@@ -6,23 +6,34 @@
 //
 
 public struct StandardLengthMessage: StandardLengthMessageProtocol {
+  
+  public var toAddress: DeviceAddressProtocol
+  
+  public let flags: MessageFlags
+  
+  public var command: CommandProtocol
 
-    public var toAddress: DeviceAddressProtocol
+  public var rawValue: String {
 
-    public let flags: MessageFlags
+    return String(
+      format: "%@%02X%@",
+      toAddress.rawValue,
+      flags.rawValue,
+      command.rawValue
+    )
 
-    public var command: CommandProtocol
+  }
 
-    public init(
-      to address: DeviceAddressProtocol,
-      flags: MessageFlags = .standardMessageFlags,
-      command: CommandProtocol
-    ) {
-
-        self.toAddress = address
-        self.flags = flags
-        self.command = command
-
-    }
-
+  public init(
+    to address: DeviceAddressProtocol,
+    flags: MessageFlags = .standardMessageFlags,
+    command: CommandProtocol
+  ) {
+    
+    self.toAddress = address
+    self.flags = flags
+    self.command = command
+    
+  }
+  
 }

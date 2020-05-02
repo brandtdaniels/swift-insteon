@@ -7,10 +7,12 @@
 
 public protocol DeviceAddressProtocol {
 
-    var highByte: UInt8 { get }
+  var highByte: UInt8 { get }
 
-    var middleByte: UInt8 { get }
+  var middleByte: UInt8 { get }
 
-    var lowByte: UInt8 { get }
+  var lowByte: UInt8 { get }
+
+  var rawValue: String { get }
 
 }

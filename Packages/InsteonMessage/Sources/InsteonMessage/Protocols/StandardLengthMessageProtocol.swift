@@ -6,13 +6,15 @@
 //
 
 public protocol StandardLengthMessageProtocol {
-
-    var toAddress: DeviceAddressProtocol { get }
-
-    var flags: MessageFlags { get }
-
-    var command: CommandProtocol { get }
-
+  
+  var toAddress: DeviceAddressProtocol { get }
+  
+  var flags: MessageFlags { get }
+  
+  var command: CommandProtocol { get }
+  
+  var rawValue: String { get }
+  
 }
 
 

@@ -6,9 +6,11 @@
 //
 
 public protocol CommandProtocol {
-
-    var command1: UInt8 { get }
-
-    var command2: UInt8 { get }
-
+  
+  var command1: UInt8 { get }
+  
+  var command2: UInt8 { get }
+  
+  var rawValue: String { get }
+  
 }

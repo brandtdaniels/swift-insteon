@@ -95,7 +95,7 @@ final class MessageFlagsTests: XCTestCase {
       MessageFlags.threeRetransmissionsMax.rawValue,
       0x03
     )
-
+    
   }
 
   static var allTests = [

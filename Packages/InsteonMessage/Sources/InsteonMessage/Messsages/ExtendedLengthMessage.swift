@@ -6,27 +6,39 @@
 //
 
 public struct ExtendedLengthMessage: ExtendedLengthMessageProtocol {
+  
+  public var toAddress: DeviceAddressProtocol
+  
+  public let flags: MessageFlags
+  
+  public var command: CommandProtocol
+  
+  public var userData: UserDataProtocol
 
-    public var toAddress: DeviceAddressProtocol
+  public var rawValue: String {
 
-    public let flags: MessageFlags
+    return String(
+      format: "%@%02X%@%@",
+      toAddress.rawValue,
+      flags.rawValue,
+      command.rawValue,
+      userData.rawValue
+    )
 
-    public var command: CommandProtocol
-
-    public var userData: UserDataProtocol
-
-    public init(
-      to address: DeviceAddressProtocol,
-      flags: MessageFlags = .extendedMessageFlags,
-      command: CommandProtocol,
-      userData: UserDataProtocol = ExtendedUserData()
-    ) {
-
-        self.toAddress = address
-        self.flags = flags
-        self.command = command
-        self.userData = userData
-
-    }
-
+  }
+  
+  public init(
+    to address: DeviceAddressProtocol,
+    flags: MessageFlags = .extendedMessageFlags,
+    command: CommandProtocol,
+    userData: UserDataProtocol = ExtendedUserData()
+  ) {
+    
+    self.toAddress = address
+    self.flags = flags
+    self.command = command
+    self.userData = userData
+    
+  }
+  
 }

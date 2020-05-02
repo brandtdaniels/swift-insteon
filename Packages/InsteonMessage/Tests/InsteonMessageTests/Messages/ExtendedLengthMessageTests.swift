@@ -136,11 +136,21 @@ final class ExtendedLengthMessageTests: XCTestCase {
 
   }
 
+  func testRawValue() {
+
+    XCTAssertEqual(
+      message.rawValue,
+      "AABBCC1F01020000000000000000000000000000"
+    )
+
+  }
+
   static var allTests = [
     ("testToAddress", testToAddress),
     ("testExtendedMessageFlags", testExtendedMessageFlags),
     ("testCommand", testCommand),
-    ("testUserData", testUserData)
+    ("testUserData", testUserData),
+    ("testRawValue", testRawValue)
   ]
 
 }

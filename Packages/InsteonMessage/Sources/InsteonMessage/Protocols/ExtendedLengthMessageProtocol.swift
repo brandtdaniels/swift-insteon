@@ -6,7 +6,10 @@
 //
 
 public protocol ExtendedLengthMessageProtocol: StandardLengthMessageProtocol {
-
-    var userData: UserDataProtocol { get }
-
+  
+  var userData: UserDataProtocol { get }
+  
+  var rawValue: String { get }
+  
+  
 }
