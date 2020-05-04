@@ -4,7 +4,7 @@ This package contains types that enable the formation of an Insteon message.
 
 ### Convenience
 
-There are several convenience options such as message flag values for standard and extended message types, command types, and a string formatter for printing or network requests.
+There are several convenience options such as message flag values for standard and extended message types, command types, and a raw value string format for printing or network requests.
 
 ## Examples
 
@@ -20,11 +20,7 @@ let lightOnFiftyPercentMessage = StandardLengthMessage(
   command: lightOnFiftyPercent.command
 )
 
-let rawString = Formatter.format(
-  lightOnFiftyPercentMessage
-)
-
-print(rawString)
+print(lightOnFiftyPercentMessage.rawValue)
 
 // Outputs: AABBCC0F1180
 
