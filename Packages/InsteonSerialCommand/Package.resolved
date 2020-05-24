@@ -1,0 +1,16 @@
+{
+  "object": {
+    "pins": [
+      {
+        "package": "InsteonMessage",
+        "repositoryURL": "https://github.com/brandtdaniels/InsteonMessage",
+        "state": {
+          "branch": null,
+          "revision": "4a69001bffc1eed7c065a350cffb961cdde08126",
+          "version": "0.1.1"
+        }
+      }
+    ]
+  },
+  "version": 1
+}
