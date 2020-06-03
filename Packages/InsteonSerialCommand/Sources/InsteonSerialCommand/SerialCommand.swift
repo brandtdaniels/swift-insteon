@@ -19,7 +19,7 @@ public struct SerialCommand {
 
   public let commandType: SerialCommandType
   
-  init(_ commandType: SerialCommandType) {
+  public init(_ commandType: SerialCommandType) {
     
     self.commandType = commandType
     
