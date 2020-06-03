@@ -1,0 +1,34 @@
+{
+  "object": {
+    "pins": [
+      {
+        "package": "InsteonMessage",
+        "repositoryURL": "https://github.com/brandtdaniels/InsteonMessage",
+        "state": {
+          "branch": null,
+          "revision": "4a69001bffc1eed7c065a350cffb961cdde08126",
+          "version": "0.1.1"
+        }
+      },
+      {
+        "package": "InsteonSerialCommand",
+        "repositoryURL": "https://github.com/brandtdaniels/InsteonSerialCommand",
+        "state": {
+          "branch": null,
+          "revision": "f27607f2d9dcdfa9ce3ccc56a1f0a35e63822dc1",
+          "version": "0.1.1"
+        }
+      },
+      {
+        "package": "RequestClient",
+        "repositoryURL": "https://github.com/brandtdaniels/RequestClient",
+        "state": {
+          "branch": null,
+          "revision": "e6e68e7b614f48f0d30d593a22b049b31116f4ae",
+          "version": "0.1.0"
+        }
+      }
+    ]
+  },
+  "version": 1
+}
