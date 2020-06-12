@@ -24,13 +24,9 @@ public enum StandardLengthDirectCommand {
   case idRequest
   
   case lightOn(level: UInt8)
-  
-  case lightOnFull
-  
+    
   case lightOnFast(level: UInt8)
-  
-  case lightOnFullFast
-  
+
   case lightOff
   
   case lightOffFast
@@ -96,14 +92,8 @@ public enum StandardLengthDirectCommand {
     case .lightOn(level: let level):
       return Command(command1: 0x11, command2: level)
       
-    case .lightOnFull:
-      return Command(command1: 0x11)
-      
     case .lightOnFast(level: let level):
       return Command(command1: 0x12, command2: level)
-      
-    case .lightOnFullFast:
-      return Command(command1: 0x12)
       
     case .lightOff:
       return Command(command1: 0x13)
