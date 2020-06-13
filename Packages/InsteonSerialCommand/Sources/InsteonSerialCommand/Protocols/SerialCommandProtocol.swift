@@ -7,6 +7,8 @@
 
 public protocol SerialCommandProtocol {
 
+  var number: SerialCommandNumber { get }
+
   var type: SerialCommandType { get }
 
   var stringValue: String { get }
