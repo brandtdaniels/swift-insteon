@@ -6,7 +6,9 @@
 //
 
 public protocol SerialCommandProtocol {
-  
+
+  var type: SerialCommandType { get }
+
   var stringValue: String { get }
   
 }

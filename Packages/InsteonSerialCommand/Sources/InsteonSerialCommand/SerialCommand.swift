@@ -17,11 +17,11 @@ public let startOfText = 0x02
 
 public struct SerialCommand {
 
-  public let commandType: SerialCommandType
+  public let type: SerialCommandType
   
-  public init(_ commandType: SerialCommandType) {
+  public init(_ type: SerialCommandType) {
     
-    self.commandType = commandType
+    self.type = type
     
   }
   
@@ -34,7 +34,7 @@ extension SerialCommand: SerialCommandProtocol {
   public var stringValue: String {
     
     return String(
-      format: "%02X%@", startOfText, commandType.stringValue
+      format: "%02X%@", startOfText, type.stringValue
     )
     
   }

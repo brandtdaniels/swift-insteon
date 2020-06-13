@@ -7,7 +7,9 @@ This package contains types that enable the formation of an Insteon serial comma
 ```
 let insteonId = InsteonIdentifier(0xAA, 0xBB, 0xCC)
   
-let command = StandardLengthDirectCommand.lightOnFull.command
+let command = StandardLengthDirectCommand.lightOn(
+  level: 0xFF
+).command
 
 let standardMessage = StandardLengthMessage(
   to: insteonId,
