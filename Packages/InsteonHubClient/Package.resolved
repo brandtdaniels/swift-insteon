@@ -6,8 +6,8 @@
         "repositoryURL": "https://github.com/brandtdaniels/InsteonMessage",
         "state": {
           "branch": null,
-          "revision": "4a69001bffc1eed7c065a350cffb961cdde08126",
-          "version": "0.1.1"
+          "revision": "60006c7daf0ffde5dde9e02a034788a5cdaa96ab",
+          "version": "0.1.2"
         }
       },
       {
@@ -15,8 +15,8 @@
         "repositoryURL": "https://github.com/brandtdaniels/InsteonSerialCommand",
         "state": {
           "branch": null,
-          "revision": "f27607f2d9dcdfa9ce3ccc56a1f0a35e63822dc1",
-          "version": "0.1.1"
+          "revision": "4f95ba9ee38baa2c96b44124a07ccac28a571546",
+          "version": "0.1.3"
         }
       },
       {
