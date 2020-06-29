@@ -77,6 +77,19 @@ final class InsteonHubRequestTests: XCTestCase {
 
   }
 
+  func testLinkStatusRequest() {
+
+    let request = LinkStatusRequest()
+
+    let urlRequest = request.urlRequest(baseUrlComponents: baseUrlComponents)
+
+    XCTAssertEqual(
+      urlRequest.url?.absoluteString,
+      "http://example.com:25105/Linkstatus.xml"
+    )
+
+  }
+
   func testSensorStatusRequest() {
 
     let request = SensorStatusRequest(page: .one)
@@ -140,6 +153,7 @@ final class InsteonHubRequestTests: XCTestCase {
     ("testCommandBufferRequest", testCommandBufferRequest),
     ("testExtendedCommandRequest", testExtendedCommandRequest),
     ("testExtendedCommandWaitRequest", testExtendedCommandWaitRequest),
+    ("testLinkStatusRequest", testLinkStatusRequest),
     ("testSensorStatusRequest", testSensorStatusRequest),
     ("testSerialCommandRequest", testSerialCommandRequest),
     ("testStandardCommandRequest", testStandardCommandRequest),

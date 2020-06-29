@@ -14,6 +14,7 @@ Requests available are:
 * Extended Command Request w/ wait (Synchronous)
 	* This is used when a response is required
 * Update Hub Credentials Request
+* Link Status Request
 
 Other requests can be created as long as they conform to the `HubRequestProtocol`
 
