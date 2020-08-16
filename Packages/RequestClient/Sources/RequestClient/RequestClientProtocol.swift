@@ -18,4 +18,8 @@ public protocol RequestClientProtocol {
     ) -> Void
   )
 
+  func send(
+    _ request: URLRequest
+  ) -> URLSession.DataTaskPublisher
+
 }

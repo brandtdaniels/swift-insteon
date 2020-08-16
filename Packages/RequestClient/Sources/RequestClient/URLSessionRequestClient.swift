@@ -41,5 +41,13 @@ extension URLSessionRequestClient: RequestClientProtocol {
     task.resume()
     
   }
+
+  public func send(
+    _ request: URLRequest
+  ) -> URLSession.DataTaskPublisher {
+
+    session.dataTaskPublisher(for: request)
+
+  }
   
 }
