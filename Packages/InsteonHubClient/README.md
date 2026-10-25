@@ -1,5 +1,3 @@
-![Swift](https://github.com/brandtdaniels/InsteonHubClient/workflows/Swift/badge.svg)
-
 # InsteonHubClient
 
 This package allows you to send requests to an Insteon Hub.
