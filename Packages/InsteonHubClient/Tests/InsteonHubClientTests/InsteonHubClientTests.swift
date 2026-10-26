@@ -1,249 +1,179 @@
 import XCTest
 @testable import InsteonHubClient
-import RequestClient
+import InsteonNetworking
 import InsteonSerialCommand
 
 final class InsteonHubClientTests: XCTestCase {
 
-  var hubClient: HubClientProtocol!
+  let address = SocketAddress(
+    host: "example.com",
+    port: 25105
+  )
 
-  var mockRequestClient: MockRequestClient!
+  let credentials = LoginCredentials(
+    user: "user",
+    password: "password"
+  )
 
-  override func setUp() {
+  let hubRequest = SerialCommandRequest(SerialCommand(.cancelAllLinking))
 
-    mockRequestClient = MockRequestClient()
+  func testHTTPClientInteraction() {
 
-    let credentials = LoginCredentials(
-      user: "",
-      password: ""
-    )
-    let address = SocketAddress(
-      host: "example.com",
-      port: 80
-    )
+    let mockHTTPClient = MockHTTPClient(result: .success(response(statusCode: 200)))
 
-    hubClient = HubClient(
+    let hubClient = HubClient(address: address, httpClient: mockHTTPClient)
+
+    hubClient.send(hubRequest) { _ in }
+
+    XCTAssertEqual(mockHTTPClient.requests.count, 1)
+    XCTAssertEqual(mockHTTPClient.requests.first?.url?.host, "example.com")
+    XCTAssertEqual(mockHTTPClient.requests.first?.url?.port, 25105)
+
+  }
+
+  func testCredentialsAddBasicAuthorization() {
+
+    let mockHTTPClient = MockHTTPClient(result: .success(response(statusCode: 200)))
+
+    let hubClient = HubClient(
       credentials: credentials,
       address: address,
-      requestClient: mockRequestClient
+      httpClient: mockHTTPClient
+    )
+
+    hubClient.send(hubRequest) { _ in }
+
+    XCTAssertEqual(
+      mockHTTPClient.requests.first?.value(forHTTPHeaderField: "Authorization"),
+      "Basic dXNlcjpwYXNzd29yZA=="
     )
 
   }
 
-  func testRequestClientInteraction() {
+  func testHTTPClientError() {
 
-    let expectation = XCTestExpectation(
-      description: "Send hub command"
+    let expectedError = HTTPClientError.nonHTTPResponse
+
+    let hubClient = HubClient(
+      address: address,
+      httpClient: MockHTTPClient(result: .failure(expectedError))
     )
 
-    let serialCommand = SerialCommand(.cancelAllLinking)
+    let result = send(hubRequest, with: hubClient)
 
-    let hubRequest = SerialCommandRequest(serialCommand)
-
-    hubClient.send(hubRequest) { result in
-
-      XCTAssertEqual(
-        self.mockRequestClient.sendCallCount,
-        1
-      )
-
-      expectation.fulfill()
-
+    switch result {
+    case .success?:
+      XCTFail("No error thrown")
+    case let .failure(error)?:
+      XCTAssertEqual(error as? HTTPClientError, expectedError)
+    case nil:
+      XCTFail("No result")
     }
-
-    wait(for: [expectation], timeout: 1.0)
 
   }
 
-  func testRequestClientError() {
+  func testHTTPClientResponseError() {
 
-    let expectedError = HubClientError.response
-
-    mockRequestClient = MockRequestClient(error: expectedError)
-
-    let credentials = LoginCredentials(
-      user: "",
-      password: ""
-    )
-    let address = SocketAddress(
-      host: "example.com",
-      port: 80
-    )
-
-    hubClient = HubClient(
-      credentials: credentials,
+    let hubClient = HubClient(
       address: address,
-      requestClient: mockRequestClient
+      httpClient: MockHTTPClient(result: .success(response(statusCode: 400)))
     )
 
-    let expectation = XCTestExpectation(
-      description: "Send hub command"
-    )
+    let result = send(hubRequest, with: hubClient)
 
-    let serialCommand = SerialCommand(.cancelAllLinking)
-
-    let hubRequest = SerialCommandRequest(serialCommand)
-
-    hubClient.send(hubRequest) { result in
-
-      switch result {
-      case .success:
-        XCTFail("No error thrown")
-      case let .failure(error):
-        XCTAssertEqual(
-          error as? HubClientError,
-          expectedError
-        )
-      }
-
-      expectation.fulfill()
-
+    switch result {
+    case .success?:
+      XCTFail("No error thrown")
+    case let .failure(error)?:
+      XCTAssertEqual(error as? HubClientError, .response(statusCode: 400))
+    case nil:
+      XCTFail("No result")
     }
-
-    wait(for: [expectation], timeout: 1.0)
 
   }
 
-  func testRequestClientResponseError() {
+  func testHTTPClientSuccess() {
 
-    let response = HTTPURLResponse(
-      url: URL(string: "example.com")!,
-      statusCode: 400,
-      httpVersion: nil,
-      headerFields: nil
-    )
+    let expectedData = Data("response".utf8)
 
-    mockRequestClient = MockRequestClient(response: response)
-
-    let credentials = LoginCredentials(
-      user: "",
-      password: ""
-    )
-    let address = SocketAddress(
-      host: "example.com",
-      port: 80
-    )
-
-    hubClient = HubClient(
-      credentials: credentials,
+    let hubClient = HubClient(
       address: address,
-      requestClient: mockRequestClient
+      httpClient: MockHTTPClient(result: .success(response(statusCode: 200, data: expectedData)))
     )
 
-    let expectation = XCTestExpectation(
-      description: "Send hub command"
-    )
+    let result = send(hubRequest, with: hubClient)
 
-    let serialCommand = SerialCommand(.cancelAllLinking)
-
-    let hubRequest = SerialCommandRequest(serialCommand)
-
-    hubClient.send(hubRequest) { result in
-
-      switch result {
-      case .success:
-        XCTFail("No error thrown")
-      case let .failure(error):
-        XCTAssertEqual(
-          error as? HubClientError,
-          HubClientError.response
-        )
-      }
-
-      expectation.fulfill()
-
+    switch result {
+    case let .success(data)?:
+      XCTAssertEqual(data, expectedData)
+    case .failure?:
+      XCTFail("Error thrown")
+    case nil:
+      XCTFail("No result")
     }
-
-    wait(for: [expectation], timeout: 1.0)
 
   }
 
-  func testRequestClientSuccess() {
+  private func send(_ hubRequest: HubRequestProtocol, with hubClient: HubClient) -> Result<Data, Error>? {
 
-    let expectedData = Data()
-    let response = HTTPURLResponse(
-      url: URL(string: "example.com")!,
-      statusCode: 200,
-      httpVersion: nil,
-      headerFields: nil
-    )
-
-    mockRequestClient = MockRequestClient(data: expectedData, response: response)
-
-    let credentials = LoginCredentials(
-      user: "",
-      password: ""
-    )
-    let address = SocketAddress(
-      host: "example.com",
-      port: 80
-    )
-
-    hubClient = HubClient(
-      credentials: credentials,
-      address: address,
-      requestClient: mockRequestClient
-    )
-
-    let expectation = XCTestExpectation(
-      description: "Send hub command"
-    )
-
-    let serialCommand = SerialCommand(.cancelAllLinking)
-
-    let hubRequest = SerialCommandRequest(serialCommand)
+    var receivedResult: Result<Data, Error>?
 
     hubClient.send(hubRequest) { result in
 
-      switch result {
-      case let .success(data):
-        XCTAssertEqual(data, expectedData)
-      case .failure(_):
-        XCTFail("Error thrown")
-      }
-
-      expectation.fulfill()
+      receivedResult = result
 
     }
 
-    wait(for: [expectation], timeout: 1.0)
+    return receivedResult
+
+  }
+
+  private func response(statusCode: Int, data: Data = Data()) -> HTTPResponse {
+
+    return HTTPResponse(
+      data: data,
+      response: HTTPURLResponse(
+        url: URL(string: "http://example.com")!,
+        statusCode: statusCode,
+        httpVersion: nil,
+        headerFields: nil
+      )!
+    )
 
   }
 
   static var allTests = [
-    ("testRequestClientInteraction", testRequestClientInteraction),
-    ("testRequestClientError", testRequestClientError),
-    ("testRequestClientResponseError", testRequestClientResponseError),
-    ("testRequestClientSuccess", testRequestClientSuccess)
+    ("testHTTPClientInteraction", testHTTPClientInteraction),
+    ("testCredentialsAddBasicAuthorization", testCredentialsAddBasicAuthorization),
+    ("testHTTPClientError", testHTTPClientError),
+    ("testHTTPClientResponseError", testHTTPClientResponseError),
+    ("testHTTPClientSuccess", testHTTPClientSuccess)
   ]
 
 }
 
-// MARK: - RequestClientProtocol
+// MARK: - HTTPClient
 
-class MockRequestClient: RequestClientProtocol {
+final class MockHTTPClient: HTTPClient {
 
-  private(set) var sendCallCount = 0
+  private(set) var requests: [URLRequest] = []
 
-  private let data: Data?
+  private let result: Result<HTTPResponse, Error>
 
-  private let response: URLResponse?
+  init(result: Result<HTTPResponse, Error>) {
 
-  private let error: Error?
-
-  init(data: Data? = nil, response: URLResponse? = nil, error: Error? = nil) {
-
-    self.data = data
-    self.response = response
-    self.error = error
+    self.result = result
 
   }
 
-  func send(_ request: URLRequest, completion: @escaping (Data?, URLResponse?, Error?) -> Void) {
+  func send(
+    _ request: URLRequest,
+    completion: @escaping (Result<HTTPResponse, Error>) -> Void
+  ) {
 
-    sendCallCount += 1
+    requests.append(request)
 
-    completion(data, response, error)
+    completion(result)
 
   }
 

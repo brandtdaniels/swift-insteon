@@ -11,19 +11,15 @@ let package = Package(
   ],
   products: [
     // Products define the executables and libraries produced by a package, and make them visible to other packages.
-    .library(name: "AuthClient", targets: ["AuthClient"]),
-    .library(name: "RequestClient", targets: ["RequestClient"]),
+    .library(name: "InsteonNetworking", targets: ["InsteonNetworking"]),
     .library(name: "InsteonMessage", targets: ["InsteonMessage"]),
     .library(name: "InsteonSerialCommand", targets: ["InsteonSerialCommand"]),
+    .library(name: "InsteonHubClient", targets: ["InsteonHubClient"]),
     .library(name: "InsteonApiClient", targets: ["InsteonApiClient"]),
-    .library(name: "InsteonHubClient", targets: ["InsteonHubClient"])
+    .library(name: "InsteonApiClientKeychain", targets: ["InsteonApiClientKeychain"])
   ],
   dependencies: [
     // Dependencies declare other packages that this package depends on.
-    .package(
-      url: "https://github.com/OAuthSwift/OAuthSwift",
-      .upToNextMajor(from: "2.1.2")
-    ),
     .package(
       url: "https://github.com/kishikawakatsumi/KeychainAccess",
       .upToNextMajor(from: "4.2.0")
@@ -32,20 +28,14 @@ let package = Package(
   targets: [
     // Each library lives in Packages/<Name> with its own Sources and Tests directories.
     .target(
-      name: "AuthClient",
-      dependencies: ["OAuthSwift"],
-      path: "Packages/AuthClient/Sources/AuthClient"
+      name: "InsteonNetworking",
+      dependencies: [],
+      path: "Packages/InsteonNetworking/Sources/InsteonNetworking"
     ),
     .testTarget(
-      name: "AuthClientTests",
-      dependencies: ["AuthClient"],
-      path: "Packages/AuthClient/Tests/AuthClientTests"
-    ),
-
-    .target(
-      name: "RequestClient",
-      dependencies: [],
-      path: "Packages/RequestClient/Sources/RequestClient"
+      name: "InsteonNetworkingTests",
+      dependencies: ["InsteonNetworking"],
+      path: "Packages/InsteonNetworking/Tests/InsteonNetworkingTests"
     ),
 
     .target(
@@ -71,25 +61,30 @@ let package = Package(
     ),
 
     .target(
-      name: "InsteonApiClient",
-      dependencies: ["AuthClient", "KeychainAccess", "RequestClient"],
-      path: "Packages/InsteonApiClient/Sources/InsteonApiClient"
-    ),
-    .testTarget(
-      name: "InsteonApiClientTests",
-      dependencies: ["InsteonApiClient", "AuthClient", "RequestClient"],
-      path: "Packages/InsteonApiClient/Tests/InsteonApiClientTests"
-    ),
-
-    .target(
       name: "InsteonHubClient",
-      dependencies: ["RequestClient", "InsteonMessage", "InsteonSerialCommand"],
+      dependencies: ["InsteonNetworking", "InsteonMessage", "InsteonSerialCommand"],
       path: "Packages/InsteonHubClient/Sources/InsteonHubClient"
     ),
     .testTarget(
       name: "InsteonHubClientTests",
-      dependencies: ["InsteonHubClient", "RequestClient", "InsteonMessage", "InsteonSerialCommand"],
+      dependencies: ["InsteonHubClient", "InsteonNetworking", "InsteonMessage", "InsteonSerialCommand"],
       path: "Packages/InsteonHubClient/Tests/InsteonHubClientTests"
+    ),
+
+    .target(
+      name: "InsteonApiClient",
+      dependencies: ["InsteonNetworking"],
+      path: "Packages/InsteonApiClient/Sources/InsteonApiClient"
+    ),
+    .target(
+      name: "InsteonApiClientKeychain",
+      dependencies: ["InsteonApiClient", "KeychainAccess"],
+      path: "Packages/InsteonApiClient/Sources/InsteonApiClientKeychain"
+    ),
+    .testTarget(
+      name: "InsteonApiClientTests",
+      dependencies: ["InsteonApiClient", "InsteonNetworking"],
+      path: "Packages/InsteonApiClient/Tests/InsteonApiClientTests"
     )
   ]
 )

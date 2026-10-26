@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import RequestClient
+import InsteonNetworking
 
 public struct HubClient {
 
@@ -21,29 +21,36 @@ public struct HubClient {
 
   }
 
-  private var credentialData: Data? {
+  private let address: SocketAddressProtocol
 
-    return String(
-      format: "%@:%@", credentials.user, credentials.password
-    ).data(using: .utf8)
+  private let httpClient: HTTPClient
+
+  /// Sends requests through `httpClient` unchanged, so it is responsible for any authentication the hub needs.
+  public init(
+    address: SocketAddressProtocol,
+    httpClient: HTTPClient
+  ) {
+
+    self.address = address
+    self.httpClient = httpClient
 
   }
 
-  private let credentials: LoginCredentialsProtocol
-
-  private let address: SocketAddressProtocol
-
-  private let requestClient: RequestClientProtocol
-
+  /// Authenticates every request to the hub with HTTP basic authentication using `credentials`.
   public init(
     credentials: LoginCredentialsProtocol,
     address: SocketAddressProtocol,
-    requestClient: RequestClientProtocol
+    httpClient: HTTPClient
   ) {
 
-    self.credentials = credentials
-    self.address = address
-    self.requestClient = requestClient
+    self.init(
+      address: address,
+      httpClient: BasicAuthenticationHTTPClient(
+        httpClient,
+        user: credentials.user,
+        password: credentials.password
+      )
+    )
 
   }
 
@@ -55,46 +62,32 @@ extension HubClient: HubClientProtocol {
 
   public func send(
     _ hubRequest: HubRequestProtocol,
-    completion: @escaping (Result<Data?, Error>)
+    completion: @escaping (Result<Data, Error>)
     -> Void) {
 
-    guard let credentialData = credentialData else {
+    let urlRequest = hubRequest.urlRequest(baseUrlComponents: baseUrlComponents)
 
-      completion(.failure(HubClientError.credentials))
+    httpClient.send(urlRequest) { result in
 
-      return
+      switch result {
 
-    }
+      case let .failure(error):
 
-    var urlRequest = hubRequest.urlRequest(baseUrlComponents: baseUrlComponents)
-    urlRequest.setValue(
-      "Basic \(credentialData.base64EncodedString())",
-      forHTTPHeaderField: "Authorization"
-    )
+        completion(.failure(error))
 
-    requestClient.send(urlRequest) { data, response, error in
+      case let .success(response):
 
-      guard error == nil else {
+        guard response.isSuccess else {
 
-        print("Error: \(error!.localizedDescription)")
-        completion(.failure(error!))
-
-        return
-
-      }
-
-      guard let response = response as? HTTPURLResponse, (200...299).contains(response.statusCode) else {
-
-          completion(.failure(HubClientError.response))
+          completion(.failure(HubClientError.response(statusCode: response.statusCode)))
 
           return
 
+        }
+
+        completion(.success(response.data))
+
       }
-
-      print("Data: \(String(describing: data))")
-      print("Response: \(response.description)")
-
-      completion(.success(data))
 
     }
 
@@ -102,9 +95,8 @@ extension HubClient: HubClientProtocol {
 
 }
 
-public enum HubClientError: Error {
+public enum HubClientError: Error, Equatable {
 
-  case credentials
-  case response
+  case response(statusCode: Int)
 
 }

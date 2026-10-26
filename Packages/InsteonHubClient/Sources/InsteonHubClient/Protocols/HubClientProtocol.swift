@@ -11,7 +11,7 @@ public protocol HubClientProtocol {
 
   func send(
     _ hubRequest: HubRequestProtocol,
-    completion: @escaping (Result<Data?,Error>) -> Void
+    completion: @escaping (Result<Data, Error>) -> Void
   )
 
 }

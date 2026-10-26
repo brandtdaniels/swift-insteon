@@ -36,12 +36,13 @@ let address = SocketAddress(
   port: 25105
 )
 
-hubClient = HubClient(
+// Any HTTPClient works here; the credentials add HTTP basic authentication to it.
+let hubClient = HubClient(
   credentials: credentials,
   address: address,
-  requestClient: mockRequestClient
+  httpClient: URLSessionHTTPClient()
 )
-    
+
 let serialCommand = SerialCommand(.cancelAllLinking)
 
 let hubRequest = SerialCommandRequest(serialCommand)

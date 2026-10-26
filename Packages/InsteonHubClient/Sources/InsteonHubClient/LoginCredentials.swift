@@ -11,4 +11,11 @@ public struct LoginCredentials: LoginCredentialsProtocol {
 
   public var password: String
 
+  public init(user: String, password: String) {
+
+    self.user = user
+    self.password = password
+
+  }
+
 }

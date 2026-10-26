@@ -5,7 +5,7 @@
 //  Created by Brandt Daniels on 6/28/20.
 //
 
-public typealias ResultCallback<Value> = (Result<Value?, ApiClientError>) -> Void
+public typealias ResultCallback<Value> = (Result<Value, ApiClientError>) -> Void
 
 public protocol ApiClientProtocol {
 

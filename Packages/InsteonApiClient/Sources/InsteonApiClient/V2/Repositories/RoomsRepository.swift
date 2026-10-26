@@ -11,7 +11,7 @@ public struct RoomsRepository {
 
   private let apiClient: ApiClientProtocol
 
-  init(_ apiClient: ApiClientProtocol) {
+  public init(_ apiClient: ApiClientProtocol) {
 
     self.apiClient = apiClient
 
@@ -39,23 +39,7 @@ extension RoomsRepository: RoomsRepositoryProtocol {
       
     }
 
-    let request = CreateRoom(data)
-
-    apiClient.request(request) { result in
-
-      switch result {
-
-      case let .failure(apiClientError):
-
-        completion(.failure(apiClientError))
-
-      case let .success(response):
-
-        completion(.success(response!))
-
-      }
-
-    }
+    apiClient.request(CreateRoom(data), completion: completion)
 
   }
 

@@ -34,7 +34,7 @@ final class SerialCommandTests: XCTestCase {
     
     let insteonId = InsteonIdentifier(0xAA, 0xBB, 0xCC)
     
-    let command = StandardLengthDirectCommand.lightOnFull.command
+    let command = StandardLengthDirectCommand.lightOn(level: 0xFF).command
     
     let standardMessage = StandardLengthMessage(
       to: insteonId,
@@ -47,7 +47,7 @@ final class SerialCommandTests: XCTestCase {
           message: standardMessage
         )
       ).stringValue,
-      "0262AABBCC0F1100"
+      "0262AABBCC0F11FF"
     )
     
   }

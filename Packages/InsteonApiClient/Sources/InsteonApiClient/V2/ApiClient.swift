@@ -1,80 +1,79 @@
-import AuthClient
 import Foundation
-import RequestClient
+import InsteonNetworking
 
-public class ApiClient {
+public final class ApiClient {
 
-  private var tokenResponse: TokenResponse?
+  private let httpClient: HTTPClient
 
-  private let requestClient: RequestClientProtocol
+  private let decoder: ResponseDecoder
 
-  private let authClient: AuthClientProtocol
-
-  private let keychain: Keychain?
-
+  /// Sends requests through `httpClient` unchanged, so it is responsible for authenticating them.
   public init(
-    _ requestClient: RequestClientProtocol,
-    _ authClient: AuthClientProtocol,
-    _ keychain: Keychain? = nil) {
+    httpClient: HTTPClient,
+    decoder: ResponseDecoder = InsteonResponseDecoder()
+  ) {
 
-    self.requestClient = requestClient
-    self.authClient = authClient
-    self.keychain = keychain
-
-    if let keychain = self.keychain,
-      let accessToken = keychain.getString(key: "accessToken"),
-      let refreshToken = keychain.getString(key: "refreshToken"),
-      let tokenTypeStr = keychain.getString(key: "tokenType"),
-      let tokenType = TokenType(rawValue: tokenTypeStr),
-      let expiresIn =  keychain.getDouble(key: "expiresIn"),
-      let _ = keychain.getString(key: "expirationDate")
-    {
-
-      tokenResponse = TokenResponse(
-        accessToken: accessToken,
-        refreshToken: refreshToken,
-        tokenType: tokenType,
-        expiresIn: expiresIn
-      )
-
-    }
+    self.httpClient = httpClient
+    self.decoder = decoder
 
   }
 
-  private func authorize(completion: @escaping (Error?) -> Void) {
+  /// Authenticates every request with `apiKey` and a token from `tokenProvider`.
+  public convenience init(
+    apiKey: String,
+    tokenProvider: AccessTokenProvider,
+    httpClient: HTTPClient = URLSessionHTTPClient()
+  ) {
 
-    authClient.authorize { [weak self] result in
+    self.init(
+      httpClient: AuthenticatingHTTPClient(
+        httpClient,
+        apiKey: apiKey,
+        tokenProvider: tokenProvider
+      )
+    )
 
-      guard let self = self else {
+  }
 
-        completion(ApiClientError.unknown(message: "Unknown error"))
+  private func perform<Value>(
+    _ urlRequest: URLRequest,
+    completion: @escaping ResultCallback<Value>,
+    transform: @escaping (HTTPResponse) throws -> Value
+  ) {
 
-        return
+    let decoder = self.decoder
 
-      }
+    httpClient.send(urlRequest) { result in
 
       switch result {
 
-      case let .failure(authError):
+      case let .failure(error):
 
-        completion(authError)
+        completion(.failure(.request(message: error.localizedDescription)))
 
-      case let .success(tokenResponse):
+      case let .success(response) where response.isSuccess:
 
-        if let keychain = self.keychain,
-          let expirationDate = tokenResponse.expirationDateString {
+        do {
 
-          keychain.set(tokenResponse.accessToken, key: "accessToken")
-          keychain.set(tokenResponse.refreshToken, key: "refreshToken")
-          keychain.set(tokenResponse.tokenType.rawValue, key: "tokenType")
-          keychain.set(tokenResponse.expiresIn, key: "expiresIn")
-          keychain.set(expirationDate, key: "expirationDate")
+          completion(.success(try transform(response)))
+
+        } catch {
+
+          completion(.failure(.decoding(message: error.localizedDescription)))
 
         }
 
-        self.tokenResponse = tokenResponse
+      case let .success(response):
 
-        completion(nil)
+        if let errorResponse = try? decoder.decode(ErrorResponse.self, from: response.data) {
+
+          completion(.failure(.server(code: errorResponse.code, message: errorResponse.message)))
+
+        } else {
+
+          completion(.failure(.unknown(message: "Unexpected status code \(response.statusCode)")))
+
+        }
 
       }
 
@@ -88,205 +87,21 @@ public class ApiClient {
 
 extension ApiClient: ApiClientProtocol {
 
-  public func request<T: ResponselessRequestProtocol>(_ request: T, completion: @escaping ResultCallback<Void>) {
+  public func request<T: RequestProtocol>(_ request: T, completion: @escaping ResultCallback<T.Response>) {
 
-    guard let tokenResponse = tokenResponse,
-      tokenResponse.isExpired == false else {
+    let decoder = self.decoder
 
-        authorize { error in
+    perform(request.urlRequest, completion: completion) { response in
 
-          guard error == nil else {
-
-            completion(.failure(.unknown(message: "Unknown error")))
-
-            return
-
-          }
-
-          DispatchQueue.main.async {
-
-            self.request(request, completion: completion)
-
-          }
-
-        }
-
-        return
-
-    }
-
-    requestClient.send(request.urlRequest) { [weak self] data, response, error in
-
-      guard let self = self else {
-
-        return
-
-      }
-
-      if let error = error {
-
-        completion(.failure(.request(message: error.localizedDescription)))
-
-      } else if let data = data,
-        let response = response as? HTTPURLResponse {
-
-        print("Response status code: \(response.statusCode)")
-
-        if response.statusCode == 204 { // No Content
-
-          completion(.success(()))
-
-        } else {
-
-          do {
-
-            let errorResponse = try JSONDecoder().decode(ErrorResponse.self, from: data)
-
-            if errorResponse.code == 4014 { // Invalid access key
-
-              self.tokenResponse = nil
-
-              DispatchQueue.main.async {
-
-                self.request(request, completion: completion)
-
-              }
-
-              return
-
-            }
-
-            completion(.failure(.server(code: errorResponse.code, message: errorResponse.message)))
-
-          } catch (let error) {
-
-            print(error)
-
-            completion(.failure(.decoding(message: error.localizedDescription)))
-
-          }
-
-        }
-
-      } else {
-
-        completion(.failure(.unknown(message: "Unknown error")))
-
-      }
+      try decoder.decode(T.Response.self, from: response.data)
 
     }
 
   }
 
-  public func request<T: RequestProtocol>(_ request: T, completion: @escaping ResultCallback<T.Response>) {
+  public func request<T: ResponselessRequestProtocol>(_ request: T, completion: @escaping ResultCallback<Void>) {
 
-    if tokenResponse == nil ||
-      tokenResponse?.isExpired == true {
-
-        authorize { error in
-
-          guard error == nil else {
-
-            completion(.failure(.unknown(message: "Unknown error")))
-
-            return
-
-          }
-
-          DispatchQueue.main.async {
-
-            self.request(request, completion: completion)
-
-          }
-
-        }
-
-      return
-
-    }
-
-//    requestClient.addHeaders([
-//      "Authentication": "APIKey \(authorizer.clientId)",
-//      "Authorization": "Bearer \(tokenResponse.accessToken)"
-//    ])
-
-    requestClient.send(request.urlRequest) { [weak self] data, response, error in
-
-      guard let self = self else {
-
-        return
-
-      }
-
-      if let error = error {
-
-        completion(.failure(.request(message: error.localizedDescription)))
-
-      } else if let data = data,
-        let response = response as? HTTPURLResponse {
-
-        print("Response status code: \(response.statusCode)")
-
-        if response.statusCode == 200 // OK
-          || response.statusCode == 201 // Created
-          || response.statusCode == 202, // Accepted
-          let dataStr = String(data: data, encoding: .utf8),
-          let cleanData = dataStr.replacingOccurrences(of: "\n", with: "", options: .regularExpression)
-            .data(using: .utf8) {
-
-          do {
-
-            let decodable = try JSONDecoder().decode(T.Response.self, from: cleanData)
-
-            completion(.success(decodable))
-
-          } catch (let error) {
-
-            print(error)
-
-            completion(.failure(.decoding(message: error.localizedDescription)))
-
-          }
-
-        } else {
-
-          do {
-
-            let errorResponse = try JSONDecoder().decode(ErrorResponse.self, from: data)
-
-            if errorResponse.code == 4014 { // Invalid access key
-
-              self.tokenResponse = nil
-
-              DispatchQueue.main.async {
-
-                self.request(request, completion: completion)
-
-              }
-
-              return
-
-            }
-
-            completion(.failure(.server(code: errorResponse.code, message: errorResponse.message)))
-
-          } catch (let error) {
-
-            print(error)
-
-            completion(.failure(.decoding(message: error.localizedDescription)))
-
-          }
-
-        }
-
-      } else {
-
-        completion(.failure(.unknown(message: "Unknown error")))
-
-      }
-
-    }
+    perform(request.urlRequest, completion: completion) { _ in () }
 
   }
 

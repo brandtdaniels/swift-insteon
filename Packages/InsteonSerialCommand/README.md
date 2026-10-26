@@ -24,6 +24,6 @@ let serialCommand = SerialCommand(
 
 print(serialCommand.stringValue)
 
-// Outputs: 0262AABBCC0F1100
+// Outputs: 0262AABBCC0F11FF
 
 ```
