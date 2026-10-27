@@ -42,3 +42,20 @@ public struct ReceivedMessage: Hashable, Sendable {
   }
 
 }
+
+extension ReceivedMessage {
+
+  /// Why the device rejected a message, when this message is a direct or ALL-Link cleanup NAK;
+  /// otherwise `nil`.
+  public var nakReason: NAKReason? {
+
+    switch flags.messageType {
+    case .directNegativeAcknowledgement, .allLinkCleanupNegativeAcknowledgement:
+      NAKReason(rawValue: command.command2)
+    default:
+      nil
+    }
+
+  }
+
+}
