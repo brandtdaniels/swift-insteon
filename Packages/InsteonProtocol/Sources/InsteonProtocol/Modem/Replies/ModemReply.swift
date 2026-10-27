@@ -14,8 +14,8 @@ public enum ModemReply: Hashable, Sendable {
   /// ALL-Linking finished with another device (`0x53`).
   case allLinkingCompleted(AllLinkingCompleted)
 
-  /// The modem's SET button was used (`0x54`). The value is the event code.
-  case buttonEvent(UInt8)
+  /// One of the modem's buttons was used (`0x54`).
+  case buttonEvent(ModemButtonEvent)
 
   /// The modem was reset to factory defaults with its SET button (`0x55`).
   case userReset

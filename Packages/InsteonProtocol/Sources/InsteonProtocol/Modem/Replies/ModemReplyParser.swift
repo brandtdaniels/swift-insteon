@@ -2,13 +2,17 @@
 ///
 /// The parser keeps any incomplete reply until the rest of its bytes arrive, so feed it bytes
 /// as you receive them, in any chunk size. Bytes that don't start a recognizable reply are
-/// skipped until the next start byte (`0x02`).
+/// skipped until the next start byte (`0x02`), and so is a start byte whose reply doesn't end
+/// in an ACK or NAK where one is expected.
+///
+/// A NAK to ``SerialCommand/getModemInfo`` or ``SerialCommand/getModemConfiguration`` is
+/// reported once more bytes arrive, since until then it can't be told apart from a reply whose
+/// data starts with `0x15`.
 ///
 /// ```swift
-/// var cursor = HubBufferCursor()
 /// var parser = ModemReplyParser()
 ///
-/// for reply in parser.parse(cursor.advance(to: try await hub.readBuffer())) {
+/// for reply in parser.parse(bytesFromModem) {
 ///   if case let .messageReceived(message) = reply {
 ///     // Handle a message from a device.
 ///   }
@@ -67,6 +71,15 @@ public struct ModemReplyParser: Hashable, Sendable {
 
         }
 
+        // A host command's reply ends in an ACK or NAK. Anything else means this start byte
+        // didn't begin a reply, so look for the next one.
+        guard SerialCommandNumber(rawValue: pending[1]) == nil || Self.isAcknowledgement(pending[length - 1]) else {
+
+          pending.removeFirst()
+          continue
+
+        }
+
         let frame = Array(pending.prefix(length))
         pending.removeFirst(length)
 
@@ -87,13 +100,6 @@ public struct ModemReplyParser: Hashable, Sendable {
 
   }
 
-  /// The number of parameter bytes each host command has, which its echo repeats.
-  private static let echoParameterCounts: [UInt8: Int] = [
-    0x61: 3, 0x63: 2, 0x64: 2, 0x65: 0, 0x66: 3, 0x67: 0, 0x68: 1, 0x69: 0, 0x6A: 0,
-    0x6B: 1, 0x6C: 0, 0x6D: 0, 0x6E: 0, 0x6F: 9, 0x70: 1, 0x71: 2, 0x72: 0, 0x74: 0,
-    0x75: 2, 0x76: 10, 0x77: 0, 0x7A: 1
-  ]
-
   /// The total length of the frame at the start of `bytes`, which starts with `0x02`.
   private static func frameLength(of bytes: [UInt8]) -> FrameLength {
 
@@ -103,9 +109,7 @@ public struct ModemReplyParser: Hashable, Sendable {
 
     }
 
-    let number = bytes[1]
-
-    switch number {
+    switch bytes[1] {
     case 0x50: return .complete(11)
     case 0x51: return .complete(25)
     case 0x52: return .complete(4)
@@ -116,22 +120,36 @@ public struct ModemReplyParser: Hashable, Sendable {
     case 0x57: return .complete(10)
     case 0x58: return .complete(3)
     case 0x59: return .complete(12)
-    case 0x60, 0x73:
-      // A NAK to these requests carries no data.
-      guard bytes.count >= 3 else {
+    default:
+      guard let number = SerialCommandNumber(rawValue: bytes[1]) else {
 
-        return .needMoreBytes
-
-      }
-
-      if bytes[2] == negativeAcknowledgement {
-
-        return .complete(3)
+        return .unrecognized
 
       }
 
-      return .complete(number == 0x60 ? 9 : 6)
-    case 0x62:
+      return replyLength(to: number, in: bytes)
+    }
+
+  }
+
+  /// The length of the modem's reply to a host command: the echo, or the data for commands
+  /// that return data, then an ACK or NAK.
+  private static func replyLength(to number: SerialCommandNumber, in bytes: [UInt8]) -> FrameLength {
+
+    switch number {
+    case .getModemInfo, .getModemConfiguration:
+      // A NAK can follow the number directly, but the data's first byte can also be 0x15, so
+      // a full-length reply that ends in an ACK or NAK takes precedence.
+      let dataLength = number == .getModemInfo ? 9 : 6
+
+      guard bytes.count >= dataLength else {
+
+        return bytes.count >= 3 && bytes[2] != negativeAcknowledgement ? .complete(dataLength) : .needMoreBytes
+
+      }
+
+      return .complete(isAcknowledgement(bytes[dataLength - 1]) ? dataLength : 3)
+    case .sendMessage:
       // The echoed message's flags say whether user data follows.
       guard bytes.count >= 6 else {
 
@@ -140,15 +158,27 @@ public struct ModemReplyParser: Hashable, Sendable {
       }
 
       return .complete(MessageFlags(rawValue: bytes[5]).isExtended ? 23 : 9)
-    default:
-      guard let parameterCount = echoParameterCounts[number] else {
-
-        return .unrecognized
-
-      }
-
-      return .complete(2 + parameterCount + 1)
+    case .cancelAllLinking, .resetModem, .getFirstAllLinkRecord, .getNextAllLinkRecord,
+         .getAllLinkRecordForSender, .ledOn, .ledOff, .rfSleep, .cancelCleanup, .beep:
+      return .complete(3)
+    case .setAcknowledgementByte, .setModemConfiguration, .setNegativeAcknowledgementByte,
+         .setApplicationRetries:
+      return .complete(4)
+    case .sendX10, .startAllLinking, .setAcknowledgementBytes, .readDatabase:
+      return .complete(5)
+    case .sendAllLinkCommand, .setHostDeviceCategory:
+      return .complete(6)
+    case .manageAllLinkRecord:
+      return .complete(12)
+    case .writeDatabase:
+      return .complete(13)
     }
+
+  }
+
+  private static func isAcknowledgement(_ byte: UInt8) -> Bool {
+
+    byte == acknowledgement || byte == negativeAcknowledgement
 
   }
 
@@ -182,7 +212,7 @@ public struct ModemReplyParser: Hashable, Sendable {
         firmwareVersion: body[7]
       ))
     case 0x54:
-      return .buttonEvent(body[0])
+      return .buttonEvent(ModemButtonEvent(rawValue: body[0]))
     case 0x55:
       return .userReset
     case 0x56:
@@ -193,18 +223,25 @@ public struct ModemReplyParser: Hashable, Sendable {
       return .allLinkCleanupStatus(isComplete: body[0] == acknowledgement)
     case 0x59:
       return .databaseRecord(address: UInt16(body[0]) << 8 | UInt16(body[1]), record: record(body, at: 2))
-    case 0x60 where body.last == acknowledgement && body.count == 7:
+    case 0x60 where body.count == 7 && body.last == acknowledgement:
       return .modemInfo(ModemInfo(
         address: address(body, at: 0),
         category: body[3],
         subcategory: body[4],
         firmwareVersion: body[5]
       ))
-    case 0x73 where body.last == acknowledgement && body.count == 4:
+    case 0x73 where body.count == 4 && body.last == acknowledgement:
       return .modemConfiguration(ModemConfigurationReport(
         configuration: ModemConfiguration(rawValue: body[0]),
         applicationRetries: body[1],
         databaseDelta: body[2]
+      ))
+    case 0x60, 0x73:
+      // A rejected request: these commands have no parameters to echo.
+      return .echo(CommandEcho(
+        number: frame[1] == 0x60 ? .getModemInfo : .getModemConfiguration,
+        parameters: [],
+        isAccepted: false
       ))
     default:
       return .echo(CommandEcho(

@@ -39,7 +39,7 @@ struct ModemReplyParserTests {
         firmwareVersion: 0x41
       ))
     ),
-    ("025402", .buttonEvent(0x02)),
+    ("025402", .buttonEvent(ModemButtonEvent(button: .set, action: .tapped))),
     ("0255", .userReset),
     ("0256" + "01" + "05" + "AABBCC", .allLinkCleanupFailed(group: 0x05, address: device)),
     ("0257" + "C201AABBCC031F01", .allLinkRecord(record)),
@@ -50,12 +50,10 @@ struct ModemReplyParserTests {
       "0260" + "112233" + "03" + "15" + "9B" + "06",
       .modemInfo(ModemInfo(address: modem, category: 0x03, subcategory: 0x15, firmwareVersion: 0x9B))
     ),
-    ("026015", .echo(CommandEcho(number: .getModemInfo, parameters: [], isAccepted: false))),
     (
       "0273" + "40" + "05" + "00" + "06",
       .modemConfiguration(ModemConfigurationReport(configuration: .monitorMode, applicationRetries: 0x05, databaseDelta: 0x00))
     ),
-    ("027315", .echo(CommandEcho(number: .getModemConfiguration, parameters: [], isAccepted: false))),
     (
       "0262" + "AABBCC" + "0F" + "11FF" + "06",
       .echo(CommandEcho(number: .sendMessage, parameters: [0xAA, 0xBB, 0xCC, 0x0F, 0x11, 0xFF], isAccepted: true))
@@ -195,6 +193,92 @@ struct ModemReplyParserTests {
 
   }
 
+  @Test func parsesModemInfoForAnAddressStartingWithNAK() {
+
+    var parser = ModemReplyParser()
+
+    let replies = parser.parse(bytes("0260" + "15AABB" + "03" + "21" + "93" + "06"))
+
+    #expect(replies == [
+      .modemInfo(ModemInfo(address: InsteonAddress(0x15, 0xAA, 0xBB), category: 0x03, subcategory: 0x21, firmwareVersion: 0x93))
+    ])
+
+  }
+
+  @Test func parsesModemConfigurationStartingWithNAKByte() {
+
+    var parser = ModemReplyParser()
+
+    let replies = parser.parse(bytes("0273" + "15" + "05" + "00" + "06"))
+
+    #expect(replies == [.modemConfiguration(ModemConfigurationReport(
+      configuration: ModemConfiguration(rawValue: 0x15),
+      applicationRetries: 0x05,
+      databaseDelta: 0x00
+    ))])
+
+  }
+
+  @Test func reportsARejectedInfoRequestOnceTheNextReplyArrives() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("026015")).isEmpty)
+    #expect(parser.parse(bytes("0260" + "112233" + "03" + "21" + "93" + "06")) == [
+      .echo(CommandEcho(number: .getModemInfo, parameters: [], isAccepted: false)),
+      .modemInfo(ModemInfo(address: Self.modem, category: 0x03, subcategory: 0x21, firmwareVersion: 0x93))
+    ])
+
+  }
+
+  @Test func reportsARejectedConfigurationRequestOnceTheNextReplyArrives() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("027315" + "0255" + "0255")) == [
+      .echo(CommandEcho(number: .getModemConfiguration, parameters: [], isAccepted: false)),
+      .userReset,
+      .userReset
+    ])
+
+  }
+
+  @Test func reportsAFullLengthRejectedInfoRequestWithoutParameters() {
+
+    var parser = ModemReplyParser()
+
+    let replies = parser.parse(bytes("0260" + "112233" + "03" + "21" + "93" + "15"))
+
+    #expect(replies == [.echo(CommandEcho(number: .getModemInfo, parameters: [], isAccepted: false))])
+
+  }
+
+  @Test func recoversFromAStartByteThatDoesntBeginAReply() {
+
+    var parser = ModemReplyParser()
+
+    // The first frame looks like the start of an extended message's echo, but the bytes that
+    // follow are other replies, so it never ends in an ACK or NAK.
+    let replies = parser.parse(bytes(
+      "0262" + "AABBCC" + "1F"
+        + "0250" + "AABBCC" + "112233" + "2B" + "11FF"
+        + "025806" + "0255" + "0255"
+    ))
+
+    #expect(replies == [
+      .messageReceived(ReceivedMessage(
+        sender: Self.device,
+        destination: Self.modem,
+        flags: MessageFlags(rawValue: 0x2B),
+        command: Command(command1: 0x11, command2: 0xFF)
+      )),
+      .allLinkCleanupStatus(isComplete: true),
+      .userReset,
+      .userReset
+    ])
+
+  }
+
   @Test func decodesEveryX10Code() {
 
     for house in X10HouseCode.allCases {
@@ -214,6 +298,40 @@ struct ModemReplyParserTests {
       }
 
     }
+
+  }
+
+  static let buttonEvents: [(UInt8, ModemButtonEvent.Button, ModemButtonEvent.Action)] = [
+    (0x02, .set, .tapped),
+    (0x03, .set, .held),
+    (0x04, .set, .released),
+    (0x12, .button2, .tapped),
+    (0x13, .button2, .held),
+    (0x14, .button2, .released),
+    (0x22, .button3, .tapped),
+    (0x23, .button3, .held),
+    (0x24, .button3, .released)
+  ]
+
+  // The event codes in Insteon's modem documentation.
+  @Test(arguments: buttonEvents)
+  func decodesButtonEvent(_ code: UInt8, _ button: ModemButtonEvent.Button, _ action: ModemButtonEvent.Action) {
+
+    let event = ModemButtonEvent(rawValue: code)
+
+    #expect(event.button == button)
+    #expect(event.action == action)
+    #expect(ModemButtonEvent(button: button, action: action) == event)
+
+  }
+
+  @Test func keepsAnUnknownButtonEventCode() {
+
+    let event = ModemButtonEvent(rawValue: 0x35)
+
+    #expect(event.button == nil)
+    #expect(event.action == nil)
+    #expect(event.rawValue == 0x35)
 
   }
 
