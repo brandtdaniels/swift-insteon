@@ -4,8 +4,7 @@ Control INSTEON devices through an INSTEON Hub on your local network.
 
 ## Overview
 
-The INSTEON Hub (model 2245) has a built-in INSTEON modem that it exposes through a local
-HTTP interface. ``HubConnection`` turns that interface into a `ModemConnection`, so a `Modem`
+An INSTEON Hub has a built-in INSTEON modem that it exposes through a local HTTP interface. ``HubConnection`` turns that interface into a `ModemConnection`, so a `Modem`
 from InsteonModem drives a Hub exactly as it drives a USB or serial PowerLinc Modem, with the
 same pacing, retries and stream of replies.
 
@@ -43,6 +42,14 @@ with no pacing or retries. Use it directly only to build something other than a
 The Hub requires the user name and password printed on it. Store them securely, for example in
 the keychain, rather than in source code. Requests go through `HTTPClient` from
 InsteonNetworking, so you can supply your own HTTP stack or a stub in tests.
+
+### Supported Hubs
+
+| Hub | Model | Support |
+| --- | --- | --- |
+| Hub 2 | 2245 | Supported |
+| Hub 1 | 2242 | Supported: it serves the same local HTTP requests on the same port |
+| Hub Pro | 2243 | Not supported: it's built around HomeKit and has no documented local modem interface |
 
 ## Topics
 

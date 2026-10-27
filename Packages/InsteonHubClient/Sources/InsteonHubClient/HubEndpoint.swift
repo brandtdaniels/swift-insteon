@@ -1,7 +1,8 @@
 /// Where an INSTEON Hub can be reached on the local network.
 public struct HubEndpoint: Hashable, Sendable {
 
-  /// The port of the Hub's HTTP interface on the Hub 2 (model 2245): `25105`.
+  /// The port of the local HTTP interface on the Hub 2 (model 2245) and Hub 1 (model 2242):
+  /// `25105`.
   public static let defaultPort = 25105
 
   /// The Hub's host name or IP address.
