@@ -50,6 +50,19 @@ struct MessageTests {
 
   }
 
+  // A message captured in Insteon's own PLM test log: enter linking mode for group 8,
+  // sent extended with its checksum.
+  @Test func checksumMatchesInsteonTrace() {
+
+    let message = ExtendedMessage(
+      to: InsteonAddress(0x10, 0xA3, 0x0F),
+      command: StandardDirectCommand.enterLinkingMode(group: 0x08)
+    )
+
+    #expect(message.hexString == "10A30F1F0908" + String(repeating: "00", count: 13) + "EF")
+
+  }
+
   @Test func extendedMessageUsesRequestedIntegrity() throws {
 
     let message = ExtendedMessage(

@@ -11,6 +11,12 @@ public enum StandardDirectCommand: Hashable, Sendable {
   /// Requests the device's product data (cmd1 `0x03`, cmd2 `0x00`).
   case productDataRequest
 
+  /// Takes the device out of linking or unlinking mode (cmd1 `0x08`).
+  ///
+  /// Only some devices support this, such as the SmartLinc and products with the Yellow Filter
+  /// engine; most leave linking mode on their own after a timeout.
+  case exitLinkingMode
+
   /// Puts the device into linking mode as a controller of `group` (cmd1 `0x09`).
   case enterLinkingMode(group: UInt8)
 
@@ -19,7 +25,8 @@ public enum StandardDirectCommand: Hashable, Sendable {
 
   /// Requests the device's INSTEON engine version (cmd1 `0x0D`).
   ///
-  /// The acknowledgement's cmd2 identifies the engine, distinguishing i1, i2 and i2cs devices.
+  /// The acknowledgement's cmd2 identifies the engine: `0x00` for i1, `0x01` for i2 and `0x02`
+  /// for i2cs, which requires checksums on extended messages.
   case getEngineVersion
 
   /// Checks that the device is reachable (cmd1 `0x0F`).
@@ -72,21 +79,27 @@ public enum StandardDirectCommand: Hashable, Sendable {
   /// Changes the device to `level` instantly (cmd1 `0x21`).
   case instantChange(level: UInt8)
 
-  /// Simulates tapping the device's SET button (cmd1 `0x25`).
+  /// Simulates tapping the SET button of a dimmable device (cmd1 `0x25`).
+  ///
+  /// One tap makes the device's current level its on-level; two taps make its current ramp
+  /// rate the default.
   case remoteSetButtonTap(SetButtonTapCount)
 
   /// Turns the device on at an on-level and ramp rate given as 4-bit values (cmd1 `0x2E`).
   ///
-  /// Both values use only their low four bits; higher bits are ignored. cmd2 holds
-  /// `onLevel` in its high nibble and `rampRate` in its low nibble.
+  /// cmd2 holds `onLevel` in its high nibble and `rampRate` in its low nibble; higher bits of
+  /// each are ignored. The device turns on to level `16 × onLevel + 0x0F` at ramp rate
+  /// `2 × rampRate + 1`, so `onLevel: 0xF, rampRate: 0x7` is fully on over about 26 seconds.
+  /// The ramp rate applies to dimmable devices only.
   case onAtRampRate(onLevel: UInt8, rampRate: UInt8)
 
   /// Turns the device off at a ramp rate given as a 4-bit value (cmd1 `0x2F`).
   ///
-  /// Only the low four bits of `rampRate` are used.
+  /// Only the low four bits of `rampRate` are used; the device ramps off at rate
+  /// `2 × rampRate + 1`.
   case offAtRampRate(rampRate: UInt8)
 
-  /// Makes the device beep (cmd1 `0x30`).
+  /// Makes the device beep for its standard duration, if it has a beeper (cmd1 `0x30`).
   case beep
 
 }
@@ -119,10 +132,10 @@ public enum OperatingFlagsRequest: UInt8, Hashable, Sendable {
 /// The number of SET button taps simulated by ``StandardDirectCommand/remoteSetButtonTap(_:)``.
 public enum SetButtonTapCount: UInt8, Hashable, Sendable {
 
-  /// A single tap.
+  /// A single tap, which sets the device's on-level to its current level.
   case one = 0x01
 
-  /// A double tap.
+  /// A double tap, which sets the device's default ramp rate to its current ramp rate.
   case two = 0x02
 
 }
@@ -137,6 +150,8 @@ extension StandardDirectCommand: CommandConvertible {
     switch self {
     case .productDataRequest:
       Command(command1: 0x03)
+    case .exitLinkingMode:
+      Command(command1: 0x08)
     case let .enterLinkingMode(group):
       Command(command1: 0x09, command2: group)
     case let .enterUnlinkingMode(group):
