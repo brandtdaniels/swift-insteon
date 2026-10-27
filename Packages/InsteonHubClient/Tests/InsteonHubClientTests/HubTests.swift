@@ -13,12 +13,12 @@ struct HubTests {
 
   let lamp = InsteonAddress(0xAA, 0xBB, 0xCC)
 
-  @Test func sendsSerialCommandsAsHexInTheQuery() async throws {
+  @Test func writesBytesAsHexInTheQuery() async throws {
 
     let stub = StubHTTPClient()
     let hub = Hub(endpoint: endpoint, httpClient: stub)
 
-    try await hub.send(.sendStandardMessage(StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF))))
+    try await hub.write(SerialCommand.sendStandardMessage(StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF))).bytes)
 
     let request = try #require(await stub.requests.first)
     #expect(request.httpMethod == "GET")
@@ -26,13 +26,13 @@ struct HubTests {
 
   }
 
-  @Test func sendsLinkingCommandsLikeAnyOther() async throws {
+  @Test func writesLinkingCommandsLikeAnyOther() async throws {
 
     let stub = StubHTTPClient()
     let hub = Hub(endpoint: endpoint, httpClient: stub)
 
-    try await hub.send(.startAllLinking(mode: .controller, group: 0x01))
-    try await hub.send(.cancelAllLinking)
+    try await hub.write(SerialCommand.startAllLinking(mode: .controller, group: 0x01).bytes)
+    try await hub.write(SerialCommand.cancelAllLinking.bytes)
 
     let urls = await stub.requests.map { $0.url?.absoluteString }
     #expect(urls == ["http://hub.local:25105/3?02640101=I=3", "http://hub.local:25105/3?0265=I=3"])
@@ -73,7 +73,7 @@ struct HubTests {
 
     await #expect(throws: HubError.unexpectedStatus(401)) {
 
-      try await hub.send(.getModemInfo)
+      try await hub.write([0x02, 0x60])
 
     }
 
@@ -84,7 +84,7 @@ struct HubTests {
     let stub = StubHTTPClient()
     let hub = Hub(endpoint: endpoint, user: "user", password: "password", httpClient: stub)
 
-    try await hub.send(.getModemInfo)
+    try await hub.write([0x02, 0x60])
 
     let request = try #require(await stub.requests.first)
     #expect(request.value(forHTTPHeaderField: "Authorization") == "Basic dXNlcjpwYXNzd29yZA==")
@@ -95,7 +95,7 @@ struct HubTests {
 
     let stub = StubHTTPClient()
 
-    try await Hub(endpoint: HubEndpoint(host: "10.0.0.5", port: 8080), httpClient: stub).send(.beep)
+    try await Hub(endpoint: HubEndpoint(host: "10.0.0.5", port: 8080), httpClient: stub).write([0x02, 0x77])
 
     #expect(await stub.requests.first?.url?.absoluteString == "http://10.0.0.5:8080/3?0277=I=3")
 

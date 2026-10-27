@@ -4,10 +4,13 @@ Control INSTEON devices through an INSTEON Hub on your local network.
 
 ## Overview
 
-An INSTEON Hub has a built-in INSTEON modem that it exposes through a local HTTP interface. ``Hub`` sends serial commands to that modem and reads back its replies.
+An INSTEON Hub has a built-in INSTEON modem that it exposes through a local HTTP interface. ``HubConnection`` turns that interface into a `ModemConnection`, so a `Modem`
+from InsteonModem drives a Hub exactly as it drives a USB or serial PowerLinc Modem, with the
+same pacing, retries and stream of replies.
 
 ```swift
 import InsteonHubClient
+import InsteonModem
 import InsteonProtocol
 
 let hub = Hub(
@@ -15,31 +18,30 @@ let hub = Hub(
   user: username,
   password: password
 )
+let modem = Modem(connection: HubConnection(hub: hub))
 
 let lamp = InsteonAddress(0xAA, 0xBB, 0xCC)
-try await hub.send(.sendStandardMessage(
+try await modem.send(.sendStandardMessage(
   StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF))
 ))
 ```
 
-``Hub`` conforms to `SerialCommandSender`, so code that sends commands can depend on that
-protocol and work with any modem connection.
+### How the Hub is polled
 
-### Reading replies
+The Hub collects the modem's replies in a ring buffer rather than pushing them. ``HubConnection``
+reads it every half second by default, using a ``HubBufferCursor`` to pick out only the bytes
+that arrived since the last read, and sends one request to the Hub at a time. Its first request
+clears the buffer, so replies from before the connection was made are ignored.
 
-The Hub collects the modem's replies in a ring buffer. Poll it with ``Hub/readBuffer()`` and
-use a ``HubBufferCursor`` to get only the bytes that arrived since the last read:
+The Hub starts its buffer over for every command, so ``HubConnection`` reads the buffer just
+before each write and keeps what it finds, rather than losing replies that arrived between
+polls. A poll that fails, such as one that times out, is tried again at the next interval; the
+connection gives up after ``HubConnection/defaultFailureLimit`` failures in a row, or at once
+if the Hub answers with an error status such as `401`.
 
-```swift
-try await hub.clearBuffer()
-var cursor = HubBufferCursor()
-var parser = ModemReplyParser()
-
-let replies = parser.parse(cursor.advance(to: try await hub.readBuffer()))
-```
-
-`ModemReplyParser`, from InsteonProtocol, turns those bytes into typed replies, such as the
-echo of each command with its ACK or NAK, and messages received from devices.
+``Hub`` is the HTTP interface underneath: writing bytes, reading the buffer and clearing it,
+with no pacing or retries. Use it directly only to build something other than a
+`ModemConnection` on top of the Hub.
 
 ### Credentials and networking
 
@@ -61,11 +63,12 @@ Both supported Hubs were sold as the INSTEON Hub, so they're identified here by 
 
 ### Connecting
 
-- ``Hub``
+- ``HubConnection``
 - ``HubEndpoint``
 - ``HubError``
 
-### Reading replies
+### The Hub's HTTP interface
 
+- ``Hub``
 - ``HubBuffer``
 - ``HubBufferCursor``

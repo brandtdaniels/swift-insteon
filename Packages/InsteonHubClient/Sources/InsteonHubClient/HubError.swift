@@ -1,4 +1,4 @@
-/// Errors reported by ``Hub``.
+/// Errors reported by ``Hub`` and ``HubConnection``.
 public enum HubError: Error, Hashable, Sendable {
 
   /// The endpoint's host and port don't form a valid URL.

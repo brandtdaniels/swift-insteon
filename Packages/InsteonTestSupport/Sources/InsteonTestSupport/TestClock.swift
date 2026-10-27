@@ -3,26 +3,40 @@ import Foundation
 /// A clock that only moves when a test advances it, so timing in tests is deterministic.
 ///
 /// Sleeping until a deadline that has already passed returns at once; any other sleep waits
-/// for ``advance(by:)`` to reach its deadline, or for its task to be cancelled.
-final class TestClock: Clock, @unchecked Sendable {
+/// for ``advance(by:)`` to reach its deadline, or for its task to be canceled.
+public final class TestClock: Clock, @unchecked Sendable {
 
-  struct Instant: InstantProtocol {
+  /// A point in time, measured from the clock's start.
+  public struct Instant: InstantProtocol {
 
-    var offset: Duration
+    /// How far past the clock's start this instant is.
+    public var offset: Duration
 
-    func advanced(by duration: Duration) -> Instant {
+    /// Creates an instant.
+    ///
+    /// - Parameter offset: How far past the clock's start the instant is.
+    public init(offset: Duration) {
+
+      self.offset = offset
+
+    }
+
+    /// Returns the instant a duration later.
+    public func advanced(by duration: Duration) -> Instant {
 
       Instant(offset: offset + duration)
 
     }
 
-    func duration(to other: Instant) -> Duration {
+    /// Returns the duration until another instant.
+    public func duration(to other: Instant) -> Duration {
 
       other.offset - offset
 
     }
 
-    static func < (lhs: Instant, rhs: Instant) -> Bool {
+    /// Returns whether one instant is earlier than another.
+    public static func < (lhs: Instant, rhs: Instant) -> Bool {
 
       lhs.offset < rhs.offset
 
@@ -49,15 +63,21 @@ final class TestClock: Clock, @unchecked Sendable {
 
   private var sleepers: [Sleeper] = []
 
-  private var cancelledIDs: Set<Int> = []
+  private var canceledIDs: Set<Int> = []
 
   private var sleeperWaiters: [(deadline: Instant, continuation: CheckedContinuation<Void, Never>)] = []
 
-  var now: Instant { lock.withLock { current } }
+  /// Creates a clock at its start.
+  public init() {}
 
-  var minimumResolution: Duration { .zero }
+  /// The clock's current time.
+  public var now: Instant { lock.withLock { current } }
 
-  func sleep(until deadline: Instant, tolerance: Duration? = nil) async throws {
+  /// The smallest step the clock moves by: any duration.
+  public var minimumResolution: Duration { .zero }
+
+  /// Sleeps until the clock reaches a deadline.
+  public func sleep(until deadline: Instant, tolerance: Duration? = nil) async throws {
 
     let id = lock.withLock {
 
@@ -73,7 +93,7 @@ final class TestClock: Clock, @unchecked Sendable {
 
         let woken: [CheckedContinuation<Void, Never>] = lock.withLock {
 
-          if cancelledIDs.remove(id) != nil {
+          if canceledIDs.remove(id) != nil {
 
             continuation.resume(throwing: CancellationError())
 
@@ -101,11 +121,11 @@ final class TestClock: Clock, @unchecked Sendable {
 
     } onCancel: {
 
-      let cancelled: Sleeper? = lock.withLock {
+      let canceled: Sleeper? = lock.withLock {
 
         guard let index = sleepers.firstIndex(where: { $0.id == id }) else {
 
-          cancelledIDs.insert(id)
+          canceledIDs.insert(id)
 
           return nil
 
@@ -115,14 +135,14 @@ final class TestClock: Clock, @unchecked Sendable {
 
       }
 
-      cancelled?.continuation.resume(throwing: CancellationError())
+      canceled?.continuation.resume(throwing: CancellationError())
 
     }
 
   }
 
   /// Moves the clock forward, waking every sleeper whose deadline it reaches.
-  func advance(by duration: Duration) {
+  public func advance(by duration: Duration) {
 
     let due: [Sleeper] = lock.withLock {
 
@@ -140,7 +160,7 @@ final class TestClock: Clock, @unchecked Sendable {
   }
 
   /// Waits until a task is sleeping until `offset` past the clock's start.
-  func waitForSleeper(until offset: Duration) async {
+  public func waitForSleeper(until offset: Duration) async {
 
     let deadline = Instant(offset: offset)
 

@@ -40,12 +40,12 @@ let package = Package(
 
     .target(
       name: "InsteonHubClient",
-      dependencies: ["InsteonProtocol", "InsteonNetworking"],
+      dependencies: ["InsteonModem", "InsteonNetworking"],
       path: "Packages/InsteonHubClient/Sources/InsteonHubClient"
     ),
     .testTarget(
       name: "InsteonHubClientTests",
-      dependencies: ["InsteonHubClient", "InsteonProtocol", "InsteonNetworking"],
+      dependencies: ["InsteonHubClient", "InsteonModem", "InsteonNetworking", "InsteonProtocol", "InsteonTestSupport"],
       path: "Packages/InsteonHubClient/Tests/InsteonHubClientTests"
     ),
 
@@ -56,8 +56,14 @@ let package = Package(
     ),
     .testTarget(
       name: "InsteonModemTests",
-      dependencies: ["InsteonModem", "InsteonProtocol"],
+      dependencies: ["InsteonModem", "InsteonProtocol", "InsteonTestSupport"],
       path: "Packages/InsteonModem/Tests/InsteonModemTests"
+    ),
+
+    // Test doubles shared by the test targets. Not a product.
+    .target(
+      name: "InsteonTestSupport",
+      path: "Packages/InsteonTestSupport/Sources/InsteonTestSupport"
     )
   ]
 )
