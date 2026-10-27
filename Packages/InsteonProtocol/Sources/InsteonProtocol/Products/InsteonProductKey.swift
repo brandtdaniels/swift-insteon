@@ -1,6 +1,6 @@
 /// The three-byte INSTEON Product Key (IPK) that identifies a product model.
 ///
-/// The product key is the primary key of the INSTEON Product Database. A device reports it in
+/// A ``ProductDatabase`` looks products up by their product key. A device reports it in
 /// its ``ProductData``. Devices without a product key don't report one; identify them by
 /// their ``DeviceCategory`` and subcategory instead.
 ///

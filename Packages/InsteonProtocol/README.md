@@ -28,7 +28,7 @@ Additional commands conform to `CommandConvertible`, so they never touch the mes
 
 - `DeviceCategory` and `InsteonProductKey`: a device's category (DevCat) and product key (IPK)
 - `SetButtonPressed` and `ProductData`: read the identity a device reports in reply to an ID request or a product data request
-- `ProductDatabase` and `DeviceCapabilities`: look up what a device can do for its firmware version in the INSTEON Product Database, from whichever source the app provides
+- `ProductDatabase` and `DeviceCapabilities`: look up what a device can do for its firmware version in a product database, from whichever source the app provides
 
 No device data is built in, so every app reads the same product database instead of keeping its own list.
 
