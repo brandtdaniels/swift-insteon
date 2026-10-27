@@ -1,8 +1,8 @@
 /// The firmware version a device or modem reports.
 ///
-/// What a device can do may depend on its firmware, so a ``ProductDatabase`` looks devices up
-/// by firmware version as well as by category and subcategory. Versions compare by number, so
-/// a database can find the closest earlier version it has a record for.
+/// What a device can do may depend on its firmware, so a device database looks devices up by
+/// firmware version as well as by category and subcategory. Versions compare by number, so a
+/// database can find the closest earlier version it has a record for.
 ///
 /// ```swift
 /// let version: FirmwareVersion = 0x41
