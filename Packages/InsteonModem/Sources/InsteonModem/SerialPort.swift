@@ -11,7 +11,9 @@ import Glibc
 /// USB (2413U) or serial cable (2413S).
 ///
 /// The port is opened in raw mode at 19200 baud, 8 data bits, no parity and one stop bit, the
-/// settings INSTEON modems use. On macOS, USB modems appear as `/dev/cu.usbserial-*`; on
+/// settings INSTEON modems use, without hardware flow control. Each command is written in a
+/// single call, because the modem discards a command if more than 240 ms pass between its
+/// bytes. On macOS, USB modems appear as `/dev/cu.usbserial-*`; on
 /// Linux, as `/dev/ttyUSB*`.
 ///
 /// Available on macOS and Linux.

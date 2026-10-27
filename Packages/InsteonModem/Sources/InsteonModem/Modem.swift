@@ -3,7 +3,8 @@ import InsteonProtocol
 /// Talks to an INSTEON modem, such as a PowerLinc Modem, over a ``ModemConnection``.
 ///
 /// ``Modem/send(_:)`` sends one command at a time and waits for the modem's echo, retrying
-/// when the modem answers with a NAK because it's busy. Everything the modem sends, including
+/// when the modem answers with a NAK because it's busy. Modems expect this pacing: a command
+/// sent before the previous one is answered may be lost. Everything the modem sends, including
 /// messages from devices, is published to every stream returned by ``Modem/replies()``.
 ///
 /// ```swift
