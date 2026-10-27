@@ -46,5 +46,5 @@ user data before acting on it:
   of the sum of cmd1, cmd2 and D1–D13.
 - Some devices use a two-byte CRC in D13–D14 for certain commands (``CRCIntegrity``).
 
-``ExtendedMessage`` applies the checksum by default. i1 and i2 devices ignore it, so it is safe to
-send to them.
+``ExtendedMessage`` applies the checksum by default. Devices with i1 and i2 engines ignore it,
+so it is safe to send to them.
