@@ -40,6 +40,8 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 
 - ``InsteonAddress``
 - ``MessageFlags``
+- ``NAKReason``
+- ``InsteonEngine``
 
 ### Commands
 
