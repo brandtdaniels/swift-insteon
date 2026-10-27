@@ -1,5 +1,3 @@
-import InsteonMessage
-
 /// A record in an ALL-Link database, describing one link with another device.
 ///
 /// The three data bytes depend on the device and the record's role. For a responder record

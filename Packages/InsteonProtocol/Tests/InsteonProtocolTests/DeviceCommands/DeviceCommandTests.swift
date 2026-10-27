@@ -1,7 +1,7 @@
 import Testing
-import InsteonMessage
+import InsteonProtocol
 
-struct CommandTests {
+struct DeviceCommandTests {
 
   static let extendedDirectCommands: [(ExtendedDirectCommand, Command)] = [
     (.extendedGetSet, Command(command1: 0x2E)),

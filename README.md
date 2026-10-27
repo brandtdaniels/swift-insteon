@@ -4,15 +4,14 @@ Swift packages for working with [INSTEON](https://www.insteon.com) home automati
 
 | Library | Description |
 | --- | --- |
-| [InsteonMessage](Packages/InsteonMessage) | Build INSTEON messages and encode them for sending to a modem or hub |
-| [InsteonSerialCommand](Packages/InsteonSerialCommand) | Build the serial commands a host sends to an INSTEON modem |
+| [InsteonProtocol](Packages/InsteonProtocol) | The INSTEON protocol as value types: messages for devices, and the serial commands that carry them through a modem |
 | [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the INSTEON clients send requests through |
 
 ## Requirements
 
 - Swift 6.0 or later
 - macOS 13, iOS 16, tvOS 16, watchOS 9 or visionOS 1 and later, or Linux
-- InsteonMessage and InsteonSerialCommand depend only on the Swift standard library; the networking libraries use Foundation
+- InsteonProtocol depends only on the Swift standard library; the networking libraries use Foundation
 
 ## Installation
 
@@ -28,7 +27,7 @@ Then add the libraries you need to your target:
 .target(
   name: "MyApp",
   dependencies: [
-    .product(name: "InsteonMessage", package: "swift-insteon")
+    .product(name: "InsteonProtocol", package: "swift-insteon")
   ]
 )
 ```
@@ -36,7 +35,7 @@ Then add the libraries you need to your target:
 ## Usage
 
 ```swift
-import InsteonMessage
+import InsteonProtocol
 
 let lamp = InsteonAddress("1A.2B.3C")!
 
@@ -54,7 +53,7 @@ let getConfiguration = ExtendedMessage(
 getConfiguration.hexString  // ends in "D1", the checksum i2cs devices require
 ```
 
-Commands the typed catalogues don't cover can be sent as raw bytes with `Command(command1:command2:)`, or added by conforming your own type to `CommandConvertible`.
+Commands the typed catalogs don't cover can be sent as raw bytes with `Command(command1:command2:)`, or added by conforming your own type to `CommandConvertible`.
 
 ## Documentation
 

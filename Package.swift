@@ -12,30 +12,18 @@ let package = Package(
     .visionOS(.v1)
   ],
   products: [
-    .library(name: "InsteonMessage", targets: ["InsteonMessage"]),
-    .library(name: "InsteonSerialCommand", targets: ["InsteonSerialCommand"]),
+    .library(name: "InsteonProtocol", targets: ["InsteonProtocol"]),
     .library(name: "InsteonNetworking", targets: ["InsteonNetworking"])
   ],
   targets: [
     .target(
-      name: "InsteonMessage",
-      path: "Packages/InsteonMessage/Sources/InsteonMessage"
+      name: "InsteonProtocol",
+      path: "Packages/InsteonProtocol/Sources/InsteonProtocol"
     ),
     .testTarget(
-      name: "InsteonMessageTests",
-      dependencies: ["InsteonMessage"],
-      path: "Packages/InsteonMessage/Tests/InsteonMessageTests"
-    ),
-
-    .target(
-      name: "InsteonSerialCommand",
-      dependencies: ["InsteonMessage"],
-      path: "Packages/InsteonSerialCommand/Sources/InsteonSerialCommand"
-    ),
-    .testTarget(
-      name: "InsteonSerialCommandTests",
-      dependencies: ["InsteonSerialCommand", "InsteonMessage"],
-      path: "Packages/InsteonSerialCommand/Tests/InsteonSerialCommandTests"
+      name: "InsteonProtocolTests",
+      dependencies: ["InsteonProtocol"],
+      path: "Packages/InsteonProtocol/Tests/InsteonProtocolTests"
     ),
 
     .target(
