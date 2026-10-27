@@ -47,7 +47,7 @@ userData[1] = 0x01
 
 let getConfiguration = ExtendedMessage(
   to: lamp,
-  command: ExtendedDirectCommand.extendedGetSet,
+  command: ExtendedDirectCommand.getSet,
   userData: userData
 )
 getConfiguration.hexString  // ends in "D1", the checksum i2cs devices require
