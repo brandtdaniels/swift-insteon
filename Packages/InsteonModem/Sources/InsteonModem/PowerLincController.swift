@@ -10,8 +10,8 @@ import InsteonProtocol
 ///
 /// | Command | IBIOS |
 /// | --- | --- |
-/// | `SerialCommand.sendStandardMessage(_:)` | Downloads the message to `0x01A4`, then sets bit 4 of `0x0142` |
-/// | `SerialCommand.sendX10(_:)` | Downloads the X10 byte to `0x0165`, then sets bit 7 of `0x0166` and bit 3 for a command |
+/// | `SerialCommand.sendStandardMessage(_:)` | Downloads the message to `0x01A4`, confirms it with Get Checksum, then sets bit 4 of `0x0142` |
+/// | `SerialCommand.sendX10(_:)` | Downloads the X10 byte to `0x0165`, confirms it with Get Checksum, then sets bit 7 of `0x0166` and bit 3 for a command |
 /// | `SerialCommand.getModemInfo` | Get Version, answered with `IBIOSReply.version(_:)` |
 ///
 /// The addresses come from the worked examples in the INSTEON Developer's Guide, chapter 9,
@@ -38,11 +38,48 @@ import InsteonProtocol
 /// ```
 public actor PowerLincController: SerialCommandSender {
 
+  /// An IBIOS command, and how to tell that the controller carried it out.
+  private struct Step {
+
+    let command: IBIOSCommand
+
+    /// For a Get Checksum that confirms a download, the checksums the download's data reads
+    /// back as. Any other checksum means the data wasn't written correctly.
+    var confirmingChecksums: Set<UInt16> = []
+
+    /// The error to throw if the controller rejects every attempt.
+    var rejected: PowerLincControllerError
+
+    init(_ command: IBIOSCommand) {
+
+      self.command = command
+      self.rejected = .rejected(command)
+
+    }
+
+    /// A Get Checksum that confirms a download wrote its data correctly.
+    init(confirming address: UInt16, data: [UInt8]) {
+
+      let length = UInt16(data.count)
+
+      self.command = .getChecksum(address: address, length: length)
+      // The developer guide describes this checksum as covering the region's bytes, and the
+      // download's as also covering its address and length, so either confirms the data.
+      self.confirmingChecksums = [
+        IBIOSCommand.checksum(of: data),
+        IBIOSCommand.checksum(of: [UInt8(address >> 8), UInt8(address & 0xFF), UInt8(length >> 8), UInt8(length & 0xFF)] + data)
+      ]
+      self.rejected = .unconfirmedDownload(address: address)
+
+    }
+
+  }
+
   private struct PendingAnswer {
 
     let id: Int
 
-    let command: IBIOSCommand
+    let step: Step
 
     let result: AsyncStream<Result<Bool, any Error>>.Continuation
 
@@ -53,7 +90,7 @@ public actor PowerLincController: SerialCommandSender {
 
     let id: Int
 
-    let command: IBIOSCommand
+    let step: Step
 
     let results: AsyncStream<Result<Bool, any Error>>
 
@@ -158,7 +195,7 @@ public actor PowerLincController: SerialCommandSender {
   ///   sending anything; otherwise the errors sending an `IBIOSCommand` throws.
   public func send(_ command: SerialCommand) async throws {
 
-    let steps = try Self.ibiosCommands(for: command)
+    let steps = try Self.steps(for: command)
 
     try await waitForTurn()
     defer { turns.release() }
@@ -192,7 +229,7 @@ public actor PowerLincController: SerialCommandSender {
 
     try await waitForUnansweredCommand()
 
-    try await perform(command)
+    try await perform(Step(command))
 
   }
 
@@ -246,42 +283,49 @@ public actor PowerLincController: SerialCommandSender {
 
   }
 
-  private static func ibiosCommands(for command: SerialCommand) throws(PowerLincControllerError) -> [IBIOSCommand] {
+  /// The steps that carry a modem command. Each download is confirmed with Get Checksum before
+  /// the flag that sends it is set, as the developer guide advises, since an ACK means only that
+  /// the controller received the bytes.
+  private static func steps(for command: SerialCommand) throws(PowerLincControllerError) -> [Step] {
 
     switch command {
     case let .sendStandardMessage(message):
-      return [
-        .download(address: Memory.messageDestination, data: message.bytes),
-        .mask(address: Memory.insteonControl, or: Memory.insteonRequestToSend, and: 0xFF)
+      return download(message.bytes, to: Memory.messageDestination) + [
+        Step(.mask(address: Memory.insteonControl, or: Memory.insteonRequestToSend, and: 0xFF))
       ]
     case let .sendX10(code):
       let isCommand = if case .command = code { true } else { false }
 
-      return [
-        .download(address: Memory.x10Transmit, data: [code.rawX10]),
-        .mask(
+      return download([code.rawX10], to: Memory.x10Transmit) + [
+        Step(.mask(
           address: Memory.x10Flags,
           or: Memory.x10RequestToSend | (isCommand ? Memory.x10IsCommand : 0),
           and: isCommand ? 0xFF : ~Memory.x10IsCommand
-        )
+        ))
       ]
     case .getModemInfo:
-      return [.getVersion]
+      return [Step(.getVersion)]
     default:
       throw .unsupported(command)
     }
 
   }
 
+  private static func download(_ data: [UInt8], to address: UInt16) -> [Step] {
+
+    [Step(.download(address: address, data: data)), Step(confirming: address, data: data)]
+
+  }
+
   // MARK: - Sending
 
-  private func perform(_ command: IBIOSCommand) async throws {
+  private func perform(_ step: Step) async throws {
 
     for attempt in 1...retryPolicy.attempts {
 
       try Task.checkCancellation()
 
-      if try await transmit(command) {
+      if try await transmit(step) {
 
         return
 
@@ -295,14 +339,14 @@ public actor PowerLincController: SerialCommandSender {
 
     }
 
-    throw PowerLincControllerError.rejected(command)
+    throw step.rejected
 
   }
 
   /// Writes a command and waits for its answer, a NAK, the timeout or cancellation.
   ///
   /// - Returns: Whether the controller accepted the command.
-  private func transmit(_ command: IBIOSCommand) async throws -> Bool {
+  private func transmit(_ step: Step) async throws -> Bool {
 
     guard !isClosed else {
 
@@ -313,12 +357,12 @@ public actor PowerLincController: SerialCommandSender {
     let id = makeID()
     let (results, continuation) = AsyncStream<Result<Bool, any Error>>.makeStream()
 
-    pendingAnswer = PendingAnswer(id: id, command: command, result: continuation)
+    pendingAnswer = PendingAnswer(id: id, step: step, result: continuation)
     defer { abandonAnswer(id) }
 
-    return try await awaitAnswer(id, command: command, results: results) { [connection] in
+    return try await awaitAnswer(id, command: step.command, results: results) { [connection] in
 
-      try await connection.write(command.bytes)
+      try await connection.write(step.command.bytes)
 
     }.get()
 
@@ -337,7 +381,7 @@ public actor PowerLincController: SerialCommandSender {
     unansweredCommand = nil
     defer { abandonAnswer(unanswered.id) }
 
-    _ = await awaitAnswer(unanswered.id, command: unanswered.command, results: unanswered.results) {}
+    _ = await awaitAnswer(unanswered.id, command: unanswered.step.command, results: unanswered.results) {}
 
     try Task.checkCancellation()
 
@@ -351,7 +395,7 @@ public actor PowerLincController: SerialCommandSender {
     write: @escaping @Sendable () async throws -> Void
   ) async -> Result<Bool, any Error> {
 
-    let timeout = retryPolicy.echoTimeout
+    let timeout = retryPolicy.echoTimeout + Self.transferTime(of: command)
 
     return await withTaskGroup(of: Void.self, returning: Result<Bool, any Error>.self) { group in
 
@@ -440,8 +484,8 @@ public actor PowerLincController: SerialCommandSender {
 
     let (results, continuation) = AsyncStream<Result<Bool, any Error>>.makeStream()
 
-    pendingAnswer = PendingAnswer(id: id, command: pending.command, result: continuation)
-    unansweredCommand = UnansweredCommand(id: id, command: pending.command, results: results)
+    pendingAnswer = PendingAnswer(id: id, step: pending.step, result: continuation)
+    unansweredCommand = UnansweredCommand(id: id, step: pending.step, results: results)
 
   }
 
@@ -489,7 +533,7 @@ public actor PowerLincController: SerialCommandSender {
 
     for reply in replies {
 
-      if let pending = pendingAnswer, let isAccepted = Self.answer(reply, to: pending.command) {
+      if let pending = pendingAnswer, let isAccepted = Self.answer(reply, to: pending.step) {
 
         completePendingAnswer(.success(isAccepted))
 
@@ -512,9 +556,26 @@ public actor PowerLincController: SerialCommandSender {
 
   }
 
-  /// Whether a reply answers a command: `true` if it accepts it, `false` if it rejects it, or
+  /// How long the data a command moves takes to cross the serial port at 4800 baud, where
+  /// each byte takes 10 bits, so a large upload or download isn't timed out before it
+  /// finishes.
+  private static func transferTime(of command: IBIOSCommand) -> Duration {
+
+    let byteCount = switch command {
+    case let .download(_, data): data.count
+    case let .upload(_, length): Int(length)
+    default: 0
+    }
+
+    return .seconds(byteCount * 10) / 4800
+
+  }
+
+  /// Whether a reply answers a step: `true` if it accepts it, `false` if it rejects it, or
   /// `nil` if it's about something else.
-  private static func answer(_ reply: IBIOSReply, to command: IBIOSCommand) -> Bool? {
+  private static func answer(_ reply: IBIOSReply, to step: Step) -> Bool? {
+
+    let command = step.command
 
     switch (reply, command) {
     case let (.echo(echo), _) where echo.number == command.number:
@@ -531,10 +592,17 @@ public actor PowerLincController: SerialCommandSender {
       return echo.parameters.isEmpty || echo.parameters == expected ? false : nil
     case (.version, .getVersion):
       return true
-    case let (.memory(address, data, _), .upload(expectedAddress, length)):
-      return address == expectedAddress && data.count == Int(length) ? true : nil
-    case let (.checksum(address, length, _), .getChecksum(expectedAddress, expectedLength)):
-      return address == expectedAddress && length == expectedLength ? true : nil
+    case let (.memory(address, data, isIntact), .upload(expectedAddress, length)):
+      // Memory that arrives damaged is read again.
+      return address == expectedAddress && data.count == Int(length) ? isIntact : nil
+    case let (.checksum(address, length, checksum), .getChecksum(expectedAddress, expectedLength)):
+      guard address == expectedAddress && length == expectedLength else {
+
+        return nil
+
+      }
+
+      return step.confirmingChecksums.isEmpty || step.confirmingChecksums.contains(checksum)
     case (.negativeAcknowledgement, _):
       return false
     default:

@@ -54,7 +54,9 @@ test log for it, it rejects X10 commands and Beep, so expect ``ModemError/reject
 
 The PowerLinc Controller (2414S) runs IBIOS rather than the IM serial commands: the host sends
 an INSTEON message by writing it into the controller's memory and setting a flag.
-``PowerLincController`` does that for standard messages and X10, and answers
+``PowerLincController`` does that for standard messages and X10, confirming each write with
+Get Checksum before it sets the flag, since the controller's ACK means only that it received
+the bytes. It also answers
 `SerialCommand.getModemInfo` with the controller's version, so code written against
 `SerialCommandSender` works with it. It doesn't carry extended messages or the modem's
 ALL-Link database commands.

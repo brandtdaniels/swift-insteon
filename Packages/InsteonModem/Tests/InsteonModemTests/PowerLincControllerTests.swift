@@ -39,18 +39,14 @@ struct PowerLincControllerTests {
   /// Answers a command the way IBIOS does.
   static func answer(_ frame: [UInt8]) -> [UInt8] {
 
-    switch frame[1] {
-    // A download's echo repeats only its address and length.
-    case 0x40: Array(frame.prefix(6)) + [0x06]
-    case 0x48: bytes("0248" + "1A2B3C" + "0302" + "FF" + "06")
-    default: frame + [0x06]
-    }
+    SimulatedIBIOS().answer(frame)
 
   }
 
   @Test func sendsAStandardMessageAsTheGuideDoes() async throws {
 
-    let connection = ScriptedConnection { frame, _ in Self.answer(frame) }
+    let ibios = SimulatedIBIOS()
+    let connection = ScriptedConnection { frame, _ in ibios.answer(frame) }
     let controller = makeController(connection)
     let lamp = InsteonAddress(0x00, 0x02, 0xAC)
 
@@ -62,6 +58,7 @@ struct PowerLincControllerTests {
 
     #expect(connection.written == [
       Self.bytes("024001A40006FD880002AC0F11FF"),
+      Self.bytes("024401A40006"),
       Self.bytes("0246014210FF")
     ])
 
@@ -69,7 +66,8 @@ struct PowerLincControllerTests {
 
   @Test func sendsX10AsTheGuideDoes() async throws {
 
-    let connection = ScriptedConnection { frame, _ in Self.answer(frame) }
+    let ibios = SimulatedIBIOS()
+    let connection = ScriptedConnection { frame, _ in ibios.answer(frame) }
     let controller = makeController(connection)
 
     try await run(controller) {
@@ -81,8 +79,10 @@ struct PowerLincControllerTests {
 
     #expect(connection.written == [
       Self.bytes("024001650001FF3366"),
+      Self.bytes("024401650001"),
       Self.bytes("0246016680F7"),
       Self.bytes("024001650001FF3762"),
+      Self.bytes("024401650001"),
       Self.bytes("0246016688FF")
     ])
 
@@ -90,7 +90,8 @@ struct PowerLincControllerTests {
 
   @Test func answersGetModemInfoWithItsVersion() async throws {
 
-    let connection = ScriptedConnection { frame, _ in Self.answer(frame) }
+    let ibios = SimulatedIBIOS()
+    let connection = ScriptedConnection { frame, _ in ibios.answer(frame) }
     let controller = makeController(connection)
     var replies = await controller.replies().makeAsyncIterator()
 
@@ -117,7 +118,8 @@ struct PowerLincControllerTests {
   ])
   func rejectsCommandsItCantCarry(_ command: SerialCommand) async throws {
 
-    let connection = ScriptedConnection { frame, _ in Self.answer(frame) }
+    let ibios = SimulatedIBIOS()
+    let connection = ScriptedConnection { frame, _ in ibios.answer(frame) }
     let controller = makeController(connection)
 
     await #expect(throws: PowerLincControllerError.unsupported(command)) {
@@ -132,7 +134,8 @@ struct PowerLincControllerTests {
 
   @Test func retriesAfterANak() async throws {
 
-    let connection = ScriptedConnection { frame, index in index == 0 ? [0x15] : Self.answer(frame) }
+    let ibios = SimulatedIBIOS()
+    let connection = ScriptedConnection { frame, index in index == 0 ? [0x15] : ibios.answer(frame) }
     let controller = makeController(connection)
 
     try await run(controller) {
@@ -144,6 +147,7 @@ struct PowerLincControllerTests {
     #expect(connection.written == [
       Self.bytes("024001650001FF3366"),
       Self.bytes("024001650001FF3366"),
+      Self.bytes("024401650001"),
       Self.bytes("0246016680F7")
     ])
 
@@ -166,6 +170,53 @@ struct PowerLincControllerTests {
     }
 
     #expect(connection.written.count == 3)
+
+  }
+
+  @Test func doesntSendADownloadThatDoesntReadBack() async throws {
+
+    // The controller acknowledges the download, but its memory reads back with the wrong checksum.
+    let connection = ScriptedConnection { frame, _ in
+
+      frame[1] == 0x44 ? frame + [0x00, 0x00, 0x06] : SimulatedIBIOS().answer(frame)
+
+    }
+    let controller = makeController(connection)
+
+    try await run(controller) {
+
+      await #expect(throws: PowerLincControllerError.unconfirmedDownload(address: 0x0165)) {
+
+        try await controller.send(.sendX10(.unit(.a, .one)))
+
+      }
+
+    }
+
+    // The checksum is read once per attempt, and the flag that would send the byte is never set.
+    #expect(connection.written == [Self.bytes("024001650001FF3366")] + Array(repeating: Self.bytes("024401650001"), count: 3))
+
+  }
+
+  @Test func readsDamagedMemoryAgain() async throws {
+
+    let ibios = SimulatedIBIOS()
+    let connection = ScriptedConnection { frame, index in
+
+      // The first upload arrives with a checksum that doesn't match its data.
+      index == 0 ? Self.bytes("02420300000400000000" + "0000" + "06") : ibios.answer(frame)
+
+    }
+    let controller = makeController(connection)
+    let command = IBIOSCommand.upload(address: 0x0300, length: 4)
+
+    try await run(controller) {
+
+      try await controller.send(command)
+
+    }
+
+    #expect(connection.written == [command.bytes, command.bytes])
 
   }
 
@@ -251,6 +302,51 @@ struct PowerLincControllerTests {
     let digits = Array(hex)
 
     return stride(from: 0, to: digits.count, by: 2).map { UInt8(String(digits[$0..<$0 + 2]), radix: 16)! }
+
+  }
+
+}
+
+/// A PowerLinc Controller's memory, answering commands the way IBIOS does.
+///
+/// `ScriptedConnection` calls it under its lock, one frame at a time.
+final class SimulatedIBIOS {
+
+  private var memory = [UInt8](repeating: 0, count: 0x1_0000)
+
+  /// Answers a command frame.
+  func answer(_ frame: [UInt8]) -> [UInt8] {
+
+    switch frame[1] {
+    case 0x40:
+      let address = Self.word(frame, at: 2)
+      let data = Array(frame.dropFirst(8))
+      memory.replaceSubrange(address..<address + data.count, with: data)
+
+      // A download's echo repeats only its address and length.
+      return Array(frame.prefix(6)) + [0x06]
+    case 0x42:
+      let address = Self.word(frame, at: 2)
+      let data = Array(memory[address..<address + Self.word(frame, at: 4)])
+      let checksum = IBIOSCommand.checksum(of: Array(frame[2..<6]) + data)
+
+      return frame + data + [UInt8(checksum >> 8), UInt8(checksum & 0xFF), 0x06]
+    case 0x44:
+      let address = Self.word(frame, at: 2)
+      let checksum = IBIOSCommand.checksum(of: memory[address..<address + Self.word(frame, at: 4)])
+
+      return frame + [UInt8(checksum >> 8), UInt8(checksum & 0xFF), 0x06]
+    case 0x48:
+      return PowerLincControllerTests.bytes("0248" + "1A2B3C" + "0302" + "FF" + "06")
+    default:
+      return frame + [0x06]
+    }
+
+  }
+
+  private static func word(_ frame: [UInt8], at index: Int) -> Int {
+
+    Int(frame[index]) << 8 | Int(frame[index + 1])
 
   }
 

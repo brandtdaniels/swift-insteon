@@ -14,9 +14,12 @@ public enum IBIOSCommand: Hashable, Sendable {
 
   /// Writes bytes into memory (`0x40`), protected by a checksum.
   ///
+  /// An ACK means IBIOS received the bytes, not that it wrote them correctly, so confirm a
+  /// download with ``IBIOSCommand/getChecksum(address:length:)``.
+  ///
   /// - Parameters:
   ///   - address: The address of the first byte to write.
-  ///   - data: The bytes to write.
+  ///   - data: The bytes to write: at most 65,535, since the length is sent in two bytes.
   case download(address: UInt16, data: [UInt8])
 
   /// Reads bytes from memory (`0x42`).
@@ -27,6 +30,9 @@ public enum IBIOSCommand: Hashable, Sendable {
   case upload(address: UInt16, length: UInt16)
 
   /// Asks for the checksum of a region of memory (`0x44`), for example to confirm a download.
+  ///
+  /// The checksum covers only the region's bytes, so a correct download of `data` reads back
+  /// as `IBIOSCommand.checksum(of: data)`.
   ///
   /// - Parameters:
   ///   - address: The address of the region's first byte.
@@ -75,7 +81,7 @@ public enum IBIOSCommand: Hashable, Sendable {
 
     switch self {
     case let .download(address, data):
-      let header = address.bigEndianBytes + UInt16(truncatingIfNeeded: data.count).bigEndianBytes
+      let header = address.bigEndianBytes + UInt16(data.count).bigEndianBytes
       return header + Self.checksum(of: header + data).bigEndianBytes + data
     case let .upload(address, length), let .getChecksum(address, length):
       return address.bigEndianBytes + length.bigEndianBytes

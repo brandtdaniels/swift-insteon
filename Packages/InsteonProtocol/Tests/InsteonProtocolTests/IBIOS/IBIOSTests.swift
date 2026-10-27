@@ -130,6 +130,30 @@ struct IBIOSTests {
 
   }
 
+  @Test func readsARejectedRequestFollowedByAReplyThatLooksLikeItsEcho() {
+
+    var parser = IBIOSReplyParser()
+
+    // Read as a whole, the bytes would be a 9-byte Get Version echo ending in an ACK.
+    #expect(parser.parse(bytes("024815" + "02450A" + "024506")) == [
+      .echo(IBIOSEcho(number: 0x48, parameters: [], isAccepted: false)),
+      .eventReport(.buttonTapped),
+      .eventReport(.messageForUnknownAddress)
+    ])
+
+  }
+
+  @Test func readsARejectedUploadWithoutTakingTheNextFramesBytesAsItsLength() {
+
+    var parser = IBIOSReplyParser()
+
+    #expect(parser.parse(bytes("024215" + "024F05")) == [
+      .echo(IBIOSEcho(number: 0x42, parameters: [], isAccepted: false)),
+      .messageReceived(.sendNotAcknowledged, message: nil)
+    ])
+
+  }
+
   @Test func finishesARejectedRequestWhenNoMoreBytesCome() {
 
     var parser = IBIOSReplyParser()
