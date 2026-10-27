@@ -51,7 +51,7 @@ let getConfiguration = ExtendedMessage(
 getConfiguration.hexString  // ends in "D1", the checksum i2cs devices require
 ```
 
-Commands the typed catalogues don't cover can be sent as raw bytes with `Command(command1:command2:)`, or added by conforming your own type to `CommandConvertible`.
+Commands the typed catalogs don't cover can be sent as raw bytes with `Command(command1:command2:)`, or added by conforming your own type to `CommandConvertible`.
 
 ## Documentation
 

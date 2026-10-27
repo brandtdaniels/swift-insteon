@@ -16,7 +16,7 @@ The message format is fixed by the protocol, so this layer changes rarely.
 
 ## Device commands
 
-`Sources/InsteonProtocol/DeviceCommands` is the catalogue of commands devices understand, and the part expected to grow as device types are added:
+`Sources/InsteonProtocol/DeviceCommands` is the catalog of commands devices understand, and the part expected to grow as device types are added:
 
 - `StandardDirectCommand` and `ExtendedDirectCommand`: common commands for any device
 
