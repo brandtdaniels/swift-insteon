@@ -59,3 +59,39 @@ extension ReceivedMessage {
   }
 
 }
+
+extension ReceivedMessage {
+
+  /// Decodes a message as modems and IBIOS report it: the sender, the destination, the flags,
+  /// the two command bytes and, for an extended message, its 14 bytes of user data.
+  ///
+  /// - Parameter bytes: 9 bytes for a standard message, or 23 for an extended one.
+  init(reportedBytes bytes: [UInt8]) {
+
+    var userData: UserData?
+
+    if bytes.count == 9 + UserData.count {
+
+      var data = UserData()
+
+      for position in 1...UserData.count {
+
+        data[position] = bytes[8 + position]
+
+      }
+
+      userData = data
+
+    }
+
+    self.init(
+      sender: InsteonAddress(bytes[0], bytes[1], bytes[2]),
+      destination: InsteonAddress(bytes[3], bytes[4], bytes[5]),
+      flags: MessageFlags(rawValue: bytes[6]),
+      command: Command(command1: bytes[7], command2: bytes[8]),
+      userData: userData
+    )
+
+  }
+
+}

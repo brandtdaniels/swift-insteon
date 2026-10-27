@@ -1,23 +1,5 @@
 import InsteonProtocol
 
-/// Parses the replies a device sends, from bytes as they arrive.
-protocol ReplyParser: Sendable {
-
-  /// What the device sends.
-  associatedtype Reply: Sendable
-
-  /// Parses received bytes, keeping any incomplete reply until the rest arrives.
-  mutating func parse(_ bytes: some Sequence<UInt8>) -> [Reply]
-
-  /// Reports a reply held back because it can't yet be told apart from a longer one.
-  mutating func finishPendingReply() -> [Reply]
-
-}
-
-extension ModemReplyParser: ReplyParser {}
-
-extension IBIOSReplyParser: ReplyParser {}
-
 /// A command for ``CommandPacer`` to write, and how to recognize the device's answer to it.
 struct Exchange<Reply>: Sendable {
 

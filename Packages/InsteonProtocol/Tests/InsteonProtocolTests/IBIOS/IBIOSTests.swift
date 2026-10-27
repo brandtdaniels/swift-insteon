@@ -32,10 +32,10 @@ struct IBIOSTests {
   static let controller = InsteonAddress(0x1A, 0x2B, 0x3C)
 
   static let replies: [(String, IBIOSReply)] = [
-    ("024001A4000606", .echo(IBIOSEcho(number: 0x40, parameters: [0x01, 0xA4, 0x00, 0x06], isAccepted: true))),
-    ("0246014210FF06", .echo(IBIOSEcho(number: 0x46, parameters: [0x01, 0x42, 0x10, 0xFF], isAccepted: true))),
-    ("02470A0006", .echo(IBIOSEcho(number: 0x47, parameters: [0x0A, 0x00], isAccepted: true))),
-    ("024001A4000615", .echo(IBIOSEcho(number: 0x40, parameters: [0x01, 0xA4, 0x00, 0x06], isAccepted: false))),
+    ("024001A4000606", .echo(IBIOSEcho(number: .download, parameters: [0x01, 0xA4, 0x00, 0x06], isAccepted: true))),
+    ("0246014210FF06", .echo(IBIOSEcho(number: .mask, parameters: [0x01, 0x42, 0x10, 0xFF], isAccepted: true))),
+    ("02470A0006", .echo(IBIOSEcho(number: .simulateEvent, parameters: [0x0A, 0x00], isAccepted: true))),
+    ("024001A4000615", .echo(IBIOSEcho(number: .download, parameters: [0x01, 0xA4, 0x00, 0x06], isAccepted: false))),
     (
       "0248" + "1A2B3C" + "0302" + "FF" + "06",
       .version(ModemInfo(address: controller, category: 0x03, subcategory: 0x02, firmwareVersion: 0xFF))
@@ -122,7 +122,7 @@ struct IBIOSTests {
 
     #expect(parser.parse(bytes("024815")).isEmpty)
     #expect(parser.parse(bytes("02450A" + "02450B" + "02450C")) == [
-      .echo(IBIOSEcho(number: 0x48, parameters: [], isAccepted: false)),
+      .echo(IBIOSEcho(number: .getVersion, parameters: [], isAccepted: false)),
       .eventReport(.buttonTapped),
       .eventReport(.buttonHeld),
       .eventReport(.buttonReleased)
@@ -136,7 +136,7 @@ struct IBIOSTests {
 
     // Read as a whole, the bytes would be a 9-byte Get Version echo ending in an ACK.
     #expect(parser.parse(bytes("024815" + "02450A" + "024506")) == [
-      .echo(IBIOSEcho(number: 0x48, parameters: [], isAccepted: false)),
+      .echo(IBIOSEcho(number: .getVersion, parameters: [], isAccepted: false)),
       .eventReport(.buttonTapped),
       .eventReport(.messageForUnknownAddress)
     ])
@@ -148,7 +148,7 @@ struct IBIOSTests {
     var parser = IBIOSReplyParser()
 
     #expect(parser.parse(bytes("024215" + "024F05")) == [
-      .echo(IBIOSEcho(number: 0x42, parameters: [], isAccepted: false)),
+      .echo(IBIOSEcho(number: .upload, parameters: [], isAccepted: false)),
       .messageReceived(.sendNotAcknowledged, message: nil)
     ])
 
@@ -159,7 +159,7 @@ struct IBIOSTests {
     var parser = IBIOSReplyParser()
 
     #expect(parser.parse(bytes("024815")).isEmpty)
-    #expect(parser.finishPendingReply() == [.echo(IBIOSEcho(number: 0x48, parameters: [], isAccepted: false))])
+    #expect(parser.finishPendingReply() == [.echo(IBIOSEcho(number: .getVersion, parameters: [], isAccepted: false))])
 
   }
 

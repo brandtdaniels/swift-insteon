@@ -4,6 +4,7 @@ import FoundationNetworking
 #endif
 import Testing
 import InsteonNetworking
+import InsteonTestSupport
 
 struct BasicAuthenticationHTTPClientTests {
 

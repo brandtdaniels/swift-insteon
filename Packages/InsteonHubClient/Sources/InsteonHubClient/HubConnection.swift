@@ -1,5 +1,6 @@
 import Foundation
 import InsteonModem
+import InsteonProtocol
 
 /// A `ModemConnection` to the modem inside an INSTEON Hub, model 2245 or 2242.
 ///
@@ -263,7 +264,7 @@ public actor HubConnection: ModemConnection {
   /// run on as a single lone NAK, which `Modem` reads as the rejection and retries.
   private static func collapsingNAKRun(_ bytes: [UInt8]) -> [UInt8] {
 
-    let negativeAcknowledgement: UInt8 = 0x15
+    let negativeAcknowledgement = ControlByte.negativeAcknowledgement
 
     guard bytes.count > 1, bytes.allSatisfy({ $0 == negativeAcknowledgement }) else {
 

@@ -23,7 +23,7 @@ extension ByteEncodable {
 extension UInt8 {
 
   /// The byte as two uppercase hexadecimal digits.
-  var hexDigits: String {
+  package var hexDigits: String {
 
     let digits = String(self, radix: 16, uppercase: true)
 

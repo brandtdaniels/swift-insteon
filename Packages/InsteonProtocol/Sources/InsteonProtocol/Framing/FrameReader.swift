@@ -1,0 +1,192 @@
+/// The bytes that mark frames and answers in the serial protocols of INSTEON modems and of
+/// devices running IBIOS.
+package enum ControlByte {
+
+  /// Start of Text (`0x02`), the first byte of every frame.
+  package static let startOfText: UInt8 = 0x02
+
+  /// End of Text (`0x03`), which ends an IBIOS text message.
+  package static let endOfText: UInt8 = 0x03
+
+  /// Acknowledge (`0x06`): the device accepted a command.
+  package static let acknowledgement: UInt8 = 0x06
+
+  /// Negative Acknowledge (`0x15`): the device rejected a command, usually because it was busy.
+  package static let negativeAcknowledgement: UInt8 = 0x15
+
+  /// Whether a byte ends an answer to a command: an ACK or a NAK.
+  package static func isAnswer(_ byte: UInt8) -> Bool {
+
+    byte == acknowledgement || byte == negativeAcknowledgement
+
+  }
+
+}
+
+/// How long the frame at the start of some bytes is.
+enum FrameLength {
+
+  /// The frame is this many bytes long, though they may not all have arrived.
+  case complete(Int)
+
+  /// More bytes must arrive before the frame's length is known.
+  case needMoreBytes
+
+  /// The start byte doesn't begin a frame this protocol recognizes.
+  case unrecognized
+
+}
+
+/// A serial protocol's frames: how long each one is, and what it means.
+protocol Framing {
+
+  /// What the device sends.
+  associatedtype Reply
+
+  /// The reply a lone NAK byte stands for, where a frame would start.
+  static var negativeAcknowledgement: Reply { get }
+
+  /// The length of the frame at the start of `bytes`, which start with ``ControlByte/startOfText``.
+  static func frameLength(of bytes: [UInt8]) -> FrameLength
+
+  /// Whether a complete frame is a reply, rather than a start byte that only looked like one.
+  static func isReply(_ frame: ArraySlice<UInt8>) -> Bool
+
+  /// The reply a complete frame carries.
+  static func decode(_ frame: [UInt8]) -> Reply
+
+}
+
+extension Framing {
+
+  static func isReply(_ frame: ArraySlice<UInt8>) -> Bool {
+
+    true
+
+  }
+
+}
+
+/// Splits the bytes a device sends into frames, keeping an incomplete one until the rest of its
+/// bytes arrive.
+///
+/// A NAK byte where a frame would start is reported as ``Framing/negativeAcknowledgement``.
+/// Other bytes that don't start a frame are skipped up to the next start byte, NAK bytes among
+/// them.
+struct FrameReader<Format: Framing>: Hashable, Sendable {
+
+  /// Bytes received that haven't made a complete frame yet.
+  private(set) var pending: [UInt8] = []
+
+  /// Adds received bytes and returns every reply they complete, oldest first.
+  mutating func read(_ bytes: some Sequence<UInt8>) -> [Format.Reply] {
+
+    pending.append(contentsOf: bytes)
+
+    var replies: [Format.Reply] = []
+
+    while let reply = nextReply() {
+
+      replies.append(reply)
+
+    }
+
+    return replies
+
+  }
+
+  /// Removes a NAK that directly follows a command's number, `02 <number> 15`, from the start of
+  /// the pending bytes.
+  ///
+  /// - Parameter isCommand: Whether a number belongs to a command that can be answered this way.
+  /// - Returns: The command's number, or `nil` if the pending bytes don't start with such a NAK.
+  mutating func takeShortNegativeAcknowledgement(where isCommand: (UInt8) -> Bool) -> UInt8? {
+
+    guard
+      pending.count >= 3,
+      pending[2] == ControlByte.negativeAcknowledgement,
+      isCommand(pending[1])
+    else {
+
+      return nil
+
+    }
+
+    let number = pending[1]
+    pending.removeFirst(3)
+
+    return number
+
+  }
+
+  private mutating func nextReply() -> Format.Reply? {
+
+    // A NAK counts only where a frame can start, not among bytes being skipped.
+    var isSkipping = false
+
+    while true {
+
+      // A device sometimes answers a command with a lone NAK instead of an echo.
+      if !isSkipping, pending.first == ControlByte.negativeAcknowledgement {
+
+        pending.removeFirst()
+
+        return Format.negativeAcknowledgement
+
+      }
+
+      guard let start = pending.firstIndex(of: ControlByte.startOfText) else {
+
+        pending.removeAll()
+
+        return nil
+
+      }
+
+      pending.removeFirst(start)
+
+      switch Format.frameLength(of: pending) {
+      case .needMoreBytes:
+        return nil
+      case .unrecognized:
+        pending.removeFirst()
+        isSkipping = true
+      case let .complete(length):
+        // Every frame waits here for the rest of its bytes, whatever its type.
+        guard pending.count >= length else {
+
+          return nil
+
+        }
+
+        guard Format.isReply(pending.prefix(length)) else {
+
+          pending.removeFirst()
+          isSkipping = true
+
+          continue
+
+        }
+
+        let frame = Array(pending.prefix(length))
+        pending.removeFirst(length)
+
+        return Format.decode(frame)
+      }
+
+    }
+
+  }
+
+}
+
+extension UInt16 {
+
+  /// Creates a value from its two bytes, most significant first.
+  init(highByte: UInt8, lowByte: UInt8) {
+
+    self = UInt16(highByte) << 8 | UInt16(lowByte)
+
+  }
+
+}

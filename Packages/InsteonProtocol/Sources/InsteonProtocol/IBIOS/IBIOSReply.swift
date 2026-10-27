@@ -63,7 +63,7 @@ public enum IBIOSReply: Hashable, Sendable {
 public struct IBIOSEcho: Hashable, Sendable {
 
   /// The number of the command being echoed.
-  public var number: UInt8
+  public var number: IBIOSCommandNumber
 
   /// The command's parameters as echoed, without the ACK or NAK byte.
   public var parameters: [UInt8]
@@ -77,7 +77,7 @@ public struct IBIOSEcho: Hashable, Sendable {
   ///   - number: The number of the command being echoed.
   ///   - parameters: The command's parameters as echoed.
   ///   - isAccepted: Whether the device accepted the command.
-  public init(number: UInt8, parameters: [UInt8], isAccepted: Bool) {
+  public init(number: IBIOSCommandNumber, parameters: [UInt8], isAccepted: Bool) {
 
     self.number = number
     self.parameters = parameters

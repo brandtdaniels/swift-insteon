@@ -20,9 +20,9 @@
 ///   }
 /// }
 /// ```
-public struct ModemReplyParser: Hashable, Sendable {
+public struct ModemReplyParser: ReplyParser, Hashable, Sendable {
 
-  private var pending: [UInt8] = []
+  private var reader = FrameReader<ModemFraming>()
 
   /// Creates a parser with no pending bytes.
   public init() {}
@@ -33,17 +33,7 @@ public struct ModemReplyParser: Hashable, Sendable {
   /// - Returns: The replies completed by these bytes, oldest first.
   public mutating func parse(_ bytes: some Sequence<UInt8>) -> [ModemReply] {
 
-    pending.append(contentsOf: bytes)
-
-    var replies: [ModemReply] = []
-
-    while let reply = nextReply() {
-
-      replies.append(reply)
-
-    }
-
-    return replies
+    reader.read(bytes)
 
   }
 
@@ -58,94 +48,40 @@ public struct ModemReplyParser: Hashable, Sendable {
   ///   don't start with such a NAK. Those bytes are kept.
   public mutating func finishPendingReply() -> [ModemReply] {
 
+    let held: Set<SerialCommandNumber> = [.getModemInfo, .getModemConfiguration]
+
     guard
-      pending.count >= 3,
-      pending[2] == Self.negativeAcknowledgement,
-      let number = SerialCommandNumber(rawValue: pending[1]),
-      number == .getModemInfo || number == .getModemConfiguration
+      let rawNumber = reader.takeShortNegativeAcknowledgement(where: {
+        SerialCommandNumber(rawValue: $0).map { held.contains($0) } ?? false
+      }),
+      let number = SerialCommandNumber(rawValue: rawNumber)
     else {
 
       return []
 
     }
 
-    pending.removeFirst(3)
-
     return [.echo(CommandEcho(number: number, parameters: [], isAccepted: false))] + parse([])
 
   }
 
-  private mutating func nextReply() -> ModemReply? {
+}
 
-    // A NAK counts only where a reply can start, not among bytes being skipped.
-    var isSkipping = false
+/// The frames of the INSTEON modem (IM) serial protocol.
+private enum ModemFraming: Framing {
 
-    while true {
+  static let negativeAcknowledgement: ModemReply = .negativeAcknowledgement
 
-      // The modem sometimes answers a command with a lone NAK instead of an echo.
-      if !isSkipping, pending.first == Self.negativeAcknowledgement {
+  /// A host command's reply ends in an ACK or NAK. Anything else means its start byte didn't
+  /// begin a reply.
+  static func isReply(_ frame: ArraySlice<UInt8>) -> Bool {
 
-        pending.removeFirst()
-
-        return .negativeAcknowledgement
-
-      }
-
-      guard let start = pending.firstIndex(of: SerialCommand.startOfText) else {
-
-        pending.removeAll()
-
-        return nil
-
-      }
-
-      pending.removeFirst(start)
-
-      switch Self.frameLength(of: pending) {
-      case .needMoreBytes:
-        return nil
-      case .unrecognized:
-        pending.removeFirst()
-        isSkipping = true
-      case let .complete(length):
-        guard pending.count >= length else {
-
-          return nil
-
-        }
-
-        // A host command's reply ends in an ACK or NAK. Anything else means this start byte
-        // didn't begin a reply, so look for the next one.
-        guard SerialCommandNumber(rawValue: pending[1]) == nil || Self.isAcknowledgement(pending[length - 1]) else {
-
-          pending.removeFirst()
-          isSkipping = true
-          continue
-
-        }
-
-        let frame = Array(pending.prefix(length))
-        pending.removeFirst(length)
-
-        return Self.decode(frame)
-      }
-
-    }
-
-  }
-
-  private enum FrameLength {
-
-    case complete(Int)
-
-    case needMoreBytes
-
-    case unrecognized
+    SerialCommandNumber(rawValue: frame[frame.startIndex + 1]) == nil || frame.last.map { ControlByte.isAnswer($0) } == true
 
   }
 
   /// The total length of the frame at the start of `bytes`, which starts with `0x02`.
-  private static func frameLength(of bytes: [UInt8]) -> FrameLength {
+  static func frameLength(of bytes: [UInt8]) -> FrameLength {
 
     guard bytes.count >= 2 else {
 
@@ -188,11 +124,11 @@ public struct ModemReplyParser: Hashable, Sendable {
 
       guard bytes.count >= dataLength else {
 
-        return bytes.count >= 3 && bytes[2] != negativeAcknowledgement ? .complete(dataLength) : .needMoreBytes
+        return bytes.count >= 3 && bytes[2] != ControlByte.negativeAcknowledgement ? .complete(dataLength) : .needMoreBytes
 
       }
 
-      return .complete(isAcknowledgement(bytes[dataLength - 1]) ? dataLength : 3)
+      return .complete(ControlByte.isAnswer(bytes[dataLength - 1]) ? dataLength : 3)
     case .sendMessage:
       // The echoed message's flags say whether user data follows.
       guard bytes.count >= 6 else {
@@ -220,30 +156,13 @@ public struct ModemReplyParser: Hashable, Sendable {
 
   }
 
-  private static func isAcknowledgement(_ byte: UInt8) -> Bool {
-
-    byte == acknowledgement || byte == negativeAcknowledgement
-
-  }
-
-  private static let acknowledgement: UInt8 = 0x06
-
-  private static let negativeAcknowledgement: UInt8 = 0x15
-
-  private static func decode(_ frame: [UInt8]) -> ModemReply {
+  static func decode(_ frame: [UInt8]) -> ModemReply {
 
     let body = Array(frame.dropFirst(2))
 
     switch frame[1] {
     case 0x50, 0x51:
-      return .messageReceived(ReceivedMessage(
-        sender: address(body, at: 0),
-        destination: address(body, at: 3),
-        flags: MessageFlags(rawValue: body[6]),
-        command: Command(command1: body[7], command2: body[8]),
-        // Exactly 14 bytes, so this never throws.
-        userData: frame[1] == 0x51 ? try! UserData(Array(body[9..<23])) : nil
-      ))
+      return .messageReceived(ReceivedMessage(reportedBytes: body))
     case 0x52:
       return .x10Received(X10Code(rawX10: body[0], flag: body[1]))
     case 0x53:
@@ -253,7 +172,7 @@ public struct ModemReplyParser: Hashable, Sendable {
 
       return .allLinkingCompleted(AllLinkingCompleted(
         linkCode: body[0],
-        group: body[1],
+        group: AllLinkGroup(rawValue: body[1]),
         address: address(body, at: 2),
         category: isController ? DeviceCategory(rawValue: body[5]) : nil,
         subcategory: isController ? DeviceSubcategory(rawValue: body[6]) : nil,
@@ -264,21 +183,16 @@ public struct ModemReplyParser: Hashable, Sendable {
     case 0x55:
       return .userReset
     case 0x56:
-      return .allLinkCleanupFailed(group: body[1], address: address(body, at: 2))
+      return .allLinkCleanupFailed(group: AllLinkGroup(rawValue: body[1]), address: address(body, at: 2))
     case 0x57:
       return .allLinkRecord(record(body, at: 0))
     case 0x58:
-      return .allLinkCleanupStatus(isComplete: body[0] == acknowledgement)
+      return .allLinkCleanupStatus(isComplete: body[0] == ControlByte.acknowledgement)
     case 0x59:
-      return .databaseRecord(address: UInt16(body[0]) << 8 | UInt16(body[1]), record: record(body, at: 2))
-    case 0x60 where body.count == 7 && body.last == acknowledgement:
-      return .modemInfo(ModemInfo(
-        address: address(body, at: 0),
-        category: DeviceCategory(rawValue: body[3]),
-        subcategory: DeviceSubcategory(rawValue: body[4]),
-        firmwareVersion: FirmwareVersion(rawValue: body[5])
-      ))
-    case 0x73 where body.count == 4 && body.last == acknowledgement:
+      return .databaseRecord(address: UInt16(highByte: body[0], lowByte: body[1]), record: record(body, at: 2))
+    case 0x60 where body.count == 7 && body.last == ControlByte.acknowledgement:
+      return .modemInfo(ModemInfo(reportedBytes: Array(body.prefix(6))))
+    case 0x73 where body.count == 4 && body.last == ControlByte.acknowledgement:
       return .modemConfiguration(ModemConfigurationReport(
         configuration: ModemConfiguration(rawValue: body[0]),
         applicationRetries: body[1],
@@ -296,7 +210,7 @@ public struct ModemReplyParser: Hashable, Sendable {
         // Only recognized numbers reach `decode`, and all of them are host commands here.
         number: SerialCommandNumber(rawValue: frame[1])!,
         parameters: Array(body.dropLast()),
-        isAccepted: body.last == acknowledgement
+        isAccepted: body.last == ControlByte.acknowledgement
       ))
     }
 
@@ -312,7 +226,7 @@ public struct ModemReplyParser: Hashable, Sendable {
 
     AllLinkRecord(
       flags: AllLinkRecordFlags(rawValue: bytes[index]),
-      group: bytes[index + 1],
+      group: AllLinkGroup(rawValue: bytes[index + 1]),
       address: address(bytes, at: index + 2),
       data1: bytes[index + 5],
       data2: bytes[index + 6],

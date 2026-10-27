@@ -2,6 +2,7 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+import InsteonProtocol
 
 /// The requests the Hub's local HTTP interface accepts.
 enum HubRequest {
@@ -40,7 +41,7 @@ enum HubRequest {
   /// Uppercase hex, two digits per byte.
   private static func hex(_ bytes: [UInt8]) -> String {
 
-    bytes.map { $0 < 0x10 ? "0" + String($0, radix: 16, uppercase: true) : String($0, radix: 16, uppercase: true) }.joined()
+    bytes.map(\.hexDigits).joined()
 
   }
 

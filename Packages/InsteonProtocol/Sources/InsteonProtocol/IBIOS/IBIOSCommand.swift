@@ -63,15 +63,15 @@ public enum IBIOSCommand: Hashable, Sendable {
   case getVersion
 
   /// The command's number.
-  public var number: UInt8 {
+  public var number: IBIOSCommandNumber {
 
     switch self {
-    case .download: 0x40
-    case .upload: 0x42
-    case .getChecksum: 0x44
-    case .mask: 0x46
-    case .simulateEvent: 0x47
-    case .getVersion: 0x48
+    case .download: .download
+    case .upload: .upload
+    case .getChecksum: .getChecksum
+    case .mask: .mask
+    case .simulateEvent: .simulateEvent
+    case .getVersion: .getVersion
     }
 
   }
@@ -117,7 +117,7 @@ extension IBIOSCommand: ByteEncodable {
   /// The command's bytes: ``SerialCommand/startOfText``, the number and the parameters.
   public var bytes: [UInt8] {
 
-    [SerialCommand.startOfText, number] + parameters
+    [SerialCommand.startOfText, number.rawValue] + parameters
 
   }
 

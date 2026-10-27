@@ -8,9 +8,9 @@
 /// A NAK that follows a command's number, such as `02 48 15`, begins the same way as a reply
 /// whose data starts with `0x15`, so it's reported once more bytes arrive. If no more bytes are
 /// coming, ``IBIOSReplyParser/finishPendingReply()`` reports it.
-public struct IBIOSReplyParser: Hashable, Sendable {
+public struct IBIOSReplyParser: ReplyParser, Hashable, Sendable {
 
-  private var pending: [UInt8] = []
+  private var reader = FrameReader<IBIOSFraming>()
 
   /// Creates a parser with no pending bytes.
   public init() {}
@@ -21,17 +21,7 @@ public struct IBIOSReplyParser: Hashable, Sendable {
   /// - Returns: The replies completed by these bytes, oldest first.
   public mutating func parse(_ bytes: some Sequence<UInt8>) -> [IBIOSReply] {
 
-    pending.append(contentsOf: bytes)
-
-    var replies: [IBIOSReply] = []
-
-    while let reply = nextReply() {
-
-      replies.append(reply)
-
-    }
-
-    return replies
+    reader.read(bytes)
 
   }
 
@@ -44,95 +34,33 @@ public struct IBIOSReplyParser: Hashable, Sendable {
   public mutating func finishPendingReply() -> [IBIOSReply] {
 
     guard
-      pending.count >= 3,
-      Self.echoedCommands.contains(pending[1]),
-      pending[2] == Self.negativeAcknowledgement
+      let rawNumber = reader.takeShortNegativeAcknowledgement(where: { IBIOSFraming.echoedCommands.contains($0) }),
+      let number = IBIOSCommandNumber(rawValue: rawNumber)
     else {
 
       return []
 
     }
 
-    let number = pending[1]
-    pending.removeFirst(3)
-
     return [.echo(IBIOSEcho(number: number, parameters: [], isAccepted: false))] + parse([])
 
   }
 
-  private mutating func nextReply() -> IBIOSReply? {
+}
 
-    // A NAK counts only where a reply can start, not among bytes being skipped.
-    var isSkipping = false
+/// The frames of the IBIOS serial protocol.
+private enum IBIOSFraming: Framing {
 
-    while true {
-
-      if !isSkipping, pending.first == Self.negativeAcknowledgement {
-
-        pending.removeFirst()
-
-        return .negativeAcknowledgement
-
-      }
-
-      guard let start = pending.firstIndex(of: SerialCommand.startOfText) else {
-
-        pending.removeAll()
-
-        return nil
-
-      }
-
-      pending.removeFirst(start)
-
-      switch Self.frameLength(of: pending) {
-      case .needMoreBytes:
-        return nil
-      case .unrecognized:
-        pending.removeFirst()
-        isSkipping = true
-      case let .complete(length):
-        // Every frame waits here for the rest of its bytes, whatever its type.
-        guard pending.count >= length else {
-
-          return nil
-
-        }
-
-        let frame = Array(pending.prefix(length))
-        pending.removeFirst(length)
-
-        return Self.decode(frame)
-      }
-
-    }
-
-  }
-
-  private enum FrameLength {
-
-    case complete(Int)
-
-    case needMoreBytes
-
-    case unrecognized
-
-  }
-
-  private static let acknowledgement: UInt8 = 0x06
-
-  private static let negativeAcknowledgement: UInt8 = 0x15
-
-  private static let endOfText: UInt8 = 0x03
+  static let negativeAcknowledgement: IBIOSReply = .negativeAcknowledgement
 
   /// The commands a host sends, which IBIOS echoes with an ACK or NAK.
-  private static let echoedCommands: Set<UInt8> = [0x40, 0x42, 0x44, 0x46, 0x47, 0x48]
+  static let echoedCommands = Set(IBIOSCommandNumber.allCases.map(\.rawValue))
 
   /// Every number a frame from IBIOS can start with.
   private static let frameNumbers = echoedCommands.union([0x41, 0x43, 0x45, 0x49, 0x4A, 0x4F])
 
   /// The length of the frame at the start of `bytes`, which starts with `0x02`.
-  private static func frameLength(of bytes: [UInt8]) -> FrameLength {
+  static func frameLength(of bytes: [UInt8]) -> FrameLength {
 
     guard bytes.count >= 2 else {
 
@@ -151,7 +79,7 @@ public struct IBIOSReplyParser: Hashable, Sendable {
     // An echo of `0x02`, the number and a NAK can't be told apart from an echo whose first
     // parameter is 0x15 until the full echo would have arrived, unless the next frame starts
     // right after the NAK. Reading on would take that frame's bytes as the echo's.
-    if bytes.count >= 5, bytes[2] == negativeAcknowledgement, bytes[3] == 0x02, frameNumbers.contains(bytes[4]) {
+    if bytes.count >= 5, bytes[2] == ControlByte.negativeAcknowledgement, bytes[3] == ControlByte.startOfText, frameNumbers.contains(bytes[4]) {
 
       return .complete(3)
 
@@ -169,13 +97,13 @@ public struct IBIOSReplyParser: Hashable, Sendable {
 
     }
 
-    if isAcknowledgement(bytes[length - 1]) {
+    if ControlByte.isAnswer(bytes[length - 1]) {
 
       return .complete(length)
 
     }
 
-    return bytes[2] == negativeAcknowledgement ? .complete(3) : .unrecognized
+    return bytes[2] == ControlByte.negativeAcknowledgement ? .complete(3) : .unrecognized
 
   }
 
@@ -183,13 +111,13 @@ public struct IBIOSReplyParser: Hashable, Sendable {
   /// tell.
   private static func echoLength(of bytes: [UInt8]) -> Int? {
 
-    switch bytes[1] {
-    case 0x40, 0x46: 7
-    case 0x47: 5
-    case 0x44, 0x48: 9
+    switch IBIOSCommandNumber(rawValue: bytes[1]) {
+    case .download, .mask: 7
+    case .simulateEvent: 5
+    case .getChecksum, .getVersion: 9
     // An upload's length is in its header.
-    case 0x42: bytes.count >= 6 ? 9 + Int(UInt16(bytes[4]) << 8 | UInt16(bytes[5])) : nil
-    default: nil
+    case .upload: bytes.count >= 6 ? 9 + Int(UInt16(highByte: bytes[4], lowByte: bytes[5])) : nil
+    case nil: nil
     }
 
   }
@@ -211,7 +139,7 @@ public struct IBIOSReplyParser: Hashable, Sendable {
 
       return .complete(3 + Int(bytes[2]))
     case 0x43:
-      guard let end = bytes.dropFirst(2).firstIndex(of: endOfText) else {
+      guard let end = bytes.dropFirst(2).firstIndex(of: ControlByte.endOfText) else {
 
         return .needMoreBytes
 
@@ -246,41 +174,31 @@ public struct IBIOSReplyParser: Hashable, Sendable {
 
   }
 
-  private static func isAcknowledgement(_ byte: UInt8) -> Bool {
-
-    byte == acknowledgement || byte == negativeAcknowledgement
-
-  }
-
-  private static func decode(_ frame: [UInt8]) -> IBIOSReply {
+  static func decode(_ frame: [UInt8]) -> IBIOSReply {
 
     let body = Array(frame.dropFirst(2))
 
     switch frame[1] {
-    case 0x42 where body.last == acknowledgement:
+    case 0x42 where body.last == ControlByte.acknowledgement:
       let data = Array(body[4..<(body.count - 3)])
-      let checksum = UInt16(body[body.count - 3]) << 8 | UInt16(body[body.count - 2])
+      let checksum = UInt16(highByte: body[body.count - 3], lowByte: body[body.count - 2])
 
       return .memory(
         address: word(body, at: 0),
         data: data,
         isIntact: checksum == IBIOSCommand.checksum(of: body[0..<4] + data)
       )
-    case 0x44 where body.last == acknowledgement:
+    case 0x44 where body.last == ControlByte.acknowledgement:
       return .checksum(address: word(body, at: 0), length: word(body, at: 2), checksum: word(body, at: 4))
-    case 0x48 where body.last == acknowledgement:
-      return .version(ModemInfo(
-        address: InsteonAddress(body[0], body[1], body[2]),
-        category: DeviceCategory(rawValue: body[3]),
-        subcategory: DeviceSubcategory(rawValue: body[4]),
-        firmwareVersion: FirmwareVersion(rawValue: body[5])
-      ))
-    case 0x40, 0x42, 0x44, 0x46, 0x47, 0x48:
+    case 0x48 where body.last == ControlByte.acknowledgement:
+      return .version(ModemInfo(reportedBytes: Array(body.prefix(6))))
+    case let number where echoedCommands.contains(number):
       // Rejected requests echo no data, and the other echoes repeat their parameters.
-      let isAccepted = body.last == acknowledgement
+      let isAccepted = body.last == ControlByte.acknowledgement
 
       return .echo(IBIOSEcho(
-        number: frame[1],
+        // Only the numbers of IBIOS commands are echoed.
+        number: IBIOSCommandNumber(rawValue: number)!,
         parameters: isAccepted || frame.count > 3 ? Array(body.dropLast()) : [],
         isAccepted: isAccepted
       ))
@@ -304,23 +222,14 @@ public struct IBIOSReplyParser: Hashable, Sendable {
 
       }
 
-      let message = Array(body.dropFirst())
-
-      return .messageReceived(event, message: ReceivedMessage(
-        sender: InsteonAddress(message[0], message[1], message[2]),
-        destination: InsteonAddress(message[3], message[4], message[5]),
-        flags: MessageFlags(rawValue: message[6]),
-        command: Command(command1: message[7], command2: message[8]),
-        // Exactly 14 bytes, so this never throws.
-        userData: message.count == 23 ? try! UserData(Array(message[9..<23])) : nil
-      ))
+      return .messageReceived(event, message: ReceivedMessage(reportedBytes: Array(body.dropFirst())))
     }
 
   }
 
   private static func word(_ bytes: [UInt8], at index: Int) -> UInt16 {
 
-    UInt16(bytes[index]) << 8 | UInt16(bytes[index + 1])
+    UInt16(highByte: bytes[index], lowByte: bytes[index + 1])
 
   }
 

@@ -25,7 +25,7 @@ public enum ModemReply: Hashable, Sendable {
   /// - Parameters:
   ///   - group: The ALL-Link group the cleanup was for.
   ///   - address: The device that didn't respond.
-  case allLinkCleanupFailed(group: UInt8, address: InsteonAddress)
+  case allLinkCleanupFailed(group: AllLinkGroup, address: InsteonAddress)
 
   /// A record from the modem's ALL-Link database (`0x57`), in reply to
   /// ``SerialCommand/getFirstAllLinkRecord`` and similar commands.
