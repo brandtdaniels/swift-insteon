@@ -68,9 +68,15 @@ public enum SerialCommand: Hashable, Sendable {
   case getAllLinkRecordForSender
 
   /// Turns the modem's LED on.
+  ///
+  /// The modem NAKs this unless ``ModemConfiguration/disableAutomaticLED`` is set, giving the
+  /// host control of the LED.
   case ledOn
 
   /// Turns the modem's LED off.
+  ///
+  /// The modem NAKs this unless ``ModemConfiguration/disableAutomaticLED`` is set, giving the
+  /// host control of the LED.
   case ledOff
 
   /// Finds, adds, changes or deletes a record in the modem's ALL-Link database.
@@ -110,6 +116,9 @@ public enum SerialCommand: Hashable, Sendable {
   /// Makes the modem beep.
   case beep
 
+  /// Sets how many times the modem retries a direct message that isn't acknowledged.
+  case setApplicationRetries(UInt8)
+
   /// The byte that starts every serial command: `0x02`.
   public static let startOfText: UInt8 = 0x02
 
@@ -141,6 +150,7 @@ public enum SerialCommand: Hashable, Sendable {
     case .readDatabase: .readDatabase
     case .writeDatabase: .writeDatabase
     case .beep: .beep
+    case .setApplicationRetries: .setApplicationRetries
     }
 
   }
@@ -163,6 +173,8 @@ public enum SerialCommand: Hashable, Sendable {
       [category, subcategory, firmwareVersion]
     case let .setAcknowledgementByte(command2), let .setNegativeAcknowledgementByte(command2):
       [command2]
+    case let .setApplicationRetries(retries):
+      [retries]
     case let .setModemConfiguration(configuration):
       [configuration.rawValue]
     case let .manageAllLinkRecord(action, record):
