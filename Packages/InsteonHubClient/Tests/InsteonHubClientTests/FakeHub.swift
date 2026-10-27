@@ -23,13 +23,21 @@ actor FakeHub: HTTPClient {
 
   private let status: Int
 
+  private var failingReads: Int
+
   /// - Parameters:
   ///   - status: The HTTP status for every request.
+  ///   - failingReads: How many buffer reads time out before reads succeed.
   ///   - respond: Given each command written, returns what the modem puts in the buffer.
-  init(status: Int = 200, respond: @escaping @Sendable ([UInt8]) -> [UInt8] = { $0 + [0x06] }) {
+  init(
+    status: Int = 200,
+    failingReads: Int = 0,
+    respond: @escaping @Sendable ([UInt8]) -> [UInt8] = { $0 + [0x06] }
+  ) {
 
     (writes, writesContinuation) = AsyncStream.makeStream()
     self.status = status
+    self.failingReads = failingReads
     self.respond = respond
 
   }
@@ -67,6 +75,13 @@ actor FakeHub: HTTPClient {
     case "/1":
       clear()
     case "/buffstatus.xml":
+      if failingReads > 0 {
+
+        failingReads -= 1
+        throw URLError(.timedOut)
+
+      }
+
       let digits = buffer.map(Self.hex).joined() + Self.hex(UInt8(endIndex * 2))
       return HTTPResponse(statusCode: 200, body: Data("<response><BS>\(digits)</BS></response>".utf8))
     default:
