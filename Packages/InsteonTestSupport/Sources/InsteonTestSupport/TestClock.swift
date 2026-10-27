@@ -63,7 +63,7 @@ public final class TestClock: Clock, @unchecked Sendable {
 
   private var sleepers: [Sleeper] = []
 
-  private var cancelledIDs: Set<Int> = []
+  private var canceledIDs: Set<Int> = []
 
   private var sleeperWaiters: [(deadline: Instant, continuation: CheckedContinuation<Void, Never>)] = []
 
@@ -93,7 +93,7 @@ public final class TestClock: Clock, @unchecked Sendable {
 
         let woken: [CheckedContinuation<Void, Never>] = lock.withLock {
 
-          if cancelledIDs.remove(id) != nil {
+          if canceledIDs.remove(id) != nil {
 
             continuation.resume(throwing: CancellationError())
 
@@ -125,7 +125,7 @@ public final class TestClock: Clock, @unchecked Sendable {
 
         guard let index = sleepers.firstIndex(where: { $0.id == id }) else {
 
-          cancelledIDs.insert(id)
+          canceledIDs.insert(id)
 
           return nil
 
