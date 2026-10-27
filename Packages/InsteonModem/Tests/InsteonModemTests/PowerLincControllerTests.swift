@@ -27,6 +27,11 @@ struct PowerLincControllerTests {
 
       try await body()
 
+      group.cancelAll()
+
+      // The group would otherwise discard an error from run().
+      try await group.waitForAll()
+
     }
 
   }
@@ -181,6 +186,40 @@ struct PowerLincControllerTests {
       }
 
     }
+
+  }
+
+  @Test func theNextSendWaitsForACanceledCommandsAnswer() async throws {
+
+    let connection = ScriptedConnection { _, _ in [] }
+    let controller = makeController(connection)
+
+    try await run(controller) {
+
+      var writes = connection.writeLog.makeAsyncIterator()
+
+      await withThrowingTaskGroup(of: Void.self) { group in
+
+        group.addTask { try await controller.send(IBIOSCommand.getVersion) }
+        _ = await writes.next()
+        group.cancelAll()
+        _ = try? await group.next()
+
+      }
+
+      // The canceled command was written, so the next one waits for the controller to answer it.
+      async let next: Void = controller.send(IBIOSCommand.mask(address: 0x0142, or: 0x10, and: 0xFF))
+      await clock.waitForSleeper(until: .seconds(2))
+      #expect(connection.written == [Self.bytes("0248")])
+
+      connection.incoming.yield(Self.answer(Self.bytes("0248")))
+      let frame = try #require(await writes.next())
+      connection.incoming.yield(Self.answer(frame))
+      try await next
+
+    }
+
+    #expect(connection.written == [Self.bytes("0248"), Self.bytes("0246014210FF")])
 
   }
 
