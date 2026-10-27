@@ -175,6 +175,84 @@ struct ModemTests {
 
   }
 
+  @Test func ignoresALateEchoOfAnEarlierCommand() async throws {
+
+    let late = SerialCommand.setAcknowledgementByte(0x01)
+    let current = SerialCommand.setAcknowledgementByte(0x02)
+    let connection = ScriptedConnection { _, index in
+
+      switch index {
+      case 0: []
+      // The first command's echo arrives late, ahead of a NAK for the second.
+      case 1: late.bytes + [0x06] + current.bytes + [0x15]
+      default: current.bytes + [0x06]
+      }
+
+    }
+    let modem = makeModem(connection)
+
+    await #expect(throws: ModemError.timedOut(.setAcknowledgementByte)) {
+
+      async let sent: Void = modem.send(late)
+      await clock.waitForSleeper(until: .seconds(2))
+      clock.advance(by: .seconds(2))
+      try await sent
+
+    }
+
+    try await modem.send(current)
+
+    #expect(connection.written == [late.bytes, current.bytes, current.bytes])
+
+  }
+
+  @Test func retriesAnInfoRequestRejectedWithAShortNak() async throws {
+
+    let info: [UInt8] = [0x02, 0x60, 0x1A, 0x2B, 0x3C, 0x03, 0x37, 0x9C, 0x06]
+    // A user reset arrives with the NAK, so the test can tell the NAK has been read.
+    let connection = ScriptedConnection { _, index in index == 0 ? [0x02, 0x55, 0x02, 0x60, 0x15] : info }
+    let modem = makeModem(connection)
+    var replies = await modem.replies().makeAsyncIterator()
+
+    async let sent: Void = modem.send(.getModemInfo)
+
+    #expect(await replies.next() == .userReset)
+
+    // The NAK can't be told apart from the start of a reply until the wait for an echo ends.
+    await clock.waitForSleeper(until: .seconds(2))
+    clock.advance(by: .seconds(2))
+    try await sent
+
+    #expect(connection.written == [[0x02, 0x60], [0x02, 0x60]])
+
+  }
+
+  @Test func doesntWriteACanceledSend() async throws {
+
+    let connection = ScriptedConnection { _, _ in [] }
+    let modem = makeModem(connection)
+
+    async let first: Void = modem.send(.ledOn)
+    var writes = connection.writeLog.makeAsyncIterator()
+    let frame = try #require(await writes.next())
+
+    // Canceled while the first command holds the modem.
+    let second = Task { try await modem.send(.ledOff) }
+    second.cancel()
+
+    connection.incoming.yield(frame + [0x06])
+    try await first
+
+    await #expect(throws: CancellationError.self) {
+
+      try await second.value
+
+    }
+
+    #expect(connection.written == [[0x02, 0x6D]])
+
+  }
+
   @Test func sendsCommandsOneAtATime() async throws {
 
     // The test answers each write itself, so it can check nothing else is written first.
