@@ -6,11 +6,12 @@ Swift packages for working with [INSTEON](https://www.insteon.com) home automati
 | --- | --- |
 | [InsteonMessage](Packages/InsteonMessage) | Build INSTEON messages and encode them for sending to a modem or hub |
 | [InsteonSerialCommand](Packages/InsteonSerialCommand) | Build the serial commands a host sends to an INSTEON modem |
+| [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the INSTEON clients send requests through |
 
 ## Requirements
 
 - Swift 6.0 or later
-- Any platform Swift supports. The libraries depend only on the Swift standard library.
+- Any platform Swift supports. InsteonMessage and InsteonSerialCommand depend only on the Swift standard library; InsteonNetworking uses Foundation.
 
 ## Installation
 
