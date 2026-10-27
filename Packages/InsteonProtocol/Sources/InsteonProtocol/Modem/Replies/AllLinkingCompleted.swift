@@ -12,7 +12,7 @@ public struct AllLinkingCompleted: Hashable, Sendable {
   public var address: InsteonAddress
 
   /// The other device's category.
-  public var category: UInt8
+  public var category: DeviceCategory
 
   /// The other device's subcategory.
   public var subcategory: UInt8
@@ -33,7 +33,7 @@ public struct AllLinkingCompleted: Hashable, Sendable {
     linkCode: UInt8,
     group: UInt8,
     address: InsteonAddress,
-    category: UInt8,
+    category: DeviceCategory,
     subcategory: UInt8,
     firmwareVersion: UInt8
   ) {

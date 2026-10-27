@@ -5,7 +5,7 @@ public struct ModemInfo: Hashable, Sendable {
   public var address: InsteonAddress
 
   /// The modem's device category.
-  public var category: UInt8
+  public var category: DeviceCategory
 
   /// The modem's device subcategory.
   public var subcategory: UInt8
@@ -20,7 +20,7 @@ public struct ModemInfo: Hashable, Sendable {
   ///   - category: The device category.
   ///   - subcategory: The device subcategory.
   ///   - firmwareVersion: The firmware version.
-  public init(address: InsteonAddress, category: UInt8, subcategory: UInt8, firmwareVersion: UInt8) {
+  public init(address: InsteonAddress, category: DeviceCategory, subcategory: UInt8, firmwareVersion: UInt8) {
 
     self.address = address
     self.category = category

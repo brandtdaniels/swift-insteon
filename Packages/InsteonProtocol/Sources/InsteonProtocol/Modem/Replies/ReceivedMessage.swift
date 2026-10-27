@@ -5,7 +5,7 @@ public struct ReceivedMessage: Hashable, Sendable {
   public var sender: InsteonAddress
 
   /// The device the message was addressed to. For broadcasts this field carries other data,
-  /// such as the sender's device category.
+  /// such as the sender's device category in a ``SetButtonPressed`` broadcast.
   public var destination: InsteonAddress
 
   /// The message's flags.

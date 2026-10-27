@@ -187,7 +187,7 @@ public struct ModemReplyParser: Hashable, Sendable {
         linkCode: body[0],
         group: body[1],
         address: address(body, at: 2),
-        category: body[5],
+        category: DeviceCategory(rawValue: body[5]),
         subcategory: body[6],
         firmwareVersion: body[7]
       ))
@@ -206,7 +206,7 @@ public struct ModemReplyParser: Hashable, Sendable {
     case 0x60 where body.last == acknowledgement && body.count == 7:
       return .modemInfo(ModemInfo(
         address: address(body, at: 0),
-        category: body[3],
+        category: DeviceCategory(rawValue: body[3]),
         subcategory: body[4],
         firmwareVersion: body[5]
       ))
