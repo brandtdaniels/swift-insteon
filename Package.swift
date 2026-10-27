@@ -5,7 +5,8 @@ import PackageDescription
 let package = Package(
   name: "swift-insteon",
   products: [
-    .library(name: "InsteonMessage", targets: ["InsteonMessage"])
+    .library(name: "InsteonMessage", targets: ["InsteonMessage"]),
+    .library(name: "InsteonSerialCommand", targets: ["InsteonSerialCommand"])
   ],
   targets: [
     .target(
@@ -16,6 +17,17 @@ let package = Package(
       name: "InsteonMessageTests",
       dependencies: ["InsteonMessage"],
       path: "Packages/InsteonMessage/Tests/InsteonMessageTests"
+    ),
+
+    .target(
+      name: "InsteonSerialCommand",
+      dependencies: ["InsteonMessage"],
+      path: "Packages/InsteonSerialCommand/Sources/InsteonSerialCommand"
+    ),
+    .testTarget(
+      name: "InsteonSerialCommandTests",
+      dependencies: ["InsteonSerialCommand", "InsteonMessage"],
+      path: "Packages/InsteonSerialCommand/Tests/InsteonSerialCommandTests"
     )
   ]
 )

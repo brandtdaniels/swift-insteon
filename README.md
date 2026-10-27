@@ -5,6 +5,7 @@ Swift packages for working with [INSTEON](https://www.insteon.com) home automati
 | Library | Description |
 | --- | --- |
 | [InsteonMessage](Packages/InsteonMessage) | Build INSTEON messages and encode them for sending to a modem or hub |
+| [InsteonSerialCommand](Packages/InsteonSerialCommand) | Build the serial commands a host sends to an INSTEON modem |
 
 ## Requirements
 
