@@ -12,14 +12,14 @@ The INSTEON protocol as Swift value types, encoded to the bytes INSTEON modems a
 - `Command` and `CommandConvertible`: the two command bytes, and the protocol device commands conform to
 - `UserData`, plus `ChecksumIntegrity` and `CRCIntegrity`: extended-message data with the integrity bytes i2cs devices require
 
-The message format is fixed by the protocol, so this layer changes rarely.
+The message format is fixed by the protocol.
 
 ## Device commands
 
-`Sources/InsteonProtocol/DeviceCommands` is the catalog of commands devices understand, and the part expected to grow as device types are added:
+`Sources/InsteonProtocol/DeviceCommands` is the catalog of commands devices understand, open to additional device types:
 
 - `StandardDirectCommand` and `ExtendedDirectCommand`: common commands for any device
 
-New commands conform to `CommandConvertible`, so adding them never touches the message layer.
+Additional commands conform to `CommandConvertible`, so they never touch the message layer.
 
 See the DocC catalog in `Sources/InsteonProtocol/InsteonProtocol.docc` for the full documentation, including the byte-level message format.
