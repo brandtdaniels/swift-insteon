@@ -18,18 +18,13 @@ let hub = Hub(
   user: username,
   password: password
 )
-let modem = Modem(connection: HubConnection(hub: hub))
 
-try await withThrowingTaskGroup(of: Void.self) { group in
-  // Polls the Hub for replies while the commands below are sent.
-  group.addTask { try await modem.run() }
-
+// Polls the Hub for replies while the closure sends commands.
+try await Modem.withConnection(HubConnection(hub: hub)) { modem in
   let lamp = InsteonAddress(0xAA, 0xBB, 0xCC)
   try await modem.send(.sendStandardMessage(
     StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF))
   ))
-
-  group.cancelAll()
 }
 ```
 

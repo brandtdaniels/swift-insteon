@@ -48,6 +48,20 @@ struct PowerLincControllerTests {
 
   }
 
+  @Test func withConnectionRunsTheController() async throws {
+
+    let connection = ScriptedConnection { frame, _ in Self.answer(frame) }
+
+    try await PowerLincController.withConnection(connection, retryPolicy: policy, clock: clock) { controller in
+
+      try await controller.send(IBIOSCommand.getVersion)
+
+    }
+
+    #expect(connection.written == [Self.bytes("0248")])
+
+  }
+
   @Test func sendsAStandardMessageAsTheGuideDoes() async throws {
 
     let connection = ScriptedConnection { frame, _ in Self.answer(frame) }

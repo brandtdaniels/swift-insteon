@@ -19,67 +19,21 @@ import InsteonProtocol
 /// ``PowerLincControllerError/unsupported(_:)``.
 ///
 /// The controller's serial port runs at 4800 baud, and messages from devices arrive through
-/// the SALad program the controller ships with. Run ``PowerLincController/run()`` alongside
-/// the code that sends commands, as with ``Modem``:
+/// the SALad program the controller ships with. Use it the way you use ``Modem``:
 ///
 /// ```swift
-/// let controller = PowerLincController(connection: try SerialPort(path: "/dev/ttyUSB0", baudRate: .baud4800))
+/// let port = try SerialPort(path: "/dev/ttyUSB0", baudRate: .baud4800)
 ///
-/// try await withThrowingTaskGroup(of: Void.self) { group in
-///   group.addTask { try await controller.run() }
-///
+/// try await PowerLincController.withConnection(port) { controller in
 ///   let lamp = InsteonAddress(0xAA, 0xBB, 0xCC)
 ///   try await controller.send(.sendStandardMessage(
 ///     StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF))
 ///   ))
-///
-///   group.cancelAll()
 /// }
 /// ```
-public actor PowerLincController: SerialCommandSender {
+public final class PowerLincController: SerialCommandSender {
 
-  private struct PendingAnswer {
-
-    let id: Int
-
-    let command: IBIOSCommand
-
-    let result: AsyncStream<Result<Bool, any Error>>.Continuation
-
-  }
-
-  /// A command whose send was canceled before the controller answered it.
-  private struct UnansweredCommand {
-
-    let id: Int
-
-    let command: IBIOSCommand
-
-    let results: AsyncStream<Result<Bool, any Error>>
-
-  }
-
-  private let connection: any ModemConnection
-
-  private let retryPolicy: Modem.RetryPolicy
-
-  private let clock: any Clock<Duration>
-
-  private var parser = IBIOSReplyParser()
-
-  private var isRunning = false
-
-  private var isClosed = false
-
-  private var nextID = 0
-
-  private var subscribers: [AsyncStream<IBIOSReply>.Continuation] = []
-
-  private var pendingAnswer: PendingAnswer?
-
-  private var unansweredCommand: UnansweredCommand?
-
-  private var turns = TurnQueue()
+  private let pacer: CommandPacer<IBIOSReplyParser>
 
   /// Creates a controller that talks over a connection.
   ///
@@ -95,56 +49,62 @@ public actor PowerLincController: SerialCommandSender {
     clock: any Clock<Duration> = ContinuousClock()
   ) {
 
-    self.connection = connection
-    self.retryPolicy = retryPolicy
-    self.clock = clock
+    pacer = CommandPacer(
+      connection: connection,
+      parser: IBIOSReplyParser(),
+      retryPolicy: retryPolicy,
+      clock: clock,
+      closedError: PowerLincControllerError.connectionClosed
+    )
+
+  }
+
+  /// Opens a controller on a connection, runs `body` with it while reading what it sends,
+  /// then closes it.
+  ///
+  /// The controller is closed when `body` returns or throws, so don't keep it beyond `body`.
+  ///
+  /// - Parameters:
+  ///   - connection: The connection to the controller, such as a ``SerialPort`` opened at
+  ///     ``SerialPort/BaudRate/baud4800``.
+  ///   - retryPolicy: How to wait for and retry commands. Defaults to ``Modem/RetryPolicy/init(attempts:delay:echoTimeout:)``.
+  ///   - clock: The clock that times retry delays and timeouts. Defaults to a
+  ///     `ContinuousClock`; tests can pass a clock they control.
+  ///   - isolation: The actor `body` runs on. Defaults to the caller's.
+  ///   - body: The work to do with the controller.
+  /// - Returns: What `body` returns.
+  /// - Throws: The error `body` throws, or the connection's error if reading from it failed.
+  public static func withConnection<Value>(
+    _ connection: any ModemConnection,
+    retryPolicy: Modem.RetryPolicy = Modem.RetryPolicy(),
+    clock: any Clock<Duration> = ContinuousClock(),
+    isolation: isolated (any Actor)? = #isolation,
+    _ body: (PowerLincController) async throws -> Value
+  ) async throws -> Value {
+
+    let controller = PowerLincController(connection: connection, retryPolicy: retryPolicy, clock: clock)
+
+    return try await withRunning({ try await controller.run() }) { try await body(controller) }
 
   }
 
   /// Reads everything the controller sends, until the connection closes or the task is
   /// canceled.
   ///
-  /// Answers and reports arrive only while this runs, so run it alongside the code that sends
-  /// commands. When it returns, the controller is closed: waiting sends fail with
-  /// ``PowerLincControllerError/connectionClosed``, and every stream from
-  /// ``PowerLincController/replies()`` finishes. Calling it while it's running returns at
-  /// once.
+  /// ``PowerLincController/withConnection(_:retryPolicy:clock:isolation:_:)`` calls this for
+  /// you. Call it yourself to keep a controller open for as long as a task runs, alongside the
+  /// code that sends commands.
+  ///
+  /// Answers and reports arrive only while this runs. When it returns, the controller is
+  /// closed: waiting sends fail with ``PowerLincControllerError/connectionClosed``, and every
+  /// stream from ``PowerLincController/replies()`` finishes. Calling it while it's running
+  /// returns at once.
   ///
   /// - Throws: The connection's error, if reading from it failed, or
   ///   ``PowerLincControllerError/connectionClosed`` if the controller has already closed.
   public func run() async throws {
 
-    guard !isClosed else {
-
-      throw PowerLincControllerError.connectionClosed
-
-    }
-
-    guard !isRunning else {
-
-      return
-
-    }
-
-    isRunning = true
-
-    do {
-
-      for try await chunk in connection.receive() {
-
-        deliver(parser.parse(chunk))
-
-      }
-
-      close(with: nil)
-
-    } catch {
-
-      close(with: error)
-
-      throw error
-
-    }
+    try await pacer.run()
 
   }
 
@@ -158,18 +118,7 @@ public actor PowerLincController: SerialCommandSender {
   ///   sending anything; otherwise the errors sending an `IBIOSCommand` throws.
   public func send(_ command: SerialCommand) async throws {
 
-    let steps = try Self.ibiosCommands(for: command)
-
-    try await waitForTurn()
-    defer { turns.release() }
-
-    try await waitForUnansweredCommand()
-
-    for step in steps {
-
-      try await perform(step)
-
-    }
+    try await pacer.send(Self.ibiosCommands(for: command).map(Self.exchange(for:)))
 
   }
 
@@ -187,12 +136,7 @@ public actor PowerLincController: SerialCommandSender {
   ///   `CancellationError` if the task is canceled, or the connection's error.
   public func send(_ command: IBIOSCommand) async throws {
 
-    try await waitForTurn()
-    defer { turns.release() }
-
-    try await waitForUnansweredCommand()
-
-    try await perform(command)
+    try await pacer.send([Self.exchange(for: command)])
 
   }
 
@@ -202,21 +146,9 @@ public actor PowerLincController: SerialCommandSender {
   /// finishes when the controller closes.
   ///
   /// - Returns: The controller's replies, in the order they arrive.
-  public func replies() -> AsyncStream<IBIOSReply> {
+  public func replies() async -> AsyncStream<IBIOSReply> {
 
-    let (stream, continuation) = AsyncStream<IBIOSReply>.makeStream()
-
-    if isClosed {
-
-      continuation.finish()
-
-    } else {
-
-      subscribers.append(continuation)
-
-    }
-
-    return stream
+    await pacer.replies()
 
   }
 
@@ -273,242 +205,16 @@ public actor PowerLincController: SerialCommandSender {
 
   }
 
-  // MARK: - Sending
-
-  private func perform(_ command: IBIOSCommand) async throws {
-
-    for attempt in 1...retryPolicy.attempts {
-
-      try Task.checkCancellation()
-
-      if try await transmit(command) {
-
-        return
-
-      }
-
-      if attempt < retryPolicy.attempts {
-
-        try await clock.sleep(for: retryPolicy.delay)
-
-      }
-
-    }
-
-    throw PowerLincControllerError.rejected(command)
-
-  }
-
-  /// Writes a command and waits for its answer, a NAK, the timeout or cancellation.
-  ///
-  /// - Returns: Whether the controller accepted the command.
-  private func transmit(_ command: IBIOSCommand) async throws -> Bool {
-
-    guard !isClosed else {
-
-      throw PowerLincControllerError.connectionClosed
-
-    }
-
-    let id = makeID()
-    let (results, continuation) = AsyncStream<Result<Bool, any Error>>.makeStream()
-
-    pendingAnswer = PendingAnswer(id: id, command: command, result: continuation)
-    defer { abandonAnswer(id) }
-
-    return try await awaitAnswer(id, command: command, results: results) { [connection] in
-
-      try await connection.write(command.bytes)
-
-    }.get()
-
-  }
-
-  /// Waits for the controller to answer a command whose send was canceled, so the next
-  /// command isn't written while the controller is still busy with it.
-  private func waitForUnansweredCommand() async throws {
-
-    guard let unanswered = unansweredCommand else {
-
-      return
-
-    }
-
-    unansweredCommand = nil
-    defer { abandonAnswer(unanswered.id) }
-
-    _ = await awaitAnswer(unanswered.id, command: unanswered.command, results: unanswered.results) {}
-
-    try Task.checkCancellation()
-
-  }
-
-  /// Runs `write`, then waits for the pending answer's result, the timeout or cancellation.
-  private func awaitAnswer(
-    _ id: Int,
-    command: IBIOSCommand,
-    results: AsyncStream<Result<Bool, any Error>>,
-    write: @escaping @Sendable () async throws -> Void
-  ) async -> Result<Bool, any Error> {
-
-    let timeout = retryPolicy.echoTimeout
-
-    return await withTaskGroup(of: Void.self, returning: Result<Bool, any Error>.self) { group in
-
-      // Writes, then gives up on the answer once the timeout passes. The group cancels this
-      // child as soon as the answer arrives.
-      group.addTask { [clock] in
-
-        do {
-
-          try await write()
-
-        } catch {
-
-          await self.failAnswer(id, with: error)
-
-          return
-
-        }
-
-        do {
-
-          try await clock.sleep(for: timeout)
-
-        } catch {
-
-          return
-
-        }
-
-        await self.answerTimedOut(id, command: command)
-
-      }
-
-      defer { group.cancelAll() }
-
-      for await result in results {
-
-        return result
-
-      }
-
-      // The stream ends without a result only when this task is canceled.
-      return .failure(CancellationError())
-
-    }
-
-  }
-
-  /// Fails the command waiting for an answer, unless the parser is holding back a NAK for it.
-  private func answerTimedOut(_ id: Int, command: IBIOSCommand) {
-
-    guard pendingAnswer?.id == id else {
-
-      return
-
-    }
-
-    deliver(parser.finishPendingReply())
-    failAnswer(id, with: PowerLincControllerError.timedOut(command))
-
-  }
-
-  private func failAnswer(_ id: Int, with error: any Error) {
-
-    guard pendingAnswer?.id == id else {
-
-      return
-
-    }
-
-    completePendingAnswer(.failure(error))
-
-  }
-
-  /// Stops waiting for an answer whose send was canceled. The command may have been written,
-  /// so its answer stays pending, and the next send waits for it.
-  private func abandonAnswer(_ id: Int) {
-
-    guard let pending = pendingAnswer, pending.id == id else {
-
-      return
-
-    }
-
-    pending.result.finish()
-
-    let (results, continuation) = AsyncStream<Result<Bool, any Error>>.makeStream()
-
-    pendingAnswer = PendingAnswer(id: id, command: pending.command, result: continuation)
-    unansweredCommand = UnansweredCommand(id: id, command: pending.command, results: results)
-
-  }
-
-  private func completePendingAnswer(_ result: Result<Bool, any Error>) {
-
-    guard let pending = pendingAnswer else {
-
-      return
-
-    }
-
-    pendingAnswer = nil
-    pending.result.yield(result)
-    pending.result.finish()
-
-  }
-
-  private func waitForTurn() async throws {
-
-    if let ticket = turns.request() {
-
-      for await _ in ticket.handoff {}
-
-      guard turns.settle(ticket) else {
-
-        throw CancellationError()
-
-      }
-
-    }
-
-    if Task.isCancelled {
-
-      turns.release()
-
-      throw CancellationError()
-
-    }
-
-  }
-
-  // MARK: - Receiving
-
-  private func deliver(_ replies: [IBIOSReply]) {
-
-    for reply in replies {
-
-      if let pending = pendingAnswer, let isAccepted = Self.answer(reply, to: pending.command) {
-
-        completePendingAnswer(.success(isAccepted))
-
-      }
-
-      // A stream whose listener has stopped listening is dropped.
-      subscribers.removeAll { subscriber in
-
-        if case .terminated = subscriber.yield(reply) {
-
-          return true
-
-        }
-
-        return false
-
-      }
-
-    }
+  // MARK: - Answers
+
+  private static func exchange(for command: IBIOSCommand) -> Exchange<IBIOSReply> {
+
+    Exchange(
+      bytes: command.bytes,
+      answer: { reply in Self.answer(reply, to: command) },
+      rejected: PowerLincControllerError.rejected(command),
+      timedOut: PowerLincControllerError.timedOut(command)
+    )
 
   }
 
@@ -540,29 +246,6 @@ public actor PowerLincController: SerialCommandSender {
     default:
       return nil
     }
-
-  }
-
-  private func close(with error: (any Error)?) {
-
-    isClosed = true
-    completePendingAnswer(.failure(error ?? PowerLincControllerError.connectionClosed))
-
-    for subscriber in subscribers {
-
-      subscriber.finish()
-
-    }
-
-    subscribers.removeAll()
-
-  }
-
-  private func makeID() -> Int {
-
-    defer { nextID += 1 }
-
-    return nextID
 
   }
 

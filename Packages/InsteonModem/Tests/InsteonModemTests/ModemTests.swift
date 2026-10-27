@@ -38,6 +38,56 @@ struct ModemTests {
 
   }
 
+  @Test func withConnectionReturnsWhatItsBodyReturns() async throws {
+
+    let connection = ScriptedConnection()
+
+    let written = try await Modem.withConnection(connection, retryPolicy: policy, clock: clock) { modem in
+
+      try await modem.send(.beep)
+
+      return connection.written
+
+    }
+
+    #expect(written == [[0x02, 0x77]])
+
+  }
+
+  @Test func withConnectionClosesTheModemWhenItsBodyReturns() async throws {
+
+    let modem = try await Modem.withConnection(ScriptedConnection(), retryPolicy: policy, clock: clock) { $0 }
+
+    await #expect(throws: ModemError.connectionClosed) {
+
+      try await modem.send(.beep)
+
+    }
+
+  }
+
+  @Test func withConnectionThrowsTheConnectionsError() async {
+
+    struct Unplugged: Error {}
+
+    let connection = ScriptedConnection()
+
+    await #expect(throws: Unplugged.self) {
+
+      try await Modem.withConnection(connection, retryPolicy: policy, clock: clock) { modem in
+
+        let replies = await modem.replies()
+        connection.incoming.finish(throwing: Unplugged())
+
+        // The stream finishes once the modem closes.
+        for await _ in replies {}
+
+      }
+
+    }
+
+  }
+
   @Test func sendReturnsOnceTheModemAcknowledges() async throws {
 
     let connection = ScriptedConnection()
