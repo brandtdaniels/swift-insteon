@@ -66,6 +66,15 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``CRCIntegrity``
 - ``UnprotectedIntegrity``
 
+### Products
+
+- <doc:IdentifyingDevices>
+- ``DeviceCategory``
+- ``DeviceSubcategory``
+- ``FirmwareVersion``
+- ``SetButtonPressed``
+- ``ProductData``
+
 ### Modem commands
 
 - ``SerialCommand``

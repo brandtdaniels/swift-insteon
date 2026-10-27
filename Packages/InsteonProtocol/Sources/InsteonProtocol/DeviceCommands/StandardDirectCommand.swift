@@ -9,6 +9,8 @@
 public enum StandardDirectCommand: Hashable, Sendable {
 
   /// Requests the device's product data (cmd1 `0x03`, cmd2 `0x00`).
+  ///
+  /// The device answers with an extended message; read it with ``ProductData``.
   case productDataRequest
 
   /// Takes the device out of linking or unlinking mode (cmd1 `0x08`).
@@ -30,7 +32,9 @@ public enum StandardDirectCommand: Hashable, Sendable {
   /// Checks that the device is reachable (cmd1 `0x0F`).
   case ping
 
-  /// Asks the device to broadcast its device category and firmware (cmd1 `0x10`).
+  /// Asks the device to identify itself (cmd1 `0x10`).
+  ///
+  /// The device answers with a broadcast; read it with ``SetButtonPressed``.
   case idRequest
 
   /// Turns the device on at `level`, using its configured ramp rate (cmd1 `0x11`).

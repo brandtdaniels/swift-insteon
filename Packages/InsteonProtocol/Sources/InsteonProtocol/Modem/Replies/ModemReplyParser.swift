@@ -247,13 +247,17 @@ public struct ModemReplyParser: Hashable, Sendable {
     case 0x52:
       return .x10Received(X10Code(rawX10: body[0], flag: body[1]))
     case 0x53:
+      // The other device's identity is valid only when the modem became its controller, and
+      // its firmware byte is 0xFF unless the device predates the Product Data Response.
+      let isController = body[0] == AllLinkMode.controller.rawValue
+
       return .allLinkingCompleted(AllLinkingCompleted(
         linkCode: body[0],
         group: body[1],
         address: address(body, at: 2),
-        category: body[5],
-        subcategory: body[6],
-        firmwareVersion: body[7]
+        category: isController ? DeviceCategory(rawValue: body[5]) : nil,
+        subcategory: isController ? DeviceSubcategory(rawValue: body[6]) : nil,
+        firmwareVersion: isController && body[7] != 0xFF ? FirmwareVersion(rawValue: body[7]) : nil
       ))
     case 0x54:
       return .buttonEvent(ModemButtonEvent(rawValue: body[0]))
@@ -270,9 +274,9 @@ public struct ModemReplyParser: Hashable, Sendable {
     case 0x60 where body.count == 7 && body.last == acknowledgement:
       return .modemInfo(ModemInfo(
         address: address(body, at: 0),
-        category: body[3],
-        subcategory: body[4],
-        firmwareVersion: body[5]
+        category: DeviceCategory(rawValue: body[3]),
+        subcategory: DeviceSubcategory(rawValue: body[4]),
+        firmwareVersion: FirmwareVersion(rawValue: body[5])
       ))
     case 0x73 where body.count == 4 && body.last == acknowledgement:
       return .modemConfiguration(ModemConfigurationReport(

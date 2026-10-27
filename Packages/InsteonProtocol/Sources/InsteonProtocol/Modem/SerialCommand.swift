@@ -50,8 +50,9 @@ public enum SerialCommand: Hashable, Sendable {
   /// - Parameters:
   ///   - category: The device category.
   ///   - subcategory: The device subcategory.
-  ///   - firmwareVersion: The firmware version to report, or `0xFF` for none.
-  case setHostDeviceCategory(category: UInt8, subcategory: UInt8, firmwareVersion: UInt8)
+  ///   - firmwareVersion: The firmware version to report, or `nil` for none, which the modem
+  ///     sends as `0xFF`.
+  case setHostDeviceCategory(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?)
 
   /// Resets the modem to factory defaults, erasing its entire ALL-Link database.
   case resetModem
@@ -183,7 +184,7 @@ public enum SerialCommand: Hashable, Sendable {
     case let .startAllLinking(mode, group):
       [mode.rawValue, group]
     case let .setHostDeviceCategory(category, subcategory, firmwareVersion):
-      [category, subcategory, firmwareVersion]
+      [category.rawValue, subcategory.rawValue, firmwareVersion?.rawValue ?? 0xFF]
     case let .setAcknowledgementByte(command2), let .setNegativeAcknowledgementByte(command2):
       [command2]
     case let .setApplicationRetries(retries):
