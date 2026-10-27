@@ -17,11 +17,26 @@ struct ModemTests {
 
   }
 
+  /// Runs `body` while `modem` reads from its connection, then stops the modem.
+  func run(_ modem: Modem, _ body: () async throws -> Void) async throws {
+
+    try await withThrowingTaskGroup(of: Void.self) { group in
+
+      group.addTask { try await modem.run() }
+      defer { group.cancelAll() }
+
+      try await body()
+
+    }
+
+  }
+
   @Test func sendReturnsOnceTheModemAcknowledges() async throws {
 
     let connection = ScriptedConnection()
+    let modem = makeModem(connection)
 
-    try await makeModem(connection).send(.beep)
+    try await run(modem) { try await modem.send(.beep) }
 
     #expect(connection.written == [[0x02, 0x77]])
 
@@ -34,8 +49,9 @@ struct ModemTests {
   func sendReturnsWhenTheModemRepliesWithData(command: SerialCommand, reply: [UInt8]) async throws {
 
     let connection = ScriptedConnection { _, _ in reply }
+    let modem = makeModem(connection)
 
-    try await makeModem(connection).send(command)
+    try await run(modem) { try await modem.send(command) }
 
     #expect(connection.written == [command.bytes])
 
@@ -44,8 +60,9 @@ struct ModemTests {
   @Test func sendRetriesAfterANak() async throws {
 
     let connection = ScriptedConnection { written, index in written + [index == 0 ? 0x15 : 0x06] }
+    let modem = makeModem(connection)
 
-    try await makeModem(connection).send(.ledOn)
+    try await run(modem) { try await modem.send(.ledOn) }
 
     #expect(connection.written == [[0x02, 0x6D], [0x02, 0x6D]])
 
@@ -54,8 +71,9 @@ struct ModemTests {
   @Test func sendRetriesAfterALoneNak() async throws {
 
     let connection = ScriptedConnection { written, index in index == 0 ? [0x15] : written + [0x06] }
+    let modem = makeModem(connection)
 
-    try await makeModem(connection).send(.beep)
+    try await run(modem) { try await modem.send(.beep) }
 
     #expect(connection.written.count == 2)
 
@@ -66,28 +84,36 @@ struct ModemTests {
     let connection = ScriptedConnection { written, index in written + [index == 0 ? 0x15 : 0x06] }
     let modem = Modem(connection: connection, retryPolicy: Modem.RetryPolicy(delay: .milliseconds(500)), clock: clock)
 
-    async let sent: Void = modem.send(.ledOn)
+    try await run(modem) {
 
-    // Wait for the retry delay specifically; the first attempt's timeout may also be asleep
-    // until the NAK cancels it.
-    await clock.waitForSleeper(until: .milliseconds(500))
-    #expect(connection.written.count == 1)
+      async let sent: Void = modem.send(.ledOn)
 
-    clock.advance(by: .milliseconds(500))
-    try await sent
+      // Wait for the retry delay specifically; the first attempt's timeout may also be asleep
+      // until the NAK cancels it.
+      await clock.waitForSleeper(until: .milliseconds(500))
+      #expect(connection.written.count == 1)
+
+      clock.advance(by: .milliseconds(500))
+      try await sent
+
+    }
 
     #expect(connection.written.count == 2)
 
   }
 
-  @Test func sendThrowsWhenEveryAttemptIsRejected() async {
+  @Test func sendThrowsWhenEveryAttemptIsRejected() async throws {
 
     let connection = ScriptedConnection { written, _ in written + [0x15] }
     let modem = makeModem(connection)
 
-    await #expect(throws: ModemError.rejected(.ledOff)) {
+    try await run(modem) {
 
-      try await modem.send(.ledOff)
+      await #expect(throws: ModemError.rejected(.ledOff)) {
+
+        try await modem.send(.ledOff)
+
+      }
 
     }
 
@@ -95,34 +121,42 @@ struct ModemTests {
 
   }
 
-  @Test func sendTimesOutWithoutAnEcho() async {
+  @Test func sendTimesOutWithoutAnEcho() async throws {
 
     let connection = ScriptedConnection { _, _ in [] }
     let modem = makeModem(connection)
 
-    await #expect(throws: ModemError.timedOut(.getModemInfo)) {
+    try await run(modem) {
 
-      async let sent: Void = modem.send(.getModemInfo)
-      await clock.waitForSleeper(until: .seconds(2))
-      clock.advance(by: .seconds(2))
-      try await sent
+      await #expect(throws: ModemError.timedOut(.getModemInfo)) {
+
+        async let sent: Void = modem.send(.getModemInfo)
+        await clock.waitForSleeper(until: .seconds(2))
+        clock.advance(by: .seconds(2))
+        try await sent
+
+      }
 
     }
 
   }
 
-  @Test func sendFailsWhenTheConnectionCloses() async {
+  @Test func sendFailsWhenTheConnectionCloses() async throws {
 
     let connection = ScriptedConnection { _, _ in [] }
     let modem = makeModem(connection)
 
-    await #expect(throws: ModemError.connectionClosed) {
+    try await run(modem) {
 
-      async let sent: Void = modem.send(.getModemInfo)
-      var writes = connection.writeLog.makeAsyncIterator()
-      _ = await writes.next()
-      connection.incoming.finish()
-      try await sent
+      await #expect(throws: ModemError.connectionClosed) {
+
+        async let sent: Void = modem.send(.getModemInfo)
+        var writes = connection.writeLog.makeAsyncIterator()
+        _ = await writes.next()
+        connection.incoming.finish()
+        try await sent
+
+      }
 
     }
 
@@ -135,6 +169,27 @@ struct ModemTests {
     let replies = await modem.replies()
 
     connection.incoming.finish()
+    try await modem.run()
+
+    for await _ in replies {}
+
+    await #expect(throws: ModemError.connectionClosed) {
+
+      try await modem.send(.beep)
+
+    }
+
+    #expect(connection.written.isEmpty)
+
+  }
+
+  @Test func cancelingRunClosesTheModem() async throws {
+
+    let connection = ScriptedConnection()
+    let modem = makeModem(connection)
+    let replies = await modem.replies()
+
+    try await run(modem) {}
 
     for await _ in replies {}
 
@@ -155,7 +210,7 @@ struct ModemTests {
     let modem = makeModem(connection)
 
     let replies = await modem.replies()
-    try await modem.send(.beep)
+    try await run(modem) { try await modem.send(.beep) }
 
     var iterator = replies.makeAsyncIterator()
     let echo = await iterator.next()
@@ -191,16 +246,20 @@ struct ModemTests {
     }
     let modem = makeModem(connection)
 
-    await #expect(throws: ModemError.timedOut(.setAcknowledgementByte)) {
+    try await run(modem) {
 
-      async let sent: Void = modem.send(late)
-      await clock.waitForSleeper(until: .seconds(2))
-      clock.advance(by: .seconds(2))
-      try await sent
+      await #expect(throws: ModemError.timedOut(.setAcknowledgementByte)) {
+
+        async let sent: Void = modem.send(late)
+        await clock.waitForSleeper(until: .seconds(2))
+        clock.advance(by: .seconds(2))
+        try await sent
+
+      }
+
+      try await modem.send(current)
 
     }
-
-    try await modem.send(current)
 
     #expect(connection.written == [late.bytes, current.bytes, current.bytes])
 
@@ -214,14 +273,18 @@ struct ModemTests {
     let modem = makeModem(connection)
     var replies = await modem.replies().makeAsyncIterator()
 
-    async let sent: Void = modem.send(.getModemInfo)
+    try await run(modem) {
 
-    #expect(await replies.next() == .userReset)
+      async let sent: Void = modem.send(.getModemInfo)
 
-    // The NAK can't be told apart from the start of a reply until the wait for an echo ends.
-    await clock.waitForSleeper(until: .seconds(2))
-    clock.advance(by: .seconds(2))
-    try await sent
+      #expect(await replies.next() == .userReset)
+
+      // The NAK can't be told apart from the start of a reply until the wait for an echo ends.
+      await clock.waitForSleeper(until: .seconds(2))
+      clock.advance(by: .seconds(2))
+      try await sent
+
+    }
 
     #expect(connection.written == [[0x02, 0x60], [0x02, 0x60]])
 
@@ -232,24 +295,67 @@ struct ModemTests {
     let connection = ScriptedConnection { _, _ in [] }
     let modem = makeModem(connection)
 
-    async let first: Void = modem.send(.ledOn)
-    var writes = connection.writeLog.makeAsyncIterator()
-    let frame = try #require(await writes.next())
+    try await run(modem) {
 
-    // Canceled while the first command holds the modem.
-    let second = Task { try await modem.send(.ledOff) }
-    second.cancel()
+      async let first: Void = modem.send(.ledOn)
+      var writes = connection.writeLog.makeAsyncIterator()
+      let frame = try #require(await writes.next())
 
-    connection.incoming.yield(frame + [0x06])
-    try await first
+      // Canceled while the first command holds the modem.
+      try await withThrowingTaskGroup(of: Void.self) { group in
 
-    await #expect(throws: CancellationError.self) {
+        group.addTask { try await modem.send(.ledOff) }
+        group.cancelAll()
 
-      try await second.value
+        await #expect(throws: CancellationError.self) {
+
+          try await group.next()
+
+        }
+
+      }
+
+      connection.incoming.yield(frame + [0x06])
+      try await first
 
     }
 
     #expect(connection.written == [[0x02, 0x6D]])
+
+  }
+
+  @Test func cancelingASendStopsWaitingForItsEcho() async throws {
+
+    let connection = ScriptedConnection { _, _ in [] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      var writes = connection.writeLog.makeAsyncIterator()
+
+      try await withThrowingTaskGroup(of: Void.self) { group in
+
+        group.addTask { try await modem.send(.ledOn) }
+        _ = await writes.next()
+        group.cancelAll()
+
+        await #expect(throws: CancellationError.self) {
+
+          try await group.next()
+
+        }
+
+      }
+
+      // The canceled send gave up its turn, so the next command goes out.
+      async let next: Void = modem.send(.ledOff)
+      let frame = try #require(await writes.next())
+      connection.incoming.yield(frame + [0x06])
+      try await next
+
+    }
+
+    #expect(connection.written == [[0x02, 0x6D], [0x02, 0x6E]])
 
   }
 
@@ -259,21 +365,25 @@ struct ModemTests {
     let connection = ScriptedConnection { _, _ in [] }
     let modem = makeModem(connection)
 
-    async let first: Void = modem.send(.ledOn)
-    async let second: Void = modem.send(.ledOff)
-    async let third: Void = modem.send(.beep)
+    try await run(modem) {
 
-    var writes = connection.writeLog.makeAsyncIterator()
+      async let first: Void = modem.send(.ledOn)
+      async let second: Void = modem.send(.ledOff)
+      async let third: Void = modem.send(.beep)
 
-    for count in 1...3 {
+      var writes = connection.writeLog.makeAsyncIterator()
 
-      let frame = try #require(await writes.next())
-      #expect(connection.written.count == count)
-      connection.incoming.yield(frame + [0x06])
+      for count in 1...3 {
+
+        let frame = try #require(await writes.next())
+        #expect(connection.written.count == count)
+        connection.incoming.yield(frame + [0x06])
+
+      }
+
+      _ = try await (first, second, third)
 
     }
-
-    _ = try await (first, second, third)
 
     #expect(Set(connection.written) == [[0x02, 0x6D], [0x02, 0x6E], [0x02, 0x77]])
 

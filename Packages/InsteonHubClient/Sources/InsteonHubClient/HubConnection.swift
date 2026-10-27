@@ -11,8 +11,15 @@ import InsteonModem
 /// let hub = Hub(endpoint: HubEndpoint(host: "192.168.1.20"), user: username, password: password)
 /// let modem = Modem(connection: HubConnection(hub: hub))
 ///
-/// try await modem.send(.getModemInfo)
+/// try await withThrowingTaskGroup(of: Void.self) { group in
+///   group.addTask { try await modem.run() }
+///   try await modem.send(.getModemInfo)
+///   group.cancelAll()
+/// }
 /// ```
+///
+/// Polling happens only while the stream from ``HubConnection/receive()`` is being read, in the
+/// reading task, so it stops when that task is canceled.
 ///
 /// Requests to the Hub go one at a time, and the first one clears the Hub's buffer so replies
 /// from before the connection was made are ignored.
@@ -33,11 +40,10 @@ public actor HubConnection: ModemConnection {
 
   private var lastWritten: [UInt8]?
 
-  private var isBusy = false
+  private var requests = TurnQueue()
 
-  private var waitingRequests: [CheckedContinuation<Void, Never>] = []
-
-  private var activeStream: AsyncThrowingStream<[UInt8], any Error>.Continuation?
+  /// The stream that has read the buffer at least once, so its next read waits for the interval.
+  private var polledStream: Int?
 
   private nonisolated let streams = StreamCounter()
 
@@ -67,8 +73,8 @@ public actor HubConnection: ModemConnection {
   /// - Throws: ``HubError`` if the Hub rejected the request, or the HTTP client's error.
   public func write(_ bytes: [UInt8]) async throws {
 
-    await beginRequest()
-    defer { endRequest() }
+    try await beginRequest()
+    defer { requests.release() }
 
     try await clearBufferIfNeeded()
     try await hub.write(bytes)
@@ -79,65 +85,70 @@ public actor HubConnection: ModemConnection {
 
   }
 
-  /// Returns the bytes the Hub's modem sends, polling the Hub's buffer until the stream ends.
+  /// Returns the bytes the Hub's modem sends, polling the Hub's buffer as the stream is read.
   ///
-  /// Calling this again finishes the previous stream. The stream finishes with an error if
-  /// reading the buffer fails.
+  /// The buffer is read once right away, then once per poll interval, in the task reading the
+  /// stream. Calling this again finishes the previous stream. The stream finishes when the
+  /// reading task is canceled, or with an error if reading the buffer fails.
   ///
   /// - Returns: A stream of received byte chunks.
   public nonisolated func receive() -> AsyncThrowingStream<[UInt8], any Error> {
 
-    let (stream, continuation) = AsyncThrowingStream<[UInt8], any Error>.makeStream()
     let id = streams.next()
-    let task = Task { await self.poll(into: continuation, id: id) }
 
-    continuation.onTermination = { _ in task.cancel() }
-
-    return stream
+    return AsyncThrowingStream(unfolding: { try await self.nextChunk(forStream: id) })
 
   }
 
   // MARK: - Polling
 
-  private func poll(into continuation: AsyncThrowingStream<[UInt8], any Error>.Continuation, id: Int) async {
-
-    // The last call to `receive()` wins, whichever task starts first.
-    guard streams.isLatest(id) else {
-
-      continuation.finish()
-
-      return
-
-    }
-
-    activeStream?.finish()
-    activeStream = continuation
+  /// Polls until the buffer has new bytes, or returns `nil` once a newer stream replaces this
+  /// one or the reading task is canceled.
+  private func nextChunk(forStream id: Int) async throws -> [UInt8]? {
 
     do {
 
       while streams.isLatest(id) {
 
+        if polledStream == id {
+
+          try await clock.sleep(for: pollInterval)
+
+        } else {
+
+          polledStream = id
+
+        }
+
+        guard streams.isLatest(id) else {
+
+          break
+
+        }
+
         let received = try await readNewBytes()
 
         if !received.isEmpty {
 
-          continuation.yield(received)
+          return received
 
         }
 
-        try await clock.sleep(for: pollInterval)
-
       }
 
-      continuation.finish()
-
-    } catch is CancellationError {
-
-      continuation.finish()
+      return nil
 
     } catch {
 
-      continuation.finish(throwing: error)
+      // Canceling the reading task ends the stream rather than failing it, whether the
+      // cancellation interrupted the wait between polls or a request to the Hub.
+      if error is CancellationError || Task.isCancelled {
+
+        return nil
+
+      }
+
+      throw error
 
     }
 
@@ -145,8 +156,8 @@ public actor HubConnection: ModemConnection {
 
   private func readNewBytes() async throws -> [UInt8] {
 
-    await beginRequest()
-    defer { endRequest() }
+    try await beginRequest()
+    defer { requests.release() }
 
     try await clearBufferIfNeeded()
 
@@ -190,29 +201,25 @@ public actor HubConnection: ModemConnection {
 
   // MARK: - One request at a time
 
-  private func beginRequest() async {
+  private func beginRequest() async throws {
 
-    guard isBusy else {
+    if let ticket = requests.request() {
 
-      isBusy = true
+      for await _ in ticket.handoff {}
 
-      return
+      guard requests.settle(ticket) else {
+
+        throw CancellationError()
+
+      }
 
     }
 
-    await withCheckedContinuation { waitingRequests.append($0) }
+    if Task.isCancelled {
 
-  }
+      requests.release()
 
-  private func endRequest() {
-
-    if waitingRequests.isEmpty {
-
-      isBusy = false
-
-    } else {
-
-      waitingRequests.removeFirst().resume()
+      throw CancellationError()
 
     }
 

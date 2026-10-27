@@ -16,17 +16,28 @@ import InsteonProtocol
 let modem = Modem(connection: try SerialPort(path: "/dev/ttyUSB0"))
 let replies = await modem.replies()
 
-let lamp = InsteonAddress(0xAA, 0xBB, 0xCC)
-try await modem.send(.sendStandardMessage(
-  StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF))
-))
+try await withThrowingTaskGroup(of: Void.self) { group in
+  // Reads everything the modem sends until the group is canceled.
+  group.addTask { try await modem.run() }
 
-for await reply in replies {
-  if case let .messageReceived(message) = reply, message.sender == lamp {
-    // The lamp acknowledged the command.
+  let lamp = InsteonAddress(0xAA, 0xBB, 0xCC)
+  try await modem.send(.sendStandardMessage(
+    StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF))
+  ))
+
+  for await reply in replies {
+    if case let .messageReceived(message) = reply, message.sender == lamp {
+      // The lamp acknowledged the command.
+      break
+    }
   }
+
+  group.cancelAll()
 }
 ```
+
+``Modem/run()`` keeps reading in the task that calls it, so the modem's lifetime follows the
+structure of your code: canceling that task closes the modem.
 
 ``Modem`` conforms to `SerialCommandSender`, so code written against that protocol works with
 any modem connection.
