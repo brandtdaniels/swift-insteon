@@ -37,7 +37,7 @@ struct UserDataIntegrityTests {
 
   }
 
-  // Reference values for the CRC used by devices that require it, such as i2cs devices.
+  // Reference values for the CRC that some devices use for certain commands.
   @Test(arguments: crcReferenceValues)
   func crcMatchesReferenceImplementation(_ data: [UInt8], _ high: UInt8, _ low: UInt8) throws {
 

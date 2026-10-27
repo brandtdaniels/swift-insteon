@@ -5,7 +5,7 @@
 public enum ExtendedDirectCommand: Hashable, Sendable {
 
   /// Reads or writes device configuration selected by the user data (cmd1 `0x2E`, cmd2 `0x00`).
-  case extendedGetSet
+  case getSet
 
   /// Reads or writes records in the device's ALL-Link database (cmd1 `0x2F`, cmd2 `0x00`).
   case readWriteAllLinkDatabase
@@ -28,7 +28,7 @@ extension ExtendedDirectCommand: CommandConvertible {
   public var command: Command {
 
     switch self {
-    case .extendedGetSet:
+    case .getSet:
       Command(command1: 0x2E)
     case .readWriteAllLinkDatabase:
       Command(command1: 0x2F)
