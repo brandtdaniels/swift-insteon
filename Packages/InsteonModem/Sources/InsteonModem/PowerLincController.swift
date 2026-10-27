@@ -276,10 +276,14 @@ public actor PowerLincController: SerialCommandSender {
 
     switch (reply, command) {
     case let (.echo(echo), _) where echo.number == command.number:
-      // A download's echo repeats only its address and length. Matching the parameters keeps a
-      // late echo of an earlier command from answering this one.
-      let isDownload = if case .download = command { true } else { false }
-      let expected = Array(command.parameters.prefix(isDownload ? 4 : command.parameters.count))
+      // A download's echo repeats only its address and length, so its data and checksum aren't
+      // encoded just to match it. Matching the parameters keeps a late echo of an earlier
+      // command from answering this one.
+      let expected: [UInt8] = if case let .download(address, data) = command {
+        [UInt8(address >> 8), UInt8(address & 0xFF), UInt8(data.count >> 8 & 0xFF), UInt8(data.count & 0xFF)]
+      } else {
+        command.parameters
+      }
 
       if echo.isAccepted {
 

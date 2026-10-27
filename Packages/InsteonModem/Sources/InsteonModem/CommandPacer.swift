@@ -39,8 +39,8 @@ struct Exchange<Reply>: Sendable {
   var transferTime: Duration = .zero
 
   /// Whether a rejection means the exchange before this one went wrong, so each new attempt
-  /// repeats that exchange first. A check that reads back what the previous command wrote
-  /// does this, since reading again would find the same mistake.
+  /// sends that exchange again first. A check that reads back what the previous command wrote
+  /// does this, since reading again would find the same mistake. Both count as one attempt.
   var repeatsPrevious = false
 
 }
@@ -220,22 +220,25 @@ actor CommandPacer<Parser: ReplyParser> {
 
   /// Sends an exchange until the device accepts it, as many times as the retry policy allows.
   ///
-  /// - Parameter previous: The exchange to repeat before each attempt after the first.
+  /// - Parameter previous: The exchange to send again before each attempt after the first.
+  ///   An attempt counts as rejected if the device rejects either one.
   private func perform(_ exchange: Exchange<Reply>, repeating previous: Exchange<Reply>? = nil) async throws {
 
-    let attempts = max(1, retryPolicy.attempts)
+    let attempts = retryPolicy.attempts
 
     for attempt in 1...attempts {
 
       try Task.checkCancellation()
 
+      var isPreviousAccepted = true
+
       if attempt > 1, let previous {
 
-        try await perform(previous)
+        isPreviousAccepted = try await transmit(previous)
 
       }
 
-      if try await transmit(exchange) {
+      if isPreviousAccepted, try await transmit(exchange) {
 
         return
 
