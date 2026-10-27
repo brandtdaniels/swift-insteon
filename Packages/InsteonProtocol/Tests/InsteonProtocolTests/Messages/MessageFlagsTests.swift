@@ -44,6 +44,7 @@ struct MessageFlagsTests {
   @Test func hopsLeftDefaultsToMaxHops() {
 
     #expect(MessageFlags(messageType: .direct, maxHops: .two).hopsLeft == .two)
+    #expect(MessageFlags(messageType: .direct, maxHops: .one, hopsLeft: .three).hopsLeft == .one)
 
   }
 
