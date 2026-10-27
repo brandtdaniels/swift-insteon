@@ -9,6 +9,11 @@ import FoundationNetworking
 /// local interface over plain HTTP, so anyone who can see the network traffic can read them;
 /// keep the Hub on a trusted network.
 ///
+/// The header is part of every request, so it also goes wherever the wrapped client sends the
+/// request, including to another host if a server redirects there. Use this client only with
+/// hosts you trust, such as a Hub on your own network. The client keeps the encoded
+/// credentials in memory for as long as it exists.
+///
 /// ```swift
 /// let client = BasicAuthenticationHTTPClient(
 ///   URLSessionHTTPClient(),
