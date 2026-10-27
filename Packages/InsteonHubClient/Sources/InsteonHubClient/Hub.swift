@@ -47,7 +47,7 @@ public struct Hub: SerialCommandSender {
   ///   - endpoint: Where the Hub can be reached.
   ///   - user: The Hub's user name.
   ///   - password: The Hub's password.
-  ///   - httpClient: The client to send requests with. Defaults to ``URLSessionHTTPClient``.
+  ///   - httpClient: The client to send requests with. Defaults to `URLSessionHTTPClient`.
   public init(
     endpoint: HubEndpoint,
     user: String,
