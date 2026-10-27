@@ -16,7 +16,7 @@ struct SerialPortTests {
     try #require(controller >= 0)
     defer { _ = close(controller) }
     try #require(grantpt(controller) == 0 && unlockpt(controller) == 0)
-    let path = String(cString: try #require(ptsname(controller)))
+    let path = try #require(pseudoTerminalPath(controller))
 
     let port = try SerialPort(path: path)
     defer { port.close() }
@@ -62,4 +62,19 @@ struct SerialPortTests {
   }
 
 }
+
+/// Returns the device path of a pseudo-terminal's peer.
+private func pseudoTerminalPath(_ controller: Int32) -> String? {
+
+  #if os(Linux)
+  // Glibc's `ptsname` isn't imported into Swift, so look it up at run time.
+  typealias PTSName = @convention(c) (Int32) -> UnsafeMutablePointer<CChar>?
+  guard let symbol = dlsym(nil, "ptsname") else { return nil }
+  let ptsname = unsafeBitCast(symbol, to: PTSName.self)
+  #endif
+
+  return ptsname(controller).map { String(cString: $0) }
+
+}
+
 #endif

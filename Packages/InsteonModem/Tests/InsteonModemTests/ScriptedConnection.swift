@@ -27,20 +27,18 @@ final class ScriptedConnection: ModemConnection, @unchecked Sendable {
 
   var written: [[UInt8]] {
 
-    lock.lock()
-    defer { lock.unlock() }
-
-    return writes
+    lock.withLock { writes }
 
   }
 
   func write(_ bytes: [UInt8]) async throws {
 
-    lock.lock()
-    let index = writes.count
-    writes.append(bytes)
-    let reply = respond(bytes, index)
-    lock.unlock()
+    let reply = lock.withLock {
+
+      writes.append(bytes)
+      return respond(bytes, writes.count - 1)
+
+    }
 
     if !reply.isEmpty {
 
