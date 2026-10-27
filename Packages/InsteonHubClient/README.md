@@ -1,6 +1,6 @@
 # InsteonHubClient
 
-Control INSTEON devices through an INSTEON Hub on your local network: the Hub 2 (model 2245) or the Hub 1 (model 2242), which serves the same local interface. The Hub Pro (model 2243) isn't supported.
+Control INSTEON devices through an INSTEON Hub on your local network: model 2245, or model 2242, which serves the same local interface. The Hub Pro (model 2243) isn't supported.
 
 - `Hub`: sends serial commands to the Hub's modem, and reads and clears the buffer of its replies; conforms to `SerialCommandSender`
 - `HubEndpoint`: the Hub's host and port (25105 by default)
