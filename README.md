@@ -4,7 +4,7 @@ Swift packages for working with [INSTEON](https://www.insteon.com) home automati
 
 | Library | Description |
 | --- | --- |
-| [InsteonProtocol](Packages/InsteonProtocol) | The INSTEON protocol as value types: build messages and encode them for a modem or hub |
+| [InsteonProtocol](Packages/InsteonProtocol) | The INSTEON protocol as value types: messages for devices, and the serial commands that carry them through a modem |
 
 ## Requirements
 

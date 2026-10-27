@@ -98,8 +98,9 @@ public struct CRCIntegrity: UserDataIntegrity {
     }
 
     var sealed = userData
-    sealed[13] = UInt8(crc >> 8)
-    sealed[14] = UInt8(crc & 0xFF)
+    let crcBytes = crc.bigEndianBytes
+    sealed[13] = crcBytes[0]
+    sealed[14] = crcBytes[1]
 
     return sealed
 
