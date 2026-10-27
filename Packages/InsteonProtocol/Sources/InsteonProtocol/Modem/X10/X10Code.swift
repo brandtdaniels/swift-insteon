@@ -15,6 +15,29 @@ public enum X10Code: Hashable, Sendable {
   /// Sends a command to the house code's addressed units.
   case command(X10HouseCode, X10Command)
 
+  /// Decodes an X10 transmission from its two bytes.
+  ///
+  /// - Parameters:
+  ///   - rawX10: The house code in the high nibble and the unit or command in the low nibble.
+  ///   - flag: `0x80` for a command; any other value for a unit address.
+  public init(rawX10: UInt8, flag: UInt8) {
+
+    // Every 4-bit value is a house, unit and command code, so these lookups always succeed.
+    let house = X10HouseCode.allCases.first { $0.rawValue == rawX10 >> 4 }!
+    let low = rawX10 & 0x0F
+
+    if flag & 0x80 != 0 {
+
+      self = .command(house, X10Command.allCases.first { $0.rawValue == low }!)
+
+    } else {
+
+      self = .unit(house, X10UnitCode.allCases.first { $0.rawValue == low }!)
+
+    }
+
+  }
+
   /// The X10 byte: the house code in the high nibble and the unit or command in the low nibble.
   public var rawX10: UInt8 {
 
