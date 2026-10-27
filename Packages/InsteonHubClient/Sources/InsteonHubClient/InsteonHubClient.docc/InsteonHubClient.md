@@ -41,6 +41,12 @@ second by default, using a ``HubBufferCursor`` to pick out only the bytes
 that arrived since the last read, and sends one request to the Hub at a time. Its first request
 clears the buffer, so replies from before the connection was made are ignored.
 
+The Hub starts its buffer over for every command, so ``HubConnection`` reads the buffer just
+before each write and keeps what it finds, rather than losing replies that arrived between
+polls. A poll that fails, such as one that times out, is tried again at the next interval; the
+connection gives up after ``HubConnection/defaultFailureLimit`` failures in a row, or at once
+if the Hub answers with an error status such as `401`.
+
 ``Hub`` is the HTTP interface underneath: writing bytes, reading the buffer and clearing it,
 with no pacing or retries. Use it directly only to build something other than a
 `ModemConnection` on top of the Hub.

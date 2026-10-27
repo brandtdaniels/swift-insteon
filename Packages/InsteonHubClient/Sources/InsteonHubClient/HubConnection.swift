@@ -22,11 +22,20 @@ import InsteonModem
 /// reading task, so it stops when that task is canceled.
 ///
 /// Requests to the Hub go one at a time, and the first one clears the Hub's buffer so replies
-/// from before the connection was made are ignored.
+/// from before the connection was made are ignored. The Hub starts its buffer over for each
+/// command, so each write first reads the bytes that arrived since the last poll, which the
+/// stream then delivers ahead of the command's reply.
+///
+/// A poll that fails, for example because a request timed out, is tried again at the next
+/// interval. The stream fails after ``HubConnection/defaultFailureLimit`` failed polls in a
+/// row by default, or at once if the Hub answers with an error status.
 public actor HubConnection: ModemConnection {
 
   /// How often the Hub's buffer is read by default: every half second.
   public static let defaultPollInterval: Duration = .milliseconds(500)
+
+  /// How many polls in a row can fail by default before the stream fails: 3.
+  public static let defaultFailureLimit = 3
 
   private let hub: Hub
 
@@ -34,11 +43,17 @@ public actor HubConnection: ModemConnection {
 
   private let clock: any Clock<Duration>
 
+  private let failureLimit: Int
+
   private var cursor = HubBufferCursor()
 
   private var hasClearedBuffer = false
 
-  private var lastWritten: [UInt8]?
+  /// Bytes read before a write that the stream hasn't delivered yet.
+  private var unreadBytes: [UInt8] = []
+
+  /// How many polls in a row have failed for the stream being read.
+  private var failedPolls = 0
 
   private var requests = TurnQueue()
 
@@ -53,16 +68,20 @@ public actor HubConnection: ModemConnection {
   ///   - hub: The Hub to talk to.
   ///   - pollInterval: How long to wait between reads of the Hub's buffer. Defaults to
   ///     ``HubConnection/defaultPollInterval``.
+  ///   - failureLimit: How many polls in a row can fail before the stream fails. At least 1.
+  ///     Defaults to ``HubConnection/defaultFailureLimit``.
   ///   - clock: The clock that times polling. Defaults to a `ContinuousClock`; tests can pass a
   ///     clock they control.
   public init(
     hub: Hub,
     pollInterval: Duration = HubConnection.defaultPollInterval,
+    failureLimit: Int = HubConnection.defaultFailureLimit,
     clock: any Clock<Duration> = ContinuousClock()
   ) {
 
     self.hub = hub
     self.pollInterval = pollInterval
+    self.failureLimit = max(1, failureLimit)
     self.clock = clock
 
   }
@@ -77,11 +96,21 @@ public actor HubConnection: ModemConnection {
     defer { requests.release() }
 
     try await clearBufferIfNeeded()
-    try await hub.write(bytes)
 
-    // The Hub starts its buffer over for each command, so read the next reply from the start.
+    // The Hub starts its buffer over for each command, so keep what arrived since the last poll.
+    // If the buffer can't be read, the command still goes out.
+    if let buffer = try? await hub.readBuffer() {
+
+      unreadBytes += Self.collapsingNAKRun(cursor.advance(to: buffer))
+
+    }
+
+    // Read the next reply from the start even if the request fails, since the Hub may have
+    // received the command anyway: a reply read twice parses, but one read from its middle
+    // doesn't.
     cursor.reset()
-    lastWritten = bytes
+
+    try await hub.write(bytes)
 
   }
 
@@ -89,7 +118,8 @@ public actor HubConnection: ModemConnection {
   ///
   /// The buffer is read once right away, then once per poll interval, in the task reading the
   /// stream. Calling this again finishes the previous stream. The stream finishes when the
-  /// reading task is canceled, or with an error if reading the buffer fails.
+  /// reading task is canceled, or with an error if the Hub answers with an error status or too
+  /// many polls in a row fail.
   ///
   /// - Returns: A stream of received byte chunks.
   public nonisolated func receive() -> AsyncThrowingStream<[UInt8], any Error> {
@@ -117,6 +147,7 @@ public actor HubConnection: ModemConnection {
         } else {
 
           polledStream = id
+          failedPolls = 0
 
         }
 
@@ -126,11 +157,26 @@ public actor HubConnection: ModemConnection {
 
         }
 
-        let received = try await readNewBytes()
+        do {
 
-        if !received.isEmpty {
+          let received = try await readNewBytes()
+          failedPolls = 0
 
-          return received
+          if !received.isEmpty {
+
+            return received
+
+          }
+
+        } catch {
+
+          failedPolls += 1
+
+          guard Self.isTransient(error), failedPolls < failureLimit else {
+
+            throw error
+
+          }
 
         }
 
@@ -161,7 +207,23 @@ public actor HubConnection: ModemConnection {
 
     try await clearBufferIfNeeded()
 
-    return repairingNAKRun(cursor.advance(to: try await hub.readBuffer()))
+    let received = unreadBytes + Self.collapsingNAKRun(cursor.advance(to: try await hub.readBuffer()))
+    unreadBytes = []
+
+    return received
+
+  }
+
+  /// Whether a failed poll is worth trying again: anything but an answer from the Hub that it
+  /// won't serve the request, or cancellation.
+  private static func isTransient(_ error: any Error) -> Bool {
+
+    switch error {
+    case HubError.unexpectedStatus, HubError.invalidEndpoint, is CancellationError:
+      false
+    default:
+      true
+    }
 
   }
 
@@ -179,23 +241,19 @@ public actor HubConnection: ModemConnection {
 
   }
 
-  /// Some Hubs fill the buffer with NAKs in place of a rejected command's echo. Rewrites such a
-  /// run as the echo of the last command with a NAK, so `Modem` sees a rejection and retries.
-  private func repairingNAKRun(_ bytes: [UInt8]) -> [UInt8] {
+  /// Some Hubs fill the buffer with NAKs in place of a rejected command's echo. Passes such a
+  /// run on as a single lone NAK, which `Modem` reads as the rejection and retries.
+  private static func collapsingNAKRun(_ bytes: [UInt8]) -> [UInt8] {
 
     let negativeAcknowledgement: UInt8 = 0x15
 
-    guard
-      bytes.count > 1,
-      bytes.allSatisfy({ $0 == negativeAcknowledgement }),
-      let lastWritten
-    else {
+    guard bytes.count > 1, bytes.allSatisfy({ $0 == negativeAcknowledgement }) else {
 
       return bytes
 
     }
 
-    return lastWritten + [negativeAcknowledgement]
+    return [negativeAcknowledgement]
 
   }
 

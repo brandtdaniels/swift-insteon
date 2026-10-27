@@ -41,7 +41,8 @@ struct HubConnectionTests {
 
     try await makeConnection(fake).write([0x02, 0x77])
 
-    #expect(await fake.requests == ["GET /1", "GET /3"])
+    // The buffer is read before the write, since writing starts it over.
+    #expect(await fake.requests == ["GET /1", "GET /buffstatus.xml", "GET /3"])
 
   }
 
@@ -73,14 +74,73 @@ struct HubConnectionTests {
 
   }
 
-  @Test func rewritesARunOfNaksAsARejectedEcho() async throws {
+  @Test func collapsesARunOfNaksToOne() async throws {
 
     let fake = FakeHub { _ in [UInt8](repeating: 0x15, count: 20) }
     let connection = makeConnection(fake)
 
     try await connection.write([0x02, 0x6D])
 
-    #expect(try await Self.firstChunk(of: connection.receive()) == [0x02, 0x6D, 0x15])
+    #expect(try await Self.firstChunk(of: connection.receive()) == [0x15])
+
+  }
+
+  @Test func keepsBytesThatArriveBeforeAWrite() async throws {
+
+    let fake = FakeHub()
+    let connection = makeConnection(fake)
+    let message: [UInt8] = [0x02, 0x50, 0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33, 0x2B, 0x11, 0xFF]
+
+    // A device's message arrives after one command's echo and before the next command starts
+    // the buffer over.
+    try await connection.write([0x02, 0x77])
+    await fake.deliver(message)
+    try await connection.write([0x02, 0x6D])
+
+    #expect(try await Self.firstChunk(of: connection.receive()) == [0x02, 0x77, 0x06] + message + [0x02, 0x6D, 0x06])
+
+  }
+
+  @Test func retriesAFailedPoll() async throws {
+
+    let fake = FakeHub(failingReads: 1)
+    let connection = makeConnection(fake)
+    let message: [UInt8] = [0x02, 0x50, 0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33, 0x2B, 0x11, 0xFF]
+
+    async let received = Self.firstChunk(of: connection.receive())
+    await clock.waitForSleeper(until: HubConnection.defaultPollInterval)
+    await fake.deliver(message)
+    clock.advance(by: HubConnection.defaultPollInterval)
+
+    #expect(try await received == message)
+
+  }
+
+  @Test func failsAfterTooManyFailedPolls() async {
+
+    let connection = makeConnection(FakeHub(failingReads: HubConnection.defaultFailureLimit))
+    let received = connection.receive()
+
+    await #expect(throws: (any Error).self) {
+
+      async let drained: Void = Self.drain(received)
+
+      for poll in 1..<HubConnection.defaultFailureLimit {
+
+        await clock.waitForSleeper(until: HubConnection.defaultPollInterval * poll)
+        clock.advance(by: HubConnection.defaultPollInterval)
+
+      }
+
+      try await drained
+
+    }
+
+  }
+
+  static func drain(_ stream: AsyncThrowingStream<[UInt8], any Error>) async throws {
+
+    for try await _ in stream {}
 
   }
 
