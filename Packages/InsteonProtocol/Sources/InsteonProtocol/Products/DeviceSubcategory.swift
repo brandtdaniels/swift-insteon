@@ -2,8 +2,8 @@
 /// ``DeviceCategory``.
 ///
 /// Together, the category and subcategory identify a product model, such as a particular
-/// dimmer or modem. Names for subcategories come from a ``ProductDatabase`` rather than from
-/// this package.
+/// dimmer or modem. Names for subcategories come from a device database rather than from this
+/// package.
 ///
 /// ```swift
 /// let subcategory: DeviceSubcategory = 0x20
