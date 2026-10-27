@@ -92,6 +92,13 @@ public struct IBIOSReplyParser: Hashable, Sendable {
         pending.removeFirst()
         isSkipping = true
       case let .complete(length):
+        // Every frame waits here for the rest of its bytes, whatever its type.
+        guard pending.count >= length else {
+
+          return nil
+
+        }
+
         let frame = Array(pending.prefix(length))
         pending.removeFirst(length)
 
