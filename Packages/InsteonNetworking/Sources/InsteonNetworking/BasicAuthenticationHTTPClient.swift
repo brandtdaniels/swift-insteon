@@ -5,6 +5,15 @@ import FoundationNetworking
 
 /// Decorates an ``HTTPClient`` by adding an HTTP basic `Authorization` header to every request.
 ///
+/// Basic authentication encodes the user name and password reversibly. INSTEON Hubs serve their
+/// local interface over plain HTTP, so anyone who can see the network traffic can read them;
+/// keep the Hub on a trusted network.
+///
+/// The header is part of every request, so it also goes wherever the wrapped client sends the
+/// request, including to another host if a server redirects there. Use this client only with
+/// hosts you trust, such as a Hub on your own network. The client keeps the encoded
+/// credentials in memory for as long as it exists.
+///
 /// ```swift
 /// let client = BasicAuthenticationHTTPClient(
 ///   URLSessionHTTPClient(),
@@ -42,6 +51,33 @@ public struct BasicAuthenticationHTTPClient: HTTPClient {
     request.setValue(authorization, forHTTPHeaderField: "Authorization")
 
     return try await httpClient.send(request)
+
+  }
+
+}
+
+// MARK: - Redaction
+
+extension BasicAuthenticationHTTPClient: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+
+  /// A description that leaves out the credentials, so logging the client doesn't reveal them.
+  public var description: String {
+
+    "BasicAuthenticationHTTPClient(httpClient: \(httpClient), authorization: <redacted>)"
+
+  }
+
+  /// The same description as ``BasicAuthenticationHTTPClient/description``.
+  public var debugDescription: String {
+
+    description
+
+  }
+
+  /// A mirror that shows the wrapped client but not the credentials, for `dump` and debuggers.
+  public var customMirror: Mirror {
+
+    Mirror(self, children: ["httpClient": httpClient], displayStyle: .struct)
 
   }
 

@@ -19,20 +19,20 @@ public enum X10Code: Hashable, Sendable {
   ///
   /// - Parameters:
   ///   - rawX10: The house code in the high nibble and the unit or command in the low nibble.
-  ///   - flag: `0x80` for a command; any other value for a unit address.
+  ///   - flag: `0x80` for a command or `0x00` for a unit address. Only bit 7 is read.
   public init(rawX10: UInt8, flag: UInt8) {
 
     // Every 4-bit value is a house, unit and command code, so these lookups always succeed.
-    let house = X10HouseCode.allCases.first { $0.rawValue == rawX10 >> 4 }!
+    let house = X10HouseCode(rawValue: rawX10 >> 4)!
     let low = rawX10 & 0x0F
 
     if flag & 0x80 != 0 {
 
-      self = .command(house, X10Command.allCases.first { $0.rawValue == low }!)
+      self = .command(house, X10Command(rawValue: low)!)
 
     } else {
 
-      self = .unit(house, X10UnitCode.allCases.first { $0.rawValue == low }!)
+      self = .unit(house, X10UnitCode(rawValue: low)!)
 
     }
 

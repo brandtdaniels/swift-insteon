@@ -53,22 +53,28 @@ public enum SerialCommand: Hashable, Sendable {
   ///   - firmwareVersion: The firmware version to report, or `0xFF` for none.
   case setHostDeviceCategory(category: DeviceCategory, subcategory: UInt8, firmwareVersion: UInt8)
 
-  /// Resets the modem to factory defaults, erasing its ALL-Link database.
+  /// Resets the modem to factory defaults, erasing its entire ALL-Link database.
   case resetModem
 
   /// Sets the cmd2 byte the modem sends in its ACKs to direct messages.
   case setAcknowledgementByte(UInt8)
 
   /// Requests the first record in the modem's ALL-Link database.
+  ///
+  /// The record follows the command's echo. The modem NAKs if the database is empty.
   case getFirstAllLinkRecord
 
-  /// Requests the next record in the modem's ALL-Link database.
+  /// Requests the next record in the modem's ALL-Link database, after
+  /// ``SerialCommand/getFirstAllLinkRecord``.
+  ///
+  /// The record follows the command's echo. The modem NAKs when there are no more records.
   case getNextAllLinkRecord
 
   /// Sets the modem's configuration flags.
   case setModemConfiguration(ModemConfiguration)
 
-  /// Requests the ALL-Link record for the device that sent the last INSTEON message.
+  /// Requests the ALL-Link record for the device that sent the last INSTEON message, if that
+  /// device is in the modem's ALL-Link database.
   case getAllLinkRecordForSender
 
   /// Turns the modem's LED on.
@@ -96,7 +102,7 @@ public enum SerialCommand: Hashable, Sendable {
   /// Sets the cmd1 and cmd2 bytes the modem sends in its ACKs to direct messages.
   case setAcknowledgementBytes(Command)
 
-  /// Puts the modem's RF transceiver to sleep until it receives another command.
+  /// Puts an RF modem into its power-saving sleep mode. Sending it any byte wakes it.
   case rfSleep
 
   /// Requests the modem's configuration flags.
@@ -107,20 +113,23 @@ public enum SerialCommand: Hashable, Sendable {
 
   /// Reads the 8-byte ALL-Link record at a database address.
   ///
-  /// - Parameter address: The record's address in the modem's database.
+  /// - Parameter address: The address of the record's first byte. Records are 8 bytes long,
+  ///   so an address inside a record reads parts of two.
   case readDatabase(address: UInt16)
 
   /// Writes an 8-byte ALL-Link record at a database address.
   ///
   /// - Parameters:
-  ///   - address: The record's address in the modem's database.
+  ///   - address: The address of the record's first byte. Records are 8 bytes long, so an
+  ///     address inside a record overwrites parts of two.
   ///   - record: The record to write.
   case writeDatabase(address: UInt16, record: AllLinkRecord)
 
   /// Makes the modem beep.
   case beep
 
-  /// Sets how many times the modem retries a direct message that isn't acknowledged.
+  /// Sets the modem's application retry count, which it reports back with
+  /// ``SerialCommand/getModemConfiguration``.
   case setApplicationRetries(UInt8)
 
   /// The byte that starts every serial command: `0x02`.
@@ -207,17 +216,6 @@ extension SerialCommand: ByteEncodable {
   public var bytes: [UInt8] {
 
     [Self.startOfText, number.rawValue] + parameters
-
-  }
-
-}
-
-extension UInt16 {
-
-  /// The value's two bytes, most significant first.
-  var bigEndianBytes: [UInt8] {
-
-    [UInt8(self >> 8), UInt8(self & 0xFF)]
 
   }
 

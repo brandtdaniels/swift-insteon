@@ -22,6 +22,21 @@ struct BasicAuthenticationHTTPClientTests {
 
   }
 
+  @Test func descriptionsLeaveOutTheCredentials() {
+
+    let client = BasicAuthenticationHTTPClient(StubHTTPClient(), user: "user", password: "password")
+    var dumped = ""
+    dump(client, to: &dumped)
+
+    for text in [String(describing: client), String(reflecting: client), dumped] {
+
+      #expect(!text.contains("dXNlcjpwYXNzd29yZA=="))
+      #expect(!text.contains("password"))
+
+    }
+
+  }
+
   @Test func returnsWrappedClientsResponse() async throws {
 
     let expected = HTTPResponse(statusCode: 401, body: Data("denied".utf8))
