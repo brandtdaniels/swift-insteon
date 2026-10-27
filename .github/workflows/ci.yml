@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
 
 permissions:
   contents: read
@@ -20,17 +19,7 @@ jobs:
       - name: Test
         run: swift test
       - name: Build documentation
-        run: |
-          mkdir -p .build/symbol-graphs .build/docs
-          swift build --target InsteonMessage \
-            -Xswiftc -emit-symbol-graph \
-            -Xswiftc -emit-symbol-graph-dir -Xswiftc "$PWD/.build/symbol-graphs"
-          xcrun docc convert Packages/InsteonMessage/Sources/InsteonMessage/InsteonMessage.docc \
-            --additional-symbol-graph-dir "$PWD/.build/symbol-graphs" \
-            --fallback-display-name InsteonMessage \
-            --fallback-bundle-identifier com.brandtdaniels.InsteonMessage \
-            --output-path .build/docs/InsteonMessage.doccarchive \
-            --warnings-as-errors
+        run: Scripts/build-docs.sh
 
   linux:
     name: Linux
