@@ -24,13 +24,12 @@ Additional commands conform to `CommandConvertible`, so they never touch the mes
 
 ## Products
 
-`Sources/InsteonProtocol/Products` covers how devices identify themselves and how an app finds out what they can do:
+`Sources/InsteonProtocol/Products` covers how devices identify themselves:
 
 - `DeviceCategory`, `DeviceSubcategory` and `FirmwareVersion`: a device's category (DevCat), subcategory (SubCat) and firmware version
 - `SetButtonPressed` and `ProductData`: read the identity a device reports in reply to an ID request or a product data request
-- `ProductDatabase` and `DeviceCapabilities`: look up what a device can do for its firmware version in a product database, from whichever source the app provides, telling standard and extended commands apart by `MessageLength`
 
-No device data is built in, so every app reads the same product database instead of keeping its own list.
+No device data is built in, so every app can look devices up in one shared device database instead of keeping its own list.
 
 ## Modem
 
