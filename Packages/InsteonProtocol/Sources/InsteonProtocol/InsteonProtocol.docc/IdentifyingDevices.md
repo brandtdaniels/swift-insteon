@@ -23,10 +23,10 @@ in ``AllLinkingCompleted``.
 ### Finding out what a device can do
 
 What a device can do depends on its product and its firmware version, because commands can
-differ between firmware versions of the same product. That information lives in the INSTEON
-Product Database (IPDB), the one shared record of every product, rather than in each app.
+differ between firmware versions of the same product. That information belongs in one shared
+product database rather than in each app.
 
-``ProductDatabase`` is how this package reads it. Conform a type to it that reads the database
+``ProductDatabase`` is how this package reads such a database. Conform a type to it that reads the database
 from wherever your app gets it, then look a device up by what it reported:
 
 ```swift

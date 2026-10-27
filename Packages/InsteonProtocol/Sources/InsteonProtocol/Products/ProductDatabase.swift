@@ -1,7 +1,7 @@
-/// A source of device capabilities: the INSTEON Product Database (IPDB), or a copy of it.
+/// A database of INSTEON products that records what each product can do.
 ///
-/// The product database is the one place that records what each product can do, so apps don't
-/// each keep their own list of devices. Conform a type to this protocol to read it from wherever
+/// A shared product database is the one place that records each product's capabilities, so
+/// apps don't each keep their own list of devices. Conform a type to this protocol to read it from wherever
 /// your app gets it, such as a web service or a copy bundled with the app.
 ///
 /// A device is looked up by its ``InsteonProductKey`` when it reports one in its

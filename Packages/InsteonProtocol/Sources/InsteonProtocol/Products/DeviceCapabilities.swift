@@ -1,4 +1,4 @@
-/// What a device can do, as recorded in the INSTEON Product Database for its firmware version.
+/// What a device can do, as a ``ProductDatabase`` records it for the device's firmware version.
 ///
 /// Devices of the same kind can support different commands depending on their firmware, so
 /// capabilities belong to a particular firmware version. A ``ProductDatabase`` supplies them;
