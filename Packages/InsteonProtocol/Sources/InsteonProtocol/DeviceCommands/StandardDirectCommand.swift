@@ -25,8 +25,7 @@ public enum StandardDirectCommand: Hashable, Sendable {
 
   /// Requests the device's INSTEON engine version (cmd1 `0x0D`).
   ///
-  /// The acknowledgement's cmd2 identifies the engine: `0x00` for i1, `0x01` for i2 and `0x02`
-  /// for i2cs, which requires checksums on extended messages.
+  /// The acknowledgement's cmd2 identifies the engine; read it with ``InsteonEngine``.
   case getEngineVersion
 
   /// Checks that the device is reachable (cmd1 `0x0F`).
@@ -195,6 +194,40 @@ extension StandardDirectCommand: StandardCommandConvertible {
       Command(command1: 0x2F, command2: rampRate & 0x0F)
     case .beep:
       Command(command1: 0x30)
+    }
+
+  }
+
+}
+
+// MARK: - Engine support
+
+extension StandardDirectCommand {
+
+  /// The earliest engine on which every device supports the command, or `nil` when support
+  /// depends on the product.
+  ///
+  /// Every device supports the base commands, such as on, off, ping and linking. The i2 engine
+  /// adds commands such as exit linking mode and the operating flags, which some i1 devices
+  /// also support. Other commands, such as ``StandardDirectCommand/beep`` and the ramp rate commands, are specific to
+  /// certain products and firmware versions; look those up in a product database.
+  public var minimumEngine: InsteonEngine? {
+
+    switch self {
+    case .enterLinkingMode, .enterUnlinkingMode, .getEngineVersion, .ping, .idRequest, .on, .fastOn,
+         .off, .fastOff, .brightenOneStep, .dimOneStep, .startManualChange, .stopManualChange:
+      .i1
+    case let .statusRequest(variant):
+      switch variant {
+      case 0x00: .i1
+      case 0x01...0x04: .i2
+      default: nil
+      }
+    case .exitLinkingMode, .getOperatingFlags, .setOperatingFlags:
+      .i2
+    case .productDataRequest, .instantChange, .remoteSetButtonTap, .onAtRampRate, .offAtRampRate,
+         .beep:
+      nil
     }
 
   }
