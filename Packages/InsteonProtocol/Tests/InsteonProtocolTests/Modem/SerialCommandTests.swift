@@ -23,7 +23,7 @@ struct SerialCommandTests {
     (.startAllLinking(mode: .controller, group: 0x01), "02640101"),
     (.startAllLinking(mode: .delete, group: 0x00), "0264FF00"),
     (.cancelAllLinking, "0265"),
-    (.setHostDeviceCategory(category: 0x03, subcategory: 0x15, firmwareVersion: 0xFF), "02660315FF"),
+    (.setHostDeviceCategory(category: 0x03, subcategory: 0x15, firmwareVersion: nil), "02660315FF"),
     (.resetModem, "0267"),
     (.setAcknowledgementByte(0x01), "026801"),
     (.getFirstAllLinkRecord, "0269"),

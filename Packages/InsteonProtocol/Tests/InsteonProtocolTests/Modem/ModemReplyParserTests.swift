@@ -39,6 +39,30 @@ struct ModemReplyParserTests {
         firmwareVersion: 0x41
       ))
     ),
+    // As a responder, the modem reports no identity for the other device.
+    (
+      "0253" + "00" + "01" + "AABBCC" + "01" + "20" + "41",
+      .allLinkingCompleted(AllLinkingCompleted(
+        linkCode: 0x00,
+        group: 0x01,
+        address: device,
+        category: nil,
+        subcategory: nil,
+        firmwareVersion: nil
+      ))
+    ),
+    // Newer devices report 0xFF in place of a firmware version.
+    (
+      "0253" + "01" + "01" + "AABBCC" + "01" + "20" + "FF",
+      .allLinkingCompleted(AllLinkingCompleted(
+        linkCode: 0x01,
+        group: 0x01,
+        address: device,
+        category: 0x01,
+        subcategory: 0x20,
+        firmwareVersion: nil
+      ))
+    ),
     ("025402", .buttonEvent(ModemButtonEvent(button: .set, action: .tapped))),
     ("0255", .userReset),
     ("0256" + "01" + "05" + "AABBCC", .allLinkCleanupFailed(group: 0x05, address: device)),
