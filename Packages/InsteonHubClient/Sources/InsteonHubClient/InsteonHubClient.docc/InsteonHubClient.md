@@ -34,9 +34,13 @@ use a ``HubBufferCursor`` to get only the bytes that arrived since the last read
 ```swift
 try await hub.clearBuffer()
 var cursor = HubBufferCursor()
+var parser = ModemReplyParser()
 
-let received = cursor.advance(to: try await hub.readBuffer())
+let replies = parser.parse(cursor.advance(to: try await hub.readBuffer()))
 ```
+
+`ModemReplyParser`, from InsteonProtocol, turns those bytes into typed replies, such as the
+echo of each command with its ACK or NAK, and messages received from devices.
 
 ### Credentials and networking
 
