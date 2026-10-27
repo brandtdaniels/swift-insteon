@@ -34,10 +34,10 @@ public struct SetButtonPressed: Hashable, Sendable {
   public var category: DeviceCategory
 
   /// The device's subcategory.
-  public var subcategory: UInt8
+  public var subcategory: DeviceSubcategory
 
   /// The device's firmware version, or `nil` when the device reports `0xFF` in its place.
-  public var firmwareVersion: UInt8?
+  public var firmwareVersion: FirmwareVersion?
 
   /// Creates a SET Button Pressed broadcast.
   ///
@@ -51,8 +51,8 @@ public struct SetButtonPressed: Hashable, Sendable {
     sender: InsteonAddress,
     role: Role,
     category: DeviceCategory,
-    subcategory: UInt8,
-    firmwareVersion: UInt8?
+    subcategory: DeviceSubcategory,
+    firmwareVersion: FirmwareVersion?
   ) {
 
     self.sender = sender
@@ -86,8 +86,8 @@ public struct SetButtonPressed: Hashable, Sendable {
       sender: message.sender,
       role: role,
       category: DeviceCategory(rawValue: message.destination.high),
-      subcategory: message.destination.middle,
-      firmwareVersion: firmware == 0xFF ? nil : firmware
+      subcategory: DeviceSubcategory(rawValue: message.destination.middle),
+      firmwareVersion: firmware == 0xFF ? nil : FirmwareVersion(rawValue: firmware)
     )
 
   }

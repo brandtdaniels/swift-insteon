@@ -15,10 +15,10 @@ public struct AllLinkingCompleted: Hashable, Sendable {
   public var category: DeviceCategory
 
   /// The other device's subcategory.
-  public var subcategory: UInt8
+  public var subcategory: DeviceSubcategory
 
   /// The other device's firmware version.
-  public var firmwareVersion: UInt8
+  public var firmwareVersion: FirmwareVersion
 
   /// Creates a linking result.
   ///
@@ -34,8 +34,8 @@ public struct AllLinkingCompleted: Hashable, Sendable {
     group: UInt8,
     address: InsteonAddress,
     category: DeviceCategory,
-    subcategory: UInt8,
-    firmwareVersion: UInt8
+    subcategory: DeviceSubcategory,
+    firmwareVersion: FirmwareVersion
   ) {
 
     self.linkCode = linkCode

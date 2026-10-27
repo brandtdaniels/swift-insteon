@@ -127,7 +127,7 @@ private struct CommandList: DeviceCapabilities {
 /// A database where firmware 0x41 of one product adds the beep command.
 private struct FirmwareDependentDatabase: ProductDatabase {
 
-  func capabilities(category: DeviceCategory, subcategory: UInt8, firmwareVersion: UInt8?) async throws -> (any DeviceCapabilities)? {
+  func capabilities(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) async throws -> (any DeviceCapabilities)? {
 
     guard category == 0x01, subcategory == 0x20 else { return nil }
 

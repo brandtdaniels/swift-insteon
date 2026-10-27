@@ -20,8 +20,8 @@ public protocol ProductDatabase: Sendable {
   /// - Throws: An error if the database couldn't be read.
   func capabilities(
     category: DeviceCategory,
-    subcategory: UInt8,
-    firmwareVersion: UInt8?
+    subcategory: DeviceSubcategory,
+    firmwareVersion: FirmwareVersion?
   ) async throws -> (any DeviceCapabilities)?
 
 }
