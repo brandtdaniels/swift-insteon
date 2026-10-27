@@ -1,8 +1,12 @@
-/// A heartbeat broadcast, which a battery-powered device sends periodically to show it's
-/// still working.
+/// A heartbeat broadcast (cmd1 `0x04`), which a battery-powered device sends periodically to
+/// show it's still working.
 ///
 /// The broadcast carries a battery level in cmd2, whose scale depends on the device, and the
 /// device's identity in its To address.
+///
+/// Many sensors send their heartbeat as an ALL-Link broadcast to a heartbeat group instead,
+/// such as group 4 on the open/close, leak and motion sensors, which this type doesn't read.
+/// Read those from the ALL-Link broadcast's group and command.
 ///
 /// ```swift
 /// var parser = ModemReplyParser()

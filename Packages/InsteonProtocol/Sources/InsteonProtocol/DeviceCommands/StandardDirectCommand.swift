@@ -12,7 +12,7 @@ public enum StandardDirectCommand: Hashable, Sendable {
   ///
   /// In i1 SET button linking, a controller in linking mode sends this to a device that
   /// broadcast ``SetButtonPressed`` as a responder, and the device acknowledges once it has
-  /// joined. Devices accept it only while their SET button has put them in linking mode.
+  /// joined.
   case assignToAllLinkGroup(group: AllLinkGroup)
 
   /// Tells a responder to leave a controller's `group` (cmd1 `0x02`).
