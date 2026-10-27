@@ -22,6 +22,16 @@ The message format is fixed by the protocol.
 
 Additional commands conform to `CommandConvertible`, so they never touch the message layer.
 
+## Products
+
+`Sources/InsteonProtocol/Products` covers how devices identify themselves and how an app finds out what they can do:
+
+- `DeviceCategory` and `InsteonProductKey`: a device's category (DevCat) and product key (IPK)
+- `SetButtonPressed` and `ProductData`: read the identity a device reports in reply to an ID request or a product data request
+- `ProductDatabase` and `DeviceCapabilities`: look up what a device can do for its firmware version in the INSTEON Product Database, from whichever source the app provides
+
+No device data is built in, so every app reads the same product database instead of keeping its own list.
+
 ## Modem
 
 `Sources/InsteonProtocol/Modem` covers the serial commands a host sends to an INSTEON modem, such as a PowerLinc Modem or the modem inside an INSTEON Hub:
