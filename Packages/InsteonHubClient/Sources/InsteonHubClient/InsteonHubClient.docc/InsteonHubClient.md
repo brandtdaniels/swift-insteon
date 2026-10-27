@@ -9,8 +9,7 @@ HTTP interface. ``Hub`` sends serial commands to that modem and reads back its r
 
 ```swift
 import InsteonHubClient
-import InsteonMessage
-import InsteonSerialCommand
+import InsteonProtocol
 
 let hub = Hub(
   endpoint: HubEndpoint(host: "192.168.1.20"),

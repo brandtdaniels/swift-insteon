@@ -1,6 +1,5 @@
 import Testing
-import InsteonMessage
-import InsteonSerialCommand
+import InsteonProtocol
 
 struct AllLinkingTests {
 

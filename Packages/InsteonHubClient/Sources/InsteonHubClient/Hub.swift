@@ -1,6 +1,6 @@
 import Foundation
 import InsteonNetworking
-import InsteonSerialCommand
+import InsteonProtocol
 
 /// A connection to an INSTEON Hub (model 2245) through its local HTTP interface.
 ///

@@ -2,7 +2,7 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
-import InsteonSerialCommand
+import InsteonProtocol
 
 /// The requests the Hub's local HTTP interface accepts.
 enum HubRequest {

@@ -4,9 +4,8 @@ import FoundationNetworking
 #endif
 import Testing
 import InsteonHubClient
-import InsteonMessage
 import InsteonNetworking
-import InsteonSerialCommand
+import InsteonProtocol
 
 struct HubTests {
 

@@ -1,5 +1,3 @@
-import InsteonMessage
-
 /// A command sent from a host to an INSTEON modem (IM), such as a PowerLinc Modem or the
 /// modem inside an INSTEON Hub.
 ///

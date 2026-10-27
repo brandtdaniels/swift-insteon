@@ -1,5 +1,5 @@
 import Testing
-import InsteonSerialCommand
+import InsteonProtocol
 
 struct X10CodeTests {
 

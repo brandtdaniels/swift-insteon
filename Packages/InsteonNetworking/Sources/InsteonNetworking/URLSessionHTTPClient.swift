@@ -49,7 +49,7 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
   private func data(for request: URLRequest) async throws -> (Data, URLResponse) {
 
     #if canImport(FoundationNetworking)
-    // swift-corelibs-foundation lacks a cancellable async API, so bridge the completion handler.
+    // swift-corelibs-foundation lacks a cancelable async API, so bridge the completion handler.
     return try await withCheckedThrowingContinuation { continuation in
 
       session.dataTask(with: request) { data, response, error in

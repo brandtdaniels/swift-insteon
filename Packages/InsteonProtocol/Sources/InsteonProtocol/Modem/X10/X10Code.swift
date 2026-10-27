@@ -1,5 +1,3 @@
-import InsteonMessage
-
 /// An X10 transmission: either a unit address or a command for a house code.
 ///
 /// X10 devices are addressed in two steps: send the unit's address, then a command for its

@@ -1,7 +1,7 @@
 /// The two command bytes of an INSTEON message.
 ///
 /// `command1` selects the operation and `command2` carries its argument, such as a light
-/// level or an ALL-Link group. Use the typed catalogues, ``StandardDirectCommand`` and
+/// level or an ALL-Link group. Use the typed catalogs, ``StandardDirectCommand`` and
 /// ``ExtendedDirectCommand``, where they cover what you need, and this type directly for
 /// device-specific commands they don't.
 public struct Command: Hashable, Sendable {
