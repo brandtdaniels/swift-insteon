@@ -26,7 +26,7 @@ Additional commands conform to `CommandConvertible`, so they never touch the mes
 
 `Sources/InsteonProtocol/Products` covers how devices identify themselves:
 
-- `DeviceCategory`, `DeviceSubcategory` and `FirmwareVersion`: a device's category (DevCat), subcategory (SubCat) and firmware version
+- `DeviceCategory`, `DeviceSubcategory` and `FirmwareVersion`: a device's category (DevCat), subcategory (SubCat) and firmware version, with the developer guide's named categories, such as `.dimmableLightingControl`
 - `SetButtonPressed` and `ProductData`: read the identity a device reports in reply to an ID request or a product data request
 
 No device data is built in, so every app can look devices up in one shared device database instead of keeping its own list.

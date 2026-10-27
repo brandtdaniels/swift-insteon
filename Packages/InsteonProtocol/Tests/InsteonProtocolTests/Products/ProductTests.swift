@@ -115,6 +115,29 @@ struct ProductTests {
 
   }
 
+  // The names in the developer guide's table of device categories.
+  @Test(arguments: [
+    (DeviceCategory.generalizedControllers, UInt8(0x00), "Generalized Controllers"),
+    (.dimmableLightingControl, 0x01, "Dimmable Lighting Control"),
+    (.networkBridges, 0x03, "Network Bridges"),
+    (.securityHealthSafety, 0x10, "Security, Health, Safety"),
+    (.holiday, 0x16, "Holiday"),
+    (.unassigned, 0xFF, "Unassigned")
+  ])
+  func namesTheGuidesCategories(_ category: DeviceCategory, _ number: UInt8, _ name: String) {
+
+    #expect(category.rawValue == number)
+    #expect(category.name == name)
+
+  }
+
+  @Test func leavesReservedCategoriesUnnamed() {
+
+    #expect(DeviceCategory(rawValue: 0x17).name == nil)
+    #expect(DeviceCategory(rawValue: 0xFE).name == nil)
+
+  }
+
   @Test func ordersFirmwareVersionsByNumber() {
 
     #expect(FirmwareVersion(rawValue: 0x40) < 0x41)
