@@ -51,7 +51,10 @@ struct ModemReplyParserTests {
       .modemInfo(ModemInfo(address: modem, category: 0x03, subcategory: 0x15, firmwareVersion: 0x9B))
     ),
     ("026015", .echo(CommandEcho(number: .getModemInfo, parameters: [], isAccepted: false))),
-    ("0273" + "40" + "0000" + "06", .modemConfiguration(.monitorMode)),
+    (
+      "0273" + "40" + "05" + "00" + "06",
+      .modemConfiguration(ModemConfigurationReport(configuration: .monitorMode, applicationRetries: 0x05, databaseDelta: 0x00))
+    ),
     ("027315", .echo(CommandEcho(number: .getModemConfiguration, parameters: [], isAccepted: false))),
     (
       "0262" + "AABBCC" + "0F" + "11FF" + "06",
@@ -76,7 +79,8 @@ struct ModemReplyParserTests {
         isAccepted: true
       ))
     ),
-    ("0277" + "06", .echo(CommandEcho(number: .beep, parameters: [], isAccepted: true)))
+    ("0277" + "06", .echo(CommandEcho(number: .beep, parameters: [], isAccepted: true))),
+    ("027A05" + "06", .echo(CommandEcho(number: .setApplicationRetries, parameters: [0x05], isAccepted: true)))
   ]
 
   @Test(arguments: replies)
@@ -117,6 +121,41 @@ struct ModemReplyParserTests {
     let replies = parser.parse(SerialCommand.sendExtendedMessage(message).bytes + [0x06])
 
     #expect(replies == [.echo(CommandEcho(number: .sendMessage, parameters: message.bytes, isAccepted: true))])
+
+  }
+
+  // Replies captured in Insteon's own PLM test log, received back to back.
+  @Test func parsesInsteonTrace() {
+
+    var parser = ModemReplyParser()
+    let pairedDevice = InsteonAddress(0x08, 0xB6, 0xEA)
+    let plm = InsteonAddress(0x13, 0xD0, 0x91)
+
+    let replies = parser.parse(bytes(
+      "0260" + "13D091" + "03" + "21" + "93" + "06"
+        + "0275" + "1FF8" + "06" + "0259" + "1FF8" + "E201" + "08B6EA" + "000000"
+        + "0261" + "041200" + "06" + "0250" + "08B6EA" + "13D091" + "61" + "1204"
+        + "025806"
+        + "0274" + "06"
+    ))
+
+    #expect(replies == [
+      .modemInfo(ModemInfo(address: plm, category: 0x03, subcategory: 0x21, firmwareVersion: 0x93)),
+      .echo(CommandEcho(number: .readDatabase, parameters: [0x1F, 0xF8], isAccepted: true)),
+      .databaseRecord(
+        address: 0x1FF8,
+        record: AllLinkRecord(flags: [.inUse, .controller, .usedBefore], group: 0x01, address: pairedDevice)
+      ),
+      .echo(CommandEcho(number: .sendAllLinkCommand, parameters: [0x04, 0x12, 0x00], isAccepted: true)),
+      .messageReceived(ReceivedMessage(
+        sender: pairedDevice,
+        destination: plm,
+        flags: MessageFlags(rawValue: 0x61),
+        command: Command(command1: 0x12, command2: 0x04)
+      )),
+      .allLinkCleanupStatus(isComplete: true),
+      .echo(CommandEcho(number: .cancelCleanup, parameters: [], isAccepted: true))
+    ])
 
   }
 

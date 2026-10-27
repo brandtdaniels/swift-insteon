@@ -48,9 +48,8 @@ public enum ModemReply: Hashable, Sendable {
   /// The modem's identity (`0x60`), in reply to ``SerialCommand/getModemInfo``.
   case modemInfo(ModemInfo)
 
-  /// The modem's configuration flags (`0x73`), in reply to
-  /// ``SerialCommand/getModemConfiguration``.
-  case modemConfiguration(ModemConfiguration)
+  /// The modem's settings (`0x73`), in reply to ``SerialCommand/getModemConfiguration``.
+  case modemConfiguration(ModemConfigurationReport)
 
   /// The modem's echo of a command the host sent, with its ACK or NAK.
   case echo(CommandEcho)
