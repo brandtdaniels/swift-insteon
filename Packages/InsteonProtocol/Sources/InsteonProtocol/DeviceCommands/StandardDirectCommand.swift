@@ -13,8 +13,7 @@ public enum StandardDirectCommand: Hashable, Sendable {
 
   /// Takes the device out of linking or unlinking mode (cmd1 `0x08`).
   ///
-  /// Only some devices support this, such as the SmartLinc and products with the Yellow Filter
-  /// engine; most leave linking mode on their own after a timeout.
+  /// Devices also leave linking mode on their own after a timeout.
   case exitLinkingMode
 
   /// Puts the device into linking mode as a controller of `group` (cmd1 `0x09`).
@@ -204,13 +203,15 @@ extension StandardDirectCommand: StandardCommandConvertible {
 
 extension StandardDirectCommand {
 
-  /// The earliest engine on which every device supports the command, or `nil` when support
+  /// The earliest engine on which every device accepts the command, or `nil` when that
   /// depends on the product.
   ///
-  /// Every device supports the base commands, such as on, off, ping and linking. The i2 engine
-  /// adds commands such as exit linking mode and the operating flags, which some i1 devices
-  /// also support. Other commands, such as ``StandardDirectCommand/beep`` and the ramp rate commands, are specific to
-  /// certain products and firmware versions; look those up in a product database.
+  /// Every device accepts the base commands, such as on, off, ping and linking. The i2 engine
+  /// adds exit linking mode, the operating flags and status request variants `0x01` through
+  /// `0x04`, which some i1 devices also accept. What a variant or flag reports still depends on
+  /// the product. Other commands, such as ``StandardDirectCommand/beep`` and the ramp rate
+  /// commands, are specific to certain products and firmware versions; look those up in a
+  /// product database.
   public var minimumEngine: InsteonEngine? {
 
     switch self {

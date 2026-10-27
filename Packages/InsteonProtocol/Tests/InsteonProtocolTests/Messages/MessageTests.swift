@@ -18,13 +18,14 @@ struct MessageTests {
 
     let message = StandardMessage(
       to: InsteonAddress(0x00, 0x00, 0x01),
-      command: StandardDirectCommand.on(level: 0xFF),
+      command: Command(command1: 0x11),
       messageType: .allLinkBroadcast,
       maxHops: .one
     )
 
+    // An ALL-Link broadcast to group 1: the group in the destination, cmd2 0x00.
     #expect(message.flags.rawValue == 0xC5)
-    #expect(message.bytes == [0x00, 0x00, 0x01, 0xC5, 0x11, 0xFF])
+    #expect(message.bytes == [0x00, 0x00, 0x01, 0xC5, 0x11, 0x00])
 
   }
 
