@@ -82,6 +82,7 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``ModemInfo``
 - ``ModemConfigurationReport``
 - ``AllLinkingCompleted``
+- ``ModemButtonEvent``
 
 ### ALL-Linking
 

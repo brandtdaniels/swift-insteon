@@ -16,7 +16,9 @@ struct HTTPResponseTests {
     let response = HTTPResponse(statusCode: 200, headers: ["Content-Type": "text/xml"])
 
     #expect(response.value(forHeader: "content-type") == "text/xml")
+    #expect(response.value(forHeader: "CONTENT-TYPE") == "text/xml")
     #expect(response.value(forHeader: "Accept") == nil)
+    #expect(response == HTTPResponse(statusCode: 200, headers: ["content-type": "text/xml"]))
 
   }
 

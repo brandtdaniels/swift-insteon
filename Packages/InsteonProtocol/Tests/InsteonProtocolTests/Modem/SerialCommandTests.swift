@@ -52,9 +52,11 @@ struct SerialCommandTests {
   }
 
   @Test(arguments: encodings)
-  func bytesStartWithStartOfTextAndNumber(_ command: SerialCommand, _ expected: String) {
+  func numberMatchesTheEncodedCommandNumber(_ command: SerialCommand, _ expected: String) {
 
-    #expect(Array(command.bytes.prefix(2)) == [SerialCommand.startOfText, command.number.rawValue])
+    let number = String(command.number.rawValue, radix: 16, uppercase: true)
+
+    #expect(expected.dropFirst(2).hasPrefix(number))
 
   }
 

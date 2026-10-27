@@ -21,6 +21,12 @@ let client: any HTTPClient = BasicAuthenticationHTTPClient(
 To use another HTTP stack, conform it to ``HTTPClient``:
 
 ```swift
+import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking  // URLRequest on Linux
+#endif
+import InsteonNetworking
+
 struct MyHTTPClient: HTTPClient {
 
   func send(_ request: URLRequest) async throws -> HTTPResponse {

@@ -35,7 +35,21 @@ struct URLSessionHTTPClientTests {
 
     StubURLProtocol.stub = .failure(URLError(.notConnectedToInternet))
 
-    await #expect(throws: (any Error).self) {
+    let error = await #expect(throws: URLError.self) {
+
+      try await client.send(URLRequest(url: URL(string: "http://hub.local/")!))
+
+    }
+
+    #expect(error?.code == .notConnectedToInternet)
+
+  }
+
+  @Test func rejectsResponsesThatArentHTTP() async {
+
+    StubURLProtocol.stub = .nonHTTP
+
+    await #expect(throws: HTTPClientError.nonHTTPResponse) {
 
       try await client.send(URLRequest(url: URL(string: "http://hub.local/")!))
 
@@ -52,6 +66,8 @@ final class StubURLProtocol: URLProtocol {
     case success(statusCode: Int, headers: [String: String], body: Data)
 
     case failure(URLError)
+
+    case nonHTTP
 
   }
 
@@ -80,6 +96,10 @@ final class StubURLProtocol: URLProtocol {
       client?.urlProtocolDidFinishLoading(self)
     case let .failure(error)?:
       client?.urlProtocol(self, didFailWithError: error)
+    case .nonHTTP?:
+      let response = URLResponse(url: request.url!, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
+      client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+      client?.urlProtocolDidFinishLoading(self)
     case nil:
       client?.urlProtocol(self, didFailWithError: URLError(.unknown))
     }

@@ -32,3 +32,14 @@ extension UInt8 {
   }
 
 }
+
+extension UInt16 {
+
+  /// The value's two bytes, most significant first.
+  var bigEndianBytes: [UInt8] {
+
+    [UInt8(self >> 8), UInt8(self & 0xFF)]
+
+  }
+
+}
