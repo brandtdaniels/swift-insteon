@@ -106,6 +106,10 @@ struct ModemReplyParserTests {
       "0279" + "FF1F03" + "06",
       .echo(CommandEcho(number: .setResponderLinkData, parameters: [0xFF, 0x1F, 0x03], isAccepted: true))
     ),
+    (
+      "0279" + "FF1F03" + "15",
+      .echo(CommandEcho(number: .setResponderLinkData, parameters: [0xFF, 0x1F, 0x03], isAccepted: false))
+    ),
     ("027A05" + "06", .echo(CommandEcho(number: .setApplicationRetries, parameters: [0x05], isAccepted: true)))
   ]
 
@@ -115,6 +119,22 @@ struct ModemReplyParserTests {
     var parser = ModemReplyParser()
 
     #expect(parser.parse(bytes(hex)) == [expected])
+
+  }
+
+  @Test(arguments: replies)
+  func parsesReplySplitAtEveryByte(_ hex: String, _ expected: ModemReply) {
+
+    let frame = bytes(hex)
+
+    for split in 1..<frame.count {
+
+      var parser = ModemReplyParser()
+      let replies = parser.parse(frame.prefix(split)) + parser.parse(frame.dropFirst(split))
+
+      #expect(replies == [expected], "split at byte \(split)")
+
+    }
 
   }
 
@@ -187,7 +207,9 @@ struct ModemReplyParserTests {
   }
 
   // From Insteon's PLM test log: the responder link data set with 0x79 shows up in the record
-  // that the next ALL-Linking creates.
+  // that the next ALL-Linking creates. Before linking, the log puts the device into linking mode
+  // for group 2 with an extended message, so the link is in group 2 although the modem was
+  // asked for group 1.
   @Test func parsesResponderLinkDataTrace() {
 
     var parser = ModemReplyParser()
