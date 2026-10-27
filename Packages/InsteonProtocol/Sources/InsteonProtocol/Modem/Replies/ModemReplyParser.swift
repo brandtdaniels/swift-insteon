@@ -1,13 +1,15 @@
 /// Turns the bytes an INSTEON modem sends into ``ModemReply`` values.
 ///
 /// The parser keeps any incomplete reply until the rest of its bytes arrive, so feed it bytes
-/// as you receive them, in any chunk size. Bytes that don't start a recognizable reply are
-/// skipped until the next start byte (`0x02`), and so is a start byte whose reply doesn't end
-/// in an ACK or NAK where one is expected.
+/// as you receive them, in any chunk size. A NAK byte (`0x15`) where a reply would start is
+/// reported as ``ModemReply/negativeAcknowledgement``. Other bytes that don't start a
+/// recognizable reply are skipped until the next start byte (`0x02`), NAK bytes among them,
+/// and so is a start byte whose reply doesn't end in an ACK or NAK where one is expected.
 ///
 /// A NAK to ``SerialCommand/getModemInfo`` or ``SerialCommand/getModemConfiguration`` is
 /// reported once more bytes arrive, since until then it can't be told apart from a reply whose
-/// data starts with `0x15`.
+/// data starts with `0x15`. If no more bytes are coming, ``ModemReplyParser/finishPendingReply()``
+/// reports it.
 ///
 /// ```swift
 /// var parser = ModemReplyParser()
@@ -45,9 +47,49 @@ public struct ModemReplyParser: Hashable, Sendable {
 
   }
 
+  /// Reports a NAK to ``SerialCommand/getModemInfo`` or ``SerialCommand/getModemConfiguration``
+  /// that's waiting for more bytes, along with any replies after it.
+  ///
+  /// The NAK (`02 60 15` or `02 73 15`) begins the same way as a reply whose data starts with
+  /// `0x15`, so ``ModemReplyParser/parse(_:)`` waits for more bytes before reporting it. Call
+  /// this once no more bytes are coming, for example when the reply has timed out.
+  ///
+  /// - Returns: The NAK's echo and the replies after it, or no replies if the pending bytes
+  ///   don't start with such a NAK. Those bytes are kept.
+  public mutating func finishPendingReply() -> [ModemReply] {
+
+    guard
+      pending.count >= 3,
+      pending[2] == Self.negativeAcknowledgement,
+      let number = SerialCommandNumber(rawValue: pending[1]),
+      number == .getModemInfo || number == .getModemConfiguration
+    else {
+
+      return []
+
+    }
+
+    pending.removeFirst(3)
+
+    return [.echo(CommandEcho(number: number, parameters: [], isAccepted: false))] + parse([])
+
+  }
+
   private mutating func nextReply() -> ModemReply? {
 
+    // A NAK counts only where a reply can start, not among bytes being skipped.
+    var isSkipping = false
+
     while true {
+
+      // The modem sometimes answers a command with a lone NAK instead of an echo.
+      if !isSkipping, pending.first == Self.negativeAcknowledgement {
+
+        pending.removeFirst()
+
+        return .negativeAcknowledgement
+
+      }
 
       guard let start = pending.firstIndex(of: SerialCommand.startOfText) else {
 
@@ -64,6 +106,7 @@ public struct ModemReplyParser: Hashable, Sendable {
         return nil
       case .unrecognized:
         pending.removeFirst()
+        isSkipping = true
       case let .complete(length):
         guard pending.count >= length else {
 
@@ -76,6 +119,7 @@ public struct ModemReplyParser: Hashable, Sendable {
         guard SerialCommandNumber(rawValue: pending[1]) == nil || Self.isAcknowledgement(pending[length - 1]) else {
 
           pending.removeFirst()
+          isSkipping = true
           continue
 
         }

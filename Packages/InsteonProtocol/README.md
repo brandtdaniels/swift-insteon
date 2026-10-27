@@ -31,6 +31,6 @@ Additional commands conform to `CommandConvertible`, so they never touch the mes
 - `AllLinkRecord`, `AllLinkRecordFlags`, `AllLinkRecordAction` and `AllLinkMode`: ALL-Link database records and linking
 - `ModemConfiguration`: the modem's configuration flags
 - `X10Code`: X10 unit addresses and commands
-- `ModemReplyParser` and `ModemReply`: turn the bytes a modem sends back into typed replies: command echoes with ACK/NAK, messages received from devices, ALL-Link records and more
+- `ModemReplyParser` and `ModemReply`: turn the bytes a modem sends back into typed replies: command echoes with ACK/NAK, lone NAKs, messages received from devices, ALL-Link records and more
 
 See the DocC catalog in `Sources/InsteonProtocol/InsteonProtocol.docc` for the full documentation, including the byte-level message format.

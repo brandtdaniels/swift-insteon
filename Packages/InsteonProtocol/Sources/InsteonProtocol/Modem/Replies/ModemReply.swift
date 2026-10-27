@@ -54,4 +54,8 @@ public enum ModemReply: Hashable, Sendable {
   /// The modem's echo of a command the host sent, with its ACK or NAK.
   case echo(CommandEcho)
 
+  /// A lone NAK (`0x15`): the modem rejected the last command without echoing it, usually
+  /// because it was busy. Send the command again after a short delay.
+  case negativeAcknowledgement
+
 }

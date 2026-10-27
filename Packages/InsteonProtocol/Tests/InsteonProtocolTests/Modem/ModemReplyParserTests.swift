@@ -193,6 +193,64 @@ struct ModemReplyParserTests {
 
   }
 
+  @Test func reportsALoneNegativeAcknowledgement() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("15" + "0255")) == [.negativeAcknowledgement, .userReset])
+
+  }
+
+  @Test func ignoresANegativeAcknowledgementAmongSkippedBytes() {
+
+    var parser = ModemReplyParser()
+
+    // Neither frame is a reply: 0x15 isn't a reply number, and the 0x61 echo doesn't end in an
+    // ACK or NAK. Their bytes are skipped, NAK bytes included.
+    #expect(parser.parse(bytes("0215" + "0261" + "153344" + "55" + "0255")) == [.userReset])
+
+  }
+
+  @Test func finishesARejectedInfoRequestWhenNoMoreBytesCome() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("026015")).isEmpty)
+    #expect(parser.finishPendingReply() == [.echo(CommandEcho(number: .getModemInfo, parameters: [], isAccepted: false))])
+    #expect(parser.parse(bytes("026D06")) == [.echo(CommandEcho(number: .ledOn, parameters: [], isAccepted: true))])
+
+  }
+
+  @Test func finishesARejectedConfigurationRequestAndTheRepliesAfterIt() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("027315" + "0255")).isEmpty)
+    #expect(parser.finishPendingReply() == [
+      .echo(CommandEcho(number: .getModemConfiguration, parameters: [], isAccepted: false)),
+      .userReset
+    ])
+
+  }
+
+  @Test func keepsPendingBytesThatArentARejectedRequest() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("0250AABB")).isEmpty)
+    #expect(parser.finishPendingReply().isEmpty)
+    #expect(parser.parse(bytes("CC" + "112233" + "2B" + "11FF")).count == 1)
+
+  }
+
+  @Test func keepsNegativeAcknowledgementInsideAnEcho() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("026D15")) == [.echo(CommandEcho(number: .ledOn, parameters: [], isAccepted: false))])
+
+  }
+
   @Test func parsesModemInfoForAnAddressStartingWithNAK() {
 
     var parser = ModemReplyParser()

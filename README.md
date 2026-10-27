@@ -7,12 +7,14 @@ Swift packages for working with [INSTEON](https://www.insteon.com) home automati
 | [InsteonProtocol](Packages/InsteonProtocol) | The INSTEON protocol as value types: messages for devices, and the serial commands that carry them through a modem |
 | [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the INSTEON clients send requests through |
 | [InsteonHubClient](Packages/InsteonHubClient) | Control INSTEON devices through an INSTEON Hub on your local network |
+| [InsteonModem](Packages/InsteonModem) | Control INSTEON devices through a PowerLinc Modem on a USB or serial port |
 
 ## Requirements
 
 - Swift 6.0 or later
 - macOS 13, iOS 16, tvOS 16, watchOS 9, visionOS 1 or later, or Linux
-- InsteonProtocol depends only on the Swift standard library; InsteonNetworking uses Foundation
+- `SerialPort`, in InsteonModem, is available on macOS and Linux
+- InsteonProtocol depends only on the Swift standard library; the other libraries use Foundation
 
 ## Installation
 
