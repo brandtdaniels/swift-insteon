@@ -206,9 +206,11 @@ struct ModemReplyParserTests {
         linkCode: 0x00,
         group: 0x02,
         address: device,
-        category: 0xFF,
-        subcategory: 0x1F,
-        firmwareVersion: 0x03
+        // The modem became the responder, so the identity bytes aren't the device's: they're
+        // the link data set with 0x79.
+        category: nil,
+        subcategory: nil,
+        firmwareVersion: nil
       )),
       .echo(CommandEcho(
         number: .manageAllLinkRecord,
