@@ -31,7 +31,7 @@ try await Modem.withConnection(HubConnection(hub: hub)) { modem in
 ### How the Hub is polled
 
 The Hub collects the modem's replies in a ring buffer rather than pushing them. While its
-stream is read, for example by `Modem/run()`, ``HubConnection`` reads the buffer every half
+stream is read, for example by `Modem.withConnection`, ``HubConnection`` reads the buffer every half
 second by default, using a ``HubBufferCursor`` to pick out only the bytes
 that arrived since the last read, and sends one request to the Hub at a time. Its first request
 clears the buffer, so replies from before the connection was made are ignored.

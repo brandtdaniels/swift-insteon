@@ -22,19 +22,7 @@ struct ModemTests {
   /// - Throws: The error `body` throws, or the error `Modem/run()` throws.
   func run(_ modem: Modem, _ body: () async throws -> Void) async throws {
 
-    try await withThrowingTaskGroup(of: Void.self) { group in
-
-      group.addTask { try await modem.run() }
-      defer { group.cancelAll() }
-
-      try await body()
-
-      group.cancelAll()
-
-      // The group would otherwise discard an error from run().
-      try await group.waitForAll()
-
-    }
+    try await withRunning({ try await modem.run() }, body)
 
   }
 
@@ -85,6 +73,40 @@ struct ModemTests {
       }
 
     }
+
+  }
+
+  @Test func withConnectionThrowsTheConnectionsErrorRatherThanTheOneItCaused() async {
+
+    struct Unplugged: Error {}
+
+    let connection = ScriptedConnection()
+
+    await #expect(throws: Unplugged.self) {
+
+      try await Modem.withConnection(connection, retryPolicy: policy, clock: clock) { modem in
+
+        let replies = await modem.replies()
+        connection.incoming.finish(throwing: Unplugged())
+
+        for await _ in replies {}
+
+        // Fails with connectionClosed, because the connection failed.
+        try await modem.send(.beep)
+
+      }
+
+    }
+
+  }
+
+  @Test func withConnectionSucceedsWhenItsConnectionThrowsAsItStops() async throws {
+
+    let connection = CancellationThrowingConnection(clock: clock)
+
+    let value = try await Modem.withConnection(connection, retryPolicy: policy, clock: clock) { _ in 42 }
+
+    #expect(value == 42)
 
   }
 
@@ -498,6 +520,28 @@ struct ModemTests {
     }
 
     #expect(Set(connection.written) == [[0x02, 0x6D], [0x02, 0x6E], [0x02, 0x77]])
+
+  }
+
+}
+
+/// A connection whose stream waits for bytes that never come, and throws `CancellationError`
+/// when it's stopped.
+private struct CancellationThrowingConnection: ModemConnection {
+
+  let clock: TestClock
+
+  func write(_ bytes: [UInt8]) async throws {}
+
+  func receive() -> AsyncThrowingStream<[UInt8], any Error> {
+
+    AsyncThrowingStream(unfolding: { [clock] in
+
+      try await clock.sleep(for: .seconds(1))
+
+      return nil
+
+    })
 
   }
 

@@ -31,7 +31,7 @@ import InsteonProtocol
 ///   ))
 /// }
 /// ```
-public final class PowerLincController: SerialCommandSender {
+public actor PowerLincController: SerialCommandSender {
 
   private let pacer: CommandPacer<IBIOSReplyParser>
 
@@ -220,24 +220,30 @@ public final class PowerLincController: SerialCommandSender {
 
     return [
       exchange(for: .download(address: address, data: data)),
-      Exchange(
-        bytes: confirmation.bytes,
-        answer: { reply in Self.answer(reply, to: confirmation, confirming: checksums) },
-        rejected: PowerLincControllerError.unconfirmedDownload(address: address),
-        timedOut: PowerLincControllerError.timedOut(confirmation)
-      )
+      exchange(for: confirmation, confirming: checksums, rejected: .unconfirmedDownload(address: address))
     ]
 
   }
 
   // MARK: - Answers
 
-  private static func exchange(for command: IBIOSCommand) -> Exchange<IBIOSReply> {
+  /// The exchange for an IBIOS command.
+  ///
+  /// - Parameters:
+  ///   - command: The command.
+  ///   - checksums: For a Get Checksum that confirms a download, the checksums its data reads
+  ///     back as.
+  ///   - rejected: The error to throw if every attempt is rejected, if not `rejected(command)`.
+  private static func exchange(
+    for command: IBIOSCommand,
+    confirming checksums: Set<UInt16> = [],
+    rejected: PowerLincControllerError? = nil
+  ) -> Exchange<IBIOSReply> {
 
     Exchange(
       bytes: command.bytes,
-      answer: { reply in Self.answer(reply, to: command) },
-      rejected: PowerLincControllerError.rejected(command),
+      answer: { reply in Self.answer(reply, to: command, confirming: checksums) },
+      rejected: rejected ?? PowerLincControllerError.rejected(command),
       timedOut: PowerLincControllerError.timedOut(command),
       transferTime: transferTime(of: command)
     )

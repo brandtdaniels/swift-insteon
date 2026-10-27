@@ -494,8 +494,9 @@ actor CommandPacer<Parser: ReplyParser> {
 ///   - isolation: The actor `body` runs on.
 ///   - body: The work to do with the device.
 /// - Returns: What `body` returns.
-/// - Throws: The error `body` throws, or the error `run` throws.
-func withRunning<Value>(
+/// - Throws: The error `run` throws, if reading from the device failed, since that's usually
+///   why `body` failed too; otherwise the error `body` throws.
+package func withRunning<Value>(
   _ run: @escaping @Sendable () async throws -> Void,
   isolation: isolated (any Actor)? = #isolation,
   _ body: () async throws -> Value
@@ -503,14 +504,38 @@ func withRunning<Value>(
 
   try await withThrowingTaskGroup(of: Void.self, returning: Value.self) { group in
 
-    group.addTask { try await run() }
-    defer { group.cancelAll() }
+    group.addTask {
 
-    let result = try await body()
+      do {
+
+        try await run()
+
+      } catch is CancellationError {
+
+        // Stopping the reading is how the scope ends, not a failure.
+
+      }
+
+    }
+
+    let result: Value
+
+    do {
+
+      result = try await body()
+
+    } catch {
+
+      group.cancelAll()
+
+      // The group would otherwise discard an error from run.
+      try await group.waitForAll()
+
+      throw error
+
+    }
 
     group.cancelAll()
-
-    // The group would otherwise discard an error from run.
     try await group.waitForAll()
 
     return result

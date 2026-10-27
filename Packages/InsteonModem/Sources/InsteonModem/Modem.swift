@@ -26,7 +26,7 @@ import InsteonProtocol
 ///
 /// To keep a modem open for the life of an app instead, create one and call ``Modem/run()``
 /// in a task that lasts as long as the app.
-public final class Modem: SerialCommandSender {
+public actor Modem: SerialCommandSender {
 
   /// How ``Modem`` waits for and retries commands.
   public struct RetryPolicy: Hashable, Sendable {
