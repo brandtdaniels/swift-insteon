@@ -18,25 +18,20 @@ let hub = Hub(
   user: username,
   password: password
 )
-let modem = Modem(connection: HubConnection(hub: hub))
 
-try await withThrowingTaskGroup(of: Void.self) { group in
-  // Polls the Hub for replies while the commands below are sent.
-  group.addTask { try await modem.run() }
-
+// Polls the Hub for replies while the closure sends commands.
+try await Modem.withConnection(HubConnection(hub: hub)) { modem in
   let lamp = InsteonAddress(0xAA, 0xBB, 0xCC)
   try await modem.send(.sendStandardMessage(
     StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF))
   ))
-
-  group.cancelAll()
 }
 ```
 
 ### How the Hub is polled
 
 The Hub collects the modem's replies in a ring buffer rather than pushing them. While its
-stream is read, for example by `Modem/run()`, ``HubConnection`` reads the buffer every half
+stream is read, for example by `Modem.withConnection`, ``HubConnection`` reads the buffer every half
 second by default, using a ``HubBufferCursor`` to pick out only the bytes
 that arrived since the last read, and sends one request to the Hub at a time. Its first request
 clears the buffer, so replies from before the connection was made are ignored.

@@ -14,12 +14,8 @@ modem is busy, and publishes everything the modem sends back.
 import InsteonModem
 import InsteonProtocol
 
-let modem = Modem(connection: try SerialPort(path: "/dev/ttyUSB0"))
-let replies = await modem.replies()
-
-try await withThrowingTaskGroup(of: Void.self) { group in
-  // Reads everything the modem sends until the group is canceled.
-  group.addTask { try await modem.run() }
+try await Modem.withConnection(SerialPort(path: "/dev/ttyUSB0")) { modem in
+  let replies = await modem.replies()
 
   let lamp = InsteonAddress(0xAA, 0xBB, 0xCC)
   try await modem.send(.sendStandardMessage(
@@ -32,13 +28,14 @@ try await withThrowingTaskGroup(of: Void.self) { group in
       break
     }
   }
-
-  group.cancelAll()
 }
 ```
 
-``Modem/run()`` keeps reading in the task that calls it, so the modem's lifetime follows the
-structure of your code: canceling that task closes the modem.
+``Modem/withConnection(_:retryPolicy:clock:isolation:_:)`` reads what the modem sends while
+the closure runs, and closes the modem when it returns, so the modem's lifetime follows the
+structure of your code. To keep a modem open for the life of an app, create a ``Modem`` and
+call ``Modem/run()`` in a task that lasts as long as the app: canceling that task closes the
+modem.
 
 ``Modem`` conforms to `SerialCommandSender`, so code written against that protocol works with
 any modem connection.

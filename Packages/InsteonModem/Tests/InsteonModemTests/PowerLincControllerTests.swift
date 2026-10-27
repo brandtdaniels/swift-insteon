@@ -20,19 +20,7 @@ struct PowerLincControllerTests {
   /// Runs `body` while `controller` reads from its connection, then stops the controller.
   func run(_ controller: PowerLincController, _ body: () async throws -> Void) async throws {
 
-    try await withThrowingTaskGroup(of: Void.self) { group in
-
-      group.addTask { try await controller.run() }
-      defer { group.cancelAll() }
-
-      try await body()
-
-      group.cancelAll()
-
-      // The group would otherwise discard an error from run().
-      try await group.waitForAll()
-
-    }
+    try await withRunning({ try await controller.run() }, body)
 
   }
 
@@ -40,6 +28,32 @@ struct PowerLincControllerTests {
   static func answer(_ frame: [UInt8]) -> [UInt8] {
 
     SimulatedIBIOS().answer(frame)
+
+  }
+
+  @Test func withConnectionRunsTheController() async throws {
+
+    let connection = ScriptedConnection { frame, _ in Self.answer(frame) }
+
+    try await PowerLincController.withConnection(connection, retryPolicy: policy, clock: clock) { controller in
+
+      try await controller.send(IBIOSCommand.getVersion)
+
+    }
+
+    #expect(connection.written == [Self.bytes("0248")])
+
+  }
+
+  @Test func withConnectionClosesTheControllerWhenItsBodyReturns() async throws {
+
+    let controller = try await PowerLincController.withConnection(ScriptedConnection(), retryPolicy: policy, clock: clock) { $0 }
+
+    await #expect(throws: PowerLincControllerError.connectionClosed) {
+
+      try await controller.send(IBIOSCommand.getVersion)
+
+    }
 
   }
 

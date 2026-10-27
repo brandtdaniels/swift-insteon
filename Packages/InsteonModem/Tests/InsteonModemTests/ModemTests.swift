@@ -22,19 +22,91 @@ struct ModemTests {
   /// - Throws: The error `body` throws, or the error `Modem/run()` throws.
   func run(_ modem: Modem, _ body: () async throws -> Void) async throws {
 
-    try await withThrowingTaskGroup(of: Void.self) { group in
+    try await withRunning({ try await modem.run() }, body)
 
-      group.addTask { try await modem.run() }
-      defer { group.cancelAll() }
+  }
 
-      try await body()
+  @Test func withConnectionReturnsWhatItsBodyReturns() async throws {
 
-      group.cancelAll()
+    let connection = ScriptedConnection()
 
-      // The group would otherwise discard an error from run().
-      try await group.waitForAll()
+    let written = try await Modem.withConnection(connection, retryPolicy: policy, clock: clock) { modem in
+
+      try await modem.send(.beep)
+
+      return connection.written
 
     }
+
+    #expect(written == [[0x02, 0x77]])
+
+  }
+
+  @Test func withConnectionClosesTheModemWhenItsBodyReturns() async throws {
+
+    let modem = try await Modem.withConnection(ScriptedConnection(), retryPolicy: policy, clock: clock) { $0 }
+
+    await #expect(throws: ModemError.connectionClosed) {
+
+      try await modem.send(.beep)
+
+    }
+
+  }
+
+  @Test func withConnectionThrowsTheConnectionsError() async {
+
+    struct Unplugged: Error {}
+
+    let connection = ScriptedConnection()
+
+    await #expect(throws: Unplugged.self) {
+
+      try await Modem.withConnection(connection, retryPolicy: policy, clock: clock) { modem in
+
+        let replies = await modem.replies()
+        connection.incoming.finish(throwing: Unplugged())
+
+        // The stream finishes once the modem closes.
+        for await _ in replies {}
+
+      }
+
+    }
+
+  }
+
+  @Test func withConnectionThrowsTheConnectionsErrorRatherThanTheOneItCaused() async {
+
+    struct Unplugged: Error {}
+
+    let connection = ScriptedConnection()
+
+    await #expect(throws: Unplugged.self) {
+
+      try await Modem.withConnection(connection, retryPolicy: policy, clock: clock) { modem in
+
+        let replies = await modem.replies()
+        connection.incoming.finish(throwing: Unplugged())
+
+        for await _ in replies {}
+
+        // Fails with connectionClosed, because the connection failed.
+        try await modem.send(.beep)
+
+      }
+
+    }
+
+  }
+
+  @Test func withConnectionSucceedsWhenItsConnectionThrowsAsItStops() async throws {
+
+    let connection = CancellationThrowingConnection(clock: clock)
+
+    let value = try await Modem.withConnection(connection, retryPolicy: policy, clock: clock) { _ in 42 }
+
+    #expect(value == 42)
 
   }
 
@@ -448,6 +520,28 @@ struct ModemTests {
     }
 
     #expect(Set(connection.written) == [[0x02, 0x6D], [0x02, 0x6E], [0x02, 0x77]])
+
+  }
+
+}
+
+/// A connection whose stream waits for bytes that never come, and throws `CancellationError`
+/// when it's stopped.
+private struct CancellationThrowingConnection: ModemConnection {
+
+  let clock: TestClock
+
+  func write(_ bytes: [UInt8]) async throws {}
+
+  func receive() -> AsyncThrowingStream<[UInt8], any Error> {
+
+    AsyncThrowingStream(unfolding: { [clock] in
+
+      try await clock.sleep(for: .seconds(1))
+
+      return nil
+
+    })
 
   }
 

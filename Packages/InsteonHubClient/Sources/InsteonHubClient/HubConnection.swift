@@ -9,12 +9,9 @@ import InsteonModem
 ///
 /// ```swift
 /// let hub = Hub(endpoint: HubEndpoint(host: "192.168.1.20"), user: username, password: password)
-/// let modem = Modem(connection: HubConnection(hub: hub))
 ///
-/// try await withThrowingTaskGroup(of: Void.self) { group in
-///   group.addTask { try await modem.run() }
+/// try await Modem.withConnection(HubConnection(hub: hub)) { modem in
 ///   try await modem.send(.getModemInfo)
-///   group.cancelAll()
 /// }
 /// ```
 ///
