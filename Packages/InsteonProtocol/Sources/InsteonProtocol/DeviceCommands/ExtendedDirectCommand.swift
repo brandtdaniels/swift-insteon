@@ -44,11 +44,11 @@ extension ExtendedDirectCommand: CommandConvertible {
 
 extension ExtendedDirectCommand {
 
-  /// The earliest engine on which every device supports the command: ``InsteonEngine/i2``.
+  /// The earliest engine on which every device accepts the command: ``InsteonEngine/i2``.
   ///
-  /// The i2 engine adds all three commands, which some i1 devices also support. What a device
+  /// The i2 engine adds all three commands, which some i1 devices also accept. What a device
   /// reads or writes with them is specific to the product.
-  public var minimumEngine: InsteonEngine {
+  public var minimumEngine: InsteonEngine? {
 
     .i2
 
