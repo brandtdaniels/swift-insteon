@@ -1,29 +1,34 @@
 import Testing
 import InsteonModem
 
+// `#expect` and `#require` can't call mutating methods, so each call to the queue is made first.
 struct TurnQueueTests {
 
   @Test func handsTurnsOutInOrder() async throws {
 
     var turns = TurnQueue()
 
-    let taken = turns.request()
-    let first = try #require(turns.request())
-    let second = try #require(turns.request())
+    let tookTheTurn = turns.request() == nil
+    let firstTicket = turns.request()
+    let secondTicket = turns.request()
 
-    #expect(taken == nil)
+    #expect(tookTheTurn)
+    let first = try #require(firstTicket)
+    let second = try #require(secondTicket)
 
     turns.release()
     for await _ in first.handoff {}
-    #expect(turns.settle(first))
+    let firstHasTurn = turns.settle(first)
+    #expect(firstHasTurn)
 
     turns.release()
     for await _ in second.handoff {}
-    #expect(turns.settle(second))
+    let secondHasTurn = turns.settle(second)
+    #expect(secondHasTurn)
 
     turns.release()
-    let free = turns.request()
-    #expect(free == nil)
+    let isFree = turns.request() == nil
+    #expect(isFree)
 
   }
 
@@ -32,15 +37,17 @@ struct TurnQueueTests {
     var turns = TurnQueue()
 
     _ = turns.request()
-    let waiter = try #require(turns.request())
+    let waiterTicket = turns.request()
+    let waiter = try #require(waiterTicket)
 
     // The waiter's wait ended without a handoff, as it does when its task is canceled.
-    #expect(!turns.settle(waiter))
+    let waiterHasTurn = turns.settle(waiter)
+    #expect(!waiterHasTurn)
 
     // The turn comes free rather than going to the canceled waiter.
     turns.release()
-    let free = turns.request()
-    #expect(free == nil)
+    let isFree = turns.request() == nil
+    #expect(isFree)
 
   }
 

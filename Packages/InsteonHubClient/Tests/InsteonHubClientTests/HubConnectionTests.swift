@@ -29,7 +29,7 @@ struct HubConnectionTests {
   }
 
   /// Reads the first chunk of a stream.
-  func firstChunk(of stream: AsyncThrowingStream<[UInt8], any Error>) async throws -> [UInt8]? {
+  static func firstChunk(of stream: AsyncThrowingStream<[UInt8], any Error>) async throws -> [UInt8]? {
 
     try await stream.first { _ in true }
 
@@ -52,7 +52,7 @@ struct HubConnectionTests {
 
     try await connection.write([0x02, 0x60])
 
-    #expect(try await firstChunk(of: connection.receive()) == [0x02, 0x60, 0x06])
+    #expect(try await Self.firstChunk(of: connection.receive()) == [0x02, 0x60, 0x06])
 
   }
 
@@ -64,7 +64,7 @@ struct HubConnectionTests {
     let message: [UInt8] = [0x02, 0x50, 0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33, 0x2B, 0x11, 0xFF]
 
     // The first poll clears the buffer and finds nothing, then waits for the next one.
-    async let received = firstChunk(of: connection.receive())
+    async let received = Self.firstChunk(of: connection.receive())
     await clock.waitForSleeper(until: HubConnection.defaultPollInterval)
     await fake.deliver(message)
     clock.advance(by: HubConnection.defaultPollInterval)
@@ -80,7 +80,7 @@ struct HubConnectionTests {
 
     try await connection.write([0x02, 0x6D])
 
-    #expect(try await firstChunk(of: connection.receive()) == [0x02, 0x6D, 0x15])
+    #expect(try await Self.firstChunk(of: connection.receive()) == [0x02, 0x6D, 0x15])
 
   }
 

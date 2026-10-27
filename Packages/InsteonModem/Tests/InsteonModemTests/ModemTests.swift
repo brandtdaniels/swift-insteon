@@ -162,7 +162,7 @@ struct ModemTests {
 
   }
 
-  @Test func sendFailsAfterTheConnectionHasClosed() async {
+  @Test func sendFailsAfterTheConnectionHasClosed() async throws {
 
     let connection = ScriptedConnection()
     let modem = makeModem(connection)
@@ -302,7 +302,7 @@ struct ModemTests {
       let frame = try #require(await writes.next())
 
       // Canceled while the first command holds the modem.
-      try await withThrowingTaskGroup(of: Void.self) { group in
+      await withThrowingTaskGroup(of: Void.self) { group in
 
         group.addTask { try await modem.send(.ledOff) }
         group.cancelAll()
@@ -333,7 +333,7 @@ struct ModemTests {
 
       var writes = connection.writeLog.makeAsyncIterator()
 
-      try await withThrowingTaskGroup(of: Void.self) { group in
+      await withThrowingTaskGroup(of: Void.self) { group in
 
         group.addTask { try await modem.send(.ledOn) }
         _ = await writes.next()
