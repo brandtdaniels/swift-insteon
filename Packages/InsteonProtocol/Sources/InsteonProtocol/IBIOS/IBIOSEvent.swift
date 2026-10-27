@@ -37,9 +37,9 @@ public struct IBIOSEvent: RawRepresentable, Hashable, Sendable {
   /// A direct message this device sent wasn't acknowledged after five retries (`0x05`).
   public static let sendNotAcknowledged = IBIOSEvent(rawValue: 0x05)
 
-  /// A message arrived from a device this one isn't linked to, with its contents masked
-  /// (`0x06`).
-  public static let unknownSender = IBIOSEvent(rawValue: 0x06)
+  /// A message arrived whose To address is neither this device's nor in its ALL-Link
+  /// database, so its contents are masked except for the low bytes of its addresses (`0x06`).
+  public static let messageForUnknownAddress = IBIOSEvent(rawValue: 0x06)
 
   /// A message arrived during enrollment, with its contents unmasked (`0x07`).
   public static let enrollmentMessage = IBIOSEvent(rawValue: 0x07)

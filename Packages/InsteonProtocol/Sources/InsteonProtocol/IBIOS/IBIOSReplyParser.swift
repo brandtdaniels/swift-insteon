@@ -128,6 +128,9 @@ public struct IBIOSReplyParser: Hashable, Sendable {
   /// The commands a host sends, which IBIOS echoes with an ACK or NAK.
   private static let echoedCommands: Set<UInt8> = [0x40, 0x42, 0x44, 0x46, 0x47, 0x48]
 
+  /// Every number a frame from IBIOS can start with.
+  private static let frameNumbers = echoedCommands.union([0x41, 0x43, 0x45, 0x49, 0x4A, 0x4F])
+
   /// The length of the frame at the start of `bytes`, which starts with `0x02`.
   private static func frameLength(of bytes: [UInt8]) -> FrameLength {
 
@@ -146,7 +149,14 @@ public struct IBIOSReplyParser: Hashable, Sendable {
     }
 
     // An echo of `0x02`, the number and a NAK can't be told apart from an echo whose first
-    // parameter is 0x15 until the full echo would have arrived.
+    // parameter is 0x15 until the full echo would have arrived, unless the next frame starts
+    // right after the NAK. Reading on would take that frame's bytes as the echo's.
+    if bytes.count >= 5, bytes[2] == negativeAcknowledgement, bytes[3] == 0x02, frameNumbers.contains(bytes[4]) {
+
+      return .complete(3)
+
+    }
+
     guard let length = echoLength(of: bytes) else {
 
       return .needMoreBytes

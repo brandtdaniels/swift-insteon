@@ -34,6 +34,10 @@ struct Exchange<Reply>: Sendable {
   /// The error to throw if the device doesn't answer.
   let timedOut: any Error
 
+  /// How much longer than the retry policy's echo timeout to wait for the answer, for a
+  /// command that moves a lot of data.
+  var transferTime: Duration = .zero
+
 }
 
 /// Paces commands to a device that answers each one before it takes the next, such as a
@@ -57,6 +61,8 @@ actor CommandPacer<Parser: ReplyParser> {
 
     let timedOut: any Error
 
+    let timeout: Duration
+
     let result: AsyncStream<Result<Bool, any Error>>.Continuation
 
   }
@@ -66,7 +72,7 @@ actor CommandPacer<Parser: ReplyParser> {
 
     let id: Int
 
-    let timedOut: any Error
+    let timeout: Duration
 
     let results: AsyncStream<Result<Bool, any Error>>
 
@@ -243,10 +249,18 @@ actor CommandPacer<Parser: ReplyParser> {
     let id = makeID()
     let (results, continuation) = AsyncStream<Result<Bool, any Error>>.makeStream()
 
-    pendingAnswer = PendingAnswer(id: id, answer: exchange.answer, timedOut: exchange.timedOut, result: continuation)
+    let timeout = retryPolicy.echoTimeout + exchange.transferTime
+
+    pendingAnswer = PendingAnswer(
+      id: id,
+      answer: exchange.answer,
+      timedOut: exchange.timedOut,
+      timeout: timeout,
+      result: continuation
+    )
     defer { abandonAnswer(id) }
 
-    return try await awaitAnswer(id, results: results) { [connection] in
+    return try await awaitAnswer(id, timeout: timeout, results: results) { [connection] in
 
       try await connection.write(exchange.bytes)
 
@@ -267,7 +281,7 @@ actor CommandPacer<Parser: ReplyParser> {
     unansweredCommand = nil
     defer { abandonAnswer(unanswered.id) }
 
-    _ = await awaitAnswer(unanswered.id, results: unanswered.results) {}
+    _ = await awaitAnswer(unanswered.id, timeout: unanswered.timeout, results: unanswered.results) {}
 
     try Task.checkCancellation()
 
@@ -276,13 +290,12 @@ actor CommandPacer<Parser: ReplyParser> {
   /// Runs `write`, then waits for the pending answer's result, the timeout or cancellation.
   private func awaitAnswer(
     _ id: Int,
+    timeout: Duration,
     results: AsyncStream<Result<Bool, any Error>>,
     write: @escaping @Sendable () async throws -> Void
   ) async -> Result<Bool, any Error> {
 
-    let timeout = retryPolicy.echoTimeout
-
-    return await withTaskGroup(of: Void.self, returning: Result<Bool, any Error>.self) { group in
+    await withTaskGroup(of: Void.self, returning: Result<Bool, any Error>.self) { group in
 
       // Writes, then gives up on the answer once the timeout passes. The group cancels this
       // child as soon as the answer arrives, so a timeout never outlives its command.
@@ -370,8 +383,14 @@ actor CommandPacer<Parser: ReplyParser> {
 
     let (results, continuation) = AsyncStream<Result<Bool, any Error>>.makeStream()
 
-    pendingAnswer = PendingAnswer(id: id, answer: pending.answer, timedOut: pending.timedOut, result: continuation)
-    unansweredCommand = UnansweredCommand(id: id, timedOut: pending.timedOut, results: results)
+    pendingAnswer = PendingAnswer(
+      id: id,
+      answer: pending.answer,
+      timedOut: pending.timedOut,
+      timeout: pending.timeout,
+      result: continuation
+    )
+    unansweredCommand = UnansweredCommand(id: id, timeout: pending.timeout, results: results)
 
   }
 

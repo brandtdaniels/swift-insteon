@@ -10,8 +10,8 @@ import InsteonProtocol
 ///
 /// | Command | IBIOS |
 /// | --- | --- |
-/// | `SerialCommand.sendStandardMessage(_:)` | Downloads the message to `0x01A4`, then sets bit 4 of `0x0142` |
-/// | `SerialCommand.sendX10(_:)` | Downloads the X10 byte to `0x0165`, then sets bit 7 of `0x0166` and bit 3 for a command |
+/// | `SerialCommand.sendStandardMessage(_:)` | Downloads the message to `0x01A4`, confirms it with Get Checksum, then sets bit 4 of `0x0142` |
+/// | `SerialCommand.sendX10(_:)` | Downloads the X10 byte to `0x0165`, confirms it with Get Checksum, then sets bit 7 of `0x0166` and bit 3 for a command |
 /// | `SerialCommand.getModemInfo` | Get Version, answered with `IBIOSReply.version(_:)` |
 ///
 /// The addresses come from the worked examples in the INSTEON Developer's Guide, chapter 9,
@@ -118,7 +118,7 @@ public final class PowerLincController: SerialCommandSender {
   ///   sending anything; otherwise the errors sending an `IBIOSCommand` throws.
   public func send(_ command: SerialCommand) async throws {
 
-    try await pacer.send(Self.ibiosCommands(for: command).map(Self.exchange(for:)))
+    try await pacer.send(Self.exchanges(for: command))
 
   }
 
@@ -178,30 +178,55 @@ public final class PowerLincController: SerialCommandSender {
 
   }
 
-  private static func ibiosCommands(for command: SerialCommand) throws(PowerLincControllerError) -> [IBIOSCommand] {
+  /// The exchanges that carry a modem command. Each download is confirmed with Get Checksum
+  /// before the flag that sends it is set, as the developer guide advises, since an ACK means
+  /// only that the controller received the bytes.
+  private static func exchanges(for command: SerialCommand) throws(PowerLincControllerError) -> [Exchange<IBIOSReply>] {
 
     switch command {
     case let .sendStandardMessage(message):
-      return [
-        .download(address: Memory.messageDestination, data: message.bytes),
-        .mask(address: Memory.insteonControl, or: Memory.insteonRequestToSend, and: 0xFF)
+      return download(message.bytes, to: Memory.messageDestination) + [
+        exchange(for: .mask(address: Memory.insteonControl, or: Memory.insteonRequestToSend, and: 0xFF))
       ]
     case let .sendX10(code):
       let isCommand = if case .command = code { true } else { false }
 
-      return [
-        .download(address: Memory.x10Transmit, data: [code.rawX10]),
-        .mask(
+      return download([code.rawX10], to: Memory.x10Transmit) + [
+        exchange(for: .mask(
           address: Memory.x10Flags,
           or: Memory.x10RequestToSend | (isCommand ? Memory.x10IsCommand : 0),
           and: isCommand ? 0xFF : ~Memory.x10IsCommand
-        )
+        ))
       ]
     case .getModemInfo:
-      return [.getVersion]
+      return [exchange(for: .getVersion)]
     default:
       throw .unsupported(command)
     }
+
+  }
+
+  private static func download(_ data: [UInt8], to address: UInt16) -> [Exchange<IBIOSReply>] {
+
+    let length = UInt16(data.count)
+    let confirmation = IBIOSCommand.getChecksum(address: address, length: length)
+
+    // The developer guide describes this checksum as covering the region's bytes, and the
+    // download's as also covering its address and length, so either confirms the data.
+    let checksums: Set<UInt16> = [
+      IBIOSCommand.checksum(of: data),
+      IBIOSCommand.checksum(of: [UInt8(address >> 8), UInt8(address & 0xFF), UInt8(length >> 8), UInt8(length & 0xFF)] + data)
+    ]
+
+    return [
+      exchange(for: .download(address: address, data: data)),
+      Exchange(
+        bytes: confirmation.bytes,
+        answer: { reply in Self.answer(reply, to: confirmation, confirming: checksums) },
+        rejected: PowerLincControllerError.unconfirmedDownload(address: address),
+        timedOut: PowerLincControllerError.timedOut(confirmation)
+      )
+    ]
 
   }
 
@@ -213,14 +238,33 @@ public final class PowerLincController: SerialCommandSender {
       bytes: command.bytes,
       answer: { reply in Self.answer(reply, to: command) },
       rejected: PowerLincControllerError.rejected(command),
-      timedOut: PowerLincControllerError.timedOut(command)
+      timedOut: PowerLincControllerError.timedOut(command),
+      transferTime: transferTime(of: command)
     )
+
+  }
+
+  /// How long the data a command moves takes to cross the serial port at 4800 baud, where
+  /// each byte takes 10 bits, so a large upload or download isn't timed out before it
+  /// finishes.
+  private static func transferTime(of command: IBIOSCommand) -> Duration {
+
+    let byteCount = switch command {
+    case let .download(_, data): data.count
+    case let .upload(_, length): Int(length)
+    default: 0
+    }
+
+    return .seconds(byteCount * 10) / 4800
 
   }
 
   /// Whether a reply answers a command: `true` if it accepts it, `false` if it rejects it, or
   /// `nil` if it's about something else.
-  private static func answer(_ reply: IBIOSReply, to command: IBIOSCommand) -> Bool? {
+  ///
+  /// - Parameter checksums: For a Get Checksum that confirms a download, the checksums its
+  ///   data reads back as. Any other checksum rejects it.
+  private static func answer(_ reply: IBIOSReply, to command: IBIOSCommand, confirming checksums: Set<UInt16> = []) -> Bool? {
 
     switch (reply, command) {
     case let (.echo(echo), _) where echo.number == command.number:
@@ -237,10 +281,17 @@ public final class PowerLincController: SerialCommandSender {
       return echo.parameters.isEmpty || echo.parameters == expected ? false : nil
     case (.version, .getVersion):
       return true
-    case let (.memory(address, data, _), .upload(expectedAddress, length)):
-      return address == expectedAddress && data.count == Int(length) ? true : nil
-    case let (.checksum(address, length, _), .getChecksum(expectedAddress, expectedLength)):
-      return address == expectedAddress && length == expectedLength ? true : nil
+    case let (.memory(address, data, isIntact), .upload(expectedAddress, length)):
+      // Memory that arrives damaged is read again.
+      return address == expectedAddress && data.count == Int(length) ? isIntact : nil
+    case let (.checksum(address, length, checksum), .getChecksum(expectedAddress, expectedLength)):
+      guard address == expectedAddress && length == expectedLength else {
+
+        return nil
+
+      }
+
+      return checksums.isEmpty || checksums.contains(checksum)
     case (.negativeAcknowledgement, _):
       return false
     default:
