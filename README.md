@@ -12,7 +12,7 @@ Swift packages for working with [INSTEON](https://www.insteon.com) home automati
 ## Requirements
 
 - Swift 6.0 or later
-- macOS 13, iOS 16, tvOS 16, watchOS 9 or visionOS 1 and later, or Linux
+- macOS 13, iOS 16, tvOS 16, watchOS 9, visionOS 1 or later, or Linux
 - `SerialPort`, in InsteonModem, is available on macOS and Linux
 - InsteonProtocol depends only on the Swift standard library; the networking libraries use Foundation
 
