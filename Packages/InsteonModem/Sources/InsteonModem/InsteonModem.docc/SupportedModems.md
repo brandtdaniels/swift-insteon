@@ -11,11 +11,12 @@ uses them, whatever the connection:
 | --- | --- | --- | --- |
 | 2413U, 2413UH | PowerLinc Modem | USB, through ``SerialPort`` | Supported |
 | 2413S, 2413SH | PowerLinc Modem | Serial, through ``SerialPort`` | Supported |
-| 2412U, 2412UH | PowerLinc Modem | USB, through ``SerialPort`` | Supported, though some commands may be rejected; see "Commands on older modems" |
-| 2412S, 2412SH | PowerLinc Modem | Serial, through ``SerialPort`` | Supported, though some commands may be rejected; see "Commands on older modems" |
-| 2448A7, 2448A7H | USB Adapter | USB, through ``SerialPort`` | Supported, by radio only; see "The USB Adapter" |
-| 2245, 2242 | Hub | Network, through `HubConnection` in InsteonHubClient | Supported |
-| 2414S | PowerLinc Controller | Serial at 4800 baud, through ``SerialPort`` | Supported by ``PowerLincController`` rather than ``Modem``; see "The PowerLinc Controller" |
+| 2412U, 2412UH | PowerLinc Modem | USB, through ``SerialPort`` | Supported; some commands may be rejected, see <doc:SupportedModems#Commands-a-modem-may-lack> |
+| 2412S, 2412SH | PowerLinc Modem | Serial, through ``SerialPort`` | Supported; some commands may be rejected, see <doc:SupportedModems#Commands-a-modem-may-lack> |
+| 2448A7, 2448A7H | USB Adapter | USB, through ``SerialPort`` | Supported, by radio only; see <doc:SupportedModems#The-USB-Adapter> |
+| 2245 | Hub 2 | Network, through `HubConnection` in InsteonHubClient | Supported |
+| 2242 | Hub 1 | Network, through `HubConnection` in InsteonHubClient | Expected to work: it serves the same local HTTP requests, though its buffer format hasn't been verified |
+| 2414S | PowerLinc Controller | Serial at 4800 baud, through ``SerialPort`` | Supported by ``PowerLincController`` rather than ``Modem``; see <doc:SupportedModems#The-PowerLinc-Controller> |
 
 These aren't supported:
 
@@ -31,18 +32,22 @@ firmware version in a `ModemInfo`. Every modem in the table reports category `0x
 subcategory tells the models apart. To name the model, look the category and subcategory up
 in a device database.
 
-### Commands on older modems
+### Commands a modem may lack
 
-The 2009 INSTEON Developer's Guide lists the IM serial commands `0x60` through `0x73`. The
+The INSTEON Developer's Guide defines the IM serial commands `0x60` through `0x73`. The
 commands after those, such as Cancel Cleanup (`0x74`), Read and Write Database
 (`0x75`, `0x76`), Beep (`0x77`), Set Responder Link Data (`0x79`) and Set Application Retries
-(`0x7A`), came with later firmware. A modem whose firmware lacks a command rejects it, and
-``Modem/send(_:)`` throws ``ModemError/rejected(_:)``.
+(`0x7A`), appear only in Insteon's PLM serial command table, so a modem whose firmware doesn't
+implement one, such as a 2412 PowerLinc Modem, may reject it.
+
+A modem rejects a command it lacks with a NAK, the same answer it gives when it's busy, so
+``Modem/send(_:)`` sends the command again as its ``Modem/RetryPolicy`` allows before it
+throws ``ModemError/rejected(_:)``.
 
 ### The USB Adapter
 
 The USB Adapter (2448A7) sends and receives INSTEON messages by radio only. In Insteon's
-own test log it rejects X10 commands and Beep, so expect ``ModemError/rejected(_:)`` for
+test log for it, it rejects X10 commands and Beep, so expect ``ModemError/rejected(_:)`` for
 `SerialCommand.sendX10(_:)` and `SerialCommand.beep`.
 
 ### The PowerLinc Controller
