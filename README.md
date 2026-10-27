@@ -5,11 +5,13 @@ Swift packages for working with [INSTEON](https://www.insteon.com) home automati
 | Library | Description |
 | --- | --- |
 | [InsteonProtocol](Packages/InsteonProtocol) | The INSTEON protocol as value types: messages for devices, and the serial commands that carry them through a modem |
+| [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the INSTEON clients send requests through |
 
 ## Requirements
 
 - Swift 6.0 or later
-- Any platform Swift supports. The libraries depend only on the Swift standard library.
+- macOS 13, iOS 16, tvOS 16, watchOS 9, visionOS 1 or later, or Linux
+- InsteonProtocol depends only on the Swift standard library; InsteonNetworking uses Foundation
 
 ## Installation
 
