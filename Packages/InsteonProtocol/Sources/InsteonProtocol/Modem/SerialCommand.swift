@@ -17,9 +17,13 @@ public enum SerialCommand: Hashable, Sendable {
 
   /// Sends a command to every device in one of the modem's ALL-Link groups.
   ///
+  /// The modem broadcasts the command, then sends ALL-Link cleanup messages to each member of
+  /// the group in turn.
+  ///
   /// - Parameters:
   ///   - group: The ALL-Link group to address.
-  ///   - command: The command to send.
+  ///   - command: The command to send. Its cmd2 is usually `0x00`, or `0xFF` for a full-on
+  ///     level.
   case sendAllLinkCommand(group: UInt8, command: Command)
 
   /// Sends a standard-length INSTEON message.
@@ -46,7 +50,7 @@ public enum SerialCommand: Hashable, Sendable {
   /// - Parameters:
   ///   - category: The device category.
   ///   - subcategory: The device subcategory.
-  ///   - firmwareVersion: The firmware version to report.
+  ///   - firmwareVersion: The firmware version to report, or `0xFF` for none.
   case setHostDeviceCategory(category: UInt8, subcategory: UInt8, firmwareVersion: UInt8)
 
   /// Resets the modem to factory defaults, erasing its ALL-Link database.
