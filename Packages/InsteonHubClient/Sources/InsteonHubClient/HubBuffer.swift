@@ -3,21 +3,21 @@ import Foundation
 /// The Hub's buffer of bytes received from its modem, as read with ``Hub/readBuffer()``.
 ///
 /// The Hub keeps the modem's replies in a ring buffer: new bytes overwrite the oldest once
-/// it fills, and ``HubBuffer/endIndex`` marks where the next byte will be written. Use a
+/// it fills, and ``HubBuffer/endIndex`` marks where the Hub writes the next byte. Use a
 /// ``HubBufferCursor`` to pick out the bytes that are new since the last read.
 public struct HubBuffer: Hashable, Sendable {
 
   /// The buffer's contents.
   public let bytes: [UInt8]
 
-  /// The index in ``HubBuffer/bytes`` where the Hub will write the next byte.
+  /// The index in ``HubBuffer/bytes`` where the Hub writes the next byte.
   public let endIndex: Int
 
   /// Creates a buffer.
   ///
   /// - Parameters:
   ///   - bytes: The buffer's contents.
-  ///   - endIndex: The index where the next byte will be written.
+  ///   - endIndex: The index where the Hub writes the next byte.
   public init(bytes: [UInt8], endIndex: Int) {
 
     self.bytes = bytes

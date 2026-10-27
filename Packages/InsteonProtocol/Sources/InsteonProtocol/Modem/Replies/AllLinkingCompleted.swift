@@ -17,8 +17,9 @@ public struct AllLinkingCompleted: Hashable, Sendable {
   /// The other device's subcategory, reported only when the modem became its controller.
   public var subcategory: DeviceSubcategory?
 
-  /// The other device's firmware version, reported only by devices that predate the Product
-  /// Data Response when the modem became their controller.
+  /// The other device's firmware version, reported when the modem became its controller by a
+  /// device that doesn't answer ``StandardDirectCommand/productDataRequest``. Other devices
+  /// send `0xFF`, which reads as `nil`.
   public var firmwareVersion: FirmwareVersion?
 
   /// Creates a linking result.

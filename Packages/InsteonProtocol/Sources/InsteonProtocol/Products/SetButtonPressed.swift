@@ -5,7 +5,9 @@
 /// category, subcategory and, on some devices, firmware version.
 ///
 /// ```swift
-/// for await reply in await modem.replies() {
+/// var parser = ModemReplyParser()
+///
+/// for reply in parser.parse(bytesFromModem) {
 ///   if case let .messageReceived(message) = reply, let identity = SetButtonPressed(message) {
 ///     print(identity.sender, identity.category, identity.subcategory)
 ///   }

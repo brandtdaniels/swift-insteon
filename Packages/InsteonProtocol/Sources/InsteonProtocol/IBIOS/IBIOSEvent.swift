@@ -22,10 +22,10 @@ public struct IBIOSEvent: RawRepresentable, Hashable, Sendable {
   /// The SALad program started (`0x00`), as it does at power-up.
   public static let initialized = IBIOSEvent(rawValue: 0x00)
 
-  /// A new INSTEON message addressed to this device arrived (`0x01`).
+  /// An INSTEON message addressed to this device arrived (`0x01`).
   public static let messageForMe = IBIOSEvent(rawValue: 0x01)
 
-  /// A new INSTEON message addressed to another device arrived (`0x02`).
+  /// An INSTEON message addressed to another device arrived (`0x02`).
   public static let messageForOthers = IBIOSEvent(rawValue: 0x02)
 
   /// A repeat of a message already received arrived on a later hop (`0x03`).

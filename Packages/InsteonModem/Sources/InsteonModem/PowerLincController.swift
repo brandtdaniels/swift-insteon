@@ -140,7 +140,7 @@ public actor PowerLincController: SerialCommandSender {
 
   }
 
-  /// Returns a stream of everything the controller sends from now on.
+  /// Returns a stream of everything the controller sends after this call.
   ///
   /// Each call returns a new stream, so several parts of an app can listen at once. A stream
   /// finishes when the controller closes.

@@ -43,7 +43,7 @@ package struct TurnQueue: Sendable {
 
   /// Takes the turn if it's free, or joins the queue.
   ///
-  /// - Returns: `nil` if the caller now holds the turn, or a ticket to wait on.
+  /// - Returns: `nil` if the caller holds the turn, or a ticket to wait on.
   package mutating func request() -> Ticket? {
 
     guard isTaken else {
@@ -67,7 +67,7 @@ package struct TurnQueue: Sendable {
   /// Settles a ticket once its handoff finishes.
   ///
   /// - Parameter ticket: The ticket whose wait ended.
-  /// - Returns: `true` if the caller now holds the turn, or `false` if the wait was canceled
+  /// - Returns: `true` if the caller holds the turn, or `false` if the wait was canceled
   ///   first, in which case the ticket leaves the queue.
   package mutating func settle(_ ticket: Ticket) -> Bool {
 

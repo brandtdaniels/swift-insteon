@@ -39,7 +39,8 @@ public struct NAKReason: RawRepresentable, Hashable, Sendable {
   /// message's checksum is wrong.
   public static let invalidCommand = NAKReason(rawValue: 0xFD)
 
-  /// The device is still searching its ALL-Link database and will answer later (`0xFC`, i2cs).
+  /// The device is still searching its ALL-Link database, and answers once the search
+  /// finishes (`0xFC`, i2cs).
   public static let databaseSearchPending = NAKReason(rawValue: 0xFC)
 
   /// A value in the command is out of range (`0xFB`, i2cs).

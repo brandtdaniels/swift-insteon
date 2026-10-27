@@ -3,7 +3,7 @@
 ///
 /// A device reports its engine in the acknowledgement of
 /// ``StandardDirectCommand/getEngineVersion``: cmd2 is the engine's raw value. Engines are
-/// ordered, so a device with a later engine supports everything an earlier one does.
+/// ordered, so a device with a higher engine supports everything a lower one does.
 ///
 /// ```swift
 /// if let engine = InsteonEngine(rawValue: acknowledgement.command.command2),

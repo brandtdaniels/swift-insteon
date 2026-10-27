@@ -150,7 +150,7 @@ public actor Modem: SerialCommandSender {
 
   }
 
-  /// Returns a stream of everything the modem sends from now on.
+  /// Returns a stream of everything the modem sends after this call.
   ///
   /// Each call returns a new stream, so several parts of an app can listen at once. A stream
   /// finishes when the modem closes.
