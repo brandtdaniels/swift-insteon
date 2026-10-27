@@ -16,36 +16,49 @@ enum HubRequest {
   /// Clears the buffer.
   case clearBuffer
 
-  var method: String {
+  var path: String {
 
     switch self {
-    case .send, .clearBuffer: "POST"
-    case .readBuffer: "GET"
-    }
-
-  }
-
-  /// The path and query. The Hub expects the command's hex where a query name would go.
-  var pathAndQuery: String {
-
-    switch self {
-    case let .send(command): "/3?\(command.hexString)=I=3"
+    case .send: "/3"
     case .readBuffer: "/buffstatus.xml"
-    case .clearBuffer: "/1?XB=M=1"
+    case .clearBuffer: "/1"
     }
 
   }
 
+  /// The query, already percent-encoded. The Hub expects the command's hex where a query name
+  /// would go.
+  var query: String? {
+
+    switch self {
+    case let .send(command): "\(command.hexString)=I=3"
+    case .readBuffer: nil
+    case .clearBuffer: "XB=M=1"
+    }
+
+  }
+
+  /// The request, a GET for every action. It always goes to the Hub rather than a cache, since
+  /// the buffer changes between reads.
   func urlRequest(for endpoint: HubEndpoint) throws(HubError) -> URLRequest {
 
-    guard let url = URL(string: "http://\(endpoint.host):\(endpoint.port)\(pathAndQuery)") else {
+    // Components set the host as a host, so it can't change the request's path or authority.
+    var components = URLComponents()
+    components.scheme = "http"
+    components.host = endpoint.host
+    components.port = endpoint.port
+    components.path = path
+    components.percentEncodedQuery = query
+
+    guard !endpoint.host.isEmpty, let url = components.url, url.host != nil else {
 
       throw .invalidEndpoint(endpoint)
 
     }
 
     var request = URLRequest(url: url)
-    request.httpMethod = method
+    request.httpMethod = "GET"
+    request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
 
     return request
 

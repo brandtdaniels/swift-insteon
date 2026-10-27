@@ -45,18 +45,25 @@ public struct HubBuffer: Hashable, Sendable {
 
     let hex = Array(response[start..<end].filter { !$0.isWhitespace })
 
-    guard hex.count >= 2, hex.count.isMultiple(of: 2), hex.allSatisfy(\.isHexDigit) else {
+    // ASCII only: `isHexDigit` also accepts full-width digits, which don't parse.
+    guard hex.count >= 2, hex.count.isMultiple(of: 2), hex.allSatisfy({ $0.isASCII && $0.isHexDigit }) else {
 
       throw .malformedBuffer
 
     }
 
     let contents = hex.dropLast(2)
-    let bytes = stride(from: contents.startIndex, to: contents.endIndex, by: 2).map {
-      UInt8(String(contents[$0..<$0 + 2]), radix: 16)!
+    let bytes = stride(from: contents.startIndex, to: contents.endIndex, by: 2).compactMap {
+      UInt8(String(contents[$0..<$0 + 2]), radix: 16)
     }
 
-    guard let endDigit = Int(String(hex.suffix(2)), radix: 16), endDigit / 2 <= bytes.count else {
+    // The end position counts hex digits, so it's always even and within the buffer.
+    guard
+      bytes.count * 2 == contents.count,
+      let endDigit = Int(String(hex.suffix(2)), radix: 16),
+      endDigit.isMultiple(of: 2),
+      endDigit / 2 <= bytes.count
+    else {
 
       throw .malformedBuffer
 

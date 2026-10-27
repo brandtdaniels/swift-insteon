@@ -32,6 +32,17 @@ struct HubBufferCursorTests {
 
   }
 
+  @Test func keepsZeroBytesThatWrapAroundTheRing() {
+
+    var cursor = HubBufferCursor()
+
+    _ = cursor.advance(to: HubBuffer(bytes: [1, 2, 3, 4, 0, 0], endIndex: 4))
+
+    // A reply ending in two zero bytes filled the end of the ring, then the next began at 0.
+    #expect(cursor.advance(to: HubBuffer(bytes: [7, 2, 3, 4, 0, 0], endIndex: 1)) == [0, 0, 7])
+
+  }
+
   @Test func skipsZeroedTailAfterBufferWasCleared() {
 
     var cursor = HubBufferCursor()
