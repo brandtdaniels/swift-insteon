@@ -48,6 +48,13 @@ enum HubRequest {
   /// the buffer changes between reads.
   func urlRequest(for endpoint: HubEndpoint) throws(HubError) -> URLRequest {
 
+    // URLComponents traps on a negative port, so an out-of-range port is rejected first.
+    guard (0...65_535).contains(endpoint.port) else {
+
+      throw .invalidEndpoint(endpoint)
+
+    }
+
     // Components set the host as a host, so it can't change the request's path or authority.
     var components = URLComponents()
     components.scheme = "http"

@@ -102,6 +102,9 @@ public actor HubConnection: ModemConnection {
 
     }
 
+    // Canceling the read above is swallowed with its other errors, so check before writing.
+    try Task.checkCancellation()
+
     // Read the next reply from the start even if the request fails, since the Hub may have
     // received the command anyway: a reply read twice parses, but one read from its middle
     // doesn't.

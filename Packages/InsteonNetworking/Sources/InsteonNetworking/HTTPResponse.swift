@@ -7,7 +7,7 @@ public struct HTTPResponse: Hashable, Sendable {
   public var statusCode: Int
 
   /// The response headers, keyed by lowercased name, since header names are case-insensitive.
-  public var headers: [String: String]
+  public private(set) var headers: [String: String]
 
   /// The response body. Empty when the server sent no body.
   public var body: Data
@@ -17,12 +17,13 @@ public struct HTTPResponse: Hashable, Sendable {
   /// - Parameters:
   ///   - statusCode: The HTTP status code.
   ///   - headers: The response headers. Defaults to none. Their names are lowercased; if two
-  ///     differ only in case, the first in the dictionary's order wins.
+  ///     differ only in case, the one whose name sorts first wins.
   ///   - body: The response body. Defaults to empty.
   public init(statusCode: Int, headers: [String: String] = [:], body: Data = Data()) {
 
     self.statusCode = statusCode
-    self.headers = Dictionary(headers.map { ($0.key.lowercased(), $0.value) }) { first, _ in first }
+    let sorted = headers.sorted { $0.key < $1.key }
+    self.headers = Dictionary(sorted.map { ($0.key.lowercased(), $0.value) }) { first, _ in first }
     self.body = body
 
   }

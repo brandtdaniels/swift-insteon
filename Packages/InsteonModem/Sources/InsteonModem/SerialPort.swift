@@ -109,8 +109,16 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
   /// Writes bytes to the modem, returning once they've all been handed to the port.
   ///
   /// - Parameter bytes: The bytes to send.
-  /// - Throws: ``SerialPortError/writeFailed(code:)`` if the port rejects the write.
+  /// - Throws: ``SerialPortError/closed`` if the port is closed, or
+  ///   ``SerialPortError/writeFailed(code:)`` if the port rejects the write.
   public func write(_ bytes: [UInt8]) async throws {
+
+    // A closed descriptor's number can be reused by another file, so nothing is written to it.
+    guard !lock.withLock({ isClosed }) else {
+
+      throw SerialPortError.closed
+
+    }
 
     try bytes.withUnsafeBytes { buffer in
 
@@ -148,6 +156,16 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
   public func receive() -> AsyncThrowingStream<[UInt8], any Error> {
 
     AsyncThrowingStream { continuation in
+
+      // A dispatch source that's never resumed can't be released safely, so a closed port
+      // doesn't make one.
+      guard !lock.withLock({ isClosed }) else {
+
+        continuation.finish()
+
+        return
+
+      }
 
       let descriptor = self.descriptor
       let source = ReadSource(
@@ -203,7 +221,11 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
       if isClosed {
 
         lock.unlock()
-        continuation.finish()
+
+        // The port closed after the check above. A canceled source never reads, and resuming
+        // it lets it be released; its cancel handler finishes the stream.
+        source.dispatchSource.cancel()
+        source.dispatchSource.resume()
 
         return
 
@@ -262,6 +284,9 @@ public enum SerialPortError: Error, Hashable, Sendable {
 
   /// Reading from the port failed.
   case readFailed(code: Int32)
+
+  /// The port is closed.
+  case closed
 
 }
 

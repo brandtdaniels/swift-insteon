@@ -28,42 +28,13 @@ import InsteonProtocol
 /// in a task that lasts as long as the app.
 public actor Modem: SerialCommandSender {
 
-  /// How ``Modem`` waits for and retries commands.
-  public struct RetryPolicy: Hashable, Sendable {
-
-    /// How many times to send a command before giving up. At least 1.
-    public var attempts: Int
-
-    /// How long to wait before sending a rejected command again.
-    public var delay: Duration
-
-    /// How long to wait for the modem to echo a command.
-    public var echoTimeout: Duration
-
-    /// Creates a retry policy.
-    ///
-    /// - Parameters:
-    ///   - attempts: How many times to send a command before giving up. Defaults to 3.
-    ///   - delay: How long to wait before resending a rejected command. Defaults to half a
-    ///     second, which gives a busy modem time to finish.
-    ///   - echoTimeout: How long to wait for an echo. Defaults to 2 seconds.
-    public init(attempts: Int = 3, delay: Duration = .milliseconds(500), echoTimeout: Duration = .seconds(2)) {
-
-      self.attempts = max(1, attempts)
-      self.delay = delay
-      self.echoTimeout = echoTimeout
-
-    }
-
-  }
-
   private let pacer: CommandPacer<ModemReplyParser>
 
   /// Creates a modem that talks over a connection.
   ///
   /// - Parameters:
   ///   - connection: The connection to the modem.
-  ///   - retryPolicy: How to wait for and retry commands. Defaults to ``Modem/RetryPolicy/init(attempts:delay:echoTimeout:)``.
+  ///   - retryPolicy: How to wait for and retry commands. Defaults to ``RetryPolicy/init(attempts:delay:answerTimeout:)``.
   ///   - clock: The clock that times retry delays and echo timeouts. Defaults to a
   ///     `ContinuousClock`; tests can pass a clock they control.
   public init(
@@ -89,7 +60,7 @@ public actor Modem: SerialCommandSender {
   ///
   /// - Parameters:
   ///   - connection: The connection to the modem.
-  ///   - retryPolicy: How to wait for and retry commands. Defaults to ``Modem/RetryPolicy/init(attempts:delay:echoTimeout:)``.
+  ///   - retryPolicy: How to wait for and retry commands. Defaults to ``RetryPolicy/init(attempts:delay:answerTimeout:)``.
   ///   - clock: The clock that times retry delays and echo timeouts. Defaults to a
   ///     `ContinuousClock`; tests can pass a clock they control.
   ///   - isolation: The actor `body` runs on. Defaults to the caller's.
