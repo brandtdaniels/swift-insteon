@@ -101,6 +101,24 @@ struct HubConnectionTests {
 
   }
 
+  @Test func deliversBytesAWriteReadsWhileTheStreamWaits() async throws {
+
+    let fake = FakeHub()
+    let connection = makeConnection(fake)
+    let message: [UInt8] = [0x02, 0x50, 0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33, 0x2B, 0x11, 0xFF]
+
+    // A device's message arrives while the stream waits between polls, and a write starts the
+    // buffer over before the next poll.
+    async let received = Self.firstChunk(of: connection.receive())
+    await clock.waitForSleeper(until: HubConnection.defaultPollInterval)
+    await fake.deliver(message)
+    try await connection.write([0x02, 0x6D])
+    clock.advance(by: HubConnection.defaultPollInterval)
+
+    #expect(try await received == message + [0x02, 0x6D, 0x06])
+
+  }
+
   @Test func retriesAFailedPoll() async throws {
 
     let fake = FakeHub(failingReads: 1)

@@ -51,4 +51,28 @@ struct TurnQueueTests {
 
   }
 
+  @Test func aWaiterHandedTheTurnHoldsItUntilReleased() throws {
+
+    var turns = TurnQueue()
+
+    _ = turns.request()
+    let waiterTicket = turns.request()
+    let waiter = try #require(waiterTicket)
+
+    // The turn is handed over before the waiter settles, as it is when the waiter's task is
+    // canceled just after the handoff. The waiter holds the turn and must pass it on.
+    turns.release()
+    let waiterHasTurn = turns.settle(waiter)
+    #expect(waiterHasTurn)
+
+    let laterTicket = turns.request()
+    #expect(laterTicket != nil)
+
+    turns.release()
+    let later = try #require(laterTicket)
+    let laterHasTurn = turns.settle(later)
+    #expect(laterHasTurn)
+
+  }
+
 }

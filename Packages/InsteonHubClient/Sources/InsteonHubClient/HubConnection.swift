@@ -117,7 +117,8 @@ public actor HubConnection: ModemConnection {
   /// Returns the bytes the Hub's modem sends, polling the Hub's buffer as the stream is read.
   ///
   /// The buffer is read once right away, then once per poll interval, in the task reading the
-  /// stream. Calling this again finishes the previous stream. The stream finishes when the
+  /// stream. Calling this again replaces the previous stream, which finishes at its next poll
+  /// and leaves any bytes it was reading to the new one. The stream finishes when the
   /// reading task is canceled, or with an error if the Hub answers with an error status or too
   /// many polls in a row fail.
   ///
@@ -160,6 +161,16 @@ public actor HubConnection: ModemConnection {
         do {
 
           let received = try await readNewBytes()
+
+          guard streams.isLatest(id) else {
+
+            // A newer stream replaced this one during the read, so the bytes are its to deliver.
+            unreadBytes = received + unreadBytes
+
+            break
+
+          }
+
           failedPolls = 0
 
           if !received.isEmpty {
@@ -169,6 +180,13 @@ public actor HubConnection: ModemConnection {
           }
 
         } catch {
+
+          // A replaced stream's failure doesn't count against the stream that replaced it.
+          guard streams.isLatest(id) else {
+
+            break
+
+          }
 
           failedPolls += 1
 
