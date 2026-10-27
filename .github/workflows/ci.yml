@@ -20,12 +20,17 @@ jobs:
       - name: Test
         run: swift test
       - name: Build documentation
-        run: >
-          xcodebuild docbuild
-          -scheme InsteonMessage
-          -destination 'generic/platform=macOS'
-          -derivedDataPath .build/docs
-          OTHER_DOCC_FLAGS="--warnings-as-errors"
+        run: |
+          mkdir -p .build/symbol-graphs
+          swift build --target InsteonMessage \
+            -Xswiftc -emit-symbol-graph \
+            -Xswiftc -emit-symbol-graph-dir -Xswiftc "$PWD/.build/symbol-graphs"
+          xcrun docc convert Packages/InsteonMessage/Sources/InsteonMessage/InsteonMessage.docc \
+            --additional-symbol-graph-dir "$PWD/.build/symbol-graphs" \
+            --fallback-display-name InsteonMessage \
+            --fallback-bundle-identifier com.brandtdaniels.InsteonMessage \
+            --output-path .build/docs/InsteonMessage.doccarchive \
+            --warnings-as-errors
 
   linux:
     name: Linux
