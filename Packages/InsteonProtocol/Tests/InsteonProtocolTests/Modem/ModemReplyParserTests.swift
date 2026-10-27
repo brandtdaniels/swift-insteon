@@ -114,7 +114,7 @@ struct ModemReplyParserTests {
     var parser = ModemReplyParser()
     let message = ExtendedMessage(
       to: Self.device,
-      command: ExtendedDirectCommand.extendedGetSet,
+      command: ExtendedDirectCommand.getSet,
       userData: try UserData([0x01])
     )
 

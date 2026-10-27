@@ -63,21 +63,20 @@ extension InsteonAddress: LosslessStringConvertible {
 
     let groups = description.split(separator: ".", omittingEmptySubsequences: false)
 
-    let digits: [Substring]
+    // Either three groups of two digits, or the six digits on their own.
+    guard (groups.count == 3 && groups.allSatisfy({ $0.count == 2 })) || groups.count == 1 else {
 
-    switch groups.count {
-    case 1 where description.count == 6:
-      let characters = Array(description)
-      digits = stride(from: 0, to: 6, by: 2).map { Substring(String(characters[$0..<$0 + 2])) }
-    case 3:
-      digits = groups
-    default:
       return nil
+
     }
 
-    let bytes = digits.compactMap { pair in
-      pair.count == 2 && pair.allSatisfy(\.isHexDigit) ? UInt8(pair, radix: 16) : nil
-    }
+    let digits = Array(groups.joined())
+
+    // `isHexDigit` rules out signs, which `UInt8(_:radix:)` would accept, and
+    // `UInt8(_:radix:)` rules out full-width digits, which `isHexDigit` would accept.
+    let bytes = digits.count == 6 && digits.allSatisfy(\.isHexDigit)
+      ? stride(from: 0, to: 6, by: 2).compactMap { UInt8(String(digits[$0...$0 + 1]), radix: 16) }
+      : []
 
     guard bytes.count == 3 else {
 

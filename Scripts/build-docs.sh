@@ -7,12 +7,16 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-graphs="$PWD/.build/symbol-graphs"
+# A build of its own, started from scratch every time: an up-to-date build doesn't run the
+# compiler, so it wouldn't emit any symbol graphs.
+scratch="$PWD/.build/docs-build"
+graphs="$scratch/symbol-graphs"
 output="$PWD/.build/docs"
-rm -rf "$graphs" "$output"
+rm -rf "$scratch" "$output"
 mkdir -p "$graphs" "$output"
 
 swift build \
+  --scratch-path "$scratch" \
   -Xswiftc -emit-symbol-graph \
   -Xswiftc -emit-symbol-graph-dir -Xswiftc "$graphs"
 
