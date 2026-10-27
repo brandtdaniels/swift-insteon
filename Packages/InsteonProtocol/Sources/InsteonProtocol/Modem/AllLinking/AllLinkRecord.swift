@@ -2,6 +2,10 @@
 ///
 /// The three data bytes depend on the device and the record's role. For a responder record
 /// on a dimmer they are typically the on-level, the ramp rate and the button number.
+///
+/// In a modem's database, a controller record holds the linked device's category, subcategory
+/// and firmware version, and a responder record holds the data set with
+/// ``SerialCommand/setResponderLinkData(data1:data2:data3:)``.
 public struct AllLinkRecord: Hashable, Sendable {
 
   /// Whether the record is in use, and whether it is a controller or responder record.

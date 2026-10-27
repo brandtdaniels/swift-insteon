@@ -129,6 +129,19 @@ public enum SerialCommand: Hashable, Sendable {
   /// Makes the modem beep.
   case beep
 
+  /// Sets the data the modem stores in the responder record its next ALL-Link creates.
+  ///
+  /// The three bytes become ``AllLinkRecord/data1``, ``AllLinkRecord/data2`` and
+  /// ``AllLinkRecord/data3`` of the record ``SerialCommand/startAllLinking(mode:group:)``
+  /// creates when the modem is the responder. Insteon describes the data as being for the next
+  /// link, so send this before each link that needs it.
+  ///
+  /// - Parameters:
+  ///   - data1: The record's first data byte.
+  ///   - data2: The record's second data byte.
+  ///   - data3: The record's third data byte.
+  case setResponderLinkData(data1: UInt8, data2: UInt8, data3: UInt8)
+
   /// Sets the modem's application retry count, which it reports back with
   /// ``SerialCommand/getModemConfiguration``.
   case setApplicationRetries(UInt8)
@@ -164,6 +177,7 @@ public enum SerialCommand: Hashable, Sendable {
     case .readDatabase: .readDatabase
     case .writeDatabase: .writeDatabase
     case .beep: .beep
+    case .setResponderLinkData: .setResponderLinkData
     case .setApplicationRetries: .setApplicationRetries
     }
 
@@ -189,6 +203,8 @@ public enum SerialCommand: Hashable, Sendable {
       [command2]
     case let .setApplicationRetries(retries):
       [retries]
+    case let .setResponderLinkData(data1, data2, data3):
+      [data1, data2, data3]
     case let .setModemConfiguration(configuration):
       [configuration.rawValue]
     case let .manageAllLinkRecord(action, record):
