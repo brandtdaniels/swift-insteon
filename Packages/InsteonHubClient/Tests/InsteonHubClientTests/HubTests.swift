@@ -6,6 +6,7 @@ import Testing
 import InsteonHubClient
 import InsteonNetworking
 import InsteonProtocol
+import InsteonTestSupport
 
 struct HubTests {
 

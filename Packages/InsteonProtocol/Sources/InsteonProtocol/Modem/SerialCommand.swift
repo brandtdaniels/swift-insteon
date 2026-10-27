@@ -24,7 +24,7 @@ public enum SerialCommand: Hashable, Sendable {
   ///   - group: The ALL-Link group to address.
   ///   - command: The command to send. Its cmd2 is usually `0x00`, or `0xFF` for a full-on
   ///     level.
-  case sendAllLinkCommand(group: UInt8, command: Command)
+  case sendAllLinkCommand(group: AllLinkGroup, command: Command)
 
   /// Sends a standard-length INSTEON message.
   case sendStandardMessage(StandardMessage)
@@ -40,7 +40,7 @@ public enum SerialCommand: Hashable, Sendable {
   /// - Parameters:
   ///   - mode: The role the modem takes in the link, or ``AllLinkMode/delete`` to unlink.
   ///   - group: The ALL-Link group to link.
-  case startAllLinking(mode: AllLinkMode, group: UInt8)
+  case startAllLinking(mode: AllLinkMode, group: AllLinkGroup)
 
   /// Takes the modem out of ALL-Linking mode.
   case cancelAllLinking
@@ -188,7 +188,7 @@ public enum SerialCommand: Hashable, Sendable {
 
     switch self {
     case let .sendAllLinkCommand(group, command):
-      [group] + command.bytes
+      [group.rawValue] + command.bytes
     case let .sendStandardMessage(message):
       message.bytes
     case let .sendExtendedMessage(message):
@@ -196,7 +196,7 @@ public enum SerialCommand: Hashable, Sendable {
     case let .sendX10(code):
       code.bytes
     case let .startAllLinking(mode, group):
-      [mode.rawValue, group]
+      [mode.rawValue, group.rawValue]
     case let .setHostDeviceCategory(category, subcategory, firmwareVersion):
       [category.rawValue, subcategory.rawValue, firmwareVersion?.rawValue ?? 0xFF]
     case let .setAcknowledgementByte(command2), let .setNegativeAcknowledgementByte(command2):

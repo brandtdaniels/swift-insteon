@@ -75,6 +75,10 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``SetButtonPressed``
 - ``ProductData``
 
+### Parsing replies
+
+- ``ReplyParser``
+
 ### Modem commands
 
 - ``SerialCommand``
@@ -98,11 +102,13 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``IBIOSCommand``
 - ``IBIOSReplyParser``
 - ``IBIOSReply``
+- ``IBIOSCommandNumber``
 - ``IBIOSEcho``
 - ``IBIOSEvent``
 
 ### ALL-Linking
 
+- ``AllLinkGroup``
 - ``AllLinkMode``
 - ``AllLinkRecord``
 - ``AllLinkRecordFlags``

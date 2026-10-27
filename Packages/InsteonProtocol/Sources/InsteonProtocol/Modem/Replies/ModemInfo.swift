@@ -30,3 +30,22 @@ public struct ModemInfo: Hashable, Sendable {
   }
 
 }
+
+extension ModemInfo {
+
+  /// Decodes an identity as a modem's Get IM Info and IBIOS's Get Version report it: the
+  /// address, the category, the subcategory and the firmware version.
+  ///
+  /// - Parameter bytes: The 6 bytes of the identity.
+  init(reportedBytes bytes: [UInt8]) {
+
+    self.init(
+      address: InsteonAddress(bytes[0], bytes[1], bytes[2]),
+      category: DeviceCategory(rawValue: bytes[3]),
+      subcategory: DeviceSubcategory(rawValue: bytes[4]),
+      firmwareVersion: FirmwareVersion(rawValue: bytes[5])
+    )
+
+  }
+
+}

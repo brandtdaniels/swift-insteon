@@ -19,10 +19,10 @@ public enum StandardDirectCommand: Hashable, Sendable {
   case exitLinkingMode
 
   /// Puts the device into linking mode as a controller of `group` (cmd1 `0x09`).
-  case enterLinkingMode(group: UInt8)
+  case enterLinkingMode(group: AllLinkGroup)
 
   /// Puts the device into unlinking mode for `group` (cmd1 `0x0A`).
-  case enterUnlinkingMode(group: UInt8)
+  case enterUnlinkingMode(group: AllLinkGroup)
 
   /// Requests the device's INSTEON engine version (cmd1 `0x0D`).
   ///
@@ -156,9 +156,9 @@ extension StandardDirectCommand: StandardCommandConvertible {
     case .exitLinkingMode:
       Command(command1: 0x08)
     case let .enterLinkingMode(group):
-      Command(command1: 0x09, command2: group)
+      Command(command1: 0x09, command2: group.rawValue)
     case let .enterUnlinkingMode(group):
-      Command(command1: 0x0A, command2: group)
+      Command(command1: 0x0A, command2: group.rawValue)
     case .getEngineVersion:
       Command(command1: 0x0D)
     case .ping:
