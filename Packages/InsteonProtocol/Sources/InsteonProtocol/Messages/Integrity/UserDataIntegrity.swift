@@ -1,9 +1,9 @@
 /// A scheme for protecting an extended message's user data against corruption.
 ///
-/// Newer (i2cs) INSTEON devices reject extended messages whose integrity bytes don't
-/// match. Which scheme a device expects depends on the device and command; most use
-/// ``ChecksumIntegrity``, and some newer devices use ``CRCIntegrity`` for certain commands. Conform your own
-/// type to support another scheme.
+/// i2cs INSTEON devices reject extended messages whose integrity bytes don't match. Which
+/// scheme a device expects depends on the device and command; most use ``ChecksumIntegrity``,
+/// and some devices use ``CRCIntegrity`` for certain commands. Conform your own type to
+/// support another scheme.
 public protocol UserDataIntegrity: Sendable {
 
   /// Returns `userData` with its integrity bytes set for `command`.
@@ -65,7 +65,7 @@ public struct ChecksumIntegrity: UserDataIntegrity {
 
 }
 
-/// Stores a two-byte CRC in D13 and D14, as some newer devices require for certain commands.
+/// Stores a two-byte CRC in D13 and D14, as some devices require for certain commands.
 ///
 /// The CRC covers cmd1, cmd2 and D1 through D12. D13 holds its high byte and D14 its low byte.
 public struct CRCIntegrity: UserDataIntegrity {
