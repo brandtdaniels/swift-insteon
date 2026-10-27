@@ -70,6 +70,8 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 
 - <doc:IdentifyingDevices>
 - ``DeviceCategory``
+- ``DeviceSubcategory``
+- ``FirmwareVersion``
 - ``SetButtonPressed``
 - ``ProductData``
 - ``ProductDatabase``
