@@ -40,7 +40,8 @@ struct SerialCommandTests {
     (.cancelCleanup, "0274"),
     (.readDatabase(address: 0x0FF8), "02750FF8"),
     (.writeDatabase(address: 0x0FF8, record: record), "02760FF8C201AABBCC031F01"),
-    (.beep, "0277")
+    (.beep, "0277"),
+    (.setApplicationRetries(0x05), "027A05")
   ]
 
   @Test(arguments: encodings)

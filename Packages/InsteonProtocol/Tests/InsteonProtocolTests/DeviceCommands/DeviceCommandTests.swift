@@ -5,11 +5,13 @@ struct DeviceCommandTests {
 
   static let extendedDirectCommands: [(ExtendedDirectCommand, Command)] = [
     (.extendedGetSet, Command(command1: 0x2E)),
-    (.readWriteAllLinkDatabase, Command(command1: 0x2F))
+    (.readWriteAllLinkDatabase, Command(command1: 0x2F)),
+    (.triggerAllLinkGroup, Command(command1: 0x30))
   ]
 
   static let standardDirectCommands: [(StandardDirectCommand, Command)] = [
     (.productDataRequest, Command(command1: 0x03, command2: 0x00)),
+    (.exitLinkingMode, Command(command1: 0x08)),
     (.enterLinkingMode(group: 0x01), Command(command1: 0x09, command2: 0x01)),
     (.enterUnlinkingMode(group: 0x02), Command(command1: 0x0A, command2: 0x02)),
     (.getEngineVersion, Command(command1: 0x0D)),
