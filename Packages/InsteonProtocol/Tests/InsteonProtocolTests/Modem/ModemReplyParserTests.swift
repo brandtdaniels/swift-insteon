@@ -78,6 +78,10 @@ struct ModemReplyParserTests {
       ))
     ),
     ("0277" + "06", .echo(CommandEcho(number: .beep, parameters: [], isAccepted: true))),
+    (
+      "0279" + "FF1F03" + "06",
+      .echo(CommandEcho(number: .setResponderLinkData, parameters: [0xFF, 0x1F, 0x03], isAccepted: true))
+    ),
     ("027A05" + "06", .echo(CommandEcho(number: .setApplicationRetries, parameters: [0x05], isAccepted: true)))
   ]
 
@@ -154,6 +158,47 @@ struct ModemReplyParserTests {
       )),
       .allLinkCleanupStatus(isComplete: true),
       .echo(CommandEcho(number: .cancelCleanup, parameters: [], isAccepted: true))
+    ])
+
+  }
+
+  // From Insteon's PLM test log: the responder link data set with 0x79 shows up in the record
+  // that the next ALL-Linking creates.
+  @Test func parsesResponderLinkDataTrace() {
+
+    var parser = ModemReplyParser()
+    let device = InsteonAddress(0x10, 0xA3, 0x0F)
+
+    let replies = parser.parse(bytes(
+      "0279" + "FF1F03" + "06"
+        + "0264" + "0001" + "06" + "0253" + "00" + "02" + "10A30F" + "FF1F03"
+        + "026F" + "00" + "00" + "02" + "10A30F" + "FF1F03" + "06" + "0257" + "A202" + "10A30F" + "FF1F03"
+    ))
+
+    #expect(replies == [
+      .echo(CommandEcho(number: .setResponderLinkData, parameters: [0xFF, 0x1F, 0x03], isAccepted: true)),
+      .echo(CommandEcho(number: .startAllLinking, parameters: [0x00, 0x01], isAccepted: true)),
+      .allLinkingCompleted(AllLinkingCompleted(
+        linkCode: 0x00,
+        group: 0x02,
+        address: device,
+        category: 0xFF,
+        subcategory: 0x1F,
+        firmwareVersion: 0x03
+      )),
+      .echo(CommandEcho(
+        number: .manageAllLinkRecord,
+        parameters: [0x00, 0x00, 0x02, 0x10, 0xA3, 0x0F, 0xFF, 0x1F, 0x03],
+        isAccepted: true
+      )),
+      .allLinkRecord(AllLinkRecord(
+        flags: AllLinkRecordFlags(rawValue: 0xA2),
+        group: 0x02,
+        address: device,
+        data1: 0xFF,
+        data2: 0x1F,
+        data3: 0x03
+      ))
     ])
 
   }

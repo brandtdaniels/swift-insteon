@@ -176,7 +176,7 @@ public struct ModemReplyParser: Hashable, Sendable {
       return .complete(4)
     case .sendX10, .startAllLinking, .setAcknowledgementBytes, .readDatabase:
       return .complete(5)
-    case .sendAllLinkCommand, .setHostDeviceCategory:
+    case .sendAllLinkCommand, .setHostDeviceCategory, .setResponderLinkData:
       return .complete(6)
     case .manageAllLinkRecord:
       return .complete(12)
