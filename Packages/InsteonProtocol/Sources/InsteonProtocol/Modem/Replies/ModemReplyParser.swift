@@ -48,14 +48,18 @@ public struct ModemReplyParser: ReplyParser, Hashable, Sendable {
   ///   don't start with such a NAK. Those bytes are kept.
   public mutating func finishPendingReply() -> [ModemReply] {
 
-    let held: Set<SerialCommandNumber> = [.getModemInfo, .getModemConfiguration]
+    let number = reader.takeShortNegativeAcknowledgement { byte -> SerialCommandNumber? in
 
-    guard
-      let rawNumber = reader.takeShortNegativeAcknowledgement(where: {
-        SerialCommandNumber(rawValue: $0).map { held.contains($0) } ?? false
-      }),
-      let number = SerialCommandNumber(rawValue: rawNumber)
-    else {
+      // Only these commands' NAKs are held back.
+      switch SerialCommandNumber(rawValue: byte) {
+      case .getModemInfo: .getModemInfo
+      case .getModemConfiguration: .getModemConfiguration
+      default: nil
+      }
+
+    }
+
+    guard let number else {
 
       return []
 

@@ -35,6 +35,13 @@ extension UInt8 {
 
 extension UInt16 {
 
+  /// Creates a value from its two bytes, most significant first.
+  init(highByte: UInt8, lowByte: UInt8) {
+
+    self = UInt16(highByte) << 8 | UInt16(lowByte)
+
+  }
+
   /// The value's two bytes, most significant first.
   var bigEndianBytes: [UInt8] {
 

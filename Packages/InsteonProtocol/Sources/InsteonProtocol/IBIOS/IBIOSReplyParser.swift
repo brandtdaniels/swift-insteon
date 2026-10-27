@@ -33,10 +33,7 @@ public struct IBIOSReplyParser: ReplyParser, Hashable, Sendable {
   ///   don't start with such a NAK. Those bytes are kept.
   public mutating func finishPendingReply() -> [IBIOSReply] {
 
-    guard
-      let rawNumber = reader.takeShortNegativeAcknowledgement(where: { IBIOSFraming.echoedCommands.contains($0) }),
-      let number = IBIOSCommandNumber(rawValue: rawNumber)
-    else {
+    guard let number = reader.takeShortNegativeAcknowledgement(of: IBIOSCommandNumber.init(rawValue:)) else {
 
       return []
 
@@ -178,30 +175,36 @@ private enum IBIOSFraming: Framing {
 
     let body = Array(frame.dropFirst(2))
 
-    switch frame[1] {
-    case 0x42 where body.last == ControlByte.acknowledgement:
-      let data = Array(body[4..<(body.count - 3)])
-      let checksum = UInt16(highByte: body[body.count - 3], lowByte: body[body.count - 2])
+    if let number = IBIOSCommandNumber(rawValue: frame[1]) {
 
-      return .memory(
-        address: word(body, at: 0),
-        data: data,
-        isIntact: checksum == IBIOSCommand.checksum(of: body[0..<4] + data)
-      )
-    case 0x44 where body.last == ControlByte.acknowledgement:
-      return .checksum(address: word(body, at: 0), length: word(body, at: 2), checksum: word(body, at: 4))
-    case 0x48 where body.last == ControlByte.acknowledgement:
-      return .version(ModemInfo(reportedBytes: Array(body.prefix(6))))
-    case let number where echoedCommands.contains(number):
-      // Rejected requests echo no data, and the other echoes repeat their parameters.
       let isAccepted = body.last == ControlByte.acknowledgement
 
-      return .echo(IBIOSEcho(
-        // Only the numbers of IBIOS commands are echoed.
-        number: IBIOSCommandNumber(rawValue: number)!,
-        parameters: isAccepted || frame.count > 3 ? Array(body.dropLast()) : [],
-        isAccepted: isAccepted
-      ))
+      switch number {
+      case .upload where isAccepted:
+        let data = Array(body[4..<(body.count - 3)])
+        let checksum = UInt16(highByte: body[body.count - 3], lowByte: body[body.count - 2])
+
+        return .memory(
+          address: word(body, at: 0),
+          data: data,
+          isIntact: checksum == IBIOSCommand.checksum(of: body[0..<4] + data)
+        )
+      case .getChecksum where isAccepted:
+        return .checksum(address: word(body, at: 0), length: word(body, at: 2), checksum: word(body, at: 4))
+      case .getVersion where isAccepted:
+        return .version(ModemInfo(reportedBytes: Array(body.prefix(6))))
+      default:
+        // Rejected requests echo no data, and the other echoes repeat their parameters.
+        return .echo(IBIOSEcho(
+          number: number,
+          parameters: isAccepted || frame.count > 3 ? Array(body.dropLast()) : [],
+          isAccepted: isAccepted
+        ))
+      }
+
+    }
+
+    switch frame[1] {
     case 0x45:
       return .eventReport(IBIOSEvent(rawValue: body[0]))
     case 0x49:

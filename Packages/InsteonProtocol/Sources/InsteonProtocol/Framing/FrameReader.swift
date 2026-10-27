@@ -3,7 +3,7 @@
 package enum ControlByte {
 
   /// Start of Text (`0x02`), the first byte of every frame.
-  package static let startOfText: UInt8 = 0x02
+  package static let startOfText = SerialCommand.startOfText
 
   /// End of Text (`0x03`), which ends an IBIOS text message.
   package static let endOfText: UInt8 = 0x03
@@ -98,21 +98,21 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
   /// Removes a NAK that directly follows a command's number, `02 <number> 15`, from the start of
   /// the pending bytes.
   ///
-  /// - Parameter isCommand: Whether a number belongs to a command that can be answered this way.
-  /// - Returns: The command's number, or `nil` if the pending bytes don't start with such a NAK.
-  mutating func takeShortNegativeAcknowledgement(where isCommand: (UInt8) -> Bool) -> UInt8? {
+  /// - Parameter command: The command a number belongs to, or `nil` if it isn't one that can be
+  ///   answered this way.
+  /// - Returns: The command, or `nil` if the pending bytes don't start with such a NAK.
+  mutating func takeShortNegativeAcknowledgement<Number>(of command: (UInt8) -> Number?) -> Number? {
 
     guard
       pending.count >= 3,
       pending[2] == ControlByte.negativeAcknowledgement,
-      isCommand(pending[1])
+      let number = command(pending[1])
     else {
 
       return nil
 
     }
 
-    let number = pending[1]
     pending.removeFirst(3)
 
     return number
@@ -175,17 +175,6 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
       }
 
     }
-
-  }
-
-}
-
-extension UInt16 {
-
-  /// Creates a value from its two bytes, most significant first.
-  init(highByte: UInt8, lowByte: UInt8) {
-
-    self = UInt16(highByte) << 8 | UInt16(lowByte)
 
   }
 

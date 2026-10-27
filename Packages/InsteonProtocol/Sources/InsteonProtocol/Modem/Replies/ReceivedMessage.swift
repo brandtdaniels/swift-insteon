@@ -68,6 +68,8 @@ extension ReceivedMessage {
   /// - Parameter bytes: 9 bytes for a standard message, or 23 for an extended one.
   init(reportedBytes bytes: [UInt8]) {
 
+    precondition(bytes.count == 9 || bytes.count == 9 + UserData.count, "A reported message is 9 or 23 bytes.")
+
     var userData: UserData?
 
     if bytes.count == 9 + UserData.count {
