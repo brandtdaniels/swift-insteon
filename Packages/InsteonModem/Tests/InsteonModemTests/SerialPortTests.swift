@@ -12,11 +12,8 @@ struct SerialPortTests {
 
   @Test func exchangesBytesWithTheDevice() async throws {
 
-    let controller = posix_openpt(O_RDWR | O_NOCTTY)
-    try #require(controller >= 0)
+    let (controller, path) = try #require(openPseudoTerminal())
     defer { _ = close(controller) }
-    try #require(grantpt(controller) == 0 && unlockpt(controller) == 0)
-    let path = try #require(pseudoTerminalPath(controller))
 
     let port = try SerialPort(path: path)
     defer { port.close() }
@@ -63,17 +60,31 @@ struct SerialPortTests {
 
 }
 
-/// Returns the device path of a pseudo-terminal's peer.
-private func pseudoTerminalPath(_ controller: Int32) -> String? {
+/// Opens a pseudo-terminal, returning its controller descriptor and the path of its peer.
+private func openPseudoTerminal() -> (controller: Int32, path: String)? {
 
   #if os(Linux)
-  // Glibc's `ptsname` isn't imported into Swift, so look it up at run time.
-  typealias PTSName = @convention(c) (Int32) -> UnsafeMutablePointer<CChar>?
-  guard let symbol = dlsym(nil, "ptsname") else { return nil }
-  let ptsname = unsafeBitCast(symbol, to: PTSName.self)
+  // Glibc's pseudo-terminal functions aren't imported into Swift, so look them up at run time.
+  typealias Function = @convention(c) (Int32) -> Int32
+  typealias NameFunction = @convention(c) (Int32) -> UnsafeMutablePointer<CChar>?
+  guard
+    let grantpt = dlsym(nil, "grantpt").map({ unsafeBitCast($0, to: Function.self) }),
+    let unlockpt = dlsym(nil, "unlockpt").map({ unsafeBitCast($0, to: Function.self) }),
+    let ptsname = dlsym(nil, "ptsname").map({ unsafeBitCast($0, to: NameFunction.self) })
+  else { return nil }
   #endif
 
-  return ptsname(controller).map { String(cString: $0) }
+  let controller = open("/dev/ptmx", O_RDWR | O_NOCTTY)
+  guard controller >= 0 else { return nil }
+
+  guard grantpt(controller) == 0, unlockpt(controller) == 0, let name = ptsname(controller) else {
+
+    _ = close(controller)
+    return nil
+
+  }
+
+  return (controller, String(cString: name))
 
 }
 
