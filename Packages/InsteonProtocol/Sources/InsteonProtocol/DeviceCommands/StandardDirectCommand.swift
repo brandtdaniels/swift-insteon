@@ -8,6 +8,18 @@
 /// ```
 public enum StandardDirectCommand: Hashable, Sendable {
 
+  /// Tells a responder to join a controller's `group` (cmd1 `0x01`).
+  ///
+  /// In i1 SET button linking, a controller in linking mode sends this to a device that
+  /// broadcast ``SetButtonPressed`` as a responder, and the device acknowledges once it has
+  /// joined.
+  case assignToAllLinkGroup(group: AllLinkGroup)
+
+  /// Tells a responder to leave a controller's `group` (cmd1 `0x02`).
+  ///
+  /// The unlinking counterpart of ``StandardDirectCommand/assignToAllLinkGroup(group:)``.
+  case deleteFromAllLinkGroup(group: AllLinkGroup)
+
   /// Requests the device's product data (cmd1 `0x03`, cmd2 `0x00`).
   ///
   /// The device answers with an extended message; read it with ``ProductData``.
@@ -151,6 +163,10 @@ extension StandardDirectCommand: StandardCommandConvertible {
   public var command: Command {
 
     switch self {
+    case let .assignToAllLinkGroup(group):
+      Command(command1: 0x01, command2: group.rawValue)
+    case let .deleteFromAllLinkGroup(group):
+      Command(command1: 0x02, command2: group.rawValue)
     case .productDataRequest:
       Command(command1: 0x03)
     case .exitLinkingMode:
@@ -219,8 +235,9 @@ extension StandardDirectCommand {
   public var minimumEngine: InsteonEngine? {
 
     switch self {
-    case .enterLinkingMode, .enterUnlinkingMode, .getEngineVersion, .ping, .idRequest, .on, .fastOn,
-         .off, .fastOff, .brightenOneStep, .dimOneStep, .startManualChange, .stopManualChange:
+    case .assignToAllLinkGroup, .deleteFromAllLinkGroup, .enterLinkingMode, .enterUnlinkingMode,
+         .getEngineVersion, .ping, .idRequest, .on, .fastOn, .off, .fastOff, .brightenOneStep,
+         .dimOneStep, .startManualChange, .stopManualChange:
       .i1
     case let .statusRequest(variant):
       switch variant {
