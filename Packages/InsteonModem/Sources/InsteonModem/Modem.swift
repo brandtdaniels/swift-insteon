@@ -7,16 +7,26 @@ import InsteonProtocol
 /// sent before the previous one is answered may be lost. Everything the modem sends, including
 /// messages from devices, is published to every stream returned by ``Modem/replies()``.
 ///
+/// ``Modem/run()`` reads what the modem sends, so run it alongside the code that sends
+/// commands, for example in a task group. Canceling it closes the modem.
+///
 /// ```swift
 /// let modem = Modem(connection: try SerialPort(path: "/dev/ttyUSB0"))
 ///
-/// let replies = await modem.replies()
-/// try await modem.send(.getModemInfo)
+/// try await withThrowingTaskGroup(of: Void.self) { group in
+///   group.addTask { try await modem.run() }
 ///
-/// for await reply in replies {
-///   if case let .modemInfo(info) = reply {
-///     print("Modem address:", info.address)
+///   let replies = await modem.replies()
+///   try await modem.send(.getModemInfo)
+///
+///   for await reply in replies {
+///     if case let .modemInfo(info) = reply {
+///       print("Modem address:", info.address)
+///       break
+///     }
 ///   }
+///
+///   group.cancelAll()
 /// }
 /// ```
 public actor Modem: SerialCommandSender {
@@ -58,9 +68,18 @@ public actor Modem: SerialCommandSender {
 
     let parameters: [UInt8]
 
-    let continuation: CheckedContinuation<CommandEcho, any Error>
+    let result: AsyncStream<Result<CommandEcho, any Error>>.Continuation
 
-    let timeout: Task<Void, Never>
+  }
+
+  /// A command whose send was canceled before the modem answered it.
+  private struct UnansweredEcho {
+
+    let id: Int
+
+    let number: SerialCommandNumber
+
+    let results: AsyncStream<Result<CommandEcho, any Error>>
 
   }
 
@@ -72,19 +91,19 @@ public actor Modem: SerialCommandSender {
 
   private var parser = ModemReplyParser()
 
-  private var reader: Task<Void, Never>?
+  private var isRunning = false
 
   private var isClosed = false
 
   private var nextID = 0
 
-  private var subscribers: [Int: AsyncStream<ModemReply>.Continuation] = [:]
+  private var subscribers: [AsyncStream<ModemReply>.Continuation] = []
 
   private var pendingEcho: PendingEcho?
 
-  private var isSending = false
+  private var unansweredEcho: UnansweredEcho?
 
-  private var waitingSenders: [CheckedContinuation<Void, Never>] = []
+  private var turns = TurnQueue()
 
   /// Creates a modem that talks over a connection.
   ///
@@ -105,25 +124,73 @@ public actor Modem: SerialCommandSender {
 
   }
 
+  /// Reads everything the modem sends, until the connection closes or the task is canceled.
+  ///
+  /// Echoes and replies arrive only while this runs, so run it alongside the code that sends
+  /// commands. When it returns, the modem is closed: waiting sends fail with
+  /// ``ModemError/connectionClosed``, and every stream from ``Modem/replies()`` finishes.
+  /// Calling it while it's running returns at once.
+  ///
+  /// - Throws: The connection's error, if reading from it failed, or
+  ///   ``ModemError/connectionClosed`` if the modem has already closed.
+  public func run() async throws {
+
+    guard !isClosed else {
+
+      throw ModemError.connectionClosed
+
+    }
+
+    guard !isRunning else {
+
+      return
+
+    }
+
+    isRunning = true
+
+    do {
+
+      for try await chunk in connection.receive() {
+
+        deliver(parser.parse(chunk))
+
+      }
+
+      close(with: nil)
+
+    } catch {
+
+      close(with: error)
+
+      throw error
+
+    }
+
+  }
+
   /// Sends a command and waits for the modem to accept it.
   ///
   /// Commands are sent one at a time, in the order they're called. Any data the command
-  /// requests, such as an ALL-Link record, arrives afterwards through ``Modem/replies()``.
+  /// requests, such as an ALL-Link record, arrives afterwards through ``Modem/replies()``. The
+  /// echo is read by ``Modem/run()``, so a send made while it isn't running times out.
   ///
-  /// A canceled send isn't written to the modem once its turn comes, and isn't sent again
-  /// after a NAK. A send already written waits for its echo or its timeout.
+  /// Canceling a send stops it: a send waiting for its turn leaves the queue, a send waiting
+  /// for its echo stops waiting, and a rejected command isn't sent again. A command that was
+  /// written still holds the modem, so the next send waits for the modem to answer it, or for
+  /// the echo timeout, before writing.
   ///
   /// - Parameter command: The command to send.
   /// - Throws: ``ModemError/rejected(_:)`` if the modem NAKs every attempt,
   ///   ``ModemError/timedOut(_:)`` if it doesn't echo the command,
-  ///   ``ModemError/connectionClosed`` if the connection closes, `CancellationError` if the
+  ///   ``ModemError/connectionClosed`` if the modem is closed, `CancellationError` if the
   ///   task is canceled, or the connection's error.
   public func send(_ command: SerialCommand) async throws {
 
-    startReading()
+    try await waitForTurn()
+    defer { turns.release() }
 
-    await waitForTurn()
-    defer { finishTurn() }
+    try await waitForUnansweredEcho()
 
     for attempt in 1...retryPolicy.attempts {
 
@@ -150,32 +217,22 @@ public actor Modem: SerialCommandSender {
   /// Returns a stream of everything the modem sends from now on.
   ///
   /// Each call returns a new stream, so several parts of an app can listen at once. A stream
-  /// finishes when the connection closes.
+  /// finishes when the modem closes.
   ///
   /// - Returns: The modem's replies, in the order they arrive.
   public func replies() -> AsyncStream<ModemReply> {
 
-    startReading()
-
-    let id = makeID()
-    var streamContinuation: AsyncStream<ModemReply>.Continuation!
-    let stream = AsyncStream<ModemReply> { streamContinuation = $0 }
+    let (stream, continuation) = AsyncStream<ModemReply>.makeStream()
 
     if isClosed {
 
-      streamContinuation.finish()
+      continuation.finish()
 
-      return stream
+    } else {
 
-    }
-
-    streamContinuation.onTermination = { [weak self] _ in
-
-      Task { await self?.removeSubscriber(id) }
+      subscribers.append(continuation)
 
     }
-
-    subscribers[id] = streamContinuation
 
     return stream
 
@@ -183,33 +240,71 @@ public actor Modem: SerialCommandSender {
 
   // MARK: - Sending
 
-  /// Writes a command and waits for its echo, or a lone NAK, or the timeout.
+  /// Writes a command and waits for its echo, a lone NAK, the timeout or cancellation.
   private func transmit(_ command: SerialCommand) async throws -> CommandEcho {
 
+    guard !isClosed else {
+
+      throw ModemError.connectionClosed
+
+    }
+
     let id = makeID()
+    let (results, continuation) = AsyncStream<Result<CommandEcho, any Error>>.makeStream()
+
+    pendingEcho = PendingEcho(id: id, number: command.number, parameters: command.parameters, result: continuation)
+    defer { abandonEcho(id) }
+
+    return try await awaitEcho(id, number: command.number, results: results) { [connection] in
+
+      try await connection.write(command.bytes)
+
+    }.get()
+
+  }
+
+  /// Waits for the modem to answer a command whose send was canceled, so the next command
+  /// isn't written while the modem is still busy with it.
+  private func waitForUnansweredEcho() async throws {
+
+    guard let unanswered = unansweredEcho else {
+
+      return
+
+    }
+
+    unansweredEcho = nil
+    defer { abandonEcho(unanswered.id) }
+
+    _ = await awaitEcho(unanswered.id, number: unanswered.number, results: unanswered.results) {}
+
+    try Task.checkCancellation()
+
+  }
+
+  /// Runs `write`, then waits for the pending echo's result, the timeout or cancellation.
+  private func awaitEcho(
+    _ id: Int,
+    number: SerialCommandNumber,
+    results: AsyncStream<Result<CommandEcho, any Error>>,
+    write: @escaping @Sendable () async throws -> Void
+  ) async -> Result<CommandEcho, any Error> {
+
     let echoTimeout = retryPolicy.echoTimeout
 
-    return try await withCheckedThrowingContinuation { continuation in
+    return await withTaskGroup(of: Void.self, returning: Result<CommandEcho, any Error>.self) { group in
 
-      if isClosed {
-
-        continuation.resume(throwing: ModemError.connectionClosed)
-
-        return
-
-      }
-
-      // Writes the command, then fails it if no echo arrives in time. Completing the command
-      // cancels this task, so a timeout never outlives the command it belongs to.
-      let timeout = Task { [connection, clock] in
+      // Writes, then gives up on the echo once the timeout passes. The group cancels this
+      // child as soon as the echo arrives, so a timeout never outlives its command.
+      group.addTask { [clock] in
 
         do {
 
-          try await connection.write(command.bytes)
+          try await write()
 
         } catch {
 
-          self.failEcho(id, with: error)
+          await self.failEcho(id, with: error)
 
           return
 
@@ -225,17 +320,20 @@ public actor Modem: SerialCommandSender {
 
         }
 
-        self.echoTimedOut(id, number: command.number)
+        await self.echoTimedOut(id, number: number)
 
       }
 
-      pendingEcho = PendingEcho(
-        id: id,
-        number: command.number,
-        parameters: command.parameters,
-        continuation: continuation,
-        timeout: timeout
-      )
+      defer { group.cancelAll() }
+
+      for await result in results {
+
+        return result
+
+      }
+
+      // The stream ends without a result only when this task is canceled.
+      return .failure(CancellationError())
 
     }
 
@@ -268,7 +366,26 @@ public actor Modem: SerialCommandSender {
 
   }
 
-  /// Completes the command waiting for an echo, if there is one, and stops its timeout.
+  /// Stops waiting for an echo whose send was canceled. The command may have been written, so
+  /// its echo stays pending, and the next send waits for it.
+  private func abandonEcho(_ id: Int) {
+
+    guard let pending = pendingEcho, pending.id == id else {
+
+      return
+
+    }
+
+    pending.result.finish()
+
+    let (results, continuation) = AsyncStream<Result<CommandEcho, any Error>>.makeStream()
+
+    pendingEcho = PendingEcho(id: id, number: pending.number, parameters: pending.parameters, result: continuation)
+    unansweredEcho = UnansweredEcho(id: id, number: pending.number, results: results)
+
+  }
+
+  /// Completes the command waiting for an echo, if there is one.
   private func completePendingEcho(_ result: Result<CommandEcho, any Error>) {
 
     guard let pending = pendingEcho else {
@@ -278,34 +395,31 @@ public actor Modem: SerialCommandSender {
     }
 
     pendingEcho = nil
-    pending.timeout.cancel()
-    pending.continuation.resume(with: result)
+    pending.result.yield(result)
+    pending.result.finish()
 
   }
 
-  private func waitForTurn() async {
+  /// Waits for the turn to send, in the order sends were called.
+  private func waitForTurn() async throws {
 
-    guard isSending else {
+    if let ticket = turns.request() {
 
-      isSending = true
+      for await _ in ticket.handoff {}
 
-      return
+      guard turns.settle(ticket) else {
+
+        throw CancellationError()
+
+      }
 
     }
 
-    await withCheckedContinuation { waitingSenders.append($0) }
+    if Task.isCancelled {
 
-  }
+      turns.release()
 
-  private func finishTurn() {
-
-    if waitingSenders.isEmpty {
-
-      isSending = false
-
-    } else {
-
-      waitingSenders.removeFirst().resume()
+      throw CancellationError()
 
     }
 
@@ -313,53 +427,22 @@ public actor Modem: SerialCommandSender {
 
   // MARK: - Receiving
 
-  private func startReading() {
-
-    guard reader == nil, !isClosed else {
-
-      return
-
-    }
-
-    let stream = connection.receive()
-
-    reader = Task { [weak self] in
-
-      do {
-
-        for try await chunk in stream {
-
-          await self?.handle(chunk)
-
-        }
-
-        await self?.close(with: nil)
-
-      } catch {
-
-        await self?.close(with: error)
-
-      }
-
-    }
-
-  }
-
-  private func handle(_ chunk: [UInt8]) {
-
-    deliver(parser.parse(chunk))
-
-  }
-
   private func deliver(_ replies: [ModemReply]) {
 
     for reply in replies {
 
       resolvePendingEcho(with: reply)
 
-      for subscriber in subscribers.values {
+      // A stream whose listener has stopped listening is dropped.
+      subscribers.removeAll { subscriber in
 
-        subscriber.yield(reply)
+        if case .terminated = subscriber.yield(reply) {
+
+          return true
+
+        }
+
+        return false
 
       }
 
@@ -396,19 +479,13 @@ public actor Modem: SerialCommandSender {
     isClosed = true
     completePendingEcho(.failure(error ?? ModemError.connectionClosed))
 
-    for subscriber in subscribers.values {
+    for subscriber in subscribers {
 
       subscriber.finish()
 
     }
 
     subscribers.removeAll()
-
-  }
-
-  private func removeSubscriber(_ id: Int) {
-
-    subscribers[id] = nil
 
   }
 
