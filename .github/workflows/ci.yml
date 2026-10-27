@@ -21,7 +21,7 @@ jobs:
         run: swift test
       - name: Build documentation
         run: |
-          mkdir -p .build/symbol-graphs
+          mkdir -p .build/symbol-graphs .build/docs
           swift build --target InsteonMessage \
             -Xswiftc -emit-symbol-graph \
             -Xswiftc -emit-symbol-graph-dir -Xswiftc "$PWD/.build/symbol-graphs"
