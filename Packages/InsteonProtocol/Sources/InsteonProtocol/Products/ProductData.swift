@@ -21,7 +21,7 @@ public struct ProductData: Hashable, Sendable {
   public var category: DeviceCategory
 
   /// The device's subcategory.
-  public var subcategory: UInt8
+  public var subcategory: DeviceSubcategory
 
   /// D9 through D14, whose meaning the device's manufacturer defines.
   public var userDefined: [UInt8]
@@ -33,7 +33,7 @@ public struct ProductData: Hashable, Sendable {
   ///   - category: The device's category.
   ///   - subcategory: The device's subcategory.
   ///   - userDefined: D9 through D14.
-  public init(sender: InsteonAddress, category: DeviceCategory, subcategory: UInt8, userDefined: [UInt8]) {
+  public init(sender: InsteonAddress, category: DeviceCategory, subcategory: DeviceSubcategory, userDefined: [UInt8]) {
 
     self.sender = sender
     self.category = category
@@ -61,7 +61,7 @@ public struct ProductData: Hashable, Sendable {
     self.init(
       sender: message.sender,
       category: DeviceCategory(rawValue: data[5]),
-      subcategory: data[6],
+      subcategory: DeviceSubcategory(rawValue: data[6]),
       userDefined: (9...14).map { data[$0] }
     )
 
