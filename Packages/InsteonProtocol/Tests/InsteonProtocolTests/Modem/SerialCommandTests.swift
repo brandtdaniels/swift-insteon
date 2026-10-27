@@ -62,7 +62,7 @@ struct SerialCommandTests {
 
     let message = ExtendedMessage(
       to: Self.lamp,
-      command: ExtendedDirectCommand.extendedGetSet,
+      command: ExtendedDirectCommand.getSet,
       userData: try UserData([0x01])
     )
 

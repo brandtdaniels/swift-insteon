@@ -40,7 +40,7 @@ struct MessageTests {
 
     let message = ExtendedMessage(
       to: address,
-      command: ExtendedDirectCommand.extendedGetSet,
+      command: ExtendedDirectCommand.getSet,
       userData: try UserData([0x01])
     )
 
@@ -63,11 +63,25 @@ struct MessageTests {
 
   }
 
+  @Test func extendedMessageFlagsFollowTheRequestedTypeAndHops() {
+
+    let message = ExtendedMessage(
+      to: address,
+      command: ExtendedDirectCommand.getSet,
+      messageType: .allLinkCleanup,
+      maxHops: .one
+    )
+
+    // 010 cleanup, extended, one hop left, one max hop.
+    #expect(message.flags.rawValue == 0x55)
+
+  }
+
   @Test func extendedMessageUsesRequestedIntegrity() throws {
 
     let message = ExtendedMessage(
       to: address,
-      command: ExtendedDirectCommand.extendedGetSet,
+      command: ExtendedDirectCommand.getSet,
       userData: try UserData([0x01]),
       integrity: CRCIntegrity()
     )

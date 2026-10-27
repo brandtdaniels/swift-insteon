@@ -25,7 +25,7 @@ struct InsteonAddressTests {
 
   }
 
-  @Test(arguments: ["", "1A.2B", "1A.2B.3C.4D", "1A2B3", "1A2B3C4D", "GG.00.00", "1A.2B.3", "+1.2B.3C", "1A..2B3C", "1A.2B.3C."])
+  @Test(arguments: ["", "1A.2B", "1A.2B.3C.4D", "1A2B3", "1A2B3C4D", "GG.00.00", "1A.2B.3", "+1.2B.3C", "1A..2B3C", "1A.2B.3C.", "１Ａ.２Ｂ.３Ｃ", "+12B3C"])
   func rejectsInvalidText(_ text: String) {
 
     #expect(InsteonAddress(text) == nil)
