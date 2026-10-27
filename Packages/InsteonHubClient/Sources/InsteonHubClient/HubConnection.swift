@@ -1,7 +1,7 @@
 import Foundation
 import InsteonModem
 
-/// A `ModemConnection` to the modem inside an INSTEON Hub.
+/// A `ModemConnection` to the modem inside an INSTEON Hub 2 (model 2245) or Hub 1 (model 2242).
 ///
 /// Writes go to the Hub as HTTP requests, and the Hub's reply buffer is polled for the bytes
 /// the modem sends back. Drive it with a `Modem` to get the same pacing, retries and stream of
