@@ -30,7 +30,7 @@ public struct StandardMessage: Message {
   ///   - maxHops: The number of retransmissions to allow. Defaults to three.
   public init(
     to destination: InsteonAddress,
-    command: some CommandConvertible,
+    command: some StandardCommandConvertible,
     messageType: MessageFlags.MessageType = .direct,
     maxHops: MessageFlags.HopCount = .three
   ) {

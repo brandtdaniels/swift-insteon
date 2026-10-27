@@ -93,8 +93,9 @@ public enum StandardDirectCommand: Hashable, Sendable {
   ///
   /// cmd2 holds `onLevel` in its high nibble and `rampRate` in its low nibble; higher bits of
   /// each are ignored. The device turns on to level `16 × onLevel + 0x0F` at ramp rate
-  /// `2 × rampRate + 1`, so `onLevel: 0xF, rampRate: 0x7` is fully on over about 26 seconds.
-  /// The ramp rate applies to dimmable devices only.
+  /// `2 × rampRate + 1`, on the scale from `0x00`, about nine minutes, to `0x1F`, 0.1 second.
+  /// So `onLevel: 0xF, rampRate: 0xF` turns fully on at ramp rate `0x1F`, the fastest. The
+  /// ramp rate applies to dimmable devices only.
   case onAtRampRate(onLevel: UInt8, rampRate: UInt8)
 
   /// Turns the device off at a ramp rate given as a 4-bit value (cmd1 `0x2F`).
@@ -144,9 +145,9 @@ public enum SetButtonTapCount: UInt8, Hashable, Sendable {
 
 }
 
-// MARK: - CommandConvertible
+// MARK: - StandardCommandConvertible
 
-extension StandardDirectCommand: CommandConvertible {
+extension StandardDirectCommand: StandardCommandConvertible {
 
   /// The command's cmd1 and cmd2 bytes.
   public var command: Command {

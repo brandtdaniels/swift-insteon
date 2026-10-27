@@ -4,7 +4,7 @@ import InsteonProtocol
 struct DeviceCommandTests {
 
   static let extendedDirectCommands: [(ExtendedDirectCommand, Command)] = [
-    (.extendedGetSet, Command(command1: 0x2E)),
+    (.getSet, Command(command1: 0x2E)),
     (.readWriteAllLinkDatabase, Command(command1: 0x2F)),
     (.triggerAllLinkGroup, Command(command1: 0x30))
   ]
