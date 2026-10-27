@@ -3,7 +3,7 @@ import Foundation
 /// A clock that only moves when a test advances it, so timing in tests is deterministic.
 ///
 /// Sleeping until a deadline that has already passed returns at once; any other sleep waits
-/// for ``advance(by:)`` to reach its deadline, or for its task to be cancelled.
+/// for ``advance(by:)`` to reach its deadline, or for its task to be canceled.
 public final class TestClock: Clock, @unchecked Sendable {
 
   /// A point in time, measured from the clock's start.
@@ -121,7 +121,7 @@ public final class TestClock: Clock, @unchecked Sendable {
 
     } onCancel: {
 
-      let cancelled: Sleeper? = lock.withLock {
+      let canceled: Sleeper? = lock.withLock {
 
         guard let index = sleepers.firstIndex(where: { $0.id == id }) else {
 
@@ -135,7 +135,7 @@ public final class TestClock: Clock, @unchecked Sendable {
 
       }
 
-      cancelled?.continuation.resume(throwing: CancellationError())
+      canceled?.continuation.resume(throwing: CancellationError())
 
     }
 

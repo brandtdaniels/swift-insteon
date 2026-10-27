@@ -101,7 +101,7 @@ public actor HubConnection: ModemConnection {
 
   private func poll(into continuation: AsyncThrowingStream<[UInt8], any Error>.Continuation, id: Int) async {
 
-    // A newer call to `receive()` wins, whichever task starts first.
+    // The last call to `receive()` wins, whichever task starts first.
     guard streams.isLatest(id) else {
 
       continuation.finish()
