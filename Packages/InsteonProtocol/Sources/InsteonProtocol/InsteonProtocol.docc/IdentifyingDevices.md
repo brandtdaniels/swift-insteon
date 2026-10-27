@@ -17,8 +17,9 @@ device's SET button to link it.
 Devices that support ``StandardDirectCommand/productDataRequest`` answer it with an extended
 message, which ``ProductData`` reads.
 
-The modem reports the category, subcategory and firmware version of each device it links with,
-in ``AllLinkingCompleted``.
+When the modem becomes a device's controller by linking, it reports the device's category and
+subcategory in ``AllLinkingCompleted``. Only devices that predate the Product Data Response
+report a firmware version there; newer devices send `0xFF`, which reads as `nil`.
 
 ### Finding out what a device can do
 
