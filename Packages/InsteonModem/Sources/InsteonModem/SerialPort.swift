@@ -8,7 +8,8 @@ import Glibc
 #endif
 
 /// A ``ModemConnection`` to a modem on a serial port, such as a PowerLinc Modem connected by
-/// USB (2413U) or serial cable (2413S).
+/// USB (2413U, 2412U) or serial cable (2413S, 2412S), or a USB Adapter (2448A7). See
+/// <doc:SupportedModems> for every model.
 ///
 /// The port is opened in raw mode at 19200 baud, 8 data bits, no parity and one stop bit, the
 /// settings INSTEON modems use, without hardware flow control. Each command is written in a
