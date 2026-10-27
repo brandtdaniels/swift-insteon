@@ -129,11 +129,12 @@ public enum SerialCommand: Hashable, Sendable {
   /// Makes the modem beep.
   case beep
 
-  /// Sets the data the modem stores in the next responder record it creates by ALL-Linking.
+  /// Sets the data the modem stores in the responder record its next ALL-Link creates.
   ///
   /// The three bytes become ``AllLinkRecord/data1``, ``AllLinkRecord/data2`` and
   /// ``AllLinkRecord/data3`` of the record ``SerialCommand/startAllLinking(mode:group:)``
-  /// creates when the modem is the responder.
+  /// creates when the modem is the responder. Insteon describes the data as being for the next
+  /// link, so send this before each link that needs it.
   ///
   /// - Parameters:
   ///   - data1: The record's first data byte.
