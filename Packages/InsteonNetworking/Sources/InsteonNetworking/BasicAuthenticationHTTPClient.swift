@@ -5,6 +5,10 @@ import FoundationNetworking
 
 /// Decorates an ``HTTPClient`` by adding an HTTP basic `Authorization` header to every request.
 ///
+/// Basic authentication encodes the user name and password reversibly. INSTEON Hubs serve their
+/// local interface over plain HTTP, so anyone who can see the network traffic can read them;
+/// keep the Hub on a trusted network.
+///
 /// ```swift
 /// let client = BasicAuthenticationHTTPClient(
 ///   URLSessionHTTPClient(),
