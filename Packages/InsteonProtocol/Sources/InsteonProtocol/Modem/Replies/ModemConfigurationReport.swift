@@ -8,7 +8,7 @@ public struct ModemConfigurationReport: Hashable, Sendable {
   /// The modem's configuration flags.
   public var configuration: ModemConfiguration
 
-  /// How many times the modem retries a direct message that isn't acknowledged, as set with
+  /// The modem's application retry count, as set with
   /// ``SerialCommand/setApplicationRetries(_:)``.
   public var applicationRetries: UInt8
 
