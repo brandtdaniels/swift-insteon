@@ -68,12 +68,12 @@ struct MessageTests {
     let message = ExtendedMessage(
       to: address,
       command: ExtendedDirectCommand.getSet,
-      messageType: .allLinkCleanup,
+      messageType: .broadcast,
       maxHops: .one
     )
 
-    // 010 cleanup, extended, one hop left, one max hop.
-    #expect(message.flags.rawValue == 0x55)
+    // 100 broadcast, extended, one hop left, one max hop.
+    #expect(message.flags.rawValue == 0x95)
 
   }
 
