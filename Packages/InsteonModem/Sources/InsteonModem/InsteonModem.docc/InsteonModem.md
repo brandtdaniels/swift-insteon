@@ -28,14 +28,14 @@ for await reply in replies {
 }
 ```
 
-``Modem`` conforms to `SerialCommandSender`, so code written against that protocol works with a
-modem on a serial port or with an INSTEON Hub.
+``Modem`` conforms to `SerialCommandSender`, so code written against that protocol works with
+any modem connection.
 
 ### Connections
 
-``SerialPort`` connects to a modem on a serial port on macOS and Linux. To reach a modem
-another way, such as through a network-attached serial adapter, conform a type to
-``ModemConnection``.
+``SerialPort`` connects to a modem on a serial port on macOS and Linux, and `HubConnection`
+from InsteonHubClient connects to the modem inside an INSTEON Hub. To reach a modem another
+way, such as through a network-attached serial adapter, conform a type to ``ModemConnection``.
 
 ## Topics
 

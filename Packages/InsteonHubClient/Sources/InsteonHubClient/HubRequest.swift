@@ -2,13 +2,11 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
-import InsteonProtocol
-
 /// The requests the Hub's local HTTP interface accepts.
 enum HubRequest {
 
-  /// Passes a serial command to the Hub's modem.
-  case send(SerialCommand)
+  /// Passes bytes to the Hub's modem.
+  case write([UInt8])
 
   /// Reads the buffer of bytes the modem has sent back.
   case readBuffer
@@ -19,20 +17,27 @@ enum HubRequest {
   var method: String {
 
     switch self {
-    case .send, .clearBuffer: "POST"
+    case .write, .clearBuffer: "POST"
     case .readBuffer: "GET"
     }
 
   }
 
-  /// The path and query. The Hub expects the command's hex where a query name would go.
+  /// The path and query. The Hub expects the bytes as hex where a query name would go.
   var pathAndQuery: String {
 
     switch self {
-    case let .send(command): "/3?\(command.hexString)=I=3"
+    case let .write(bytes): "/3?\(Self.hex(bytes))=I=3"
     case .readBuffer: "/buffstatus.xml"
     case .clearBuffer: "/1?XB=M=1"
     }
+
+  }
+
+  /// Uppercase hex, two digits per byte.
+  private static func hex(_ bytes: [UInt8]) -> String {
+
+    bytes.map { $0 < 0x10 ? "0" + String($0, radix: 16, uppercase: true) : String($0, radix: 16, uppercase: true) }.joined()
 
   }
 

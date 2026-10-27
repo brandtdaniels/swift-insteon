@@ -2,7 +2,8 @@
 
 Control INSTEON devices through an INSTEON Hub (model 2245) on your local network.
 
-- `Hub`: sends serial commands to the Hub's modem, and reads and clears the buffer of its replies; conforms to `SerialCommandSender`
+- `HubConnection`: a `ModemConnection` to the Hub's built-in modem, so a `Modem` from InsteonModem drives a Hub just like a USB or serial modem
+- `Hub`: the Hub's HTTP interface underneath, which writes bytes to the modem and reads and clears the buffer of its replies
 - `HubEndpoint`: the Hub's host and port (25105 by default)
 - `HubBuffer` and `HubBufferCursor`: parse the reply buffer and pick out what's new since the last read
 

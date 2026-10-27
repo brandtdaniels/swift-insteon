@@ -1,29 +1,16 @@
 import Foundation
 import InsteonNetworking
-import InsteonProtocol
 
-/// A connection to an INSTEON Hub (model 2245) through its local HTTP interface.
+/// The local HTTP interface of an INSTEON Hub (model 2245).
 ///
-/// The Hub passes serial commands to its built-in modem and collects the modem's replies in a
-/// buffer, which you poll with ``Hub/readBuffer()``.
-///
-/// ```swift
-/// let hub = Hub(
-///   endpoint: HubEndpoint(host: "192.168.1.20"),
-///   user: username,
-///   password: password
-/// )
-///
-/// let lamp = InsteonAddress(0xAA, 0xBB, 0xCC)
-/// let turnOn = StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF))
-///
-/// try await hub.send(.sendStandardMessage(turnOn))
-/// ```
+/// The Hub passes bytes to its built-in modem and collects the modem's replies in a buffer.
+/// These are the Hub's three requests, with no pacing or retries; to send commands, wrap the
+/// Hub in a ``HubConnection`` and drive it with a `Modem`, as you would a USB modem.
 ///
 /// The Hub requires HTTP basic authentication with the user name and password printed on it.
 /// ``Hub/init(endpoint:user:password:httpClient:)`` adds it for you; to authenticate another
 /// way, pass an already-authenticated client to ``Hub/init(endpoint:httpClient:)``.
-public struct Hub: SerialCommandSender {
+public struct Hub: Sendable {
 
   private let endpoint: HubEndpoint
 
@@ -62,15 +49,16 @@ public struct Hub: SerialCommandSender {
 
   }
 
-  /// Passes a serial command to the Hub's modem.
+  /// Passes bytes, such as a serial command, to the Hub's modem.
   ///
-  /// The modem's reply, such as an ACK or the requested data, arrives in the buffer.
+  /// The Hub starts its buffer over, and the modem's reply, such as the command's echo or the
+  /// requested data, arrives in it.
   ///
-  /// - Parameter command: The command to send.
+  /// - Parameter bytes: The bytes to send.
   /// - Throws: ``HubError`` if the Hub rejected the request, or the HTTP client's error.
-  public func send(_ command: SerialCommand) async throws {
+  public func write(_ bytes: [UInt8]) async throws {
 
-    _ = try await perform(.send(command))
+    _ = try await perform(.write(bytes))
 
   }
 
