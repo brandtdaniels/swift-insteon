@@ -252,8 +252,8 @@ public struct ModemReplyParser: Hashable, Sendable {
         group: body[1],
         address: address(body, at: 2),
         category: DeviceCategory(rawValue: body[5]),
-        subcategory: body[6],
-        firmwareVersion: body[7]
+        subcategory: DeviceSubcategory(rawValue: body[6]),
+        firmwareVersion: FirmwareVersion(rawValue: body[7])
       ))
     case 0x54:
       return .buttonEvent(ModemButtonEvent(rawValue: body[0]))
@@ -271,8 +271,8 @@ public struct ModemReplyParser: Hashable, Sendable {
       return .modemInfo(ModemInfo(
         address: address(body, at: 0),
         category: DeviceCategory(rawValue: body[3]),
-        subcategory: body[4],
-        firmwareVersion: body[5]
+        subcategory: DeviceSubcategory(rawValue: body[4]),
+        firmwareVersion: FirmwareVersion(rawValue: body[5])
       ))
     case 0x73 where body.count == 4 && body.last == acknowledgement:
       return .modemConfiguration(ModemConfigurationReport(
