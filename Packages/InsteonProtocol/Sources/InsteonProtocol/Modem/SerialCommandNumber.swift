@@ -76,4 +76,7 @@ public enum SerialCommandNumber: UInt8, CaseIterable, Hashable, Sendable {
   /// Beep (`0x77`).
   case beep = 0x77
 
+  /// Set Application Retries (`0x7A`).
+  case setApplicationRetries = 0x7A
+
 }

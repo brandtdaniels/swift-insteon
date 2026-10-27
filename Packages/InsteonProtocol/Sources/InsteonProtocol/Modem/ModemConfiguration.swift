@@ -18,6 +18,9 @@ public struct ModemConfiguration: OptionSet, Hashable, Sendable {
   public static let disableDeadman = ModemConfiguration(rawValue: 1 << 4)
 
   /// Disables automatic control of the modem's LED, leaving it to the host (bit 5).
+  ///
+  /// Required before ``SerialCommand/ledOn`` and ``SerialCommand/ledOff``, which the modem
+  /// otherwise NAKs.
   public static let disableAutomaticLED = ModemConfiguration(rawValue: 1 << 5)
 
   /// Puts the modem in monitor mode, so it reports messages addressed to other devices (bit 6).
