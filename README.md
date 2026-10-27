@@ -65,3 +65,9 @@ swift test
 ```
 
 Each library lives in `Packages/<Name>`, with its sources, tests and DocC catalog, and is built from the root `Package.swift`.
+
+## License
+
+The code in this repository is available under the MIT License. See [LICENSE](LICENSE).
+
+INSTEON is a trademark of its owner. This project is an independent implementation of the publicly documented INSTEON protocol. It is not affiliated with, endorsed by or sponsored by Insteon or its owner, and the license covers only this project's code.
