@@ -48,6 +48,17 @@ public actor PowerLincController: SerialCommandSender {
 
   }
 
+  /// A command whose send was canceled before the controller answered it.
+  private struct UnansweredCommand {
+
+    let id: Int
+
+    let command: IBIOSCommand
+
+    let results: AsyncStream<Result<Bool, any Error>>
+
+  }
+
   private let connection: any ModemConnection
 
   private let retryPolicy: Modem.RetryPolicy
@@ -65,6 +76,8 @@ public actor PowerLincController: SerialCommandSender {
   private var subscribers: [AsyncStream<IBIOSReply>.Continuation] = []
 
   private var pendingAnswer: PendingAnswer?
+
+  private var unansweredCommand: UnansweredCommand?
 
   private var turns = TurnQueue()
 
@@ -94,13 +107,20 @@ public actor PowerLincController: SerialCommandSender {
   /// Answers and reports arrive only while this runs, so run it alongside the code that sends
   /// commands. When it returns, the controller is closed: waiting sends fail with
   /// ``PowerLincControllerError/connectionClosed``, and every stream from
-  /// ``PowerLincController/replies()`` finishes. Calling it again, or while it's running,
-  /// returns at once.
+  /// ``PowerLincController/replies()`` finishes. Calling it while it's running returns at
+  /// once.
   ///
-  /// - Throws: The connection's error, if reading from it failed.
+  /// - Throws: The connection's error, if reading from it failed, or
+  ///   ``PowerLincControllerError/connectionClosed`` if the controller has already closed.
   public func run() async throws {
 
-    guard !isRunning, !isClosed else {
+    guard !isClosed else {
+
+      throw PowerLincControllerError.connectionClosed
+
+    }
+
+    guard !isRunning else {
 
       return
 
@@ -143,6 +163,8 @@ public actor PowerLincController: SerialCommandSender {
     try await waitForTurn()
     defer { turns.release() }
 
+    try await waitForUnansweredCommand()
+
     for step in steps {
 
       try await perform(step)
@@ -155,7 +177,8 @@ public actor PowerLincController: SerialCommandSender {
   ///
   /// Commands are sent one at a time, in the order they're called, and a command the
   /// controller rejects is sent again after the retry policy's delay. Canceling a send stops
-  /// it, as with ``Modem/send(_:)``.
+  /// it, and the next send waits for a canceled command that was written, as with
+  /// ``Modem/send(_:)``.
   ///
   /// - Parameter command: The command to send.
   /// - Throws: ``PowerLincControllerError/rejected(_:)`` if the controller NAKs every attempt,
@@ -166,6 +189,8 @@ public actor PowerLincController: SerialCommandSender {
 
     try await waitForTurn()
     defer { turns.release() }
+
+    try await waitForUnansweredCommand()
 
     try await perform(command)
 
@@ -286,21 +311,57 @@ public actor PowerLincController: SerialCommandSender {
     }
 
     let id = makeID()
-    let timeout = retryPolicy.echoTimeout
     let (results, continuation) = AsyncStream<Result<Bool, any Error>>.makeStream()
 
     pendingAnswer = PendingAnswer(id: id, command: command, result: continuation)
     defer { abandonAnswer(id) }
 
-    let result = await withTaskGroup(of: Void.self, returning: Result<Bool, any Error>.self) { group in
+    return try await awaitAnswer(id, command: command, results: results) { [connection] in
 
-      // Writes the command, then gives up on its answer once the timeout passes. The group
-      // cancels this child as soon as the answer arrives.
-      group.addTask { [connection, clock] in
+      try await connection.write(command.bytes)
+
+    }.get()
+
+  }
+
+  /// Waits for the controller to answer a command whose send was canceled, so the next
+  /// command isn't written while the controller is still busy with it.
+  private func waitForUnansweredCommand() async throws {
+
+    guard let unanswered = unansweredCommand else {
+
+      return
+
+    }
+
+    unansweredCommand = nil
+    defer { abandonAnswer(unanswered.id) }
+
+    _ = await awaitAnswer(unanswered.id, command: unanswered.command, results: unanswered.results) {}
+
+    try Task.checkCancellation()
+
+  }
+
+  /// Runs `write`, then waits for the pending answer's result, the timeout or cancellation.
+  private func awaitAnswer(
+    _ id: Int,
+    command: IBIOSCommand,
+    results: AsyncStream<Result<Bool, any Error>>,
+    write: @escaping @Sendable () async throws -> Void
+  ) async -> Result<Bool, any Error> {
+
+    let timeout = retryPolicy.echoTimeout
+
+    return await withTaskGroup(of: Void.self, returning: Result<Bool, any Error>.self) { group in
+
+      // Writes, then gives up on the answer once the timeout passes. The group cancels this
+      // child as soon as the answer arrives.
+      group.addTask { [clock] in
 
         do {
 
-          try await connection.write(command.bytes)
+          try await write()
 
         } catch {
 
@@ -337,8 +398,6 @@ public actor PowerLincController: SerialCommandSender {
 
     }
 
-    return try result.get()
-
   }
 
   /// Fails the command waiting for an answer, unless the parser is holding back a NAK for it.
@@ -367,6 +426,8 @@ public actor PowerLincController: SerialCommandSender {
 
   }
 
+  /// Stops waiting for an answer whose send was canceled. The command may have been written,
+  /// so its answer stays pending, and the next send waits for it.
   private func abandonAnswer(_ id: Int) {
 
     guard let pending = pendingAnswer, pending.id == id else {
@@ -375,8 +436,12 @@ public actor PowerLincController: SerialCommandSender {
 
     }
 
-    pendingAnswer = nil
     pending.result.finish()
+
+    let (results, continuation) = AsyncStream<Result<Bool, any Error>>.makeStream()
+
+    pendingAnswer = PendingAnswer(id: id, command: pending.command, result: continuation)
+    unansweredCommand = UnansweredCommand(id: id, command: pending.command, results: results)
 
   }
 
