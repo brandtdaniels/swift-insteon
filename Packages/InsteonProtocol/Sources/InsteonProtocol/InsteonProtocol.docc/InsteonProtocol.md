@@ -77,6 +77,7 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``ReceivedMessage``
 - ``CommandEcho``
 - ``ModemInfo``
+- ``ModemConfigurationReport``
 - ``AllLinkingCompleted``
 
 ### ALL-Linking

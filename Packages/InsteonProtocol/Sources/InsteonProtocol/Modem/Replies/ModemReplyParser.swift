@@ -91,7 +91,7 @@ public struct ModemReplyParser: Hashable, Sendable {
   private static let echoParameterCounts: [UInt8: Int] = [
     0x61: 3, 0x63: 2, 0x64: 2, 0x65: 0, 0x66: 3, 0x67: 0, 0x68: 1, 0x69: 0, 0x6A: 0,
     0x6B: 1, 0x6C: 0, 0x6D: 0, 0x6E: 0, 0x6F: 9, 0x70: 1, 0x71: 2, 0x72: 0, 0x74: 0,
-    0x75: 2, 0x76: 10, 0x77: 0
+    0x75: 2, 0x76: 10, 0x77: 0, 0x7A: 1
   ]
 
   /// The total length of the frame at the start of `bytes`, which starts with `0x02`.
@@ -201,7 +201,11 @@ public struct ModemReplyParser: Hashable, Sendable {
         firmwareVersion: body[5]
       ))
     case 0x73 where body.last == acknowledgement && body.count == 4:
-      return .modemConfiguration(ModemConfiguration(rawValue: body[0]))
+      return .modemConfiguration(ModemConfigurationReport(
+        configuration: ModemConfiguration(rawValue: body[0]),
+        applicationRetries: body[1],
+        databaseDelta: body[2]
+      ))
     default:
       return .echo(CommandEcho(
         // Only recognized numbers reach `decode`, and all of them are host commands here.
