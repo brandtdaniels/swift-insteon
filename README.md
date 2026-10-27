@@ -6,6 +6,7 @@ Swift packages for working with [INSTEON](https://www.insteon.com) home automati
 | --- | --- |
 | [InsteonProtocol](Packages/InsteonProtocol) | The INSTEON protocol as value types: messages for devices, and the serial commands that carry them through a modem |
 | [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the INSTEON clients send requests through |
+| [InsteonHubClient](Packages/InsteonHubClient) | Control INSTEON devices through an INSTEON Hub on your local network |
 
 ## Requirements
 
