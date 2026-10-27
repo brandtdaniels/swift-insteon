@@ -45,12 +45,14 @@ public struct ProductData: Hashable, Sendable {
   /// Reads a Product Data Response from a received message.
   ///
   /// - Parameter message: A message the modem received.
-  /// - Returns: `nil` unless the message is an extended direct message with cmd1 `0x03`.
+  /// - Returns: `nil` unless the message is an extended direct message with cmd1 `0x03` and
+  ///   cmd2 `0x00`.
   public init?(_ message: ReceivedMessage) {
 
     guard
       message.flags.messageType == .direct,
-      message.command.command1 == 0x03,
+      // cmd2 0x00 is product data; other values carry other responses, such as text.
+      message.command == Command(command1: 0x03, command2: 0x00),
       let data = message.userData
     else {
 

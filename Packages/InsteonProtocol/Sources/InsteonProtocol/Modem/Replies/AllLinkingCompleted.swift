@@ -11,14 +11,15 @@ public struct AllLinkingCompleted: Hashable, Sendable {
   /// The address of the other device.
   public var address: InsteonAddress
 
-  /// The other device's category.
-  public var category: DeviceCategory
+  /// The other device's category, reported only when the modem became its controller.
+  public var category: DeviceCategory?
 
-  /// The other device's subcategory.
-  public var subcategory: DeviceSubcategory
+  /// The other device's subcategory, reported only when the modem became its controller.
+  public var subcategory: DeviceSubcategory?
 
-  /// The other device's firmware version.
-  public var firmwareVersion: FirmwareVersion
+  /// The other device's firmware version, reported only by devices that predate the Product
+  /// Data Response when the modem became their controller.
+  public var firmwareVersion: FirmwareVersion?
 
   /// Creates a linking result.
   ///
@@ -26,16 +27,16 @@ public struct AllLinkingCompleted: Hashable, Sendable {
   ///   - linkCode: The link code the modem reported.
   ///   - group: The ALL-Link group.
   ///   - address: The other device's address.
-  ///   - category: The other device's category.
-  ///   - subcategory: The other device's subcategory.
-  ///   - firmwareVersion: The other device's firmware version.
+  ///   - category: The other device's category, if reported.
+  ///   - subcategory: The other device's subcategory, if reported.
+  ///   - firmwareVersion: The other device's firmware version, if reported.
   public init(
     linkCode: UInt8,
     group: UInt8,
     address: InsteonAddress,
-    category: DeviceCategory,
-    subcategory: DeviceSubcategory,
-    firmwareVersion: FirmwareVersion
+    category: DeviceCategory?,
+    subcategory: DeviceSubcategory?,
+    firmwareVersion: FirmwareVersion?
   ) {
 
     self.linkCode = linkCode
