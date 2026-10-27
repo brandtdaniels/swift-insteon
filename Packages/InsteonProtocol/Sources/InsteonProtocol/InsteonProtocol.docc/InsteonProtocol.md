@@ -21,7 +21,9 @@ SerialCommand.sendStandardMessage(turnOn).hexString  // "02621A2B3C0F11FF"
 ```
 
 Connections to a modem conform to ``SerialCommandSender``, so code that sends commands can
-depend on the protocol rather than on a particular connection.
+depend on the protocol rather than on a particular connection. Turn the bytes the modem sends
+back, such as command echoes and messages from devices, into typed replies with
+``ModemReplyParser``.
 
 Every type is `Sendable` and has no dependencies beyond the Swift standard library.
 
@@ -70,6 +72,17 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``SerialCommandNumber``
 - ``SerialCommandSender``
 - ``ModemConfiguration``
+
+### Modem replies
+
+- ``ModemReplyParser``
+- ``ModemReply``
+- ``ReceivedMessage``
+- ``CommandEcho``
+- ``ModemInfo``
+- ``ModemConfigurationReport``
+- ``AllLinkingCompleted``
+- ``ModemButtonEvent``
 
 ### ALL-Linking
 
