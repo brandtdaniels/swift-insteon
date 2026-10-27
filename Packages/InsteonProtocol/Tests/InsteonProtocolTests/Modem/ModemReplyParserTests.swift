@@ -189,9 +189,25 @@ struct ModemReplyParserTests {
 
     var parser = ModemReplyParser()
 
-    let replies = parser.parse(bytes("FF00" + "0299" + "15" + "0255"))
+    let replies = parser.parse(bytes("FF00" + "0299" + "33" + "0255"))
 
     #expect(replies == [.userReset])
+
+  }
+
+  @Test func reportsALoneNegativeAcknowledgement() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("15" + "0255")) == [.negativeAcknowledgement, .userReset])
+
+  }
+
+  @Test func keepsNegativeAcknowledgementInsideAnEcho() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("026D15")) == [.echo(CommandEcho(number: .ledOn, parameters: [], isAccepted: false))])
 
   }
 

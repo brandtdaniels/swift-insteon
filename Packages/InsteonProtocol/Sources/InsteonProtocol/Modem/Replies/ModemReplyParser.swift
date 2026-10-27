@@ -1,8 +1,9 @@
 /// Turns the bytes an INSTEON modem sends into ``ModemReply`` values.
 ///
 /// The parser keeps any incomplete reply until the rest of its bytes arrive, so feed it bytes
-/// as you receive them, in any chunk size. Bytes that don't start a recognizable reply are
-/// skipped until the next start byte (`0x02`).
+/// as you receive them, in any chunk size. A NAK byte (`0x15`) between replies is reported
+/// as ``ModemReply/negativeAcknowledgement``; other bytes that don't start a recognizable
+/// reply are skipped until the next start byte (`0x02`).
 ///
 /// ```swift
 /// var cursor = HubBufferCursor()
@@ -45,7 +46,7 @@ public struct ModemReplyParser: Hashable, Sendable {
 
     while true {
 
-      guard let start = pending.firstIndex(of: SerialCommand.startOfText) else {
+      guard let start = pending.firstIndex(where: { $0 == SerialCommand.startOfText || $0 == Self.negativeAcknowledgement }) else {
 
         pending.removeAll()
 
@@ -54,6 +55,15 @@ public struct ModemReplyParser: Hashable, Sendable {
       }
 
       pending.removeFirst(start)
+
+      // The modem sometimes answers a command with a lone NAK instead of an echo.
+      if pending[0] == Self.negativeAcknowledgement {
+
+        pending.removeFirst()
+
+        return .negativeAcknowledgement
+
+      }
 
       switch Self.frameLength(of: pending) {
       case .needMoreBytes:
