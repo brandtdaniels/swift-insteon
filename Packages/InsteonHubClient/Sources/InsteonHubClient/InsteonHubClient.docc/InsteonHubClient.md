@@ -50,7 +50,7 @@ Both supported Hubs were sold as the INSTEON Hub, so they're identified here by 
 | Model | Also known as | Support |
 | --- | --- | --- |
 | 2245 | Hub 2 | Supported |
-| 2242 | Hub 1 | Supported: it serves the same local HTTP requests on the same port |
+| 2242 | Hub 1 | Expected to work: it serves the same local HTTP requests on the same port, though its buffer format hasn't been verified |
 | 2243 | Hub Pro | Not supported: it's built around HomeKit and has no documented local modem interface |
 
 ## Topics
