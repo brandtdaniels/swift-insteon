@@ -21,7 +21,7 @@ struct HubTests {
     try await hub.send(.sendStandardMessage(StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF))))
 
     let request = try #require(await stub.requests.first)
-    #expect(request.httpMethod == "POST")
+    #expect(request.httpMethod == "GET")
     #expect(request.url?.absoluteString == "http://hub.local:25105/3?0262AABBCC0F11FF=I=3")
 
   }
@@ -46,7 +46,7 @@ struct HubTests {
     try await Hub(endpoint: endpoint, httpClient: stub).clearBuffer()
 
     let request = try #require(await stub.requests.first)
-    #expect(request.httpMethod == "POST")
+    #expect(request.httpMethod == "GET")
     #expect(request.url?.absoluteString == "http://hub.local:25105/1?XB=M=1")
 
   }
@@ -95,9 +95,30 @@ struct HubTests {
 
     let stub = StubHTTPClient()
 
-    try await Hub(endpoint: HubEndpoint(host: "10.0.0.5", port: 9761), httpClient: stub).send(.beep)
+    try await Hub(endpoint: HubEndpoint(host: "10.0.0.5", port: 8080), httpClient: stub).send(.beep)
 
-    #expect(await stub.requests.first?.url?.absoluteString == "http://10.0.0.5:9761/3?0277=I=3")
+    #expect(await stub.requests.first?.url?.absoluteString == "http://10.0.0.5:8080/3?0277=I=3")
+
+  }
+
+  @Test func aHostCantChangeWhereTheRequestGoes() async throws {
+
+    let stub = StubHTTPClient()
+    let hub = Hub(endpoint: HubEndpoint(host: "hub.local/steal?x="), httpClient: stub)
+
+    do {
+
+      _ = try await hub.readBuffer()
+
+    } catch HubError.invalidEndpoint {
+
+      return
+
+    } catch {}
+
+    let url = try #require(await stub.requests.first?.url)
+    #expect(url.path == "/buffstatus.xml")
+    #expect(url.query == nil)
 
   }
 

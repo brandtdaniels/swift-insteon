@@ -1,6 +1,9 @@
 /// Tracks how far the Hub's buffer has been read, so each read returns only new bytes.
 ///
+/// Clear the buffer before the first read, so earlier replies aren't returned as new:
+///
 /// ```swift
+/// try await hub.clearBuffer()
 /// var cursor = HubBufferCursor()
 ///
 /// while true {
@@ -8,6 +11,10 @@
 ///   // Parse the modem's replies in `received`.
 /// }
 /// ```
+///
+/// The cursor tracks one reader. If another client clears the buffer and the modem then writes
+/// past the cursor's position, the cursor can't tell, and the bytes before its position are
+/// missed; have one client read a Hub's buffer at a time.
 public struct HubBufferCursor: Hashable, Sendable {
 
   private var position = 0
@@ -18,7 +25,9 @@ public struct HubBufferCursor: Hashable, Sendable {
   /// Returns the bytes written since the last call, and moves the cursor past them.
   ///
   /// Bytes that wrapped around the end of the ring buffer are returned in the order they were
-  /// written. A buffer of all zeros is treated as just cleared and resets the cursor.
+  /// written. A buffer of all zeros is treated as just cleared and resets the cursor, and so is
+  /// a buffer that's all zeros from its end position on, since a wrap would leave the previous
+  /// pass's bytes there.
   ///
   /// - Parameter buffer: The latest buffer read from the Hub.
   /// - Returns: The bytes written since the previous call, oldest first.
@@ -45,12 +54,15 @@ public struct HubBufferCursor: Hashable, Sendable {
 
     if end < start {
 
-      let tail = buffer.bytes[start...]
+      // Zeros everywhere after the end position mean the buffer was cleared and refilled, not
+      // wrapped: only the bytes before the end position are new.
+      guard buffer.bytes[end...].contains(where: { $0 != 0 }) else {
 
-      // A zeroed tail means the buffer was cleared since the last read.
-      let wrapped = tail.allSatisfy { $0 == 0 } ? [] : Array(tail)
+        return Array(buffer.bytes[..<end])
 
-      return wrapped + buffer.bytes[..<end]
+      }
+
+      return Array(buffer.bytes[start...]) + buffer.bytes[..<end]
 
     }
 
