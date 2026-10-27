@@ -4,8 +4,9 @@ Talk to an INSTEON modem, such as a PowerLinc Modem on a USB or serial port.
 
 ## Overview
 
-A PowerLinc Modem (2413U by USB, 2413S by serial cable) connects your computer to the
-INSTEON network. ``Modem`` speaks the modem's serial protocol over any ``ModemConnection``:
+A PowerLinc Modem (2413U by USB, 2413S by serial cable), or another modem from
+<doc:SupportedModems>, connects your computer to the INSTEON network. ``Modem`` speaks the
+modem's serial protocol over any ``ModemConnection``:
 it sends commands one at a time, waits for the modem to accept each one, retries when the
 modem is busy, and publishes everything the modem sends back.
 
@@ -49,6 +50,10 @@ from InsteonHubClient connects to the modem inside an INSTEON Hub. To reach a mo
 way, such as through a network-attached serial adapter, conform a type to ``ModemConnection``.
 
 ## Topics
+
+### Essentials
+
+- <doc:SupportedModems>
 
 ### Modems
 
