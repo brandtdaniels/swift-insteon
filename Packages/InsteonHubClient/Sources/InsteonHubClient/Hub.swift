@@ -9,14 +9,16 @@ import InsteonNetworking
 ///
 /// The Hub requires HTTP basic authentication with the user name and password printed on it.
 /// ``Hub/init(endpoint:user:password:httpClient:)`` adds it for you; to authenticate another
-/// way, pass an already-authenticated client to ``Hub/init(endpoint:httpClient:)``.
+/// way, pass an already-authenticated client to ``Hub/init(endpoint:httpClient:)``. The Hub's
+/// interface is plain HTTP, so the credentials are readable on the network: keep the Hub on a
+/// network you trust.
 public struct Hub: Sendable {
 
   private let endpoint: HubEndpoint
 
   private let httpClient: any HTTPClient
 
-  /// Creates a connection that sends requests through a client as-is.
+  /// Creates a Hub interface that sends requests through a client as-is.
   ///
   /// - Parameters:
   ///   - endpoint: Where the Hub can be reached.
@@ -28,7 +30,7 @@ public struct Hub: Sendable {
 
   }
 
-  /// Creates a connection that authenticates with the Hub's user name and password.
+  /// Creates a Hub interface that authenticates with the Hub's user name and password.
   ///
   /// - Parameters:
   ///   - endpoint: Where the Hub can be reached.

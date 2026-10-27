@@ -133,7 +133,7 @@ public enum SerialCommand: Hashable, Sendable {
   ///
   /// The three bytes become ``AllLinkRecord/data1``, ``AllLinkRecord/data2`` and
   /// ``AllLinkRecord/data3`` of the record ``SerialCommand/startAllLinking(mode:group:)``
-  /// creates when the modem is the responder. Insteon describes the data as being for the next
+  /// creates when the modem is the responder. INSTEON's command table describes the data as being for the next
   /// link, so send this before each link that needs it.
   ///
   /// - Parameters:

@@ -1,13 +1,18 @@
 # swift-insteon
 
+[![CI](https://github.com/brandtdaniels/swift-insteon/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/brandtdaniels/swift-insteon/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Swift packages for working with [INSTEON](https://www.insteon.com) home automation devices.
 
 | Library | Description |
 | --- | --- |
-| [InsteonProtocol](Packages/InsteonProtocol) | The INSTEON protocol as value types: messages for devices, and the serial commands that carry them through a modem |
+| [InsteonProtocol](Packages/InsteonProtocol) | The INSTEON protocol as value types: messages for devices, the serial commands that carry them through a modem, and the IBIOS commands of a PowerLinc Controller |
+| [InsteonModem](Packages/InsteonModem) | Control INSTEON devices through a PowerLinc Modem or USB Adapter on a USB or serial port, or a PowerLinc Controller (2414S) |
+| [InsteonHubClient](Packages/InsteonHubClient) | Control INSTEON devices through an INSTEON Hub on your local network, by driving its built-in modem with InsteonModem |
 | [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the INSTEON clients send requests through |
-| [InsteonHubClient](Packages/InsteonHubClient) | Control INSTEON devices through an INSTEON Hub on your local network |
-| [InsteonModem](Packages/InsteonModem) | Control INSTEON devices through a PowerLinc Modem on a USB or serial port |
+
+The [Supported Modems](Packages/InsteonModem/Sources/InsteonModem/InsteonModem.docc/SupportedModems.md) article lists every modem, Hub and controller, and how well each is supported.
 
 ## Requirements
 
@@ -30,12 +35,55 @@ Then add the libraries you need to your target:
 .target(
   name: "MyApp",
   dependencies: [
+    .product(name: "InsteonModem", package: "swift-insteon"),
     .product(name: "InsteonProtocol", package: "swift-insteon")
   ]
 )
 ```
 
 ## Usage
+
+### Talking to a modem
+
+`Modem.withConnection` opens a modem, reads what it sends while your closure uses it, and closes it when the closure returns:
+
+```swift
+import InsteonModem
+import InsteonProtocol
+
+let lamp = InsteonAddress("1A.2B.3C")!
+
+try await Modem.withConnection(SerialPort(path: "/dev/ttyUSB0")) { modem in
+  let replies = await modem.replies()
+
+  try await modem.send(.sendStandardMessage(
+    StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF))
+  ))
+
+  for await reply in replies {
+    if case let .messageReceived(message) = reply, message.sender == lamp {
+      // The lamp acknowledged the command.
+      break
+    }
+  }
+}
+```
+
+An INSTEON Hub works the same way through its built-in modem:
+
+```swift
+import InsteonHubClient
+
+let hub = Hub(endpoint: HubEndpoint(host: "192.168.1.20"), user: username, password: password)
+
+try await Modem.withConnection(HubConnection(hub: hub)) { modem in
+  try await modem.send(.getModemInfo)
+}
+```
+
+The Hub's user name and password are printed on it. Keep them out of source code, for example in the keychain.
+
+### Building messages
 
 ```swift
 import InsteonProtocol

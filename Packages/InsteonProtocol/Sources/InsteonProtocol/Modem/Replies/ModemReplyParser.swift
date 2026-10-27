@@ -248,7 +248,7 @@ public struct ModemReplyParser: Hashable, Sendable {
       return .x10Received(X10Code(rawX10: body[0], flag: body[1]))
     case 0x53:
       // The other device's identity is valid only when the modem became its controller, and
-      // its firmware byte is 0xFF unless the device predates the Product Data Response.
+      // its firmware byte is 0xFF from a device that answers the Product Data Request.
       let isController = body[0] == AllLinkMode.controller.rawValue
 
       return .allLinkingCompleted(AllLinkingCompleted(

@@ -6,11 +6,14 @@
 /// try await hub.clearBuffer()
 /// var cursor = HubBufferCursor()
 ///
-/// while true {
+/// while !Task.isCancelled {
 ///   let received = cursor.advance(to: try await hub.readBuffer())
 ///   // Parse the modem's replies in `received`.
+///   try await Task.sleep(for: .milliseconds(500))
 /// }
 /// ```
+///
+/// ``HubConnection`` does this polling for you.
 ///
 /// The cursor tracks one reader. If another client clears the buffer and the modem then writes
 /// past the cursor's position, the cursor can't tell, and the bytes before its position are

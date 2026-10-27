@@ -35,7 +35,7 @@ messages carry configuration and database records too large for cmd2.
 
 INSTEON devices repeat messages they hear to extend range. Each repeat decrements the hops
 left; a message is not repeated once it reaches zero, or by the device it's addressed to. A
-new message starts with hops left equal to max hops.
+message is sent with hops left equal to max hops.
 
 The protocol's convention is three max hops for broadcasts and ALL-Link broadcasts, and one
 for direct and ALL-Link cleanup messages, which the sending device raises on each retry up to

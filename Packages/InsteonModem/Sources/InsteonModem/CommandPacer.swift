@@ -189,7 +189,7 @@ actor CommandPacer<Parser: ReplyParser> {
 
   }
 
-  /// Returns a stream of everything the device sends from now on, which finishes when the
+  /// Returns a stream of everything the device sends after this call, which finishes when the
   /// device closes.
   func replies() -> AsyncStream<Reply> {
 

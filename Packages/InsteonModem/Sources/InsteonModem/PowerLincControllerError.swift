@@ -18,7 +18,7 @@ public enum PowerLincControllerError: Error, Hashable, Sendable {
   /// The controller didn't answer an IBIOS command within the configured timeout.
   case timedOut(IBIOSCommand)
 
-  /// The connection closed while a command was waiting for its answer.
+  /// The controller is closed: its connection ended, or ``PowerLincController/run()`` returned.
   case connectionClosed
 
 }
