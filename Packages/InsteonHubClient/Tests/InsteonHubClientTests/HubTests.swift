@@ -101,6 +101,22 @@ struct HubTests {
 
   }
 
+  @Test(arguments: [-1, 65_536])
+  func rejectsAPortOutOfRange(_ port: Int) async {
+
+    let stub = StubHTTPClient()
+    let endpoint = HubEndpoint(host: "hub.local", port: port)
+
+    await #expect(throws: HubError.invalidEndpoint(endpoint)) {
+
+      try await Hub(endpoint: endpoint, httpClient: stub).readBuffer()
+
+    }
+
+    #expect(await stub.requests.isEmpty)
+
+  }
+
   @Test func aHostCantChangeWhereTheRequestGoes() async throws {
 
     let stub = StubHTTPClient()

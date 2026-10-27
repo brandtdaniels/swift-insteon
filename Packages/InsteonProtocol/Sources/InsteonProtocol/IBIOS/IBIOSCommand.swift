@@ -81,6 +81,8 @@ public enum IBIOSCommand: Hashable, Sendable {
 
     switch self {
     case let .download(address, data):
+      precondition(data.count <= Int(UInt16.max), "An IBIOS download carries at most 65,535 bytes.")
+
       let header = address.bigEndianBytes + UInt16(data.count).bigEndianBytes
       return header + Self.checksum(of: header + data).bigEndianBytes + data
     case let .upload(address, length), let .getChecksum(address, length):

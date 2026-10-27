@@ -63,9 +63,13 @@ public final class TestClock: Clock, @unchecked Sendable {
 
   private var sleepers: [Sleeper] = []
 
+  /// Sleeps and waits that have been issued an ID and haven't finished.
+  private var pendingIDs: Set<Int> = []
+
+  /// Pending sleeps and waits canceled before they started waiting.
   private var canceledIDs: Set<Int> = []
 
-  private var sleeperWaiters: [(deadline: Instant, continuation: CheckedContinuation<Void, Never>)] = []
+  private var sleeperWaiters: [(id: Int, deadline: Instant, continuation: CheckedContinuation<Void, Never>)] = []
 
   /// Creates a clock at its start.
   public init() {}
@@ -79,13 +83,7 @@ public final class TestClock: Clock, @unchecked Sendable {
   /// Sleeps until the clock reaches a deadline.
   public func sleep(until deadline: Instant, tolerance: Duration? = nil) async throws {
 
-    let id = lock.withLock {
-
-      defer { nextID += 1 }
-
-      return nextID
-
-    }
+    let id = makeID()
 
     try await withTaskCancellationHandler {
 
@@ -95,6 +93,7 @@ public final class TestClock: Clock, @unchecked Sendable {
 
           if canceledIDs.remove(id) != nil {
 
+            pendingIDs.remove(id)
             continuation.resume(throwing: CancellationError())
 
             return []
@@ -103,6 +102,7 @@ public final class TestClock: Clock, @unchecked Sendable {
 
           if deadline <= current {
 
+            pendingIDs.remove(id)
             continuation.resume()
 
             return []
@@ -125,11 +125,19 @@ public final class TestClock: Clock, @unchecked Sendable {
 
         guard let index = sleepers.firstIndex(where: { $0.id == id }) else {
 
-          canceledIDs.insert(id)
+          // A sleep that already finished needs nothing; one that hasn't started yet stops
+          // as it starts.
+          if pendingIDs.contains(id) {
+
+            canceledIDs.insert(id)
+
+          }
 
           return nil
 
         }
+
+        pendingIDs.remove(id)
 
         return sleepers.remove(at: index)
 
@@ -150,6 +158,7 @@ public final class TestClock: Clock, @unchecked Sendable {
 
       let due = sleepers.filter { $0.deadline <= current }
       sleepers.removeAll { $0.deadline <= current }
+      pendingIDs.subtract(due.map(\.id))
 
       return due
 
@@ -159,32 +168,81 @@ public final class TestClock: Clock, @unchecked Sendable {
 
   }
 
-  /// Waits until a task is sleeping until `offset` past the clock's start.
+  /// Waits until a task is sleeping until `offset` past the clock's start, or until the waiting
+  /// task is canceled, for example by a test's time limit.
   public func waitForSleeper(until offset: Duration) async {
 
     let deadline = Instant(offset: offset)
+    let id = makeID()
 
-    await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+    await withTaskCancellationHandler {
 
-      let ready = lock.withLock {
+      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
 
-        guard !sleepers.contains(where: { $0.deadline == deadline }) else {
+        let ready = lock.withLock {
 
-          return true
+          guard
+            canceledIDs.remove(id) == nil,
+            !sleepers.contains(where: { $0.deadline == deadline })
+          else {
+
+            pendingIDs.remove(id)
+
+            return true
+
+          }
+
+          sleeperWaiters.append((id, deadline, continuation))
+
+          return false
 
         }
 
-        sleeperWaiters.append((deadline, continuation))
+        if ready {
 
-        return false
+          continuation.resume()
+
+        }
+
+      }
+
+    } onCancel: {
+
+      let canceled: CheckedContinuation<Void, Never>? = lock.withLock {
+
+        guard let index = sleeperWaiters.firstIndex(where: { $0.id == id }) else {
+
+          if pendingIDs.contains(id) {
+
+            canceledIDs.insert(id)
+
+          }
+
+          return nil
+
+        }
+
+        pendingIDs.remove(id)
+
+        return sleeperWaiters.remove(at: index).continuation
 
       }
 
-      if ready {
+      canceled?.resume()
 
-        continuation.resume()
+    }
 
-      }
+  }
+
+  private func makeID() -> Int {
+
+    lock.withLock {
+
+      defer { nextID += 1 }
+
+      pendingIDs.insert(nextID)
+
+      return nextID
 
     }
 
@@ -196,6 +254,7 @@ public final class TestClock: Clock, @unchecked Sendable {
     let deadlines = Set(sleepers.map(\.deadline))
     let satisfied = sleeperWaiters.filter { deadlines.contains($0.deadline) }
     sleeperWaiters.removeAll { deadlines.contains($0.deadline) }
+    pendingIDs.subtract(satisfied.map(\.id))
 
     return satisfied.map(\.continuation)
 

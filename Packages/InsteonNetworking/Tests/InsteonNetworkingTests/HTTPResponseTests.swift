@@ -22,4 +22,13 @@ struct HTTPResponseTests {
 
   }
 
+  @Test func keepsTheSameHeaderWhenNamesDifferOnlyInCase() {
+
+    let response = HTTPResponse(statusCode: 200, headers: ["x-test": "lower", "X-Test": "upper"])
+
+    // "X-Test" sorts before "x-test", whatever order the dictionary iterates in.
+    #expect(response.value(forHeader: "X-TEST") == "upper")
+
+  }
+
 }

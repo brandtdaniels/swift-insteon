@@ -58,6 +58,7 @@ way, such as through a network-attached serial adapter, conform a type to ``Mode
 - ``ModemError``
 - ``PowerLincController``
 - ``PowerLincControllerError``
+- ``RetryPolicy``
 
 ### Connections
 

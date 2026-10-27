@@ -21,14 +21,7 @@ import Glibc
 /// Available on macOS and Linux.
 public final class SerialPort: ModemConnection, @unchecked Sendable {
 
-  // `lock` guards `readSource` and `isClosed`; `descriptor` never changes.
-  private let descriptor: Int32
-
-  private let lock = NSLock()
-
-  private var readSource: ReadSource?
-
-  private var isClosed = false
+  private let owner: DescriptorOwner
 
   /// The speed of a serial connection.
   public enum BaudRate: Hashable, Sendable {
@@ -96,7 +89,7 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
 
     }
 
-    self.descriptor = descriptor
+    self.owner = DescriptorOwner(descriptor)
 
   }
 
@@ -109,8 +102,20 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
   /// Writes bytes to the modem, returning once they've all been handed to the port.
   ///
   /// - Parameter bytes: The bytes to send.
-  /// - Throws: ``SerialPortError/writeFailed(code:)`` if the port rejects the write.
+  /// - Throws: ``SerialPortError/closed`` if the port is closed, or
+  ///   ``SerialPortError/writeFailed(code:)`` if the port rejects the write.
   public func write(_ bytes: [UInt8]) async throws {
+
+    // The descriptor stays open until this write finishes, even if the port closes meanwhile.
+    guard owner.beginUse() else {
+
+      throw SerialPortError.closed
+
+    }
+
+    defer { owner.endUse() }
+
+    let descriptor = owner.descriptor
 
     try bytes.withUnsafeBytes { buffer in
 
@@ -147,9 +152,19 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
   /// - Returns: A stream of received byte chunks that finishes when the port closes.
   public func receive() -> AsyncThrowingStream<[UInt8], any Error> {
 
-    AsyncThrowingStream { continuation in
+    AsyncThrowingStream { [owner] continuation in
 
-      let descriptor = self.descriptor
+      // The descriptor stays open until this stream's source stops reading, even if the port
+      // closes meanwhile.
+      guard owner.beginUse() else {
+
+        continuation.finish()
+
+        return
+
+      }
+
+      let descriptor = owner.descriptor
       let source = ReadSource(
         DispatchSource.makeReadSource(fileDescriptor: descriptor, queue: DispatchQueue(label: "InsteonModem.SerialPort"))
       )
@@ -178,17 +193,11 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
 
       }
 
-      // Dispatch calls this once the source has stopped reading, so it's safe to close the
-      // descriptor here.
+      // Dispatch calls this once the source has stopped reading.
       source.dispatchSource.setCancelHandler {
 
         continuation.finish()
-
-        if source.stop() {
-
-          closeDescriptor(descriptor)
-
-        }
+        owner.endUse()
 
       }
 
@@ -198,51 +207,20 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
 
       }
 
-      lock.lock()
-
-      if isClosed {
-
-        lock.unlock()
-        continuation.finish()
-
-        return
-
-      }
-
-      readSource?.dispatchSource.cancel()
-      readSource = source
-      lock.unlock()
-
+      // A source that's canceled before it's resumed never reads, and resuming it lets it be
+      // released and run its cancel handler.
+      owner.makeReader(source).forEach { $0.dispatchSource.cancel() }
       source.dispatchSource.resume()
 
     }
 
   }
 
-  /// Closes the port. Any stream from ``SerialPort/receive()`` finishes.
+  /// Closes the port. Any stream from ``SerialPort/receive()`` finishes, and the descriptor
+  /// closes once nothing is reading from or writing to it.
   public func close() {
 
-    lock.lock()
-
-    guard !isClosed else {
-
-      lock.unlock()
-
-      return
-
-    }
-
-    isClosed = true
-    let source = readSource
-    readSource = nil
-    lock.unlock()
-
-    // A source that's still reading closes the descriptor once it stops.
-    if source?.cancelClosingDescriptor() != true {
-
-      closeDescriptor(descriptor)
-
-    }
+    owner.close()
 
   }
 
@@ -263,20 +241,16 @@ public enum SerialPortError: Error, Hashable, Sendable {
   /// Reading from the port failed.
   case readFailed(code: Int32)
 
+  /// The port is closed.
+  case closed
+
 }
 
-/// Lets a dispatch source be captured by the `Sendable` closures that drive it, and decides
-/// whether the source or ``SerialPort/close()`` closes the descriptor.
+/// Lets a dispatch source be captured by the `Sendable` closures that drive it. Dispatch
+/// sources are thread-safe.
 private final class ReadSource: @unchecked Sendable {
 
-  // Dispatch sources are thread-safe; `lock` guards `hasStopped` and `closesDescriptor`.
   let dispatchSource: any DispatchSourceRead
-
-  private let lock = NSLock()
-
-  private var hasStopped = false
-
-  private var closesDescriptor = false
 
   init(_ dispatchSource: any DispatchSourceRead) {
 
@@ -284,33 +258,119 @@ private final class ReadSource: @unchecked Sendable {
 
   }
 
-  /// Cancels the source and has it close the descriptor once it stops reading.
-  ///
-  /// - Returns: `false` if the source had already stopped, leaving the descriptor to the caller.
-  func cancelClosingDescriptor() -> Bool {
+}
 
-    lock.lock()
-    let isReading = !hasStopped
-    closesDescriptor = isReading
-    lock.unlock()
+/// Owns a port's descriptor, and closes it only once the port is closed and nothing is
+/// reading from or writing to it: a closed descriptor's number can be reused by another file,
+/// and dispatch requires a descriptor to stay open until every source on it has stopped.
+private final class DescriptorOwner: @unchecked Sendable {
 
-    dispatchSource.cancel()
+  // `lock` guards everything below it; `descriptor` never changes.
+  let descriptor: Int32
 
-    return isReading
+  private let lock = NSLock()
+
+  private var isClosed = false
+
+  /// Sources that haven't stopped, and writes in progress.
+  private var users = 0
+
+  private var reader: ReadSource?
+
+  init(_ descriptor: Int32) {
+
+    self.descriptor = descriptor
 
   }
 
-  /// Records that the source has stopped reading.
+  /// Starts using the descriptor.
   ///
-  /// - Returns: Whether the source should close the descriptor.
-  func stop() -> Bool {
+  /// - Returns: `false` if the port is closed, in which case the descriptor mustn't be used.
+  func beginUse() -> Bool {
 
-    lock.lock()
-    defer { lock.unlock() }
+    lock.withLock {
 
-    hasStopped = true
+      guard !isClosed else {
 
-    return closesDescriptor
+        return false
+
+      }
+
+      users += 1
+
+      return true
+
+    }
+
+  }
+
+  /// Stops using the descriptor, closing it if the port is closed and nothing else uses it.
+  func endUse() {
+
+    let isLastUser = lock.withLock {
+
+      users -= 1
+
+      return isClosed && users == 0
+
+    }
+
+    if isLastUser {
+
+      closeDescriptor(descriptor)
+
+    }
+
+  }
+
+  /// Makes a source the one reading.
+  ///
+  /// - Returns: The sources to cancel: the one this replaces, or this one if the port has
+  ///   closed since it began using the descriptor.
+  func makeReader(_ source: ReadSource) -> [ReadSource] {
+
+    lock.withLock {
+
+      guard !isClosed else {
+
+        return [source]
+
+      }
+
+      defer { reader = source }
+
+      return reader.map { [$0] } ?? []
+
+    }
+
+  }
+
+  /// Closes the port: the reading source is canceled, and the descriptor closes once nothing
+  /// uses it.
+  func close() {
+
+    let (source, isUnused): (ReadSource?, Bool) = lock.withLock {
+
+      guard !isClosed else {
+
+        return (nil, false)
+
+      }
+
+      isClosed = true
+      defer { reader = nil }
+
+      return (reader, users == 0)
+
+    }
+
+    source?.dispatchSource.cancel()
+
+    if isUnused {
+
+      closeDescriptor(descriptor)
+
+    }
 
   }
 

@@ -41,7 +41,7 @@ commands after those, such as Cancel Cleanup (`0x74`), Read and Write Database
 implement one, such as a 2412 PowerLinc Modem, may reject it.
 
 A modem rejects a command it lacks with a NAK, the same answer it gives when it's busy, so
-``Modem/send(_:)`` sends the command again as its ``Modem/RetryPolicy`` allows before it
+``Modem/send(_:)`` sends the command again as its ``RetryPolicy`` allows before it
 throws ``ModemError/rejected(_:)``.
 
 ### The USB Adapter

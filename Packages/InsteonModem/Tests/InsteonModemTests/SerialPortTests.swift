@@ -10,7 +10,8 @@ import Glibc
 /// Exercises the real POSIX code path against a pseudo-terminal standing in for a modem.
 struct SerialPortTests {
 
-  @Test func exchangesBytesWithTheDevice() async throws {
+  @Test(.timeLimit(.minutes(1)))
+  func exchangesBytesWithTheDevice() async throws {
 
     let (controller, path) = try #require(openPseudoTerminal())
     defer { _ = close(controller) }
@@ -86,6 +87,35 @@ struct SerialPortTests {
     _ = port.receive()
 
     for try await _ in first {}
+
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func receivingAfterClosingFinishesAtOnce() async throws {
+
+    let (controller, path) = try #require(openPseudoTerminal())
+    defer { _ = close(controller) }
+
+    let port = try SerialPort(path: path)
+    port.close()
+
+    for try await _ in port.receive() {}
+
+  }
+
+  @Test func writingAfterClosingThrows() async throws {
+
+    let (controller, path) = try #require(openPseudoTerminal())
+    defer { _ = close(controller) }
+
+    let port = try SerialPort(path: path)
+    port.close()
+
+    await #expect(throws: SerialPortError.closed) {
+
+      try await port.write([0x02, 0x60])
+
+    }
 
   }
 

@@ -34,9 +34,14 @@ struct Exchange<Reply>: Sendable {
   /// The error to throw if the device doesn't answer.
   let timedOut: any Error
 
-  /// How much longer than the retry policy's echo timeout to wait for the answer, for a
+  /// How much longer than the retry policy's answer timeout to wait for the answer, for a
   /// command that moves a lot of data.
   var transferTime: Duration = .zero
+
+  /// Whether a rejection means the exchange before this one went wrong, so each new attempt
+  /// sends that exchange again first. A check that reads back what the previous command wrote
+  /// does this, since reading again would find the same mistake. Both count as one attempt.
+  var repeatsPrevious = false
 
 }
 
@@ -80,7 +85,7 @@ actor CommandPacer<Parser: ReplyParser> {
 
   private let connection: any ModemConnection
 
-  private let retryPolicy: Modem.RetryPolicy
+  private let retryPolicy: RetryPolicy
 
   private let clock: any Clock<Duration>
 
@@ -113,7 +118,7 @@ actor CommandPacer<Parser: ReplyParser> {
   init(
     connection: any ModemConnection,
     parser: Parser,
-    retryPolicy: Modem.RetryPolicy,
+    retryPolicy: RetryPolicy,
     clock: any Clock<Duration>,
     closedError: any Error
   ) {
@@ -181,9 +186,11 @@ actor CommandPacer<Parser: ReplyParser> {
 
     try await waitForUnansweredCommand()
 
-    for exchange in exchanges {
+    for (index, exchange) in exchanges.enumerated() {
 
-      try await perform(exchange)
+      let previous = exchange.repeatsPrevious && index > 0 ? exchanges[index - 1] : nil
+
+      try await perform(exchange, repeating: previous)
 
     }
 
@@ -211,19 +218,33 @@ actor CommandPacer<Parser: ReplyParser> {
 
   // MARK: - Sending
 
-  private func perform(_ exchange: Exchange<Reply>) async throws {
+  /// Sends an exchange until the device accepts it, as many times as the retry policy allows.
+  ///
+  /// - Parameter previous: The exchange to send again before each attempt after the first.
+  ///   An attempt counts as rejected if the device rejects either one.
+  private func perform(_ exchange: Exchange<Reply>, repeating previous: Exchange<Reply>? = nil) async throws {
 
-    for attempt in 1...retryPolicy.attempts {
+    let attempts = retryPolicy.attempts
+
+    for attempt in 1...attempts {
 
       try Task.checkCancellation()
 
-      if try await transmit(exchange) {
+      var isPreviousAccepted = true
+
+      if attempt > 1, let previous {
+
+        isPreviousAccepted = try await transmit(previous)
+
+      }
+
+      if isPreviousAccepted, try await transmit(exchange) {
 
         return
 
       }
 
-      if attempt < retryPolicy.attempts {
+      if attempt < attempts {
 
         try await clock.sleep(for: retryPolicy.delay)
 
@@ -249,7 +270,7 @@ actor CommandPacer<Parser: ReplyParser> {
     let id = makeID()
     let (results, continuation) = AsyncStream<Result<Bool, any Error>>.makeStream()
 
-    let timeout = retryPolicy.echoTimeout + exchange.transferTime
+    let timeout = retryPolicy.answerTimeout + exchange.transferTime
 
     pendingAnswer = PendingAnswer(
       id: id,

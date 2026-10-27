@@ -40,12 +40,12 @@ public actor PowerLincController: SerialCommandSender {
   /// - Parameters:
   ///   - connection: The connection to the controller, such as a ``SerialPort`` opened at
   ///     ``SerialPort/BaudRate/baud4800``.
-  ///   - retryPolicy: How to wait for and retry commands. Defaults to ``Modem/RetryPolicy/init(attempts:delay:echoTimeout:)``.
+  ///   - retryPolicy: How to wait for and retry commands. Defaults to ``RetryPolicy/init(attempts:delay:answerTimeout:)``.
   ///   - clock: The clock that times retry delays and timeouts. Defaults to a
   ///     `ContinuousClock`; tests can pass a clock they control.
   public init(
     connection: any ModemConnection,
-    retryPolicy: Modem.RetryPolicy = Modem.RetryPolicy(),
+    retryPolicy: RetryPolicy = RetryPolicy(),
     clock: any Clock<Duration> = ContinuousClock()
   ) {
 
@@ -67,7 +67,7 @@ public actor PowerLincController: SerialCommandSender {
   /// - Parameters:
   ///   - connection: The connection to the controller, such as a ``SerialPort`` opened at
   ///     ``SerialPort/BaudRate/baud4800``.
-  ///   - retryPolicy: How to wait for and retry commands. Defaults to ``Modem/RetryPolicy/init(attempts:delay:echoTimeout:)``.
+  ///   - retryPolicy: How to wait for and retry commands. Defaults to ``RetryPolicy/init(attempts:delay:answerTimeout:)``.
   ///   - clock: The clock that times retry delays and timeouts. Defaults to a
   ///     `ContinuousClock`; tests can pass a clock they control.
   ///   - isolation: The actor `body` runs on. Defaults to the caller's.
@@ -76,7 +76,7 @@ public actor PowerLincController: SerialCommandSender {
   /// - Throws: The error `body` throws, or the connection's error if reading from it failed.
   public static func withConnection<Value>(
     _ connection: any ModemConnection,
-    retryPolicy: Modem.RetryPolicy = Modem.RetryPolicy(),
+    retryPolicy: RetryPolicy = RetryPolicy(),
     clock: any Clock<Duration> = ContinuousClock(),
     isolation: isolated (any Actor)? = #isolation,
     _ body: (PowerLincController) async throws -> Value
@@ -245,7 +245,9 @@ public actor PowerLincController: SerialCommandSender {
       answer: { reply in Self.answer(reply, to: command, confirming: checksums) },
       rejected: rejected ?? PowerLincControllerError.rejected(command),
       timedOut: PowerLincControllerError.timedOut(command),
-      transferTime: transferTime(of: command)
+      transferTime: transferTime(of: command),
+      // Data that doesn't read back has to be downloaded again, not just read again.
+      repeatsPrevious: !checksums.isEmpty
     )
 
   }
@@ -274,9 +276,14 @@ public actor PowerLincController: SerialCommandSender {
 
     switch (reply, command) {
     case let (.echo(echo), _) where echo.number == command.number:
-      // A download's echo repeats only its address and length. Matching the parameters keeps a
-      // late echo of an earlier command from answering this one.
-      let expected = Array(command.parameters.prefix(command.number == 0x40 ? 4 : command.parameters.count))
+      // A download's echo repeats only its address and length, so its data and checksum aren't
+      // encoded just to match it. Matching the parameters keeps a late echo of an earlier
+      // command from answering this one.
+      let expected: [UInt8] = if case let .download(address, data) = command {
+        [UInt8(address >> 8), UInt8(address & 0xFF), UInt8(data.count >> 8 & 0xFF), UInt8(data.count & 0xFF)]
+      } else {
+        command.parameters
+      }
 
       if echo.isAccepted {
 

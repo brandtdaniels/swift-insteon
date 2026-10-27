@@ -9,7 +9,7 @@ struct ModemTests {
 
   let clock = TestClock()
 
-  let policy = Modem.RetryPolicy(attempts: 3, delay: .zero, echoTimeout: .seconds(2))
+  let policy = RetryPolicy(attempts: 3, delay: .zero, answerTimeout: .seconds(2))
 
   func makeModem(_ connection: ScriptedConnection) -> Modem {
 
@@ -23,6 +23,16 @@ struct ModemTests {
   func run(_ modem: Modem, _ body: () async throws -> Void) async throws {
 
     try await withRunning({ try await modem.run() }, body)
+
+  }
+
+  @Test func retryPolicyKeepsAtLeastOneAttempt() {
+
+    var policy = RetryPolicy()
+    policy.attempts = 0
+
+    #expect(policy.attempts == 1)
+    #expect(RetryPolicy(attempts: -2).attempts == 1)
 
   }
 
@@ -161,7 +171,7 @@ struct ModemTests {
   @Test func sendWaitsBeforeRetrying() async throws {
 
     let connection = ScriptedConnection { written, index in written + [index == 0 ? 0x15 : 0x06] }
-    let modem = Modem(connection: connection, retryPolicy: Modem.RetryPolicy(delay: .milliseconds(500)), clock: clock)
+    let modem = Modem(connection: connection, retryPolicy: RetryPolicy(delay: .milliseconds(500)), clock: clock)
 
     try await run(modem) {
 

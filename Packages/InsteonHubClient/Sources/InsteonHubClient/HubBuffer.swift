@@ -17,8 +17,11 @@ public struct HubBuffer: Hashable, Sendable {
   ///
   /// - Parameters:
   ///   - bytes: The buffer's contents.
-  ///   - endIndex: The index where the Hub writes the next byte.
+  ///   - endIndex: The index where the Hub writes the next byte, from `0` through
+  ///     `bytes.count`.
   public init(bytes: [UInt8], endIndex: Int) {
+
+    precondition((0...bytes.count).contains(endIndex), "A Hub buffer's end index must be within its bytes.")
 
     self.bytes = bytes
     self.endIndex = endIndex

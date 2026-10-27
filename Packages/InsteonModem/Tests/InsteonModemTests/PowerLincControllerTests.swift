@@ -9,7 +9,7 @@ struct PowerLincControllerTests {
 
   let clock = TestClock()
 
-  let policy = Modem.RetryPolicy(attempts: 3, delay: .zero, echoTimeout: .seconds(2))
+  let policy = RetryPolicy(attempts: 3, delay: .zero, answerTimeout: .seconds(2))
 
   func makeController(_ connection: ScriptedConnection) -> PowerLincController {
 
@@ -207,8 +207,38 @@ struct PowerLincControllerTests {
 
     }
 
-    // The checksum is read once per attempt, and the flag that would send the byte is never set.
-    #expect(connection.written == [Self.bytes("024001650001FF3366")] + Array(repeating: Self.bytes("024401650001"), count: 3))
+    // Each attempt downloads the byte again and reads its checksum, and the flag that would send
+    // the byte is never set.
+    let attempt = [Self.bytes("024001650001FF3366"), Self.bytes("024401650001")]
+    #expect(connection.written == attempt + attempt + attempt)
+
+  }
+
+  @Test func downloadsAgainWhenTheDataDoesntReadBack() async throws {
+
+    let ibios = SimulatedIBIOS()
+
+    // The first download arrives damaged, so its memory reads back with the wrong checksum.
+    let connection = ScriptedConnection { frame, index in
+
+      index == 1 ? frame + [0x00, 0x00, 0x06] : ibios.answer(frame)
+
+    }
+    let controller = makeController(connection)
+
+    try await run(controller) {
+
+      try await controller.send(.sendX10(.unit(.a, .one)))
+
+    }
+
+    #expect(connection.written == [
+      Self.bytes("024001650001FF3366"),
+      Self.bytes("024401650001"),
+      Self.bytes("024001650001FF3366"),
+      Self.bytes("024401650001"),
+      Self.bytes("0246016680F7")
+    ])
 
   }
 
