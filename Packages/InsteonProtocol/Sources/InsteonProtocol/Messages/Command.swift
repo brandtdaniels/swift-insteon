@@ -39,9 +39,9 @@ extension Command: ByteEncodable {
 
 }
 
-// MARK: - CommandConvertible
+// MARK: - StandardCommandConvertible
 
-extension Command: CommandConvertible {
+extension Command: StandardCommandConvertible {
 
   /// The command itself.
   public var command: Command {
