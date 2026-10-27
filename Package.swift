@@ -4,6 +4,13 @@ import PackageDescription
 
 let package = Package(
   name: "swift-insteon",
+  platforms: [
+    .macOS(.v13),
+    .iOS(.v16),
+    .tvOS(.v16),
+    .watchOS(.v9),
+    .visionOS(.v1)
+  ],
   products: [
     .library(name: "InsteonMessage", targets: ["InsteonMessage"]),
     .library(name: "InsteonSerialCommand", targets: ["InsteonSerialCommand"]),
