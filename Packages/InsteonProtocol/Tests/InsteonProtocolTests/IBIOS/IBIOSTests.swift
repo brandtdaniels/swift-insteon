@@ -98,6 +98,24 @@ struct IBIOSTests {
 
   }
 
+  // Every reply, split at every byte, parses the same once all of it has arrived.
+  @Test(arguments: replies)
+  func waitsForEveryReplySplitAtAnyByte(_ hex: String, _ expected: IBIOSReply) {
+
+    let frame = bytes(hex)
+
+    for split in 1..<max(frame.count, 1) {
+
+      var parser = IBIOSReplyParser()
+      let first = parser.parse(frame.prefix(split))
+      let rest = parser.parse(frame.dropFirst(split))
+
+      #expect(first + rest == [expected], "split after byte \(split)")
+
+    }
+
+  }
+
   @Test func reportsARejectedRequestOnceTheNextReplyArrives() {
 
     var parser = IBIOSReplyParser()
