@@ -1,6 +1,6 @@
 # Identifying Devices
 
-Find out what kind of device is on the network and what it can do.
+Find out what kind of device is on the network.
 
 ## Overview
 
@@ -21,31 +21,9 @@ When the modem becomes a device's controller by linking, it reports the device's
 subcategory in ``AllLinkingCompleted``. Only devices that predate the Product Data Response
 report a firmware version there; newer devices send `0xFF`, which reads as `nil`.
 
-### Finding out what a device can do
+### Looking a device up
 
-What a device can do depends on its product and its firmware version, because commands can
-differ between firmware versions of the same product. That information belongs in one shared
-product database rather than in each app.
-
-``ProductDatabase`` is how this package reads such a database. Conform a type to it that reads
-the database from wherever your app gets it, then look a device up by what it reported:
-
-```swift
-func capabilities(
-  of identity: SetButtonPressed,
-  in database: some ProductDatabase
-) async throws -> (any DeviceCapabilities)? {
-  try await database.capabilities(
-    category: identity.category,
-    subcategory: identity.subcategory,
-    firmwareVersion: identity.firmwareVersion
-  )
-}
-
-if let capabilities = try await capabilities(of: identity, in: database),
-   capabilities.responds(to: StandardDirectCommand.beep) {
-  try await modem.send(.sendStandardMessage(
-    StandardMessage(to: identity.sender, command: StandardDirectCommand.beep)
-  ))
-}
-```
+Together, a device's category, subcategory and firmware version identify its product and the
+firmware it runs. What a device can do depends on both, because commands can differ between
+firmware versions of the same product, so that information belongs in one shared device
+database that apps look devices up in, rather than in each app.
