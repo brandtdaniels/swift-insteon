@@ -246,4 +246,24 @@ struct ModemReplyParserTests {
 
   }
 
+  @Test func readsTheReasonFromANAK() {
+
+    let nak = ReceivedMessage(
+      sender: InsteonAddress(0xAA, 0xBB, 0xCC),
+      destination: InsteonAddress(0x11, 0x22, 0x33),
+      flags: MessageFlags(messageType: .directNegativeAcknowledgement),
+      command: Command(command1: 0x11, command2: 0xFF)
+    )
+    let ack = ReceivedMessage(
+      sender: nak.sender,
+      destination: nak.destination,
+      flags: MessageFlags(messageType: .directAcknowledgement),
+      command: Command(command1: 0x11, command2: 0xFF)
+    )
+
+    #expect(nak.nakReason == .notLinked)
+    #expect(ack.nakReason == nil)
+
+  }
+
 }
