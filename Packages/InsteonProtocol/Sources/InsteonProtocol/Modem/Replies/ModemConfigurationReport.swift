@@ -1,8 +1,8 @@
 /// The settings a modem reports in reply to ``SerialCommand/getModemConfiguration``.
 ///
-/// The reply ends with two bytes after the configuration flags. Later firmware uses them for
-/// ``applicationRetries`` and ``databaseDelta``; older firmware marks them as spare, so their
-/// values have no meaning on those modems.
+/// The reply ends with two bytes after the configuration flags. Depending on the modem's
+/// firmware, they hold ``applicationRetries`` and ``databaseDelta``, or they're spare and their
+/// values have no meaning.
 public struct ModemConfigurationReport: Hashable, Sendable {
 
   /// The modem's configuration flags.

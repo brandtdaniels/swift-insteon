@@ -39,7 +39,7 @@ public struct ExtendedMessage: Message {
   ///   - command: The command to send.
   ///   - userData: The user data to send. Its integrity bytes are overwritten by `integrity`.
   ///   - integrity: How to protect the user data. Defaults to ``ChecksumIntegrity``,
-  ///     which i2cs devices require and older devices ignore.
+  ///     which i2cs devices require and i1 and i2 devices ignore.
   ///   - messageType: The kind of message. Defaults to ``MessageFlags/MessageType/direct``.
   ///   - maxHops: The number of retransmissions to allow. Defaults to three.
   public init(
