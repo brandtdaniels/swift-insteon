@@ -15,12 +15,18 @@ final class ScriptedConnection: ModemConnection, @unchecked Sendable {
 
   let incoming: AsyncThrowingStream<[UInt8], any Error>.Continuation
 
+  /// Every frame written, in order, for tests that need to wait for a write.
+  let writeLog: AsyncStream<[UInt8]>
+
+  private let writeLogContinuation: AsyncStream<[UInt8]>.Continuation
+
   /// - Parameter respond: Given each written frame and its index, returns the bytes to send back.
   init(respond: @escaping ([UInt8], Int) -> [UInt8] = { written, _ in written + [0x06] }) {
 
     var continuation: AsyncThrowingStream<[UInt8], any Error>.Continuation!
     stream = AsyncThrowingStream { continuation = $0 }
     incoming = continuation
+    (writeLog, writeLogContinuation) = AsyncStream.makeStream()
     self.respond = respond
 
   }
@@ -39,6 +45,8 @@ final class ScriptedConnection: ModemConnection, @unchecked Sendable {
       return respond(bytes, writes.count - 1)
 
     }
+
+    writeLogContinuation.yield(bytes)
 
     if !reply.isEmpty {
 

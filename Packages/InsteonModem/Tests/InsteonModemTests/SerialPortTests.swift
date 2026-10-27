@@ -21,9 +21,19 @@ struct SerialPortTests {
     // Host to modem.
     try await port.write([0x02, 0x60])
 
-    var buffer = [UInt8](repeating: 0, count: 16)
-    let count = read(controller, &buffer, buffer.count)
-    #expect(Array(buffer.prefix(max(count, 0))) == [0x02, 0x60])
+    // A read can return part of what was written, so read until the whole frame arrives.
+    var sent: [UInt8] = []
+
+    while sent.count < 2 {
+
+      var buffer = [UInt8](repeating: 0, count: 16)
+      let count = read(controller, &buffer, buffer.count)
+      try #require(count > 0)
+      sent += buffer.prefix(count)
+
+    }
+
+    #expect(sent == [0x02, 0x60])
 
     // Modem to host.
     let received = port.receive()

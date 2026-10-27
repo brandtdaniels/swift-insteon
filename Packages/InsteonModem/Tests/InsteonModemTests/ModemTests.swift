@@ -2,16 +2,25 @@ import Testing
 import InsteonModem
 import InsteonProtocol
 
+/// Every test runs on a ``TestClock`` that only moves when the test advances it, so retry
+/// delays and echo timeouts never depend on how fast the machine running the tests is.
 struct ModemTests {
 
-  let fastRetries = Modem.RetryPolicy(attempts: 3, delay: .milliseconds(10), echoTimeout: .milliseconds(200))
+  let clock = TestClock()
+
+  let policy = Modem.RetryPolicy(attempts: 3, delay: .zero, echoTimeout: .seconds(2))
+
+  func makeModem(_ connection: ScriptedConnection) -> Modem {
+
+    Modem(connection: connection, retryPolicy: policy, clock: clock)
+
+  }
 
   @Test func sendReturnsOnceTheModemAcknowledges() async throws {
 
     let connection = ScriptedConnection()
-    let modem = Modem(connection: connection, retryPolicy: fastRetries)
 
-    try await modem.send(.beep)
+    try await makeModem(connection).send(.beep)
 
     #expect(connection.written == [[0x02, 0x77]])
 
@@ -24,9 +33,8 @@ struct ModemTests {
   func sendReturnsWhenTheModemRepliesWithData(command: SerialCommand, reply: [UInt8]) async throws {
 
     let connection = ScriptedConnection { _, _ in reply }
-    let modem = Modem(connection: connection, retryPolicy: fastRetries)
 
-    try await modem.send(command)
+    try await makeModem(connection).send(command)
 
     #expect(connection.written == [command.bytes])
 
@@ -35,9 +43,8 @@ struct ModemTests {
   @Test func sendRetriesAfterANak() async throws {
 
     let connection = ScriptedConnection { written, index in written + [index == 0 ? 0x15 : 0x06] }
-    let modem = Modem(connection: connection, retryPolicy: fastRetries)
 
-    try await modem.send(.ledOn)
+    try await makeModem(connection).send(.ledOn)
 
     #expect(connection.written == [[0x02, 0x6D], [0x02, 0x6D]])
 
@@ -46,9 +53,27 @@ struct ModemTests {
   @Test func sendRetriesAfterALoneNak() async throws {
 
     let connection = ScriptedConnection { written, index in index == 0 ? [0x15] : written + [0x06] }
-    let modem = Modem(connection: connection, retryPolicy: fastRetries)
 
-    try await modem.send(.beep)
+    try await makeModem(connection).send(.beep)
+
+    #expect(connection.written.count == 2)
+
+  }
+
+  @Test func sendWaitsBeforeRetrying() async throws {
+
+    let connection = ScriptedConnection { written, index in written + [index == 0 ? 0x15 : 0x06] }
+    let modem = Modem(connection: connection, retryPolicy: Modem.RetryPolicy(delay: .milliseconds(500)), clock: clock)
+
+    async let sent: Void = modem.send(.ledOn)
+
+    // Wait for the retry delay specifically; the first attempt's timeout may also be asleep
+    // until the NAK cancels it.
+    await clock.waitForSleeper(until: .milliseconds(500))
+    #expect(connection.written.count == 1)
+
+    clock.advance(by: .milliseconds(500))
+    try await sent
 
     #expect(connection.written.count == 2)
 
@@ -57,7 +82,7 @@ struct ModemTests {
   @Test func sendThrowsWhenEveryAttemptIsRejected() async {
 
     let connection = ScriptedConnection { written, _ in written + [0x15] }
-    let modem = Modem(connection: connection, retryPolicy: fastRetries)
+    let modem = makeModem(connection)
 
     await #expect(throws: ModemError.rejected(.ledOff)) {
 
@@ -72,11 +97,14 @@ struct ModemTests {
   @Test func sendTimesOutWithoutAnEcho() async {
 
     let connection = ScriptedConnection { _, _ in [] }
-    let modem = Modem(connection: connection, retryPolicy: Modem.RetryPolicy(echoTimeout: .milliseconds(50)))
+    let modem = makeModem(connection)
 
     await #expect(throws: ModemError.timedOut(.getModemInfo)) {
 
-      try await modem.send(.getModemInfo)
+      async let sent: Void = modem.send(.getModemInfo)
+      await clock.waitForSleeper(until: .seconds(2))
+      clock.advance(by: .seconds(2))
+      try await sent
 
     }
 
@@ -85,12 +113,13 @@ struct ModemTests {
   @Test func sendFailsWhenTheConnectionCloses() async {
 
     let connection = ScriptedConnection { _, _ in [] }
-    let modem = Modem(connection: connection, retryPolicy: Modem.RetryPolicy(echoTimeout: .seconds(10)))
+    let modem = makeModem(connection)
 
     await #expect(throws: ModemError.connectionClosed) {
 
       async let sent: Void = modem.send(.getModemInfo)
-      try await Task.sleep(for: .milliseconds(50))
+      var writes = connection.writeLog.makeAsyncIterator()
+      _ = await writes.next()
       connection.incoming.finish()
       try await sent
 
@@ -98,11 +127,31 @@ struct ModemTests {
 
   }
 
+  @Test func sendFailsAfterTheConnectionHasClosed() async {
+
+    let connection = ScriptedConnection()
+    let modem = makeModem(connection)
+    let replies = await modem.replies()
+
+    connection.incoming.finish()
+
+    for await _ in replies {}
+
+    await #expect(throws: ModemError.connectionClosed) {
+
+      try await modem.send(.beep)
+
+    }
+
+    #expect(connection.written.isEmpty)
+
+  }
+
   @Test func repliesIncludeEchoesAndMessagesFromDevices() async throws {
 
     let deviceMessage: [UInt8] = [0x02, 0x50, 0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33, 0x2B, 0x11, 0xFF]
     let connection = ScriptedConnection { written, _ in written + [0x06] + deviceMessage }
-    let modem = Modem(connection: connection, retryPolicy: fastRetries)
+    let modem = makeModem(connection)
 
     let replies = await modem.replies()
     try await modem.send(.beep)
@@ -127,16 +176,27 @@ struct ModemTests {
 
   @Test func sendsCommandsOneAtATime() async throws {
 
-    let connection = ScriptedConnection()
-    let modem = Modem(connection: connection, retryPolicy: fastRetries)
+    // The test answers each write itself, so it can check nothing else is written first.
+    let connection = ScriptedConnection { _, _ in [] }
+    let modem = makeModem(connection)
 
     async let first: Void = modem.send(.ledOn)
     async let second: Void = modem.send(.ledOff)
     async let third: Void = modem.send(.beep)
+
+    var writes = connection.writeLog.makeAsyncIterator()
+
+    for count in 1...3 {
+
+      let frame = try #require(await writes.next())
+      #expect(connection.written.count == count)
+      connection.incoming.yield(frame + [0x06])
+
+    }
+
     _ = try await (first, second, third)
 
     #expect(Set(connection.written) == [[0x02, 0x6D], [0x02, 0x6E], [0x02, 0x77]])
-    #expect(connection.written.count == 3)
 
   }
 

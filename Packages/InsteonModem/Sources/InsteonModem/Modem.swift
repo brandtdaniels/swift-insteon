@@ -58,11 +58,15 @@ public actor Modem: SerialCommandSender {
 
     let continuation: CheckedContinuation<CommandEcho, any Error>
 
+    let timeout: Task<Void, Never>
+
   }
 
   private let connection: any ModemConnection
 
   private let retryPolicy: RetryPolicy
+
+  private let clock: any Clock<Duration>
 
   private var parser = ModemReplyParser()
 
@@ -85,10 +89,17 @@ public actor Modem: SerialCommandSender {
   /// - Parameters:
   ///   - connection: The connection to the modem.
   ///   - retryPolicy: How to wait for and retry commands. Defaults to ``Modem/RetryPolicy/init(attempts:delay:echoTimeout:)``.
-  public init(connection: any ModemConnection, retryPolicy: RetryPolicy = RetryPolicy()) {
+  ///   - clock: The clock that times retry delays and echo timeouts. Defaults to a
+  ///     `ContinuousClock`; tests can pass a clock they control.
+  public init(
+    connection: any ModemConnection,
+    retryPolicy: RetryPolicy = RetryPolicy(),
+    clock: any Clock<Duration> = ContinuousClock()
+  ) {
 
     self.connection = connection
     self.retryPolicy = retryPolicy
+    self.clock = clock
 
   }
 
@@ -118,7 +129,7 @@ public actor Modem: SerialCommandSender {
 
       if attempt < retryPolicy.attempts {
 
-        try await Task.sleep(for: retryPolicy.delay)
+        try await clock.sleep(for: retryPolicy.delay)
 
       }
 
@@ -168,13 +179,21 @@ public actor Modem: SerialCommandSender {
   private func transmit(_ command: SerialCommand) async throws -> CommandEcho {
 
     let id = makeID()
-    let timeout = retryPolicy.echoTimeout
+    let echoTimeout = retryPolicy.echoTimeout
 
     return try await withCheckedThrowingContinuation { continuation in
 
-      pendingEcho = PendingEcho(id: id, number: command.number, continuation: continuation)
+      if isClosed {
 
-      Task { [connection] in
+        continuation.resume(throwing: ModemError.connectionClosed)
+
+        return
+
+      }
+
+      // Writes the command, then fails it if no echo arrives in time. Completing the command
+      // cancels this task, so a timeout never outlives the command it belongs to.
+      let timeout = Task { [connection, clock] in
 
         do {
 
@@ -188,11 +207,21 @@ public actor Modem: SerialCommandSender {
 
         }
 
-        try? await Task.sleep(for: timeout)
+        do {
+
+          try await clock.sleep(for: echoTimeout)
+
+        } catch {
+
+          return
+
+        }
 
         self.failEcho(id, with: ModemError.timedOut(command.number))
 
       }
+
+      pendingEcho = PendingEcho(id: id, number: command.number, continuation: continuation, timeout: timeout)
 
     }
 
@@ -200,14 +229,28 @@ public actor Modem: SerialCommandSender {
 
   private func failEcho(_ id: Int, with error: any Error) {
 
-    guard let pending = pendingEcho, pending.id == id else {
+    guard pendingEcho?.id == id else {
+
+      return
+
+    }
+
+    completePendingEcho(.failure(error))
+
+  }
+
+  /// Completes the command waiting for an echo, if there is one, and stops its timeout.
+  private func completePendingEcho(_ result: Result<CommandEcho, any Error>) {
+
+    guard let pending = pendingEcho else {
 
       return
 
     }
 
     pendingEcho = nil
-    pending.continuation.resume(throwing: error)
+    pending.timeout.cancel()
+    pending.continuation.resume(with: result)
 
   }
 
@@ -299,16 +342,13 @@ public actor Modem: SerialCommandSender {
 
     switch reply {
     case let .echo(echo) where echo.number == pending.number:
-      pendingEcho = nil
-      pending.continuation.resume(returning: echo)
+      completePendingEcho(.success(echo))
     // These commands are answered with their data in place of a plain echo.
     case .modemInfo where pending.number == .getModemInfo,
          .modemConfiguration where pending.number == .getModemConfiguration:
-      pendingEcho = nil
-      pending.continuation.resume(returning: CommandEcho(number: pending.number, parameters: [], isAccepted: true))
+      completePendingEcho(.success(CommandEcho(number: pending.number, parameters: [], isAccepted: true)))
     case .negativeAcknowledgement:
-      pendingEcho = nil
-      pending.continuation.resume(returning: CommandEcho(number: pending.number, parameters: [], isAccepted: false))
+      completePendingEcho(.success(CommandEcho(number: pending.number, parameters: [], isAccepted: false)))
     default:
       break
     }
@@ -318,13 +358,7 @@ public actor Modem: SerialCommandSender {
   private func close(with error: (any Error)?) {
 
     isClosed = true
-
-    if let pending = pendingEcho {
-
-      pendingEcho = nil
-      pending.continuation.resume(throwing: error ?? ModemError.connectionClosed)
-
-    }
+    completePendingEcho(.failure(error ?? ModemError.connectionClosed))
 
     for subscriber in subscribers.values {
 
