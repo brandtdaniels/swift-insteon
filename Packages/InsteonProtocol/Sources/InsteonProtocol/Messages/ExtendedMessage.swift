@@ -21,7 +21,7 @@ public struct ExtendedMessage: Message {
   public let destination: InsteonAddress
 
   /// The kind of message.
-  public let messageType: MessageFlags.MessageType
+  public let messageType: MessageType
 
   /// The number of retransmissions to allow.
   public let maxHops: MessageFlags.HopCount
@@ -40,20 +40,22 @@ public struct ExtendedMessage: Message {
   ///   - userData: The user data to send. Its integrity bytes are overwritten by `integrity`.
   ///   - integrity: How to protect the user data. Defaults to ``ChecksumIntegrity``,
   ///     which i2cs devices require and i1 and i2 devices ignore.
-  ///   - messageType: The kind of message. Defaults to ``MessageFlags/MessageType/direct``.
+  ///   - messageType: The kind of message. Defaults to ``ExtendedMessage/MessageType/direct``.
   ///   - maxHops: The number of retransmissions to allow. Defaults to three.
   public init(
     to destination: InsteonAddress,
     command: some CommandConvertible,
     userData: UserData = UserData(),
     integrity: some UserDataIntegrity = ChecksumIntegrity(),
-    messageType: MessageFlags.MessageType = .direct,
+    messageType: MessageType = .direct,
     maxHops: MessageFlags.HopCount = .three
   ) {
 
+    let command = command.command
+
     self.destination = destination
-    self.command = command.command
-    self.userData = integrity.seal(userData, for: command.command)
+    self.command = command
+    self.userData = integrity.seal(userData, for: command)
     self.messageType = messageType
     self.maxHops = maxHops
 
@@ -62,7 +64,7 @@ public struct ExtendedMessage: Message {
   /// The message's flags: extended length, with all hops remaining.
   public var flags: MessageFlags {
 
-    MessageFlags(messageType: messageType, isExtended: true, maxHops: maxHops)
+    MessageFlags(messageType: messageType.flagsType, isExtended: true, maxHops: maxHops)
 
   }
 
@@ -70,6 +72,33 @@ public struct ExtendedMessage: Message {
   public var bytes: [UInt8] {
 
     destination.bytes + [flags.rawValue] + command.bytes + userData.bytes
+
+  }
+
+}
+
+extension ExtendedMessage {
+
+  /// The kinds of message that exist at extended length.
+  ///
+  /// ALL-Link broadcasts, ALL-Link cleanups and acknowledgements are standard length only.
+  public enum MessageType: Hashable, Sendable, CaseIterable {
+
+    /// A message to one device.
+    case direct
+
+    /// A message to every device in range.
+    case broadcast
+
+    /// The type as it appears in the message flags.
+    public var flagsType: MessageFlags.MessageType {
+
+      switch self {
+      case .direct: .direct
+      case .broadcast: .broadcast
+      }
+
+    }
 
   }
 
