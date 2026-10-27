@@ -87,13 +87,8 @@ public struct CRCIntegrity: UserDataIntegrity {
 
       for _ in 0..<8 {
 
-        var bit = UInt16(byte & 0x01)
-
-        for tap: UInt16 in [0x8000, 0x4000, 0x1000, 0x0008] where crc & tap != 0 {
-
-          bit ^= 0x01
-
-        }
+        // The input bit, XORed with the CRC's taps at bits 15, 14, 12 and 3.
+        let bit = UInt16(byte & 0x01) ^ UInt16((crc & 0xD008).nonzeroBitCount & 1)
 
         crc = crc << 1 | bit
         byte >>= 1
