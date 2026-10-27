@@ -12,6 +12,8 @@ struct DeviceCommandTests {
   static let standardDirectCommands: [(StandardDirectCommand, Command)] = [
     (.productDataRequest, Command(command1: 0x03, command2: 0x00)),
     (.exitLinkingMode, Command(command1: 0x08)),
+    (.assignToAllLinkGroup(group: 0x01), Command(command1: 0x01, command2: 0x01)),
+    (.deleteFromAllLinkGroup(group: 0x02), Command(command1: 0x02, command2: 0x02)),
     (.enterLinkingMode(group: 0x01), Command(command1: 0x09, command2: 0x01)),
     (.enterUnlinkingMode(group: 0x02), Command(command1: 0x0A, command2: 0x02)),
     (.getEngineVersion, Command(command1: 0x0D)),

@@ -7,13 +7,13 @@ struct ProductTests {
 
   let modem = InsteonAddress(0x11, 0x22, 0x33)
 
-  func broadcast(to destination: InsteonAddress, command1: UInt8) -> ReceivedMessage {
+  func broadcast(to destination: InsteonAddress, command1: UInt8, command2: UInt8 = 0xFF) -> ReceivedMessage {
 
     ReceivedMessage(
       sender: device,
       destination: destination,
       flags: MessageFlags(messageType: .broadcast),
-      command: Command(command1: command1, command2: 0xFF)
+      command: Command(command1: command1, command2: command2)
     )
 
   }
@@ -62,6 +62,69 @@ struct ProductTests {
   func ignoresOtherMessagesAsSetButtonPressed(_ message: ReceivedMessage) {
 
     #expect(SetButtonPressed(message) == nil)
+
+  }
+
+  @Test func readsAHeartbeatsBatteryLevelAndIdentity() throws {
+
+    let heartbeat = try #require(Heartbeat(broadcast(to: InsteonAddress(0x00, 0x10, 0x41), command1: 0x04, command2: 0xA0)))
+
+    #expect(heartbeat == Heartbeat(sender: device, batteryLevel: 0xA0, category: 0x00, subcategory: 0x10, firmwareVersion: 0x41))
+
+  }
+
+  @Test(arguments: [(UInt8(0x00), PowerlinePhaseTest.Phase.a), (0x01, .b)])
+  func readsThePowerlinePhase(_ command2: UInt8, _ phase: PowerlinePhaseTest.Phase) throws {
+
+    let test = try #require(PowerlinePhaseTest(broadcast(to: InsteonAddress(0x00, 0x00, 0x00), command1: 0x03, command2: command2)))
+
+    #expect(test == PowerlinePhaseTest(sender: device, phase: phase))
+
+  }
+
+  @Test func ignoresAPowerlinePhaseTestWithAnUnknownPhase() {
+
+    #expect(PowerlinePhaseTest(broadcast(to: InsteonAddress(0x00, 0x00, 0x00), command1: 0x03, command2: 0x02)) == nil)
+
+  }
+
+  @Test func readsDeviceStatusChangedWithoutAFirmwareVersion() throws {
+
+    let changed = try #require(DeviceStatusChanged(broadcast(to: InsteonAddress(0x01, 0x20, 0xFF), command1: 0x27)))
+
+    #expect(changed == DeviceStatusChanged(sender: device, category: 0x01, subcategory: 0x20, firmwareVersion: nil))
+
+  }
+
+  @Test func readsEachBroadcastOnlyFromItsOwnCommand() {
+
+    let destination = InsteonAddress(0x01, 0x20, 0x41)
+
+    #expect(Heartbeat(broadcast(to: destination, command1: 0x27)) == nil)
+    #expect(PowerlinePhaseTest(broadcast(to: destination, command1: 0x04, command2: 0x00)) == nil)
+    #expect(DeviceStatusChanged(broadcast(to: destination, command1: 0x04)) == nil)
+    #expect(SetButtonPressed(broadcast(to: destination, command1: 0x27)) == nil)
+
+  }
+
+  @Test func ignoresDirectAndExtendedMessagesAsBroadcasts() {
+
+    let direct = ReceivedMessage(
+      sender: device,
+      destination: modem,
+      flags: MessageFlags(messageType: .direct),
+      command: Command(command1: 0x04, command2: 0x00)
+    )
+    let extended = ReceivedMessage(
+      sender: device,
+      destination: InsteonAddress(0x01, 0x20, 0x41),
+      flags: MessageFlags(messageType: .broadcast, isExtended: true),
+      command: Command(command1: 0x27, command2: 0x00)
+    )
+
+    #expect(Heartbeat(direct) == nil)
+    #expect(PowerlinePhaseTest(direct) == nil)
+    #expect(DeviceStatusChanged(extended) == nil)
 
   }
 

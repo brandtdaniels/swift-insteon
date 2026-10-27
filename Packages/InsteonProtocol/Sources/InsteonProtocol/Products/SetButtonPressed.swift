@@ -82,14 +82,14 @@ public struct SetButtonPressed: Hashable, Sendable {
 
     }
 
-    let firmware = message.destination.low
+    let identity = message.reportedIdentity
 
     self.init(
       sender: message.sender,
       role: role,
-      category: DeviceCategory(rawValue: message.destination.high),
-      subcategory: DeviceSubcategory(rawValue: message.destination.middle),
-      firmwareVersion: firmware == 0xFF ? nil : FirmwareVersion(rawValue: firmware)
+      category: identity.category,
+      subcategory: identity.subcategory,
+      firmwareVersion: identity.firmwareVersion
     )
 
   }

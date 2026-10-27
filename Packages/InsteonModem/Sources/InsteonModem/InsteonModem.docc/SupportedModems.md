@@ -40,6 +40,9 @@ commands after those, such as Cancel Cleanup (`0x74`), Read and Write Database
 (`0x7A`), appear only in Insteon's PLM serial command table, so a modem whose firmware doesn't
 implement one, such as a 2412 PowerLinc Modem, may reject it.
 
+The same table lists Set Status (`0x78`), Set RF Frequency (`0x7B`) and Set Venstar ACKs
+(`0x7C`) without their parameters, so `SerialCommand` doesn't include them.
+
 A modem rejects a command it lacks with a NAK, the same answer it gives when it's busy, so
 ``Modem/send(_:)`` sends the command again as its ``RetryPolicy`` allows before it
 throws ``ModemError/rejected(_:)``.

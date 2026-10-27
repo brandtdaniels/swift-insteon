@@ -1,4 +1,9 @@
 /// The flags byte of an ALL-Link database record.
+///
+/// A modem with a linear database copies ``AllLinkRecordFlags/inUse`` and
+/// ``AllLinkRecordFlags/usedBefore`` from a record written with
+/// ``AllLinkRecordAction/modifyFirstOrAdd``. A modem with a threaded database manages both bits
+/// itself.
 public struct AllLinkRecordFlags: OptionSet, Hashable, Sendable {
 
   /// The flags byte.

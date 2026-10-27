@@ -20,6 +20,8 @@ struct EngineAndNAKTests {
 
   static let minimumEngines: [(StandardDirectCommand, InsteonEngine?)] = [
     (.on(level: 0xFF), .i1),
+    (.assignToAllLinkGroup(group: 0x01), .i1),
+    (.deleteFromAllLinkGroup(group: 0x01), .i1),
     (.enterLinkingMode(group: 0x01), .i1),
     (.statusRequest(variant: 0x00), .i1),
     (.statusRequest(variant: 0x02), .i2),
