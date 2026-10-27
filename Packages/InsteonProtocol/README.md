@@ -42,4 +42,12 @@ No device data is built in, so every app can look devices up in one shared devic
 - `X10Code`: X10 unit addresses and commands
 - `ModemReplyParser` and `ModemReply`: turn the bytes a modem sends back into typed replies: command echoes with ACK/NAK, lone NAKs, messages received from devices, ALL-Link records and more
 
+## PowerLinc Controller
+
+`Sources/InsteonProtocol/IBIOS` covers IBIOS, the serial protocol of the PowerLinc Controller (2414U, 2414S), which gives the host access to the device's memory instead of modem commands:
+
+- `IBIOSCommand`: download, upload, checksum, mask, simulated event and get version, encoded to bytes with their checksums
+- `IBIOSReplyParser` and `IBIOSReply`: turn the bytes the controller sends into typed replies: echoes with ACK/NAK, memory, event reports, and the INSTEON messages and X10 its SALad program reports
+- `IBIOSEvent`: the events IBIOS reports
+
 See the DocC catalog in `Sources/InsteonProtocol/InsteonProtocol.docc` for the full documentation, including the byte-level message format.

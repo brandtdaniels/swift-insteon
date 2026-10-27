@@ -16,11 +16,12 @@ uses them, whatever the connection:
 | 2448A7, 2448A7H | USB Adapter | USB, through ``SerialPort`` | Supported, by radio only; see <doc:SupportedModems#The-USB-Adapter> |
 | 2245 | Hub 2 | Network, through `HubConnection` in InsteonHubClient | Supported |
 | 2242 | Hub 1 | Network, through `HubConnection` in InsteonHubClient | Expected to work: it serves the same local HTTP requests, though its buffer format hasn't been verified |
+| 2414S | PowerLinc Controller | Serial at 4800 baud, through ``SerialPort`` | Supported by ``PowerLincController`` rather than ``Modem``; see <doc:SupportedModems#The-PowerLinc-Controller> |
 
 These aren't supported:
 
-- **PowerLinc Controller (2414U, 2414S):** it uses the IBIOS serial commands, a different
-  protocol from the IM serial commands.
+- **PowerLinc Controller by USB (2414U):** it connects through USB HID rather than a serial
+  port.
 - **SmartLinc (2412N):** its interface isn't documented.
 - **Hub Pro (2243):** it's built around HomeKit and has no documented local modem interface.
 
@@ -48,3 +49,18 @@ throws ``ModemError/rejected(_:)``.
 The USB Adapter (2448A7) sends and receives INSTEON messages by radio only. In Insteon's
 test log for it, it rejects X10 commands and Beep, so expect ``ModemError/rejected(_:)`` for
 `SerialCommand.sendX10(_:)` and `SerialCommand.beep`.
+
+### The PowerLinc Controller
+
+The PowerLinc Controller (2414S) runs IBIOS rather than the IM serial commands: the host sends
+an INSTEON message by writing it into the controller's memory and setting a flag.
+``PowerLincController`` does that for standard messages and X10, confirming each write with
+Get Checksum before it sets the flag, since the controller's ACK means only that it received
+the bytes. It also answers
+`SerialCommand.getModemInfo` with the controller's version, so code written against
+`SerialCommandSender` works with it. It doesn't carry extended messages or the modem's
+ALL-Link database commands.
+
+The memory addresses it uses come from the worked examples in the INSTEON Developer's Guide,
+which use the controller's i1 INSTEON engine. Messages from devices arrive through the SALad
+program the controller ships with.
