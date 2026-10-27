@@ -7,12 +7,12 @@ struct ProductTests {
 
   let modem = InsteonAddress(0x11, 0x22, 0x33)
 
-  func broadcast(to destination: InsteonAddress, command1: UInt8, isExtended: Bool = false) -> ReceivedMessage {
+  func broadcast(to destination: InsteonAddress, command1: UInt8) -> ReceivedMessage {
 
     ReceivedMessage(
       sender: device,
       destination: destination,
-      flags: MessageFlags(messageType: .broadcast, isExtended: isExtended),
+      flags: MessageFlags(messageType: .broadcast),
       command: Command(command1: command1, command2: 0xFF)
     )
 
@@ -51,6 +51,13 @@ struct ProductTests {
       flags: MessageFlags(messageType: .direct),
       command: Command(command1: 0x01)
     ),
+    // An extended broadcast.
+    ReceivedMessage(
+      sender: InsteonAddress(0xCC, 0xCC, 0xCC),
+      destination: InsteonAddress(0x01, 0x03, 0xFF),
+      flags: MessageFlags(messageType: .broadcast, isExtended: true),
+      command: Command(command1: 0x01)
+    ),
   ])
   func ignoresOtherMessagesAsSetButtonPressed(_ message: ReceivedMessage) {
 
@@ -77,6 +84,21 @@ struct ProductTests {
 
   }
 
+  // cmd2 0x02 asks for the device's text string, which also arrives with cmd1 0x03.
+  @Test func ignoresOtherResponsesWithTheSameCommand() throws {
+
+    let message = ReceivedMessage(
+      sender: device,
+      destination: modem,
+      flags: .extendedDirect,
+      command: Command(command1: 0x03, command2: 0x02),
+      userData: try UserData(Array("Kitchen".utf8))
+    )
+
+    #expect(ProductData(message) == nil)
+
+  }
+
   @Test func ignoresStandardMessagesAsProductData() {
 
     let message = ReceivedMessage(sender: device, destination: modem, flags: .direct, command: Command(command1: 0x03))
@@ -85,15 +107,37 @@ struct ProductTests {
 
   }
 
-  @Test func printsCategoriesInHex() {
+  @Test func printsIdentityBytesInHex() {
 
     #expect(DeviceCategory(rawValue: 0x0E).description == "0x0E")
+    #expect(DeviceSubcategory(rawValue: 0x2A).description == "0x2A")
+    #expect(FirmwareVersion(rawValue: 0x41).description == "0x41")
+
+  }
+
+  @Test func ordersFirmwareVersionsByNumber() {
+
+    #expect(FirmwareVersion(rawValue: 0x40) < 0x41)
+    #expect([FirmwareVersion(rawValue: 0x45), 0x41, 0x43].max() == 0x45)
 
   }
 
   @Test func encodesTheHostDeviceCategory() {
 
-    #expect(SerialCommand.setHostDeviceCategory(category: 0x03, subcategory: 0x15, firmwareVersion: 0xFF).bytes == [0x02, 0x66, 0x03, 0x15, 0xFF])
+    #expect(SerialCommand.setHostDeviceCategory(category: 0x03, subcategory: 0x15, firmwareVersion: 0x41).bytes == [0x02, 0x66, 0x03, 0x15, 0x41])
+    // No firmware version is sent as 0xFF.
+    #expect(SerialCommand.setHostDeviceCategory(category: 0x03, subcategory: 0x15, firmwareVersion: nil).bytes == [0x02, 0x66, 0x03, 0x15, 0xFF])
+
+  }
+
+  // cmd1 0x2E is Light ON at Ramp Rate as a standard command, but Extended Set/Get as an
+  // extended one.
+  @Test func capabilitiesTellStandardAndExtendedCommandsApart() {
+
+    let capabilities = CommandList(standard: [0x2E])
+
+    #expect(capabilities.responds(to: Command(command1: 0x2E, command2: 0x80)))
+    #expect(!capabilities.responds(to: ExtendedDirectCommand.getSet))
 
   }
 
@@ -113,14 +157,20 @@ struct ProductTests {
 
 }
 
-/// Capabilities matched by cmd1, as a product database might record them.
+/// Capabilities matched by cmd1 in each command table, as a product database might record them.
 private struct CommandList: DeviceCapabilities {
 
-  let respondedCommands: Set<UInt8>
+  var standard: Set<UInt8> = []
 
-  func responds(to command: Command) -> Bool { respondedCommands.contains(command.command1) }
+  var extended: Set<UInt8> = []
 
-  func sends(_ command: Command) -> Bool { false }
+  func responds(to command: Command, length: MessageLength) -> Bool {
+
+    (length == .standard ? standard : extended).contains(command.command1)
+
+  }
+
+  func sends(_ command: Command, length: MessageLength) -> Bool { false }
 
 }
 
@@ -131,7 +181,7 @@ private struct FirmwareDependentDatabase: ProductDatabase {
 
     guard category == 0x01, subcategory == 0x20 else { return nil }
 
-    return (firmwareVersion ?? 0) >= 0x41 ? CommandList(respondedCommands: [0x11, 0x13, 0x30]) : CommandList(respondedCommands: [0x11, 0x13])
+    return (firmwareVersion ?? 0) >= 0x41 ? CommandList(standard: [0x11, 0x13, 0x30]) : CommandList(standard: [0x11, 0x13])
 
   }
 
