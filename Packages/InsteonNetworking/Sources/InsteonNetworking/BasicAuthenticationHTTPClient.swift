@@ -46,3 +46,30 @@ public struct BasicAuthenticationHTTPClient: HTTPClient {
   }
 
 }
+
+// MARK: - Redaction
+
+extension BasicAuthenticationHTTPClient: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+
+  /// A description that leaves out the credentials, so logging the client doesn't reveal them.
+  public var description: String {
+
+    "BasicAuthenticationHTTPClient(httpClient: \(httpClient), authorization: <redacted>)"
+
+  }
+
+  /// The same description as ``BasicAuthenticationHTTPClient/description``.
+  public var debugDescription: String {
+
+    description
+
+  }
+
+  /// A mirror that shows the wrapped client but not the credentials, for `dump` and debuggers.
+  public var customMirror: Mirror {
+
+    Mirror(self, children: ["httpClient": httpClient], displayStyle: .struct)
+
+  }
+
+}

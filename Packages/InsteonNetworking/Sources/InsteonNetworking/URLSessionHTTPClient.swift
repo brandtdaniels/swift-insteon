@@ -49,26 +49,39 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
   private func data(for request: URLRequest) async throws -> (Data, URLResponse) {
 
     #if canImport(FoundationNetworking)
-    // swift-corelibs-foundation lacks a cancelable async API, so bridge the completion handler.
-    return try await withCheckedThrowingContinuation { continuation in
+    // swift-corelibs-foundation lacks an async API, so bridge the completion handler, and cancel
+    // the data task when the calling task is canceled, as the async API on Apple platforms does.
+    let cancellation = DataTaskCancellation()
 
-      session.dataTask(with: request) { data, response, error in
+    return try await withTaskCancellationHandler {
 
-        if let error {
+      try await withCheckedThrowingContinuation { continuation in
 
-          continuation.resume(throwing: error)
+        let task = session.dataTask(with: request) { data, response, error in
 
-        } else if let response {
+          if let error {
 
-          continuation.resume(returning: (data ?? Data(), response))
+            continuation.resume(throwing: error)
 
-        } else {
+          } else if let response {
 
-          continuation.resume(throwing: HTTPClientError.nonHTTPResponse)
+            continuation.resume(returning: (data ?? Data(), response))
+
+          } else {
+
+            continuation.resume(throwing: URLError(.badServerResponse))
+
+          }
 
         }
 
-      }.resume()
+        cancellation.start(task)
+
+      }
+
+    } onCancel: {
+
+      cancellation.cancel()
 
     }
     #else
@@ -78,3 +91,51 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
   }
 
 }
+
+#if canImport(FoundationNetworking)
+/// Starts a data task and cancels it if cancellation was requested before or after it started.
+private final class DataTaskCancellation: @unchecked Sendable {
+
+  // `lock` guards `task` and `isCanceled`.
+  private let lock = NSLock()
+
+  private var task: URLSessionDataTask?
+
+  private var isCanceled = false
+
+  func start(_ task: URLSessionDataTask) {
+
+    let isCanceled = lock.withLock {
+
+      self.task = task
+
+      return self.isCanceled
+
+    }
+
+    if isCanceled {
+
+      task.cancel()
+
+    }
+
+    task.resume()
+
+  }
+
+  func cancel() {
+
+    let task = lock.withLock {
+
+      isCanceled = true
+
+      return self.task
+
+    }
+
+    task?.cancel()
+
+  }
+
+}
+#endif
