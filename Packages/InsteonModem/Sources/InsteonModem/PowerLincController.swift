@@ -12,7 +12,7 @@ import InsteonProtocol
 /// | --- | --- |
 /// | `SerialCommand.sendStandardMessage(_:)` | Downloads the message to `0x01A4`, then sets bit 4 of `0x0142` |
 /// | `SerialCommand.sendX10(_:)` | Downloads the X10 byte to `0x0165`, then sets bit 7 of `0x0166` and bit 3 for a command |
-/// | `SerialCommand.getModemInfo` | Get Version, answered with ``IBIOSReply/version(_:)`` |
+/// | `SerialCommand.getModemInfo` | Get Version, answered with `IBIOSReply.version(_:)` |
 ///
 /// The addresses come from the worked examples in the INSTEON Developer's Guide, chapter 9,
 /// which use the i1 INSTEON engine. Other commands, including extended messages, throw
@@ -133,9 +133,9 @@ public actor PowerLincController: SerialCommandSender {
   ///
   /// - Parameter command: A standard message, X10 or `getModemInfo`. The answer to
   ///   `getModemInfo` arrives through ``PowerLincController/replies()`` as
-  ///   ``IBIOSReply/version(_:)``.
+  ///   `IBIOSReply.version(_:)`.
   /// - Throws: ``PowerLincControllerError/unsupported(_:)`` for any other command, without
-  ///   sending anything; otherwise the errors sending an ``IBIOSCommand`` throws.
+  ///   sending anything; otherwise the errors sending an `IBIOSCommand` throws.
   public func send(_ command: SerialCommand) async throws {
 
     let steps = try Self.ibiosCommands(for: command)

@@ -4,7 +4,7 @@ import InsteonProtocol
 public enum PowerLincControllerError: Error, Hashable, Sendable {
 
   /// The controller can't carry this command. It sends standard INSTEON messages and X10, and
-  /// answers ``SerialCommand/getModemInfo``.
+  /// answers `SerialCommand.getModemInfo`.
   case unsupported(SerialCommand)
 
   /// The controller kept rejecting an IBIOS command with a NAK, usually because it was busy.
