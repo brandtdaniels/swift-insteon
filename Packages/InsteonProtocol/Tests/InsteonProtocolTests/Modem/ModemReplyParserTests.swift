@@ -144,7 +144,8 @@ struct ModemReplyParserTests {
       .echo(CommandEcho(number: .readDatabase, parameters: [0x1F, 0xF8], isAccepted: true)),
       .databaseRecord(
         address: 0x1FF8,
-        record: AllLinkRecord(flags: [.inUse, .controller, .usedBefore], group: 0x01, address: pairedDevice)
+        // E2: in use, controller and used before, plus bit 5, which real records also set.
+        record: AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0x01, address: pairedDevice)
       ),
       .echo(CommandEcho(number: .sendAllLinkCommand, parameters: [0x04, 0x12, 0x00], isAccepted: true)),
       .messageReceived(ReceivedMessage(
