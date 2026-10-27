@@ -28,7 +28,7 @@ These aren't supported:
 The reply to `SerialCommand.getModemInfo` carries the modem's device category, subcategory and
 firmware version in a `ModemInfo`. Every modem in the table reports category `0x03`, and the
 subcategory tells the models apart. To name the model, look the category and subcategory up
-in a `ProductDatabase` from InsteonProtocol.
+in a device database.
 
 ### Commands on older modems
 
