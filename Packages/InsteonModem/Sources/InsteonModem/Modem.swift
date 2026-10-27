@@ -301,6 +301,11 @@ public actor Modem: SerialCommandSender {
     case let .echo(echo) where echo.number == pending.number:
       pendingEcho = nil
       pending.continuation.resume(returning: echo)
+    // These commands are answered with their data in place of a plain echo.
+    case .modemInfo where pending.number == .getModemInfo,
+         .modemConfiguration where pending.number == .getModemConfiguration:
+      pendingEcho = nil
+      pending.continuation.resume(returning: CommandEcho(number: pending.number, parameters: [], isAccepted: true))
     case .negativeAcknowledgement:
       pendingEcho = nil
       pending.continuation.resume(returning: CommandEcho(number: pending.number, parameters: [], isAccepted: false))

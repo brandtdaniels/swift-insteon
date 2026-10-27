@@ -11,9 +11,24 @@ struct ModemTests {
     let connection = ScriptedConnection()
     let modem = Modem(connection: connection, retryPolicy: fastRetries)
 
-    try await modem.send(.getModemConfiguration)
+    try await modem.send(.beep)
 
-    #expect(connection.written == [[0x02, 0x73]])
+    #expect(connection.written == [[0x02, 0x77]])
+
+  }
+
+  @Test(arguments: [
+    (SerialCommand.getModemInfo, [UInt8]([0x02, 0x60, 0x1A, 0x2B, 0x3C, 0x03, 0x37, 0x9C, 0x06])),
+    (SerialCommand.getModemConfiguration, [UInt8]([0x02, 0x73, 0x40, 0x05, 0x00, 0x06])),
+  ])
+  func sendReturnsWhenTheModemRepliesWithData(command: SerialCommand, reply: [UInt8]) async throws {
+
+    let connection = ScriptedConnection { _, _ in reply }
+    let modem = Modem(connection: connection, retryPolicy: fastRetries)
+
+    try await modem.send(command)
+
+    #expect(connection.written == [command.bytes])
 
   }
 
