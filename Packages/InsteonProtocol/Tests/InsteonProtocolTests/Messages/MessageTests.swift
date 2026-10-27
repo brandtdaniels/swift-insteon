@@ -1,5 +1,5 @@
 import Testing
-import InsteonMessage
+import InsteonProtocol
 
 struct MessageTests {
 

@@ -4,7 +4,7 @@ Swift packages for working with [INSTEON](https://www.insteon.com) home automati
 
 | Library | Description |
 | --- | --- |
-| [InsteonMessage](Packages/InsteonMessage) | Build INSTEON messages and encode them for sending to a modem or hub |
+| [InsteonProtocol](Packages/InsteonProtocol) | The INSTEON protocol as value types: build messages and encode them for a modem or hub |
 
 ## Requirements
 
@@ -25,7 +25,7 @@ Then add the libraries you need to your target:
 .target(
   name: "MyApp",
   dependencies: [
-    .product(name: "InsteonMessage", package: "swift-insteon")
+    .product(name: "InsteonProtocol", package: "swift-insteon")
   ]
 )
 ```
@@ -33,7 +33,7 @@ Then add the libraries you need to your target:
 ## Usage
 
 ```swift
-import InsteonMessage
+import InsteonProtocol
 
 let lamp = InsteonAddress("1A.2B.3C")!
 

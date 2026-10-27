@@ -5,17 +5,17 @@ import PackageDescription
 let package = Package(
   name: "swift-insteon",
   products: [
-    .library(name: "InsteonMessage", targets: ["InsteonMessage"])
+    .library(name: "InsteonProtocol", targets: ["InsteonProtocol"])
   ],
   targets: [
     .target(
-      name: "InsteonMessage",
-      path: "Packages/InsteonMessage/Sources/InsteonMessage"
+      name: "InsteonProtocol",
+      path: "Packages/InsteonProtocol/Sources/InsteonProtocol"
     ),
     .testTarget(
-      name: "InsteonMessageTests",
-      dependencies: ["InsteonMessage"],
-      path: "Packages/InsteonMessage/Tests/InsteonMessageTests"
+      name: "InsteonProtocolTests",
+      dependencies: ["InsteonProtocol"],
+      path: "Packages/InsteonProtocol/Tests/InsteonProtocolTests"
     )
   ]
 )

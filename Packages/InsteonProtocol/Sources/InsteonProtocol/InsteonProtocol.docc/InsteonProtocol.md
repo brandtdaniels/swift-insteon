@@ -1,15 +1,15 @@
-# ``InsteonMessage``
+# ``InsteonProtocol``
 
-Build INSTEON messages for sending to a modem or hub.
+Build INSTEON messages and encode them for sending to a modem or hub.
 
 ## Overview
 
 INSTEON devices talk to each other over the power line and RF using short messages. This
-package models those messages as value types and encodes them to the bytes an INSTEON modem
+module models those messages as value types and encodes them to the bytes an INSTEON modem
 accepts for transmission.
 
 ```swift
-import InsteonMessage
+import InsteonProtocol
 
 let lamp = InsteonAddress("1A.2B.3C")!
 
@@ -21,7 +21,7 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 
 ## Topics
 
-### Essentials
+### Messages
 
 - <doc:MessageFormat>
 - ``StandardMessage``
