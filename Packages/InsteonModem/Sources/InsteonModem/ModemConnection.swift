@@ -1,6 +1,6 @@
 /// A byte-level connection to an INSTEON modem, such as a serial port.
 ///
-/// ``Modem`` speaks the modem's protocol over any connection, so supporting a new way of
+/// ``Modem`` speaks the modem's protocol over any connection, so supporting another way of
 /// reaching a modem only means conforming to this protocol.
 public protocol ModemConnection: Sendable {
 
