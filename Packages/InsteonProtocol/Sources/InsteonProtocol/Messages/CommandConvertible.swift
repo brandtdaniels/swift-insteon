@@ -7,6 +7,22 @@ public protocol CommandConvertible: Sendable {
   /// The command bytes this value represents.
   var command: Command { get }
 
+  /// The earliest ``InsteonEngine`` on which every device accepts the command, or `nil` when
+  /// that depends on the product. Defaults to `nil`.
+  var minimumEngine: InsteonEngine? { get }
+
+}
+
+extension CommandConvertible {
+
+  /// Returns `nil`: without more knowledge of a command, whether a device accepts it depends on
+  /// the product.
+  public var minimumEngine: InsteonEngine? {
+
+    nil
+
+  }
+
 }
 
 /// A command that can be sent in a standard-length message.

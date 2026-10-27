@@ -90,7 +90,7 @@ public struct MessageFlags: Hashable, Sendable {
   ///   - isExtended: Whether the message carries 14 bytes of user data.
   ///   - maxHops: The number of retransmissions to allow.
   ///   - hopsLeft: The number of retransmissions remaining. Defaults to `maxHops`, as for a
-  ///     message that has not been retransmitted yet.
+  ///     message that has not been retransmitted yet, and is limited to `maxHops`.
   public init(
     messageType: MessageType,
     isExtended: Bool = false,
@@ -101,7 +101,7 @@ public struct MessageFlags: Hashable, Sendable {
     self.messageType = messageType
     self.isExtended = isExtended
     self.maxHops = maxHops
-    self.hopsLeft = hopsLeft ?? maxHops
+    self.hopsLeft = min(hopsLeft ?? maxHops, maxHops)
 
   }
 
