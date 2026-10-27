@@ -2,6 +2,7 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+
 /// The requests the Hub's local HTTP interface accepts.
 enum HubRequest {
 
@@ -14,22 +15,24 @@ enum HubRequest {
   /// Clears the buffer.
   case clearBuffer
 
-  var method: String {
+  var path: String {
 
     switch self {
-    case .write, .clearBuffer: "POST"
-    case .readBuffer: "GET"
+    case .write: "/3"
+    case .readBuffer: "/buffstatus.xml"
+    case .clearBuffer: "/1"
     }
 
   }
 
-  /// The path and query. The Hub expects the bytes as hex where a query name would go.
-  var pathAndQuery: String {
+  /// The query, already percent-encoded. The Hub expects the bytes as hex where a query name
+  /// would go.
+  var query: String? {
 
     switch self {
-    case let .write(bytes): "/3?\(Self.hex(bytes))=I=3"
-    case .readBuffer: "/buffstatus.xml"
-    case .clearBuffer: "/1?XB=M=1"
+    case let .write(bytes): "\(Self.hex(bytes))=I=3"
+    case .readBuffer: nil
+    case .clearBuffer: "XB=M=1"
     }
 
   }
@@ -41,16 +44,27 @@ enum HubRequest {
 
   }
 
+  /// The request, a GET for every action. It always goes to the Hub rather than a cache, since
+  /// the buffer changes between reads.
   func urlRequest(for endpoint: HubEndpoint) throws(HubError) -> URLRequest {
 
-    guard let url = URL(string: "http://\(endpoint.host):\(endpoint.port)\(pathAndQuery)") else {
+    // Components set the host as a host, so it can't change the request's path or authority.
+    var components = URLComponents()
+    components.scheme = "http"
+    components.host = endpoint.host
+    components.port = endpoint.port
+    components.path = path
+    components.percentEncodedQuery = query
+
+    guard !endpoint.host.isEmpty, let url = components.url, url.host != nil else {
 
       throw .invalidEndpoint(endpoint)
 
     }
 
     var request = URLRequest(url: url)
-    request.httpMethod = method
+    request.httpMethod = "GET"
+    request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
 
     return request
 

@@ -27,7 +27,11 @@ struct HubBufferTests {
     "<response><BS></BS></response>",
     "<response><BS>010</BS></response>",
     "<response><BS>01GG02</BS></response>",
-    "<response><BS>0102FF</BS></response>"
+    "<response><BS>0102FF</BS></response>",
+    // An end position in the middle of a byte.
+    "<response><BS>010203</BS></response>",
+    // Full-width digits, which aren't hex to the Hub.
+    "<response><BS>０１0202</BS></response>"
   ])
   func rejectsMalformedResponses(_ response: String) {
 
