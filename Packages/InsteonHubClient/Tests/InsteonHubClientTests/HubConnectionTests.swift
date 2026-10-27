@@ -32,7 +32,7 @@ struct HubConnectionTests {
 
     try await makeConnection(fake).write([0x02, 0x77])
 
-    #expect(await fake.requests == ["POST /1", "POST /3"])
+    #expect(await fake.requests == ["GET /1", "GET /3"])
 
   }
 
