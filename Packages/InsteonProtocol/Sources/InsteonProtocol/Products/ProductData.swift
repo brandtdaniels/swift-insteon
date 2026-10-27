@@ -4,22 +4,18 @@
 ///
 /// | Byte | Contents |
 /// | --- | --- |
-/// | D1 | Reserved |
-/// | D2–D4 | ``productKey`` |
+/// | D1–D4 | Reserved |
 /// | D5 | ``category`` |
 /// | D6 | ``subcategory`` |
 /// | D7–D8 | Reserved |
 /// | D9–D14 | ``userDefined``, which some manufacturers use for the firmware version |
 ///
-/// Devices without a product key don't answer the request; they identify themselves only
-/// through ``SetButtonPressed``.
+/// Not every device answers the request; every device identifies itself with
+/// ``SetButtonPressed``.
 public struct ProductData: Hashable, Sendable {
 
   /// The device that sent the response.
   public var sender: InsteonAddress
-
-  /// The device's INSTEON Product Key.
-  public var productKey: InsteonProductKey
 
   /// The device's category.
   public var category: DeviceCategory
@@ -34,20 +30,12 @@ public struct ProductData: Hashable, Sendable {
   ///
   /// - Parameters:
   ///   - sender: The device that sent the response.
-  ///   - productKey: The device's product key.
   ///   - category: The device's category.
   ///   - subcategory: The device's subcategory.
   ///   - userDefined: D9 through D14.
-  public init(
-    sender: InsteonAddress,
-    productKey: InsteonProductKey,
-    category: DeviceCategory,
-    subcategory: UInt8,
-    userDefined: [UInt8]
-  ) {
+  public init(sender: InsteonAddress, category: DeviceCategory, subcategory: UInt8, userDefined: [UInt8]) {
 
     self.sender = sender
-    self.productKey = productKey
     self.category = category
     self.subcategory = subcategory
     self.userDefined = userDefined
@@ -72,7 +60,6 @@ public struct ProductData: Hashable, Sendable {
 
     self.init(
       sender: message.sender,
-      productKey: InsteonProductKey(data[2], data[3], data[4]),
       category: DeviceCategory(rawValue: data[5]),
       subcategory: data[6],
       userDefined: (9...14).map { data[$0] }

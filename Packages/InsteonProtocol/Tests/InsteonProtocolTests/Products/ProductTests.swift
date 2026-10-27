@@ -71,7 +71,6 @@ struct ProductTests {
 
     let product = try #require(ProductData(message))
 
-    #expect(product.productKey == InsteonProductKey(0x00, 0x00, 0x34))
     #expect(product.category == 0x00)
     #expect(product.subcategory == 0x05)
     #expect(product.userDefined == [0x41, 0, 0, 0, 0, 0])
@@ -86,10 +85,9 @@ struct ProductTests {
 
   }
 
-  @Test func printsCategoriesAndProductKeysInHex() {
+  @Test func printsCategoriesInHex() {
 
     #expect(DeviceCategory(rawValue: 0x0E).description == "0x0E")
-    #expect(InsteonProductKey(0x00, 0x00, 0x34).description == "0x000034")
 
   }
 
@@ -109,7 +107,7 @@ struct ProductTests {
     #expect(early.responds(to: StandardDirectCommand.on(level: 0xFF)))
     #expect(!early.responds(to: StandardDirectCommand.beep))
     #expect(later.responds(to: StandardDirectCommand.beep))
-    #expect(try await database.capabilities(productKey: InsteonProductKey(0, 0, 1), firmwareVersion: nil) == nil)
+    #expect(try await database.capabilities(category: 0x02, subcategory: 0x20, firmwareVersion: nil) == nil)
 
   }
 
@@ -128,12 +126,6 @@ private struct CommandList: DeviceCapabilities {
 
 /// A database where firmware 0x41 of one product adds the beep command.
 private struct FirmwareDependentDatabase: ProductDatabase {
-
-  func capabilities(productKey: InsteonProductKey, firmwareVersion: UInt8?) async throws -> (any DeviceCapabilities)? {
-
-    nil
-
-  }
 
   func capabilities(category: DeviceCategory, subcategory: UInt8, firmwareVersion: UInt8?) async throws -> (any DeviceCapabilities)? {
 
