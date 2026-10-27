@@ -49,11 +49,13 @@ InsteonNetworking, so you can supply your own HTTP stack or a stub in tests.
 
 ### Supported Hubs
 
-| Hub | Model | Support |
+Both supported Hubs were sold as the INSTEON Hub, so they're identified here by model number.
+
+| Model | Also known as | Support |
 | --- | --- | --- |
-| Hub 2 | 2245 | Supported |
-| Hub 1 | 2242 | Supported: it serves the same local HTTP requests on the same port |
-| Hub Pro | 2243 | Not supported: it's built around HomeKit and has no documented local modem interface |
+| 2245 | Hub 2 | Supported |
+| 2242 | Hub 1 | Supported: it serves the same local HTTP requests on the same port |
+| 2243 | Hub Pro | Not supported: it's built around HomeKit and has no documented local modem interface |
 
 ## Topics
 

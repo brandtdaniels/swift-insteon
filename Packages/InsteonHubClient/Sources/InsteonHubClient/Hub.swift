@@ -2,8 +2,7 @@ import Foundation
 import InsteonNetworking
 import InsteonProtocol
 
-/// A connection to an INSTEON Hub 2 (model 2245) or Hub 1 (model 2242) through its local HTTP
-/// interface.
+/// A connection to an INSTEON Hub, model 2245 or 2242, through its local HTTP interface.
 ///
 /// The Hub passes serial commands to its built-in modem and collects the modem's replies in a
 /// buffer, which you poll with ``Hub/readBuffer()``.
