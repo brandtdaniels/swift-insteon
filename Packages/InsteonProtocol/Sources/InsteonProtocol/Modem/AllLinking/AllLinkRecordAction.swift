@@ -1,6 +1,7 @@
 /// What ``SerialCommand/manageAllLinkRecord(action:record:)`` does with a record.
 ///
-/// Searches match a record's group and address, ignoring its flags.
+/// Searches match a record's group and address, ignoring its flags and data, so a search or
+/// delete needs only those two fields.
 public enum AllLinkRecordAction: UInt8, CaseIterable, Hashable, Sendable {
 
   /// Finds the first matching record (`0x00`). The modem NAKs if there is none.
@@ -16,11 +17,11 @@ public enum AllLinkRecordAction: UInt8, CaseIterable, Hashable, Sendable {
   case modifyFirstOrAdd = 0x20
 
   /// Overwrites the first matching controller record, or adds the record as a controller
-  /// record (`0x40`).
+  /// record (`0x40`). The modem sets ``AllLinkRecordFlags/controller`` itself.
   case modifyFirstControllerOrAdd = 0x40
 
   /// Overwrites the first matching responder record, or adds the record as a responder
-  /// record (`0x41`).
+  /// record (`0x41`). The modem clears ``AllLinkRecordFlags/controller`` itself.
   case modifyFirstResponderOrAdd = 0x41
 
   /// Deletes the first matching record (`0x80`). The modem NAKs if there is none.
