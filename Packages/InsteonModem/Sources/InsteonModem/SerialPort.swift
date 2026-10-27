@@ -12,7 +12,8 @@ import Glibc
 /// <doc:SupportedModems> for every model.
 ///
 /// The port is opened in raw mode at 19200 baud, 8 data bits, no parity and one stop bit, the
-/// settings INSTEON modems use, without hardware flow control. Each command is written in a
+/// settings INSTEON modems use, without hardware flow control. A PowerLinc Controller (2414S)
+/// uses 4800 baud instead; see ``SerialPort/BaudRate``. Each command is written in a
 /// single call, because the modem discards a command if more than 240 ms pass between its
 /// bytes. On macOS, USB modems appear as `/dev/cu.usbserial-*`; on
 /// Linux, as `/dev/ttyUSB*`.
@@ -29,11 +30,33 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
 
   private var isClosed = false
 
+  /// The speed of a serial connection.
+  public enum BaudRate: Hashable, Sendable {
+
+    /// 4800 baud, which a PowerLinc Controller (2414S) uses.
+    case baud4800
+
+    /// 19200 baud, which INSTEON modems use.
+    case baud19200
+
+    var speed: speed_t {
+
+      switch self {
+      case .baud4800: speed_t(B4800)
+      case .baud19200: speed_t(B19200)
+      }
+
+    }
+
+  }
+
   /// Opens the serial port at a path and configures it for an INSTEON modem.
   ///
-  /// - Parameter path: The device path, such as `/dev/ttyUSB0`.
+  /// - Parameters:
+  ///   - path: The device path, such as `/dev/ttyUSB0`.
+  ///   - baudRate: The port's speed. Defaults to 19200 baud, for INSTEON modems.
   /// - Throws: ``SerialPortError`` if the port can't be opened or configured.
-  public init(path: String) throws(SerialPortError) {
+  public init(path: String, baudRate: BaudRate = .baud19200) throws(SerialPortError) {
 
     // Opening without blocking avoids waiting for a carrier-detect signal the modem doesn't send.
     let descriptor = open(path, O_RDWR | O_NOCTTY | O_NONBLOCK)
@@ -55,8 +78,8 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
     }
 
     cfmakeraw(&options)
-    cfsetispeed(&options, speed_t(B19200))
-    cfsetospeed(&options, speed_t(B19200))
+    cfsetispeed(&options, baudRate.speed)
+    cfsetospeed(&options, baudRate.speed)
     options.c_cflag |= tcflag_t(CLOCAL | CREAD)
     // Raw mode leaves these as the port last had them.
     options.c_cflag &= ~(tcflag_t(CSTOPB) | tcflag_t(CRTSCTS))

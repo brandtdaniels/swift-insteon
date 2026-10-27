@@ -59,6 +59,8 @@ way, such as through a network-attached serial adapter, conform a type to ``Mode
 
 - ``Modem``
 - ``ModemError``
+- ``PowerLincController``
+- ``PowerLincControllerError``
 
 ### Connections
 
