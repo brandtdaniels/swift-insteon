@@ -93,6 +93,14 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``AllLinkingCompleted``
 - ``ModemButtonEvent``
 
+### PowerLinc Controller (IBIOS)
+
+- ``IBIOSCommand``
+- ``IBIOSReplyParser``
+- ``IBIOSReply``
+- ``IBIOSEcho``
+- ``IBIOSEvent``
+
 ### ALL-Linking
 
 - ``AllLinkMode``
