@@ -58,6 +58,37 @@ struct SerialPortTests {
 
   }
 
+  @Test(.timeLimit(.minutes(1)))
+  func closingFinishesTheReceiveStream() async throws {
+
+    let (controller, path) = try #require(openPseudoTerminal())
+    defer { _ = close(controller) }
+
+    let port = try SerialPort(path: path)
+    let received = port.receive()
+
+    port.close()
+
+    for try await _ in received {}
+
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func receivingAgainFinishesThePreviousStream() async throws {
+
+    let (controller, path) = try #require(openPseudoTerminal())
+    defer { _ = close(controller) }
+
+    let port = try SerialPort(path: path)
+    defer { port.close() }
+
+    let first = port.receive()
+    _ = port.receive()
+
+    for try await _ in first {}
+
+  }
+
   @Test func reportsAMissingDevice() {
 
     #expect(throws: SerialPortError.self) {

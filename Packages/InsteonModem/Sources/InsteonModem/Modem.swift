@@ -56,6 +56,8 @@ public actor Modem: SerialCommandSender {
 
     let number: SerialCommandNumber
 
+    let parameters: [UInt8]
+
     let continuation: CheckedContinuation<CommandEcho, any Error>
 
     let timeout: Task<Void, Never>
@@ -108,10 +110,14 @@ public actor Modem: SerialCommandSender {
   /// Commands are sent one at a time, in the order they're called. Any data the command
   /// requests, such as an ALL-Link record, arrives afterwards through ``Modem/replies()``.
   ///
+  /// A canceled send isn't written to the modem once its turn comes, and isn't sent again
+  /// after a NAK. A send already written waits for its echo or its timeout.
+  ///
   /// - Parameter command: The command to send.
   /// - Throws: ``ModemError/rejected(_:)`` if the modem NAKs every attempt,
   ///   ``ModemError/timedOut(_:)`` if it doesn't echo the command,
-  ///   ``ModemError/connectionClosed`` if the connection closes, or the connection's error.
+  ///   ``ModemError/connectionClosed`` if the connection closes, `CancellationError` if the
+  ///   task is canceled, or the connection's error.
   public func send(_ command: SerialCommand) async throws {
 
     startReading()
@@ -120,6 +126,8 @@ public actor Modem: SerialCommandSender {
     defer { finishTurn() }
 
     for attempt in 1...retryPolicy.attempts {
+
+      try Task.checkCancellation()
 
       if try await transmit(command).isAccepted {
 
@@ -217,13 +225,34 @@ public actor Modem: SerialCommandSender {
 
         }
 
-        self.failEcho(id, with: ModemError.timedOut(command.number))
+        self.echoTimedOut(id, number: command.number)
 
       }
 
-      pendingEcho = PendingEcho(id: id, number: command.number, continuation: continuation, timeout: timeout)
+      pendingEcho = PendingEcho(
+        id: id,
+        number: command.number,
+        parameters: command.parameters,
+        continuation: continuation,
+        timeout: timeout
+      )
 
     }
+
+  }
+
+  /// Fails the command waiting for an echo, unless the parser is holding back a NAK for it,
+  /// which only more bytes or the end of the wait can tell apart from data.
+  private func echoTimedOut(_ id: Int, number: SerialCommandNumber) {
+
+    guard pendingEcho?.id == id else {
+
+      return
+
+    }
+
+    deliver(parser.finishPendingReply())
+    failEcho(id, with: ModemError.timedOut(number))
 
   }
 
@@ -318,7 +347,13 @@ public actor Modem: SerialCommandSender {
 
   private func handle(_ chunk: [UInt8]) {
 
-    for reply in parser.parse(chunk) {
+    deliver(parser.parse(chunk))
+
+  }
+
+  private func deliver(_ replies: [ModemReply]) {
+
+    for reply in replies {
 
       resolvePendingEcho(with: reply)
 
@@ -341,7 +376,8 @@ public actor Modem: SerialCommandSender {
     }
 
     switch reply {
-    case let .echo(echo) where echo.number == pending.number:
+    // Matching the parameters keeps a late echo of an earlier command from answering this one.
+    case let .echo(echo) where echo.number == pending.number && echo.parameters == pending.parameters:
       completePendingEcho(.success(echo))
     // These commands are answered with their data in place of a plain echo.
     case .modemInfo where pending.number == .getModemInfo,

@@ -57,6 +57,8 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
     cfsetispeed(&options, speed_t(B19200))
     cfsetospeed(&options, speed_t(B19200))
     options.c_cflag |= tcflag_t(CLOCAL | CREAD)
+    // Raw mode leaves these as the port last had them.
+    options.c_cflag &= ~(tcflag_t(CSTOPB) | tcflag_t(CRTSCTS))
 
     // Writes block until the bytes are accepted; reads are driven by a dispatch source.
     guard
@@ -152,6 +154,20 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
 
       }
 
+      // Dispatch calls this once the source has stopped reading, so it's safe to close the
+      // descriptor here.
+      source.dispatchSource.setCancelHandler {
+
+        continuation.finish()
+
+        if source.stop() {
+
+          closeDescriptor(descriptor)
+
+        }
+
+      }
+
       continuation.onTermination = { _ in
 
         source.dispatchSource.cancel()
@@ -193,11 +209,16 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
     }
 
     isClosed = true
-    readSource?.dispatchSource.cancel()
+    let source = readSource
     readSource = nil
     lock.unlock()
 
-    closeDescriptor(descriptor)
+    // A source that's still reading closes the descriptor once it stops.
+    if source?.cancelClosingDescriptor() != true {
+
+      closeDescriptor(descriptor)
+
+    }
 
   }
 
@@ -220,15 +241,52 @@ public enum SerialPortError: Error, Hashable, Sendable {
 
 }
 
-/// Lets a dispatch source be captured by the `Sendable` closures that drive it.
+/// Lets a dispatch source be captured by the `Sendable` closures that drive it, and decides
+/// whether the source or ``SerialPort/close()`` closes the descriptor.
 private final class ReadSource: @unchecked Sendable {
 
-  // Dispatch sources are thread-safe.
+  // Dispatch sources are thread-safe; `lock` guards `hasStopped` and `closesDescriptor`.
   let dispatchSource: any DispatchSourceRead
+
+  private let lock = NSLock()
+
+  private var hasStopped = false
+
+  private var closesDescriptor = false
 
   init(_ dispatchSource: any DispatchSourceRead) {
 
     self.dispatchSource = dispatchSource
+
+  }
+
+  /// Cancels the source and has it close the descriptor once it stops reading.
+  ///
+  /// - Returns: `false` if the source had already stopped, leaving the descriptor to the caller.
+  func cancelClosingDescriptor() -> Bool {
+
+    lock.lock()
+    let isReading = !hasStopped
+    closesDescriptor = isReading
+    lock.unlock()
+
+    dispatchSource.cancel()
+
+    return isReading
+
+  }
+
+  /// Records that the source has stopped reading.
+  ///
+  /// - Returns: Whether the source should close the descriptor.
+  func stop() -> Bool {
+
+    lock.lock()
+    defer { lock.unlock() }
+
+    hasStopped = true
+
+    return closesDescriptor
 
   }
 
