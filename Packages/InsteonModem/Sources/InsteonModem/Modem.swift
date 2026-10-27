@@ -72,6 +72,17 @@ public actor Modem: SerialCommandSender {
 
   }
 
+  /// A command whose send was canceled before the modem answered it.
+  private struct UnansweredEcho {
+
+    let id: Int
+
+    let number: SerialCommandNumber
+
+    let results: AsyncStream<Result<CommandEcho, any Error>>
+
+  }
+
   private let connection: any ModemConnection
 
   private let retryPolicy: RetryPolicy
@@ -89,6 +100,8 @@ public actor Modem: SerialCommandSender {
   private var subscribers: [AsyncStream<ModemReply>.Continuation] = []
 
   private var pendingEcho: PendingEcho?
+
+  private var unansweredEcho: UnansweredEcho?
 
   private var turns = TurnQueue()
 
@@ -116,12 +129,19 @@ public actor Modem: SerialCommandSender {
   /// Echoes and replies arrive only while this runs, so run it alongside the code that sends
   /// commands. When it returns, the modem is closed: waiting sends fail with
   /// ``ModemError/connectionClosed``, and every stream from ``Modem/replies()`` finishes.
-  /// Calling it again, or while it's running, returns at once.
+  /// Calling it while it's running returns at once.
   ///
-  /// - Throws: The connection's error, if reading from it failed.
+  /// - Throws: The connection's error, if reading from it failed, or
+  ///   ``ModemError/connectionClosed`` if the modem has already closed.
   public func run() async throws {
 
-    guard !isRunning, !isClosed else {
+    guard !isClosed else {
+
+      throw ModemError.connectionClosed
+
+    }
+
+    guard !isRunning else {
 
       return
 
@@ -156,7 +176,9 @@ public actor Modem: SerialCommandSender {
   /// echo is read by ``Modem/run()``, so a send made while it isn't running times out.
   ///
   /// Canceling a send stops it: a send waiting for its turn leaves the queue, a send waiting
-  /// for its echo stops waiting, and a rejected command isn't sent again.
+  /// for its echo stops waiting, and a rejected command isn't sent again. A command that was
+  /// written still holds the modem, so the next send waits for the modem to answer it, or for
+  /// the echo timeout, before writing.
   ///
   /// - Parameter command: The command to send.
   /// - Throws: ``ModemError/rejected(_:)`` if the modem NAKs every attempt,
@@ -167,6 +189,8 @@ public actor Modem: SerialCommandSender {
 
     try await waitForTurn()
     defer { turns.release() }
+
+    try await waitForUnansweredEcho()
 
     for attempt in 1...retryPolicy.attempts {
 
@@ -226,21 +250,57 @@ public actor Modem: SerialCommandSender {
     }
 
     let id = makeID()
-    let echoTimeout = retryPolicy.echoTimeout
     let (results, continuation) = AsyncStream<Result<CommandEcho, any Error>>.makeStream()
 
     pendingEcho = PendingEcho(id: id, number: command.number, parameters: command.parameters, result: continuation)
     defer { abandonEcho(id) }
 
-    let result = await withTaskGroup(of: Void.self, returning: Result<CommandEcho, any Error>.self) { group in
+    return try await awaitEcho(id, number: command.number, results: results) { [connection] in
 
-      // Writes the command, then gives up on its echo once the timeout passes. The group
-      // cancels this child as soon as the echo arrives, so a timeout never outlives its command.
-      group.addTask { [connection, clock] in
+      try await connection.write(command.bytes)
+
+    }.get()
+
+  }
+
+  /// Waits for the modem to answer a command whose send was canceled, so the next command
+  /// isn't written while the modem is still busy with it.
+  private func waitForUnansweredEcho() async throws {
+
+    guard let unanswered = unansweredEcho else {
+
+      return
+
+    }
+
+    unansweredEcho = nil
+    defer { abandonEcho(unanswered.id) }
+
+    _ = await awaitEcho(unanswered.id, number: unanswered.number, results: unanswered.results) {}
+
+    try Task.checkCancellation()
+
+  }
+
+  /// Runs `write`, then waits for the pending echo's result, the timeout or cancellation.
+  private func awaitEcho(
+    _ id: Int,
+    number: SerialCommandNumber,
+    results: AsyncStream<Result<CommandEcho, any Error>>,
+    write: @escaping @Sendable () async throws -> Void
+  ) async -> Result<CommandEcho, any Error> {
+
+    let echoTimeout = retryPolicy.echoTimeout
+
+    return await withTaskGroup(of: Void.self, returning: Result<CommandEcho, any Error>.self) { group in
+
+      // Writes, then gives up on the echo once the timeout passes. The group cancels this
+      // child as soon as the echo arrives, so a timeout never outlives its command.
+      group.addTask { [clock] in
 
         do {
 
-          try await connection.write(command.bytes)
+          try await write()
 
         } catch {
 
@@ -260,7 +320,7 @@ public actor Modem: SerialCommandSender {
 
         }
 
-        await self.echoTimedOut(id, number: command.number)
+        await self.echoTimedOut(id, number: number)
 
       }
 
@@ -276,8 +336,6 @@ public actor Modem: SerialCommandSender {
       return .failure(CancellationError())
 
     }
-
-    return try result.get()
 
   }
 
@@ -308,7 +366,8 @@ public actor Modem: SerialCommandSender {
 
   }
 
-  /// Stops waiting for an echo that no longer has a command waiting on it.
+  /// Stops waiting for an echo whose send was canceled. The command may have been written, so
+  /// its echo stays pending, and the next send waits for it.
   private func abandonEcho(_ id: Int) {
 
     guard let pending = pendingEcho, pending.id == id else {
@@ -317,8 +376,12 @@ public actor Modem: SerialCommandSender {
 
     }
 
-    pendingEcho = nil
     pending.result.finish()
+
+    let (results, continuation) = AsyncStream<Result<CommandEcho, any Error>>.makeStream()
+
+    pendingEcho = PendingEcho(id: id, number: pending.number, parameters: pending.parameters, result: continuation)
+    unansweredEcho = UnansweredEcho(id: id, number: pending.number, results: results)
 
   }
 

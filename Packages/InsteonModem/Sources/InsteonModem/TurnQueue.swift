@@ -9,6 +9,13 @@
 ///   for await _ in ticket.handoff {}
 ///   guard turns.settle(ticket) else { throw CancellationError() }
 /// }
+///
+/// // A task canceled as it was handed the turn passes it on.
+/// if Task.isCancelled {
+///   turns.release()
+///   throw CancellationError()
+/// }
+///
 /// defer { turns.release() }
 /// ```
 package struct TurnQueue: Sendable {
