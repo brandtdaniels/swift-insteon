@@ -4,12 +4,13 @@ import InsteonProtocol
 public enum DeviceCapability: Hashable, Sendable {
 
   /// Which mode values a thermostat uses in its mode status reports.
-  public enum ThermostatModeValues: String, Hashable, Sendable, Decodable {
+  public enum ThermostatModeValues: String, Hashable, Sendable {
 
-    /// The values in Insteon's thermostat command tables, which `ThermostatMode` reads.
+    /// The values in Insteon's thermostat command tables, which InsteonProtocol's
+    /// `ThermostatMode` reads.
     case commandTable
 
-    /// A TempLinc's own values, which `TempLincMode` reads.
+    /// A TempLinc's own values, which InsteonProtocol's `TempLincMode` reads.
     case tempLinc
 
   }
@@ -72,9 +73,8 @@ public enum DeviceCapability: Hashable, Sendable {
 
 extension DeviceCapability {
 
-  /// The capability kinds this package reads. A profile's capability of any other kind, from
-  /// a later version of the database, is skipped.
-  static let kinds: Set<String> = ["onOff", "dimmable", "modem", "hub", "hubPro", "thermostat", "groupEvents", "heartbeat"]
+  /// The longest heartbeat interval a profile can give: a year.
+  static let longestHeartbeatInterval = 525_600
 
   private enum CodingKeys: String, CodingKey {
 
@@ -98,8 +98,9 @@ extension DeviceCapability {
 
   }
 
-  /// Decodes a capability of a kind in ``kinds``.
-  init(from decoder: any Decoder) throws {
+  /// Decodes a capability, or returns `nil` for one this package doesn't read: a kind, or a
+  /// thermostat's mode values, from a later version of the database.
+  init?(from decoder: any Decoder) throws {
 
     let container = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -115,10 +116,13 @@ extension DeviceCapability {
     case "hubPro":
       self = .hubPro(port: try container.decode(UInt16.self, forKey: .port))
     case "thermostat":
-      self = .thermostat(
-        modeValues: try container.decode(ThermostatModeValues.self, forKey: .modeValues),
-        measuresHumidity: try container.decodeIfPresent(Bool.self, forKey: .humidity) ?? false
-      )
+      guard let modeValues = ThermostatModeValues(rawValue: try container.decode(String.self, forKey: .modeValues)) else {
+
+        return nil
+
+      }
+
+      self = .thermostat(modeValues: modeValues, measuresHumidity: try container.decodeIfPresent(Bool.self, forKey: .humidity) ?? false)
     case "groupEvents":
       self = .groupEvents(try container.decode([Event].self, forKey: .events).map { event in
 
@@ -128,15 +132,15 @@ extension DeviceCapability {
     case "heartbeat":
       let minutes = try container.decode(Int.self, forKey: .intervalMinutes)
 
-      guard minutes > 0 else {
+      guard (1...Self.longestHeartbeatInterval).contains(minutes) else {
 
-        throw DecodingError.dataCorruptedError(forKey: .intervalMinutes, in: container, debugDescription: "A heartbeat interval must be at least a minute.")
+        throw DecodingError.dataCorruptedError(forKey: .intervalMinutes, in: container, debugDescription: "A heartbeat interval must be from a minute to a year.")
 
       }
 
       self = .heartbeat(group: AllLinkGroupNumber(rawValue: try container.decode(ProfileByte.self, forKey: .group).value), interval: .seconds(minutes * 60))
-    case let kind:
-      throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "\(kind) isn't a capability kind this package reads.")
+    default:
+      return nil
     }
 
   }

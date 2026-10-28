@@ -68,28 +68,25 @@ public struct DeviceDatabase: Hashable, Sendable {
   ///   isn't a database.
   public init(json: Data) throws {
 
-    let decoder = JSONDecoder()
-    let version = try decoder.decode(Version.self, from: json).schemaVersion
-
-    guard version == Self.schemaVersion else {
-
-      throw DeviceDatabaseError.unsupportedSchemaVersion(version)
-
-    }
-
-    self.init(profiles: try decoder.decode(Contents.self, from: json).devices)
+    self.init(profiles: try JSONDecoder().decode(Contents.self, from: json).devices)
 
   }
 
   /// Loads the copy of the database the package ships with.
   ///
-  /// The copy is read from the package's resources each time, so keep the database rather than
-  /// loading it for each lookup.
+  /// The copy is read once, the first time it's asked for.
   ///
   /// - Returns: The database.
   /// - Throws: ``DeviceDatabaseError/missingBundledDatabase`` if the copy isn't in the
   ///   package's resources, or the error reading it.
   public static func bundled() throws -> DeviceDatabase {
+
+    try bundledCopy.get()
+
+  }
+
+  /// The copy the package ships with, or the error reading it.
+  private static let bundledCopy = Result<DeviceDatabase, any Error> {
 
     guard let url = Bundle.module.url(forResource: "database", withExtension: "json") else {
 
@@ -103,25 +100,39 @@ public struct DeviceDatabase: Hashable, Sendable {
 
   /// The profile of a device that reported a category, subcategory and firmware version.
   ///
-  /// A device that reports no firmware version matches only an identity that covers every
-  /// version.
+  /// An identity for a range of firmware versions is preferred over one for every version, so
+  /// a profile for particular versions isn't hidden by a broader one. A device that reports no
+  /// firmware version, or `0xFF`, matches only an identity that covers every version.
   ///
   /// - Parameters:
   ///   - category: The category the device reported.
   ///   - subcategory: The subcategory the device reported.
   ///   - firmwareVersion: The firmware version the device reported, if any.
-  /// - Returns: The first profile with a matching identity, or `nil` if there's none. The
-  ///   published database has at most one.
+  /// - Returns: The matching profile, or `nil` if there's none. The published database never
+  ///   has two profiles claim the same identity.
   public func profile(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> DeviceProfile? {
 
-    index[Key(category: category, subcategory: subcategory), default: []]
-      .lazy
-      .map { profiles[$0] }
-      .first { profile in
+    var broadest: DeviceProfile?
 
-        profile.identities.contains { $0.matches(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion) }
+    for offset in index[Key(category: category, subcategory: subcategory), default: []] {
+
+      let profile = profiles[offset]
+
+      for identity in profile.identities where identity.matches(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion) {
+
+        guard identity.firmware == nil else {
+
+          return profile
+
+        }
+
+        broadest = broadest ?? profile
 
       }
+
+    }
+
+    return broadest
 
   }
 
@@ -135,16 +146,32 @@ public struct DeviceDatabase: Hashable, Sendable {
 
   }
 
-  /// The database's format version, read before the rest.
-  private struct Version: Decodable {
-
-    let schemaVersion: Int
-
-  }
-
+  /// The database's contents, with its format version checked before its profiles are read.
   private struct Contents: Decodable {
 
+    private enum CodingKeys: String, CodingKey {
+
+      case schemaVersion
+      case devices
+
+    }
+
     let devices: [DeviceProfile]
+
+    init(from decoder: any Decoder) throws {
+
+      let container = try decoder.container(keyedBy: CodingKeys.self)
+      let version = try container.decode(Int.self, forKey: .schemaVersion)
+
+      guard version == DeviceDatabase.schemaVersion else {
+
+        throw DeviceDatabaseError.unsupportedSchemaVersion(version)
+
+      }
+
+      devices = try container.decode([DeviceProfile].self, forKey: .devices)
+
+    }
 
   }
 

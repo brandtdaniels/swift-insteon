@@ -9,7 +9,7 @@ import InsteonProtocol
 public struct DeviceProfile: Hashable, Sendable {
 
   /// How a product communicates.
-  public enum Radio: String, Hashable, Sendable, Decodable {
+  public enum Radio: String, Hashable, Sendable {
 
     /// Over the power line only.
     case powerline
@@ -23,7 +23,7 @@ public struct DeviceProfile: Hashable, Sendable {
   }
 
   /// Which ALL-Link roles a product or group can take.
-  public enum LinkRole: String, Hashable, Sendable, Decodable {
+  public enum LinkRole: String, Hashable, Sendable {
 
     /// A controller, which sends commands to its responders.
     case controller
@@ -40,7 +40,7 @@ public struct DeviceProfile: Hashable, Sendable {
   public struct Group: Hashable, Sendable {
 
     /// How a group can be linked.
-    public enum Linking: String, Hashable, Sendable, Decodable {
+    public enum Linking: String, Hashable, Sendable {
 
       /// From the device's own buttons, as well as by software.
       case device
@@ -219,28 +219,20 @@ extension DeviceProfile: Decodable {
 
     let name: String
 
-    let role: LinkRole
+    let role: String
 
-    let linkable: Group.Linking?
+    let linkable: String?
 
   }
 
-  /// A capability, or `nil` for a kind this package doesn't read.
+  /// A capability, or `nil` for one this package doesn't read.
   private struct CapabilityEntry: Decodable {
-
-    private enum CodingKeys: String, CodingKey {
-
-      case kind
-
-    }
 
     let capability: DeviceCapability?
 
     init(from decoder: any Decoder) throws {
 
-      let kind = try decoder.container(keyedBy: CodingKeys.self).decode(String.self, forKey: .kind)
-
-      capability = DeviceCapability.kinds.contains(kind) ? try DeviceCapability(from: decoder) : nil
+      capability = try DeviceCapability(from: decoder)
 
     }
 
@@ -248,8 +240,10 @@ extension DeviceProfile: Decodable {
 
   /// Decodes a profile from its JSON.
   ///
-  /// A capability of a kind this package doesn't read, which a later version of the database
-  /// can add, is skipped.
+  /// Values from a later version of the database that this package doesn't read are passed
+  /// over rather than failing the profile: an unknown radio or role reads as `nil`, a group
+  /// with an unknown role is skipped, a group with an unknown way of linking reads as
+  /// ``DeviceProfile/Group/Linking/software``, and an unknown capability is skipped.
   ///
   /// - Parameter decoder: The decoder to read from.
   /// - Throws: `DecodingError` if the JSON isn't a profile.
@@ -261,12 +255,21 @@ extension DeviceProfile: Decodable {
       model: try container.decode(ProductModel.self, forKey: .model),
       name: try container.decode(String.self, forKey: .name),
       identities: try container.decode([DeviceIdentity].self, forKey: .identities),
-      radio: try container.decodeIfPresent(Radio.self, forKey: .radio),
-      role: try container.decodeIfPresent(LinkRole.self, forKey: .role),
+      radio: try container.decodeIfPresent(String.self, forKey: .radio).flatMap(Radio.init(rawValue:)),
+      role: try container.decodeIfPresent(String.self, forKey: .role).flatMap(LinkRole.init(rawValue:)),
       isBatteryPowered: try container.decodeIfPresent(Bool.self, forKey: .batteryPowered) ?? false,
-      groups: try (container.decodeIfPresent([GroupEntry].self, forKey: .groups) ?? []).map { entry in
+      groups: try (container.decodeIfPresent([GroupEntry].self, forKey: .groups) ?? []).compactMap { entry in
 
-        Group(number: AllLinkGroupNumber(rawValue: entry.number.value), name: entry.name, role: entry.role, linking: entry.linkable ?? .device)
+        LinkRole(rawValue: entry.role).map { role in
+
+          Group(
+            number: AllLinkGroupNumber(rawValue: entry.number.value),
+            name: entry.name,
+            role: role,
+            linking: entry.linkable.map { Group.Linking(rawValue: $0) ?? .software } ?? .device
+          )
+
+        }
 
       },
       capabilities: try container.decode([CapabilityEntry].self, forKey: .capabilities).compactMap(\.capability),

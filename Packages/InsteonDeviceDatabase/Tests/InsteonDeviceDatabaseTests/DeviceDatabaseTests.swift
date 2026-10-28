@@ -121,6 +121,73 @@ struct DeviceDatabaseTests {
 
   }
 
+  @Test func prefersAnIdentityForParticularFirmware() throws {
+
+    let profiles = #"""
+      {
+        "model": "1000",
+        "name": "Any Version",
+        "identities": [{ "category": "0x01", "subcategory": "0x20" }],
+        "capabilities": [],
+        "sources": ["A"]
+      },
+      {
+        "model": "1001",
+        "name": "Later Versions",
+        "identities": [{ "category": "0x01", "subcategory": "0x20", "firmware": { "from": "0x40", "through": "0xFF" } }],
+        "capabilities": [],
+        "sources": ["B"]
+      }
+      """#
+    let database = try DeviceDatabase(json: Self.json(profiles))
+
+    #expect(database.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x45)?.model == "1001")
+    #expect(database.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x3F)?.model == "1000")
+    // 0xFF means the device gave no version.
+    #expect(database.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0xFF)?.model == "1000")
+
+  }
+
+  // A later version of the database can add values this package doesn't read.
+  @Test func passesOverValuesItDoesntRead() throws {
+
+    let profile = #"""
+      {
+        "model": "1",
+        "name": "A",
+        "identities": [{ "category": "0x05", "subcategory": "0x01" }],
+        "radio": "infrared",
+        "role": "observer",
+        "groups": [
+          { "number": "0x01", "name": "Kept", "role": "controller", "linkable": "remotely" },
+          { "number": "0x02", "name": "Skipped", "role": "observer" }
+        ],
+        "capabilities": [{ "kind": "thermostat", "modeValues": "venstar" }, { "kind": "dimmable" }],
+        "sources": ["A"]
+      }
+      """#
+    let read = try #require(try DeviceDatabase(json: Self.json(profile)).profiles.first)
+
+    #expect(read.radio == nil)
+    #expect(read.role == nil)
+    #expect(read.groups == [.init(number: 0x01, name: "Kept", role: .controller, linking: .software)])
+    #expect(read.capabilities == [.dimmable])
+
+  }
+
+  @Test(arguments: [0, 525_601, Int.max])
+  func refusesAHeartbeatIntervalOutOfRange(_ minutes: Int) {
+
+    let profile = #"{ "model": "1", "name": "A", "identities": [{ "category": "0x10", "subcategory": "0x01" }], "capabilities": [{ "kind": "heartbeat", "group": "0x04", "intervalMinutes": \#(minutes) }], "sources": ["A"] }"#
+
+    #expect(throws: DecodingError.self) {
+
+      try DeviceDatabase(json: Self.json(profile))
+
+    }
+
+  }
+
   @Test func saysWhatAGroupCommandMeans() throws {
 
     let profile = try #require(try DeviceDatabase(json: Self.json(Self.leakSensor)).profiles.first)

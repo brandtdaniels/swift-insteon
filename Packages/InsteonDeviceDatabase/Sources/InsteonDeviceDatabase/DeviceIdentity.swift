@@ -39,8 +39,8 @@ public struct DeviceIdentity: Hashable, Sendable {
 
   /// Whether a device reporting these values has this identity.
   ///
-  /// A device that reports no firmware version, such as one that reports `0xFF`, matches only
-  /// an identity that covers every version.
+  /// A device that reports no firmware version, or `0xFF`, which devices report when they
+  /// don't give one, matches only an identity that covers every version.
   ///
   /// - Parameters:
   ///   - category: The category the device reported.
@@ -61,7 +61,13 @@ public struct DeviceIdentity: Hashable, Sendable {
 
     }
 
-    return firmwareVersion.map(firmware.contains) ?? false
+    guard let firmwareVersion, firmwareVersion.rawValue != 0xFF else {
+
+      return false
+
+    }
+
+    return firmware.contains(firmwareVersion)
 
   }
 
