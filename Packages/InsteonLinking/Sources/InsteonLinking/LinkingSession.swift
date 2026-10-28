@@ -203,7 +203,7 @@ struct LinkingSession: Sendable {
   private func firstLink(
     in replies: AsyncStream<ModemReply>,
     with device: InsteonAddress?,
-    group: AllLinkGroupNumber?,
+    group expectedGroup: AllLinkGroupNumber?,
     expecting expectedMode: AllLinkMode,
     within linkingTimeout: Duration
   ) async throws -> AllLinkingCompleted {
@@ -224,7 +224,7 @@ struct LinkingSession: Sendable {
 
           // Another device linked while the modem was waiting, or the modem made a different
           // kind of link or a link in another group than asked, so the caller has to know.
-          guard device == nil || link.address == device, group == nil || link.group == group, link.mode == expectedMode else {
+          guard device == nil || link.address == device, expectedGroup == nil || link.group == expectedGroup, link.mode == expectedMode else {
 
             throw LinkingError.unexpectedLink(link)
 
