@@ -92,6 +92,62 @@ struct GroupCommandTests {
 
   }
 
+  // A later press whose broadcasts were all missed reaches the modem only as a cleanup.
+  @Test func passesOnACleanupLongAfterTheSameCommand() {
+
+    var filter = GroupCommandFilter<ContinuousClock.Instant>()
+
+    #expect(filter.command(from: broadcast(group: 0x01, command1: 0x11), at: start) != nil)
+    #expect(filter.command(from: cleanup(group: 0x01, command1: 0x11), at: start.advanced(by: .seconds(60))) != nil)
+
+  }
+
+  // A retried cleanup for on arrives after the broadcast for off.
+  @Test func ignoresALateCleanupForAnEarlierCommand() {
+
+    var filter = GroupCommandFilter<ContinuousClock.Instant>()
+
+    #expect(filter.command(from: broadcast(group: 0x01, command1: 0x11), at: start) != nil)
+    #expect(filter.command(from: broadcast(group: 0x01, command1: 0x13), at: start.advanced(by: .seconds(2))) != nil)
+    #expect(filter.command(from: cleanup(group: 0x01, command1: 0x11), at: start.advanced(by: .seconds(3))) == nil)
+
+  }
+
+  @Test func treatsACleanupAfterTheSuccessReportAsNew() {
+
+    var filter = GroupCommandFilter<ContinuousClock.Instant>()
+    let report = ReceivedMessage(
+      sender: keypad,
+      destination: InsteonAddress(0x11, 0x01, 0x01),
+      flags: MessageFlags(messageType: .allLinkBroadcast),
+      command: Command(command1: 0x06, command2: 0x00)
+    )
+
+    #expect(filter.command(from: broadcast(group: 0x01, command1: 0x11), at: start) != nil)
+    #expect(filter.command(from: report, at: start.advanced(by: .seconds(2))) == nil)
+    #expect(filter.command(from: cleanup(group: 0x01, command1: 0x11), at: start.advanced(by: .seconds(3))) != nil)
+
+  }
+
+  @Test func passesOnABroadcastWithAnotherLevelWithinTheWindow() {
+
+    var filter = GroupCommandFilter<ContinuousClock.Instant>()
+
+    #expect(filter.command(from: broadcast(group: 0x01, command1: 0x11, command2: 0x7F), at: start) != nil)
+    #expect(filter.command(from: broadcast(group: 0x01, command1: 0x11, command2: 0xFF), at: start.advanced(by: .milliseconds(400))) != nil)
+
+  }
+
+  // A message stamped before the one before it counts as arriving at the same time.
+  @Test func treatsAnEarlierStampAsTheSameTime() {
+
+    var filter = GroupCommandFilter<ContinuousClock.Instant>()
+
+    #expect(filter.command(from: broadcast(group: 0x01, command1: 0x11), at: start) != nil)
+    #expect(filter.command(from: broadcast(group: 0x01, command1: 0x11), at: start.advanced(by: .milliseconds(-200))) == nil)
+
+  }
+
   @Test func keepsEachControllersGroupsApart() {
 
     var filter = GroupCommandFilter<ContinuousClock.Instant>()

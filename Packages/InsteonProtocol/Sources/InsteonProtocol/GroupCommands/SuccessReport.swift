@@ -48,11 +48,7 @@ public struct SuccessReport: Hashable, Sendable {
   /// - Returns: `nil` unless the message is a standard ALL-Link broadcast with cmd1 `0x06`.
   public init?(_ message: ReceivedMessage) {
 
-    guard
-      !message.flags.isExtended,
-      message.flags.messageType == .allLinkBroadcast,
-      message.command.command1 == Self.command1
-    else {
+    guard message.isStandardBroadcast(command1: Self.command1, type: .allLinkBroadcast) else {
 
       return nil
 
