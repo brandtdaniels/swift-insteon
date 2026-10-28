@@ -93,8 +93,12 @@ public struct DeviceDatabase: Hashable, Sendable {
 
   }
 
-  /// The JSON of the copy the package ships with.
-  static func bundledJSON() throws -> Data {
+  /// The JSON of the copy the package ships with, such as to save as an app's own copy.
+  ///
+  /// - Returns: The JSON.
+  /// - Throws: ``DeviceDatabaseError/missingBundledDatabase`` if the copy isn't in the
+  ///   package's resources, or the error reading it.
+  public static func bundledJSON() throws -> Data {
 
     guard let url = Bundle.module.url(forResource: "database", withExtension: "json") else {
 
@@ -193,17 +197,5 @@ public enum DeviceDatabaseError: Error, Hashable, Sendable {
 
   /// The copy of the database the package ships with isn't in its resources.
   case missingBundledDatabase
-
-  /// The server answered a request for the manifest or the database with a status other than
-  /// 2xx, with that status.
-  case unexpectedStatus(Int)
-
-  /// The manifest isn't the JSON the INSTEON device database publishes, or names its
-  /// database by anything but a plain file name.
-  case malformedManifest
-
-  /// The downloaded database's SHA-256 doesn't match the manifest's, such as when one was
-  /// fetched before a new version was published and the other after.
-  case checksumMismatch
 
 }

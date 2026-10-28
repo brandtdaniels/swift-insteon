@@ -110,13 +110,21 @@ let package = Package(
 
     .target(
       name: "InsteonDeviceDatabase",
-      dependencies: ["InsteonNetworking", "InsteonProtocol"],
+      dependencies: [
+        // Only DeviceDatabaseUpdater uses it, and it needs CryptoKit.
+        .target(name: "InsteonNetworking", condition: .when(platforms: [.macOS, .iOS, .tvOS, .watchOS, .visionOS])),
+        "InsteonProtocol"
+      ],
       path: "Packages/InsteonDeviceDatabase/Sources/InsteonDeviceDatabase",
       resources: [.copy("Resources/database.json")]
     ),
     .testTarget(
       name: "InsteonDeviceDatabaseTests",
-      dependencies: ["InsteonDeviceDatabase", "InsteonNetworking", "InsteonProtocol"],
+      dependencies: [
+        "InsteonDeviceDatabase",
+        .target(name: "InsteonNetworking", condition: .when(platforms: [.macOS, .iOS, .tvOS, .watchOS, .visionOS])),
+        "InsteonProtocol"
+      ],
       path: "Packages/InsteonDeviceDatabase/Tests/InsteonDeviceDatabaseTests"
     ),
 

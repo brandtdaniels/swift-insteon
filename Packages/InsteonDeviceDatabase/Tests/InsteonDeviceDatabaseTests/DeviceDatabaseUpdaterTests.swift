@@ -85,16 +85,26 @@ struct DeviceDatabaseUpdaterTests {
 
   }
 
-  @Test func comparesWithTheBundledCopyByDefault() async {
+  @Test func comparesWithTheBundledCopyByDefault() async throws {
 
-    let files = Self.files(manifest: Self.manifest(sha256: String(repeating: "0", count: 64)))
+    let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: try DeviceDatabase.bundledJSON())))
 
-    // The bundled copy doesn't hash to zeros, so the database is downloaded, and then refused.
-    await #expect(throws: DeviceDatabaseError.checksumMismatch) {
+    let update = try await DeviceDatabaseUpdater(client: files).update(replacing: nil)
 
-      try await DeviceDatabaseUpdater(client: files).update(replacing: nil)
+    #expect(update == .unchanged)
+    #expect(await files.requested == ["manifest.json"])
 
-    }
+  }
+
+  // A cache can't answer with an older database for a request that names the new one's hash.
+  @Test func namesTheExpectedHashInTheDatabaseRequest() async throws {
+
+    let digest = Self.sha256(of: Self.published)
+    let files = Self.files(manifest: Self.manifest(sha256: digest))
+
+    _ = try await DeviceDatabaseUpdater(client: files).update(replacing: nil)
+
+    #expect(await files.urls.last?.query == "sha256=\(digest)")
 
   }
 
@@ -102,7 +112,7 @@ struct DeviceDatabaseUpdaterTests {
 
     let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Data("older".utf8))))
 
-    await #expect(throws: DeviceDatabaseError.checksumMismatch) {
+    await #expect(throws: DeviceDatabaseUpdateError.checksumMismatch) {
 
       try await DeviceDatabaseUpdater(client: files).update(replacing: nil)
 
@@ -124,12 +134,12 @@ struct DeviceDatabaseUpdaterTests {
 
   }
 
-  @Test(arguments: ["../database.json", "https:", "", ".hidden"])
+  @Test(arguments: ["../database.json", "https:", "", ".hidden", "databáse.json"])
   func refusesAManifestNamingAnotherPlace(_ database: String) async {
 
     let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published), database: database))
 
-    await #expect(throws: DeviceDatabaseError.malformedManifest) {
+    await #expect(throws: DeviceDatabaseUpdateError.malformedManifest) {
 
       try await DeviceDatabaseUpdater(client: files).update(replacing: nil)
 
@@ -137,11 +147,25 @@ struct DeviceDatabaseUpdaterTests {
 
   }
 
+  @Test func refusesADigestThatIsntASCIIHexadecimal() async {
+
+    let files = Self.files(manifest: Self.manifest(sha256: String(repeating: "\u{FF41}", count: 64)))
+
+    await #expect(throws: DeviceDatabaseUpdateError.malformedManifest) {
+
+      try await DeviceDatabaseUpdater(client: files).update(replacing: nil)
+
+    }
+
+    #expect(await files.requested == ["manifest.json"])
+
+  }
+
   @Test func reportsAFailedRequest() async {
 
     let files = PublishedFiles(["manifest.json": HTTPResponse(statusCode: 503)])
 
-    await #expect(throws: DeviceDatabaseError.unexpectedStatus(503)) {
+    await #expect(throws: DeviceDatabaseUpdateError.unexpectedStatus(503)) {
 
       try await DeviceDatabaseUpdater(client: files).update(replacing: nil)
 
