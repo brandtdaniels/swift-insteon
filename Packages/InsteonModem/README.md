@@ -24,5 +24,6 @@ The Supported Modems article in the documentation explains each caveat.
 - `ModemConnection`: the byte-level connection `Modem` talks over
 - `PowerLincController`: sends standard messages and X10 through a PowerLinc Controller (2414S) using IBIOS, and streams what it reports; conforms to `SerialCommandSender`
 - `SerialPort`: a `ModemConnection` to a serial or USB modem, on macOS and Linux, at 19200 or 4800 baud
+- `ModemDiscovery`: finds modems on the computer's USB-to-serial adapters, or on serial devices the user picks, by asking each for its modem information, on macOS and Linux
 
 See the DocC catalog in `Sources/InsteonModem/InsteonModem.docc` for the full documentation.

@@ -57,3 +57,8 @@ way, such as through a network-attached serial adapter, conform a type to ``Mode
 - ``ModemConnection``
 - ``SerialPort``
 - ``SerialPortError``
+
+### Finding modems
+
+- ``ModemDiscovery``
+- ``DiscoveredModem``
