@@ -143,6 +143,111 @@ public actor Modem: SerialCommandSender {
 
   }
 
+  /// How long ``Modem/sendAllLinkCommand(group:command:timeout:)`` waits for the cleanups by
+  /// default: 10 seconds.
+  ///
+  /// The Developer's Guide gives the worst case as 2.150 seconds from the broadcast to the
+  /// first member's cleanup report and 1.550 seconds to each one after, so 10 seconds covers a
+  /// group of up to six members that all need every retry. Pass more for a larger group.
+  public static let defaultAllLinkCommandTimeout: Duration = .seconds(10)
+
+  /// Sends a command to one of the modem's ALL-Link groups and waits for the modem to finish
+  /// its cleanups.
+  ///
+  /// The modem broadcasts the command to the group, then sends each member a cleanup message,
+  /// as Send ALL-Link Command (`0x61`) describes. The modem's turn is held until the modem's
+  /// ALL-Link Cleanup Status Report (`0x58`), since the guide says any message sent before then
+  /// cancels the rest of the cleanups. Meanwhile each member's cleanup acknowledgement, cleanup
+  /// NAK or ALL-Link Cleanup Failure Report (`0x56`) is collected.
+  ///
+  /// ```swift
+  /// let report = try await modem.sendAllLinkCommand(group: 0x01, command: StandardDirectCommand.on(level: 0xFF).command)
+  /// print(report.unacknowledged)   // Members to retry with a direct message.
+  /// ```
+  ///
+  /// To send a command without waiting for its cleanups, send `SerialCommand.sendAllLinkCommand`
+  /// with ``Modem/send(_:)``.
+  ///
+  /// - Parameters:
+  ///   - group: The modem's ALL-Link group to send the command to.
+  ///   - command: The command to broadcast. Its cmd2 goes in the broadcast; the cleanups carry
+  ///     the group number instead. The guide says not to send Light Start Manual Change
+  ///     (cmd1 `0x17`) this way, so it isn't allowed.
+  ///   - timeout: How long to wait for the modem's echo and every cleanup together. Defaults to
+  ///     ``Modem/defaultAllLinkCommandTimeout``.
+  /// - Returns: Which members acknowledged their cleanup, which didn't, and whether the modem
+  ///   reached them all.
+  /// - Throws: ``ModemError/rejected(_:)`` if the modem NAKs every attempt, as it does for a
+  ///   group it has no records for, ``ModemError/timedOut(_:)`` if the cleanups don't finish
+  ///   in time, ``ModemError/connectionClosed`` if the modem is closed, `CancellationError` if
+  ///   the task is canceled, or the connection's error.
+  public func sendAllLinkCommand(
+    group: AllLinkGroupNumber,
+    command: Command,
+    timeout: Duration = Modem.defaultAllLinkCommandTimeout
+  ) async throws -> AllLinkCleanupReport {
+
+    precondition(command.command1 != 0x17, "Send Light Start Manual Change as a direct message, not to a group.")
+
+    let serialCommand = SerialCommand.sendAllLinkCommand(group: group, command: command)
+    let parameters = serialCommand.parameters
+
+    // Listening starts first, so no cleanup report can be missed.
+    let replies = await pacer.replies()
+
+    let status = AnswerStep<ModemReply>(
+      verdict: { reply in
+
+        if case .allLinkCleanupStatus = reply {
+
+          return .accepted
+
+        }
+
+        return nil
+
+      },
+      timedOut: ModemError.timedOut(.sendAllLinkCommand)
+    )
+
+    _ = try await pacer.send([
+      Exchange(bytes: serialCommand.bytes, steps: Self.exchange(for: serialCommand).steps + [status], timeout: timeout)
+    ])
+
+    // The stream has everything up to the status report that answered the command. What came
+    // before the command's accepted echo belongs to something else.
+    var hasStarted = false
+    var acknowledged: [InsteonAddress] = []
+    var unacknowledged: [InsteonAddress] = []
+
+    for await reply in replies {
+
+      switch reply {
+      case let .echo(echo) where echo.number == .sendAllLinkCommand && echo.parameters == parameters && echo.isAccepted:
+        hasStarted = true
+      case let .messageReceived(message) where hasStarted && message.command.command1 == command.command1:
+        switch message.flags.messageType {
+        case .allLinkCleanupAcknowledgement:
+          acknowledged.append(message.sender)
+        case .allLinkCleanupNegativeAcknowledgement:
+          unacknowledged.append(message.sender)
+        default:
+          break
+        }
+      case let .allLinkCleanupFailed(failedGroup, address) where hasStarted && failedGroup == group:
+        unacknowledged.append(address)
+      case let .allLinkCleanupStatus(isComplete) where hasStarted:
+        return AllLinkCleanupReport(acknowledged: acknowledged, unacknowledged: unacknowledged, isComplete: isComplete)
+      default:
+        break
+      }
+
+    }
+
+    throw ModemError.connectionClosed
+
+  }
+
   /// How long a request for a standard message waits for the device's answer by default:
   /// 3 seconds.
   ///
