@@ -2427,7 +2427,7 @@
       ]
     },
     {
-      "description": "The SwitchLinc, LampLinc and ApplianceLinc code base as used by the LampLinc, the other plug-in and socket dimmers, and the older In-LineLinc dimmers and relays. The relays ignore the ramp rate and on-level.",
+      "description": "The SwitchLinc, LampLinc and ApplianceLinc code base as used by the LampLinc, the other plug-in and socket dimmers, and the older In-LineLinc dimmers.",
       "extendedSettings": {
         "perButton": false,
         "values": [
@@ -3753,7 +3753,7 @@
       ]
     },
     {
-      "description": "The SwitchLinc, LampLinc and ApplianceLinc code base as used by the older SwitchLinc and ToggleLinc dimmers and the ToggleLinc relays. The relays ignore the ramp rate and on-level.",
+      "description": "The SwitchLinc, LampLinc and ApplianceLinc code base as used by the older SwitchLinc and ToggleLinc dimmers.",
       "extendedSettings": {
         "perButton": false,
         "values": [
@@ -4343,7 +4343,7 @@
       ]
     },
     {
-      "description": "The SwitchLinc, LampLinc and ApplianceLinc code base as used by the older SwitchLinc relays.",
+      "description": "The SwitchLinc, LampLinc and ApplianceLinc code base as used by the older SwitchLinc, ToggleLinc and In-LineLinc relays.",
       "extendedSettings": {
         "perButton": false,
         "values": [
@@ -6624,12 +6624,12 @@
       "commandSets": [
         {
           "category": "0x02",
-          "commandSet": "switchLincDimmerLegacy",
+          "commandSet": "switchLincRelayLegacy",
           "subcategory": "0x0D"
         },
         {
           "category": "0x02",
-          "commandSet": "switchLincDimmerLegacy",
+          "commandSet": "switchLincRelayLegacy",
           "subcategory": "0x1A"
         }
       ],
@@ -6856,7 +6856,7 @@
       "commandSets": [
         {
           "category": "0x02",
-          "commandSet": "lampLinc",
+          "commandSet": "switchLincRelayLegacy",
           "subcategory": "0x12"
         }
       ],
@@ -7097,7 +7097,7 @@
       "commandSets": [
         {
           "category": "0x02",
-          "commandSet": "lampLinc",
+          "commandSet": "switchLincRelayLegacy",
           "subcategory": "0x10"
         }
       ],
@@ -7156,7 +7156,7 @@
       "commandSets": [
         {
           "category": "0x02",
-          "commandSet": "lampLinc",
+          "commandSet": "switchLincRelayLegacy",
           "subcategory": "0x14"
         }
       ],
@@ -8235,11 +8235,6 @@
         {
           "category": "0x01",
           "commandSet": "plugInModule",
-          "subcategory": "0x0B"
-        },
-        {
-          "category": "0x01",
-          "commandSet": "plugInModule",
           "subcategory": "0x0F"
         },
         {
@@ -8284,6 +8279,9 @@
       ],
       "model": "2632",
       "name": "Dimmer Module",
+      "notes": [
+        "Insteon's list of code bases puts subcategory 0x0B on the older LampLinc code base, but the 2632's product requirements give it the newer layout, so no command set is named for it."
+      ],
       "radio": "dual",
       "role": "both",
       "sources": [
@@ -9845,7 +9843,7 @@
       "commandSets": [
         {
           "category": "0x02",
-          "commandSet": "lampLinc",
+          "commandSet": "switchLincRelayLegacy",
           "subcategory": "0x22"
         }
       ],
