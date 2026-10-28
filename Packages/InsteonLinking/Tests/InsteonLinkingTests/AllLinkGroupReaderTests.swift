@@ -65,6 +65,23 @@ struct AllLinkGroupReaderTests {
 
   }
 
+  // A keypad responds to the modem's group 1 with two of its buttons.
+  @Test func keepsEachRecordAResponderHasForAGroup() async throws {
+
+    let modem = InMemoryModem()
+    var buttonA = responder(of: modemAddress, group: 0x01)
+    var buttonB = responder(of: modemAddress, group: 0x01)
+    buttonA.data3 = 0x01
+    buttonB.data3 = 0x02
+    await modem.setModemRecords([controller(of: keypad, group: 0x01)])
+    await modem.setDatabase([0x0FFF: buttonA, 0x0FF7: buttonB], of: keypad)
+
+    let reading = try await read(modem, devices: [keypad])
+
+    #expect(reading.groups.first?.responders.map(\.data3) == [0x01, 0x02])
+
+  }
+
   // The lamp was reset, so the keypad still records a link the lamp forgot.
   @Test func reportsALinkMissingItsOtherHalf() async throws {
 

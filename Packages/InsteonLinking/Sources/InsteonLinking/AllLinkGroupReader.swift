@@ -78,8 +78,12 @@ public struct AllLinkGroupReading: Hashable, Sendable {
 /// }
 /// ```
 ///
-/// Only the listed devices and the modem are read. A device the reader can't reach is listed
-/// in ``AllLinkGroupReading/unreadable`` rather than failing the reading.
+/// Only the listed devices and the modem are read. The modem's database is read every time,
+/// since it has no delta to say whether something else, such as its SET button, changed it.
+/// A device that doesn't answer or rejects the reads is listed in
+/// ``AllLinkGroupReading/unreadable`` rather than failing the reading. A responder can have
+/// several records for one controller's group, such as one for each of a keypad's buttons, so
+/// it can appear in a group more than once, once for each record.
 public struct AllLinkGroupReader: Sendable {
 
   /// The cache the databases are read through.
@@ -99,11 +103,13 @@ public struct AllLinkGroupReader: Sendable {
   /// - Parameter devices: The devices whose databases to read.
   /// - Returns: The groups, the half links, and the devices that couldn't be read or weren't
   ///   listed.
-  /// - Throws: The modem's errors reading its own address or database, or
-  ///   `CancellationError` if the task is canceled.
+  /// - Throws: The modem's errors, other than a listed device not answering or rejecting the
+  ///   reads, or `CancellationError` if the task is canceled.
   public func read(devices: [InsteonAddress]) async throws -> AllLinkGroupReading {
 
     let modemAddress = try await cache.modem.modemInfo().address
+    await cache.invalidateModem()
+
     var databases: [InsteonAddress: (endpoint: LinkEndpoint, records: [AllLinkRecord])] = [
       modemAddress: (.modem, try await cache.modemRecords().filter { $0.flags.contains(.inUse) })
     ]
@@ -121,13 +127,15 @@ public struct AllLinkGroupReader: Sendable {
 
         databases[device] = (.device(device), records)
 
-      } catch is CancellationError {
+      } catch let error as ModemError {
 
-        throw CancellationError()
-
-      } catch {
-
-        unreadable.append(device)
+        // Only the device's own failures make it unreadable; the modem's end the reading.
+        switch error {
+        case .deviceTimedOut(device), .deviceRejected(device, _):
+          unreadable.append(device)
+        default:
+          throw error
+        }
 
       }
 
@@ -152,6 +160,13 @@ public struct AllLinkGroupReader: Sendable {
     // The modem first, then the devices in address order.
     let owners = [modem] + databases.keys.filter { $0 != modem }.sorted(by: addressOrder)
 
+    // Each database's records by what they link, so a record's match is found directly.
+    let indexes = databases.mapValues { database in
+
+      Dictionary(grouping: database.records) { MatchKey(address: $0.address, group: $0.group, isController: $0.flags.contains(.controller)) }
+
+    }
+
     for owner in owners {
 
       guard let (endpoint, records) = databases[owner] else {
@@ -167,7 +182,7 @@ public struct AllLinkGroupReader: Sendable {
         let other = record.address
         let isController = record.flags.contains(.controller)
 
-        guard let otherDatabase = databases[other] else {
+        guard let otherDatabase = databases[other], let otherIndex = indexes[other] else {
 
           if !skipped.contains(other) {
 
@@ -179,14 +194,10 @@ public struct AllLinkGroupReader: Sendable {
 
         }
 
-        // The other end's matching record: the opposite role, the same group, and this end.
-        let match = otherDatabase.records.first { candidate in
+        // The other end's matching records: the opposite role, the same group, and this end.
+        let matches = otherIndex[MatchKey(address: owner, group: record.group, isController: !isController)] ?? []
 
-          candidate.flags.contains(.controller) != isController && candidate.group == record.group && candidate.address == owner
-
-        }
-
-        guard let match else {
+        guard !matches.isEmpty else {
 
           halfLinks.append(.init(endpoint: endpoint, record: record))
 
@@ -194,12 +205,15 @@ public struct AllLinkGroupReader: Sendable {
 
         }
 
-        // Each pair is collected once, from its controller's side.
+        // Each pair is collected once, from its controller's side, with every record the
+        // responder keeps for it.
         if isController {
 
-          responders[record.group, default: []].append(
+          responders[record.group, default: []] += matches.map { match in
+
             AllLinkGroup.Responder(otherDatabase.endpoint, data1: match.data1, data2: match.data2, data3: match.data3)
-          )
+
+          }
 
         }
 
@@ -207,10 +221,12 @@ public struct AllLinkGroupReader: Sendable {
 
       for number in responders.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
 
-        let members = responders[number, default: []]
-        var seen: Set<LinkEndpoint> = []
+        // A controller with two records of the same responder in a group would list its
+        // records twice.
+        var seen: Set<AllLinkGroup.Responder> = []
+        let members = responders[number, default: []].filter { seen.insert($0).inserted }
 
-        groups.append(AllLinkGroup(controller: endpoint, number: number, responders: members.filter { seen.insert($0.endpoint).inserted }))
+        groups.append(AllLinkGroup(controller: endpoint, number: number, responders: members))
 
       }
 
@@ -222,6 +238,17 @@ public struct AllLinkGroupReader: Sendable {
       unreadable: unreadable,
       unlisted: unlisted.sorted(by: addressOrder)
     )
+
+  }
+
+  /// What a record links: the other end, the group, and the record's role.
+  private struct MatchKey: Hashable {
+
+    let address: InsteonAddress
+
+    let group: AllLinkGroupNumber
+
+    let isController: Bool
 
   }
 
