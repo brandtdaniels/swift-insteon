@@ -1,4 +1,4 @@
-/// The generation of INSTEON engine a device runs, which sets the commands every such device
+/// The generation of Insteon engine a device runs, which sets the commands every such device
 /// supports and how strictly it checks extended messages.
 ///
 /// A device reports its engine in the acknowledgement of

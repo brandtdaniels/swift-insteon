@@ -1,4 +1,4 @@
-/// A value with a fixed binary representation in the INSTEON protocol.
+/// A value with a fixed binary representation in the Insteon protocol.
 public protocol ByteEncodable {
 
   /// The value's bytes, in the order they are transmitted.
@@ -10,7 +10,7 @@ extension ByteEncodable {
 
   /// The value's bytes as uppercase hexadecimal, two digits per byte, with no separators.
   ///
-  /// This is the form INSTEON modems and hubs accept in their text interfaces,
+  /// This is the form Insteon modems and hubs accept in their text interfaces,
   /// for example `"0F1180"`.
   public var hexString: String {
 

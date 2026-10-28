@@ -24,7 +24,7 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
   /// 2xx, with that status.
   case unexpectedStatus(Int)
 
-  /// The manifest isn't the JSON the INSTEON device catalog publishes, or names its
+  /// The manifest isn't the JSON the Insteon device catalog publishes, or names its
   /// catalog by anything but a plain file name.
   case malformedManifest
 
@@ -58,7 +58,7 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
 /// Hashes are worked out with swift-crypto, which uses CryptoKit on Apple platforms.
 public struct DeviceCatalogUpdater: Sendable {
 
-  /// Where the INSTEON device catalog publishes the format version this package reads.
+  /// Where the Insteon device catalog publishes the format version this package reads.
   public static let defaultLocation = URL(string: "https://brandtdaniels.github.io/insteon-device-catalog/v\(DeviceCatalog.schemaVersion)/")!
 
   /// The client requests are sent through.

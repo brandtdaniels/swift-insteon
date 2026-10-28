@@ -1,4 +1,4 @@
-/// A type that can be expressed as INSTEON command bytes.
+/// A type that can be expressed as Insteon command bytes.
 ///
 /// Messages accept any conforming type, so device-specific command sets can be added
 /// without changing this package.

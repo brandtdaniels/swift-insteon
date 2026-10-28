@@ -3,7 +3,7 @@ import InsteonProtocol
 /// Errors reported by ``PowerLincController``.
 public enum PowerLincControllerError: Error, Hashable, Sendable {
 
-  /// The controller can't carry this command. It sends standard INSTEON messages and X10, and
+  /// The controller can't carry this command. It sends standard Insteon messages and X10, and
   /// answers `SerialCommand.getModemInfo`.
   case unsupported(SerialCommand)
 

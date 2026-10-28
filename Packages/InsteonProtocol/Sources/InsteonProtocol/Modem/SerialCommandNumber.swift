@@ -1,4 +1,4 @@
-/// The number that identifies a command sent from a host to an INSTEON modem.
+/// The number that identifies a command sent from a host to an Insteon modem.
 ///
 /// Every serial command starts with ``SerialCommand/startOfText`` (`0x02`) followed by its
 /// number.
@@ -10,7 +10,7 @@ public enum SerialCommandNumber: UInt8, CaseIterable, Hashable, Sendable {
   /// Send ALL-Link Command (`0x61`).
   case sendAllLinkCommand = 0x61
 
-  /// Send INSTEON Standard or Extended Message (`0x62`).
+  /// Send Insteon Standard or Extended Message (`0x62`).
   case sendMessage = 0x62
 
   /// Send X10 (`0x63`).
@@ -28,7 +28,7 @@ public enum SerialCommandNumber: UInt8, CaseIterable, Hashable, Sendable {
   /// Reset the IM (`0x67`).
   case resetModem = 0x67
 
-  /// Set INSTEON ACK Message Byte (`0x68`).
+  /// Set Insteon ACK Message Byte (`0x68`).
   case setAcknowledgementByte = 0x68
 
   /// Get First ALL-Link Record (`0x69`).
@@ -52,10 +52,10 @@ public enum SerialCommandNumber: UInt8, CaseIterable, Hashable, Sendable {
   /// Manage ALL-Link Record (`0x6F`).
   case manageAllLinkRecord = 0x6F
 
-  /// Set INSTEON NAK Message Byte (`0x70`).
+  /// Set Insteon NAK Message Byte (`0x70`).
   case setNegativeAcknowledgementByte = 0x70
 
-  /// Set INSTEON ACK Message Two Bytes (`0x71`).
+  /// Set Insteon ACK Message Two Bytes (`0x71`).
   case setAcknowledgementBytes = 0x71
 
   /// RF Sleep (`0x72`).

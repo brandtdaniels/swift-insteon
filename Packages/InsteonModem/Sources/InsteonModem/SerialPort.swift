@@ -12,7 +12,7 @@ import Glibc
 /// <doc:SupportedModems> for every model.
 ///
 /// The port is opened in raw mode at 19200 baud, 8 data bits, no parity and one stop bit, the
-/// settings INSTEON modems use, without hardware flow control. A PowerLinc Controller (2414S)
+/// settings Insteon modems use, without hardware flow control. A PowerLinc Controller (2414S)
 /// uses 4800 baud instead; see ``SerialPort/BaudRate``. Each command is written in a
 /// single call, because the modem discards a command if more than 240 ms pass between its
 /// bytes. On macOS, USB modems appear as `/dev/cu.usbserial-*`; on
@@ -29,7 +29,7 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
     /// 4800 baud, which a PowerLinc Controller (2414S) uses.
     case baud4800
 
-    /// 19200 baud, which INSTEON modems use.
+    /// 19200 baud, which Insteon modems use.
     case baud19200
 
     var speed: speed_t {
@@ -43,11 +43,11 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
 
   }
 
-  /// Opens the serial port at a path and configures it for an INSTEON modem.
+  /// Opens the serial port at a path and configures it for an Insteon modem.
   ///
   /// - Parameters:
   ///   - path: The device path, such as `/dev/ttyUSB0`.
-  ///   - baudRate: The port's speed. Defaults to 19200 baud, for INSTEON modems.
+  ///   - baudRate: The port's speed. Defaults to 19200 baud, for Insteon modems.
   /// - Throws: ``SerialPortError`` if the port can't be opened or configured.
   public init(path: String, baudRate: BaudRate = .baud19200) throws(SerialPortError) {
 

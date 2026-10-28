@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Replaces InsteonDeviceCatalog's copy of the INSTEON device catalog with the published one,
+# Replaces InsteonDeviceCatalog's copy of the Insteon device catalog with the published one,
 # after checking it against the SHA-256 in the published manifest.
 #
 # Usage: Scripts/update-device-catalog.sh

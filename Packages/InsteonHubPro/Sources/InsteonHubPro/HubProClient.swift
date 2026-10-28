@@ -5,7 +5,7 @@ import FoundationNetworking
 import InsteonNetworking
 import InsteonProtocol
 
-/// Adds and removes INSTEON devices on a Hub Pro (2243-222), reads its settings, and starts
+/// Adds and removes Insteon devices on a Hub Pro (2243-222), reads its settings, and starts
 /// its software update, through its local HTTP interface.
 ///
 /// The interface is plain HTTP on port 80, without authentication, and every request is a
@@ -64,7 +64,7 @@ public struct HubProClient: Sendable {
 
   /// Adds a device to the Hub Pro.
   ///
-  /// - Parameter device: The device's INSTEON address, printed on it.
+  /// - Parameter device: The device's Insteon address, printed on it.
   /// - Throws: ``HubProError/deviceNotResponding`` if the device didn't answer the Hub Pro,
   ///   another ``HubProError`` if the Hub Pro refused or the host or port isn't usable, or the
   ///   client's error.
@@ -76,7 +76,7 @@ public struct HubProClient: Sendable {
 
   /// Removes a device from the Hub Pro.
   ///
-  /// - Parameter device: The device's INSTEON address.
+  /// - Parameter device: The device's Insteon address.
   /// - Throws: ``HubProError/deviceNotResponding`` if the device didn't answer the Hub Pro,
   ///   another ``HubProError`` if the Hub Pro refused, or the client's error.
   public func removeDevice(_ device: InsteonAddress) async throws {

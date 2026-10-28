@@ -499,7 +499,7 @@ struct RequestTests {
 
   }
 
-  // The guide: other INSTEON traffic stops the cleanups, and the status report says so.
+  // The guide: other Insteon traffic stops the cleanups, and the status report says so.
   @Test func reportsCleanupsCutShort() async throws {
 
     let connection = ScriptedConnection { written, _ in written + [0x06, 0x02, 0x58, 0x15] }

@@ -5,7 +5,7 @@ import FoundationNetworking
 import InsteonHubClient
 import InsteonNetworking
 
-/// Finds INSTEON Hubs on the local network, without Insteon's servers.
+/// Finds Insteon Hubs on the local network, without Insteon's servers.
 ///
 /// A Hub doesn't announce itself, so discovery asks every address on the device's private
 /// subnets. Each address is sent one HTTP request for the Hub's buffer page, `/buffstatus.xml`

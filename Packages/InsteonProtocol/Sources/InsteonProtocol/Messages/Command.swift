@@ -1,4 +1,4 @@
-/// The two command bytes of an INSTEON message.
+/// The two command bytes of an Insteon message.
 ///
 /// `command1` selects the operation and `command2` carries its argument, such as a light
 /// level or an ALL-Link group. Use the typed catalogs, ``StandardDirectCommand`` and

@@ -1,4 +1,4 @@
-/// An INSTEON message a modem received from a device.
+/// An Insteon message a modem received from a device.
 public struct ReceivedMessage: Hashable, Sendable {
 
   /// The device that sent the message.

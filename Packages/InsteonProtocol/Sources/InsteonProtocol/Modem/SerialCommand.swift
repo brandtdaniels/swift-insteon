@@ -1,5 +1,5 @@
-/// A command sent from a host to an INSTEON modem (IM), such as a PowerLinc Modem or the
-/// modem inside an INSTEON Hub.
+/// A command sent from a host to an Insteon modem (IM), such as a PowerLinc Modem or the
+/// modem inside an Insteon Hub.
 ///
 /// Each command encodes to ``SerialCommand/startOfText``, its ``SerialCommand/number`` and
 /// its parameters:
@@ -26,10 +26,10 @@ public enum SerialCommand: Hashable, Sendable {
   ///     level.
   case sendAllLinkCommand(group: AllLinkGroupNumber, command: Command)
 
-  /// Sends a standard-length INSTEON message.
+  /// Sends a standard-length Insteon message.
   case sendStandardMessage(StandardMessage)
 
-  /// Sends an extended-length INSTEON message.
+  /// Sends an extended-length Insteon message.
   case sendExtendedMessage(ExtendedMessage)
 
   /// Sends an X10 unit address or command over the power line.
@@ -77,7 +77,7 @@ public enum SerialCommand: Hashable, Sendable {
   /// Sets the modem's configuration flags.
   case setModemConfiguration(ModemConfiguration)
 
-  /// Requests the ALL-Link record for the device that sent the last INSTEON message, if that
+  /// Requests the ALL-Link record for the device that sent the last Insteon message, if that
   /// device is in the modem's ALL-Link database.
   case getAllLinkRecordForSender
 
@@ -136,7 +136,7 @@ public enum SerialCommand: Hashable, Sendable {
   ///
   /// The three bytes become ``AllLinkRecord/data1``, ``AllLinkRecord/data2`` and
   /// ``AllLinkRecord/data3`` of the record ``SerialCommand/startAllLinking(mode:group:)``
-  /// creates when the modem is the responder. INSTEON's command table describes the data as being for the next
+  /// creates when the modem is the responder. Insteon's command table describes the data as being for the next
   /// link, so send this before each link that needs it.
   ///
   /// - Parameters:

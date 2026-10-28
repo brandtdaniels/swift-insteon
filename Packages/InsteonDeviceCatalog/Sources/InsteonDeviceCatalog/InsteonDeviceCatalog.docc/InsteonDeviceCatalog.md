@@ -1,12 +1,12 @@
 # ``InsteonDeviceCatalog``
 
-Find what an INSTEON device is and can do from the category, subcategory and firmware version
+Find what an Insteon device is and can do from the category, subcategory and firmware version
 it reports.
 
 ## Overview
 
-Every INSTEON device reports a category, a subcategory and a firmware version: when it's asked
-to identify itself, when its SET button is pressed, and in some heartbeats. The INSTEON device
+Every Insteon device reports a category, a subcategory and a firmware version: when it's asked
+to identify itself, when its SET button is pressed, and in some heartbeats. The Insteon device
 catalog turns those into a ``DeviceProfile``: the product's model and name, its ALL-Link
 groups, and its capabilities, such as dimming, a thermostat's mode values, what a sensor means
 by each command it sends, and how often it sends a heartbeat.

@@ -1,4 +1,4 @@
-/// A message an INSTEON modem sends to its host.
+/// A message an Insteon modem sends to its host.
 ///
 /// Modems send two kinds of replies: echoes of the commands the host sent, ending in an ACK or
 /// NAK, and reports of things that happened, such as a message received from a device. Turn

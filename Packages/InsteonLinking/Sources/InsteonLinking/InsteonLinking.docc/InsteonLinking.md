@@ -1,6 +1,6 @@
 # ``InsteonLinking``
 
-Link INSTEON devices to each other and to the modem.
+Link Insteon devices to each other and to the modem.
 
 ## Overview
 

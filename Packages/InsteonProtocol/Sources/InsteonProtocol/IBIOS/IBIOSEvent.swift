@@ -1,7 +1,7 @@
 /// An event IBIOS reports to the host, identified by its handle.
 ///
 /// IBIOS reports each event in an ``IBIOSReply/eventReport(_:)``, and the SALad program a
-/// PowerLinc Controller ships with also reports the INSTEON message behind events
+/// PowerLinc Controller ships with also reports the Insteon message behind events
 /// ``IBIOSEvent/messageForMe`` through ``IBIOSEvent/enrollmentMessage`` in an
 /// ``IBIOSReply/messageReceived(_:message:)``. Handles this type doesn't name keep their
 /// number.
@@ -22,10 +22,10 @@ public struct IBIOSEvent: RawRepresentable, Hashable, Sendable {
   /// The SALad program started (`0x00`), as it does at power-up.
   public static let initialized = IBIOSEvent(rawValue: 0x00)
 
-  /// An INSTEON message addressed to this device arrived (`0x01`).
+  /// An Insteon message addressed to this device arrived (`0x01`).
   public static let messageForMe = IBIOSEvent(rawValue: 0x01)
 
-  /// An INSTEON message addressed to another device arrived (`0x02`).
+  /// An Insteon message addressed to another device arrived (`0x02`).
   public static let messageForOthers = IBIOSEvent(rawValue: 0x02)
 
   /// A repeat of a message already received arrived on a later hop (`0x03`).

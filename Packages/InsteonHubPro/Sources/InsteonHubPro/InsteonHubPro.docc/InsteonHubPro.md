@@ -1,15 +1,15 @@
 # ``InsteonHubPro``
 
-Add INSTEON devices to a Hub Pro, read its settings, and update its software.
+Add Insteon devices to a Hub Pro, read its settings, and update its software.
 
 ## Overview
 
-The Hub Pro (2243-222) is built on the same foundations as the other Hubs, with an INSTEON
+The Hub Pro (2243-222) is built on the same foundations as the other Hubs, with an Insteon
 modem that `HubConnection` in `InsteonHubClient` drives the same way. It was also sold as a
 HomeKit bridge, which current versions of HomeKit no longer support.
 
 ``HubProClient`` covers the requests only the Hub Pro has, which Insteon's app used alongside
-HomeKit: it adds and removes INSTEON devices from the bridge, reports the Hub Pro's network
+HomeKit: it adds and removes Insteon devices from the bridge, reports the Hub Pro's network
 settings and software versions, and installs software updates.
 
 ```swift

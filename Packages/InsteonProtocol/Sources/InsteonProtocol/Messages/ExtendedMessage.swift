@@ -1,4 +1,4 @@
-/// An extended-length INSTEON message: destination, flags, two command bytes and 14 bytes
+/// An extended-length Insteon message: destination, flags, two command bytes and 14 bytes
 /// of user data.
 ///
 /// The message seals its user data with an integrity scheme when created, so the integrity

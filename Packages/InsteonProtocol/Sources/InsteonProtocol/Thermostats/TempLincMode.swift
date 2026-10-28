@@ -1,5 +1,5 @@
 /// The mode a TempLinc Thermostat (2441TH) or TempLinc Wireless Zone Thermostat (2441ZTH)
-/// reports in a mode ``ThermostatStatusReport``, as the final revisions of SmartLabs' TempLinc
+/// reports in a mode ``ThermostatStatusReport``, as the final revisions of Insteon's TempLinc
 /// product requirements give it.
 ///
 /// Earlier revisions and the TempLinc engineering specification give only off, auto (`0x01`),

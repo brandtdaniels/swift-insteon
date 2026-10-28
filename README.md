@@ -3,19 +3,19 @@
 [![CI](https://github.com/brandtdaniels/swift-insteon/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/brandtdaniels/swift-insteon/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Swift packages for working with [INSTEON](https://www.insteon.com) home automation devices.
+Swift packages for working with [Insteon](https://www.insteon.com) home automation devices.
 
 | Library | Description |
 | --- | --- |
-| [InsteonProtocol](Packages/InsteonProtocol) | The INSTEON protocol as value types: messages for devices, the serial commands that carry them through a modem, and the IBIOS commands of a PowerLinc Controller |
-| [InsteonModem](Packages/InsteonModem) | Control INSTEON devices through a PowerLinc Modem or USB Adapter on a USB or serial port, or a PowerLinc Controller (2414S) |
+| [InsteonProtocol](Packages/InsteonProtocol) | The Insteon protocol as value types: messages for devices, the serial commands that carry them through a modem, and the IBIOS commands of a PowerLinc Controller |
+| [InsteonModem](Packages/InsteonModem) | Control Insteon devices through a PowerLinc Modem or USB Adapter on a USB or serial port, or a PowerLinc Controller (2414S) |
 | [InsteonLinking](Packages/InsteonLinking) | Link devices to each other and to the modem: by writing their ALL-Link databases, remotely, or with their SET buttons |
-| [InsteonHubClient](Packages/InsteonHubClient) | Control INSTEON devices through an INSTEON Hub on your local network, by driving its built-in modem with InsteonModem |
-| [InsteonHubDiscovery](Packages/InsteonHubDiscovery) | Find INSTEON Hubs on your local network, by asking the network itself or Insteon Connect |
-| [InsteonHubPro](Packages/InsteonHubPro) | Add INSTEON devices to a Hub Pro and read its settings and update its software through its local interface |
+| [InsteonHubClient](Packages/InsteonHubClient) | Control Insteon devices through an Insteon Hub on your local network, by driving its built-in modem with InsteonModem |
+| [InsteonHubDiscovery](Packages/InsteonHubDiscovery) | Find Insteon Hubs on your local network, by asking the network itself or Insteon Connect |
+| [InsteonHubPro](Packages/InsteonHubPro) | Add Insteon devices to a Hub Pro and read its settings and update its software through its local interface |
 | [InsteonScheduling](Packages/InsteonScheduling) | Work out when schedules run, at clock times or around sunrise and sunset, in a home's time zone through daylight saving changes |
 | [InsteonDeviceCatalog](Packages/InsteonDeviceCatalog) | Find what a device is and can do, such as its groups, what its group commands mean and its heartbeat interval, from the category, subcategory and firmware version it reports, and read its messages as named events |
-| [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the INSTEON clients send requests through |
+| [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the Insteon clients send requests through |
 
 The [Supported Modems](Packages/InsteonModem/Sources/InsteonModem/InsteonModem.docc/SupportedModems.md) article lists every modem, Hub and controller, and how well each is supported.
 
@@ -65,7 +65,7 @@ try await Modem.withConnection(SerialPort(path: "/dev/ttyUSB0")) { modem in
 }
 ```
 
-An INSTEON Hub works the same way through its built-in modem:
+An Insteon Hub works the same way through its built-in modem:
 
 ```swift
 import InsteonHubClient
@@ -119,4 +119,4 @@ Each library lives in `Packages/<Name>`, with its sources, tests and DocC catalo
 
 The code in this repository is available under the MIT License. See [LICENSE](LICENSE).
 
-INSTEON is a trademark of its owner. This project is an independent implementation of the publicly documented INSTEON protocol. It is not affiliated with, endorsed by or sponsored by Insteon or its owner, and the license covers only this project's code.
+Insteon is a trademark of its owner. This project is an independent implementation of the publicly documented Insteon protocol. It is not affiliated with, endorsed by or sponsored by Insteon or its owner, and the license covers only this project's code.

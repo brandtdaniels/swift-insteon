@@ -26,13 +26,13 @@ public struct DiscoveredModem: Hashable, Sendable {
 
 }
 
-/// Finds INSTEON modems on the computer's USB-to-serial adapters.
+/// Finds Insteon modems on the computer's USB-to-serial adapters.
 ///
 /// Discovery opens each device at 19200 baud and asks it for its modem information with
 /// ``Modem/modemInfo()``. A device that answers with a modem's category,
 /// `DeviceCategory.networkBridges`, is reported along with what it said about itself. A NAK
 /// means a modem that's busy, so it's asked once more. Many modems connect through a common
-/// USB-to-serial chip rather than one with SmartLabs' USB vendor ID, so the answer, rather
+/// USB-to-serial chip rather than one with Insteon's USB vendor ID, so the answer, rather
 /// than the device's vendor, is what identifies a modem.
 ///
 /// ```swift
@@ -119,7 +119,7 @@ public struct ModemDiscovery: Sendable {
 
   }
 
-  /// Asks each device, all at once, whether it's an INSTEON modem.
+  /// Asks each device, all at once, whether it's an Insteon modem.
   ///
   /// - Returns: The modems found, in the order of their paths.
   /// - Throws: The error listing the devices, if they can't be listed, or `CancellationError`

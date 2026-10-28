@@ -1,6 +1,6 @@
 import InsteonProtocol
 
-/// Talks to an INSTEON modem, such as a PowerLinc Modem, over a ``ModemConnection``.
+/// Talks to an Insteon modem, such as a PowerLinc Modem, over a ``ModemConnection``.
 ///
 /// ``Modem/send(_:)`` sends one command at a time and waits for the modem's echo, retrying
 /// when the modem answers with a NAK because it's busy. Modems expect this pacing: a command
@@ -128,7 +128,7 @@ public actor Modem: SerialCommandSender {
   /// Asks the modem about itself with Get IM Info (`0x60`).
   ///
   /// - Returns: The modem's address, device category, subcategory and firmware version. Every
-  ///   INSTEON modem reports category `DeviceCategory.networkBridges`, and the subcategory
+  ///   Insteon modem reports category `DeviceCategory.networkBridges`, and the subcategory
   ///   names the model; see <doc:SupportedModems>.
   /// - Throws: The errors of ``Modem/send(_:)``.
   public func modemInfo() async throws -> ModemInfo {
@@ -292,7 +292,7 @@ public actor Modem: SerialCommandSender {
   /// How long a request for a standard message waits for the device's answer by default:
   /// 3 seconds.
   ///
-  /// The Developer's Guide gives 2.00 seconds for the INSTEON engine to retry a standard
+  /// The Developer's Guide gives 2.00 seconds for the Insteon engine to retry a standard
   /// message five times from Max Hops 3, the most it retries. The extra second covers the
   /// modem's echo.
   public static let defaultRequestTimeout: Duration = .seconds(3)
@@ -300,7 +300,7 @@ public actor Modem: SerialCommandSender {
   /// How long a request for an extended message waits for the device's answer by default:
   /// 4.17 seconds.
   ///
-  /// The Developer's Guide gives 3.17 seconds for the INSTEON engine to retry an extended
+  /// The Developer's Guide gives 3.17 seconds for the Insteon engine to retry an extended
   /// message five times from Max Hops 3. The extra second covers the modem's echo, as in
   /// ``Modem/defaultRequestTimeout``.
   public static let defaultExtendedRequestTimeout: Duration = .milliseconds(4_170)

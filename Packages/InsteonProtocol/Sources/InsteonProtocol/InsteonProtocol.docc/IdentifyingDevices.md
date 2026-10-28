@@ -4,7 +4,7 @@ Find out what kind of device is on the network.
 
 ## Overview
 
-Every INSTEON device belongs to a device category (DevCat) and subcategory (SubCat), and runs a
+Every Insteon device belongs to a device category (DevCat) and subcategory (SubCat), and runs a
 particular firmware version. Devices report these themselves, so an app never needs to ask the
 user what they installed.
 

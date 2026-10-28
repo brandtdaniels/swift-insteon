@@ -29,7 +29,7 @@ public enum IBIOSReply: Hashable, Sendable {
   /// An event fired (`0x45`).
   case eventReport(IBIOSEvent)
 
-  /// An INSTEON message arrived, as the device's SALad program reports it (`0x4F`).
+  /// An Insteon message arrived, as the device's SALad program reports it (`0x4F`).
   ///
   /// - Parameters:
   ///   - event: The event the message fired, such as ``IBIOSEvent/messageForMe``.

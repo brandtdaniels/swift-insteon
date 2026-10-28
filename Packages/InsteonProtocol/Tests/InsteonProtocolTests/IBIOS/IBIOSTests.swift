@@ -1,7 +1,7 @@
 import Testing
 import InsteonProtocol
 
-/// The encodings come from the worked examples in the INSTEON Developer's Guide, chapter 9,
+/// The encodings come from the worked examples in the Insteon Developer's Guide, chapter 9,
 /// including their checksums.
 struct IBIOSTests {
 

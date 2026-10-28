@@ -1,4 +1,4 @@
-/// The bytes that mark frames and answers in the serial protocols of INSTEON modems and of
+/// The bytes that mark frames and answers in the serial protocols of Insteon modems and of
 /// devices running IBIOS.
 package enum ControlByte {
 

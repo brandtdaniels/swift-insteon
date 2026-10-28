@@ -1,6 +1,6 @@
 /// A scheme for protecting an extended message's user data against corruption.
 ///
-/// i2cs INSTEON devices reject extended messages whose integrity bytes don't match. Which
+/// i2cs Insteon devices reject extended messages whose integrity bytes don't match. Which
 /// scheme a device expects depends on the device and command; most use ``ChecksumIntegrity``,
 /// and some devices use ``CRCIntegrity`` for certain commands. Conform your own type to
 /// support another scheme.

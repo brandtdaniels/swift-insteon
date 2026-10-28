@@ -1,6 +1,6 @@
 import InsteonProtocol
 
-/// What one INSTEON product is and can do: its model, the identities it reports, its ALL-Link
+/// What one Insteon product is and can do: its model, the identities it reports, its ALL-Link
 /// groups and its capabilities.
 ///
 /// A ``DeviceCatalog`` finds a device's profile from the category, subcategory and firmware

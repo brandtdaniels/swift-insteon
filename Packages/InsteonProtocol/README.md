@@ -1,6 +1,6 @@
 # InsteonProtocol
 
-The INSTEON protocol as Swift value types, encoded to the bytes INSTEON modems and hubs accept.
+The Insteon protocol as Swift value types, encoded to the bytes Insteon modems and hubs accept.
 
 ## Messages
 
@@ -49,7 +49,7 @@ No device data is built in, so every app can look devices up in one shared devic
 
 ## Modem
 
-`Sources/InsteonProtocol/Modem` covers the serial commands a host sends to an INSTEON modem, such as a PowerLinc Modem or the modem inside an INSTEON Hub:
+`Sources/InsteonProtocol/Modem` covers the serial commands a host sends to an Insteon modem, such as a PowerLinc Modem or the modem inside an Insteon Hub:
 
 - `SerialCommand`: the host-to-modem commands `0x60` through `0x77`, `0x79`, `0x7A` and `0x7D`, encoded to bytes
 - `SerialCommandSender`: the protocol modem connections conform to
@@ -63,7 +63,7 @@ No device data is built in, so every app can look devices up in one shared devic
 `Sources/InsteonProtocol/IBIOS` covers IBIOS, the serial protocol of the PowerLinc Controller (2414U, 2414S), which gives the host access to the device's memory instead of modem commands:
 
 - `IBIOSCommand` and `IBIOSCommandNumber`: download, upload, checksum, mask, simulated event and get version, encoded to bytes with their checksums
-- `IBIOSReplyParser` and `IBIOSReply`: turn the bytes the controller sends into typed replies: echoes with ACK/NAK, memory, event reports, and the INSTEON messages and X10 its SALad program reports
+- `IBIOSReplyParser` and `IBIOSReply`: turn the bytes the controller sends into typed replies: echoes with ACK/NAK, memory, event reports, and the Insteon messages and X10 its SALad program reports
 - `IBIOSEvent`: the events IBIOS reports
 
 See the DocC catalog in `Sources/InsteonProtocol/InsteonProtocol.docc` for the full documentation, including the byte-level message format.

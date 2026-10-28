@@ -1,6 +1,6 @@
 # InsteonModem
 
-Talk to an INSTEON modem, such as a PowerLinc Modem connected by USB (2413U) or serial cable (2413S).
+Talk to an Insteon modem, such as a PowerLinc Modem connected by USB (2413U) or serial cable (2413S).
 
 ## Supported modems
 

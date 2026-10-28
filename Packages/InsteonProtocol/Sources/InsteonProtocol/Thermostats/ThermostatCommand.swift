@@ -1,5 +1,5 @@
 /// Commands a thermostat accepts in a standard direct message, from Insteon's thermostat
-/// command tables, SmartLabs' Thermostat Adapter (Venstar/Totaline) datasheet and the TempLinc
+/// command tables, Insteon's Thermostat Adapter (Venstar/Totaline) datasheet and the TempLinc
 /// Thermostat (2441TH) product requirements.
 ///
 /// Thermostats don't all accept every command, or give every value the same meaning, so check
