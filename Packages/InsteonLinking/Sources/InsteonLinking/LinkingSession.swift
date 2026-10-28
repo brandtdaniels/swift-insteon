@@ -184,9 +184,6 @@ struct LinkingSession: Sendable {
 
     } catch {
 
-      // A link may have been made even so, such as one with another device.
-      await cache?.invalidateModem()
-
       let modem = modem
       let restore: @Sendable () async -> Void = {
 
@@ -204,6 +201,9 @@ struct LinkingSession: Sendable {
         await restore()
 
       }
+
+      // A link may have been made even so, such as one with another device.
+      await cache?.invalidateModem()
 
       throw error
 

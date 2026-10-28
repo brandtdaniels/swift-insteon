@@ -4,25 +4,34 @@ import InsteonProtocol
 /// Keeps copies of the ALL-Link databases of the modem and its devices, so each is read over
 /// the network only when it has changed.
 ///
-/// Reading a device's database takes a request for every record, so the cache keeps what it
-/// read along with the device's ALL-Link database delta at the time. The delta is a byte the
-/// device changes whenever its database does, and it arrives in the acknowledgement of a
-/// status request. Before handing back a copy, the cache asks for the delta again: one
-/// standard message instead of a read. A device whose delta has changed is read again.
+/// The databases in the modem and the devices are the source of truth; a copy is only ever
+/// what was last read from them. Reading a device's database takes a request for every
+/// record, so the cache keeps what it read along with the device's ALL-Link database delta at
+/// the time. The delta is a byte the device changes whenever its database does, and it
+/// arrives in the acknowledgement of a status request. Before handing back a copy, the cache
+/// asks for the delta again: one standard message instead of a read. A device whose delta has
+/// changed is read again. ``Linker`` and ``Unlinker`` forget a device's copy whenever they
+/// change its database, so it's read again rather than guessed.
 ///
 /// The modem's own database has no delta every modem reports, so the cache reads it once
-/// and keeps it until ``AllLinkDatabaseCache/invalidateModem()``. ``Linker`` and ``Unlinker``
-/// invalidate it whenever they change the modem's records.
+/// and keeps it until ``AllLinkDatabaseCache/invalidateModem()``, which ``Linker`` and
+/// ``Unlinker`` call whenever they change the modem's records. Since something else, such as
+/// the modem's SET button, can change it too, the linker always asks the modem itself before
+/// changing it; the copy is for an app to read.
 ///
 /// ```swift
 /// let cache = AllLinkDatabaseCache(modem: modem)
 /// let linker = Linker(modem: modem, cache: cache)
 ///
-/// try await linker.link(group)
-/// let records = try await cache.records(of: lamp)   // No read: the linker kept it up to date.
+/// let records = try await cache.records(of: lamp)   // Reads the lamp's database.
+/// try await linker.link(group)                      // Checks the delta instead of reading it.
 /// ```
 ///
-/// The copies live in memory for as long as the cache does.
+/// A delta is one byte, so a database that changed a multiple of 256 times between two
+/// requests looks unchanged. Give a linker or unlinker a cache that reads through the same
+/// modem, and use one linker or unlinker at a time with a cache, since two changing the same
+/// device at once can each write into the same free record. The copies live in memory for as
+/// long as the cache does.
 public actor AllLinkDatabaseCache {
 
   /// A device's database as it was read, and its delta at the time.
@@ -119,27 +128,6 @@ public actor AllLinkDatabaseCache {
   public func invalidateModem() {
 
     modemDatabase = nil
-
-  }
-
-  /// Replaces a device's copy with records written to it, at the device's delta after the
-  /// writes, so the next request doesn't read the database again. If the delta can't be read,
-  /// the copy is forgotten instead.
-  ///
-  /// - Parameters:
-  ///   - records: The device's records as they now are.
-  ///   - device: The device.
-  func store(_ records: [AllLinkRecordResponse], of device: InsteonAddress) async {
-
-    do {
-
-      devices[device] = DeviceDatabase(delta: try await databaseDelta(of: device), records: records)
-
-    } catch {
-
-      devices[device] = nil
-
-    }
 
   }
 

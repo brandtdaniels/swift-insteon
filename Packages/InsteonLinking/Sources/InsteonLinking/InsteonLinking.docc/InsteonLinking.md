@@ -81,9 +81,10 @@ Reading a device's database takes a request for every record, so a linker reads 
 database once per call. To read it less often across calls, give ``Linker`` and ``Unlinker``
 the same ``AllLinkDatabaseCache``. It keeps each device's database along with the device's
 ALL-Link database delta, a byte the device changes whenever its database does, and before
-reusing a copy it asks the device for its delta with one status request. A database the
-linker writes is kept as written. The modem's own database is kept until something changes
-it.
+reusing a copy it asks the device for its delta with one status request. The databases in
+the modem and the devices stay the source of truth: a database the linker changes is read
+again next time rather than kept as written, and the linker asks the modem itself before
+changing the modem's records.
 
 ## Topics
 

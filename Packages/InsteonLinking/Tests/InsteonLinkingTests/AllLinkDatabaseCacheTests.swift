@@ -82,9 +82,9 @@ struct AllLinkDatabaseCacheTests {
 
   }
 
-  // The linker writes the lamp's records through the cache, so the next request finds them
-  // without reading the database again.
-  @Test func keepsWhatTheLinkerWrites() async throws {
+  // The device is the source of truth, so a database the linker changed is read again rather
+  // than kept as the linker wrote it.
+  @Test func readsADatabaseAgainAfterTheLinkerChangesIt() async throws {
 
     let modem = InMemoryModem()
     let cache = AllLinkDatabaseCache(modem: modem)
@@ -93,11 +93,11 @@ struct AllLinkDatabaseCacheTests {
     let records = try await cache.records(of: lamp)
 
     #expect(records.first?.record.address == keypad)
-    #expect(await modem.databaseReads[lamp] == 1)
+    #expect(await modem.databaseReads[lamp] == 2)
 
   }
 
-  @Test func readsADatabaseOnceForEveryLinkThroughTheSameCache() async throws {
+  @Test func readsAnUnchangedDatabaseOnlyOnceAcrossLinks() async throws {
 
     let modem = InMemoryModem()
     let cache = AllLinkDatabaseCache(modem: modem)
@@ -105,9 +105,11 @@ struct AllLinkDatabaseCacheTests {
 
     try await linker.link(group(controller: .device(keypad)))
     try await linker.link(group(controller: .device(keypad)))
+    try await linker.link(group(controller: .device(keypad)))
 
-    #expect(await modem.databaseReads[lamp] == 1)
-    #expect(await modem.databaseReads[keypad] == 1)
+    // The second link reads the databases the first changed; the third finds them unchanged.
+    #expect(await modem.databaseReads[lamp] == 2)
+    #expect(await modem.databaseReads[keypad] == 2)
 
   }
 

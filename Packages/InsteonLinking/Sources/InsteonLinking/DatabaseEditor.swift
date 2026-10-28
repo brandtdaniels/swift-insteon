@@ -8,7 +8,8 @@ import InsteonProtocol
 /// in place, otherwise the first record no longer in use is reused, otherwise the record goes
 /// at the end and the record after it becomes the new end. Each write is read back to check
 /// it. Each device's database is read once, then kept up to date as records are written. With
-/// a cache, databases are read through it and what's written is stored in it.
+/// a cache, databases are read through it, and a device's copy is forgotten once its database
+/// changes, so the device stays the source of truth.
 struct DatabaseEditor {
 
   /// The addresses of a group's endpoints.
@@ -257,11 +258,12 @@ struct DatabaseEditor {
 
   }
 
-  /// Keeps a device's records as they are after a write, here and in the cache.
+  /// Keeps a device's records as they are after a write, and forgets the cache's copy, which
+  /// is read again from the device next time.
   private mutating func store(_ records: [AllLinkRecordResponse], of device: InsteonAddress) async {
 
     databases[device] = records
-    await cache?.store(records, of: device)
+    await cache?.invalidate(device)
 
   }
 
@@ -283,12 +285,12 @@ struct DatabaseEditor {
 
     }
 
-    await cache?.invalidateModem()
-
     try await modem.send(.manageAllLinkRecord(
       action: isController ? .modifyFirstControllerOrAdd : .modifyFirstResponderOrAdd,
       record: record
     ))
+
+    await cache?.invalidateModem()
 
   }
 
@@ -302,25 +304,36 @@ struct DatabaseEditor {
 
     }
 
-    await cache?.invalidateModem()
-
     // The modem deletes the first record matching a group and address whatever its role, so
     // every match is deleted and those of the other role are added back.
     let key = AllLinkRecord(flags: [], group: group, address: address)
 
-    for _ in existing {
+    do {
 
-      try await modem.send(.manageAllLinkRecord(action: .deleteFirst, record: key))
+      for _ in existing {
+
+        try await modem.send(.manageAllLinkRecord(action: .deleteFirst, record: key))
+
+      }
+
+      for record in existing where record.flags.contains(.controller) != isController {
+
+        let action: AllLinkRecordAction = record.flags.contains(.controller) ? .modifyFirstControllerOrAdd : .modifyFirstResponderOrAdd
+
+        try await modem.send(.manageAllLinkRecord(action: action, record: record))
+
+      }
+
+    } catch {
+
+      // Some records may have changed before the failure.
+      await cache?.invalidateModem()
+
+      throw error
 
     }
 
-    for record in existing where record.flags.contains(.controller) != isController {
-
-      let action: AllLinkRecordAction = record.flags.contains(.controller) ? .modifyFirstControllerOrAdd : .modifyFirstResponderOrAdd
-
-      try await modem.send(.manageAllLinkRecord(action: action, record: record))
-
-    }
+    await cache?.invalidateModem()
 
   }
 
