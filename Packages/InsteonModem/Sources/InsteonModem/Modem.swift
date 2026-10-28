@@ -190,11 +190,7 @@ public actor Modem: SerialCommandSender {
     precondition(command.command1 != 0x17, "Send Light Start Manual Change as a direct message, not to a group.")
 
     let serialCommand = SerialCommand.sendAllLinkCommand(group: group, command: command)
-    let parameters = serialCommand.parameters
-
-    // Listening starts first, so no cleanup report can be missed.
-    let replies = await pacer.replies()
-
+    let echo = Self.exchange(for: serialCommand).steps
     let status = AnswerStep<ModemReply>(
       verdict: { reply in
 
@@ -209,13 +205,32 @@ public actor Modem: SerialCommandSender {
       },
       timedOut: ModemError.timedOut(.sendAllLinkCommand)
     )
+    let exchange = Exchange(bytes: serialCommand.bytes, steps: echo + [status], timeout: timeout)
 
-    _ = try await pacer.send([
-      Exchange(bytes: serialCommand.bytes, steps: Self.exchange(for: serialCommand).steps + [status], timeout: timeout)
-    ])
+    return try await pacer.withTurn { turn in
 
-    // The stream has everything up to the status report that answered the command. What came
-    // before the command's accepted echo belongs to something else.
+      // Listening starts within the turn, after any earlier command has been answered, so
+      // only this command's cleanups are heard.
+      let replies = await turn.replies()
+
+      _ = try await turn.send(exchange)
+
+      return try await Self.cleanupReport(in: replies, for: serialCommand, group: group, command1: command.command1)
+
+    }
+
+  }
+
+  /// Reads a group command's cleanups from the replies that followed it, up to the modem's
+  /// status report.
+  private static func cleanupReport(
+    in replies: AsyncStream<ModemReply>,
+    for serialCommand: SerialCommand,
+    group: AllLinkGroupNumber,
+    command1: UInt8
+  ) async throws -> AllLinkCleanupReport {
+
+    // What came before the command's accepted echo belongs to something else.
     var hasStarted = false
     var acknowledged: [InsteonAddress] = []
     var unacknowledged: [InsteonAddress] = []
@@ -223,21 +238,30 @@ public actor Modem: SerialCommandSender {
     for await reply in replies {
 
       switch reply {
-      case let .echo(echo) where echo.number == .sendAllLinkCommand && echo.parameters == parameters && echo.isAccepted:
+      case let .echo(echo) where isAcceptedEcho(echo, of: serialCommand):
         hasStarted = true
-      case let .messageReceived(message) where hasStarted && message.command.command1 == command.command1:
-        switch message.flags.messageType {
-        case .allLinkCleanupAcknowledgement:
-          acknowledged.append(message.sender)
-        case .allLinkCleanupNegativeAcknowledgement:
-          unacknowledged.append(message.sender)
-        default:
-          break
-        }
+      // A cleanup acknowledgement repeats the command, with the group in cmd2.
+      case let .messageReceived(message)
+        where hasStarted && message.command == Command(command1: command1, command2: group.rawValue)
+          && message.flags.messageType == .allLinkCleanupAcknowledgement:
+        acknowledged.append(message.sender)
+      // A cleanup NAK carries its reason in cmd2. A device still searching its database
+      // answers again once it's done, so that one isn't a failure.
+      case let .messageReceived(message)
+        where hasStarted && message.command.command1 == command1
+          && message.flags.messageType == .allLinkCleanupNegativeAcknowledgement
+          && message.nakReason != .databaseSearchPending:
+        unacknowledged.append(message.sender)
       case let .allLinkCleanupFailed(failedGroup, address) where hasStarted && failedGroup == group:
         unacknowledged.append(address)
       case let .allLinkCleanupStatus(isComplete) where hasStarted:
-        return AllLinkCleanupReport(acknowledged: acknowledged, unacknowledged: unacknowledged, isComplete: isComplete)
+        let answered = Set(acknowledged)
+
+        return AllLinkCleanupReport(
+          acknowledged: unique(acknowledged),
+          unacknowledged: unique(unacknowledged.filter { !answered.contains($0) }),
+          isComplete: isComplete
+        )
       default:
         break
       }
@@ -245,6 +269,23 @@ public actor Modem: SerialCommandSender {
     }
 
     throw ModemError.connectionClosed
+
+  }
+
+  /// The addresses in order, each once.
+  private static func unique(_ addresses: [InsteonAddress]) -> [InsteonAddress] {
+
+    var seen: Set<InsteonAddress> = []
+
+    return addresses.filter { seen.insert($0).inserted }
+
+  }
+
+  /// Whether an echo accepts a command: it repeats the command's number and parameters, so a
+  /// late echo of an earlier command doesn't count, and ends with an ACK.
+  private static func isAcceptedEcho(_ echo: CommandEcho, of command: SerialCommand) -> Bool {
+
+    echo.number == command.number && echo.parameters == command.parameters && echo.isAccepted
 
   }
 
@@ -756,7 +797,7 @@ public actor Modem: SerialCommandSender {
         switch reply {
         // Matching the parameters keeps a late echo of an earlier command from answering this one.
         case let .echo(echo) where echo.number == number && echo.parameters == parameters:
-          return echo.isAccepted
+          return isAcceptedEcho(echo, of: command)
         // These commands are answered with their data in place of a plain echo.
         case .modemInfo where number == .getModemInfo,
              .modemConfiguration where number == .getModemConfiguration:
