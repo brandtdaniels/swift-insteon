@@ -1,4 +1,4486 @@
 {
+  "commandSets": [
+    {
+      "description": "The SwitchLinc, LampLinc and ApplianceLinc code base as used by the ApplianceLinc and other plug-in, outdoor and timer on/off modules.",
+      "extendedSettings": {
+        "perButton": false,
+        "values": [
+          {
+            "byte": 5,
+            "description": "The X10 house code, or 0x20 for no X10 address.",
+            "name": "x10HouseCode"
+          },
+          {
+            "byte": 6,
+            "description": "The X10 unit code.",
+            "name": "x10UnitCode"
+          },
+          {
+            "byte": 12,
+            "description": "The signal-to-noise count.",
+            "name": "signalToNoiseCount"
+          },
+          {
+            "byte": 13,
+            "description": "The signal-to-noise value of the last failure.",
+            "name": "signalToNoiseLastFailure"
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10HouseCode"
+              },
+              {
+                "position": 4,
+                "value": "x10UnitCode"
+              }
+            ],
+            "description": "Sets the X10 address.",
+            "name": "x10Address",
+            "perButton": false,
+            "selector": "0x04"
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x0A",
+          "description": "Turns cleanup success reports off.",
+          "name": "cleanupReportOff"
+        },
+        {
+          "command2": "0x0B",
+          "description": "Turns cleanup success reports on.",
+          "name": "cleanupReportOn"
+        }
+      ],
+      "id": "applianceLinc",
+      "name": "ApplianceLinc",
+      "notes": [
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide lists 0x0A and above as unused on this code base; the later command sheets add the cleanup report commands 0x0A and 0x0B.",
+        "Insteon's earlier command sheets give D12 as the signal-to-noise ratio and D13 as a count of messages with CRC errors."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LED is off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "Load sense is on: the device turns its load on when it senses the attached lamp or appliance being switched on.",
+          "name": "loadSense",
+          "off": "0x07",
+          "on": "0x06",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device sends a success report after the cleanup messages that follow a group command. Only dealer firmware has this setting.",
+          "name": "cleanupReport",
+          "query": "0x00"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)"
+      ]
+    },
+    {
+      "description": "The DIN rail dimmer and on/off modules, which run the KeypadLinc code base with a single load.",
+      "flagCommands": [
+        {
+          "command2": "0x1C",
+          "description": "Starts each message with the hop count of the last acknowledgment received (smart hops).",
+          "name": "smartHopsOn"
+        },
+        {
+          "command2": "0x1D",
+          "description": "Starts each message with one hop.",
+          "name": "smartHopsOff"
+        },
+        {
+          "command2": "0x26",
+          "description": "Turns the Yakity Yak signaling option off.",
+          "name": "yakityYakOff"
+        },
+        {
+          "command2": "0x27",
+          "description": "Turns the Yakity Yak signaling option on.",
+          "name": "yakityYakOn"
+        },
+        {
+          "command2": "0x28",
+          "description": "When modulation sync fails, the device doesn't hop the message.",
+          "name": "modSyncFailureNoHop"
+        },
+        {
+          "command2": "0x29",
+          "description": "When modulation sync fails, the device uses its own zero crossing.",
+          "name": "modSyncFailureOwnZeroCrossing"
+        },
+        {
+          "command2": "0x2A",
+          "description": "The device repeats every power line hop over RF.",
+          "name": "pushHopsToRadioOn"
+        },
+        {
+          "command2": "0x2B",
+          "description": "The device doesn't repeat every power line hop over RF.",
+          "name": "pushHopsToRadioOff"
+        }
+      ],
+      "id": "dinRailModule",
+      "name": "DIN Rail Module",
+      "notes": [
+        "Insteon's earliest command sheet swaps 0x08 and 0x09 (backlight on and off); the later sheets, used here, agree with the Insteon for Hub app.",
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide gives query 0x02 as a signal-to-noise value; the later command sheets count messages with CRC errors there.",
+        "Insteon's documents don't give this product's extended Get and Set layout."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "Turning the load on at the device restores its last level instead of the on-level.",
+          "name": "resumeDim",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LEDs and button backlights are off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "The device beeps when a button is pressed.",
+          "name": "keyBeep",
+          "off": "0x0B",
+          "on": "0x0A",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
+          "name": "radioOff",
+          "off": "0x0D",
+          "on": "0x0C",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x80",
+          "description": "Insteon communication over the power line is off. The device turns it back on whenever it powers up.",
+          "name": "powerLineOff",
+          "off": "0x0F",
+          "on": "0x0E",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x01",
+          "description": "The device retries application messages as many times as its link database says, and reports cleanup errors.",
+          "name": "applicationRetries",
+          "off": "0x11",
+          "on": "0x10",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x02",
+          "description": "X10 sending and receiving are off.",
+          "name": "x10Off",
+          "off": "0x13",
+          "on": "0x12",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x04",
+          "description": "The status LED blinks when a communication error occurs.",
+          "name": "errorBlink",
+          "off": "0x14",
+          "on": "0x15",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x08",
+          "description": "The device sends a success report after the cleanup messages that follow a group command.",
+          "name": "cleanupReport",
+          "off": "0x16",
+          "on": "0x17",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x10",
+          "description": "Extended Set and link database write messages must carry a checksum in D14.",
+          "name": "checksumRequired",
+          "off": "0x18",
+          "on": "0x19",
+          "query": "0x05"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        },
+        {
+          "description": "The number of messages received with a CRC error.",
+          "name": "crcErrorCount",
+          "query": "0x02"
+        },
+        {
+          "description": "The number of signal-to-noise failures.",
+          "name": "signalToNoiseFailureCount",
+          "query": "0x03"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)",
+        "Insteon for Hub app"
+      ]
+    },
+    {
+      "description": "The on/off outlet with two separately controlled outlets, which runs the KeypadLinc code base with load sense for each outlet.",
+      "flagCommands": [
+        {
+          "command2": "0x18",
+          "description": "Locks the outlet's buttons.",
+          "name": "lockButtons"
+        },
+        {
+          "command2": "0x19",
+          "description": "Unlocks the outlet's buttons.",
+          "name": "unlockButtons"
+        },
+        {
+          "command2": "0x1C",
+          "description": "Starts each message with the hop count of the last acknowledgment received (smart hops).",
+          "name": "smartHopsOn"
+        },
+        {
+          "command2": "0x1D",
+          "description": "Starts each message with one hop.",
+          "name": "smartHopsOff"
+        }
+      ],
+      "id": "dualOnOffOutlet",
+      "name": "Dual On/Off Outlet",
+      "notes": [
+        "Insteon's earliest command sheet swaps 0x08 and 0x09 (backlight on and off); the later sheets, used here, agree with the Insteon for Hub app.",
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide gives query 0x02 as a signal-to-noise value; the later command sheets count messages with CRC errors there.",
+        "Insteon's documents don't give this product's extended Get and Set layout."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "Load sense is on for the second outlet.",
+          "name": "secondLoadSense",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x08",
+          "description": "Load sense is on for the first outlet.",
+          "name": "loadSense",
+          "off": "0x07",
+          "on": "0x06",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LEDs and button backlights are off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "The device beeps when a button is pressed.",
+          "name": "keyBeep",
+          "off": "0x0B",
+          "on": "0x0A",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
+          "name": "radioOff",
+          "off": "0x0D",
+          "on": "0x0C",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x80",
+          "description": "Insteon communication over the power line is off. The device turns it back on whenever it powers up.",
+          "name": "powerLineOff",
+          "off": "0x0F",
+          "on": "0x0E",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x01",
+          "description": "The device retries application messages as many times as its link database says, and reports cleanup errors.",
+          "name": "applicationRetries",
+          "off": "0x11",
+          "on": "0x10",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x02",
+          "description": "X10 sending and receiving are off.",
+          "name": "x10Off",
+          "off": "0x13",
+          "on": "0x12",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x04",
+          "description": "The status LED blinks when a communication error occurs.",
+          "name": "errorBlink",
+          "off": "0x14",
+          "on": "0x15",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x08",
+          "description": "The device sends a success report after the cleanup messages that follow a group command.",
+          "name": "cleanupReport",
+          "off": "0x16",
+          "on": "0x17",
+          "query": "0x05"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        },
+        {
+          "description": "The number of messages received with a CRC error.",
+          "name": "crcErrorCount",
+          "query": "0x02"
+        },
+        {
+          "description": "The number of signal-to-noise failures.",
+          "name": "signalToNoiseFailureCount",
+          "query": "0x03"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)",
+        "Insteon for Hub app"
+      ]
+    },
+    {
+      "description": "The FanLinc fan and light controller, which runs the KeypadLinc code base. Group 1 is the light and group 2 the fan.",
+      "flagCommands": [
+        {
+          "command2": "0x1C",
+          "description": "Starts each message with the hop count of the last acknowledgment received (smart hops).",
+          "name": "smartHopsOn"
+        },
+        {
+          "command2": "0x1D",
+          "description": "Starts each message with one hop.",
+          "name": "smartHopsOff"
+        }
+      ],
+      "id": "fanLinc",
+      "name": "FanLinc",
+      "notes": [
+        "Insteon's earliest command sheet swaps 0x08 and 0x09 (backlight on and off); the later sheets, used here, agree with the Insteon for Hub app.",
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide gives query 0x02 as a signal-to-noise value; the later command sheets count messages with CRC errors there.",
+        "Insteon's documents don't give this product's extended Get and Set layout."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "Turning the load on at the device restores its last level instead of the on-level.",
+          "name": "resumeDim",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LEDs and button backlights are off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "The device beeps when a button is pressed.",
+          "name": "keyBeep",
+          "off": "0x0B",
+          "on": "0x0A",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
+          "name": "radioOff",
+          "off": "0x0D",
+          "on": "0x0C",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x80",
+          "description": "Insteon communication over the power line is off. The device turns it back on whenever it powers up.",
+          "name": "powerLineOff",
+          "off": "0x0F",
+          "on": "0x0E",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x01",
+          "description": "The device retries application messages as many times as its link database says, and reports cleanup errors.",
+          "name": "applicationRetries",
+          "off": "0x11",
+          "on": "0x10",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x02",
+          "description": "X10 sending and receiving are off.",
+          "name": "x10Off",
+          "off": "0x13",
+          "on": "0x12",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x04",
+          "description": "The status LED blinks when a communication error occurs.",
+          "name": "errorBlink",
+          "off": "0x14",
+          "on": "0x15",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x08",
+          "description": "The device sends a success report after the cleanup messages that follow a group command.",
+          "name": "cleanupReport",
+          "off": "0x16",
+          "on": "0x17",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x10",
+          "description": "Extended Set and link database write messages must carry a checksum in D14.",
+          "name": "checksumRequired",
+          "off": "0x18",
+          "on": "0x19",
+          "query": "0x05"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        },
+        {
+          "description": "The number of messages received with a CRC error.",
+          "name": "crcErrorCount",
+          "query": "0x02"
+        },
+        {
+          "description": "The number of signal-to-noise failures.",
+          "name": "signalToNoiseFailureCount",
+          "query": "0x03"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)",
+        "Insteon for Hub app"
+      ]
+    },
+    {
+      "description": "The dual-band In-LineLinc dimmers and relays, which run the KeypadLinc code base with a single load. The relays ignore the ramp rate and on-level.",
+      "extendedSettings": {
+        "perButton": false,
+        "values": [
+          {
+            "byte": 7,
+            "description": "The ramp rate, from 0x01 (8 minutes) to 0x1F (0.1 second). 0x00 is 2 seconds.",
+            "name": "rampRate",
+            "range": {
+              "from": "0x00",
+              "through": "0x1F"
+            }
+          },
+          {
+            "byte": 8,
+            "description": "The level the load turns on to, from 0x00 (off) to 0xFF (full).",
+            "name": "onLevel",
+            "range": {
+              "from": "0x00",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 9,
+            "description": "The brightness of the status LEDs, from 0x11 (dimmest) to 0x7F (brightest).",
+            "name": "ledBrightness",
+            "range": {
+              "from": "0x11",
+              "through": "0x7F"
+            }
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "rampRate"
+              }
+            ],
+            "description": "Sets the ramp rate.",
+            "name": "rampRate",
+            "perButton": false,
+            "selector": "0x05"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "onLevel"
+              }
+            ],
+            "description": "Sets the on-level.",
+            "name": "onLevel",
+            "perButton": false,
+            "selector": "0x06"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "ledBrightness"
+              }
+            ],
+            "description": "Sets the brightness of the status LED.",
+            "name": "ledBrightness",
+            "perButton": false,
+            "selector": "0x07"
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x1C",
+          "description": "Starts each message with the hop count of the last acknowledgment received (smart hops).",
+          "name": "smartHopsOn"
+        },
+        {
+          "command2": "0x1D",
+          "description": "Starts each message with one hop.",
+          "name": "smartHopsOff"
+        },
+        {
+          "command2": "0x26",
+          "description": "Turns the Yakity Yak signaling option off.",
+          "name": "yakityYakOff"
+        },
+        {
+          "command2": "0x27",
+          "description": "Turns the Yakity Yak signaling option on.",
+          "name": "yakityYakOn"
+        },
+        {
+          "command2": "0x28",
+          "description": "When modulation sync fails, the device doesn't hop the message.",
+          "name": "modSyncFailureNoHop"
+        },
+        {
+          "command2": "0x29",
+          "description": "When modulation sync fails, the device uses its own zero crossing.",
+          "name": "modSyncFailureOwnZeroCrossing"
+        },
+        {
+          "command2": "0x2A",
+          "description": "The device repeats every power line hop over RF.",
+          "name": "pushHopsToRadioOn"
+        },
+        {
+          "command2": "0x2B",
+          "description": "The device doesn't repeat every power line hop over RF.",
+          "name": "pushHopsToRadioOff"
+        }
+      ],
+      "id": "inLineLinc",
+      "name": "In-LineLinc",
+      "notes": [
+        "Insteon's earliest command sheet swaps 0x08 and 0x09 (backlight on and off); the later sheets, used here, agree with the Insteon for Hub app.",
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide gives query 0x02 as a signal-to-noise value; the later command sheets count messages with CRC errors there.",
+        "Insteon's earlier command sheets give ramp rates 0x00 through 0x1F as 9 minutes down to 0.1 second; the later ones make 0x01 8 minutes and 0x00 2 seconds.",
+        "The product requirements document for the 2475DA1 lists bit 5 of the 0x00 reply as load sense, set with 0x06 and 0x07; Insteon's command sheets and the Insteon for Hub app make bit 5 the key beep on this code base."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "Turning the load on at the device restores its last level instead of the on-level.",
+          "name": "resumeDim",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LEDs and button backlights are off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "The device beeps when a button is pressed.",
+          "name": "keyBeep",
+          "off": "0x0B",
+          "on": "0x0A",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
+          "name": "radioOff",
+          "off": "0x0D",
+          "on": "0x0C",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x80",
+          "description": "Insteon communication over the power line is off. The device turns it back on whenever it powers up.",
+          "name": "powerLineOff",
+          "off": "0x0F",
+          "on": "0x0E",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x01",
+          "description": "The device retries application messages as many times as its link database says, and reports cleanup errors.",
+          "name": "applicationRetries",
+          "off": "0x11",
+          "on": "0x10",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x02",
+          "description": "X10 sending and receiving are off.",
+          "name": "x10Off",
+          "off": "0x13",
+          "on": "0x12",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x04",
+          "description": "The status LED blinks when a communication error occurs.",
+          "name": "errorBlink",
+          "off": "0x14",
+          "on": "0x15",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x08",
+          "description": "The device sends a success report after the cleanup messages that follow a group command.",
+          "name": "cleanupReport",
+          "off": "0x16",
+          "on": "0x17",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x10",
+          "description": "Extended Set and link database write messages must carry a checksum in D14.",
+          "name": "checksumRequired",
+          "off": "0x18",
+          "on": "0x19",
+          "query": "0x05"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        },
+        {
+          "description": "The number of messages received with a CRC error.",
+          "name": "crcErrorCount",
+          "query": "0x02"
+        },
+        {
+          "description": "The number of signal-to-noise failures.",
+          "name": "signalToNoiseFailureCount",
+          "query": "0x03"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)",
+        "Insteon for Hub app",
+        "Insteon product requirements document for the 2475DA1"
+      ]
+    },
+    {
+      "description": "The In-LineLinc 0-10 V ballast dimmer, which runs the KeypadLinc code base. Its two input lines trigger groups 1 through 4, which use the on masks, on-levels and ramp rates of groups 2 through 5.",
+      "extendedSettings": {
+        "perButton": true,
+        "values": [
+          {
+            "byte": 5,
+            "description": "The X10 house code, or 0x20 for no X10 address.",
+            "name": "x10HouseCode"
+          },
+          {
+            "byte": 6,
+            "description": "The X10 unit code.",
+            "name": "x10UnitCode"
+          },
+          {
+            "byte": 7,
+            "description": "The ramp rate, from 0x01 (8 minutes) to 0x1F (0.1 second). 0x00 is 2 seconds.",
+            "name": "rampRate",
+            "range": {
+              "from": "0x00",
+              "through": "0x1F"
+            }
+          },
+          {
+            "byte": 8,
+            "description": "The level the load turns on to, from 0x00 (off) to 0xFF (full).",
+            "name": "onLevel",
+            "range": {
+              "from": "0x00",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 9,
+            "description": "The brightness of the status LEDs, from 0x11 (dimmest) to 0x7F (brightest).",
+            "name": "ledBrightness",
+            "range": {
+              "from": "0x11",
+              "through": "0x7F"
+            }
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "inputEnabled"
+              }
+            ],
+            "description": "Enables (0x01) or disables (0x00) group D1, one of the groups 2 through 5 that the input lines use.",
+            "name": "inputEnabled",
+            "perButton": true,
+            "selector": "0x02"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "rampRate"
+              }
+            ],
+            "description": "Sets the ramp rate of group D1.",
+            "name": "rampRate",
+            "perButton": true,
+            "selector": "0x05"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "onLevel"
+              }
+            ],
+            "description": "Sets the on-level of group D1.",
+            "name": "onLevel",
+            "perButton": true,
+            "selector": "0x06"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "dacMinimum"
+              },
+              {
+                "position": 4,
+                "value": "dacMaximum"
+              }
+            ],
+            "description": "Sets the range of the 0-10 V output: D3 points to the start of the DAC table (the minimum) and D4 to its end (the maximum).",
+            "name": "dacRange",
+            "perButton": false,
+            "selector": "0x0D"
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x1C",
+          "description": "Starts each message with the hop count of the last acknowledgment received (smart hops).",
+          "name": "smartHopsOn"
+        },
+        {
+          "command2": "0x1D",
+          "description": "Starts each message with one hop.",
+          "name": "smartHopsOff"
+        }
+      ],
+      "id": "inLineLinc0To10V",
+      "name": "In-LineLinc 0-10 V Ballast Dimmer",
+      "notes": [
+        "Insteon's earliest command sheet swaps 0x08 and 0x09 (backlight on and off); the later sheets, used here, agree with the Insteon for Hub app.",
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide gives query 0x02 as a signal-to-noise value; the later command sheets count messages with CRC errors there.",
+        "Insteon's earlier command sheets give ramp rates 0x00 through 0x1F as 9 minutes down to 0.1 second; the later ones make 0x01 8 minutes and 0x00 2 seconds.",
+        "Insteon's earlier command sheet describes selector 0x02 as a mask whose bits 0 and 1 disable relays 1 and 2."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "Turning the load on at the device restores its last level instead of the on-level.",
+          "name": "resumeDim",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LEDs and button backlights are off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "The device beeps when a button is pressed.",
+          "name": "keyBeep",
+          "off": "0x0B",
+          "on": "0x0A",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
+          "name": "radioOff",
+          "off": "0x0D",
+          "on": "0x0C",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x80",
+          "description": "Insteon communication over the power line is off. The device turns it back on whenever it powers up.",
+          "name": "powerLineOff",
+          "off": "0x0F",
+          "on": "0x0E",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x01",
+          "description": "The device retries application messages as many times as its link database says, and reports cleanup errors.",
+          "name": "applicationRetries",
+          "off": "0x11",
+          "on": "0x10",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x02",
+          "description": "X10 sending and receiving are off.",
+          "name": "x10Off",
+          "off": "0x13",
+          "on": "0x12",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x04",
+          "description": "The status LED blinks when a communication error occurs.",
+          "name": "errorBlink",
+          "off": "0x14",
+          "on": "0x15",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x08",
+          "description": "The device sends a success report after the cleanup messages that follow a group command.",
+          "name": "cleanupReport",
+          "off": "0x16",
+          "on": "0x17",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x10",
+          "description": "Extended Set and link database write messages must carry a checksum in D14.",
+          "name": "checksumRequired",
+          "off": "0x18",
+          "on": "0x19",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x80",
+          "description": "The dimmer works as a relay rather than a 0-10 V dimmer.",
+          "name": "relayMode",
+          "off": "0x1E",
+          "on": "0x1F",
+          "query": "0x05"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        },
+        {
+          "description": "The number of messages received with a CRC error.",
+          "name": "crcErrorCount",
+          "query": "0x02"
+        },
+        {
+          "description": "The number of signal-to-noise failures.",
+          "name": "signalToNoiseFailureCount",
+          "query": "0x03"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)",
+        "Insteon for Hub app"
+      ]
+    },
+    {
+      "description": "The I/O Linc, with a sensor input and a relay output.",
+      "extendedSettings": {
+        "perButton": false,
+        "values": [
+          {
+            "byte": 3,
+            "description": "The multiplier for the momentary time. With 0x46 and a momentary time of 0xFF, the relay stays closed for about 30 minutes.",
+            "name": "momentaryPrescaler",
+            "range": {
+              "from": "0x00",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 4,
+            "description": "How long the relay stays closed in momentary mode, in tenths of a second.",
+            "name": "momentaryTime",
+            "range": {
+              "from": "0x02",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 5,
+            "description": "The input's X10 house code, or 0x20 for no X10 address.",
+            "name": "x10InputHouseCode"
+          },
+          {
+            "byte": 6,
+            "description": "The input's X10 unit code.",
+            "name": "x10InputUnitCode"
+          },
+          {
+            "byte": 7,
+            "description": "The output's X10 house code, or 0x20 for no X10 address.",
+            "name": "x10OutputHouseCode"
+          },
+          {
+            "byte": 8,
+            "description": "The output's X10 unit code.",
+            "name": "x10OutputUnitCode"
+          },
+          {
+            "byte": 9,
+            "description": "The power line's signal-to-noise value.",
+            "name": "signalToNoise"
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10InputHouseCode"
+              },
+              {
+                "position": 4,
+                "value": "x10InputUnitCode"
+              }
+            ],
+            "description": "Sets the input's X10 address.",
+            "name": "x10InputAddress",
+            "perButton": false,
+            "selector": "0x04"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10OutputHouseCode"
+              },
+              {
+                "position": 4,
+                "value": "x10OutputUnitCode"
+              }
+            ],
+            "description": "Sets the output's X10 address.",
+            "name": "x10OutputAddress",
+            "perButton": false,
+            "selector": "0x05"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "momentaryTime"
+              }
+            ],
+            "description": "Sets the momentary time. A nonzero time turns the momentary flag on, and 0x00 turns it off.",
+            "name": "momentaryTime",
+            "perButton": false,
+            "selector": "0x06"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "momentaryPrescaler"
+              }
+            ],
+            "description": "Sets the multiplier for the momentary time.",
+            "name": "momentaryPrescaler",
+            "perButton": false,
+            "selector": "0x07"
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x0C",
+          "description": "The I/O Linc sends X10 On when its input turns off.",
+          "name": "sendX10OnWhenOff"
+        },
+        {
+          "command2": "0x0D",
+          "description": "The I/O Linc sends X10 On when its input turns on.",
+          "name": "sendX10OnWhenOn"
+        },
+        {
+          "command2": "0x10",
+          "description": "A received X10 On turns the relay off.",
+          "name": "x10OnTurnsOff"
+        },
+        {
+          "command2": "0x11",
+          "description": "A received X10 On turns the relay on.",
+          "name": "x10OnTurnsOn"
+        }
+      ],
+      "id": "ioLinc",
+      "name": "I/O Linc",
+      "notes": [
+        "Insteon's later command sheet marks bit 6 of the 0x00 reply as ignored; the earlier sheet and the Insteon for Hub app read it as the trigger reversal that 0x0E and 0x0F set.",
+        "Insteon's earlier command sheet labels D5 and D6 of the reply the relay's X10 address and D7 and D8 the sensor's, where the later sheet has the input's and the output's."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "The relay follows the sensor input.",
+          "name": "relayFollowsInput",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x08",
+          "description": "The relay is momentary (momentary A): it closes for the momentary time and then opens.",
+          "name": "momentary",
+          "off": "0x07",
+          "on": "0x06",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "Both On and Off commands close the momentary relay (momentary B).",
+          "name": "momentaryOnBothCommands",
+          "off": "0x13",
+          "on": "0x12",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The I/O Linc sends On when the sensor input opens rather than when it closes.",
+          "name": "triggerReversed",
+          "off": "0x0F",
+          "on": "0x0E",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x80",
+          "description": "Whether the momentary relay closes depends on the state of the sensor input (momentary C).",
+          "name": "momentaryFollowsSensor",
+          "off": "0x15",
+          "on": "0x14",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x01",
+          "description": "The status LED is off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x02"
+        },
+        {
+          "bit": "0x02",
+          "description": "The I/O Linc beeps when its set button is pressed.",
+          "name": "keyBeep",
+          "off": "0x0B",
+          "on": "0x0A",
+          "query": "0x02"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon for Hub app"
+      ]
+    },
+    {
+      "description": "The KeypadLinc code base used by the 6- and 8-button KeypadLinc dimmer and relay keypads, including the 2334 and 2487S keypads. Most extended settings are per button.",
+      "extendedSettings": {
+        "perButton": true,
+        "values": [
+          {
+            "byte": 3,
+            "description": "The buttons that turn on with this button.",
+            "kind": "buttons",
+            "name": "onMask"
+          },
+          {
+            "byte": 4,
+            "description": "The buttons that turn off when this button is pressed.",
+            "kind": "buttons",
+            "name": "offMask"
+          },
+          {
+            "byte": 5,
+            "description": "The X10 house code, or 0x20 for no X10 address.",
+            "name": "x10HouseCode"
+          },
+          {
+            "byte": 6,
+            "description": "The X10 unit code.",
+            "name": "x10UnitCode"
+          },
+          {
+            "byte": 7,
+            "description": "The ramp rate, from 0x01 (8 minutes) to 0x1F (0.1 second). 0x00 is 2 seconds.",
+            "name": "rampRate",
+            "range": {
+              "from": "0x00",
+              "through": "0x1F"
+            }
+          },
+          {
+            "byte": 8,
+            "description": "The level the load turns on to, from 0x00 (off) to 0xFF (full).",
+            "name": "onLevel",
+            "range": {
+              "from": "0x00",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 9,
+            "description": "The brightness of the status LEDs, from 0x11 (dimmest) to 0x7F (brightest).",
+            "name": "ledBrightness",
+            "range": {
+              "from": "0x11",
+              "through": "0x7F"
+            }
+          },
+          {
+            "byte": 10,
+            "description": "The non-toggle buttons, which send the same command on every press.",
+            "kind": "buttons",
+            "name": "nonToggleMask"
+          },
+          {
+            "byte": 11,
+            "description": "The buttons whose LEDs are on.",
+            "kind": "buttons",
+            "name": "ledMask"
+          },
+          {
+            "byte": 12,
+            "description": "The buttons that send X10 All On or All Off instead of On or Off.",
+            "kind": "buttons",
+            "name": "x10AllMask"
+          },
+          {
+            "byte": 13,
+            "description": "The non-toggle buttons that send On. The others send Off.",
+            "kind": "buttons",
+            "name": "nonToggleOnMask"
+          },
+          {
+            "byte": 14,
+            "description": "The buttons in a radio group with this button. The group only works when the off mask holds them too.",
+            "kind": "buttons",
+            "name": "groupMask"
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "onMask"
+              }
+            ],
+            "description": "Sets the on mask of button D1.",
+            "name": "onMask",
+            "perButton": true,
+            "selector": "0x02"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "offMask"
+              },
+              {
+                "position": 4,
+                "value": "groupMask"
+              }
+            ],
+            "description": "Sets the off mask (D3) and radio group (D4) of button D1. The radio group only works when the off mask holds it too.",
+            "name": "offMask",
+            "perButton": true,
+            "selector": "0x03"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10HouseCode"
+              },
+              {
+                "position": 4,
+                "value": "x10UnitCode"
+              }
+            ],
+            "description": "Sets the X10 address of button D1.",
+            "name": "x10Address",
+            "perButton": true,
+            "selector": "0x04"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "rampRate"
+              }
+            ],
+            "description": "Sets the ramp rate of button D1. With the load detached, bit 6 makes buttons 2 through 8 control only their LEDs, and bit 7 the load and LED.",
+            "name": "rampRate",
+            "perButton": true,
+            "selector": "0x05"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "onLevel"
+              }
+            ],
+            "description": "Sets the on-level of button D1.",
+            "name": "onLevel",
+            "perButton": true,
+            "selector": "0x06"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "ledBrightness"
+              }
+            ],
+            "description": "Sets the brightness of the status LEDs.",
+            "name": "ledBrightness",
+            "perButton": false,
+            "selector": "0x07"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "nonToggleMask"
+              }
+            ],
+            "description": "Sets which buttons are non-toggle.",
+            "name": "nonToggleMask",
+            "perButton": false,
+            "selector": "0x08"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "ledMask"
+              }
+            ],
+            "description": "Turns the button LEDs on and off.",
+            "name": "ledMask",
+            "perButton": false,
+            "selector": "0x09"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10AllMask"
+              }
+            ],
+            "description": "Sets which buttons send X10 All On or All Off.",
+            "name": "x10AllMask",
+            "perButton": false,
+            "selector": "0x0A"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "nonToggleOnMask"
+              }
+            ],
+            "description": "Sets which non-toggle buttons send On.",
+            "name": "nonToggleOnMask",
+            "perButton": false,
+            "selector": "0x0B"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "triggerMask"
+              }
+            ],
+            "description": "Sets which buttons are trigger buttons.",
+            "name": "triggerMask",
+            "perButton": false,
+            "selector": "0x0C"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "maxRetries"
+              }
+            ],
+            "description": "Sets how many times the device retries a message, from 0x01 to 0xFF. 0x00 restores the factory default of 5.",
+            "name": "maxRetries",
+            "perButton": false,
+            "selector": "0x0F"
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x1C",
+          "description": "Starts each message with the hop count of the last acknowledgment received (smart hops).",
+          "name": "smartHopsOn"
+        },
+        {
+          "command2": "0x1D",
+          "description": "Starts each message with one hop.",
+          "name": "smartHopsOff"
+        },
+        {
+          "command2": "0x26",
+          "description": "Turns the Yakity Yak signaling option off.",
+          "name": "yakityYakOff"
+        },
+        {
+          "command2": "0x27",
+          "description": "Turns the Yakity Yak signaling option on.",
+          "name": "yakityYakOn"
+        },
+        {
+          "command2": "0x28",
+          "description": "When modulation sync fails, the device doesn't hop the message.",
+          "name": "modSyncFailureNoHop"
+        },
+        {
+          "command2": "0x29",
+          "description": "When modulation sync fails, the device uses its own zero crossing.",
+          "name": "modSyncFailureOwnZeroCrossing"
+        },
+        {
+          "command2": "0x2A",
+          "description": "The device repeats every power line hop over RF.",
+          "name": "pushHopsToRadioOn"
+        },
+        {
+          "command2": "0x2B",
+          "description": "The device doesn't repeat every power line hop over RF.",
+          "name": "pushHopsToRadioOff"
+        }
+      ],
+      "id": "keypadLinc",
+      "name": "KeypadLinc",
+      "notes": [
+        "Insteon's earliest command sheet swaps 0x06 and 0x07 (the 6- and 8-button layouts) and 0x08 and 0x09 (backlight on and off); the later sheets, used here, agree with the Insteon for Hub app.",
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide gives query 0x02 as a signal-to-noise value; the later command sheets count messages with CRC errors there.",
+        "Insteon's earlier command sheets give ramp rates 0x00 through 0x1F as 9 minutes down to 0.1 second; the later ones make 0x01 8 minutes and 0x00 2 seconds.",
+        "Insteon's earlier command sheets and 2009 Developer's Guide give D14 of the reply as the trigger mask; the later sheets moved the trigger mask to query 0x08 and use D14 for the radio group mask.",
+        "Insteon's 2009 Developer's Guide sets selectors 0x08 through 0x0C one button at a time; the later command sheets and the Insteon for Hub app write the whole mask."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "Turning the load on at the device restores its last level instead of the on-level.",
+          "name": "resumeDim",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x08",
+          "description": "The keypad has the 8-button layout. When the bit is 0, it has the 6-button layout.",
+          "name": "eightButtons",
+          "off": "0x07",
+          "on": "0x06",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LEDs and button backlights are off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "The device beeps when a button is pressed.",
+          "name": "keyBeep",
+          "off": "0x0B",
+          "on": "0x0A",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
+          "name": "radioOff",
+          "off": "0x0D",
+          "on": "0x0C",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x80",
+          "description": "Insteon communication over the power line is off. The device turns it back on whenever it powers up.",
+          "name": "powerLineOff",
+          "off": "0x0F",
+          "on": "0x0E",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x01",
+          "description": "The device retries application messages as many times as its link database says, and reports cleanup errors.",
+          "name": "applicationRetries",
+          "off": "0x11",
+          "on": "0x10",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x02",
+          "description": "X10 sending and receiving are off.",
+          "name": "x10Off",
+          "off": "0x13",
+          "on": "0x12",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x04",
+          "description": "The status LED blinks when a communication error occurs.",
+          "name": "errorBlink",
+          "off": "0x14",
+          "on": "0x15",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x08",
+          "description": "The device sends a success report after the cleanup messages that follow a group command.",
+          "name": "cleanupReport",
+          "off": "0x16",
+          "on": "0x17",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x10",
+          "description": "Extended Set and link database write messages must carry a checksum in D14.",
+          "name": "checksumRequired",
+          "off": "0x18",
+          "on": "0x19",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x20",
+          "description": "The load is detached from button 1 and is controlled as group 9. It can only be set by software.",
+          "name": "detachedLoad",
+          "off": "0x1A",
+          "on": "0x1B",
+          "query": "0x05"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        },
+        {
+          "description": "The number of messages received with a CRC error.",
+          "name": "crcErrorCount",
+          "query": "0x02"
+        },
+        {
+          "description": "The number of signal-to-noise failures.",
+          "name": "signalToNoiseFailureCount",
+          "query": "0x03"
+        },
+        {
+          "description": "The trigger buttons, one bit per button with button 1 in bit 0. Each sends a trigger command when pressed.",
+          "name": "triggerMask",
+          "query": "0x08"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)",
+        "Insteon for Hub app"
+      ]
+    },
+    {
+      "description": "The countdown timer keypads, a KeypadLinc variant whose buttons choose how long the load stays on. Settings are for the whole device, so D1 is always 0x01.",
+      "extendedSettings": {
+        "perButton": false,
+        "values": [
+          {
+            "byte": 3,
+            "description": "The seconds of the countdown.",
+            "name": "timerSeconds"
+          },
+          {
+            "byte": 4,
+            "description": "The minutes of the countdown.",
+            "name": "timerMinutes"
+          },
+          {
+            "byte": 5,
+            "description": "The X10 house code, or 0x20 for no X10 address.",
+            "name": "x10HouseCode"
+          },
+          {
+            "byte": 6,
+            "description": "The X10 unit code.",
+            "name": "x10UnitCode"
+          },
+          {
+            "byte": 7,
+            "description": "The ramp rate, from 0x01 (8 minutes) to 0x1F (0.1 second). 0x00 is 2 seconds.",
+            "name": "rampRate",
+            "range": {
+              "from": "0x00",
+              "through": "0x1F"
+            }
+          },
+          {
+            "byte": 8,
+            "description": "The level the load turns on to, from 0x00 (off) to 0xFF (full).",
+            "name": "onLevel",
+            "range": {
+              "from": "0x00",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 9,
+            "description": "The brightness of the status LEDs, from 0x11 (dimmest) to 0x7F (brightest).",
+            "name": "ledBrightness",
+            "range": {
+              "from": "0x11",
+              "through": "0x7F"
+            }
+          },
+          {
+            "byte": 10,
+            "description": "The countdown's hours, which also turn the timer on: 0x00 is off, 0x01 is on for the minutes and seconds alone, 0x02 for one hour plus the minutes and seconds, and so on.",
+            "name": "timerHours"
+          },
+          {
+            "byte": 11,
+            "description": "The timer LEDs: bit 0 is 2 minutes, bit 1 5 minutes, bit 2 10 minutes, bit 3 15 minutes, bit 4 30 minutes, bit 5 1 hour, bit 6 2 hours and bit 7 4 hours.",
+            "name": "timerLeds"
+          },
+          {
+            "byte": 12,
+            "description": "The buttons that send X10 All On or All Off instead of On or Off.",
+            "kind": "buttons",
+            "name": "x10AllMask"
+          },
+          {
+            "byte": 13,
+            "description": "The non-toggle buttons that send On. The others send Off.",
+            "kind": "buttons",
+            "name": "nonToggleOnMask"
+          },
+          {
+            "byte": 14,
+            "description": "The trigger buttons, each of which sends a trigger command when pressed.",
+            "kind": "buttons",
+            "name": "triggerMask"
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "timerSeconds"
+              },
+              {
+                "position": 4,
+                "value": "timerMinutes"
+              },
+              {
+                "position": 5,
+                "value": "timerHours"
+              },
+              {
+                "position": 6,
+                "value": "countdownOnLevel"
+              }
+            ],
+            "description": "Sets the countdown (D3 seconds, D4 minutes, D5 hours) and the level the load turns on to (D6). A level of 0x00 keeps the local on-level when the load is off and leaves the level alone when it's on.",
+            "name": "countdown",
+            "perButton": false,
+            "selector": "0x02"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10HouseCode"
+              },
+              {
+                "position": 4,
+                "value": "x10UnitCode"
+              }
+            ],
+            "description": "Sets the X10 address.",
+            "name": "x10Address",
+            "perButton": false,
+            "selector": "0x04"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "rampRate"
+              }
+            ],
+            "description": "Sets the ramp rate.",
+            "name": "rampRate",
+            "perButton": false,
+            "selector": "0x05"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "onLevel"
+              }
+            ],
+            "description": "Sets the on-level.",
+            "name": "onLevel",
+            "perButton": false,
+            "selector": "0x06"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "ledBrightness"
+              }
+            ],
+            "description": "Sets the brightness of the status LEDs.",
+            "name": "ledBrightness",
+            "perButton": false,
+            "selector": "0x07"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "timerLeds"
+              }
+            ],
+            "description": "Turns the timer LEDs on and off.",
+            "name": "ledMask",
+            "perButton": false,
+            "selector": "0x09"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10AllMask"
+              }
+            ],
+            "description": "Sets which buttons send X10 All On or All Off.",
+            "name": "x10AllMask",
+            "perButton": false,
+            "selector": "0x0A"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "nonToggleOnMask"
+              }
+            ],
+            "description": "Sets which non-toggle buttons send On.",
+            "name": "nonToggleOnMask",
+            "perButton": false,
+            "selector": "0x0B"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "triggerMask"
+              }
+            ],
+            "description": "Sets which buttons are trigger buttons.",
+            "name": "triggerMask",
+            "perButton": false,
+            "selector": "0x0C"
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x35",
+          "description": "Sets button 4 to off. Insteon's documents describe 0x35 and 0x37 alike and don't say which bit each clears.",
+          "name": "buttonFourOff"
+        },
+        {
+          "command2": "0x37",
+          "description": "Sets button 4 to off. Insteon's documents describe 0x35 and 0x37 alike and don't say which bit each clears.",
+          "name": "buttonFourOffAlternate"
+        }
+      ],
+      "id": "keypadLincCountdownTimer",
+      "name": "KeypadLinc Countdown Timer",
+      "notes": [
+        "Bits 2 and 3 of the 0x04 reply together set button 4's mode: always off, always on, a 4-hour countdown or on/off toggle.",
+        "The keypad is built on the KeypadLinc code base, but Insteon's documents don't say which of the KeypadLinc's other operating flags it accepts.",
+        "Setting the hours and minutes starts the countdown, and the matching LED lights a second later."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "The keypad gives no warning before its countdown ends.",
+          "name": "noWarning",
+          "off": "0x31",
+          "on": "0x32",
+          "query": "0x04"
+        },
+        {
+          "bit": "0x02",
+          "description": "The keypad switches its load as a relay instead of dimming it.",
+          "name": "actsAsRelay",
+          "off": "0x33",
+          "on": "0x34",
+          "query": "0x04"
+        },
+        {
+          "bit": "0x04",
+          "description": "Button 4 starts a 4-hour countdown.",
+          "name": "buttonFourFourHours",
+          "on": "0x36",
+          "query": "0x04"
+        },
+        {
+          "bit": "0x08",
+          "description": "Button 4 turns the load on with no countdown.",
+          "name": "buttonFourForever",
+          "on": "0x38",
+          "query": "0x04"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook"
+      ]
+    },
+    {
+      "description": "The schedule timer keypads, a KeypadLinc variant that turns its groups on and off at set times of day. Its Get Operating Flags bits differ from the KeypadLinc's.",
+      "extendedSettings": {
+        "perButton": true,
+        "values": [
+          {
+            "byte": 3,
+            "description": "The buttons that turn on with this button.",
+            "kind": "buttons",
+            "name": "onMask"
+          },
+          {
+            "byte": 4,
+            "description": "The buttons that turn off when this button is pressed.",
+            "kind": "buttons",
+            "name": "offMask"
+          },
+          {
+            "byte": 5,
+            "description": "The X10 house code, or 0x20 for no X10 address.",
+            "name": "x10HouseCode"
+          },
+          {
+            "byte": 6,
+            "description": "The X10 unit code.",
+            "name": "x10UnitCode"
+          },
+          {
+            "byte": 7,
+            "description": "The ramp rate, from 0x01 (8 minutes) to 0x1F (0.1 second). 0x00 is 2 seconds.",
+            "name": "rampRate",
+            "range": {
+              "from": "0x00",
+              "through": "0x1F"
+            }
+          },
+          {
+            "byte": 8,
+            "description": "The level the load turns on to, from 0x00 (off) to 0xFF (full).",
+            "name": "onLevel",
+            "range": {
+              "from": "0x00",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 9,
+            "description": "The brightness of the status LEDs, from 0x11 (dimmest) to 0x7F (brightest).",
+            "name": "ledBrightness",
+            "range": {
+              "from": "0x11",
+              "through": "0x7F"
+            }
+          },
+          {
+            "byte": 10,
+            "description": "The non-toggle buttons, which send the same command on every press.",
+            "kind": "buttons",
+            "name": "nonToggleMask"
+          },
+          {
+            "byte": 11,
+            "description": "The buttons whose LEDs are on.",
+            "kind": "buttons",
+            "name": "ledMask"
+          },
+          {
+            "byte": 12,
+            "description": "The buttons that send X10 All On or All Off instead of On or Off.",
+            "kind": "buttons",
+            "name": "x10AllMask"
+          },
+          {
+            "byte": 13,
+            "description": "The non-toggle buttons that send On. The others send Off.",
+            "kind": "buttons",
+            "name": "nonToggleOnMask"
+          },
+          {
+            "byte": 14,
+            "description": "The buttons in a radio group with this button. The group only works when the off mask holds them too.",
+            "kind": "buttons",
+            "name": "groupMask"
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "onMask"
+              }
+            ],
+            "description": "Sets the on mask of button D1.",
+            "name": "onMask",
+            "perButton": true,
+            "selector": "0x02"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "offMask"
+              },
+              {
+                "position": 4,
+                "value": "groupMask"
+              }
+            ],
+            "description": "Sets the off mask (D3) and radio group (D4) of button D1. The radio group only works when the off mask holds it too.",
+            "name": "offMask",
+            "perButton": true,
+            "selector": "0x03"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10HouseCode"
+              },
+              {
+                "position": 4,
+                "value": "x10UnitCode"
+              }
+            ],
+            "description": "Sets the X10 address of button D1.",
+            "name": "x10Address",
+            "perButton": true,
+            "selector": "0x04"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "rampRate"
+              }
+            ],
+            "description": "Sets the ramp rate of button D1. With the load detached, bit 6 makes buttons 2 through 8 control only their LEDs, and bit 7 the load and LED.",
+            "name": "rampRate",
+            "perButton": true,
+            "selector": "0x05"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "onLevel"
+              }
+            ],
+            "description": "Sets the on-level of button D1.",
+            "name": "onLevel",
+            "perButton": true,
+            "selector": "0x06"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "ledBrightness"
+              }
+            ],
+            "description": "Sets the brightness of the status LEDs.",
+            "name": "ledBrightness",
+            "perButton": false,
+            "selector": "0x07"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "nonToggleMask"
+              }
+            ],
+            "description": "Sets which buttons are non-toggle.",
+            "name": "nonToggleMask",
+            "perButton": false,
+            "selector": "0x08"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "ledMask"
+              }
+            ],
+            "description": "Turns the button LEDs on and off.",
+            "name": "ledMask",
+            "perButton": false,
+            "selector": "0x09"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10AllMask"
+              }
+            ],
+            "description": "Sets which buttons send X10 All On or All Off.",
+            "name": "x10AllMask",
+            "perButton": false,
+            "selector": "0x0A"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "nonToggleOnMask"
+              }
+            ],
+            "description": "Sets which non-toggle buttons send On.",
+            "name": "nonToggleOnMask",
+            "perButton": false,
+            "selector": "0x0B"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "triggerMask"
+              }
+            ],
+            "description": "Sets which buttons are trigger buttons.",
+            "name": "triggerMask",
+            "perButton": false,
+            "selector": "0x0C"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "maxRetries"
+              }
+            ],
+            "description": "Sets how many times the device retries a message, from 0x01 to 0xFF. 0x00 restores the factory default of 5.",
+            "name": "maxRetries",
+            "perButton": false,
+            "selector": "0x0F"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "onHoursTens"
+              },
+              {
+                "position": 4,
+                "value": "onHoursOnes"
+              },
+              {
+                "position": 5,
+                "value": "onMinutesTens"
+              },
+              {
+                "position": 6,
+                "value": "onMinutesOnes"
+              },
+              {
+                "position": 7,
+                "value": "offHoursTens"
+              },
+              {
+                "position": 8,
+                "value": "offHoursOnes"
+              },
+              {
+                "position": 9,
+                "value": "offMinutesTens"
+              },
+              {
+                "position": 10,
+                "value": "offMinutesOnes"
+              }
+            ],
+            "description": "Sets the on time (D3 through D6) and off time (D7 through D10) of group D1, as hours and minutes with one decimal digit per byte.",
+            "name": "groupTimer",
+            "perButton": true,
+            "selector": "0x0D"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "hoursTens"
+              },
+              {
+                "position": 4,
+                "value": "hoursOnes"
+              },
+              {
+                "position": 5,
+                "value": "minutesTens"
+              },
+              {
+                "position": 6,
+                "value": "minutesOnes"
+              }
+            ],
+            "description": "Sets the time of day as hours and minutes, one decimal digit per byte.",
+            "name": "timeOfDay",
+            "perButton": false,
+            "selector": "0x0E"
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x00",
+          "description": "Turns the programming lock on: linking and programming from the keypad are locked out.",
+          "name": "programmingLockOn"
+        },
+        {
+          "command2": "0x01",
+          "description": "Turns the programming lock off.",
+          "name": "programmingLockOff"
+        },
+        {
+          "command2": "0x02",
+          "description": "The status LED blinks when the keypad sends an Insteon message.",
+          "name": "ledOnTransmitOn"
+        },
+        {
+          "command2": "0x03",
+          "description": "The status LED doesn't blink when the keypad sends an Insteon message.",
+          "name": "ledOnTransmitOff"
+        },
+        {
+          "command2": "0x04",
+          "description": "Turning the load on at the keypad restores its last level instead of the on-level.",
+          "name": "resumeDimOn"
+        },
+        {
+          "command2": "0x05",
+          "description": "Turning the load on at the keypad goes to the on-level.",
+          "name": "resumeDimOff"
+        },
+        {
+          "command2": "0x06",
+          "description": "Sets the 8-button layout.",
+          "name": "eightButtonLayout"
+        },
+        {
+          "command2": "0x07",
+          "description": "Sets the 6-button layout.",
+          "name": "sixButtonLayout"
+        },
+        {
+          "command2": "0x08",
+          "description": "Turns the status LEDs and button backlights off.",
+          "name": "backlightOff"
+        },
+        {
+          "command2": "0x09",
+          "description": "Turns the status LEDs and button backlights on.",
+          "name": "backlightOn"
+        },
+        {
+          "command2": "0x0A",
+          "description": "The keypad beeps when a button is pressed.",
+          "name": "keyBeepOn"
+        },
+        {
+          "command2": "0x0B",
+          "description": "The keypad doesn't beep when a button is pressed.",
+          "name": "keyBeepOff"
+        },
+        {
+          "command2": "0x14",
+          "description": "The status LED doesn't blink when a communication error occurs.",
+          "name": "errorBlinkOff"
+        },
+        {
+          "command2": "0x15",
+          "description": "The status LED blinks when a communication error occurs.",
+          "name": "errorBlinkOn"
+        }
+      ],
+      "id": "keypadLincScheduleTimer",
+      "name": "KeypadLinc Schedule Timer",
+      "notes": [
+        "Insteon's documents don't say which Get Operating Flags bit each Set Operating Flags command changes on this keypad.",
+        "A Get with 0x01 in D3 returns the on and off times of group D1 in D3 through D10, and a Get with 0x02 in D3 returns the time of day in D3 through D6, in the layout the Sets use.",
+        "Insteon's earlier command sheets give ramp rates 0x00 through 0x1F as 9 minutes down to 0.1 second; the later ones make 0x01 8 minutes and 0x00 2 seconds.",
+        "Insteon's earlier command sheets and 2009 Developer's Guide give D14 of the reply as the trigger mask; the later sheets moved the trigger mask to query 0x08 and use D14 for the radio group mask.",
+        "Insteon's 2009 Developer's Guide sets selectors 0x08 through 0x0C one button at a time; the later command sheets and the Insteon for Hub app write the whole mask."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "Turning the load on at the device restores its last level instead of the on-level.",
+          "name": "resumeDim",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The keypad has the 8-button layout. When the bit is 0, it has the 6-button layout.",
+          "name": "eightButtons",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "The status LEDs and button backlights are off.",
+          "name": "ledOff",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The status LED blinks when a communication error occurs.",
+          "name": "errorBlink",
+          "query": "0x00"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)",
+        "Insteon for Hub app"
+      ]
+    },
+    {
+      "description": "The SwitchLinc, LampLinc and ApplianceLinc code base as used by the LampLinc, the other plug-in and socket dimmers, and the older In-LineLinc dimmers and relays. The relays ignore the ramp rate and on-level.",
+      "extendedSettings": {
+        "perButton": false,
+        "values": [
+          {
+            "byte": 3,
+            "description": "How much the status LED is dimmed: 0x00 is no dimming (brightest), 0x01 the most dimming and 0xFF the least.",
+            "name": "ledDimming",
+            "range": {
+              "from": "0x00",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 5,
+            "description": "The X10 house code, or 0x20 for no X10 address.",
+            "name": "x10HouseCode"
+          },
+          {
+            "byte": 6,
+            "description": "The X10 unit code.",
+            "name": "x10UnitCode"
+          },
+          {
+            "byte": 7,
+            "description": "The ramp rate, from 0x01 (8 minutes) to 0x1F (0.1 second). 0x00 is 2 seconds.",
+            "name": "rampRate",
+            "range": {
+              "from": "0x00",
+              "through": "0x1F"
+            }
+          },
+          {
+            "byte": 8,
+            "description": "The level the load turns on to, from 0x00 (off) to 0xFF (full).",
+            "name": "onLevel",
+            "range": {
+              "from": "0x00",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 9,
+            "description": "The signal-to-noise threshold.",
+            "name": "signalToNoiseThreshold"
+          },
+          {
+            "byte": 12,
+            "description": "The signal-to-noise count.",
+            "name": "signalToNoiseCount"
+          },
+          {
+            "byte": 13,
+            "description": "The signal-to-noise value of the last failure.",
+            "name": "signalToNoiseLastFailure"
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10HouseCode"
+              },
+              {
+                "position": 4,
+                "value": "x10UnitCode"
+              }
+            ],
+            "description": "Sets the X10 address.",
+            "name": "x10Address",
+            "perButton": false,
+            "selector": "0x04"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "rampRate"
+              }
+            ],
+            "description": "Sets the ramp rate.",
+            "name": "rampRate",
+            "perButton": false,
+            "selector": "0x05"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "onLevel"
+              }
+            ],
+            "description": "Sets the on-level.",
+            "name": "onLevel",
+            "perButton": false,
+            "selector": "0x06"
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x0A",
+          "description": "Turns cleanup success reports off.",
+          "name": "cleanupReportOff"
+        },
+        {
+          "command2": "0x0B",
+          "description": "Turns cleanup success reports on.",
+          "name": "cleanupReportOn"
+        }
+      ],
+      "id": "lampLinc",
+      "name": "LampLinc",
+      "notes": [
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide lists 0x0A and above as unused on this code base; the later command sheets add the cleanup report commands 0x0A and 0x0B.",
+        "Insteon's earlier command sheets give ramp rates 0x00 through 0x1F as 9 minutes down to 0.1 second; the later ones make 0x01 8 minutes and 0x00 2 seconds.",
+        "Insteon's earlier command sheets give D12 as the signal-to-noise ratio and D13 as a count of messages with CRC errors."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "Turning the load on at the device restores its last level instead of the on-level.",
+          "name": "resumeDim",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LED is off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "Load sense is on: the device turns its load on when it senses the attached lamp or appliance being switched on.",
+          "name": "loadSense",
+          "off": "0x07",
+          "on": "0x06",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device sends a success report after the cleanup messages that follow a group command. Only dealer firmware has this setting.",
+          "name": "cleanupReport",
+          "query": "0x00"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        },
+        {
+          "description": "The power line's signal-to-noise value.",
+          "name": "signalToNoise",
+          "query": "0x02"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)"
+      ]
+    },
+    {
+      "description": "The dimmable LED bulbs, which run the KeypadLinc code base.",
+      "flagCommands": [
+        {
+          "command2": "0x04",
+          "description": "The bulb powers up to its last state.",
+          "name": "powerUpLastState"
+        },
+        {
+          "command2": "0x05",
+          "description": "The bulb powers up on.",
+          "name": "powerUpOn"
+        },
+        {
+          "command2": "0x08",
+          "description": "Turns linking at power-up off.",
+          "name": "linkOnPowerUpOff"
+        },
+        {
+          "command2": "0x09",
+          "description": "Turns linking at power-up on.",
+          "name": "linkOnPowerUpOn"
+        },
+        {
+          "command2": "0x1C",
+          "description": "Starts each message with the hop count of the last acknowledgment received (smart hops).",
+          "name": "smartHopsOn"
+        },
+        {
+          "command2": "0x1D",
+          "description": "Starts each message with one hop.",
+          "name": "smartHopsOff"
+        }
+      ],
+      "id": "ledBulb",
+      "name": "LED Bulb",
+      "notes": [
+        "Bits 2 and 4 of the 0x00 reply hold the power-up state and link-at-power-up settings, but Insteon's documents don't make clear which value each command writes.",
+        "Insteon's 2009 Developer's Guide gives query 0x02 as a signal-to-noise value; the later command sheets count messages with CRC errors there.",
+        "Insteon's documents don't give this product's extended Get and Set layout."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
+          "name": "radioOff",
+          "off": "0x0D",
+          "on": "0x0C",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x80",
+          "description": "Insteon communication over the power line is off. The device turns it back on whenever it powers up.",
+          "name": "powerLineOff",
+          "off": "0x0F",
+          "on": "0x0E",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x01",
+          "description": "The device retries application messages as many times as its link database says, and reports cleanup errors.",
+          "name": "applicationRetries",
+          "off": "0x11",
+          "on": "0x10",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x02",
+          "description": "X10 sending and receiving are off.",
+          "name": "x10Off",
+          "off": "0x13",
+          "on": "0x12",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x04",
+          "description": "The status LED blinks when a communication error occurs.",
+          "name": "errorBlink",
+          "off": "0x14",
+          "on": "0x15",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x08",
+          "description": "The device sends a success report after the cleanup messages that follow a group command.",
+          "name": "cleanupReport",
+          "off": "0x16",
+          "on": "0x17",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x10",
+          "description": "Extended Set and link database write messages must carry a checksum in D14.",
+          "name": "checksumRequired",
+          "off": "0x18",
+          "on": "0x19",
+          "query": "0x05"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        },
+        {
+          "description": "The number of messages received with a CRC error.",
+          "name": "crcErrorCount",
+          "query": "0x02"
+        },
+        {
+          "description": "The number of signal-to-noise failures.",
+          "name": "signalToNoiseFailureCount",
+          "query": "0x03"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)",
+        "Insteon for Hub app"
+      ]
+    },
+    {
+      "description": "The Micro dimmer and on/off modules, which run the KeypadLinc code base and take a sense line input from a wall switch.",
+      "flagCommands": [
+        {
+          "command2": "0x1C",
+          "description": "Starts each message with the hop count of the last acknowledgment received (smart hops).",
+          "name": "smartHopsOn"
+        },
+        {
+          "command2": "0x1D",
+          "description": "Starts each message with one hop.",
+          "name": "smartHopsOff"
+        },
+        {
+          "command2": "0x26",
+          "description": "Turns the Yakity Yak signaling option off.",
+          "name": "yakityYakOff"
+        },
+        {
+          "command2": "0x27",
+          "description": "Turns the Yakity Yak signaling option on.",
+          "name": "yakityYakOn"
+        },
+        {
+          "command2": "0x28",
+          "description": "When modulation sync fails, the device doesn't hop the message.",
+          "name": "modSyncFailureNoHop"
+        },
+        {
+          "command2": "0x29",
+          "description": "When modulation sync fails, the device uses its own zero crossing.",
+          "name": "modSyncFailureOwnZeroCrossing"
+        },
+        {
+          "command2": "0x2A",
+          "description": "The device repeats every power line hop over RF.",
+          "name": "pushHopsToRadioOn"
+        },
+        {
+          "command2": "0x2B",
+          "description": "The device doesn't repeat every power line hop over RF.",
+          "name": "pushHopsToRadioOff"
+        }
+      ],
+      "id": "microModule",
+      "name": "Micro Module",
+      "notes": [
+        "Insteon's earliest command sheet swaps 0x08 and 0x09 (backlight on and off); the later sheets, used here, agree with the Insteon for Hub app.",
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide gives query 0x02 as a signal-to-noise value; the later command sheets count messages with CRC errors there.",
+        "Insteon's documents don't give this product's extended Get and Set layout."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "Turning the load on at the device restores its last level instead of the on-level.",
+          "name": "resumeDim",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LEDs and button backlights are off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "The device beeps when a button is pressed.",
+          "name": "keyBeep",
+          "off": "0x0B",
+          "on": "0x0A",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
+          "name": "radioOff",
+          "off": "0x0D",
+          "on": "0x0C",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x80",
+          "description": "Insteon communication over the power line is off. The device turns it back on whenever it powers up.",
+          "name": "powerLineOff",
+          "off": "0x0F",
+          "on": "0x0E",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x01",
+          "description": "The device retries application messages as many times as its link database says, and reports cleanup errors.",
+          "name": "applicationRetries",
+          "off": "0x11",
+          "on": "0x10",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x02",
+          "description": "X10 sending and receiving are off.",
+          "name": "x10Off",
+          "off": "0x13",
+          "on": "0x12",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x04",
+          "description": "The status LED blinks when a communication error occurs.",
+          "name": "errorBlink",
+          "off": "0x14",
+          "on": "0x15",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x08",
+          "description": "The device sends a success report after the cleanup messages that follow a group command.",
+          "name": "cleanupReport",
+          "off": "0x16",
+          "on": "0x17",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x10",
+          "description": "Extended Set and link database write messages must carry a checksum in D14.",
+          "name": "checksumRequired",
+          "off": "0x18",
+          "on": "0x19",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x01",
+          "description": "The module has two sense lines. A dual sense line is always momentary.",
+          "name": "dualLine",
+          "off": "0x1E",
+          "on": "0x1F",
+          "query": "0x06"
+        },
+        {
+          "bit": "0x02",
+          "description": "The sense line input is momentary rather than latching.",
+          "name": "momentaryLine",
+          "off": "0x20",
+          "on": "0x21",
+          "query": "0x06"
+        },
+        {
+          "bit": "0x04",
+          "description": "The sense line sets the load directly: line high turns it on and line low turns it off. When the bit is 0, every change of the line toggles the load, as a 3-way switch does.",
+          "name": "lineLevelSetsLoad",
+          "off": "0x22",
+          "on": "0x23",
+          "query": "0x06"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        },
+        {
+          "description": "The number of messages received with a CRC error.",
+          "name": "crcErrorCount",
+          "query": "0x02"
+        },
+        {
+          "description": "The number of signal-to-noise failures.",
+          "name": "signalToNoiseFailureCount",
+          "query": "0x03"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)",
+        "Insteon for Hub app"
+      ]
+    },
+    {
+      "description": "The OutletLinc dimmer, which runs the KeypadLinc code base with load sense and an over-temperature limit.",
+      "extendedSettings": {
+        "perButton": false,
+        "values": [
+          {
+            "byte": 5,
+            "description": "The X10 house code, or 0x20 for no X10 address.",
+            "name": "x10HouseCode"
+          },
+          {
+            "byte": 6,
+            "description": "The X10 unit code.",
+            "name": "x10UnitCode"
+          },
+          {
+            "byte": 7,
+            "description": "The ramp rate, from 0x01 (8 minutes) to 0x1F (0.1 second). 0x00 is 2 seconds.",
+            "name": "rampRate",
+            "range": {
+              "from": "0x00",
+              "through": "0x1F"
+            }
+          },
+          {
+            "byte": 8,
+            "description": "The level the load turns on to, from 0x00 (off) to 0xFF (full).",
+            "name": "onLevel",
+            "range": {
+              "from": "0x00",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 9,
+            "description": "The brightness of the status LEDs, from 0x11 (dimmest) to 0x7F (brightest).",
+            "name": "ledBrightness",
+            "range": {
+              "from": "0x11",
+              "through": "0x7F"
+            }
+          },
+          {
+            "byte": 12,
+            "description": "The over-temperature limit. 0x00 and 0xFF turn the limit off, 0x50 is 70 degrees and the default is 0x7D.",
+            "name": "overTemperatureLimit"
+          },
+          {
+            "byte": 13,
+            "description": "The signal-to-noise count.",
+            "name": "signalToNoiseCount"
+          },
+          {
+            "byte": 14,
+            "description": "The number of signal-to-noise failures.",
+            "name": "signalToNoiseFailureCount"
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10HouseCode"
+              },
+              {
+                "position": 4,
+                "value": "x10UnitCode"
+              }
+            ],
+            "description": "Sets the X10 address.",
+            "name": "x10Address",
+            "perButton": false,
+            "selector": "0x04"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "rampRate"
+              }
+            ],
+            "description": "Sets the ramp rate.",
+            "name": "rampRate",
+            "perButton": false,
+            "selector": "0x05"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "onLevel"
+              }
+            ],
+            "description": "Sets the on-level.",
+            "name": "onLevel",
+            "perButton": false,
+            "selector": "0x06"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "ledBrightness"
+              }
+            ],
+            "description": "Sets the brightness of the status LED.",
+            "name": "ledBrightness",
+            "perButton": false,
+            "selector": "0x07"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "overTemperatureLimit"
+              }
+            ],
+            "description": "Sets the over-temperature limit.",
+            "name": "overTemperatureLimit",
+            "perButton": false,
+            "selector": "0x08"
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x1C",
+          "description": "Starts each message with the hop count of the last acknowledgment received (smart hops).",
+          "name": "smartHopsOn"
+        },
+        {
+          "command2": "0x1D",
+          "description": "Starts each message with one hop.",
+          "name": "smartHopsOff"
+        }
+      ],
+      "id": "outletLinc",
+      "name": "OutletLinc Dimmer",
+      "notes": [
+        "Insteon's earliest command sheet swaps 0x08 and 0x09 (backlight on and off); the later sheets, used here, agree with the Insteon for Hub app.",
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide gives query 0x02 as a signal-to-noise value; the later command sheets count messages with CRC errors there.",
+        "Insteon's earlier command sheets give ramp rates 0x00 through 0x1F as 9 minutes down to 0.1 second; the later ones make 0x01 8 minutes and 0x00 2 seconds."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "Turning the load on at the device restores its last level instead of the on-level.",
+          "name": "resumeDim",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x08",
+          "description": "Load sense is on: the device turns its load on when it senses the attached lamp or appliance being switched on.",
+          "name": "loadSense",
+          "off": "0x07",
+          "on": "0x06",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LEDs and button backlights are off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "The device beeps when a button is pressed.",
+          "name": "keyBeep",
+          "off": "0x0B",
+          "on": "0x0A",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
+          "name": "radioOff",
+          "off": "0x0D",
+          "on": "0x0C",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x80",
+          "description": "Insteon communication over the power line is off. The device turns it back on whenever it powers up.",
+          "name": "powerLineOff",
+          "off": "0x0F",
+          "on": "0x0E",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x01",
+          "description": "The device retries application messages as many times as its link database says, and reports cleanup errors.",
+          "name": "applicationRetries",
+          "off": "0x11",
+          "on": "0x10",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x02",
+          "description": "X10 sending and receiving are off.",
+          "name": "x10Off",
+          "off": "0x13",
+          "on": "0x12",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x04",
+          "description": "The status LED blinks when a communication error occurs.",
+          "name": "errorBlink",
+          "off": "0x14",
+          "on": "0x15",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x08",
+          "description": "The device sends a success report after the cleanup messages that follow a group command.",
+          "name": "cleanupReport",
+          "off": "0x16",
+          "on": "0x17",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x10",
+          "description": "Extended Set and link database write messages must carry a checksum in D14.",
+          "name": "checksumRequired",
+          "off": "0x18",
+          "on": "0x19",
+          "query": "0x05"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        },
+        {
+          "description": "The number of messages received with a CRC error.",
+          "name": "crcErrorCount",
+          "query": "0x02"
+        },
+        {
+          "description": "The number of signal-to-noise failures.",
+          "name": "signalToNoiseFailureCount",
+          "query": "0x03"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)",
+        "Insteon for Hub app"
+      ]
+    },
+    {
+      "description": "The SwitchLinc, LampLinc and ApplianceLinc code base as used by the OutletLinc relays.",
+      "extendedSettings": {
+        "perButton": false,
+        "values": [
+          {
+            "byte": 5,
+            "description": "The X10 house code, or 0x20 for no X10 address.",
+            "name": "x10HouseCode"
+          },
+          {
+            "byte": 6,
+            "description": "The X10 unit code.",
+            "name": "x10UnitCode"
+          },
+          {
+            "byte": 12,
+            "description": "The signal-to-noise count.",
+            "name": "signalToNoiseCount"
+          },
+          {
+            "byte": 13,
+            "description": "The signal-to-noise value of the last failure.",
+            "name": "signalToNoiseLastFailure"
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10HouseCode"
+              },
+              {
+                "position": 4,
+                "value": "x10UnitCode"
+              }
+            ],
+            "description": "Sets the X10 address.",
+            "name": "x10Address",
+            "perButton": false,
+            "selector": "0x04"
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x0A",
+          "description": "Turns cleanup success reports off.",
+          "name": "cleanupReportOff"
+        },
+        {
+          "command2": "0x0B",
+          "description": "Turns cleanup success reports on.",
+          "name": "cleanupReportOn"
+        }
+      ],
+      "id": "outletLincLegacy",
+      "name": "OutletLinc Relay",
+      "notes": [
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide lists 0x0A and above as unused on this code base; the later command sheets add the cleanup report commands 0x0A and 0x0B.",
+        "Insteon's earlier command sheets give D12 as the signal-to-noise ratio and D13 as a count of messages with CRC errors."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "Turning the load on at the device restores its last level instead of the on-level.",
+          "name": "resumeDim",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LED is off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "Load sense is on: the device turns its load on when it senses the attached lamp or appliance being switched on.",
+          "name": "loadSense",
+          "off": "0x07",
+          "on": "0x06",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device sends a success report after the cleanup messages that follow a group command. Only dealer firmware has this setting.",
+          "name": "cleanupReport",
+          "query": "0x00"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)"
+      ]
+    },
+    {
+      "description": "The 2632 plug-in dimmer and 2633 and 2635 plug-in on/off modules. The on/off modules ignore the ramp rate and on-level.",
+      "extendedSettings": {
+        "perButton": false,
+        "values": [
+          {
+            "byte": 7,
+            "description": "The ramp rate, from 0x01 (8 minutes) to 0x1F (0.1 second). 0x00 is 2 seconds.",
+            "name": "rampRate",
+            "range": {
+              "from": "0x00",
+              "through": "0x1F"
+            }
+          },
+          {
+            "byte": 8,
+            "description": "The level the load turns on to, from 0x00 (off) to 0xFF (full).",
+            "name": "onLevel",
+            "range": {
+              "from": "0x00",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 9,
+            "description": "The brightness of the status LEDs, from 0x11 (dimmest) to 0x7F (brightest).",
+            "name": "ledBrightness",
+            "range": {
+              "from": "0x11",
+              "through": "0x7F"
+            }
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "rampRate"
+              }
+            ],
+            "description": "Sets the ramp rate.",
+            "name": "rampRate",
+            "perButton": false,
+            "selector": "0x05"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "onLevel"
+              }
+            ],
+            "description": "Sets the on-level.",
+            "name": "onLevel",
+            "perButton": false,
+            "selector": "0x06"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "ledBrightness"
+              }
+            ],
+            "description": "Sets the brightness of the status LED.",
+            "name": "ledBrightness",
+            "perButton": false,
+            "selector": "0x07"
+          }
+        ]
+      },
+      "id": "plugInModule",
+      "name": "Plug-in Module",
+      "notes": [
+        "The product requirements documents list bit 5 of the 0x00 reply as load sense, which Insteon's command sheets give as the key beep on the KeypadLinc code base, and document no command that sets it."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "Turning the load on at the device restores its last level instead of the on-level.",
+          "name": "resumeDim",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LED is off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon product requirements document for the 2632",
+        "Insteon product requirements document for the 2633"
+      ]
+    },
+    {
+      "description": "The dual-band SwitchLinc dimmers, which run the KeypadLinc code base with a single load and no button masks.",
+      "extendedSettings": {
+        "perButton": false,
+        "values": [
+          {
+            "byte": 5,
+            "description": "The X10 house code, or 0x20 for no X10 address.",
+            "name": "x10HouseCode"
+          },
+          {
+            "byte": 6,
+            "description": "The X10 unit code.",
+            "name": "x10UnitCode"
+          },
+          {
+            "byte": 7,
+            "description": "The ramp rate, from 0x01 (8 minutes) to 0x1F (0.1 second). 0x00 is 2 seconds.",
+            "name": "rampRate",
+            "range": {
+              "from": "0x00",
+              "through": "0x1F"
+            }
+          },
+          {
+            "byte": 8,
+            "description": "The level the load turns on to, from 0x00 (off) to 0xFF (full).",
+            "name": "onLevel",
+            "range": {
+              "from": "0x00",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 9,
+            "description": "The brightness of the status LEDs, from 0x11 (dimmest) to 0x7F (brightest).",
+            "name": "ledBrightness",
+            "range": {
+              "from": "0x11",
+              "through": "0x7F"
+            }
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10HouseCode"
+              },
+              {
+                "position": 4,
+                "value": "x10UnitCode"
+              }
+            ],
+            "description": "Sets the X10 address.",
+            "name": "x10Address",
+            "perButton": false,
+            "selector": "0x04"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "rampRate"
+              }
+            ],
+            "description": "Sets the ramp rate.",
+            "name": "rampRate",
+            "perButton": false,
+            "selector": "0x05"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "onLevel"
+              }
+            ],
+            "description": "Sets the on-level.",
+            "name": "onLevel",
+            "perButton": false,
+            "selector": "0x06"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "ledBrightness"
+              }
+            ],
+            "description": "Sets the brightness of the status LED.",
+            "name": "ledBrightness",
+            "perButton": false,
+            "selector": "0x07"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "maxRetries"
+              }
+            ],
+            "description": "Sets how many times the device retries a message, from 0x01 to 0xFF. 0x00 restores the factory default of 5.",
+            "name": "maxRetries",
+            "perButton": false,
+            "selector": "0x0F"
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x1C",
+          "description": "Starts each message with the hop count of the last acknowledgment received (smart hops).",
+          "name": "smartHopsOn"
+        },
+        {
+          "command2": "0x1D",
+          "description": "Starts each message with one hop.",
+          "name": "smartHopsOff"
+        },
+        {
+          "command2": "0x26",
+          "description": "Turns the Yakity Yak signaling option off.",
+          "name": "yakityYakOff"
+        },
+        {
+          "command2": "0x27",
+          "description": "Turns the Yakity Yak signaling option on.",
+          "name": "yakityYakOn"
+        },
+        {
+          "command2": "0x28",
+          "description": "When modulation sync fails, the device doesn't hop the message.",
+          "name": "modSyncFailureNoHop"
+        },
+        {
+          "command2": "0x29",
+          "description": "When modulation sync fails, the device uses its own zero crossing.",
+          "name": "modSyncFailureOwnZeroCrossing"
+        },
+        {
+          "command2": "0x2A",
+          "description": "The device repeats every power line hop over RF.",
+          "name": "pushHopsToRadioOn"
+        },
+        {
+          "command2": "0x2B",
+          "description": "The device doesn't repeat every power line hop over RF.",
+          "name": "pushHopsToRadioOff"
+        }
+      ],
+      "id": "switchLincDimmer",
+      "name": "SwitchLinc Dimmer",
+      "notes": [
+        "Insteon's earliest command sheet swaps 0x08 and 0x09 (backlight on and off); the later sheets, used here, agree with the Insteon for Hub app.",
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide gives query 0x02 as a signal-to-noise value; the later command sheets count messages with CRC errors there.",
+        "Insteon's earlier command sheets give ramp rates 0x00 through 0x1F as 9 minutes down to 0.1 second; the later ones make 0x01 8 minutes and 0x00 2 seconds.",
+        "The product requirements document for the 2474DWH lists bit 5 of the 0x00 reply as load sense, set with 0x06 and 0x07; Insteon's command sheets and the Insteon for Hub app make bit 5 the key beep on this code base."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "Turning the load on at the device restores its last level instead of the on-level.",
+          "name": "resumeDim",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LEDs and button backlights are off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "The device beeps when a button is pressed.",
+          "name": "keyBeep",
+          "off": "0x0B",
+          "on": "0x0A",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
+          "name": "radioOff",
+          "off": "0x0D",
+          "on": "0x0C",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x80",
+          "description": "Insteon communication over the power line is off. The device turns it back on whenever it powers up.",
+          "name": "powerLineOff",
+          "off": "0x0F",
+          "on": "0x0E",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x01",
+          "description": "The device retries application messages as many times as its link database says, and reports cleanup errors.",
+          "name": "applicationRetries",
+          "off": "0x11",
+          "on": "0x10",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x02",
+          "description": "X10 sending and receiving are off.",
+          "name": "x10Off",
+          "off": "0x13",
+          "on": "0x12",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x04",
+          "description": "The status LED blinks when a communication error occurs.",
+          "name": "errorBlink",
+          "off": "0x14",
+          "on": "0x15",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x08",
+          "description": "The device sends a success report after the cleanup messages that follow a group command.",
+          "name": "cleanupReport",
+          "off": "0x16",
+          "on": "0x17",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x10",
+          "description": "Extended Set and link database write messages must carry a checksum in D14.",
+          "name": "checksumRequired",
+          "off": "0x18",
+          "on": "0x19",
+          "query": "0x05"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        },
+        {
+          "description": "The number of messages received with a CRC error.",
+          "name": "crcErrorCount",
+          "query": "0x02"
+        },
+        {
+          "description": "The number of signal-to-noise failures.",
+          "name": "signalToNoiseFailureCount",
+          "query": "0x03"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)",
+        "Insteon for Hub app",
+        "Insteon product requirements document for the 2474DWH"
+      ]
+    },
+    {
+      "description": "The SwitchLinc, LampLinc and ApplianceLinc code base as used by the older SwitchLinc and ToggleLinc dimmers and the ToggleLinc relays. The relays ignore the ramp rate and on-level.",
+      "extendedSettings": {
+        "perButton": false,
+        "values": [
+          {
+            "byte": 3,
+            "description": "How much the status LED is dimmed: 0x00 is no dimming (brightest), 0x01 the most dimming and 0xFF the least.",
+            "name": "ledDimming",
+            "range": {
+              "from": "0x00",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 5,
+            "description": "The X10 house code, or 0x20 for no X10 address.",
+            "name": "x10HouseCode"
+          },
+          {
+            "byte": 6,
+            "description": "The X10 unit code.",
+            "name": "x10UnitCode"
+          },
+          {
+            "byte": 7,
+            "description": "The ramp rate, from 0x01 (8 minutes) to 0x1F (0.1 second). 0x00 is 2 seconds.",
+            "name": "rampRate",
+            "range": {
+              "from": "0x00",
+              "through": "0x1F"
+            }
+          },
+          {
+            "byte": 8,
+            "description": "The level the load turns on to, from 0x00 (off) to 0xFF (full).",
+            "name": "onLevel",
+            "range": {
+              "from": "0x00",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 9,
+            "description": "The signal-to-noise threshold.",
+            "name": "signalToNoiseThreshold"
+          },
+          {
+            "byte": 12,
+            "description": "The signal-to-noise count.",
+            "name": "signalToNoiseCount"
+          },
+          {
+            "byte": 13,
+            "description": "The signal-to-noise value of the last failure.",
+            "name": "signalToNoiseLastFailure"
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "ledDimming"
+              }
+            ],
+            "description": "Sets how much the status LED is dimmed. Only SwitchLinc and ToggleLinc models with a beeper have this setting.",
+            "name": "ledDimming",
+            "perButton": false,
+            "selector": "0x03"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10HouseCode"
+              },
+              {
+                "position": 4,
+                "value": "x10UnitCode"
+              }
+            ],
+            "description": "Sets the X10 address.",
+            "name": "x10Address",
+            "perButton": false,
+            "selector": "0x04"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "rampRate"
+              }
+            ],
+            "description": "Sets the ramp rate.",
+            "name": "rampRate",
+            "perButton": false,
+            "selector": "0x05"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "onLevel"
+              }
+            ],
+            "description": "Sets the on-level.",
+            "name": "onLevel",
+            "perButton": false,
+            "selector": "0x06"
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x0A",
+          "description": "Turns cleanup success reports off.",
+          "name": "cleanupReportOff"
+        },
+        {
+          "command2": "0x0B",
+          "description": "Turns cleanup success reports on.",
+          "name": "cleanupReportOn"
+        }
+      ],
+      "id": "switchLincDimmerLegacy",
+      "name": "SwitchLinc Dimmer (legacy)",
+      "notes": [
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide lists 0x0A and above as unused on this code base; the later command sheets add the cleanup report commands 0x0A and 0x0B.",
+        "Insteon's earlier command sheets give ramp rates 0x00 through 0x1F as 9 minutes down to 0.1 second; the later ones make 0x01 8 minutes and 0x00 2 seconds.",
+        "Insteon's earlier command sheets give the LED setting in D3 and selector 0x03 as a brightness from 0x11 to 0x7F.",
+        "Insteon's earlier command sheets give D12 as the signal-to-noise ratio and D13 as a count of messages with CRC errors."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "Turning the load on at the device restores its last level instead of the on-level.",
+          "name": "resumeDim",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LED is off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "Load sense is on: the device turns its load on when it senses the attached lamp or appliance being switched on.",
+          "name": "loadSense",
+          "off": "0x07",
+          "on": "0x06",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device sends a success report after the cleanup messages that follow a group command. Only dealer firmware has this setting.",
+          "name": "cleanupReport",
+          "query": "0x00"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        },
+        {
+          "description": "The power line's signal-to-noise value.",
+          "name": "signalToNoise",
+          "query": "0x02"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)"
+      ]
+    },
+    {
+      "description": "The dual-band SwitchLinc relays, which run the KeypadLinc code base with a single load and no button masks.",
+      "extendedSettings": {
+        "perButton": false,
+        "values": [
+          {
+            "byte": 5,
+            "description": "The X10 house code, or 0x20 for no X10 address.",
+            "name": "x10HouseCode"
+          },
+          {
+            "byte": 6,
+            "description": "The X10 unit code.",
+            "name": "x10UnitCode"
+          },
+          {
+            "byte": 9,
+            "description": "The brightness of the status LEDs, from 0x11 (dimmest) to 0x7F (brightest).",
+            "name": "ledBrightness",
+            "range": {
+              "from": "0x11",
+              "through": "0x7F"
+            }
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10HouseCode"
+              },
+              {
+                "position": 4,
+                "value": "x10UnitCode"
+              }
+            ],
+            "description": "Sets the X10 address.",
+            "name": "x10Address",
+            "perButton": false,
+            "selector": "0x04"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "ledBrightness"
+              }
+            ],
+            "description": "Sets the brightness of the status LED.",
+            "name": "ledBrightness",
+            "perButton": false,
+            "selector": "0x07"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "maxRetries"
+              }
+            ],
+            "description": "Sets how many times the device retries a message, from 0x01 to 0xFF. 0x00 restores the factory default of 5.",
+            "name": "maxRetries",
+            "perButton": false,
+            "selector": "0x0F"
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x1C",
+          "description": "Starts each message with the hop count of the last acknowledgment received (smart hops).",
+          "name": "smartHopsOn"
+        },
+        {
+          "command2": "0x1D",
+          "description": "Starts each message with one hop.",
+          "name": "smartHopsOff"
+        },
+        {
+          "command2": "0x26",
+          "description": "Turns the Yakity Yak signaling option off.",
+          "name": "yakityYakOff"
+        },
+        {
+          "command2": "0x27",
+          "description": "Turns the Yakity Yak signaling option on.",
+          "name": "yakityYakOn"
+        },
+        {
+          "command2": "0x28",
+          "description": "When modulation sync fails, the device doesn't hop the message.",
+          "name": "modSyncFailureNoHop"
+        },
+        {
+          "command2": "0x29",
+          "description": "When modulation sync fails, the device uses its own zero crossing.",
+          "name": "modSyncFailureOwnZeroCrossing"
+        },
+        {
+          "command2": "0x2A",
+          "description": "The device repeats every power line hop over RF.",
+          "name": "pushHopsToRadioOn"
+        },
+        {
+          "command2": "0x2B",
+          "description": "The device doesn't repeat every power line hop over RF.",
+          "name": "pushHopsToRadioOff"
+        }
+      ],
+      "id": "switchLincRelay",
+      "name": "SwitchLinc Relay",
+      "notes": [
+        "Insteon's earliest command sheet swaps 0x08 and 0x09 (backlight on and off); the later sheets, used here, agree with the Insteon for Hub app.",
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide gives query 0x02 as a signal-to-noise value; the later command sheets count messages with CRC errors there.",
+        "The product requirements document for the 2477S lists bit 5 of the 0x00 reply as load sense, set with 0x06 and 0x07; Insteon's command sheets and the Insteon for Hub app make bit 5 the key beep on this code base."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LEDs and button backlights are off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "The device beeps when a button is pressed.",
+          "name": "keyBeep",
+          "off": "0x0B",
+          "on": "0x0A",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
+          "name": "radioOff",
+          "off": "0x0D",
+          "on": "0x0C",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x80",
+          "description": "Insteon communication over the power line is off. The device turns it back on whenever it powers up.",
+          "name": "powerLineOff",
+          "off": "0x0F",
+          "on": "0x0E",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x01",
+          "description": "The device retries application messages as many times as its link database says, and reports cleanup errors.",
+          "name": "applicationRetries",
+          "off": "0x11",
+          "on": "0x10",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x02",
+          "description": "X10 sending and receiving are off.",
+          "name": "x10Off",
+          "off": "0x13",
+          "on": "0x12",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x04",
+          "description": "The status LED blinks when a communication error occurs.",
+          "name": "errorBlink",
+          "off": "0x14",
+          "on": "0x15",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x08",
+          "description": "The device sends a success report after the cleanup messages that follow a group command.",
+          "name": "cleanupReport",
+          "off": "0x16",
+          "on": "0x17",
+          "query": "0x05"
+        },
+        {
+          "bit": "0x10",
+          "description": "Extended Set and link database write messages must carry a checksum in D14.",
+          "name": "checksumRequired",
+          "off": "0x18",
+          "on": "0x19",
+          "query": "0x05"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        },
+        {
+          "description": "The number of messages received with a CRC error.",
+          "name": "crcErrorCount",
+          "query": "0x02"
+        },
+        {
+          "description": "The number of signal-to-noise failures.",
+          "name": "signalToNoiseFailureCount",
+          "query": "0x03"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)",
+        "Insteon for Hub app",
+        "Insteon product requirements document for the 2477S"
+      ]
+    },
+    {
+      "description": "The SwitchLinc relay with a countdown timer that turns its load off after a set time.",
+      "extendedSettings": {
+        "perButton": false,
+        "values": [
+          {
+            "byte": 3,
+            "description": "The status LED's brightness.",
+            "name": "ledLevel"
+          },
+          {
+            "byte": 4,
+            "description": "How long, in minutes, a single press keeps the load on.",
+            "name": "defaultOnTime"
+          },
+          {
+            "byte": 5,
+            "description": "The X10 house code, or 0x20 for no X10 address.",
+            "name": "x10HouseCode"
+          },
+          {
+            "byte": 6,
+            "description": "The X10 unit code.",
+            "name": "x10UnitCode"
+          },
+          {
+            "byte": 7,
+            "description": "The hours of the countdown.",
+            "name": "timerHours"
+          },
+          {
+            "byte": 8,
+            "description": "The minutes of the countdown.",
+            "name": "timerMinutes"
+          },
+          {
+            "byte": 12,
+            "description": "The signal-to-noise count.",
+            "name": "signalToNoiseCount"
+          },
+          {
+            "byte": 13,
+            "description": "The signal-to-noise value of the last failure.",
+            "name": "signalToNoiseLastFailure"
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10HouseCode"
+              },
+              {
+                "position": 4,
+                "value": "x10UnitCode"
+              }
+            ],
+            "description": "Sets the X10 address.",
+            "name": "x10Address",
+            "perButton": false,
+            "selector": "0x04"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "timerHours"
+              },
+              {
+                "position": 4,
+                "value": "timerMinutes"
+              }
+            ],
+            "description": "Sets the countdown's hours (D3) and minutes (D4).",
+            "name": "onTime",
+            "perButton": false,
+            "selector": "0x05"
+          },
+          {
+            "bytes": [
+              {
+                "position": 5,
+                "value": "defaultOnTime"
+              }
+            ],
+            "description": "Sets how long, in minutes from 0x01 to 0xFF, a single press keeps the load on. 0x00 leaves it unchanged.",
+            "name": "defaultOnTime",
+            "perButton": false,
+            "selector": "0x06"
+          }
+        ]
+      },
+      "id": "switchLincRelayCountdownTimer",
+      "name": "SwitchLinc Relay Countdown Timer",
+      "notes": [
+        "Insteon's command sheets call the local warning 1 minute in the Set Operating Flags table and 2 minutes in the Get Operating Flags table."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x04",
+          "description": "The countdown timer is off, and the switch works as an ordinary switch.",
+          "name": "timerOff",
+          "off": "0x05",
+          "on": "0x04",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x08",
+          "description": "The trigger group is off.",
+          "name": "triggerGroupOff",
+          "off": "0x07",
+          "on": "0x06",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LED is off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "The switch gives no local warning before its countdown ends.",
+          "name": "noLocalWarning",
+          "off": "0x0B",
+          "on": "0x0A",
+          "query": "0x00"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook"
+      ]
+    },
+    {
+      "description": "The SwitchLinc, LampLinc and ApplianceLinc code base as used by the older SwitchLinc relays.",
+      "extendedSettings": {
+        "perButton": false,
+        "values": [
+          {
+            "byte": 3,
+            "description": "How much the status LED is dimmed: 0x00 is no dimming (brightest), 0x01 the most dimming and 0xFF the least.",
+            "name": "ledDimming",
+            "range": {
+              "from": "0x00",
+              "through": "0xFF"
+            }
+          },
+          {
+            "byte": 5,
+            "description": "The X10 house code, or 0x20 for no X10 address.",
+            "name": "x10HouseCode"
+          },
+          {
+            "byte": 6,
+            "description": "The X10 unit code.",
+            "name": "x10UnitCode"
+          },
+          {
+            "byte": 12,
+            "description": "The signal-to-noise count.",
+            "name": "signalToNoiseCount"
+          },
+          {
+            "byte": 13,
+            "description": "The signal-to-noise value of the last failure.",
+            "name": "signalToNoiseLastFailure"
+          }
+        ],
+        "writes": [
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "ledDimming"
+              }
+            ],
+            "description": "Sets how much the status LED is dimmed. Only SwitchLinc and ToggleLinc models with a beeper have this setting.",
+            "name": "ledDimming",
+            "perButton": false,
+            "selector": "0x03"
+          },
+          {
+            "bytes": [
+              {
+                "position": 3,
+                "value": "x10HouseCode"
+              },
+              {
+                "position": 4,
+                "value": "x10UnitCode"
+              }
+            ],
+            "description": "Sets the X10 address.",
+            "name": "x10Address",
+            "perButton": false,
+            "selector": "0x04"
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x0A",
+          "description": "Turns cleanup success reports off.",
+          "name": "cleanupReportOff"
+        },
+        {
+          "command2": "0x0B",
+          "description": "Turns cleanup success reports on.",
+          "name": "cleanupReportOn"
+        }
+      ],
+      "id": "switchLincRelayLegacy",
+      "name": "SwitchLinc Relay (legacy)",
+      "notes": [
+        "Insteon's 2009 Developer's Guide reads bit 4 of the 0x00 reply as LED on, but the later command sheets read it as LED off, the state 0x08 sets.",
+        "Insteon's 2009 Developer's Guide lists 0x0A and above as unused on this code base; the later command sheets add the cleanup report commands 0x0A and 0x0B.",
+        "Insteon's earlier command sheets give the LED setting in D3 and selector 0x03 as a brightness from 0x11 to 0x7F.",
+        "Insteon's earlier command sheets give D12 as the signal-to-noise ratio and D13 as a count of messages with CRC errors."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x10",
+          "description": "The status LED is off.",
+          "name": "ledOff",
+          "off": "0x09",
+          "on": "0x08",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x20",
+          "description": "Load sense is on: the device turns its load on when it senses the attached lamp or appliance being switched on.",
+          "name": "loadSense",
+          "off": "0x07",
+          "on": "0x06",
+          "query": "0x00"
+        },
+        {
+          "bit": "0x40",
+          "description": "The device sends a success report after the cleanup messages that follow a group command. Only dealer firmware has this setting.",
+          "name": "cleanupReport",
+          "query": "0x00"
+        }
+      ],
+      "readings": [
+        {
+          "description": "A count that goes up whenever the link database changes.",
+          "name": "databaseDelta",
+          "query": "0x01"
+        }
+      ],
+      "sources": [
+        "Insteon command workbook",
+        "Insteon Developer's Guide (2009)"
+      ]
+    }
+  ],
   "devices": [
     {
       "capabilities": [
@@ -274,6 +4756,18 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "keypadLinc",
+          "subcategory": "0x41"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "keypadLinc",
+          "subcategory": "0x42"
         }
       ],
       "description": "A wall keypad that dims and switches its connected light fixture and adds extra buttons for controlling other Insteon devices or scenes. Insteon sells it in 6-button and 8-button versions.",
@@ -1106,6 +5600,23 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "microModule",
+          "subcategory": "0x35"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "microModule",
+          "subcategory": "0x38"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "microModule",
+          "subcategory": "0x39"
+        }
+      ],
       "description": "A small dimmer module that installs at a light fixture or behind an existing wall switch. It adds Insteon remote dimming control without replacing the original switch.",
       "identities": [
         {
@@ -1158,6 +5669,23 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "microModule",
+          "subcategory": "0x2F"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "microModule",
+          "subcategory": "0x31"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "microModule",
+          "subcategory": "0x32"
         }
       ],
       "description": "A small on/off relay module that installs in a fixture box or behind an existing wall switch. It adds Insteon remote control to a light while keeping the original switch.",
@@ -1520,6 +6048,13 @@
         "I/O Linc"
       ],
       "capabilities": [],
+      "commandSets": [
+        {
+          "category": "0x07",
+          "commandSet": "ioLinc",
+          "subcategory": "0x00"
+        }
+      ],
       "description": "A plug-in module with a low-voltage sensor input and a relay output. It connects alarm sensors, door strikes, garage door openers, and other contact-closure devices to an Insteon network.",
       "engines": [
         {
@@ -1564,6 +6099,23 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "dinRailModule",
+          "subcategory": "0x34"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "dinRailModule",
+          "subcategory": "0x36"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "dinRailModule",
+          "subcategory": "0x37"
+        }
+      ],
       "description": "A dimmer module that mounts on a DIN rail in an electrical panel to dim and switch lighting circuits remotely. It supports adjustable brightness levels and ramp rates.",
       "identities": [
         {
@@ -1601,6 +6153,23 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "dinRailModule",
+          "subcategory": "0x2E"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "dinRailModule",
+          "subcategory": "0x33"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "dinRailModule",
+          "subcategory": "0x34"
+        }
+      ],
       "description": "A relay module that mounts on a DIN rail in an electrical panel to switch lighting circuits on and off remotely over Insteon.",
       "identities": [
         {
@@ -1635,6 +6204,13 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "lampLinc",
+          "subcategory": "0x0D"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -1656,6 +6232,13 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "lampLinc",
+          "subcategory": "0x06"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -1675,6 +6258,13 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "lampLinc",
+          "subcategory": "0x00"
         }
       ],
       "engines": [
@@ -1716,6 +6306,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "applianceLinc",
+          "subcategory": "0x09"
+        }
+      ],
       "engines": [
         {
           "category": "0x02",
@@ -1755,6 +6352,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "applianceLinc",
+          "subcategory": "0x06"
+        }
+      ],
       "engines": [
         {
           "category": "0x02",
@@ -1790,6 +6394,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "applianceLinc",
+          "subcategory": "0x07"
+        }
+      ],
       "identities": [
         {
           "category": "0x02",
@@ -1809,6 +6420,13 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "lampLinc",
+          "subcategory": "0x0E"
         }
       ],
       "description": "A plug-in module that lets a dimmable lamp be turned on and off and dimmed remotely. The lamp plugs into the module, which plugs into a wall outlet.",
@@ -1871,6 +6489,13 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "lampLinc",
+          "subcategory": "0x22"
         }
       ],
       "engines": [
@@ -1938,6 +6563,18 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmerLegacy",
+          "subcategory": "0x17"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmerLegacy",
+          "subcategory": "0x1F"
+        }
+      ],
       "engines": [
         {
           "category": "0x01",
@@ -1984,6 +6621,18 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "switchLincDimmerLegacy",
+          "subcategory": "0x0D"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "switchLincDimmerLegacy",
+          "subcategory": "0x1A"
+        }
+      ],
       "engines": [
         {
           "category": "0x02",
@@ -2023,6 +6672,13 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "outletLinc",
+          "subcategory": "0x21"
         }
       ],
       "description": "An in-wall duplex outlet whose top receptacle can be dimmed and switched remotely over Insteon while the bottom receptacle stays always on. It controls plug-in lamps from Insteon keypads, remotes, or the Hub.",
@@ -2070,6 +6726,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "outletLincLegacy",
+          "subcategory": "0x08"
+        }
+      ],
       "engines": [
         {
           "category": "0x02",
@@ -2113,6 +6776,13 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "lampLinc",
+          "subcategory": "0x18"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -2132,6 +6802,13 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmer",
+          "subcategory": "0x24"
         }
       ],
       "engines": [
@@ -2176,6 +6853,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "lampLinc",
+          "subcategory": "0x12"
+        }
+      ],
       "identities": [
         {
           "category": "0x02",
@@ -2195,6 +6879,18 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "lampLinc",
+          "subcategory": "0x02"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "lampLinc",
+          "subcategory": "0x1A"
         }
       ],
       "engines": [
@@ -2255,6 +6951,13 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "inLineLinc",
+          "subcategory": "0x32"
+        }
+      ],
       "engines": [
         {
           "category": "0x01",
@@ -2294,6 +6997,13 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "inLineLinc0To10V",
+          "subcategory": "0x25"
         }
       ],
       "description": "A controller for dimmable lighting ballasts that use a 0-10 VDC control input. It also has two relay outputs that can switch non-dimmable ballasts of up to 5 amps each.",
@@ -2341,6 +7051,13 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "fanLinc",
+          "subcategory": "0x2E"
+        }
+      ],
       "description": "A module installed inside a ceiling fan's canopy that controls the fan speed (low, medium, high) and the fan's light kit. It can be controlled by other Insteon devices or the Hub.",
       "engines": [
         {
@@ -2375,6 +7092,13 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "lampLinc",
+          "subcategory": "0x10"
         }
       ],
       "engines": [
@@ -2429,6 +7153,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "lampLinc",
+          "subcategory": "0x14"
+        }
+      ],
       "engines": [
         {
           "category": "0x02",
@@ -2465,6 +7196,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "inLineLinc",
+          "subcategory": "0x2B"
+        }
+      ],
       "engines": [
         {
           "category": "0x02",
@@ -2496,6 +7234,13 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "inLineLinc",
+          "subcategory": "0x1F"
         }
       ],
       "engines": [
@@ -2532,6 +7277,23 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmerLegacy",
+          "subcategory": "0x01"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmerLegacy",
+          "subcategory": "0x19"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmer",
+          "subcategory": "0x30"
         }
       ],
       "engines": [
@@ -2610,6 +7372,18 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmerLegacy",
+          "subcategory": "0x04"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmerLegacy",
+          "subcategory": "0x1D"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -2633,6 +7407,23 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "switchLincRelayLegacy",
+          "subcategory": "0x0A"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "switchLincRelayLegacy",
+          "subcategory": "0x15"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "switchLincRelayLegacy",
+          "subcategory": "0x1C"
         }
       ],
       "engines": [
@@ -2697,6 +7488,18 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "switchLincRelayCountdownTimer",
+          "subcategory": "0x0E"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "switchLincRelayCountdownTimer",
+          "subcategory": "0x29"
+        }
+      ],
       "groups": [
         {
           "name": "Load",
@@ -2734,6 +7537,13 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmer",
+          "subcategory": "0x20"
+        }
+      ],
       "description": "An in-wall dimmer switch that controls its light locally and can be controlled remotely by Insteon keypads, remotes, sensors, or the Hub. It is rated for up to 150 W of LED or 600 W of incandescent lighting.",
       "groups": [
         {
@@ -2764,6 +7574,13 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmer",
+          "subcategory": "0x2D"
         }
       ],
       "description": "A higher-capacity version of the Insteon wall dimmer switch, rated for up to 250 W of dimmable LED or 1,000 W of incandescent or halogen lighting. It can be controlled locally or remotely over Insteon.",
@@ -2814,6 +7631,13 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "switchLincRelay",
+          "subcategory": "0x2A"
         }
       ],
       "description": "An in-wall on/off switch for non-dimmable loads such as fluorescent lights, ceiling fans, and exhaust fans, rated up to 17 amps. It can be controlled locally or remotely over Insteon.",
@@ -2918,6 +7742,13 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmer",
+          "subcategory": "0x31"
+        }
+      ],
       "engines": [
         {
           "category": "0x01",
@@ -2966,6 +7797,13 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "keypadLincScheduleTimer",
+          "subcategory": "0x2F"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -2985,6 +7823,13 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "keypadLincCountdownTimer",
+          "subcategory": "0x05"
         }
       ],
       "identities": [
@@ -3015,6 +7860,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "keypadLincCountdownTimer",
+          "subcategory": "0x25"
+        }
+      ],
       "identities": [
         {
           "category": "0x02",
@@ -3038,6 +7890,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "keypadLincScheduleTimer",
+          "subcategory": "0x26"
+        }
+      ],
       "identities": [
         {
           "category": "0x02",
@@ -3057,6 +7916,13 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "keypadLinc",
+          "subcategory": "0x1B"
         }
       ],
       "engines": [
@@ -3111,6 +7977,13 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "keypadLinc",
+          "subcategory": "0x1C"
+        }
+      ],
       "engines": [
         {
           "category": "0x01",
@@ -3163,6 +8036,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "keypadLinc",
+          "subcategory": "0x0F"
+        }
+      ],
       "engines": [
         {
           "category": "0x02",
@@ -3206,6 +8086,18 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "keypadLinc",
+          "subcategory": "0x1E"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "keypadLinc",
+          "subcategory": "0x2C"
         }
       ],
       "description": "A wall keypad that switches its connected light fixture on and off and adds extra buttons for controlling other Insteon devices or scenes. It replaces a standard wall switch. Insteon sells it in a 6-button version.",
@@ -3305,6 +8197,18 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "switchLincRelayLegacy",
+          "subcategory": "0x18"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "switchLincRelayLegacy",
+          "subcategory": "0x19"
+        }
+      ],
       "identities": [
         {
           "category": "0x02",
@@ -3325,6 +8229,28 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "plugInModule",
+          "subcategory": "0x0B"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "plugInModule",
+          "subcategory": "0x0F"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "plugInModule",
+          "subcategory": "0x11"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "plugInModule",
+          "subcategory": "0x12"
         }
       ],
       "groups": [
@@ -3369,6 +8295,28 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "plugInModule",
+          "subcategory": "0x2D"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "plugInModule",
+          "subcategory": "0x30"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "plugInModule",
+          "subcategory": "0x35"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "plugInModule",
+          "subcategory": "0x36"
         }
       ],
       "groups": [
@@ -3418,6 +8366,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "applianceLinc",
+          "subcategory": "0x38"
+        }
+      ],
       "description": "A weather-resistant plug-in relay module for switching outdoor lights and appliances on and off remotely. It is rated NEMA 3R and works from -4 to 122 degrees Fahrenheit.",
       "engines": [
         {
@@ -3460,6 +8415,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "plugInModule",
+          "subcategory": "0x37"
+        }
+      ],
       "description": "A plug-in relay module that switches lamps, fans, space heaters, and other small appliances on and off remotely. It handles loads of up to 15 amps or 1,800 W.",
       "groups": [
         {
@@ -3490,6 +8452,13 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "dualOnOffOutlet",
+          "subcategory": "0x39"
         }
       ],
       "description": "An in-wall duplex outlet with two receptacles that can each be switched on and off independently over Insteon. It is used to control plug-in lamps, fans, and small appliances.",
@@ -3535,6 +8504,38 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "ledBulb",
+          "subcategory": "0x3A"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "ledBulb",
+          "subcategory": "0x3B"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "ledBulb",
+          "subcategory": "0x4C"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "ledBulb",
+          "subcategory": "0x51"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "ledBulb",
+          "subcategory": "0x3C"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "ledBulb",
+          "subcategory": "0x4D"
         }
       ],
       "identities": [
@@ -3586,6 +8587,33 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "ledBulb",
+          "subcategory": "0x49"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "ledBulb",
+          "subcategory": "0x4A"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "ledBulb",
+          "subcategory": "0x4E"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "ledBulb",
+          "subcategory": "0x4B"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "ledBulb",
+          "subcategory": "0x4F"
         }
       ],
       "identities": [
@@ -4222,6 +9250,13 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "lampLinc",
+          "subcategory": "0x07"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -4241,6 +9276,18 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "applianceLinc",
+          "subcategory": "0x0C"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "applianceLinc",
+          "subcategory": "0x17"
         }
       ],
       "identities": [
@@ -4335,6 +9382,18 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmerLegacy",
+          "subcategory": "0x03"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmerLegacy",
+          "subcategory": "0x1E"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -4355,6 +9414,18 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "switchLincRelayLegacy",
+          "subcategory": "0x0B"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "switchLincRelayLegacy",
+          "subcategory": "0x16"
         }
       ],
       "identities": [
@@ -4521,6 +9592,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "keypadLinc",
+          "subcategory": "0x24"
+        }
+      ],
       "identities": [
         {
           "category": "0x02",
@@ -4553,6 +9631,13 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmer",
+          "subcategory": "0x27"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -4569,6 +9654,13 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "switchLincRelayLegacy",
+          "subcategory": "0x23"
         }
       ],
       "identities": [
@@ -4589,6 +9681,13 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "keypadLinc",
+          "subcategory": "0x29"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -4607,6 +9706,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "keypadLinc",
+          "subcategory": "0x20"
+        }
+      ],
       "identities": [
         {
           "category": "0x02",
@@ -4623,6 +9729,13 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "lampLinc",
+          "subcategory": "0x2A"
         }
       ],
       "identities": [
@@ -4661,6 +9774,13 @@
           "kind": "onOff"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "outletLincLegacy",
+          "subcategory": "0x21"
+        }
+      ],
       "identities": [
         {
           "category": "0x02",
@@ -4697,6 +9817,13 @@
           "kind": "dimmable"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "lampLinc",
+          "subcategory": "0x2C"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -4713,6 +9840,13 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x02",
+          "commandSet": "lampLinc",
+          "subcategory": "0x22"
         }
       ],
       "identities": [
