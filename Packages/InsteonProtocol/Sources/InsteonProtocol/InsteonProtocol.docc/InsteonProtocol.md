@@ -91,11 +91,11 @@ what the device is, from a device database.
 - ``OpenCloseSensorEvent``
 - ``LeakSensorEvent``
 - ``SmokeBridgeEvent``
-- ``HeartbeatMonitor``
 
 ### Broadcasts
 
 - ``Heartbeat``
+- ``HeartbeatMonitor``
 - ``PowerlinePhaseTest``
 - ``DeviceStatusChanged``
 

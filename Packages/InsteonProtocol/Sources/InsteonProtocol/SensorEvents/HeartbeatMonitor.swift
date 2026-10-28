@@ -5,14 +5,17 @@
 /// longer than that has likely stopped working. Insteon's heartbeat status sheet gives the
 /// interval as 23.8 hours for the leak, open/close and motion sensors, with the first
 /// heartbeat as late as 23.8 hours after the batteries go in. A device is silent once nothing
-/// has been heard from it for ``HeartbeatMonitor/allowance``.
+/// has been heard from it for longer than ``HeartbeatMonitor/allowance``.
 ///
 /// Any message counts, not only a heartbeat: the sheet notes that a sensor restarts its
 /// heartbeat interval when its button is pressed, so a sensor that's in use may send no
 /// heartbeat for longer than the interval.
 ///
 /// The monitor keeps no clock of its own: give it the time each message arrived and the time
-/// to check, from any clock, so tests can use one they control.
+/// to check, from any clock, so tests can use one they control. It keeps nothing across
+/// launches either: to carry a device's time over, save how long ago it was last heard from,
+/// ``HeartbeatMonitor/lastHeard(from:)`` measured against the wall clock, and watch it again
+/// since that long before now.
 ///
 /// ```swift
 /// var monitor = HeartbeatMonitor<ContinuousClock.Instant>()
@@ -28,18 +31,18 @@
 /// ```
 public struct HeartbeatMonitor<Instant: InstantProtocol>: Sendable where Instant.Duration == Duration, Instant: Sendable {
 
-  /// How long a device can go unheard before it's silent by default: 47.6 hours, two of the
+  /// How long a device can go unheard before it's silent by default: 71.4 hours, three of the
   /// heartbeat intervals Insteon's heartbeat status sheet gives.
   ///
-  /// Two intervals let one heartbeat be lost, such as to interference, without the device
-  /// being reported.
-  public static var defaultAllowance: Duration { .seconds(171_360) }
+  /// Three intervals let a heartbeat be lost, such as to interference, and the next one
+  /// arrive late without the device being reported.
+  public static var defaultAllowance: Duration { .seconds(257_040) }
 
   /// How long a device can go unheard before it's silent.
   public let allowance: Duration
 
   /// When each watched device was last heard from, or started being watched.
-  private var lastHeard: [InsteonAddress: Instant] = [:]
+  private var lastHeardAt: [InsteonAddress: Instant] = [:]
 
   /// Creates a monitor that isn't watching any devices.
   ///
@@ -54,20 +57,22 @@ public struct HeartbeatMonitor<Instant: InstantProtocol>: Sendable where Instant
   /// The devices being watched, in address order.
   public var watchedDevices: [InsteonAddress] {
 
-    lastHeard.keys.sorted { $0.bytes.lexicographicallyPrecedes($1.bytes) }
+    Self.inAddressOrder(lastHeardAt.keys)
 
   }
 
   /// Starts watching a device, counting it as heard from at `instant`.
   ///
-  /// Watching a device that's already watched counts it as heard from again.
+  /// Watching a device that's already watched counts it as heard from at `instant` only if
+  /// that's later than when it was last heard from, as ``HeartbeatMonitor/heard(from:at:)``
+  /// does.
   ///
   /// - Parameters:
   ///   - device: The device to watch.
   ///   - instant: When to start counting from, such as when the app started.
   public mutating func watch(_ device: InsteonAddress, since instant: Instant) {
 
-    lastHeard[device] = instant
+    lastHeardAt[device] = lastHeardAt[device].map { max($0, instant) } ?? instant
 
   }
 
@@ -76,7 +81,17 @@ public struct HeartbeatMonitor<Instant: InstantProtocol>: Sendable where Instant
   /// - Parameter device: The device to stop watching.
   public mutating func stopWatching(_ device: InsteonAddress) {
 
-    lastHeard[device] = nil
+    lastHeardAt[device] = nil
+
+  }
+
+  /// When a watched device was last heard from, or started being watched.
+  ///
+  /// - Parameter device: A device.
+  /// - Returns: The time, or `nil` if the device isn't watched.
+  public func lastHeard(from device: InsteonAddress) -> Instant? {
+
+    lastHeardAt[device]
 
   }
 
@@ -90,13 +105,13 @@ public struct HeartbeatMonitor<Instant: InstantProtocol>: Sendable where Instant
   ///   - instant: When the message arrived.
   public mutating func heard(from device: InsteonAddress, at instant: Instant) {
 
-    guard let last = lastHeard[device] else {
+    guard let last = lastHeardAt[device] else {
 
       return
 
     }
 
-    lastHeard[device] = max(last, instant)
+    lastHeardAt[device] = max(last, instant)
 
   }
 
@@ -106,11 +121,14 @@ public struct HeartbeatMonitor<Instant: InstantProtocol>: Sendable where Instant
   /// - Returns: The silent devices, in address order.
   public func silentDevices(at instant: Instant) -> [InsteonAddress] {
 
-    watchedDevices.filter { device in
+    Self.inAddressOrder(lastHeardAt.filter { $0.value.duration(to: instant) > allowance }.keys)
 
-      lastHeard[device].map { $0.duration(to: instant) > allowance } ?? false
+  }
 
-    }
+  /// Orders addresses by their bytes.
+  private static func inAddressOrder(_ devices: some Sequence<InsteonAddress>) -> [InsteonAddress] {
+
+    devices.sorted { $0.bytes.lexicographicallyPrecedes($1.bytes) }
 
   }
 

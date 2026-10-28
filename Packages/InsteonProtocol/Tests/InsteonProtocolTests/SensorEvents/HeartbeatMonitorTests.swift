@@ -60,8 +60,20 @@ struct HeartbeatMonitorTests {
     monitor.watch(leakSensor, since: start)
     monitor.watch(motionSensor, since: start)
 
-    #expect(monitor.allowance == .seconds(171_360))
-    #expect(monitor.silentDevices(at: start.advanced(by: hours * 48)) == [motionSensor, leakSensor])
+    #expect(monitor.silentDevices(at: start.advanced(by: .seconds(257_040))).isEmpty)
+    #expect(monitor.silentDevices(at: start.advanced(by: hours * 72)) == [motionSensor, leakSensor])
+
+  }
+
+  @Test func keepsTheLaterTimeWhenADeviceIsWatchedAgain() {
+
+    var monitor = HeartbeatMonitor<ContinuousClock.Instant>(allowance: hours)
+    monitor.watch(leakSensor, since: start)
+    monitor.heard(from: leakSensor, at: start.advanced(by: hours * 2))
+    monitor.watch(leakSensor, since: start)
+
+    #expect(monitor.lastHeard(from: leakSensor) == start.advanced(by: hours * 2))
+    #expect(monitor.lastHeard(from: motionSensor) == nil)
 
   }
 
