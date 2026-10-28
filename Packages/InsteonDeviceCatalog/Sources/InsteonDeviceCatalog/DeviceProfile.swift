@@ -62,6 +62,9 @@ public struct DeviceProfile: Hashable, Sendable {
     /// How the group can be linked.
     public var linking: Linking
 
+    /// How sure the catalog is of the group.
+    public var verification: Verification
+
     /// Creates a group.
     ///
     /// - Parameters:
@@ -69,12 +72,14 @@ public struct DeviceProfile: Hashable, Sendable {
     ///   - name: The group's name.
     ///   - role: The role the product takes in the group.
     ///   - linking: How the group can be linked. Defaults to ``DeviceProfile/Group/Linking/device``.
-    public init(number: AllLinkGroupNumber, name: String, role: LinkRole, linking: Linking = .device) {
+    ///   - verification: How sure the catalog is of the group. Defaults to ``Verification/documented``.
+    public init(number: AllLinkGroupNumber, name: String, role: LinkRole, linking: Linking = .device, verification: Verification = .documented) {
 
       self.number = number
       self.name = name
       self.role = role
       self.linking = linking
+      self.verification = verification
 
     }
 
@@ -129,6 +134,9 @@ public struct DeviceProfile: Hashable, Sendable {
   /// The documents the profile's values come from.
   public var sources: [String]
 
+  /// How sure the catalog is of the profile itself, such as its model and name.
+  public var verification: Verification
+
   /// Creates a profile.
   ///
   /// - Parameters:
@@ -147,6 +155,7 @@ public struct DeviceProfile: Hashable, Sendable {
   ///   - capabilities: What the product can do.
   ///   - notes: Behavior worth knowing.
   ///   - sources: The documents the values come from.
+  ///   - verification: How sure the catalog is of the profile itself. Defaults to ``Verification/documented``.
   public init(
     model: ProductModel,
     name: String,
@@ -161,7 +170,8 @@ public struct DeviceProfile: Hashable, Sendable {
     groups: [Group] = [],
     capabilities: [DeviceCapability] = [],
     notes: [String] = [],
-    sources: [String] = []
+    sources: [String] = [],
+    verification: Verification = .documented
   ) {
 
     self.model = model
@@ -178,6 +188,7 @@ public struct DeviceProfile: Hashable, Sendable {
     self.capabilities = capabilities
     self.notes = notes
     self.sources = sources
+    self.verification = verification
 
   }
 
@@ -295,6 +306,7 @@ extension DeviceProfile: Decodable {
     case capabilities
     case notes
     case sources
+    case verification
 
   }
 
@@ -307,6 +319,8 @@ extension DeviceProfile: Decodable {
     let role: String
 
     let linkable: String?
+
+    let verification: Verification?
 
   }
 
@@ -368,7 +382,8 @@ extension DeviceProfile: Decodable {
             number: AllLinkGroupNumber(rawValue: entry.number.value),
             name: entry.name,
             role: role,
-            linking: entry.linkable.map { Group.Linking(rawValue: $0) ?? .software } ?? .device
+            linking: entry.linkable.map { Group.Linking(rawValue: $0) ?? .software } ?? .device,
+            verification: entry.verification ?? .documented
           )
 
         }
@@ -376,7 +391,8 @@ extension DeviceProfile: Decodable {
       },
       capabilities: try container.decode([CapabilityEntry].self, forKey: .capabilities).compactMap(\.capability),
       notes: try container.decodeIfPresent([String].self, forKey: .notes) ?? [],
-      sources: try container.decode([String].self, forKey: .sources)
+      sources: try container.decode([String].self, forKey: .sources),
+      verification: try container.decodeIfPresent(Verification.self, forKey: .verification) ?? .documented
     )
 
   }
