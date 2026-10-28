@@ -28,10 +28,16 @@ on the Hub.
 
 ### What discovery sends
 
-Discovery sends one request to each address on subnets of at most 1,024 addresses, a few
-dozen at a time, and nothing more to the Hubs it finds. Another web server on port `25105`
-that asks for a password the same way would be reported too, so the result is where to try
-connecting rather than a guarantee.
+Discovery sends one request to each address on private subnets (`10.0.0.0/8`,
+`172.16.0.0/12` and `192.168.0.0/16`) of at most 1,024 addresses, a few dozen at a time, and
+nothing more to the Hubs it finds. It never searches a cellular, public or larger network,
+and it sends no credentials: its client mustn't add any.
+
+Any device on port `25105` that asks for a password the same way would be reported too, so a
+result is a candidate rather than a verified Hub. The Hub's interface sends its password
+unencrypted, so show the user the address and let them confirm it before connecting with
+their credentials. Once connected, `SerialCommand.getModemInfo` reports the Hub's modem,
+whose subcategory names its model.
 
 ### Local network permission
 
