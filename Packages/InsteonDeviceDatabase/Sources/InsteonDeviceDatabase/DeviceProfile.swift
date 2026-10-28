@@ -1,0 +1,279 @@
+import InsteonProtocol
+
+/// What one INSTEON product is and can do: its model, the identities it reports, its ALL-Link
+/// groups and its capabilities.
+///
+/// A ``DeviceDatabase`` finds a device's profile from the category, subcategory and firmware
+/// version it reports, so an app can support a product by what its profile says rather than
+/// by code written for it.
+public struct DeviceProfile: Hashable, Sendable {
+
+  /// How a product communicates.
+  public enum Radio: String, Hashable, Sendable, Decodable {
+
+    /// Over the power line only.
+    case powerline
+
+    /// Over RF only.
+    case rf
+
+    /// Over both the power line and RF.
+    case dual
+
+  }
+
+  /// Which ALL-Link roles a product or group can take.
+  public enum LinkRole: String, Hashable, Sendable, Decodable {
+
+    /// A controller, which sends commands to its responders.
+    case controller
+
+    /// A responder, which acts on its controllers' commands.
+    case responder
+
+    /// Both a controller and a responder.
+    case both
+
+  }
+
+  /// One of a product's ALL-Link groups.
+  public struct Group: Hashable, Sendable {
+
+    /// How a group can be linked.
+    public enum Linking: String, Hashable, Sendable, Decodable {
+
+      /// From the device's own buttons, as well as by software.
+      case device
+
+      /// Only by software, such as by writing to the device's ALL-Link database.
+      case software
+
+    }
+
+    /// The group number.
+    public var number: AllLinkGroupNumber
+
+    /// The group's name, such as `"Wet"` or `"Button A"`.
+    public var name: String
+
+    /// The role the product takes in the group.
+    public var role: LinkRole
+
+    /// How the group can be linked.
+    public var linking: Linking
+
+    /// Creates a group.
+    ///
+    /// - Parameters:
+    ///   - number: The group number.
+    ///   - name: The group's name.
+    ///   - role: The role the product takes in the group.
+    ///   - linking: How the group can be linked. Defaults to ``DeviceProfile/Group/Linking/device``.
+    public init(number: AllLinkGroupNumber, name: String, role: LinkRole, linking: Linking = .device) {
+
+      self.number = number
+      self.name = name
+      self.role = role
+      self.linking = linking
+
+    }
+
+  }
+
+  /// The model number printed on the product.
+  public var model: ProductModel
+
+  /// The product's name, such as `"Leak Sensor"`.
+  public var name: String
+
+  /// The category, subcategory and firmware versions the product reports.
+  public var identities: [DeviceIdentity]
+
+  /// How the product communicates, or `nil` if no source states it.
+  public var radio: Radio?
+
+  /// Whether the product can be a controller, a responder, or both, or `nil` if no source
+  /// states it.
+  public var role: LinkRole?
+
+  /// Whether the product runs on batteries and sleeps between messages, so it answers only
+  /// shortly after it sends something.
+  public var isBatteryPowered: Bool
+
+  /// The product's ALL-Link groups.
+  public var groups: [Group]
+
+  /// What the product can do.
+  public var capabilities: [DeviceCapability]
+
+  /// Behavior worth knowing that no capability describes.
+  public var notes: [String]
+
+  /// The documents the profile's values come from.
+  public var sources: [String]
+
+  /// Creates a profile.
+  ///
+  /// - Parameters:
+  ///   - model: The model number.
+  ///   - name: The product's name.
+  ///   - identities: The identities the product reports.
+  ///   - radio: How the product communicates.
+  ///   - role: The ALL-Link roles the product can take.
+  ///   - isBatteryPowered: Whether the product runs on batteries.
+  ///   - groups: The product's ALL-Link groups.
+  ///   - capabilities: What the product can do.
+  ///   - notes: Behavior worth knowing.
+  ///   - sources: The documents the values come from.
+  public init(
+    model: ProductModel,
+    name: String,
+    identities: [DeviceIdentity],
+    radio: Radio? = nil,
+    role: LinkRole? = nil,
+    isBatteryPowered: Bool = false,
+    groups: [Group] = [],
+    capabilities: [DeviceCapability] = [],
+    notes: [String] = [],
+    sources: [String] = []
+  ) {
+
+    self.model = model
+    self.name = name
+    self.identities = identities
+    self.radio = radio
+    self.role = role
+    self.isBatteryPowered = isBatteryPowered
+    self.groups = groups
+    self.capabilities = capabilities
+    self.notes = notes
+    self.sources = sources
+
+  }
+
+  /// What the product means by a command it sent to one of its groups.
+  ///
+  /// ```swift
+  /// if let profile = database.profile(category: 0x10, subcategory: 0x08, firmwareVersion: nil),
+  ///    profile.event(group: command.group, command1: command.command1) == "wet" {
+  ///   print("The leak sensor is wet")
+  /// }
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - group: The group the command was sent to.
+  ///   - command1: The command's cmd1.
+  /// - Returns: The event, or `nil` if the profile doesn't say what the command means.
+  public func event(group: AllLinkGroupNumber, command1: UInt8) -> DeviceEventName? {
+
+    for case let .groupEvents(events) in capabilities {
+
+      if let match = events.first(where: { $0.group == group && $0.command1 == command1 }) {
+
+        return match.event
+
+      }
+
+    }
+
+    return nil
+
+  }
+
+  /// The interval between the product's heartbeats, or `nil` if it sends none or its profile
+  /// doesn't give the interval.
+  public var heartbeatInterval: Duration? {
+
+    for case let .heartbeat(_, interval) in capabilities {
+
+      return interval
+
+    }
+
+    return nil
+
+  }
+
+}
+
+extension DeviceProfile: Decodable {
+
+  private enum CodingKeys: String, CodingKey {
+
+    case model
+    case name
+    case identities
+    case radio
+    case role
+    case batteryPowered
+    case groups
+    case capabilities
+    case notes
+    case sources
+
+  }
+
+  private struct GroupEntry: Decodable {
+
+    let number: ProfileByte
+
+    let name: String
+
+    let role: LinkRole
+
+    let linkable: Group.Linking?
+
+  }
+
+  /// A capability, or `nil` for a kind this package doesn't read.
+  private struct CapabilityEntry: Decodable {
+
+    private enum CodingKeys: String, CodingKey {
+
+      case kind
+
+    }
+
+    let capability: DeviceCapability?
+
+    init(from decoder: any Decoder) throws {
+
+      let kind = try decoder.container(keyedBy: CodingKeys.self).decode(String.self, forKey: .kind)
+
+      capability = DeviceCapability.kinds.contains(kind) ? try DeviceCapability(from: decoder) : nil
+
+    }
+
+  }
+
+  /// Decodes a profile from its JSON.
+  ///
+  /// A capability of a kind this package doesn't read, which a later version of the database
+  /// can add, is skipped.
+  ///
+  /// - Parameter decoder: The decoder to read from.
+  /// - Throws: `DecodingError` if the JSON isn't a profile.
+  public init(from decoder: any Decoder) throws {
+
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+
+    self.init(
+      model: try container.decode(ProductModel.self, forKey: .model),
+      name: try container.decode(String.self, forKey: .name),
+      identities: try container.decode([DeviceIdentity].self, forKey: .identities),
+      radio: try container.decodeIfPresent(Radio.self, forKey: .radio),
+      role: try container.decodeIfPresent(LinkRole.self, forKey: .role),
+      isBatteryPowered: try container.decodeIfPresent(Bool.self, forKey: .batteryPowered) ?? false,
+      groups: try (container.decodeIfPresent([GroupEntry].self, forKey: .groups) ?? []).map { entry in
+
+        Group(number: AllLinkGroupNumber(rawValue: entry.number.value), name: entry.name, role: entry.role, linking: entry.linkable ?? .device)
+
+      },
+      capabilities: try container.decode([CapabilityEntry].self, forKey: .capabilities).compactMap(\.capability),
+      notes: try container.decodeIfPresent([String].self, forKey: .notes) ?? [],
+      sources: try container.decode([String].self, forKey: .sources)
+    )
+
+  }
+
+}
