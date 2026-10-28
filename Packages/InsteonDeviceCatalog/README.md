@@ -3,7 +3,7 @@
 Find what an Insteon device is and can do from the category, subcategory and firmware version it reports.
 
 - `DeviceCatalog`: the profiles, a copy of the Insteon device catalog shipped with the package, lookups by identity or model, and search by model, name, alias or identity
-- `DeviceProfile`: a product's model, name, aliases, description, identities, ALL-Link groups and capabilities, what it means by each command it sends to a group, and its heartbeat interval
+- `DeviceProfile`: a product's model, name, aliases, description, identities, ALL-Link groups and capabilities, what it means by each command it sends to a group, its heartbeat interval, and whether a device runs the i2CS engine given the identity and firmware version it reports
 - `DeviceCatalogUpdater`: downloads the published catalog when it differs from the app's copy, checked against the manifest's SHA-256
 - `DeviceEventInterpreter` and `DeviceEvent`: the messages a modem receives, read through each device's profile, such as a leak sensor's group 2 on as `wet`
 - `DeviceCapability`, `DeviceIdentity`, `ProductModel` and `DeviceEventName`: the parts of a profile

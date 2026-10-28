@@ -266,12 +266,89 @@ struct DeviceCatalogTests {
 
   }
 
+  @Test func readsI2CSForSomeIdentitiesAndFirmware() throws {
+
+    let profile = #"""
+      {
+        "model": "1",
+        "name": "Dimmer Switch",
+        "identities": [
+          { "category": "0x01", "subcategory": "0x19" },
+          { "category": "0x01", "subcategory": "0x30" },
+          { "category": "0x01", "subcategory": "0x31" }
+        ],
+        "capabilities": [
+          { "kind": "dimmable" },
+          {
+            "kind": "i2cs",
+            "identities": [
+              { "category": "0x01", "subcategory": "0x19", "firmware": { "only": ["0x41", "0xD1"] } },
+              { "category": "0x01", "subcategory": "0x30", "firmware": { "except": ["0x38"] } }
+            ]
+          }
+        ],
+        "sources": ["A"]
+      }
+      """#
+    let read = try #require(try DeviceCatalog(json: Self.json(profile)).profiles.first)
+
+    #expect(read.capabilities.last == .i2cs(.identities([
+      ScopedIdentity(category: 0x01, subcategory: 0x19, firmware: .only([0x41, 0xD1])),
+      ScopedIdentity(category: 0x01, subcategory: 0x30, firmware: .except([0x38])),
+    ])))
+
+    #expect(read.runsI2CS(category: 0x01, subcategory: 0x19, firmwareVersion: 0xD1))
+    #expect(!read.runsI2CS(category: 0x01, subcategory: 0x19, firmwareVersion: 0x40))
+    #expect(read.runsI2CS(category: 0x01, subcategory: 0x30, firmwareVersion: 0x40))
+    #expect(!read.runsI2CS(category: 0x01, subcategory: 0x30, firmwareVersion: 0x38))
+    #expect(!read.runsI2CS(category: 0x01, subcategory: 0x31, firmwareVersion: 0x41))
+
+    // Without a firmware version, or with 0xFF, a selection can't include the device.
+    #expect(!read.runsI2CS(category: 0x01, subcategory: 0x19, firmwareVersion: nil))
+    #expect(!read.runsI2CS(category: 0x01, subcategory: 0x30, firmwareVersion: 0xFF))
+
+    #expect(read.capabilities(category: 0x01, subcategory: 0x31, firmwareVersion: 0x41) == [.dimmable])
+
+  }
+
+  @Test func readsI2CSForEveryVersion() throws {
+
+    let profile = #"{ "model": "1", "name": "A", "identities": [{ "category": "0x01", "subcategory": "0x01" }], "capabilities": [{ "kind": "i2cs" }], "sources": ["A"] }"#
+    let read = try #require(try DeviceCatalog(json: Self.json(profile)).profiles.first)
+
+    #expect(read.capabilities == [.i2cs(.everyVersion)])
+    #expect(read.runsI2CS(category: 0x01, subcategory: 0x01, firmwareVersion: nil))
+
+  }
+
+  @Test func refusesAFirmwareSelectionWithBothOrNeither() {
+
+    for selection in [#"{ "only": ["0x41"], "except": ["0x40"] }"#, "{}"] {
+
+      let profile = #"{ "model": "1", "name": "A", "identities": [{ "category": "0x01", "subcategory": "0x01" }], "capabilities": [{ "kind": "i2cs", "identities": [{ "category": "0x01", "subcategory": "0x01", "firmware": \#(selection) }] }], "sources": ["A"] }"#
+
+      #expect(throws: DecodingError.self) {
+
+        try DeviceCatalog(json: Self.json(profile))
+
+      }
+
+    }
+
+  }
+
   @Test func loadsTheBundledCopy() throws {
 
     let catalog = try DeviceCatalog.bundled()
 
     #expect(catalog.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x41)?.model == "2477D")
     #expect(catalog.profile(category: 0x10, subcategory: 0x08, firmwareVersion: nil)?.event(group: 0x02, command1: 0x11) == "wet")
+
+    // HouseLinc lists 0x41 under the 2476D's checksum class for subcategory 0x19, and 0x38
+    // under its earlier class.
+    let dimmer = try #require(catalog.profile(model: "2476D"))
+    #expect(dimmer.runsI2CS(category: 0x01, subcategory: 0x19, firmwareVersion: 0x41))
+    #expect(!dimmer.runsI2CS(category: 0x01, subcategory: 0x19, firmwareVersion: 0x38))
 
     // The published catalog never has two profiles claim one identity.
     for profile in catalog.profiles {

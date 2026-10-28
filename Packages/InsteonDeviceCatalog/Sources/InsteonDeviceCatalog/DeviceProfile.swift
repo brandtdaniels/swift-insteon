@@ -224,6 +224,59 @@ public struct DeviceProfile: Hashable, Sendable {
 
   }
 
+  /// The capabilities a device of this product has, given the identity and firmware version it
+  /// reported.
+  ///
+  /// Most capabilities apply to every identity and firmware version. One with a
+  /// ``CapabilityCoverage``, such as ``DeviceCapability/i2cs(_:)``, is left out unless its
+  /// coverage includes the device.
+  ///
+  /// - Parameters:
+  ///   - category: The category the device reported.
+  ///   - subcategory: The subcategory the device reported.
+  ///   - firmwareVersion: The firmware version the device reported, if any.
+  /// - Returns: The device's capabilities.
+  public func capabilities(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> [DeviceCapability] {
+
+    capabilities.filter { capability in
+
+      guard case let .i2cs(coverage) = capability else {
+
+        return true
+
+      }
+
+      return coverage.covers(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion)
+
+    }
+
+  }
+
+  /// Whether a device of this product runs the i2CS engine, and so rejects an extended message
+  /// whose D14 checksum is wrong, given the identity and firmware version it reported.
+  ///
+  /// ```swift
+  /// let integrity: any UserDataIntegrity = profile.runsI2CS(category: category, subcategory: subcategory, firmwareVersion: version)
+  ///   ? ChecksumIntegrity()
+  ///   : UnprotectedIntegrity()
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - category: The category the device reported.
+  ///   - subcategory: The subcategory the device reported.
+  ///   - firmwareVersion: The firmware version the device reported, if any.
+  /// - Returns: `true` if the profile's ``DeviceCapability/i2cs(_:)`` capability covers the
+  ///   device; `false` if it doesn't, or the profile has none.
+  public func runsI2CS(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> Bool {
+
+    capabilities(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion).contains { capability in
+
+      if case .i2cs = capability { true } else { false }
+
+    }
+
+  }
+
   /// The interval between the product's heartbeats, or `nil` if it sends none or its profile
   /// doesn't give the interval.
   public var heartbeatInterval: Duration? {
