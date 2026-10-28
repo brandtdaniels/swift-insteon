@@ -16,6 +16,9 @@ public struct CommandSetEntry: Hashable, Sendable {
   /// The firmware versions that use the command set, or `nil` for every version.
   public var firmware: FirmwareSelection?
 
+  /// How sure the catalog is of the entry.
+  public var verification: Verification
+
   /// Creates a command set entry.
   ///
   /// - Parameters:
@@ -23,12 +26,14 @@ public struct CommandSetEntry: Hashable, Sendable {
   ///   - category: The category the product reports.
   ///   - subcategory: The subcategory the product reports.
   ///   - firmware: The firmware versions that use the command set, or `nil` for every version.
-  public init(commandSet: CommandSetID, category: DeviceCategory, subcategory: DeviceSubcategory, firmware: FirmwareSelection? = nil) {
+  ///   - verification: How sure the catalog is of the entry. Defaults to ``Verification/documented``.
+  public init(commandSet: CommandSetID, category: DeviceCategory, subcategory: DeviceSubcategory, firmware: FirmwareSelection? = nil, verification: Verification = .documented) {
 
     self.commandSet = commandSet
     self.category = category
     self.subcategory = subcategory
     self.firmware = firmware
+    self.verification = verification
 
   }
 
@@ -62,6 +67,7 @@ extension CommandSetEntry: Decodable {
     case category
     case subcategory
     case firmware
+    case verification
 
   }
 
@@ -78,7 +84,8 @@ extension CommandSetEntry: Decodable {
       commandSet: CommandSetID(rawValue: try container.decode(String.self, forKey: .commandSet)),
       category: DeviceCategory(rawValue: try container.decode(ProfileByte.self, forKey: .category).value),
       subcategory: DeviceSubcategory(rawValue: try container.decode(ProfileByte.self, forKey: .subcategory).value),
-      firmware: try container.decodeIfPresent(FirmwareSelection.self, forKey: .firmware)
+      firmware: try container.decodeIfPresent(FirmwareSelection.self, forKey: .firmware),
+      verification: try container.decodeIfPresent(Verification.self, forKey: .verification) ?? .documented
     )
 
   }

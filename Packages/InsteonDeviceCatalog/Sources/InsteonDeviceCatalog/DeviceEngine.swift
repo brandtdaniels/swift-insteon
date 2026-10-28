@@ -55,6 +55,9 @@ public struct DeviceEngine: Hashable, Sendable {
   /// The firmware versions that run the engine, or `nil` for every version.
   public var firmware: FirmwareSelection?
 
+  /// How sure the catalog is of the engine entry.
+  public var verification: Verification
+
   /// Creates an engine entry.
   ///
   /// - Parameters:
@@ -62,12 +65,14 @@ public struct DeviceEngine: Hashable, Sendable {
   ///   - category: The category the product reports.
   ///   - subcategory: The subcategory the product reports.
   ///   - firmware: The firmware versions that run the engine, or `nil` for every version.
-  public init(engine: InsteonEngine, category: DeviceCategory, subcategory: DeviceSubcategory, firmware: FirmwareSelection? = nil) {
+  ///   - verification: How sure the catalog is of the engine entry. Defaults to ``Verification/documented``.
+  public init(engine: InsteonEngine, category: DeviceCategory, subcategory: DeviceSubcategory, firmware: FirmwareSelection? = nil, verification: Verification = .documented) {
 
     self.engine = engine
     self.category = category
     self.subcategory = subcategory
     self.firmware = firmware
+    self.verification = verification
 
   }
 
@@ -135,6 +140,7 @@ extension DeviceEngine {
     case category
     case subcategory
     case firmware
+    case verification
 
   }
 
@@ -161,7 +167,13 @@ extension DeviceEngine {
 
     }
 
-    self.init(engine: engine, category: category, subcategory: subcategory, firmware: firmware)
+    self.init(
+      engine: engine,
+      category: category,
+      subcategory: subcategory,
+      firmware: firmware,
+      verification: try container.decodeIfPresent(Verification.self, forKey: .verification) ?? .documented
+    )
 
   }
 
