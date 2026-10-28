@@ -136,7 +136,7 @@ public struct DeviceStandardCommand: Hashable, Sendable {
 
   /// The user data that sends a command as an extended message, for a device whose
   /// ``DeviceStandardCommand/extendedWhen`` flag is set: cmd1 and cmd2 again in D1 and D2, and
-  /// `0x00` after. Send it with ``UnprotectedIntegrity``.
+  /// `0x00` after. Send it with `UnprotectedIntegrity`.
   ///
   /// - Parameter command: The command.
   /// - Returns: The user data.
@@ -155,13 +155,13 @@ public struct DeviceStandardCommand: Hashable, Sendable {
 /// How an extended message's user data is protected.
 public enum MessageIntegrity: String, Hashable, Sendable {
 
-  /// Not at all: ``UnprotectedIntegrity``.
+  /// Not at all: `UnprotectedIntegrity`.
   case unprotected = "none"
 
-  /// A checksum in D14: ``ChecksumIntegrity``.
+  /// A checksum in D14: `ChecksumIntegrity`.
   case checksum
 
-  /// A CRC in D13 and D14: ``CRCIntegrity``.
+  /// A CRC in D13 and D14: `CRCIntegrity`.
   case crc
 
   /// The scheme that seals user data this way.
