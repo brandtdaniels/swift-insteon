@@ -71,8 +71,8 @@ The Hubs were sold under similar names, so they're identified here by model numb
 
 | Model | Also known as | Support |
 | --- | --- | --- |
-| 2245 | Hub 2 | Supported |
-| 2242 | Hub 1 | Expected to work: it serves the same local HTTP requests on the same port, though its buffer format hasn't been verified |
+| 2245 | Hub | Supported |
+| 2242 | Hub | Expected to work: it serves the same local HTTP requests on the same port, though its buffer format hasn't been verified |
 | 2243 | Hub Pro | Expected to work: it's built on the same foundations and answers Hub discovery, though it hasn't been verified. `InsteonHubPro` covers the requests only it has |
 
 HouseLinc drove the 2242 and 2245 the same way, which suggests they share

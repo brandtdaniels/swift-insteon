@@ -14,8 +14,8 @@ uses them, whatever the connection:
 | 2412U, 2412UH | PowerLinc Modem | USB, through ``SerialPort`` | Supported; some commands may be rejected, see <doc:SupportedModems#Commands-a-modem-may-lack> |
 | 2412S, 2412SH | PowerLinc Modem | Serial, through ``SerialPort`` | Supported; some commands may be rejected, see <doc:SupportedModems#Commands-a-modem-may-lack> |
 | 2448A7, 2448A7H | USB Adapter | USB, through ``SerialPort`` | Supported, by radio only; see <doc:SupportedModems#The-USB-Adapter> |
-| 2245 | Hub 2 | Network, through `HubConnection` in InsteonHubClient | Supported |
-| 2242 | Hub 1 | Network, through `HubConnection` in InsteonHubClient | Expected to work: it serves the same local HTTP requests, though its buffer format hasn't been verified |
+| 2245 | Hub | Network, through `HubConnection` in InsteonHubClient | Supported |
+| 2242 | Hub | Network, through `HubConnection` in InsteonHubClient | Expected to work: it serves the same local HTTP requests, though its buffer format hasn't been verified |
 | 2243 | Hub Pro | Network, through `HubConnection` in InsteonHubClient | Expected to work: it's built on the same foundations as the other Hubs and answers Hub discovery, though it hasn't been verified |
 | 2414S | PowerLinc Controller | Serial at 4800 baud, through ``SerialPort`` | Supported by ``PowerLincController`` rather than ``Modem``; see <doc:SupportedModems#The-PowerLinc-Controller> |
 
