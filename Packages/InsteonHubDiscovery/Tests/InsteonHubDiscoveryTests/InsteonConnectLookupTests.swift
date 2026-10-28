@@ -9,8 +9,30 @@ import InsteonNetworking
 import InsteonProtocol
 
 /// Get Info pages modeled on the example in Insteon's support article "Identify Insteon Hub
-/// IP Address and Port", with made-up addresses. A captured page would make a better fixture.
+/// IP Address and Port", and on the page as it reads in 2026, with made-up addresses.
 enum GetInfoPage {
+
+  /// A Hub's block as the page shows it in 2026: the address as bold text, and a table of
+  /// labels and values.
+  static func cardBlock(address: String, insteonID: String) -> String {
+
+    """
+    <table width="500" cellpadding="4" cellspacing="0" class="card">
+      <tr><td colspan="2" class="title">&#9989; Insteon device was found on your network.<br />
+        <b>\(address)</b> [this is your device's Internal IP]</td></tr>
+      <tr><td class="head">Connect Account</td><td class="info">Yes</td></tr>
+      <tr><td class="head">Internet IP</td><td class="info">203.0.113.7</td></tr>
+      <tr><td class="head">MAC Address</td><td class="info">00:0E:F3:00:00:01</td></tr>
+      <tr><td class="head">Insteon ID</td><td class="info">\(insteonID)</td></tr>
+      <tr><td class="head">Subnet Mask</td><td class="info">255.255.252.0</td></tr>
+      <tr><td class="head">Gateway</td><td class="info">192.168.4.1</td></tr>
+      <tr><td class="head">Device Category</td><td class="info">03</td></tr>
+      <tr><td class="head">Sub Category</td><td class="info">33</td></tr>
+      <tr><td class="head">Unit Type</td><td class="info">HUB2</td></tr>
+    </table>
+    """
+
+  }
 
   static func hubBlock(link: String, insteonID: String) -> String {
 
@@ -72,6 +94,29 @@ struct InsteonConnectLookupTests {
 
     #expect(request.url?.absoluteString == "https://connect.insteon.com/GetInfo.aspx")
     #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
+
+  }
+
+  @Test func readsTheCardLayout() async throws {
+
+    let (lookup, _) = makeLookup(answering: GetInfoPage.page(
+      GetInfoPage.cardBlock(address: "192.168.4.20:25105", insteonID: "1A.2B.3C")
+    ))
+
+    // The gateway, 192.168.4.1, is a private address too, but it isn't a Hub.
+    #expect(try await lookup.hubs() == [
+      DiscoveredHub(endpoint: HubEndpoint(host: "192.168.4.20"), insteonID: InsteonAddress(0x1A, 0x2B, 0x3C)),
+    ])
+
+  }
+
+  @Test func readsTheCardLayoutWithoutAPort() async throws {
+
+    let (lookup, _) = makeLookup(answering: GetInfoPage.page(
+      GetInfoPage.cardBlock(address: "192.168.4.20", insteonID: "1A.2B.3C")
+    ))
+
+    #expect(try await lookup.hubs().map(\.endpoint) == [HubEndpoint(host: "192.168.4.20")])
 
   }
 
