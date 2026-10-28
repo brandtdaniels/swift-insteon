@@ -282,7 +282,7 @@ extension StandardDirectCommand {
   /// `0x01` through `0x04`, which some i1 devices also accept. What a request, variant or flag
   /// reports still depends on the product. Other requests and commands, such as
   /// ``StandardDirectCommand/beep`` and the ramp rate commands, are specific to certain products
-  /// and firmware versions; look those up in a device database.
+  /// and firmware versions; look those up in the Insteon device catalog.
   public var minimumEngine: InsteonEngine? {
 
     switch self {

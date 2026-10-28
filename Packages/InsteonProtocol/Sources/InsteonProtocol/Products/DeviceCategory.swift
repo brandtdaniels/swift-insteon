@@ -6,7 +6,7 @@
 ///
 /// The Insteon Developer's Guide defines categories `0x00` through `0x16`, each available as a
 /// constant with its ``DeviceCategory/name``, and reserves `0x17` through `0xFE`. Names for
-/// subcategories, which identify products, come from a device database rather than from this
+/// subcategories, which identify products, come from the Insteon device catalog rather than from this
 /// package.
 ///
 /// ```swift

@@ -2,7 +2,7 @@
 /// ``DeviceCategory``.
 ///
 /// Together, the category and subcategory identify a product model, such as a particular
-/// dimmer or modem. Names for subcategories come from a device database rather than from this
+/// dimmer or modem. Names for subcategories come from the Insteon device catalog rather than from this
 /// package.
 ///
 /// ```swift
