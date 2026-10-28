@@ -37,8 +37,8 @@ while let next = schedules.nextRun(of: porchLights, after: last) {
 }
 ```
 
-Sunrise and sunset come from a ``SunTimes`` the app supplies; this package doesn't calculate
-them.
+Sunrise and sunset come from a ``SunTimes``: ``SolarCalculator`` works them out for the home's
+location with NOAA's equations, or an app can supply its own.
 
 ## Topics
 
@@ -52,3 +52,8 @@ them.
 
 - ``ScheduleCalendar``
 - ``SunTimes``
+
+### Sunrise and sunset
+
+- ``SolarCalculator``
+- ``GeographicCoordinate``
