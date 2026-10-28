@@ -14,7 +14,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      # The package needs Swift 6.4, so use the runner's newest Xcode rather than its default.
+      # Use the runner's newest Xcode, and so its newest Swift, rather than its default.
       - name: Select Xcode
         run: sudo xcode-select --switch "$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -n 1)"
       - name: Show the Swift version
@@ -33,7 +33,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      # The package needs Swift 6.4, so use the runner's newest Xcode rather than its default.
+      # Use the runner's newest Xcode, and so its newest Swift, rather than its default.
       - name: Select Xcode
         run: sudo xcode-select --switch "$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -n 1)"
       - name: Show the Swift version
@@ -46,7 +46,7 @@ jobs:
   linux:
     name: Linux
     runs-on: ubuntu-latest
-    container: swift:6.4.1
+    container: swift:6.3.3
     steps:
       - uses: actions/checkout@v4
       - name: Build
