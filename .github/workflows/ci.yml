@@ -14,6 +14,11 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      # The package needs Swift 6.4, so use the runner's newest Xcode rather than its default.
+      - name: Select Xcode
+        run: sudo xcode-select --switch "$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -n 1)"
+      - name: Show the Swift version
+        run: swift --version
       # Warnings fail the build here rather than in Package.swift, so they don't affect apps
       # that depend on the package.
       - name: Build
@@ -28,6 +33,11 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      # The package needs Swift 6.4, so use the runner's newest Xcode rather than its default.
+      - name: Select Xcode
+        run: sudo xcode-select --switch "$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -n 1)"
+      - name: Show the Swift version
+        run: swift --version
       # The package declares iOS, where SerialPort isn't available, so check that everything
       # else builds there.
       - name: Build
@@ -36,7 +46,7 @@ jobs:
   linux:
     name: Linux
     runs-on: ubuntu-latest
-    container: swift:6.1
+    container: swift:6.4.1
     steps:
       - uses: actions/checkout@v4
       - name: Build
