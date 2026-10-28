@@ -269,6 +269,45 @@ actor CommandPacer<Parser: ReplyParser> {
 
   }
 
+  /// The turn a ``CommandPacer/withTurn(_:)`` body holds, through which it sends its commands.
+  struct Turn: Sendable {
+
+    fileprivate let pacer: CommandPacer
+
+    /// Writes a command in the held turn and waits for its answer, sending it again as the
+    /// retry policy allows if the device rejects it.
+    ///
+    /// - Parameter exchange: The command to write.
+    /// - Returns: The reply that answered the command.
+    /// - Throws: The errors of ``CommandPacer/send(_:)``.
+    func send(_ exchange: Exchange<Reply>) async throws -> Reply {
+
+      try await pacer.perform(exchange)
+
+    }
+
+  }
+
+  /// Holds one turn while `body` sends commands, for a sequence whose next command depends on
+  /// the answer to the last, such as a scan that ends when the device says there's no more.
+  ///
+  /// No other send writes until `body` returns, so nothing can come between its commands.
+  ///
+  /// - Parameter body: Sends the commands through the turn it's given.
+  /// - Returns: What `body` returns.
+  /// - Throws: `CancellationError` if the task is canceled while waiting for the turn, or what
+  ///   `body` throws.
+  func withTurn<Value: Sendable>(_ body: @Sendable (Turn) async throws -> Value) async throws -> Value {
+
+    try await waitForTurn()
+    defer { turns.release() }
+
+    try await waitForUnansweredCommand()
+
+    return try await body(Turn(pacer: self))
+
+  }
+
   /// Returns a stream of everything the device sends after this call, which finishes when the
   /// device closes.
   func replies() -> AsyncStream<Reply> {

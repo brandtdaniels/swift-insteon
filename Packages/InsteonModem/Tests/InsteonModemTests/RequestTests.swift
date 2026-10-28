@@ -397,4 +397,79 @@ struct RequestTests {
 
   }
 
+  @Test func readsEveryRecordInTheModemsDatabase() async throws {
+
+    let controller: [UInt8] = [0x02, 0x57, 0xE2, 0x05] + device.bytes + [0x01, 0x20, 0x41]
+    let responder: [UInt8] = [0x02, 0x57, 0xA2, 0x01] + device.bytes + [0x00, 0x00, 0x00]
+    // Get First, then Get Next until the modem NAKs because there are no more records.
+    let connection = ScriptedConnection { written, index in
+
+      switch index {
+      case 0: written + [0x06] + controller
+      case 1: written + [0x06] + responder
+      default: written + [0x15]
+      }
+
+    }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let records = try await modem.allLinkRecords()
+
+      #expect(records.map(\.group) == [0x05, 0x01])
+      #expect(records.map(\.flags.rawValue) == [0xE2, 0xA2])
+
+    }
+
+    #expect(connection.written == [[0x02, 0x69], [0x02, 0x6A], [0x02, 0x6A]])
+
+  }
+
+  // A NAK without the echo means the modem is busy, so Get Next is sent again rather than
+  // ending the scan.
+  @Test func asksAgainForTheNextRecordWhileTheModemIsBusy() async throws {
+
+    let record: [UInt8] = [0x02, 0x57, 0xE2, 0x05] + device.bytes + [0x01, 0x20, 0x41]
+    let connection = ScriptedConnection { written, index in
+
+      switch index {
+      case 0, 2: written + [0x06] + record
+      case 1: [0x15]
+      default: written + [0x15]
+      }
+
+    }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let records = try await modem.allLinkRecords()
+
+      #expect(records.count == 2)
+
+    }
+
+    #expect(connection.written == [[0x02, 0x69], [0x02, 0x6A], [0x02, 0x6A], [0x02, 0x6A]])
+
+  }
+
+  // The guide: the modem NAKs Get First when its database is empty.
+  @Test func readsAnEmptyModemDatabase() async throws {
+
+    let connection = ScriptedConnection { written, _ in written + [0x15] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let records = try await modem.allLinkRecords()
+
+      #expect(records.isEmpty)
+
+    }
+
+    #expect(connection.written == [[0x02, 0x69]])
+
+  }
+
 }
