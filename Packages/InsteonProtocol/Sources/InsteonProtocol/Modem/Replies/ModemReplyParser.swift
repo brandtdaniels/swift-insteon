@@ -146,7 +146,7 @@ private enum ModemFraming: Framing {
          .getAllLinkRecordForSender, .ledOn, .ledOff, .rfSleep, .cancelCleanup, .beep:
       return .complete(3)
     case .setAcknowledgementByte, .setModemConfiguration, .setNegativeAcknowledgementByte,
-         .setApplicationRetries:
+         .setApplicationRetries, .setRadio:
       return .complete(4)
     case .sendX10, .startAllLinking, .setAcknowledgementBytes, .readDatabase:
       return .complete(5)

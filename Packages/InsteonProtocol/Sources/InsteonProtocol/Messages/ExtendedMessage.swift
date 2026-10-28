@@ -10,7 +10,7 @@
 ///
 /// let message = ExtendedMessage(
 ///   to: InsteonAddress(0xAA, 0xBB, 0xCC),
-///   command: ExtendedDirectCommand.getSet,
+///   command: ExtendedDirectCommand.getSet(),
 ///   userData: userData
 /// )
 /// message.userData[14]  // 0xD1, the checksum

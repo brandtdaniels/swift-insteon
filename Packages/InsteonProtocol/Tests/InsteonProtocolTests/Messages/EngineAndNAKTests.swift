@@ -40,7 +40,7 @@ struct EngineAndNAKTests {
 
   @Test func extendedCommandsNeedTheI2Engine() {
 
-    #expect(ExtendedDirectCommand.getSet.minimumEngine == .i2)
+    #expect(ExtendedDirectCommand.getSet().minimumEngine == .i2)
     #expect(Command(command1: 0x30).minimumEngine == nil)
 
   }

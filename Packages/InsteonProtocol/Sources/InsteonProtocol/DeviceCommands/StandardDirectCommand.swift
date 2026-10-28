@@ -30,10 +30,17 @@ public enum StandardDirectCommand: Hashable, Sendable {
   /// Devices also leave linking mode on their own after a timeout.
   case exitLinkingMode
 
-  /// Puts the device into linking mode as a controller of `group` (cmd1 `0x09`).
+  /// Puts the device into linking mode for `group`, as if its SET button were held (cmd1 `0x09`).
+  ///
+  /// Like the SET button, this doesn't choose the device's role: it becomes the controller of
+  /// a device that's waiting to respond, and a responder to a controller that's already in
+  /// linking mode, such as a modem started with ``SerialCommand/startAllLinking(mode:group:)``.
+  /// Devices with only one group ignore `group`.
   case enterLinkingMode(group: AllLinkGroup)
 
   /// Puts the device into unlinking mode for `group` (cmd1 `0x0A`).
+  ///
+  /// Devices with only one group ignore `group`.
   case enterUnlinkingMode(group: AllLinkGroup)
 
   /// Requests the device's INSTEON engine version (cmd1 `0x0D`).
@@ -130,17 +137,50 @@ public enum ManualChangeDirection: UInt8, Hashable, Sendable {
 
 }
 
-/// The information requested by ``StandardDirectCommand/getOperatingFlags(_:)``.
-public enum OperatingFlagsRequest: UInt8, Hashable, Sendable {
+/// The information requested by ``StandardDirectCommand/getOperatingFlags(_:)``, sent as cmd2.
+///
+/// The developer guide defines `0x00` through `0x02`. Devices define other requests for their
+/// own data, such as `0x05` and `0x06` for more flags on KeypadLinc and SwitchLinc dimmers;
+/// create those from their byte. What each request returns depends on the product.
+///
+/// ```swift
+/// let moreFlags: OperatingFlagsRequest = 0x05
+/// ```
+public struct OperatingFlagsRequest: RawRepresentable, Hashable, Sendable {
 
-  /// The device's operating flags.
-  case operatingFlags = 0x00
+  /// The request's byte.
+  public let rawValue: UInt8
 
-  /// The device's ALL-Link database delta, which changes whenever the database does.
-  case allLinkDatabaseDelta = 0x01
+  /// Creates a request from its byte.
+  ///
+  /// - Parameter rawValue: The request's byte.
+  public init(rawValue: UInt8) {
 
-  /// The device's measured signal-to-noise value.
-  case signalToNoise = 0x02
+    self.rawValue = rawValue
+
+  }
+
+  /// The device's operating flags (`0x00`).
+  public static let operatingFlags = OperatingFlagsRequest(rawValue: 0x00)
+
+  /// The device's ALL-Link database delta, which changes whenever the database does (`0x01`).
+  public static let allLinkDatabaseDelta = OperatingFlagsRequest(rawValue: 0x01)
+
+  /// The device's measured signal-to-noise value (`0x02`).
+  public static let signalToNoise = OperatingFlagsRequest(rawValue: 0x02)
+
+}
+
+extension OperatingFlagsRequest: ExpressibleByIntegerLiteral {
+
+  /// Creates a request from an integer literal.
+  ///
+  /// - Parameter value: The request's byte.
+  public init(integerLiteral value: UInt8) {
+
+    self.init(rawValue: value)
+
+  }
 
 }
 

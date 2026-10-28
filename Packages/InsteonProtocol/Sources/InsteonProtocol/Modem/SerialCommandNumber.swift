@@ -82,4 +82,7 @@ public enum SerialCommandNumber: UInt8, CaseIterable, Hashable, Sendable {
   /// Set Application Retries (`0x7A`).
   case setApplicationRetries = 0x7A
 
+  /// Set RF Disable Flag (`0x7D`).
+  case setRadio = 0x7D
+
 }

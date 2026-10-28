@@ -41,7 +41,7 @@ struct MessageTests {
 
     let message = ExtendedMessage(
       to: address,
-      command: ExtendedDirectCommand.getSet,
+      command: ExtendedDirectCommand.getSet(),
       userData: try UserData([0x01])
     )
 
@@ -68,7 +68,7 @@ struct MessageTests {
 
     let message = ExtendedMessage(
       to: address,
-      command: ExtendedDirectCommand.getSet,
+      command: ExtendedDirectCommand.getSet(),
       messageType: .broadcast,
       maxHops: .one
     )
@@ -82,7 +82,7 @@ struct MessageTests {
 
     let message = ExtendedMessage(
       to: address,
-      command: ExtendedDirectCommand.getSet,
+      command: ExtendedDirectCommand.getSet(),
       userData: try UserData([0x01]),
       integrity: CRCIntegrity()
     )

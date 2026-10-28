@@ -146,6 +146,9 @@ public enum SerialCommand: Hashable, Sendable {
   /// ``SerialCommand/getModemConfiguration``.
   case setApplicationRetries(UInt8)
 
+  /// Turns the modem's radio on or off.
+  case setRadio(RadioSetting)
+
   /// The byte that starts every serial command: `0x02`.
   public static let startOfText: UInt8 = 0x02
 
@@ -179,6 +182,7 @@ public enum SerialCommand: Hashable, Sendable {
     case .beep: .beep
     case .setResponderLinkData: .setResponderLinkData
     case .setApplicationRetries: .setApplicationRetries
+    case .setRadio: .setRadio
     }
 
   }
@@ -203,6 +207,8 @@ public enum SerialCommand: Hashable, Sendable {
       [command2]
     case let .setApplicationRetries(retries):
       [retries]
+    case let .setRadio(setting):
+      [setting.rawValue]
     case let .setResponderLinkData(data1, data2, data3):
       [data1, data2, data3]
     case let .setModemConfiguration(configuration):
