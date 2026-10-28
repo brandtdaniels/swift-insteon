@@ -15,6 +15,7 @@ let package = Package(
     .library(name: "InsteonProtocol", targets: ["InsteonProtocol"]),
     .library(name: "InsteonNetworking", targets: ["InsteonNetworking"]),
     .library(name: "InsteonHubClient", targets: ["InsteonHubClient"]),
+    .library(name: "InsteonHubDiscovery", targets: ["InsteonHubDiscovery"]),
     .library(name: "InsteonModem", targets: ["InsteonModem"]),
     .library(name: "InsteonLinking", targets: ["InsteonLinking"])
   ],
@@ -48,6 +49,17 @@ let package = Package(
       name: "InsteonHubClientTests",
       dependencies: ["InsteonHubClient", "InsteonModem", "InsteonNetworking", "InsteonProtocol", "InsteonTestSupport"],
       path: "Packages/InsteonHubClient/Tests/InsteonHubClientTests"
+    ),
+
+    .target(
+      name: "InsteonHubDiscovery",
+      dependencies: ["InsteonHubClient", "InsteonNetworking"],
+      path: "Packages/InsteonHubDiscovery/Sources/InsteonHubDiscovery"
+    ),
+    .testTarget(
+      name: "InsteonHubDiscoveryTests",
+      dependencies: ["InsteonHubDiscovery", "InsteonHubClient", "InsteonNetworking"],
+      path: "Packages/InsteonHubDiscovery/Tests/InsteonHubDiscoveryTests"
     ),
 
     .target(
