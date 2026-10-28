@@ -100,18 +100,18 @@ public struct InsteonConnectLookup: Sendable {
 
   /// Reads the Hubs from the Get Info page.
   ///
-  /// The page shows one block for each Hub. The Hub's local address and port start the block,
-  /// either as a link such as `http://10.0.1.10:25105` or as text such as `10.0.1.10:25105`
-  /// after "Insteon device was found on your network", and a table of labels and values
-  /// follows, including "Insteon ID" or "Your Insteon ID". The page reads "Sorry, cannot find
-  /// an Insteon Hub on your network" when there are none.
+  /// The page shows one block for each Hub. The Hub's local address, usually with its port,
+  /// starts the block, as a link such as `http://10.0.1.10:25105` or as text such as
+  /// `10.0.1.10:25105` after "Insteon device was found on your network". A table of labels
+  /// and values follows, including "Insteon ID" or "Your Insteon ID". The page reads "Sorry,
+  /// cannot find an Insteon Hub on your network" when there are none.
   ///
   /// The table also lists the gateway and subnet mask, so an address given as text starts a
   /// block only when it carries a port or follows the "found" line.
   ///
   /// Only Hubs at a private address (`10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16`) are
   /// kept, since the address is where the Hub's password will be sent, and each address is
-  /// kept once. A link without a port is to the Hub's default port.
+  /// kept once. An address without a port is at the Hub's default port.
   ///
   /// - Parameter page: The page's HTML.
   /// - Returns: The Hubs in the page's order.
@@ -125,9 +125,12 @@ public struct InsteonConnectLookup: Sendable {
     var current: Int?
     let lines = textLines(of: page)
 
+    // Whether the previous line said a Hub was found.
+    var follows = false
+
     for (index, line) in lines.enumerated() {
 
-      let follows = index > 0 && lines[index - 1].range(of: "found on your network", options: .caseInsensitive) != nil
+      defer { follows = saysFound(line) }
 
       if let link = link(in: line) ?? address(in: line, follows: follows) {
 
@@ -246,6 +249,16 @@ public struct InsteonConnectLookup: Sendable {
     }
 
     return link(in: "http://" + line)
+
+  }
+
+  /// Whether a line says a Hub was found, as "Insteon device was found on your network" does,
+  /// and not that none was.
+  private static func saysFound(_ line: String) -> Bool {
+
+    let line = line.lowercased()
+
+    return line.contains("was found on your network") && !line.contains("not found")
 
   }
 
