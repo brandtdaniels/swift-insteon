@@ -104,13 +104,31 @@ struct HubProClientTests {
 
   }
 
-  @Test func startsAnUpdate() async throws {
+  @Test func startsAnUpdateWhateverTheBody() async throws {
 
-    let http = answering("{}")
+    let http = answering("")
 
     try await HubProClient(host: "192.168.1.20", httpClient: http).startUpdate()
 
     #expect(await http.requests.first?.url?.absoluteString == "http://192.168.1.20:80/update")
+
+  }
+
+  @Test func treatsANullOrEmptyErrorAsSuccess() async throws {
+
+    try await HubProClient(host: "192.168.1.20", httpClient: answering(#"{"error":null}"#)).addDevice(lamp)
+    try await HubProClient(host: "192.168.1.20", httpClient: answering(#"{"error":""}"#)).removeDevice(lamp)
+
+  }
+
+  @Test func refusesAHostOrPortItCantUse() async {
+
+    await #expect(throws: HubProError.invalidEndpoint) {
+      try await HubProClient(host: "", httpClient: answering("{}")).settings()
+    }
+    await #expect(throws: HubProError.invalidEndpoint) {
+      try await HubProClient(host: "192.168.1.20", port: -1, httpClient: answering("{}")).settings()
+    }
 
   }
 

@@ -14,4 +14,7 @@ public enum HubProError: Error, Hashable, Sendable {
   /// The answer wasn't the JSON the Hub Pro sends.
   case malformedResponse
 
+  /// The host is empty or isn't a host name or IP address, or the port isn't from 0 to 65535.
+  case invalidEndpoint
+
 }

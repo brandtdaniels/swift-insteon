@@ -8,10 +8,8 @@ import InsteonProtocol
 /// Adds and removes INSTEON devices on a Hub Pro (2243-222), reads its settings, and starts
 /// its software update, through its local HTTP interface.
 ///
-/// The Hub Pro is a HomeKit bridge: it shows each INSTEON device added to it as a HomeKit
-/// accessory, so devices are controlled through HomeKit rather than this client. Its local
-/// interface is plain HTTP on port 80, without authentication, and every request is a `POST`
-/// that answers with JSON.
+/// The interface is plain HTTP on port 80, without authentication, and every request is a
+/// `POST`. Adding and removing a device, and reading the settings, answer with JSON.
 ///
 /// ```swift
 /// let hubPro = HubProClient(host: "192.168.1.20")
@@ -19,9 +17,8 @@ import InsteonProtocol
 /// try await hubPro.addDevice(InsteonAddress(0x1A, 0x2B, 0x3C))
 /// ```
 ///
-/// Adding or removing a device restarts the Hub Pro's HomeKit bridge, so the device appears
-/// in or leaves the HomeKit home some time after the request returns. Send one request at a
-/// time.
+/// The Hub Pro restarts its bridge after adding or removing a device, so it may not answer for
+/// a while after. Send one request at a time.
 public struct HubProClient: Sendable {
 
   /// The port of the Hub Pro's local HTTP interface: `80`.
@@ -46,7 +43,7 @@ public struct HubProClient: Sendable {
   /// Creates a client for a Hub Pro.
   ///
   /// - Parameters:
-  ///   - host: The Hub Pro's host name or IP address, such as the HomeKit accessory's address.
+  ///   - host: The Hub Pro's host name or IP address.
   ///   - port: The port of its HTTP interface. Defaults to ``HubProClient/defaultPort``.
   ///   - httpClient: The client to send requests with. Defaults to a `URLSessionHTTPClient`.
   ///   - timeout: How long to wait for an answer. Defaults to
@@ -65,18 +62,19 @@ public struct HubProClient: Sendable {
 
   }
 
-  /// Adds a device to the Hub Pro, which then shows it as a HomeKit accessory.
+  /// Adds a device to the Hub Pro.
   ///
   /// - Parameter device: The device's INSTEON address, printed on it.
   /// - Throws: ``HubProError/deviceNotResponding`` if the device didn't answer the Hub Pro,
-  ///   another ``HubProError`` if the Hub Pro refused, or the client's error.
+  ///   another ``HubProError`` if the Hub Pro refused or the host or port isn't usable, or the
+  ///   client's error.
   public func addDevice(_ device: InsteonAddress) async throws {
 
     try Self.check(try await post("/insteon/add", device: device))
 
   }
 
-  /// Removes a device from the Hub Pro, which then removes its HomeKit accessory.
+  /// Removes a device from the Hub Pro.
   ///
   /// - Parameter device: The device's INSTEON address.
   /// - Throws: ``HubProError/deviceNotResponding`` if the device didn't answer the Hub Pro,
@@ -114,10 +112,12 @@ public struct HubProClient: Sendable {
   /// after. The update is done once ``HubProClient/settings()`` answers again and
   /// ``HubProSettings/isUpdateAvailable`` is `false`.
   ///
-  /// - Throws: A ``HubProError`` if the Hub Pro refused, or the client's error.
+  /// - Throws: ``HubProError/unexpectedStatus(_:)`` if the Hub Pro refused, or the client's
+  ///   error.
   public func startUpdate() async throws {
 
-    try Self.check(try await post("/update"))
+    // The Hub Pro may restart before its answer has a body, so only the status counts.
+    _ = try await post("/update")
 
   }
 
@@ -128,7 +128,6 @@ public struct HubProClient: Sendable {
     var components = URLComponents()
     components.scheme = "http"
     components.host = host
-    components.port = port
     components.path = path
 
     if let device {
@@ -141,9 +140,17 @@ public struct HubProClient: Sendable {
 
     }
 
-    guard let url = components.url else {
+    guard !host.isEmpty, (0...65_535).contains(port) else {
 
-      preconditionFailure("A Hub Pro host must be a host name or IP address: \(host)")
+      throw HubProError.invalidEndpoint
+
+    }
+
+    components.port = port
+
+    guard let url = components.url, url.host != nil else {
+
+      throw HubProError.invalidEndpoint
 
     }
 
@@ -176,7 +183,8 @@ public struct HubProClient: Sendable {
 
     }
 
-    guard let error = object["error"] else {
+    // An empty or null error is no error.
+    guard let error = object["error"], !(error is NSNull), (error as? String)?.isEmpty != true else {
 
       return
 
