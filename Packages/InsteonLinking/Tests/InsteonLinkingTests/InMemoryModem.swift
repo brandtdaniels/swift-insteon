@@ -160,19 +160,17 @@ actor InMemoryModem: LinkingModem {
 
   // MARK: - LinkingModem
 
+  func modemInfo() async throws -> ModemInfo {
+
+    wasAskedForItsAddress = true
+
+    return ModemInfo(address: address, category: 0x03, subcategory: 0x15, firmwareVersion: 0x9E)
+
+  }
+
   func send(_ command: SerialCommand) async throws {
 
     switch command {
-    case .getModemInfo:
-      wasAskedForItsAddress = true
-
-      let info = ModemInfo(address: address, category: 0x03, subcategory: 0x15, firmwareVersion: 0x9E)
-
-      for subscriber in subscribers {
-
-        subscriber.yield(.modemInfo(info))
-
-      }
     case let .manageAllLinkRecord(action, record):
       try manage(record, action: action)
     case let .startAllLinking(mode, group):

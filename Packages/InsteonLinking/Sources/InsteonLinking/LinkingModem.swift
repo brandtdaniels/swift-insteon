@@ -1,7 +1,8 @@
 import InsteonModem
 import InsteonProtocol
 
-/// What ``Linker`` and ``Unlinker`` need from a modem: sending commands and messages, reading
+/// What ``Linker``, ``Unlinker``, ``AllLinkDatabaseCache`` and ``AllLinkGroupReader`` need from
+/// a modem: its own information, sending commands and messages, reading the modem's and
 /// devices' ALL-Link databases, and hearing what the modem reports.
 ///
 /// `Modem` from InsteonModem conforms, over a serial port or an INSTEON Hub. Tests can
@@ -10,6 +11,9 @@ public protocol LinkingModem: Sendable {
 
   /// Sends a serial command and waits for the modem to accept it.
   func send(_ command: SerialCommand) async throws
+
+  /// Asks the modem about itself: its address, category, subcategory and firmware version.
+  func modemInfo() async throws -> ModemInfo
 
   /// Sends a standard direct message to a device and waits for the device to acknowledge it.
   func request(_ message: StandardMessage, timeout: Duration) async throws -> ReceivedMessage

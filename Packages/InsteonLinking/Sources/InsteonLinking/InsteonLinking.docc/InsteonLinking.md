@@ -103,6 +103,8 @@ changing the modem's records.
 ### Databases
 
 - ``AllLinkDatabaseCache``
+- ``AllLinkGroupReader``
+- ``AllLinkGroupReading``
 
 ### Modems
 
