@@ -1,7 +1,8 @@
 import InsteonModem
 import InsteonProtocol
 
-/// What ``Linker`` and ``Unlinker`` need from a modem: sending commands and messages, reading
+/// What ``Linker``, ``Unlinker``, ``AllLinkDatabaseCache`` and ``AllLinkGroupReader`` need from
+/// a modem: its own information, sending commands and messages, reading the modem's and
 /// devices' ALL-Link databases, and hearing what the modem reports.
 ///
 /// `Modem` from InsteonModem conforms, over a serial port or an INSTEON Hub. Tests can

@@ -81,7 +81,7 @@ struct DatabaseEditor {
 
     }
 
-    return Addresses(modem: try await modemAddress())
+    return Addresses(modem: try await modem.modemInfo().address)
 
   }
 
@@ -334,13 +334,6 @@ struct DatabaseEditor {
     }
 
     await cache?.invalidateModem()
-
-  }
-
-  /// Reads the modem's own address, which devices' records use to link to it.
-  private func modemAddress() async throws -> InsteonAddress {
-
-    try await modem.modemInfo().address
 
   }
 
