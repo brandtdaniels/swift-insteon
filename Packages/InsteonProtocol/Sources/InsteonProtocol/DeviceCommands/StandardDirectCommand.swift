@@ -27,7 +27,12 @@ public enum StandardDirectCommand: Hashable, Sendable {
 
   /// Takes the device out of linking or unlinking mode (cmd1 `0x08`).
   ///
-  /// Devices also leave linking mode on their own after a timeout.
+  /// Devices also leave linking mode on their own after a timeout. Insteon's documents disagree
+  /// on which devices accept the command: one command table lists it for every i2 device,
+  /// another says only SmartLinc and i2cs products support it, and the Developer's Guide
+  /// reserves cmd1 `0x08`. The i2cs command sheet says an i2cs device always acts on it, as a
+  /// standard or extended message, even when it NAKs it because the sender isn't in its
+  /// ALL-Link database.
   case exitLinkingMode
 
   /// Puts the device into linking mode for `group`, as if its SET button were held (cmd1 `0x09`).
@@ -97,7 +102,9 @@ public enum StandardDirectCommand: Hashable, Sendable {
 
   /// Sets or clears one of the device's operating flags (cmd1 `0x20`).
   ///
-  /// `flag` selects the flag and the operation; its meaning varies by device.
+  /// `flag` selects the flag and the operation; its meaning varies by device. i2cs devices
+  /// accept it only in an extended message, which carries a checksum, so send it to them with
+  /// `ExtendedMessage`.
   case setOperatingFlags(flag: UInt8)
 
   /// Changes the device to `level` instantly (cmd1 `0x21`).
