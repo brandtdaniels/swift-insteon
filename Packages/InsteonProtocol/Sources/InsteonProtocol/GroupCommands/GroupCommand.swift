@@ -19,7 +19,9 @@ public struct GroupCommand: Hashable, Sendable {
     /// The ALL-Link broadcast to the whole group.
     case broadcast
 
-    /// A cleanup message to one member, which arrives when the broadcast was missed.
+    /// A cleanup message to one member. Each member gets one after every broadcast, so on its
+    /// own a cleanup usually repeats a broadcast; ``GroupCommandFilter`` passes one on only
+    /// when its broadcast was missed.
     case cleanup
 
   }
@@ -73,12 +75,9 @@ public struct GroupCommand: Hashable, Sendable {
 
     switch message.flags.messageType {
     case .allLinkBroadcast:
-      // The guide: the To address holds the group number in its low byte.
-      guard
-        message.destination.high == 0x00,
-        message.destination.middle == 0x00,
-        message.command.command1 != SuccessReport.command1
-      else {
+      // The guide: the To address holds the group number in its low byte. A Success Report
+      // uses the To address for other things.
+      guard message.command.command1 != SuccessReport.command1 else {
 
         return nil
 

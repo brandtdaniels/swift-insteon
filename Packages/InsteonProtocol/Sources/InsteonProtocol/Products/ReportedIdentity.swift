@@ -1,9 +1,9 @@
 extension ReceivedMessage {
 
-  /// Whether the message is a standard-length broadcast with a cmd1.
-  func isStandardBroadcast(command1: UInt8) -> Bool {
+  /// Whether the message is a standard-length broadcast, or another type, with a cmd1.
+  func isStandardBroadcast(command1: UInt8, type: MessageFlags.MessageType = .broadcast) -> Bool {
 
-    flags.messageType == .broadcast && !flags.isExtended && command.command1 == command1
+    flags.messageType == type && !flags.isExtended && command.command1 == command1
 
   }
 
