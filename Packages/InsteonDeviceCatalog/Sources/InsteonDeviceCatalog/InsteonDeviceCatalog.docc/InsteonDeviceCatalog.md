@@ -1,4 +1,4 @@
-# ``InsteonDeviceDatabase``
+# ``InsteonDeviceCatalog``
 
 Find what an INSTEON device is and can do from the category, subcategory and firmware version
 it reports.
@@ -7,18 +7,18 @@ it reports.
 
 Every INSTEON device reports a category, a subcategory and a firmware version: when it's asked
 to identify itself, when its SET button is pressed, and in some heartbeats. The INSTEON device
-database turns those into a ``DeviceProfile``: the product's model and name, its ALL-Link
+catalog turns those into a ``DeviceProfile``: the product's model and name, its ALL-Link
 groups, and its capabilities, such as dimming, a thermostat's mode values, what a sensor means
 by each command it sends, and how often it sends a heartbeat.
 
-So a product is supported by adding its profile to the database, rather than by writing code
-for it. The database is a set of static JSON files published on GitHub Pages; this package
+So a product is supported by adding its profile to the catalog, rather than by writing code
+for it. The catalog is a set of static JSON files published on GitHub Pages; this package
 ships a copy, so lookups work offline.
 
 ```swift
-let database = try DeviceDatabase.bundled()
+let catalog = try DeviceCatalog.bundled()
 
-guard let profile = database.profile(category: 0x10, subcategory: 0x08, firmwareVersion: nil) else {
+guard let profile = catalog.profile(category: 0x10, subcategory: 0x08, firmwareVersion: nil) else {
   return
 }
 
@@ -33,7 +33,7 @@ if profile.event(group: 0x02, command1: 0x11) == "wet" {
 print(profile.heartbeatInterval ?? .zero)
 ```
 
-``DeviceDatabaseUpdater`` keeps an app's copy current: it downloads the published database
+``DeviceCatalogUpdater`` keeps an app's copy current: it downloads the published catalog
 only when the published manifest's SHA-256 differs from the app's copy, and uses the download
 only if it hashes to that SHA-256. Updating is optional.
 
@@ -47,16 +47,16 @@ dimming for dimmable lighting control.
 
 ## Topics
 
-### The database
+### The catalog
 
-- ``DeviceDatabase``
-- ``DeviceDatabaseError``
+- ``DeviceCatalog``
+- ``DeviceCatalogError``
 
 ### Updating
 
-- ``DeviceDatabaseUpdater``
-- ``DeviceDatabaseUpdate``
-- ``DeviceDatabaseUpdateError``
+- ``DeviceCatalogUpdater``
+- ``DeviceCatalogUpdate``
+- ``DeviceCatalogUpdateError``
 
 ### Reading events
 

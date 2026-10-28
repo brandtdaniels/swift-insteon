@@ -1,5 +1,5 @@
 import Testing
-import InsteonDeviceDatabase
+import InsteonDeviceCatalog
 import InsteonProtocol
 
 struct DeviceEventInterpreterTests {
@@ -12,7 +12,7 @@ struct DeviceEventInterpreterTests {
 
   func interpreter() throws -> DeviceEventInterpreter<ContinuousClock.Instant> {
 
-    DeviceEventInterpreter(database: try DeviceDatabase(json: DeviceDatabaseTests.json(DeviceDatabaseTests.leakSensor)))
+    DeviceEventInterpreter(catalog: try DeviceCatalog(json: DeviceCatalogTests.json(DeviceCatalogTests.leakSensor)))
 
   }
 
@@ -87,7 +87,7 @@ struct DeviceEventInterpreterTests {
   @Test func readsAHeartbeatBroadcastWithItsBatteryLevel() throws {
 
     var interpreter = try interpreter()
-    let expected = try #require(interpreter.database.profile(model: "2852"))
+    let expected = try #require(interpreter.catalog.profile(model: "2852"))
 
     let events = interpreter.events(from: identity(command1: 0x04, command2: 0x80), at: start)
 
@@ -128,11 +128,11 @@ struct DeviceEventInterpreterTests {
 
   }
 
-  // A heartbeat from a device the database doesn't know mustn't undo what the app remembered.
+  // A heartbeat from a device the catalog doesn't know mustn't undo what the app remembered.
   @Test func keepsAProfileWhenTheIdentityIsUnknown() throws {
 
     var interpreter = try interpreter()
-    let profile = try #require(interpreter.database.profile(model: "2852"))
+    let profile = try #require(interpreter.catalog.profile(model: "2852"))
     interpreter.remember(profile, for: sensor)
 
     let events = interpreter.events(from: identity(command1: 0x04, category: 0x01, subcategory: 0x20), at: start)
@@ -142,14 +142,14 @@ struct DeviceEventInterpreterTests {
 
   }
 
-  @Test func findsProfilesAgainInANewDatabase() throws {
+  @Test func findsProfilesAgainInANewCatalog() throws {
 
     var interpreter = try interpreter()
     _ = interpreter.events(from: identity(command1: 0x02, category: 0x01, subcategory: 0x20), at: start)
     #expect(interpreter.profile(of: sensor) == nil)
 
     let dimmer = #"{ "model": "2477D", "name": "SwitchLinc Dimmer", "identities": [{ "category": "0x01", "subcategory": "0x20" }], "capabilities": [{ "kind": "dimmable" }], "sources": ["A"] }"#
-    interpreter.database = try DeviceDatabase(json: DeviceDatabaseTests.json(dimmer))
+    interpreter.catalog = try DeviceCatalog(json: DeviceCatalogTests.json(dimmer))
 
     #expect(interpreter.profile(of: sensor)?.model == "2477D")
 
@@ -158,7 +158,7 @@ struct DeviceEventInterpreterTests {
   @Test func usesARememberedProfile() throws {
 
     var interpreter = try interpreter()
-    let profile = try #require(interpreter.database.profile(model: "2852"))
+    let profile = try #require(interpreter.catalog.profile(model: "2852"))
     interpreter.remember(profile, for: sensor)
 
     #expect(interpreter.events(from: groupBroadcast(group: 0x01, command1: 0x11), at: start).first == .groupCommand(

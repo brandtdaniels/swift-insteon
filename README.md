@@ -14,7 +14,7 @@ Swift packages for working with [INSTEON](https://www.insteon.com) home automati
 | [InsteonHubDiscovery](Packages/InsteonHubDiscovery) | Find INSTEON Hubs on your local network, by asking the network itself or Insteon Connect |
 | [InsteonHubPro](Packages/InsteonHubPro) | Add INSTEON devices to a Hub Pro and read its settings and update its software through its local interface |
 | [InsteonScheduling](Packages/InsteonScheduling) | Work out when schedules run, at clock times or around sunrise and sunset, in a home's time zone through daylight saving changes |
-| [InsteonDeviceDatabase](Packages/InsteonDeviceDatabase) | Find what a device is and can do, such as its groups, what its group commands mean and its heartbeat interval, from the category, subcategory and firmware version it reports, and read its messages as named events |
+| [InsteonDeviceCatalog](Packages/InsteonDeviceCatalog) | Find what a device is and can do, such as its groups, what its group commands mean and its heartbeat interval, from the category, subcategory and firmware version it reports, and read its messages as named events |
 | [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the INSTEON clients send requests through |
 
 The [Supported Modems](Packages/InsteonModem/Sources/InsteonModem/InsteonModem.docc/SupportedModems.md) article lists every modem, Hub and controller, and how well each is supported.
@@ -25,7 +25,7 @@ The [Supported Modems](Packages/InsteonModem/Sources/InsteonModem/InsteonModem.d
 - macOS 13, iOS 16, tvOS 16, watchOS 9, visionOS 1 or later, or Linux
 - `SerialPort`, in InsteonModem, is available on macOS and Linux
 - InsteonProtocol depends only on the Swift standard library; the other libraries use Foundation
-- InsteonDeviceDatabase uses Apple's [swift-crypto](https://github.com/apple/swift-crypto), which is CryptoKit on Apple platforms, to check downloaded databases
+- InsteonDeviceCatalog uses Apple's [swift-crypto](https://github.com/apple/swift-crypto), which is CryptoKit on Apple platforms, to check downloaded catalogs
 
 ## Installation
 

@@ -2,11 +2,11 @@ import InsteonProtocol
 
 /// Reads the messages a modem receives as ``DeviceEvent``s, using each device's profile.
 ///
-/// The interpreter learns a device's profile when the device reports an identity the database
+/// The interpreter learns a device's profile when the device reports an identity the catalog
 /// knows, such as when its SET button is held to link it, or from
 /// ``DeviceEventInterpreter/remember(_:for:)`` for devices an app already knows. From then on,
 /// the device's group commands carry what its profile says they mean, so a product is
-/// supported by its profile alone. An identity the database doesn't know leaves the device's
+/// supported by its profile alone. An identity the catalog doesn't know leaves the device's
 /// profile as it was.
 ///
 /// Group commands pass through a `GroupCommandFilter` first, so each command a device sends
@@ -15,7 +15,7 @@ import InsteonProtocol
 /// `duplicateWindow`.
 ///
 /// ```swift
-/// var interpreter = DeviceEventInterpreter<ContinuousClock.Instant>(database: try .bundled())
+/// var interpreter = DeviceEventInterpreter<ContinuousClock.Instant>(catalog: try .bundled())
 ///
 /// for await reply in await modem.replies() {
 ///   guard case let .messageReceived(message) = reply else { continue }
@@ -52,16 +52,16 @@ public struct DeviceEventInterpreter<Instant: InstantProtocol>: Sendable where I
 
   }
 
-  /// The database profiles are found in. Setting it finds each device's profile again from the
-  /// identity it last reported, so a newer database takes effect without losing what the
+  /// The catalog profiles are found in. Setting it finds each device's profile again from the
+  /// identity it last reported, so a newer catalog takes effect without losing what the
   /// interpreter has heard.
-  public var database: DeviceDatabase {
+  public var catalog: DeviceCatalog {
 
     didSet {
 
       for (device, identity) in identities {
 
-        if let profile = database.profile(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion) {
+        if let profile = catalog.profile(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion) {
 
           profiles[device] = profile
 
@@ -84,12 +84,12 @@ public struct DeviceEventInterpreter<Instant: InstantProtocol>: Sendable where I
   /// Creates an interpreter that knows no devices yet.
   ///
   /// - Parameters:
-  ///   - database: The database to find profiles in.
+  ///   - catalog: The catalog to find profiles in.
   ///   - filter: The filter group commands pass through. Defaults to one with its default
   ///     windows.
-  public init(database: DeviceDatabase, filter: GroupCommandFilter<Instant> = GroupCommandFilter()) {
+  public init(catalog: DeviceCatalog, filter: GroupCommandFilter<Instant> = GroupCommandFilter()) {
 
-    self.database = database
+    self.catalog = catalog
     self.filter = filter
 
   }
@@ -97,7 +97,7 @@ public struct DeviceEventInterpreter<Instant: InstantProtocol>: Sendable where I
   /// The profile known for a device.
   ///
   /// - Parameter device: The device's address.
-  /// - Returns: The profile, or `nil` if the device hasn't reported an identity the database
+  /// - Returns: The profile, or `nil` if the device hasn't reported an identity the catalog
   ///   knows and hasn't been remembered.
   public func profile(of device: InsteonAddress) -> DeviceProfile? {
 
@@ -189,13 +189,13 @@ public struct DeviceEventInterpreter<Instant: InstantProtocol>: Sendable where I
 
   }
 
-  /// Records the profile matching a device's reported identity, if the database has one, and
+  /// Records the profile matching a device's reported identity, if the catalog has one, and
   /// reports it.
   private mutating func identify(_ device: InsteonAddress, _ identity: Identity) -> DeviceEvent {
 
     identities[device] = identity
 
-    let profile = database.profile(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion)
+    let profile = catalog.profile(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion)
 
     if let profile {
 
