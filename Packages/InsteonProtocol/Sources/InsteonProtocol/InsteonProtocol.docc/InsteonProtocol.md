@@ -82,6 +82,16 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``GroupCommandFilter``
 - ``SuccessReport``
 
+### Sensor events
+
+The same group command means different things on different devices, so pick the type by
+what the device is, from a device database.
+
+- ``MotionSensorEvent``
+- ``OpenCloseSensorEvent``
+- ``LeakSensorEvent``
+- ``SmokeBridgeEvent``
+
 ### Broadcasts
 
 - ``Heartbeat``
