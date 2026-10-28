@@ -340,21 +340,7 @@ struct DatabaseEditor {
   /// Reads the modem's own address, which devices' records use to link to it.
   private func modemAddress() async throws -> InsteonAddress {
 
-    let replies = await modem.replies()
-
-    try await modem.send(.getModemInfo)
-
-    for await reply in replies {
-
-      if case let .modemInfo(info) = reply {
-
-        return info.address
-
-      }
-
-    }
-
-    throw LinkingError.modemAddressUnavailable
+    try await modem.modemInfo().address
 
   }
 
