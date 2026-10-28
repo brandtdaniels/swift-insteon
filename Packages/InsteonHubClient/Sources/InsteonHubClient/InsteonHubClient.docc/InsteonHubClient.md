@@ -111,6 +111,7 @@ the same requests.
 ### The Hub's HTTP interface
 
 - ``Hub``
+- ``HubShortCommand``
 - ``HubBuffer``
 - ``HubBufferCursor``
 
