@@ -40,6 +40,13 @@ public struct UnprotectedIntegrity: UserDataIntegrity {
 ///
 /// The checksum is the two's complement of the low byte of the sum of cmd1, cmd2 and
 /// D1 through D13, so that all 16 bytes sum to zero modulo 256.
+///
+/// Some i2 devices from before i2cs can check it too, once Set Operating Flags with cmd2
+/// `0x19` turns checking on; bit 4 of the reply to Get Operating Flags with cmd2 `0x05` says
+/// whether it's on, as Insteon's command workbook describes. Others use their load-sense flag
+/// for it instead: Set Operating Flags with cmd2 `0x06`, and bit 5 of Get Operating Flags with
+/// cmd2 `0x00`. Devices that check it NAK a
+/// message whose checksum is wrong with cmd2 `0xFD`.
 public struct ChecksumIntegrity: UserDataIntegrity {
 
   /// Creates the scheme.
@@ -103,6 +110,23 @@ public struct CRCIntegrity: UserDataIntegrity {
     sealed[14] = crcBytes[1]
 
     return sealed
+
+  }
+
+}
+
+extension UserDataIntegrity {
+
+  /// Whether user data's integrity bytes match its contents, such as for the checksum an i2cs
+  /// device puts in a record it sends from its ALL-Link database.
+  ///
+  /// - Parameters:
+  ///   - userData: The user data, as received.
+  ///   - command: The command it came with.
+  /// - Returns: Whether sealing the user data leaves it unchanged.
+  public func isIntact(_ userData: UserData, for command: Command) -> Bool {
+
+    seal(userData, for: command) == userData
 
   }
 

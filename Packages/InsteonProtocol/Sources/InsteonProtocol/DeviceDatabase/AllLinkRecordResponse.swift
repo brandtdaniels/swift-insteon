@@ -2,7 +2,9 @@
 /// ``AllLinkDatabaseRequest``.
 ///
 /// The response is an extended ``ExtendedDirectCommand/readWriteAllLinkDatabase`` message with
-/// D2 `0x01`: D3 and D4 hold the record's address and D6 through D13 hold the record.
+/// D2 `0x01`: D3 and D4 hold the record's address and D6 through D13 hold the record. An i2cs
+/// device puts a checksum in D14, which ``AllLinkRecordResponse/hasIntactChecksum`` checks;
+/// older devices may not, so a record from one of them can fail the check and still be whole.
 public struct AllLinkRecordResponse: Hashable, Sendable {
 
   /// The device whose database holds the record.
@@ -14,17 +16,29 @@ public struct AllLinkRecordResponse: Hashable, Sendable {
   /// The record.
   public var record: AllLinkRecord
 
+  /// Whether D14 holds the checksum of cmd1, cmd2 and D1 through D13, as an i2cs device sends
+  /// it. A record from an i2cs device that fails the check was damaged on the way; read it
+  /// again.
+  public var hasIntactChecksum: Bool
+
   /// Creates a record response.
   ///
   /// - Parameters:
   ///   - sender: The device whose database holds the record.
   ///   - address: The record's address.
   ///   - record: The record.
-  public init(sender: InsteonAddress, address: UInt16, record: AllLinkRecord) {
+  ///   - hasIntactChecksum: Whether D14 held the response's checksum. Defaults to `true`.
+  public init(
+    sender: InsteonAddress,
+    address: UInt16,
+    record: AllLinkRecord,
+    hasIntactChecksum: Bool = true
+  ) {
 
     self.sender = sender
     self.address = address
     self.record = record
+    self.hasIntactChecksum = hasIntactChecksum
 
   }
 
@@ -49,7 +63,8 @@ public struct AllLinkRecordResponse: Hashable, Sendable {
     self.init(
       sender: message.sender,
       address: UInt16(highByte: data[3], lowByte: data[4]),
-      record: AllLinkRecord(data.bytes, at: 5)
+      record: AllLinkRecord(data.bytes, at: 5),
+      hasIntactChecksum: ChecksumIntegrity().isIntact(data, for: message.command)
     )
 
   }

@@ -56,8 +56,41 @@ struct AllLinkDatabaseTests {
 
     let response = try #require(AllLinkRecordResponse(message))
 
-    #expect(response == AllLinkRecordResponse(sender: device, address: 0x0FFF, record: record))
+    // The guide's example predates i2cs, so it carries no checksum.
+    #expect(response == AllLinkRecordResponse(
+      sender: device,
+      address: 0x0FFF,
+      record: record,
+      hasIntactChecksum: false
+    ))
     #expect(!response.isEndOfDatabase)
+
+  }
+
+  // A response logged in Insteon's command workbook, whose D14 is the i2cs checksum.
+  @Test func checksTheChecksumAnI2csDeviceSends() throws {
+
+    var data = try UserData([0x00, 0x01, 0x0F, 0xFF, 0x00, 0xE2, 0x01, 0x13, 0xD0, 0x91, 0x05, 0x1C, 0x01])
+    data[14] = 0x49
+
+    func response(_ userData: UserData) -> AllLinkRecordResponse? {
+
+      AllLinkRecordResponse(ReceivedMessage(
+        sender: device,
+        destination: InsteonAddress(0x11, 0x22, 0x33),
+        flags: .extendedDirect,
+        command: Command(command1: 0x2F, command2: 0x00),
+        userData: userData
+      ))
+
+    }
+
+    #expect(response(data)?.hasIntactChecksum == true)
+    #expect(ChecksumIntegrity().isIntact(data, for: Command(command1: 0x2F, command2: 0x00)))
+
+    data[9] = 0x00
+
+    #expect(response(data)?.hasIntactChecksum == false)
 
   }
 
