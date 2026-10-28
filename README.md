@@ -12,6 +12,7 @@ Swift packages for working with [INSTEON](https://www.insteon.com) home automati
 | [InsteonLinking](Packages/InsteonLinking) | Link devices to each other and to the modem: by writing their ALL-Link databases, remotely, or with their SET buttons |
 | [InsteonHubClient](Packages/InsteonHubClient) | Control INSTEON devices through an INSTEON Hub on your local network, by driving its built-in modem with InsteonModem |
 | [InsteonHubDiscovery](Packages/InsteonHubDiscovery) | Find INSTEON Hubs on your local network, by asking the network itself or Insteon Connect |
+| [InsteonHubPro](Packages/InsteonHubPro) | Add INSTEON devices to a Hub Pro, the HomeKit bridge, and read its settings and update its software through its local interface |
 | [InsteonScheduling](Packages/InsteonScheduling) | Work out when schedules run, at clock times or around sunrise and sunset, in a home's time zone through daylight saving changes |
 | [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the INSTEON clients send requests through |
 
