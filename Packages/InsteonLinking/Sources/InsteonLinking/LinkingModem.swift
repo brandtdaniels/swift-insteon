@@ -14,17 +14,15 @@ public protocol LinkingModem: Sendable {
   /// Sends an extended direct message to a device and waits for the device to acknowledge it.
   func request(_ message: ExtendedMessage, timeout: Duration) async throws -> ReceivedMessage
 
-  /// Sends an extended direct message to a device and waits for the reply the device sends
-  /// after acknowledging it.
-  func request<Reply: Sendable>(
-    _ message: ExtendedMessage,
-    awaitingReply reply: @escaping @Sendable (ReceivedMessage) -> Reply?,
-    timeout: Duration
-  ) async throws -> Reply
-
   /// Reads every record in a device's ALL-Link database, ending with the record that marks
   /// the end of the database.
   func readAllLinkDatabase(of device: InsteonAddress, timeout: Duration) async throws -> [AllLinkRecordResponse]
+
+  /// Reads the record at an address in a device's ALL-Link database.
+  func readAllLinkRecord(of device: InsteonAddress, at address: UInt16, timeout: Duration) async throws -> AllLinkRecordResponse
+
+  /// Finds every record in the modem's own ALL-Link database for a group and device.
+  func allLinkRecords(group: AllLinkGroupNumber, device: InsteonAddress) async throws -> [AllLinkRecord]
 
   /// Returns a stream of everything the modem sends after this call.
   func replies() async -> AsyncStream<ModemReply>

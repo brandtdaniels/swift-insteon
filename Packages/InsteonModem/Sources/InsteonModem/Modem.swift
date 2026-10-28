@@ -311,11 +311,22 @@ public actor Modem: SerialCommandSender {
 
   }
 
-  /// Reads one record, asking again when it doesn't arrive in time.
-  private func readAllLinkRecord(
+  /// Reads the record at an address in a device's ALL-Link database.
+  ///
+  /// A record that doesn't arrive in time is asked for again, as many times as the modem's
+  /// ``RetryPolicy`` allows.
+  ///
+  /// - Parameters:
+  ///   - device: The device whose database to read.
+  ///   - address: The record's address, or `0x0000` for the first record.
+  ///   - timeout: How long to wait for each attempt. Defaults to ``Modem/defaultRequestTimeout``.
+  /// - Returns: The record and its address.
+  /// - Throws: The errors of ``Modem/request(_:awaitingReply:timeout:)``, once every attempt
+  ///   has failed.
+  public func readAllLinkRecord(
     of device: InsteonAddress,
     at address: UInt16,
-    timeout: Duration
+    timeout: Duration = Modem.defaultRequestTimeout
   ) async throws -> AllLinkRecordResponse {
 
     var attempt = 1
@@ -342,6 +353,37 @@ public actor Modem: SerialCommandSender {
       }
 
     }
+
+  }
+
+  /// Finds every record in the modem's own ALL-Link database for a group and device: its
+  /// controller record and its responder record, either or both.
+  ///
+  /// The modem searches with Manage ALL-Link Record's Find First and Find Next, which match a
+  /// record's group and address and report it in an ALL-Link Record Response. The modem NAKs
+  /// once there are no more, so a NAK ends the search rather than being sent again.
+  ///
+  /// - Parameters:
+  ///   - group: The group the records belong to.
+  ///   - device: The device the records link to.
+  /// - Returns: The matching records, in the order the modem finds them.
+  /// - Throws: ``ModemError/timedOut(_:)`` if the modem doesn't answer,
+  ///   ``ModemError/connectionClosed`` if the modem is closed, `CancellationError` if the task
+  ///   is canceled, or the connection's error.
+  public func allLinkRecords(group: AllLinkGroupNumber, device: InsteonAddress) async throws -> [AllLinkRecord] {
+
+    let key = AllLinkRecord(flags: [], group: group, address: device)
+    var records: [AllLinkRecord] = []
+    var action = AllLinkRecordAction.findFirst
+
+    while let record = try await find(action, matching: key) {
+
+      records.append(record)
+      action = .findNext
+
+    }
+
+    return records
 
   }
 
@@ -425,6 +467,71 @@ public actor Modem: SerialCommandSender {
       },
       timedOut: ModemError.deviceTimedOut(device)
     )
+
+  }
+
+  /// Asks the modem for the next record matching a group and address.
+  ///
+  /// - Returns: The record, or `nil` once the modem NAKs because there are no more.
+  private func find(_ action: AllLinkRecordAction, matching key: AllLinkRecord) async throws -> AllLinkRecord? {
+
+    struct NotFound: Error {}
+
+    let command = SerialCommand.manageAllLinkRecord(action: action, record: key)
+    let parameters = command.parameters
+    let timedOut = ModemError.timedOut(.manageAllLinkRecord)
+
+    let exchange = Exchange<ModemReply>(
+      bytes: command.bytes,
+      steps: [
+        AnswerStep(
+          verdict: { reply in
+
+            switch reply {
+            case let .echo(echo) where echo.number == .manageAllLinkRecord && echo.parameters == parameters:
+              // A NAK to a search means there's no matching record.
+              return echo.isAccepted ? .accepted : .failed(NotFound())
+            case .negativeAcknowledgement:
+              return .rejected(ModemError.rejected(.manageAllLinkRecord))
+            default:
+              return nil
+            }
+
+          },
+          timedOut: timedOut
+        ),
+        AnswerStep(
+          verdict: { reply in
+
+            if case .allLinkRecord = reply {
+
+              return .accepted
+
+            }
+
+            return nil
+
+          },
+          timedOut: timedOut
+        ),
+      ]
+    )
+
+    do {
+
+      guard case let .allLinkRecord(record) = try await pacer.send([exchange])[0] else {
+
+        preconditionFailure("A search is answered only by an ALL-Link Record Response.")
+
+      }
+
+      return record
+
+    } catch is NotFound {
+
+      return nil
+
+    }
 
   }
 

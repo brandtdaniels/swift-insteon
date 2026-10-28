@@ -34,12 +34,21 @@ actor InMemoryModem: LinkingModem {
   /// Devices that acknowledge writes without storing them.
   var forgetfulDevices: Set<InsteonAddress> = []
 
+  /// How many records were deleted from the modem.
+  private(set) var modemDeletions = 0
+
   /// Whether the modem was asked for its own address.
   private(set) var wasAskedForItsAddress = false
 
   private var subscribers: [AsyncStream<ModemReply>.Continuation] = []
 
   private static let end = AllLinkRecord(flags: [], group: 0x00, address: InsteonAddress(0x00, 0x00, 0x00))
+
+  func setModemRecords(_ records: [AllLinkRecord]) {
+
+    modemRecords = records
+
+  }
 
   func setDatabase(_ records: [UInt16: AllLinkRecord], of device: InsteonAddress) {
 
@@ -130,37 +139,23 @@ actor InMemoryModem: LinkingModem {
 
   }
 
-  func request<Reply: Sendable>(
-    _ message: ExtendedMessage,
-    awaitingReply reply: @escaping @Sendable (ReceivedMessage) -> Reply?,
-    timeout: Duration
-  ) async throws -> Reply {
+  func readAllLinkRecord(of device: InsteonAddress, at address: UInt16, timeout: Duration) async throws -> AllLinkRecordResponse {
 
-    let device = message.destination
+    guard !unlinkedDevices.contains(device) else {
 
-    _ = try await request(message, timeout: timeout)
-
-    let data = message.userData
-    let requested = UInt16(data[3]) << 8 | UInt16(data[4])
-    let recordAddress: UInt16 = requested == 0x0000 ? 0x0FFF : requested
-    let addressBytes: [UInt8] = [UInt8(recordAddress >> 8), UInt8(recordAddress & 0xFF)]
-    let userData: [UInt8] = [0x00, 0x01] + addressBytes + [0x00] + record(of: device, at: recordAddress).bytes
-
-    let response = ReceivedMessage(
-      sender: device,
-      destination: address,
-      flags: .extendedDirect,
-      command: ExtendedDirectCommand.readWriteAllLinkDatabase.command,
-      userData: try UserData(userData)
-    )
-
-    guard let value = reply(response) else {
-
-      throw ModemError.deviceTimedOut(device)
+      throw ModemError.deviceRejected(device, .notLinked)
 
     }
 
-    return value
+    let recordAddress: UInt16 = address == 0x0000 ? 0x0FFF : address
+
+    return AllLinkRecordResponse(sender: device, address: recordAddress, record: record(of: device, at: recordAddress))
+
+  }
+
+  func allLinkRecords(group: AllLinkGroupNumber, device: InsteonAddress) async throws -> [AllLinkRecord] {
+
+    modemRecords.filter { $0.group == group && $0.address == device }
 
   }
 
@@ -245,6 +240,7 @@ actor InMemoryModem: LinkingModem {
       }
 
       modemRecords.remove(at: index)
+      modemDeletions += 1
     default:
       break
     }

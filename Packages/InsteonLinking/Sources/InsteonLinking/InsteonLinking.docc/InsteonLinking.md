@@ -36,11 +36,21 @@ linked to, so link the modem to an i2cs device with its SET button first.
 
 ### How records are written
 
-A device's database is a list of 8-byte records whose addresses count down by 8. ``Linker``
-updates a record that already links the same devices in the same group and role, otherwise
-reuses the first record that's no longer in use, otherwise adds the record at the end of the
-database and marks the record after it as the new end. It reads every record back after
-writing it. The modem's own database is written with its Manage ALL-Link Record command.
+A device's database is a list of 8-byte records whose addresses count down by 8, from
+`0x0FFF` to `0x0307`. ``Linker`` writes each responder's record first, then the controller's:
+
+- A responder record updates every record that already links the same devices in the same
+  group, otherwise reuses the first record that's no longer in use, otherwise goes at the end
+  of the database, after the record below it is marked as the new end.
+- A controller record is added only when there's none, since an existing one holds data the
+  controller keeps for itself, such as a keypad's button number.
+
+Every write is read back, and each device's database is read once per call, then kept up to
+date as records are written. ``Unlinker`` deletes a record by clearing its in-use bit.
+
+The modem's own database is changed with its Manage ALL-Link Record command. Its delete
+matches a record's group and address but not its role, so ``Unlinker`` finds every matching
+record first, deletes them all, and adds back the ones it's keeping.
 
 ## Topics
 

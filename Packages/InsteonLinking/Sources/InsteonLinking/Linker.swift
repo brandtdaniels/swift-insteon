@@ -44,9 +44,12 @@ public struct Linker: Sendable {
 
   /// Links a group's controller to each of its responders by writing their records.
   ///
-  /// A record that already links the same devices in the same group is updated with the
-  /// group's link data, so linking a group again changes its responders' data in place. Links
-  /// are made one responder at a time, and those already made stay made if a later one fails.
+  /// A responder record that already links the same devices in the same group is updated with
+  /// the group's link data, so linking a group again changes its responders' data in place. A
+  /// controller record that's already there stays as it is, since its data belongs to the
+  /// controller; a new one has all-zero data. Links are made one responder at a time, each
+  /// responder's record before the controller's, and those already made stay made if a later
+  /// one fails.
   ///
   /// - Parameter group: The group to link.
   /// - Throws: ``LinkingError`` if a device's database is full or a record doesn't read back
@@ -54,21 +57,14 @@ public struct Linker: Sendable {
   ///   device that isn't linked to the modem.
   public func link(_ group: AllLinkGroup) async throws {
 
-    let editor = DatabaseEditor(modem: modem, timeout: timeout)
+    var editor = DatabaseEditor(modem: modem, timeout: timeout)
     let addresses = try await editor.addresses(for: group)
     let controller = addresses.address(of: group.controller)
 
     for responder in group.responders {
 
-      try await editor.write(
-        AllLinkRecord(
-          flags: DatabaseEditor.flags(isController: true),
-          group: group.number,
-          address: addresses.address(of: responder.endpoint)
-        ),
-        into: group.controller
-      )
-
+      // The responder's record goes first, so a responder that rejects it, such as an i2cs
+      // device that isn't linked to the modem, doesn't leave the controller with a link to it.
       try await editor.write(
         AllLinkRecord(
           flags: DatabaseEditor.flags(isController: false),
@@ -79,6 +75,15 @@ public struct Linker: Sendable {
           data3: responder.data3
         ),
         into: responder.endpoint
+      )
+
+      try await editor.write(
+        AllLinkRecord(
+          flags: DatabaseEditor.flags(isController: true),
+          group: group.number,
+          address: addresses.address(of: responder.endpoint)
+        ),
+        into: group.controller
       )
 
     }

@@ -41,24 +41,26 @@ public struct Unlinker: Sendable {
   ///   modem's errors.
   public func unlink(_ group: AllLinkGroup) async throws {
 
-    let editor = DatabaseEditor(modem: modem, timeout: timeout)
+    var editor = DatabaseEditor(modem: modem, timeout: timeout)
     let addresses = try await editor.addresses(for: group)
     let controller = addresses.address(of: group.controller)
 
     for responder in group.responders {
+
+      // The controller's record goes first, so the controller stops cleaning up with a
+      // responder that no longer answers to the group.
+      try await editor.delete(
+        group: group.number,
+        address: addresses.address(of: responder.endpoint),
+        isController: true,
+        from: group.controller
+      )
 
       try await editor.delete(
         group: group.number,
         address: controller,
         isController: false,
         from: responder.endpoint
-      )
-
-      try await editor.delete(
-        group: group.number,
-        address: addresses.address(of: responder.endpoint),
-        isController: true,
-        from: group.controller
       )
 
     }
