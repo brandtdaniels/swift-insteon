@@ -11,10 +11,10 @@ Talk to an INSTEON modem, such as a PowerLinc Modem connected by USB (2413U) or 
 | 2448A7, 2448A7H | USB Adapter | USB, through `SerialPort` | Supported, by radio only; expect X10 and Beep to be rejected |
 | 2245 | Hub 2 | Network, through `HubConnection` in InsteonHubClient | Supported |
 | 2242 | Hub 1 | Network, through `HubConnection` in InsteonHubClient | Expected to work; its buffer format hasn't been verified |
+| 2243 | Hub Pro | Network, through `HubConnection` in InsteonHubClient | Expected to work: it's built on the same foundations as the other Hubs, though it hasn't been verified |
 | 2414S | PowerLinc Controller | Serial at 4800 baud, through `SerialPort` | Supported by `PowerLincController`, which speaks IBIOS: standard messages, X10 and version |
 | 2414U | PowerLinc Controller | USB HID | Not supported: it connects through USB HID, not a serial port |
 | 2412N | SmartLinc | Network | Not supported: its interface isn't documented |
-| 2243 | Hub Pro | Network | Not supported: it's built around HomeKit and has no documented local modem interface |
 
 The Supported Modems article in the documentation explains each caveat.
 

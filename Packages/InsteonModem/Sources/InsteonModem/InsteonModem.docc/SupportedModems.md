@@ -16,6 +16,7 @@ uses them, whatever the connection:
 | 2448A7, 2448A7H | USB Adapter | USB, through ``SerialPort`` | Supported, by radio only; see <doc:SupportedModems#The-USB-Adapter> |
 | 2245 | Hub 2 | Network, through `HubConnection` in InsteonHubClient | Supported |
 | 2242 | Hub 1 | Network, through `HubConnection` in InsteonHubClient | Expected to work: it serves the same local HTTP requests, though its buffer format hasn't been verified |
+| 2243 | Hub Pro | Network, through `HubConnection` in InsteonHubClient | Expected to work: it's built on the same foundations as the other Hubs and answers Hub discovery, though it hasn't been verified |
 | 2414S | PowerLinc Controller | Serial at 4800 baud, through ``SerialPort`` | Supported by ``PowerLincController`` rather than ``Modem``; see <doc:SupportedModems#The-PowerLinc-Controller> |
 
 These aren't supported:
@@ -23,7 +24,6 @@ These aren't supported:
 - **PowerLinc Controller by USB (2414U):** it connects through USB HID rather than a serial
   port.
 - **SmartLinc (2412N):** its interface isn't documented.
-- **Hub Pro (2243):** it's built around HomeKit and has no documented local modem interface.
 
 ### Identifying a modem
 
