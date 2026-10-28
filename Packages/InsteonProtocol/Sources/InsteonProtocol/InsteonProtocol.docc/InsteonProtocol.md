@@ -92,6 +92,16 @@ what the device is, from a device database.
 - ``LeakSensorEvent``
 - ``SmokeBridgeEvent``
 
+### Thermostats
+
+- ``ThermostatCommand``
+- ``ThermostatModeSetting``
+- ``ThermostatFanSetting``
+- ``ThermostatTemperature``
+- ``ThermostatMode``
+- ``ThermostatStatusReport``
+- ``ThermostatDisplayOption``
+
 ### Broadcasts
 
 - ``Heartbeat``
