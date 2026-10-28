@@ -27,6 +27,9 @@ public protocol LinkingModem: Sendable {
   /// Finds every record in the modem's own ALL-Link database for a group and device.
   func allLinkRecords(group: AllLinkGroupNumber, device: InsteonAddress) async throws -> [AllLinkRecord]
 
+  /// Reads every record in the modem's own ALL-Link database.
+  func allLinkRecords() async throws -> [AllLinkRecord]
+
   /// Returns a stream of everything the modem sends after this call.
   func replies() async -> AsyncStream<ModemReply>
 

@@ -7,7 +7,8 @@ import InsteonProtocol
 /// database: records that already link the same device in the same group and role are updated
 /// in place, otherwise the first record no longer in use is reused, otherwise the record goes
 /// at the end and the record after it becomes the new end. Each write is read back to check
-/// it. Each device's database is read once, then kept up to date as records are written.
+/// it. Each device's database is read once, then kept up to date as records are written. With
+/// a cache, databases are read through it and what's written is stored in it.
 struct DatabaseEditor {
 
   /// The addresses of a group's endpoints.
@@ -39,13 +40,16 @@ struct DatabaseEditor {
 
   let timeout: Duration
 
+  let cache: AllLinkDatabaseCache?
+
   /// The device databases read so far, kept up to date with every write.
   private var databases: [InsteonAddress: [AllLinkRecordResponse]] = [:]
 
-  init(modem: any LinkingModem, timeout: Duration) {
+  init(modem: any LinkingModem, timeout: Duration, cache: AllLinkDatabaseCache?) {
 
     self.modem = modem
     self.timeout = timeout
+    self.cache = cache
 
   }
 
@@ -111,6 +115,7 @@ struct DatabaseEditor {
       try await deleteFromModem(group: group, address: address, isController: isController)
     case let .device(device):
       var records = try await database(of: device)
+      var deletedAny = false
 
       for index in records.indices {
 
@@ -134,10 +139,15 @@ struct DatabaseEditor {
 
         try await write(deleted, at: records[index].address, in: device)
         records[index].record = deleted
+        deletedAny = true
 
       }
 
-      databases[device] = records
+      if deletedAny {
+
+        await store(records, of: device)
+
+      }
     }
 
   }
@@ -146,7 +156,8 @@ struct DatabaseEditor {
 
   private mutating func write(_ record: AllLinkRecord, into device: InsteonAddress) async throws {
 
-    var records = try await database(of: device)
+    let original = try await database(of: device)
+    var records = original
     let isController = record.flags.contains(.controller)
 
     let matches = records.indices.filter { index in
@@ -198,7 +209,11 @@ struct DatabaseEditor {
 
     }
 
-    databases[device] = records
+    if records != original {
+
+      await store(records, of: device)
+
+    }
 
   }
 
@@ -226,10 +241,27 @@ struct DatabaseEditor {
 
     }
 
-    let records = try await modem.readAllLinkDatabase(of: device, timeout: timeout)
+    let records = if let cache {
+
+      try await cache.records(of: device)
+
+    } else {
+
+      try await modem.readAllLinkDatabase(of: device, timeout: timeout)
+
+    }
+
     databases[device] = records
 
     return records
+
+  }
+
+  /// Keeps a device's records as they are after a write, here and in the cache.
+  private mutating func store(_ records: [AllLinkRecordResponse], of device: InsteonAddress) async {
+
+    databases[device] = records
+    await cache?.store(records, of: device)
 
   }
 
@@ -251,6 +283,8 @@ struct DatabaseEditor {
 
     }
 
+    await cache?.invalidateModem()
+
     try await modem.send(.manageAllLinkRecord(
       action: isController ? .modifyFirstControllerOrAdd : .modifyFirstResponderOrAdd,
       record: record
@@ -267,6 +301,8 @@ struct DatabaseEditor {
       return
 
     }
+
+    await cache?.invalidateModem()
 
     // The modem deletes the first record matching a group and address whatever its role, so
     // every match is deleted and those of the other role are added back.

@@ -75,6 +75,16 @@ The modem's own database is changed with its Manage ALL-Link Record command. Its
 matches a record's group and address but not its role, so ``Unlinker`` finds every matching
 record first, deletes them all, and adds back the ones it's keeping.
 
+### Reading databases less often
+
+Reading a device's database takes a request for every record, so a linker reads each
+database once per call. To read it less often across calls, give ``Linker`` and ``Unlinker``
+the same ``AllLinkDatabaseCache``. It keeps each device's database along with the device's
+ALL-Link database delta, a byte the device changes whenever its database does, and before
+reusing a copy it asks the device for its delta with one status request. A database the
+linker writes is kept as written. The modem's own database is kept until something changes
+it.
+
 ## Topics
 
 ### Groups
@@ -88,6 +98,10 @@ record first, deletes them all, and adds back the ones it's keeping.
 - ``Linker``
 - ``Unlinker``
 - ``LinkingError``
+
+### Databases
+
+- ``AllLinkDatabaseCache``
 
 ### Modems
 

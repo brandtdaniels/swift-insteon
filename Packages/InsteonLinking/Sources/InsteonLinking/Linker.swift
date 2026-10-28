@@ -33,6 +33,9 @@ public struct Linker: Sendable {
   /// The clock that times the wait for a link.
   public let clock: any Clock<Duration>
 
+  /// The cache databases are read through and kept in, if any.
+  public let cache: AllLinkDatabaseCache?
+
   /// Creates a linker.
   ///
   /// - Parameters:
@@ -41,15 +44,20 @@ public struct Linker: Sendable {
   ///     `Modem.defaultExtendedRequestTimeout`, since most of the requests are extended.
   ///   - clock: The clock that times the wait for a link. Defaults to a `ContinuousClock`;
   ///     tests can pass a clock they control.
+  ///   - cache: A cache to read databases through and keep what's written in, so a database
+  ///     is read again only when it has changed. Defaults to `nil`, which reads each database
+  ///     once per call.
   public init(
     modem: any LinkingModem,
     timeout: Duration = Modem.defaultExtendedRequestTimeout,
-    clock: any Clock<Duration> = ContinuousClock()
+    clock: any Clock<Duration> = ContinuousClock(),
+    cache: AllLinkDatabaseCache? = nil
   ) {
 
     self.modem = modem
     self.timeout = timeout
     self.clock = clock
+    self.cache = cache
 
   }
 
@@ -68,7 +76,7 @@ public struct Linker: Sendable {
   ///   device that isn't linked to the modem.
   public func link(_ group: AllLinkGroup) async throws {
 
-    var editor = DatabaseEditor(modem: modem, timeout: timeout)
+    var editor = DatabaseEditor(modem: modem, timeout: timeout, cache: cache)
     let addresses = try await editor.addresses(for: group)
     let controller = addresses.address(of: group.controller)
 
@@ -146,7 +154,7 @@ public struct Linker: Sendable {
     timeout linkingTimeout: Duration = Linker.defaultRemoteLinkingTimeout
   ) async throws -> AllLinkingCompleted {
 
-    try await LinkingSession(modem: modem, timeout: timeout, clock: clock).remote(
+    try await LinkingSession(modem: modem, timeout: timeout, clock: clock, cache: cache).remote(
       device,
       deviceCommand: .enterLinkingMode(group: deviceGroup),
       modemMode: modemRole.linkingMode,
@@ -180,7 +188,7 @@ public struct Linker: Sendable {
     timeout linkingTimeout: Duration = Linker.defaultManualLinkingTimeout
   ) async throws -> AllLinkingCompleted {
 
-    try await LinkingSession(modem: modem, timeout: timeout, clock: clock).manual(
+    try await LinkingSession(modem: modem, timeout: timeout, clock: clock, cache: cache).manual(
       modemMode: modemRole.linkingMode,
       group: group,
       expecting: modemRole.linkingMode,
