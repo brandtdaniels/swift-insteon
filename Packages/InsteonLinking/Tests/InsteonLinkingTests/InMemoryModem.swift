@@ -72,6 +72,15 @@ actor InMemoryModem: LinkingModem {
   /// How many records were deleted from the modem.
   private(set) var modemDeletions = 0
 
+  /// Each device's ALL-Link database delta, which changes with every write to its database.
+  private var deltas: [InsteonAddress: UInt8] = [:]
+
+  /// How many times each device's whole database was read.
+  private(set) var databaseReads: [InsteonAddress: Int] = [:]
+
+  /// How many times the modem's whole database was read.
+  private(set) var modemDatabaseReads = 0
+
   /// Whether the modem was asked for its own address.
   private(set) var wasAskedForItsAddress = false
 
@@ -135,6 +144,14 @@ actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Someone changes a device's database without the linker, such as by pressing its SET
+  /// button, so its delta changes.
+  func changeDatabase(of device: InsteonAddress) {
+
+    deltas[device, default: 0] &+= 1
+
+  }
+
   func record(of device: InsteonAddress, at address: UInt16) -> AllLinkRecord {
 
     databases[device]?[address] ?? Self.end
@@ -175,6 +192,24 @@ actor InMemoryModem: LinkingModem {
 
     let device = message.destination
     var command2 = message.command.command2
+
+    if message.command.command1 == 0x19 {
+
+      guard !unlinkedDevices.contains(device) else {
+
+        throw ModemError.deviceRejected(device, .notLinked)
+
+      }
+
+      // A status request's acknowledgement carries the database delta in cmd1.
+      return ReceivedMessage(
+        sender: device,
+        destination: address,
+        flags: MessageFlags(messageType: .directAcknowledgement),
+        command: Command(command1: deltas[device, default: 0], command2: 0x00)
+      )
+
+    }
 
     if message.command.command1 == 0x0D {
 
@@ -237,6 +272,7 @@ actor InMemoryModem: LinkingModem {
 
       if !forgetfulDevices.contains(device) {
 
+        changeDatabase(of: device)
         databases[device, default: [:]][recordAddress] = AllLinkRecord(
           flags: AllLinkRecordFlags(rawValue: data[6]),
           group: AllLinkGroupNumber(rawValue: data[7]),
@@ -279,6 +315,14 @@ actor InMemoryModem: LinkingModem {
 
   }
 
+  func allLinkRecords() async throws -> [AllLinkRecord] {
+
+    modemDatabaseReads += 1
+
+    return modemRecords
+
+  }
+
   func readAllLinkDatabase(of device: InsteonAddress, timeout: Duration) async throws -> [AllLinkRecordResponse] {
 
     guard !unlinkedDevices.contains(device) else {
@@ -286,6 +330,8 @@ actor InMemoryModem: LinkingModem {
       throw ModemError.deviceRejected(device, .notLinked)
 
     }
+
+    databaseReads[device, default: 0] += 1
 
     var responses: [AllLinkRecordResponse] = []
     var recordAddress: UInt16 = 0x0FFF

@@ -9,6 +9,7 @@ Link INSTEON devices to each other and to the modem: by writing the records of e
 - `Linker`: writes a group's controller and responder records, reusing free records and checking each write; links a device to the modem remotely (i2 and i2cs) or with its SET button (every engine)
 - `Unlinker`: deletes a group's records, or unlinks a device from the modem remotely or with its SET button
 - `ModemRole`: whether the modem controls a device or responds to it
+- `AllLinkDatabaseCache`: keeps the modem's and devices' ALL-Link databases, reading a device's again only when its database delta changes
 - `LinkingModem`: what the linker needs from a modem; `Modem` from InsteonModem conforms
 
 Devices with an i2 or i2cs engine accept database writes; an i2cs device accepts them only once it's linked to the modem.

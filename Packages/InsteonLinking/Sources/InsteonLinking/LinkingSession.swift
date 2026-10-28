@@ -12,6 +12,9 @@ struct LinkingSession: Sendable {
 
   let clock: any Clock<Duration>
 
+  /// The cache whose copy of the modem's database a link may change.
+  let cache: AllLinkDatabaseCache?
+
   /// Links or unlinks a device without anyone pressing its SET button.
   ///
   /// The device is asked for its engine, then the modem and the device enter their modes in
@@ -172,7 +175,12 @@ struct LinkingSession: Sendable {
       // modem's own group only when it controls the link, so a responder's isn't checked.
       let reportedGroup = modemMode == .responder ? nil : group
 
-      return try await firstLink(in: replies, with: device, group: reportedGroup, expecting: expectedMode, within: linkingTimeout)
+      let link = try await firstLink(in: replies, with: device, group: reportedGroup, expecting: expectedMode, within: linkingTimeout)
+
+      // The modem's database changed. A device's copy is checked against its delta anyway.
+      await cache?.invalidateModem()
+
+      return link
 
     } catch {
 
@@ -193,6 +201,9 @@ struct LinkingSession: Sendable {
         await restore()
 
       }
+
+      // A link may have been made even so, such as one with another device.
+      await cache?.invalidateModem()
 
       throw error
 
