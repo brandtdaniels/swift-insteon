@@ -62,6 +62,11 @@ Both supported Hubs were sold as the INSTEON Hub, so they're identified here by 
 | 2242 | Hub 1 | Expected to work: it serves the same local HTTP requests on the same port, though its buffer format hasn't been verified |
 | 2243 | Hub Pro | Not supported: it's built around HomeKit and has no documented local modem interface |
 
+SmartLabs' HouseLinc software drove the 2242 and 2245 the same way, which suggests they share
+their local interface, and had no such support for the 2243. A Hub's modem reports its model
+through `SerialCommand.getModemInfo`: category `0x03` with subcategory `0x33` to `0x36` for
+the 2245, or `0x2B` or `0x2E` to `0x32` for the 2242.
+
 ## Topics
 
 ### Connecting

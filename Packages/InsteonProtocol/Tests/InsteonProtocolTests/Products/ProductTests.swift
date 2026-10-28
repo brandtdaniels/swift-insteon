@@ -130,7 +130,7 @@ struct ProductTests {
 
   @Test func readsProductDataFromTheUserData() throws {
 
-    let userData = try UserData([0x00, 0x00, 0x00, 0x34, 0x00, 0x05, 0xFF, 0xFF, 0x41, 0, 0, 0, 0, 0])
+    let userData = try UserData([0x00, 0x01, 0x02, 0x34, 0x00, 0x05, 0xFF, 0xFF, 0x41, 0, 0, 0, 0, 0])
     let message = ReceivedMessage(
       sender: device,
       destination: modem,
@@ -141,6 +141,7 @@ struct ProductTests {
 
     let product = try #require(ProductData(message))
 
+    #expect(product.productKey == ProductKey(0x01, 0x02, 0x34))
     #expect(product.category == 0x00)
     #expect(product.subcategory == 0x05)
     #expect(product.userDefined == [0x41, 0, 0, 0, 0, 0])
@@ -171,6 +172,9 @@ struct ProductTests {
   }
 
   @Test func printsIdentityBytesInHex() {
+
+    #expect(ProductKey(0x00, 0x00, 0x1F).description == "0x00001F")
+    #expect(ProductKey(0x12, 0x34, 0x56).description == "0x123456")
 
     #expect(DeviceCategory(rawValue: 0x0E).description == "0x0E")
     #expect(DeviceSubcategory(rawValue: 0x2A).description == "0x2A")

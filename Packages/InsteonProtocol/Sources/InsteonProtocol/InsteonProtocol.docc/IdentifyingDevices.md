@@ -15,7 +15,10 @@ broadcast, which ``SetButtonPressed`` reads. The same broadcast arrives when som
 device's SET button to link it.
 
 Devices that support ``StandardDirectCommand/productDataRequest`` answer it with an extended
-message, which ``ProductData`` reads.
+message, which ``ProductData`` reads. Besides the category and subcategory, it carries the
+device's ``ProductKey``. The Developer's Guide requires one of devices made after
+February 1, 2007, but many devices don't fill it in, so identify devices by their category,
+subcategory and firmware version.
 
 When the modem becomes a device's controller by linking, it reports the device's category and
 subcategory in ``AllLinkingCompleted``. Only devices that don't answer the Product Data Request
