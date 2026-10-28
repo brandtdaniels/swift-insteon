@@ -30,8 +30,8 @@ public struct IPv4Subnet: Hashable, Sendable {
   /// - Parameters:
   ///   - address: An address in the subnet, such as `"192.168.1.20"`.
   ///   - prefixLength: How many leading bits name the network, from 0 to 32.
-  /// - Returns: `nil` if the address isn't four numbers from 0 to 255 separated by dots, or
-  ///   the prefix length is outside 0 to 32.
+  /// - Returns: `nil` if the address isn't four decimal numbers from 0 to 255 separated by
+  ///   dots, without leading zeros, or the prefix length is outside 0 to 32.
   public init?(address: String, prefixLength: Int) {
 
     let parts = address.split(separator: ".", omittingEmptySubsequences: false)
@@ -46,8 +46,14 @@ public struct IPv4Subnet: Hashable, Sendable {
 
     for part in parts {
 
-      // UInt8 also accepts a leading "+", which isn't dotted-decimal.
-      guard !part.isEmpty, part.allSatisfy({ $0.isASCII && $0.isNumber }), let octet = UInt8(part) else {
+      // UInt8 also accepts a leading "+", which isn't dotted-decimal, and other parsers read a
+      // leading zero as octal, so only plain decimal digits without one are accepted.
+      guard
+        !part.isEmpty,
+        part.allSatisfy({ $0.isASCII && $0.isNumber }),
+        part == "0" || part.first != "0",
+        let octet = UInt8(part)
+      else {
 
         return nil
 

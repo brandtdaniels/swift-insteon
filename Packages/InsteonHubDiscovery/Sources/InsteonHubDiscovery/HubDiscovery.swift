@@ -180,7 +180,7 @@ public struct HubDiscovery: Sendable {
   private func probe(_ endpoint: HubEndpoint, with request: URLRequest) async throws -> DiscoveredHub? {
 
     var request = request
-    request.timeoutInterval = Self.seconds(probeTimeout)
+    request.timeoutInterval = probeTimeout.timeInterval
 
     let response: HTTPResponse
 
@@ -210,10 +210,14 @@ public struct HubDiscovery: Sendable {
 
   }
 
-  /// A duration in seconds, as `URLRequest` takes it.
-  private static func seconds(_ duration: Duration) -> TimeInterval {
+}
 
-    let (seconds, attoseconds) = duration.components
+extension Duration {
+
+  /// The duration in seconds, as `URLRequest` takes it.
+  var timeInterval: TimeInterval {
+
+    let (seconds, attoseconds) = components
 
     return TimeInterval(seconds) + TimeInterval(attoseconds) / 1e18
 
