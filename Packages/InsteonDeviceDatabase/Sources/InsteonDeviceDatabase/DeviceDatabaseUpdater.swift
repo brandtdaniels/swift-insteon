@@ -1,6 +1,8 @@
-#if canImport(CryptoKit)
-import CryptoKit
+import Crypto
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import InsteonNetworking
 
 /// The result of checking for a newer copy of the device database.
@@ -52,9 +54,8 @@ public enum DeviceDatabaseUpdateError: Error, Hashable, Sendable {
 /// }
 /// ```
 ///
-/// Updating is optional: the package ships a copy, so an app works without ever updating. The
-/// updater checks hashes with CryptoKit, so it's available only where CryptoKit is, on Apple
-/// platforms.
+/// Updating is optional: the package ships a copy, so an app works without ever updating.
+/// Hashes are worked out with swift-crypto, which uses CryptoKit on Apple platforms.
 public struct DeviceDatabaseUpdater: Sendable {
 
   /// Where the INSTEON device database publishes the format version this package reads.
@@ -197,4 +198,3 @@ public struct DeviceDatabaseUpdater: Sendable {
   }
 
 }
-#endif

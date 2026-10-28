@@ -11,6 +11,10 @@ let package = Package(
     .watchOS(.v9),
     .visionOS(.v1)
   ],
+  dependencies: [
+    // SHA-256 for DeviceDatabaseUpdater: CryptoKit on Apple platforms, BoringSSL elsewhere.
+    .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMinor(from: "5.0.3"))
+  ],
   products: [
     .library(name: "InsteonProtocol", targets: ["InsteonProtocol"]),
     .library(name: "InsteonNetworking", targets: ["InsteonNetworking"]),
@@ -111,9 +115,9 @@ let package = Package(
     .target(
       name: "InsteonDeviceDatabase",
       dependencies: [
-        // Only DeviceDatabaseUpdater uses it, and it needs CryptoKit.
-        .target(name: "InsteonNetworking", condition: .when(platforms: [.macOS, .iOS, .tvOS, .watchOS, .visionOS])),
-        "InsteonProtocol"
+        "InsteonNetworking",
+        "InsteonProtocol",
+        .product(name: "Crypto", package: "swift-crypto")
       ],
       path: "Packages/InsteonDeviceDatabase/Sources/InsteonDeviceDatabase",
       resources: [.copy("Resources/database.json")]
@@ -122,8 +126,9 @@ let package = Package(
       name: "InsteonDeviceDatabaseTests",
       dependencies: [
         "InsteonDeviceDatabase",
-        .target(name: "InsteonNetworking", condition: .when(platforms: [.macOS, .iOS, .tvOS, .watchOS, .visionOS])),
-        "InsteonProtocol"
+        "InsteonNetworking",
+        "InsteonProtocol",
+        .product(name: "Crypto", package: "swift-crypto")
       ],
       path: "Packages/InsteonDeviceDatabase/Tests/InsteonDeviceDatabaseTests"
     ),

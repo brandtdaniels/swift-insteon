@@ -33,10 +33,9 @@ if profile.event(group: 0x02, command1: 0x11) == "wet" {
 print(profile.heartbeatInterval ?? .zero)
 ```
 
-On Apple platforms, `DeviceDatabaseUpdater` keeps an app's copy current: it downloads the
-published database only when the published manifest's SHA-256 differs from the app's copy,
-and uses the download only if it hashes to that SHA-256. Updating is optional, and the
-updater isn't available on Linux, where apps use the copy the package ships with.
+``DeviceDatabaseUpdater`` keeps an app's copy current: it downloads the published database
+only when the published manifest's SHA-256 differs from the app's copy, and uses the download
+only if it hashes to that SHA-256. Updating is optional.
 
 A device with no profile can still be handled by what its `DeviceCategory` implies, such as
 dimming for dimmable lighting control.
@@ -47,6 +46,12 @@ dimming for dimmable lighting control.
 
 - ``DeviceDatabase``
 - ``DeviceDatabaseError``
+
+### Updating
+
+- ``DeviceDatabaseUpdater``
+- ``DeviceDatabaseUpdate``
+- ``DeviceDatabaseUpdateError``
 
 ### Profiles
 

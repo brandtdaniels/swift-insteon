@@ -1,6 +1,8 @@
-#if canImport(CryptoKit)
-import CryptoKit
+import Crypto
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import Testing
 import InsteonDeviceDatabase
 import InsteonNetworking
@@ -186,4 +188,3 @@ struct DeviceDatabaseUpdaterTests {
   }
 
 }
-#endif

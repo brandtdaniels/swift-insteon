@@ -4,7 +4,7 @@ Find what an INSTEON device is and can do from the category, subcategory and fir
 
 - `DeviceDatabase`: the profiles, a copy of the INSTEON device database shipped with the package, and lookups by identity or model
 - `DeviceProfile`: a product's model, name, identities, ALL-Link groups and capabilities, what it means by each command it sends to a group, and its heartbeat interval
-- `DeviceDatabaseUpdater`: on Apple platforms, downloads the published database when it differs from the app's copy, checked against the manifest's SHA-256 with CryptoKit
+- `DeviceDatabaseUpdater`: downloads the published database when it differs from the app's copy, checked against the manifest's SHA-256
 - `DeviceCapability`, `DeviceIdentity`, `ProductModel` and `DeviceEventName`: the parts of a profile
 
 The shipped copy is `Sources/InsteonDeviceDatabase/Resources/database.json`, the `v1/database.json` the [INSTEON device database](https://github.com/brandtdaniels/insteon-device-database) publishes. Refresh it with `Scripts/update-device-database.sh`.

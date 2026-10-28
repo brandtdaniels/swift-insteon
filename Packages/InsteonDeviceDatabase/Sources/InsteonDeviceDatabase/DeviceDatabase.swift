@@ -5,8 +5,8 @@ import InsteonProtocol
 /// reports.
 ///
 /// The package ships a copy of the INSTEON device database, which ``DeviceDatabase/bundled()``
-/// loads. An app can instead load a copy it downloaded, such as with `DeviceDatabaseUpdater`,
-/// with ``DeviceDatabase/init(json:)``.
+/// loads. An app can keep a newer copy with ``DeviceDatabaseUpdater``, or load one it
+/// downloaded itself with ``DeviceDatabase/init(json:)``.
 ///
 /// ```swift
 /// let database = try DeviceDatabase.bundled()
