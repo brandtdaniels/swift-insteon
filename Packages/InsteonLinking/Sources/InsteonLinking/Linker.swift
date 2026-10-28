@@ -129,7 +129,7 @@ public struct Linker: Sendable {
   ///   - modemGroup: The modem's group: the group the device joins, or the group the modem
   ///     joins it in.
   ///   - deviceGroup: The device's group or button. Devices with only one group ignore it.
-  ///   - timeout: How long to wait for the modem to report the link. Defaults to
+  ///   - linkingTimeout: How long to wait for the modem to report the link. Defaults to
   ///     ``Linker/defaultRemoteLinkingTimeout``.
   /// - Returns: The link the modem reports.
   /// - Throws: ``LinkingError/remoteLinkingUnsupported(_:)`` for an i1 device,
@@ -167,7 +167,7 @@ public struct Linker: Sendable {
   /// - Parameters:
   ///   - modemRole: Whether the modem controls the device or responds to it.
   ///   - group: The modem's group.
-  ///   - timeout: How long to wait. Defaults to ``Linker/defaultManualLinkingTimeout``.
+  ///   - linkingTimeout: How long to wait. Defaults to ``Linker/defaultManualLinkingTimeout``.
   /// - Returns: The link the modem reports, including the device's address.
   /// - Throws: ``LinkingError/linkingTimedOut`` if no device links in time,
   ///   ``LinkingError/unexpectedLink(_:)`` if the modem reports a different kind of link, or

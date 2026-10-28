@@ -97,7 +97,7 @@ public struct Unlinker: Sendable {
   ///   - modemRole: Whether the modem controls the device or responds to it.
   ///   - modemGroup: The modem's group in the link.
   ///   - deviceGroup: The device's group or button. Devices with only one group ignore it.
-  ///   - timeout: How long to wait for the modem to report the link removed. Defaults to
+  ///   - linkingTimeout: How long to wait for the modem to report the link removed. Defaults to
   ///     `Linker.defaultRemoteLinkingTimeout`.
   /// - Throws: ``LinkingError/remoteLinkingUnsupported(_:)`` for an i1 device,
   ///   ``LinkingError/linkingTimedOut`` if the link isn't removed in time,
@@ -153,7 +153,7 @@ public struct Unlinker: Sendable {
   /// - Parameters:
   ///   - modemRole: Whether the modem controls the device or responds to it.
   ///   - group: The modem's group in the link.
-  ///   - timeout: How long to wait. Defaults to `Linker.defaultManualLinkingTimeout`.
+  ///   - linkingTimeout: How long to wait. Defaults to `Linker.defaultManualLinkingTimeout`.
   /// - Returns: The removed link the modem reports, including the device's address.
   /// - Throws: ``LinkingError/linkingTimedOut`` if no device unlinks in time,
   ///   ``LinkingError/unexpectedLink(_:)`` if the modem reports a new link instead, or the
