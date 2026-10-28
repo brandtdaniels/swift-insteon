@@ -14,7 +14,7 @@ public enum HubError: Error, Hashable, Sendable {
   /// A 2242 Hub's page of slot statuses could not be parsed.
   case malformedSlotPage
 
-  /// The slot holds the Hub's unlock code, so it can't hold a timer.
+  /// The slot can't hold a timer: it holds the Hub's unlock code, or it's in the thermostat room.
   case reservedSlot(HubSlot)
 
 }

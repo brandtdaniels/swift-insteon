@@ -3,12 +3,19 @@ import InsteonProtocol
 /// One of the 256 slots in which a 2242 Hub keeps a scene or device it runs timers for.
 ///
 /// The Hub arranges its slots as 16 pages of 16, and numbers them from 1: slot `n` is index
-/// `(n - 1) % 16 + 1` on page `(n - 1) / 16 + 1`. Slot 240 holds the Hub's unlock code rather
-/// than a timer.
+/// `(n - 1) % 16 + 1` on page `(n - 1) / 16 + 1`. Each page is one of the Hub's rooms. Timers go
+/// in slots 1 through 239, the ones Insteon's Hub app used: slot 240 holds the Hub's unlock code,
+/// and the last page is the thermostat room, which the app kept disabled.
 public struct HubSlot: RawRepresentable, Hashable, Sendable, Comparable {
 
   /// The slot that holds the Hub's unlock code.
   public static let unlockCode = HubSlot(rawValue: 240)!
+
+  /// The slots that hold timers: 1 through 239.
+  public static let timerSlots = 1...239
+
+  /// Whether the slot can hold a timer.
+  public var holdsTimers: Bool { Self.timerSlots.contains(rawValue) }
 
   /// The slot number, from 1 through 256.
   public let rawValue: Int
@@ -127,8 +134,9 @@ public struct HubSlotStatus: Hashable, Sendable {
 
   /// Parses one page of slot statuses from the Hub's `b.xml` response.
   ///
-  /// The page lists each slot as two `S` elements: one whose `D` attribute is the device and
-  /// group, such as `1A.DC.49.01`, then one whose `D` attribute is the flags in hex.
+  /// The page lists `S` elements whose `D` attributes are either a slot's device and group,
+  /// such as `1A.DC.49.01`, or a slot's flags in hex. As Insteon's Hub app reads the page, the
+  /// first device and group goes with the first flags, and so on, in slot order.
   ///
   /// - Parameters:
   ///   - response: The response body as text.
@@ -138,8 +146,10 @@ public struct HubSlotStatus: Hashable, Sendable {
   static func page(_ response: String, page: Int) throws(HubError) -> [HubSlotStatus] {
 
     let values = attributeValues(in: response)
+    let targets = values.filter { $0.count > 2 }
+    let flags = values.filter { $0.count <= 2 }
 
-    guard values.count.isMultiple(of: 2), values.count <= 32 else {
+    guard targets.count == flags.count, targets.count <= 16 else {
 
       throw .malformedSlotPage
 
@@ -147,15 +157,14 @@ public struct HubSlotStatus: Hashable, Sendable {
 
     var statuses: [HubSlotStatus] = []
 
-    for (offset, pair) in stride(from: 0, to: values.count, by: 2).map({ (values[$0], values[$0 + 1]) }).enumerated() {
+    for (offset, (target, flag)) in zip(targets, flags).enumerated() {
 
-      let bytes = pair.0.split(separator: ".", omittingEmptySubsequences: false).compactMap { UInt8($0, radix: 16) }
+      let bytes = target.split(separator: ".", omittingEmptySubsequences: false).compactMap { UInt8($0, radix: 16) }
 
       guard
         bytes.count == 4,
-        pair.0.count == 11,
-        pair.1.count <= 2,
-        let flags = UInt8(pair.1, radix: 16),
+        target.count == 11,
+        let flags = UInt8(flag, radix: 16),
         let slot = HubSlot(page: page, index: offset + 1)
       else {
 
@@ -176,7 +185,7 @@ public struct HubSlotStatus: Hashable, Sendable {
 
   }
 
-  /// The `D` attribute of each `S` element, in order.
+  /// The `D` attribute of each `S` element, in order, in either kind of quotes.
   private static func attributeValues(in response: String) -> [String] {
 
     var values: [String] = []
@@ -186,14 +195,22 @@ public struct HubSlotStatus: Hashable, Sendable {
 
       rest = rest[element.upperBound...]
 
-      guard let start = rest.range(of: "D=\""), let end = rest.range(of: "\"", range: start.upperBound..<rest.endIndex) else {
+      guard let name = rest.range(of: "D="), let quote = rest[name.upperBound...].first, quote == "\"" || quote == "'" else {
 
         break
 
       }
 
-      values.append(String(rest[start.upperBound..<end.lowerBound]))
-      rest = rest[end.upperBound...]
+      let start = rest.index(after: name.upperBound)
+
+      guard let end = rest[start...].firstIndex(of: quote) else {
+
+        break
+
+      }
+
+      values.append(String(rest[start..<end]))
+      rest = rest[rest.index(after: end)...]
 
     }
 

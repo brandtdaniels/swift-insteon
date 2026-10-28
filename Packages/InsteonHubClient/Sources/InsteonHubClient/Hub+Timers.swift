@@ -38,12 +38,12 @@ extension Hub {
   /// - Parameters:
   ///   - timer: The timer. One with no times and no days removes the slot's timer.
   ///   - slot: The slot.
-  /// - Throws: ``HubError/reservedSlot(_:)`` for the slot that holds the unlock code,
+  /// - Throws: ``HubError/reservedSlot(_:)`` for a slot past 239,
   ///   ``HubError`` if the Hub rejected a request or the slot's page couldn't be parsed, or the
   ///   HTTP client's error.
   public func setTimer(_ timer: HubTimer, for slot: HubSlot) async throws {
 
-    guard slot != .unlockCode else {
+    guard slot.holdsTimers else {
 
       throw HubError.reservedSlot(slot)
 
@@ -60,11 +60,11 @@ extension Hub {
   /// - Parameters:
   ///   - commands: The commands, or `nil` to send none.
   ///   - slot: The slot.
-  /// - Throws: ``HubError/reservedSlot(_:)`` for the slot that holds the unlock code,
+  /// - Throws: ``HubError/reservedSlot(_:)`` for a slot past 239,
   ///   ``HubError`` if the Hub rejected the request, or the HTTP client's error.
   public func setCommands(_ commands: HubSlotCommands?, for slot: HubSlot) async throws {
 
-    guard slot != .unlockCode else {
+    guard slot.holdsTimers else {
 
       throw HubError.reservedSlot(slot)
 

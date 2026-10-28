@@ -83,9 +83,10 @@ their local interface; it didn't drive the 2243. A Hub's modem reports its model
 ### Timers the Hub runs
 
 A 2242 Hub runs timers on its own, so they keep running with no app connected. It keeps them in
-256 numbered slots, 16 pages of 16. Each slot has a name, an on time and an off time, the days of
-the week it runs, and the serial commands it sends to turn on and off. Slot 240 holds the Hub's
-unlock code instead.
+256 numbered slots, 16 pages of 16, one page per room. Each slot has a name, an on time and an
+off time, the days of the week it runs, and the serial commands it sends to turn on and off.
+Timers go in slots 1 through 239, the ones Insteon's Hub app used: slot 240 holds the Hub's unlock
+code, and the last page is the thermostat room, which the app kept disabled.
 
 ``Hub/setCommands(_:for:)`` sets what a slot sends, and ``Hub/setTimer(_:for:)`` sets when.
 Times are a time of day, sunrise or sunset. The Hub works out sunrise and sunset from a table of

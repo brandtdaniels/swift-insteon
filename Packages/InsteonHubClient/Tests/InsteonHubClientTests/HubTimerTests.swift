@@ -54,6 +54,19 @@ struct HubTimerTests {
 
   }
 
+  // Insteon's Hub app pairs the devices and the flags in order, whether or not they alternate.
+  @Test func readsAPageListingDevicesThenFlagsInEitherQuotes() async throws {
+
+    let (hub, _) = makeHub(answering: #"<S D='1A.DC.49.01'/><S D="00.00.00.00"/><S D="13"/><S D='00'/>"#)
+
+    let statuses = try await hub.slotStatuses(page: 3)
+
+    #expect(statuses.map(\.slot.rawValue) == [33, 34])
+    #expect(statuses.map(\.device) == [plug, InsteonAddress(0, 0, 0)])
+    #expect(statuses.map(\.flags) == [[.used, .active, .on], []])
+
+  }
+
   @Test(arguments: [#"<S D="1A.DC.49"/><S D="13"/>"#, #"<S D="1A.DC.49.01"/>"#, #"<S D="1A.DC.49.01"/><S D="1G"/>"#])
   func refusesAMalformedPage(_ body: String) async {
 
@@ -115,24 +128,29 @@ struct HubTimerTests {
 
   }
 
-  @Test func refusesTheUnlockCodesSlot() async {
+  @Test(arguments: [240, 241, 256])
+  func refusesSlotsPast239(_ number: Int) async throws {
 
     let (hub, stub) = makeHub()
-    let timer = HubTimer(name: HubSlotName(rawValue: "Lamp")!, on: nil, off: nil, days: [])
+    let slot = try #require(HubSlot(rawValue: number))
+    let timer = HubTimer(name: try #require(HubSlotName(rawValue: "Lamp")), on: nil, off: nil, days: [])
 
-    await #expect(throws: HubError.reservedSlot(.unlockCode)) {
+    #expect(!slot.holdsTimers)
 
-      try await hub.setTimer(timer, for: .unlockCode)
+    await #expect(throws: HubError.reservedSlot(slot)) {
+
+      try await hub.setTimer(timer, for: slot)
 
     }
 
-    await #expect(throws: HubError.reservedSlot(.unlockCode)) {
+    await #expect(throws: HubError.reservedSlot(slot)) {
 
-      try await hub.setCommands(nil, for: .unlockCode)
+      try await hub.setCommands(nil, for: slot)
 
     }
 
     #expect(await stub.requests.isEmpty)
+    #expect(HubSlot(rawValue: 239)?.holdsTimers == true)
 
   }
 
