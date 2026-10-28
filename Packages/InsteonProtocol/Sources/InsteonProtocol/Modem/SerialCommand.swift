@@ -24,7 +24,7 @@ public enum SerialCommand: Hashable, Sendable {
   ///   - group: The ALL-Link group to address.
   ///   - command: The command to send. Its cmd2 is usually `0x00`, or `0xFF` for a full-on
   ///     level.
-  case sendAllLinkCommand(group: AllLinkGroup, command: Command)
+  case sendAllLinkCommand(group: AllLinkGroupNumber, command: Command)
 
   /// Sends a standard-length INSTEON message.
   case sendStandardMessage(StandardMessage)
@@ -40,7 +40,7 @@ public enum SerialCommand: Hashable, Sendable {
   /// - Parameters:
   ///   - mode: The role the modem takes in the link, or ``AllLinkMode/delete`` to unlink.
   ///   - group: The ALL-Link group to link.
-  case startAllLinking(mode: AllLinkMode, group: AllLinkGroup)
+  case startAllLinking(mode: AllLinkMode, group: AllLinkGroupNumber)
 
   /// Takes the modem out of ALL-Linking mode.
   case cancelAllLinking

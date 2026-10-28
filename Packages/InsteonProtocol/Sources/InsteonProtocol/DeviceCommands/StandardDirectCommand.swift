@@ -13,12 +13,12 @@ public enum StandardDirectCommand: Hashable, Sendable {
   /// In i1 SET button linking, a controller in linking mode sends this to a device that
   /// broadcast ``SetButtonPressed`` as a responder, and the device acknowledges once it has
   /// joined.
-  case assignToAllLinkGroup(group: AllLinkGroup)
+  case assignToAllLinkGroup(group: AllLinkGroupNumber)
 
   /// Tells a responder to leave a controller's `group` (cmd1 `0x02`).
   ///
   /// The unlinking counterpart of ``StandardDirectCommand/assignToAllLinkGroup(group:)``.
-  case deleteFromAllLinkGroup(group: AllLinkGroup)
+  case deleteFromAllLinkGroup(group: AllLinkGroupNumber)
 
   /// Requests the device's product data (cmd1 `0x03`, cmd2 `0x00`).
   ///
@@ -39,12 +39,12 @@ public enum StandardDirectCommand: Hashable, Sendable {
   /// ``SerialCommand/startAllLinking(mode:group:)``. Devices with only one group ignore `group`.
   /// i2cs devices expect it in an extended message with a checksum. i1 devices don't accept it,
   /// so they're linked with their SET button.
-  case enterLinkingMode(group: AllLinkGroup)
+  case enterLinkingMode(group: AllLinkGroupNumber)
 
   /// Puts the device into unlinking mode for `group` (cmd1 `0x0A`).
   ///
   /// Devices with only one group ignore `group`. i1 devices don't accept it.
-  case enterUnlinkingMode(group: AllLinkGroup)
+  case enterUnlinkingMode(group: AllLinkGroupNumber)
 
   /// Requests the device's INSTEON engine version (cmd1 `0x0D`).
   ///

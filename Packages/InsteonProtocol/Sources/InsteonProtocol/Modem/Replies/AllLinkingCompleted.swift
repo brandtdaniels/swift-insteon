@@ -6,7 +6,7 @@ public struct AllLinkingCompleted: Hashable, Sendable {
   public var linkCode: UInt8
 
   /// The ALL-Link group that was linked.
-  public var group: AllLinkGroup
+  public var group: AllLinkGroupNumber
 
   /// The address of the other device.
   public var address: InsteonAddress
@@ -33,7 +33,7 @@ public struct AllLinkingCompleted: Hashable, Sendable {
   ///   - firmwareVersion: The other device's firmware version, if reported.
   public init(
     linkCode: UInt8,
-    group: AllLinkGroup,
+    group: AllLinkGroupNumber,
     address: InsteonAddress,
     category: DeviceCategory?,
     subcategory: DeviceSubcategory?,
