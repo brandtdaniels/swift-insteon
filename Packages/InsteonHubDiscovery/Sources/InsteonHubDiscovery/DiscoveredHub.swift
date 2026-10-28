@@ -1,7 +1,11 @@
 import InsteonHubClient
 import InsteonProtocol
 
-/// An INSTEON Hub that ``HubDiscovery`` found on the local network.
+/// An INSTEON Hub that ``HubDiscovery`` found on the local network, or that
+/// ``InsteonConnectLookup`` found listed for it.
+///
+/// The same Hub found both ways compares unequal when only one knows its INSTEON ID, so merge
+/// results by ``DiscoveredHub/endpoint``.
 ///
 /// Connect to it with the user name and password printed on the Hub:
 ///

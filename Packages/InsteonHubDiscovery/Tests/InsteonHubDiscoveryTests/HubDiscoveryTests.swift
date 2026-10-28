@@ -299,7 +299,7 @@ struct IPv4SubnetTests {
 
   }
 
-  @Test(arguments: ["+192.168.1.20", "192.168.1", "192.168.1.256", "192.168..20", "192.168.1.٢"])
+  @Test(arguments: ["+192.168.1.20", "192.168.1", "192.168.1.256", "192.168..20", "192.168.1.٢", "010.0.0.1"])
   func rejectsAddressesThatArentDottedDecimal(_ address: String) {
 
     #expect(IPv4Subnet(address: address, prefixLength: 24) == nil)
