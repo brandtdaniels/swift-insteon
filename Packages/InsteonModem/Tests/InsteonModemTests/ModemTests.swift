@@ -230,6 +230,28 @@ struct ModemTests {
 
   }
 
+  // The guide: the modem answers once it has erased its memory, which takes about 20 seconds
+  // on a model with external EEPROM.
+  @Test func waitsForTheModemToEraseItsMemoryWhenItResets() async throws {
+
+    let connection = ScriptedConnection { _, _ in [] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      await #expect(throws: ModemError.timedOut(.resetModem)) {
+
+        async let sent: Void = modem.send(.resetModem)
+        await clock.waitForSleeper(until: .seconds(22))
+        clock.advance(by: .seconds(22))
+        try await sent
+
+      }
+
+    }
+
+  }
+
   @Test func sendFailsWhenTheConnectionCloses() async throws {
 
     let connection = ScriptedConnection { _, _ in [] }

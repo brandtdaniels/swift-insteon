@@ -55,6 +55,9 @@ public enum SerialCommand: Hashable, Sendable {
   case setHostDeviceCategory(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?)
 
   /// Resets the modem to factory defaults, erasing its entire ALL-Link database.
+  ///
+  /// The modem answers once it has erased its memory, which the Developer's Guide says takes
+  /// about 20 seconds on a model with external EEPROM and about 2 seconds on one without.
   case resetModem
 
   /// Sets the cmd2 byte the modem sends in its ACKs to direct messages.
