@@ -143,6 +143,152 @@ public actor Modem: SerialCommandSender {
 
   }
 
+  /// How long ``Modem/sendAllLinkCommand(group:command:timeout:)`` waits for the cleanups by
+  /// default: 10 seconds.
+  ///
+  /// The Developer's Guide gives the worst case as 2.150 seconds from the broadcast to the
+  /// first member's cleanup report and 1.550 seconds to each one after, so 10 seconds covers a
+  /// group of up to six members that all need every retry. Pass more for a larger group.
+  public static let defaultAllLinkCommandTimeout: Duration = .seconds(10)
+
+  /// Sends a command to one of the modem's ALL-Link groups and waits for the modem to finish
+  /// its cleanups.
+  ///
+  /// The modem broadcasts the command to the group, then sends each member a cleanup message,
+  /// as Send ALL-Link Command (`0x61`) describes. The modem's turn is held until the modem's
+  /// ALL-Link Cleanup Status Report (`0x58`), since the guide says any message sent before then
+  /// cancels the rest of the cleanups. Meanwhile each member's cleanup acknowledgement, cleanup
+  /// NAK or ALL-Link Cleanup Failure Report (`0x56`) is collected.
+  ///
+  /// ```swift
+  /// let report = try await modem.sendAllLinkCommand(group: 0x01, command: StandardDirectCommand.on(level: 0xFF).command)
+  /// print(report.unacknowledged)   // Members to retry with a direct message.
+  /// ```
+  ///
+  /// To send a command without waiting for its cleanups, send `SerialCommand.sendAllLinkCommand`
+  /// with ``Modem/send(_:)``.
+  ///
+  /// - Parameters:
+  ///   - group: The modem's ALL-Link group to send the command to.
+  ///   - command: The command to broadcast. Its cmd2 goes in the broadcast; the cleanups carry
+  ///     the group number instead. The guide says not to send Light Start Manual Change
+  ///     (cmd1 `0x17`) this way, so it isn't allowed.
+  ///   - timeout: How long to wait for the modem's echo and every cleanup together. Defaults to
+  ///     ``Modem/defaultAllLinkCommandTimeout``.
+  /// - Returns: Which members acknowledged their cleanup, which didn't, and whether the modem
+  ///   reached them all.
+  /// - Throws: ``ModemError/rejected(_:)`` if the modem NAKs every attempt, as it does for a
+  ///   group it has no records for, ``ModemError/timedOut(_:)`` if the cleanups don't finish
+  ///   in time, ``ModemError/connectionClosed`` if the modem is closed, `CancellationError` if
+  ///   the task is canceled, or the connection's error.
+  public func sendAllLinkCommand(
+    group: AllLinkGroupNumber,
+    command: Command,
+    timeout: Duration = Modem.defaultAllLinkCommandTimeout
+  ) async throws -> AllLinkCleanupReport {
+
+    precondition(command.command1 != 0x17, "Send Light Start Manual Change as a direct message, not to a group.")
+
+    let serialCommand = SerialCommand.sendAllLinkCommand(group: group, command: command)
+    let echo = Self.exchange(for: serialCommand).steps
+    let status = AnswerStep<ModemReply>(
+      verdict: { reply in
+
+        if case .allLinkCleanupStatus = reply {
+
+          return .accepted
+
+        }
+
+        return nil
+
+      },
+      timedOut: ModemError.timedOut(.sendAllLinkCommand)
+    )
+    let exchange = Exchange(bytes: serialCommand.bytes, steps: echo + [status], timeout: timeout)
+
+    return try await pacer.withTurn { turn in
+
+      // Listening starts within the turn, after any earlier command has been answered, so
+      // only this command's cleanups are heard.
+      let replies = await turn.replies()
+
+      _ = try await turn.send(exchange)
+
+      return try await Self.cleanupReport(in: replies, for: serialCommand, group: group, command1: command.command1)
+
+    }
+
+  }
+
+  /// Reads a group command's cleanups from the replies that followed it, up to the modem's
+  /// status report.
+  private static func cleanupReport(
+    in replies: AsyncStream<ModemReply>,
+    for serialCommand: SerialCommand,
+    group: AllLinkGroupNumber,
+    command1: UInt8
+  ) async throws -> AllLinkCleanupReport {
+
+    // What came before the command's accepted echo belongs to something else.
+    var hasStarted = false
+    var acknowledged: [InsteonAddress] = []
+    var unacknowledged: [InsteonAddress] = []
+
+    for await reply in replies {
+
+      switch reply {
+      case let .echo(echo) where isAcceptedEcho(echo, of: serialCommand):
+        hasStarted = true
+      // A cleanup acknowledgement repeats the command, with the group in cmd2.
+      case let .messageReceived(message)
+        where hasStarted && message.command == Command(command1: command1, command2: group.rawValue)
+          && message.flags.messageType == .allLinkCleanupAcknowledgement:
+        acknowledged.append(message.sender)
+      // A cleanup NAK carries its reason in cmd2. A device still searching its database
+      // answers again once it's done, so that one isn't a failure.
+      case let .messageReceived(message)
+        where hasStarted && message.command.command1 == command1
+          && message.flags.messageType == .allLinkCleanupNegativeAcknowledgement
+          && message.nakReason != .databaseSearchPending:
+        unacknowledged.append(message.sender)
+      case let .allLinkCleanupFailed(failedGroup, address) where hasStarted && failedGroup == group:
+        unacknowledged.append(address)
+      case let .allLinkCleanupStatus(isComplete) where hasStarted:
+        let answered = Set(acknowledged)
+
+        return AllLinkCleanupReport(
+          acknowledged: unique(acknowledged),
+          unacknowledged: unique(unacknowledged.filter { !answered.contains($0) }),
+          isComplete: isComplete
+        )
+      default:
+        break
+      }
+
+    }
+
+    throw ModemError.connectionClosed
+
+  }
+
+  /// The addresses in order, each once.
+  private static func unique(_ addresses: [InsteonAddress]) -> [InsteonAddress] {
+
+    var seen: Set<InsteonAddress> = []
+
+    return addresses.filter { seen.insert($0).inserted }
+
+  }
+
+  /// Whether an echo accepts a command: it repeats the command's number and parameters, so a
+  /// late echo of an earlier command doesn't count, and ends with an ACK.
+  private static func isAcceptedEcho(_ echo: CommandEcho, of command: SerialCommand) -> Bool {
+
+    echo.number == command.number && echo.parameters == command.parameters && echo.isAccepted
+
+  }
+
   /// How long a request for a standard message waits for the device's answer by default:
   /// 3 seconds.
   ///
@@ -651,7 +797,7 @@ public actor Modem: SerialCommandSender {
         switch reply {
         // Matching the parameters keeps a late echo of an earlier command from answering this one.
         case let .echo(echo) where echo.number == number && echo.parameters == parameters:
-          return echo.isAccepted
+          return isAcceptedEcho(echo, of: command)
         // These commands are answered with their data in place of a plain echo.
         case .modemInfo where number == .getModemInfo,
              .modemConfiguration where number == .getModemConfiguration:

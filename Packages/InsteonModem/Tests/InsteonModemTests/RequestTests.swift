@@ -472,4 +472,127 @@ struct RequestTests {
 
   }
 
+
+  // MARK: - Group commands
+
+  /// A group member that doesn't acknowledge its cleanup.
+  var keypad: InsteonAddress { InsteonAddress(0x00, 0x5E, 0x5D) }
+
+  @Test func reportsEachMembersCleanup() async throws {
+
+    let lamp = device
+    let keypad = self.keypad
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgement, command1: 0x11, command2: 0x01)
+    let failure: [UInt8] = [0x02, 0x56, 0x01, 0x01] + keypad.bytes
+    let connection = ScriptedConnection { written, _ in written + [0x06] + ack + failure + [0x02, 0x58, 0x06] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let report = try await modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+
+      #expect(report == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [keypad], isComplete: true))
+
+    }
+
+    #expect(connection.written == [[0x02, 0x61, 0x01, 0x11, 0xFF]])
+
+  }
+
+  // The guide: other INSTEON traffic stops the cleanups, and the status report says so.
+  @Test func reportsCleanupsCutShort() async throws {
+
+    let connection = ScriptedConnection { written, _ in written + [0x06, 0x02, 0x58, 0x15] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let report = try await modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x13, command2: 0x00))
+
+      #expect(report == AllLinkCleanupReport(acknowledged: [], unacknowledged: [], isComplete: false))
+
+    }
+
+  }
+
+  // A status report from an earlier group command arrives before this one's echo.
+  @Test func ignoresAnEarlierCommandsCleanups() async throws {
+
+    let lamp = device
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgement, command1: 0x11, command2: 0x01)
+    let connection = ScriptedConnection { written, _ in [0x02, 0x58, 0x15] + written + [0x06] + ack + [0x02, 0x58, 0x06] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let report = try await modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+
+      #expect(report == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [], isComplete: true))
+
+    }
+
+  }
+
+  // An i2cs member still searching its database NAKs, then acknowledges once it's done.
+  @Test func countsAMemberThatAnswersAfterSearchingItsDatabase() async throws {
+
+    let lamp = device
+    let pending = received(from: lamp, .allLinkCleanupNegativeAcknowledgement, command1: 0x11, command2: 0xFC)
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgement, command1: 0x11, command2: 0x01)
+    let connection = ScriptedConnection { written, _ in written + [0x06] + pending + ack + [0x02, 0x58, 0x06] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let report = try await modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+
+      #expect(report == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [], isComplete: true))
+
+    }
+
+  }
+
+  // A cleanup carries its group in cmd2, so an acknowledgement for another group, such as a
+  // keypad's own scene heard in monitor mode, isn't counted.
+  @Test func countsOnlyThisGroupsCleanups() async throws {
+
+    let lamp = device
+    let keypad = self.keypad
+    let otherGroup = received(from: keypad, .allLinkCleanupAcknowledgement, command1: 0x11, command2: 0x03)
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgement, command1: 0x11, command2: 0x01)
+    let failure: [UInt8] = [0x02, 0x56, 0x01, 0x01] + lamp.bytes
+    let connection = ScriptedConnection { written, _ in written + [0x06] + otherGroup + ack + failure + [0x02, 0x58, 0x06] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let report = try await modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+
+      // The lamp acknowledged, so a later failure report for it doesn't list it twice.
+      #expect(report == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [], isComplete: true))
+
+    }
+
+  }
+
+  @Test func waitsForTheCleanupsUpToTheTimeout() async throws {
+
+    let connection = ScriptedConnection { written, _ in written + [0x06] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      await #expect(throws: ModemError.timedOut(.sendAllLinkCommand)) {
+
+        async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+        await clock.waitForSleeper(until: Modem.defaultAllLinkCommandTimeout)
+        clock.advance(by: Modem.defaultAllLinkCommandTimeout)
+        _ = try await report
+
+      }
+
+    }
+
+  }
+
 }

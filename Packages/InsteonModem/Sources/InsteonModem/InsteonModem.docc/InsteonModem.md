@@ -51,6 +51,7 @@ way, such as through a network-attached serial adapter, conform a type to ``Mode
 - ``PowerLincController``
 - ``PowerLincControllerError``
 - ``RetryPolicy``
+- ``AllLinkCleanupReport``
 
 ### Connections
 
