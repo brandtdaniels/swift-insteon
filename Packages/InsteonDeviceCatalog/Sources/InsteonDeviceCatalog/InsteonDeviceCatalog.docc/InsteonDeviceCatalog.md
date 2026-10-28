@@ -71,5 +71,7 @@ dimming for dimmable lighting control.
 - ``DeviceProfile``
 - ``DeviceIdentity``
 - ``DeviceCapability``
+- ``DeviceEngine``
+- ``FirmwareSelection``
 - ``ProductModel``
 - ``DeviceEventName``

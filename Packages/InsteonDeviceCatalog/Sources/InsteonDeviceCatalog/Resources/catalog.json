@@ -10,6 +10,38 @@
           "port": 25105
         }
       ],
+      "engines": [
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x2B"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x2E"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x2F"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x30"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x31"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x32"
+        }
+      ],
       "identities": [
         {
           "category": "0x03",
@@ -62,6 +94,23 @@
           "port": 80
         }
       ],
+      "engines": [
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x18"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x2C"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x2D"
+        }
+      ],
       "identities": [
         {
           "category": "0x03",
@@ -104,6 +153,28 @@
         }
       ],
       "description": "The central controller for an Insteon system. It drives its built-in modem over the local network, and runs scenes, schedules and alerts.",
+      "engines": [
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x33"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x34"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x35"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x36"
+        }
+      ],
       "identities": [
         {
           "category": "0x03",
@@ -135,6 +206,28 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x07",
+          "engine": "i2cs",
+          "subcategory": "0x0E"
+        },
+        {
+          "category": "0x07",
+          "engine": "i2cs",
+          "subcategory": "0x0F"
+        },
+        {
+          "category": "0x07",
+          "engine": "i2cs",
+          "subcategory": "0x10"
+        },
+        {
+          "category": "0x07",
+          "engine": "i2cs",
+          "subcategory": "0x11"
         }
       ],
       "identities": [
@@ -184,6 +277,18 @@
         }
       ],
       "description": "A wall keypad that dims and switches its connected light fixture and adds extra buttons for controlling other Insteon devices or scenes. Insteon sells it in 6-button and 8-button versions.",
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x41"
+        },
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x42"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -210,6 +315,53 @@
       "batteryPowered": true,
       "capabilities": [],
       "description": "A small rechargeable, battery-powered wireless remote that controls Insteon devices or groups of devices. Insteon sells it in 4-scene, 8-scene, and 1-scene switch versions, and it can be wall-mounted without wiring.",
+      "engines": [
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x1A"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x1B"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x1C"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x16"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x14"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x15"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x18"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x17"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x19"
+        }
+      ],
       "identities": [
         {
           "category": "0x00",
@@ -272,7 +424,22 @@
       ]
     },
     {
+      "aliases": [
+        "IRLinc Receiver"
+      ],
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x40"
+            ]
+          },
+          "subcategory": "0x06"
+        }
+      ],
       "identities": [
         {
           "category": "0x03",
@@ -280,13 +447,28 @@
         }
       ],
       "model": "2411R",
-      "name": "IRLinc Receiver",
+      "name": "Infrared Receiver",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "IRLinc Transmitter"
+      ],
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x4A"
+            ]
+          },
+          "subcategory": "0x07"
+        }
+      ],
       "identities": [
         {
           "category": "0x03",
@@ -294,13 +476,34 @@
         }
       ],
       "model": "2411T",
-      "name": "IRLinc Transmitter",
+      "name": "Infrared Transmitter",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "SmartLinc"
+      ],
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x9B",
+              "0xE0",
+              "0xE1",
+              "0xE2",
+              "0xE3",
+              "0xE4",
+              "0xE8"
+            ]
+          },
+          "subcategory": "0x10"
+        }
+      ],
       "identities": [
         {
           "category": "0x03",
@@ -308,12 +511,15 @@
         }
       ],
       "model": "2412N",
-      "name": "SmartLinc",
+      "name": "Central Controller",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "PowerLinc Serial Modem"
+      ],
       "capabilities": [
         {
           "kind": "modem"
@@ -326,12 +532,15 @@
         }
       ],
       "model": "2412S",
-      "name": "PowerLinc Serial Modem",
+      "name": "Serial Modem",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "PowerLinc Serial Modem"
+      ],
       "capabilities": [
         {
           "kind": "modem"
@@ -344,12 +553,15 @@
         }
       ],
       "model": "2412SH",
-      "name": "PowerLinc Serial Modem",
+      "name": "Serial Modem",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "PowerLinc USB Modem"
+      ],
       "capabilities": [
         {
           "kind": "modem"
@@ -362,12 +574,15 @@
         }
       ],
       "model": "2412U",
-      "name": "PowerLinc USB Modem",
+      "name": "USB Modem",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "PowerLinc USB Modem"
+      ],
       "capabilities": [
         {
           "kind": "modem"
@@ -380,15 +595,57 @@
         }
       ],
       "model": "2412UH",
-      "name": "PowerLinc USB Modem",
+      "name": "USB Modem",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "PowerLinc Serial Modem"
+      ],
       "capabilities": [
         {
           "kind": "modem"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "except": [
+              "0x88",
+              "0x92",
+              "0x98",
+              "0x99",
+              "0xE3"
+            ]
+          },
+          "subcategory": "0x11"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x3B",
+              "0x92",
+              "0x98",
+              "0x99",
+              "0x9A",
+              "0x9B",
+              "0xC8",
+              "0xC9",
+              "0xCB",
+              "0xCD",
+              "0xCE",
+              "0xE0",
+              "0xE3",
+              "0xE4"
+            ]
+          },
+          "subcategory": "0x19"
         }
       ],
       "identities": [
@@ -402,7 +659,7 @@
         }
       ],
       "model": "2413S",
-      "name": "PowerLinc Serial Modem",
+      "name": "Serial Modem",
       "radio": "dual",
       "role": "both",
       "sources": [
@@ -419,6 +676,35 @@
         }
       ],
       "description": "A USB powerline modem that connects a computer to an Insteon network, so home automation software can send and receive Insteon messages.",
+      "engines": [
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x9A",
+              "0x9B"
+            ]
+          },
+          "subcategory": "0x15"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x9A",
+              "0x9B",
+              "0xEB",
+              "0xEC",
+              "0xED",
+              "0xEE",
+              "0xEF"
+            ]
+          },
+          "subcategory": "0x1A"
+        }
+      ],
       "identities": [
         {
           "category": "0x03",
@@ -439,6 +725,9 @@
       ]
     },
     {
+      "aliases": [
+        "PowerLinc Serial"
+      ],
       "capabilities": [],
       "identities": [
         {
@@ -447,12 +736,15 @@
         }
       ],
       "model": "2414S",
-      "name": "PowerLinc Serial",
+      "name": "Serial Controller",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "PowerLinc USB"
+      ],
       "capabilities": [],
       "identities": [
         {
@@ -461,13 +753,28 @@
         }
       ],
       "model": "2414U",
-      "name": "PowerLinc USB",
+      "name": "USB Controller",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "iMeter Solo"
+      ],
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x09",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x30"
+            ]
+          },
+          "subcategory": "0x07"
+        }
+      ],
       "identities": [
         {
           "category": "0x09",
@@ -475,7 +782,7 @@
         }
       ],
       "model": "2423A1",
-      "name": "iMeter Solo",
+      "name": "Power Meter",
       "sources": [
         "HouseLinc device catalog"
       ]
@@ -495,6 +802,9 @@
       ]
     },
     {
+      "aliases": [
+        "SynchroLinc"
+      ],
       "capabilities": [],
       "identities": [
         {
@@ -503,12 +813,15 @@
         }
       ],
       "model": "2423A5",
-      "name": "SynchroLinc",
+      "name": "Appliance Status Sensor",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "ControLinc"
+      ],
       "capabilities": [],
       "identities": [
         {
@@ -517,12 +830,15 @@
         }
       ],
       "model": "2430",
-      "name": "ControLinc",
+      "name": "Tabletop Controller",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "RemoteLinc"
+      ],
       "capabilities": [],
       "identities": [
         {
@@ -531,12 +847,15 @@
         }
       ],
       "model": "2440",
-      "name": "RemoteLinc",
+      "name": "Remote Control",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "TempLinc Thermostat"
+      ],
       "capabilities": [
         {
           "humidity": true,
@@ -636,7 +955,7 @@
         }
       ],
       "model": "2441TH",
-      "name": "TempLinc Thermostat",
+      "name": "Thermostat",
       "notes": [
         "Subcategory 0x16 is the Thermostat 2.0 firmware, given its own subcategory so software can tell its features apart; HouseLinc lists it as a heat pump thermostat."
       ],
@@ -650,6 +969,18 @@
     },
     {
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x05",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x95"
+            ]
+          },
+          "subcategory": "0x03"
+        }
+      ],
       "identities": [
         {
           "category": "0x05",
@@ -663,6 +994,9 @@
       ]
     },
     {
+      "aliases": [
+        "TempLinc Wireless Zone Thermostat"
+      ],
       "batteryPowered": true,
       "capabilities": [
         {
@@ -755,7 +1089,7 @@
         }
       ],
       "model": "2441ZTH",
-      "name": "TempLinc Wireless Zone Thermostat",
+      "name": "Wireless Zone Thermostat",
       "radio": "rf",
       "role": "controller",
       "sources": [
@@ -801,6 +1135,9 @@
       ]
     },
     {
+      "aliases": [
+        "SignaLinc"
+      ],
       "capabilities": [],
       "identities": [
         {
@@ -809,7 +1146,7 @@
         }
       ],
       "model": "2442",
-      "name": "SignaLinc",
+      "name": "RF Signal Enhancer",
       "sources": [
         "HouseLinc device catalog"
       ]
@@ -861,8 +1198,10 @@
       ],
       "model": "2443",
       "name": "Range Extender",
+      "radio": "dual",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "Insteon device database (SQLite, InsteonDevices.db)"
       ]
     },
     {
@@ -897,6 +1236,21 @@
     },
     {
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x37",
+              "0x94",
+              "0x95",
+              "0x96"
+            ]
+          },
+          "subcategory": "0x10"
+        }
+      ],
       "identities": [
         {
           "category": "0x00",
@@ -905,12 +1259,32 @@
       ],
       "model": "2444A2WH4",
       "name": "Mini Remote - 4 Scene",
+      "radio": "rf",
+      "role": "controller",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "Insteon device database (SQLite, InsteonDevices.db)"
       ]
     },
     {
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x37",
+              "0x92",
+              "0x93",
+              "0x94",
+              "0x95",
+              "0x96"
+            ]
+          },
+          "subcategory": "0x12"
+        }
+      ],
       "identities": [
         {
           "category": "0x00",
@@ -919,12 +1293,30 @@
       ],
       "model": "2444A2WH8",
       "name": "Mini Remote - 8 Scene",
+      "radio": "rf",
+      "role": "controller",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "Insteon device database (SQLite, InsteonDevices.db)"
       ]
     },
     {
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x37",
+              "0x94",
+              "0x95",
+              "0x96"
+            ]
+          },
+          "subcategory": "0x11"
+        }
+      ],
       "identities": [
         {
           "category": "0x00",
@@ -933,14 +1325,29 @@
       ],
       "model": "2444A3",
       "name": "Mini Remote - Switch",
+      "radio": "rf",
+      "role": "controller",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "Insteon device database (SQLite, InsteonDevices.db)"
       ]
     },
     {
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x3D"
+        },
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x3E"
         }
       ],
       "identities": [
@@ -965,6 +1372,18 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x3F"
+        },
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x40"
         }
       ],
       "identities": [
@@ -1030,7 +1449,32 @@
       ]
     },
     {
+      "aliases": [
+        "TouchLinc"
+      ],
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x98"
+            ]
+          },
+          "subcategory": "0x24"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x98"
+            ]
+          },
+          "subcategory": "0x27"
+        }
+      ],
       "identities": [
         {
           "category": "0x03",
@@ -1042,13 +1486,23 @@
         }
       ],
       "model": "2448A7T",
-      "name": "TouchLinc",
+      "name": "Touchscreen Controller",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "I/O Linc"
+      ],
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x07",
+          "engine": "i2cs",
+          "subcategory": "0x0D"
+        }
+      ],
       "identities": [
         {
           "category": "0x07",
@@ -1056,7 +1510,7 @@
         }
       ],
       "model": "2450-50-60",
-      "name": "I/O Linc",
+      "name": "I/O Module (50/60 Hz)",
       "sources": [
         "HouseLinc device catalog"
       ]
@@ -1067,6 +1521,27 @@
       ],
       "capabilities": [],
       "description": "A plug-in module with a low-voltage sensor input and a relay output. It connects alarm sensors, door strikes, garage door openers, and other contact-closure devices to an Insteon network.",
+      "engines": [
+        {
+          "category": "0x07",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x40",
+              "0x41",
+              "0xA1",
+              "0xA2",
+              "0xA3",
+              "0xA4",
+              "0xA5",
+              "0xA6",
+              "0xA7",
+              "0xA8"
+            ]
+          },
+          "subcategory": "0x00"
+        }
+      ],
       "identities": [
         {
           "category": "0x07",
@@ -1152,6 +1627,9 @@
       ]
     },
     {
+      "aliases": [
+        "SocketLinc"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
@@ -1164,12 +1642,15 @@
         }
       ],
       "model": "2454D",
-      "name": "SocketLinc",
+      "name": "Socket Dimmer",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "LampLinc"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
@@ -1182,15 +1663,36 @@
         }
       ],
       "model": "2456D2",
-      "name": "LampLinc",
+      "name": "Lamp Dimmer Module",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "LampLinc Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x00"
         }
       ],
       "identities": [
@@ -1200,15 +1702,36 @@
         }
       ],
       "model": "2456D3",
-      "name": "LampLinc Dimmer",
+      "name": "Dimmer Module",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "ApplianceLinc"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x42",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x09"
         }
       ],
       "identities": [
@@ -1218,15 +1741,32 @@
         }
       ],
       "model": "2456S3",
-      "name": "ApplianceLinc",
+      "name": "On/Off Module",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "Outdoor ApplianceLinc"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x06"
         }
       ],
       "identities": [
@@ -1236,12 +1776,15 @@
         }
       ],
       "model": "2456S3E",
-      "name": "Outdoor ApplianceLinc",
+      "name": "Outdoor On/Off Module",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "TimerLinc"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
@@ -1254,7 +1797,7 @@
         }
       ],
       "model": "2456S3T",
-      "name": "TimerLinc",
+      "name": "Timer Module",
       "sources": [
         "HouseLinc device catalog"
       ]
@@ -1269,6 +1812,31 @@
         }
       ],
       "description": "A plug-in module that lets a dimmable lamp be turned on and off and dimmed remotely. The lamp plugs into the module, which plugs into a wall outlet.",
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0x42",
+              "0x43",
+              "0xCB",
+              "0xCC",
+              "0xCD",
+              "0xCF",
+              "0xD0",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x0E"
+        }
+      ],
       "groups": [
         {
           "name": "Load",
@@ -1297,9 +1865,25 @@
       ]
     },
     {
+      "aliases": [
+        "LampLinc Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x22"
         }
       ],
       "identities": [
@@ -1309,13 +1893,30 @@
         }
       ],
       "model": "2457D2X",
-      "name": "LampLinc Dimmer",
+      "name": "Dimmer Plug",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "MorningLinc"
+      ],
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x0F",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x06"
+        }
+      ],
       "identities": [
         {
           "category": "0x0F",
@@ -1323,15 +1924,36 @@
         }
       ],
       "model": "2458A1",
-      "name": "MorningLinc",
+      "name": "Morning Industry Lock Controller",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "ToggleLinc Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x1F"
         }
       ],
       "identities": [
@@ -1345,7 +1967,7 @@
         }
       ],
       "model": "2466DW",
-      "name": "ToggleLinc Dimmer",
+      "name": "Toggle Dimmer Switch",
       "notes": [
         "HouseLinc lists subcategory 0x1F for firmware 0x3A and later."
       ],
@@ -1354,9 +1976,25 @@
       ]
     },
     {
+      "aliases": [
+        "ToggleLinc On/Off"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD5"
+            ]
+          },
+          "subcategory": "0x1A"
         }
       ],
       "identities": [
@@ -1370,7 +2008,7 @@
         }
       ],
       "model": "2466SW",
-      "name": "ToggleLinc On/Off",
+      "name": "Toggle On/Off Switch",
       "notes": [
         "HouseLinc lists subcategory 0x1A for firmware 0x3A and later."
       ],
@@ -1388,6 +2026,28 @@
         }
       ],
       "description": "An in-wall duplex outlet whose top receptacle can be dimmed and switched remotely over Insteon while the bottom receptacle stays always on. It controls plug-in lamps from Insteon keypads, remotes, or the Hub.",
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0x44",
+              "0xB3",
+              "0xB5",
+              "0xB6",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xBA",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x21"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -1402,9 +2062,34 @@
       ]
     },
     {
+      "aliases": [
+        "OutletLinc Relay"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x42",
+              "0xCD",
+              "0xCE",
+              "0xCF",
+              "0xD0",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x08"
         }
       ],
       "identities": [
@@ -1414,12 +2099,15 @@
         }
       ],
       "model": "2473SWH",
-      "name": "OutletLinc Relay",
+      "name": "On/Off Outlet",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "ICON SwitchLinc Dimmer In-line Companion"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
@@ -1432,15 +2120,25 @@
         }
       ],
       "model": "2474D",
-      "name": "ICON SwitchLinc Dimmer In-line Companion",
+      "name": "ICON In-Line Dimmer",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "SwitchLinc 2-Wire Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x24"
         }
       ],
       "groups": [
@@ -1457,7 +2155,7 @@
         }
       ],
       "model": "2474DWH",
-      "name": "SwitchLinc 2-Wire Dimmer",
+      "name": "2-Wire Dimmer Switch",
       "notes": [
         "Needs no neutral wire.",
         "Repeats RF but not powerline."
@@ -1470,6 +2168,9 @@
       ]
     },
     {
+      "aliases": [
+        "ICON In-LineLinc Relay"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
@@ -1482,15 +2183,38 @@
         }
       ],
       "model": "2474S",
-      "name": "ICON In-LineLinc Relay",
+      "name": "ICON In-Line On/Off Module",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "In-LineLinc Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xCF",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6",
+              "0xD7"
+            ]
+          },
+          "subcategory": "0x1A"
         }
       ],
       "groups": [
@@ -1511,7 +2235,7 @@
         }
       ],
       "model": "2475D",
-      "name": "In-LineLinc Dimmer",
+      "name": "In-Line Dimmer Module",
       "notes": [
         "Linked by holding SET for 10 seconds."
       ],
@@ -1523,9 +2247,19 @@
       ]
     },
     {
+      "aliases": [
+        "In-LineLinc Dimmer (Dual-Band)"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x32"
         }
       ],
       "groups": [
@@ -1542,7 +2276,7 @@
         }
       ],
       "model": "2475DA1",
-      "name": "In-LineLinc Dimmer (Dual-Band)",
+      "name": "In-Line Dimmer Module (Dual-Band)",
       "notes": [
         "Returns its load and LEDs to their states before a power outage."
       ],
@@ -1563,6 +2297,13 @@
         }
       ],
       "description": "A controller for dimmable lighting ballasts that use a 0-10 VDC control input. It also has two relay outputs that can switch non-dimmable ballasts of up to 5 amps each.",
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x25"
+        }
+      ],
       "groups": [
         {
           "name": "Load",
@@ -1601,6 +2342,19 @@
         }
       ],
       "description": "A module installed inside a ceiling fan's canopy that controls the fan speed (low, medium, high) and the fan's light kit. It can be controlled by other Insteon devices or the Hub.",
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "except": [
+              "0x3B",
+              "0xBA"
+            ]
+          },
+          "subcategory": "0x2E"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -1615,9 +2369,30 @@
       ]
     },
     {
+      "aliases": [
+        "In-LineLinc Relay"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x10"
         }
       ],
       "groups": [
@@ -1634,7 +2409,7 @@
         }
       ],
       "model": "2475S",
-      "name": "In-LineLinc Relay",
+      "name": "In-Line On/Off Module",
       "notes": [
         "Linked by holding SET for 10 seconds."
       ],
@@ -1646,9 +2421,27 @@
       ]
     },
     {
+      "aliases": [
+        "In-LineLinc Relay with Sense"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x14"
         }
       ],
       "identities": [
@@ -1658,15 +2451,30 @@
         }
       ],
       "model": "2475S2",
-      "name": "In-LineLinc Relay with Sense",
+      "name": "In-Line On/Off Module with Sense",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "In-LineLinc On/Off"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41"
+            ]
+          },
+          "subcategory": "0x2B"
         }
       ],
       "identities": [
@@ -1676,15 +2484,33 @@
         }
       ],
       "model": "2475SDB-50",
-      "name": "In-LineLinc On/Off",
+      "name": "In-Line On/Off Module (Dual-Band)",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "In-LineLinc On/Off"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0x43",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x1F"
         }
       ],
       "identities": [
@@ -1694,15 +2520,65 @@
         }
       ],
       "model": "2475SDB",
-      "name": "In-LineLinc On/Off",
+      "name": "In-Line On/Off Module (Dual-Band)",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "SwitchLinc Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xCC",
+              "0xCD",
+              "0xCE",
+              "0xCF",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6",
+              "0xD7"
+            ]
+          },
+          "subcategory": "0x19"
+        },
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xBA",
+              "0xBB",
+              "0xBC",
+              "0xBE",
+              "0xBF",
+              "0xCC",
+              "0xCD",
+              "0xCE",
+              "0xCF"
+            ]
+          },
+          "subcategory": "0x30"
         }
       ],
       "identities": [
@@ -1720,12 +2596,15 @@
         }
       ],
       "model": "2476D",
-      "name": "SwitchLinc Dimmer",
+      "name": "Dimmer Switch",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "SwitchLinc Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
@@ -1742,15 +2621,51 @@
         }
       ],
       "model": "2476DH",
-      "name": "SwitchLinc Dimmer",
+      "name": "Dimmer Switch (High Wattage)",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "SwitchLinc Relay"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41"
+            ]
+          },
+          "subcategory": "0x15"
+        },
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xCC",
+              "0xCD",
+              "0xCE",
+              "0xCF",
+              "0xD0",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x1C"
         }
       ],
       "identities": [
@@ -1768,12 +2683,15 @@
         }
       ],
       "model": "2476S",
-      "name": "SwitchLinc Relay",
+      "name": "On/Off Switch",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "SwitchLinc Relay Countdown Timer"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
@@ -1797,7 +2715,7 @@
         }
       ],
       "model": "2476ST",
-      "name": "SwitchLinc Relay Countdown Timer",
+      "name": "On/Off Switch with Countdown Timer",
       "notes": [
         "When its timer runs out it sends off to its group's members, unless its group control option is turned off."
       ],
@@ -1849,6 +2767,23 @@
         }
       ],
       "description": "A higher-capacity version of the Insteon wall dimmer switch, rated for up to 250 W of dimmable LED or 1,000 W of incandescent or halogen lighting. It can be controlled locally or remotely over Insteon.",
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0x42",
+              "0x43",
+              "0x44",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x2D"
+        }
+      ],
       "groups": [
         {
           "name": "Load",
@@ -1882,6 +2817,13 @@
         }
       ],
       "description": "An in-wall on/off switch for non-dimmable loads such as fluorescent lights, ceiling fans, and exhaust fans, rated up to 17 amps. It can be controlled locally or remotely over Insteon.",
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "subcategory": "0x2A"
+        }
+      ],
       "groups": [
         {
           "name": "Load",
@@ -1910,6 +2852,20 @@
           "kind": "onOff"
         }
       ],
+      "engines": [
+        {
+          "category": "0x09",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD4",
+              "0xD5"
+            ]
+          },
+          "subcategory": "0x0A"
+        }
+      ],
       "identities": [
         {
           "category": "0x09",
@@ -1928,6 +2884,19 @@
           "kind": "onOff"
         }
       ],
+      "engines": [
+        {
+          "category": "0x09",
+          "engine": "i2cs",
+          "firmware": {
+            "except": [
+              "0x3A",
+              "0x40"
+            ]
+          },
+          "subcategory": "0x0B"
+        }
+      ],
       "identities": [
         {
           "category": "0x09",
@@ -1941,9 +2910,26 @@
       ]
     },
     {
+      "aliases": [
+        "SwitchLinc Dimmer 240V"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xBC",
+              "0xBD"
+            ]
+          },
+          "subcategory": "0x31"
         }
       ],
       "groups": [
@@ -1960,7 +2946,7 @@
         }
       ],
       "model": "2478D",
-      "name": "SwitchLinc Dimmer 240V",
+      "name": "Dimmer Switch 240V",
       "notes": [
         "Returns its load and LEDs to their states before a power outage."
       ],
@@ -1972,6 +2958,9 @@
       ]
     },
     {
+      "aliases": [
+        "KeypadLinc Schedule Timer with Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
@@ -1984,12 +2973,15 @@
         }
       ],
       "model": "2484DST6",
-      "name": "KeypadLinc Schedule Timer with Dimmer",
+      "name": "Schedule Timer Dimmer Keypad",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "KeypadLinc Countdown Timer, 8 Buttons"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
@@ -2002,7 +2994,7 @@
         }
       ],
       "model": "2484DWH8",
-      "name": "KeypadLinc Countdown Timer, 8 Buttons",
+      "name": "Countdown Timer Dimmer Keypad, 8 Buttons",
       "notes": [
         "Buttons A to H start 2, 5, 10, 15 and 30 minute and 1 and 2 hour timers, and turn the load off.",
         "Turns its load off for a second a minute before a timer ends, unless that's turned off.",
@@ -2015,6 +3007,9 @@
       ]
     },
     {
+      "aliases": [
+        "KeypadLinc Countdown Timer Relay, 8 Buttons"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
@@ -2027,7 +3022,7 @@
         }
       ],
       "model": "2484SWH8",
-      "name": "KeypadLinc Countdown Timer Relay, 8 Buttons",
+      "name": "Countdown Timer On/Off Keypad, 8 Buttons",
       "radio": "powerline",
       "sources": [
         "HouseLinc device catalog",
@@ -2035,6 +3030,9 @@
       ]
     },
     {
+      "aliases": [
+        "KeypadLinc Schedule Timer On/Off Switch"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
@@ -2047,15 +3045,40 @@
         }
       ],
       "model": "2485SWH6",
-      "name": "KeypadLinc Schedule Timer On/Off Switch",
+      "name": "Schedule Timer On/Off Keypad",
       "sources": [
         "HouseLinc device catalog"
       ]
     },
     {
+      "aliases": [
+        "KeypadLinc Dimmer, 6 Buttons"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xB2",
+              "0xB3",
+              "0xB5",
+              "0xB6",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xBA",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x1B"
         }
       ],
       "identities": [
@@ -2069,7 +3092,7 @@
         }
       ],
       "model": "2486DWH6",
-      "name": "KeypadLinc Dimmer, 6 Buttons",
+      "name": "Dimmer Keypad, 6 Buttons",
       "notes": [
         "Each button other than the load's can be set to toggle, send only off, or send only on."
       ],
@@ -2080,9 +3103,34 @@
       ]
     },
     {
+      "aliases": [
+        "KeypadLinc Dimmer, 8 Buttons"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xB2",
+              "0xB3",
+              "0xB5",
+              "0xB6",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xBA",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x1C"
         }
       ],
       "identities": [
@@ -2096,7 +3144,7 @@
         }
       ],
       "model": "2486DWH8",
-      "name": "KeypadLinc Dimmer, 8 Buttons",
+      "name": "Dimmer Keypad, 8 Buttons",
       "notes": [
         "Each button other than the load's can be set to toggle, send only off, or send only on."
       ],
@@ -2107,9 +3155,34 @@
       ]
     },
     {
+      "aliases": [
+        "KeypadLinc Relay, 6 Buttons"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xB2",
+              "0xB3",
+              "0xB5",
+              "0xB6",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xBA",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x0F"
         }
       ],
       "identities": [
@@ -2119,7 +3192,7 @@
         }
       ],
       "model": "2486SWH6",
-      "name": "KeypadLinc Relay, 6 Buttons",
+      "name": "On/Off Keypad, 6 Buttons",
       "role": "both",
       "sources": [
         "HouseLinc device catalog",
@@ -2136,6 +3209,45 @@
         }
       ],
       "description": "A wall keypad that switches its connected light fixture on and off and adds extra buttons for controlling other Insteon devices or scenes. It replaces a standard wall switch. Insteon sells it in a 6-button version.",
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xB2",
+              "0xB3",
+              "0xB5",
+              "0xB6",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xBA",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x1E"
+        },
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xB6",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xBA",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x2C"
+        }
+      ],
       "identities": [
         {
           "category": "0x02",
@@ -2158,6 +3270,20 @@
     },
     {
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x05",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x95",
+              "0xD3",
+              "0xD4"
+            ]
+          },
+          "subcategory": "0x0E"
+        }
+      ],
       "identities": [
         {
           "category": "0x05",
@@ -2171,6 +3297,9 @@
       ]
     },
     {
+      "aliases": [
+        "SwitchLinc 220V Relay"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
@@ -2187,7 +3316,7 @@
         }
       ],
       "model": "2494S220",
-      "name": "SwitchLinc 220V Relay",
+      "name": "On/Off Switch 220V",
       "sources": [
         "HouseLinc device catalog"
       ]
@@ -2290,6 +3419,13 @@
         }
       ],
       "description": "A weather-resistant plug-in relay module for switching outdoor lights and appliances on and off remotely. It is rated NEMA 3R and works from -4 to 122 degrees Fahrenheit.",
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "subcategory": "0x38"
+        }
+      ],
       "groups": [
         {
           "name": "Load",
@@ -2357,6 +3493,13 @@
         }
       ],
       "description": "An in-wall duplex outlet with two receptacles that can each be switched on and off independently over Insteon. It is used to control plug-in lamps, fans, and small appliances.",
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "subcategory": "0x39"
+        }
+      ],
       "groups": [
         {
           "name": "Outlet 1",
@@ -2599,6 +3742,9 @@
       ]
     },
     {
+      "aliases": [
+        "I/O Linc"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
@@ -2650,7 +3796,7 @@
         }
       ],
       "model": "2822",
-      "name": "I/O Linc",
+      "name": "I/O Module",
       "notes": [
         "Each relay's momentary time can be set from 0.2 seconds to 100 minutes."
       ],
@@ -2676,6 +3822,34 @@
     },
     {
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x10",
+          "engine": "i2cs",
+          "firmware": {
+            "except": [
+              "0x22",
+              "0x24",
+              "0x26",
+              "0x30",
+              "0x34",
+              "0x36",
+              "0x82"
+            ]
+          },
+          "subcategory": "0x01"
+        },
+        {
+          "category": "0x10",
+          "engine": "i2cs",
+          "subcategory": "0x04"
+        },
+        {
+          "category": "0x10",
+          "engine": "i2cs",
+          "subcategory": "0x05"
+        }
+      ],
       "identities": [
         {
           "category": "0x10",
@@ -2727,6 +3901,40 @@
         }
       ],
       "description": "A wireless, battery-powered sensor that mounts on a door or window and reports when it opens or closes. It can switch Insteon lights or, with the Hub, send phone alerts.",
+      "engines": [
+        {
+          "category": "0x10",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x32",
+              "0x33",
+              "0x34",
+              "0x40",
+              "0x41",
+              "0x42",
+              "0x43",
+              "0x81",
+              "0x83",
+              "0x84",
+              "0x86",
+              "0x87",
+              "0x88"
+            ]
+          },
+          "subcategory": "0x02"
+        },
+        {
+          "category": "0x10",
+          "engine": "i2cs",
+          "subcategory": "0x06"
+        },
+        {
+          "category": "0x10",
+          "engine": "i2cs",
+          "subcategory": "0x07"
+        }
+      ],
       "groups": [
         {
           "name": "Open/close",
@@ -3006,6 +4214,9 @@
       ]
     },
     {
+      "aliases": [
+        "ICON LampLinc"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
@@ -3018,7 +4229,7 @@
         }
       ],
       "model": "2856D2",
-      "name": "ICON LampLinc",
+      "name": "ICON Dimmer Module",
       "notes": [
         "HouseLinc also lists its identity under 2856D2B."
       ],
@@ -3050,6 +4261,13 @@
     },
     {
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x0F",
+          "engine": "i2cs",
+          "subcategory": "0x0A"
+        }
+      ],
       "identities": [
         {
           "category": "0x0F",
@@ -3065,6 +4283,23 @@
     {
       "batteryPowered": true,
       "capabilities": [],
+      "engines": [
+        {
+          "category": "0x0F",
+          "engine": "i2cs",
+          "subcategory": "0x07"
+        },
+        {
+          "category": "0x0F",
+          "engine": "i2cs",
+          "subcategory": "0x08"
+        },
+        {
+          "category": "0x0F",
+          "engine": "i2cs",
+          "subcategory": "0x09"
+        }
+      ],
       "identities": [
         {
           "category": "0x0F",
