@@ -29,8 +29,24 @@ These aren't supported:
 
 The reply to `SerialCommand.getModemInfo` carries the modem's device category, subcategory and
 firmware version in a `ModemInfo`. Every modem in the table reports category `0x03`, and the
-subcategory tells the models apart. To name the model, look the category and subcategory up
-in a device database.
+subcategory tells the models apart. SmartLabs' HouseLinc device catalog lists these:
+
+| Model | Subcategories |
+| --- | --- |
+| 2413U, 2413UH | `0x15`, `0x1A` |
+| 2413S, 2413SH | `0x11`, `0x19` |
+| 2412U, 2412UH | `0x0B`, `0x13` |
+| 2412S, 2412SH | `0x05`, `0x14` |
+| 2448A7 | `0x1F`, `0x20` |
+| 2448A7H | `0x21`, `0x23` |
+| 2245 | `0x33` to `0x36`, one for each region |
+| 2242 | `0x2B`, `0x2E` to `0x32`, one or more for each region |
+| 2414S | `0x01` |
+| 2412N (SmartLinc) | `0x10` |
+| 2243 (Hub Pro) | `0x18`, `0x2C`, `0x2D` |
+
+The catalog also lists a Hub as `0x37` without a model number. For any other modem, look the
+category and subcategory up in a device database.
 
 ### Commands a modem may lack
 
