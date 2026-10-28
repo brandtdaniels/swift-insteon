@@ -78,7 +78,7 @@ The Hubs were sold under similar names, so they're identified here by model numb
 SmartLabs' HouseLinc software drove the 2242 and 2245 the same way, which suggests they share
 their local interface; it didn't drive the 2243. A Hub's modem reports its model through
 `SerialCommand.getModemInfo`: category `0x03` with subcategory `0x33` to `0x36` for the 2245,
-`0x2B`, `0x2E` to `0x32` or `0x37` for the 2242, or `0x3A` for the 2243.
+`0x2B` or `0x2E` to `0x32` for the 2242, or `0x18`, `0x2C` or `0x2D` for the 2243.
 
 ## Topics
 
