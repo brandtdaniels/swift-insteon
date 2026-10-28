@@ -148,6 +148,20 @@ public struct DeviceCatalog: Hashable, Sendable {
 
   }
 
+  /// The profiles a search finds, in catalog order.
+  ///
+  /// Every word of the search must appear in a profile's model, name, aliases or identities,
+  /// ignoring case, so `"switchlinc dimmer"` finds the products once called SwitchLinc Dimmer
+  /// and `"0x01/0x20"` finds the one with that identity.
+  ///
+  /// - Parameter query: The words to look for, separated by spaces.
+  /// - Returns: The matching profiles, or every profile for an empty search.
+  public func profiles(matching query: String) -> [DeviceProfile] {
+
+    profiles.filter { $0.matches(query) }
+
+  }
+
   /// The profile of a model.
   ///
   /// - Parameter model: The model number.

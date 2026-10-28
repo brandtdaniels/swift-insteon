@@ -83,8 +83,16 @@ public struct DeviceProfile: Hashable, Sendable {
   /// The model number printed on the product.
   public var model: ProductModel
 
-  /// The product's name, such as `"Leak Sensor"`.
+  /// The product's name, such as `"Dimmer Switch"`.
   public var name: String
+
+  /// Other names the product is known by, such as earlier or marketing names, like
+  /// `"SwitchLinc Dimmer"`.
+  public var aliases: [String]
+
+  /// What the product is, in a sentence or two, or `nil` if the catalog doesn't say. The
+  /// catalog's JSON calls it `description`.
+  public var summary: String?
 
   /// The category, subcategory and firmware versions the product reports.
   public var identities: [DeviceIdentity]
@@ -117,6 +125,8 @@ public struct DeviceProfile: Hashable, Sendable {
   /// - Parameters:
   ///   - model: The model number.
   ///   - name: The product's name.
+  ///   - aliases: Other names the product is known by.
+  ///   - summary: What the product is.
   ///   - identities: The identities the product reports.
   ///   - radio: How the product communicates.
   ///   - role: The ALL-Link roles the product can take.
@@ -128,6 +138,8 @@ public struct DeviceProfile: Hashable, Sendable {
   public init(
     model: ProductModel,
     name: String,
+    aliases: [String] = [],
+    summary: String? = nil,
     identities: [DeviceIdentity],
     radio: Radio? = nil,
     role: LinkRole? = nil,
@@ -140,6 +152,8 @@ public struct DeviceProfile: Hashable, Sendable {
 
     self.model = model
     self.name = name
+    self.aliases = aliases
+    self.summary = summary
     self.identities = identities
     self.radio = radio
     self.role = role
@@ -193,6 +207,23 @@ public struct DeviceProfile: Hashable, Sendable {
 
   }
 
+  /// Whether every word of a search appears in the profile's model, name, aliases or
+  /// identities, ignoring case.
+  ///
+  /// An identity matches as its category and subcategory written `0x01/0x20`.
+  ///
+  /// - Parameter query: The words to look for, separated by spaces.
+  /// - Returns: `true` if every word appears; `true` for an empty search.
+  public func matches(_ query: String) -> Bool {
+
+    let text = ([model.rawValue, name] + aliases + identities.map { "\($0.category)/\($0.subcategory)" })
+      .joined(separator: " ")
+      .lowercased()
+
+    return query.lowercased().split(whereSeparator: \.isWhitespace).allSatisfy { text.contains($0) }
+
+  }
+
   /// The interval between the product's heartbeats, or `nil` if it sends none or its profile
   /// doesn't give the interval.
   public var heartbeatInterval: Duration? {
@@ -215,6 +246,8 @@ extension DeviceProfile: Decodable {
 
     case model
     case name
+    case aliases
+    case summary = "description"
     case identities
     case radio
     case role
@@ -267,6 +300,8 @@ extension DeviceProfile: Decodable {
     self.init(
       model: try container.decode(ProductModel.self, forKey: .model),
       name: try container.decode(String.self, forKey: .name),
+      aliases: try container.decodeIfPresent([String].self, forKey: .aliases) ?? [],
+      summary: try container.decodeIfPresent(String.self, forKey: .summary),
       identities: try container.decode([DeviceIdentity].self, forKey: .identities),
       radio: try container.decodeIfPresent(String.self, forKey: .radio).flatMap(Radio.init(rawValue:)),
       role: try container.decodeIfPresent(String.self, forKey: .role).flatMap(LinkRole.init(rawValue:)),

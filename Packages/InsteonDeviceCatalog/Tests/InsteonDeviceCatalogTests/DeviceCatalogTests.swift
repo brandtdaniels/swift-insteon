@@ -97,6 +97,39 @@ struct DeviceCatalogTests {
 
   }
 
+  @Test func readsANameAliasesAndDescription() throws {
+
+    let profile = #"""
+      {
+        "model": "2477D",
+        "name": "Dimmer Switch",
+        "aliases": ["SwitchLinc Dimmer"],
+        "description": "An in-wall dimmer switch.",
+        "identities": [{ "category": "0x01", "subcategory": "0x20" }],
+        "capabilities": [{ "kind": "dimmable" }],
+        "sources": ["A"]
+      }
+      """#
+    let read = try #require(try DeviceCatalog(json: Self.json(profile)).profiles.first)
+
+    #expect(read.name == "Dimmer Switch")
+    #expect(read.aliases == ["SwitchLinc Dimmer"])
+    #expect(read.summary == "An in-wall dimmer switch.")
+
+  }
+
+  @Test func searchesModelsNamesAliasesAndIdentities() throws {
+
+    let catalog = try DeviceCatalog.bundled()
+
+    #expect(catalog.profiles(matching: "0x01/0x20").map(\.model) == ["2477D"])
+    #expect(catalog.profiles(matching: "SWITCHLINC dimmer").contains { $0.model == "2477D" })
+    #expect(catalog.profiles(matching: "2852").map(\.model) == ["2852"])
+    #expect(catalog.profiles(matching: "").count == catalog.profiles.count)
+    #expect(catalog.profiles(matching: "no such product").isEmpty)
+
+  }
+
   @Test func findsAProfileByIdentityOrModel() throws {
 
     let catalog = try DeviceCatalog(json: Self.json(Self.leakSensor))

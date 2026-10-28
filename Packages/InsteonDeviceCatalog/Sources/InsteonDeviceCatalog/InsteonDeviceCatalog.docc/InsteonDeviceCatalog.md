@@ -42,6 +42,9 @@ each device's profile when the device reports its identity, such as when its SET
 held to link it, and from then on reports what the device's group commands mean and when it
 sends a heartbeat.
 
+``DeviceCatalog/profiles(matching:)`` searches the catalog by model, name, alias or identity,
+such as for an app's list of supported products.
+
 A device with no profile can still be handled by what its `DeviceCategory` implies, such as
 dimming for dimmable lighting control.
 
