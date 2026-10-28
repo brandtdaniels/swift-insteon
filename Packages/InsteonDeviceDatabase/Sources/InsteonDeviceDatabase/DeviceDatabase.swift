@@ -5,7 +5,8 @@ import InsteonProtocol
 /// reports.
 ///
 /// The package ships a copy of the INSTEON device database, which ``DeviceDatabase/bundled()``
-/// loads. An app can instead load a copy it downloaded with ``DeviceDatabase/init(json:)``.
+/// loads. An app can keep a newer copy with ``DeviceDatabaseUpdater``, or load one it
+/// downloaded itself with ``DeviceDatabase/init(json:)``.
 ///
 /// ```swift
 /// let database = try DeviceDatabase.bundled()
@@ -88,13 +89,24 @@ public struct DeviceDatabase: Hashable, Sendable {
   /// The copy the package ships with, or the error reading it.
   private static let bundledCopy = Result<DeviceDatabase, any Error> {
 
+    try DeviceDatabase(json: bundledJSON())
+
+  }
+
+  /// The JSON of the copy the package ships with, such as to save as an app's own copy.
+  ///
+  /// - Returns: The JSON.
+  /// - Throws: ``DeviceDatabaseError/missingBundledDatabase`` if the copy isn't in the
+  ///   package's resources, or the error reading it.
+  public static func bundledJSON() throws -> Data {
+
     guard let url = Bundle.module.url(forResource: "database", withExtension: "json") else {
 
       throw DeviceDatabaseError.missingBundledDatabase
 
     }
 
-    return try DeviceDatabase(json: Data(contentsOf: url))
+    return try Data(contentsOf: url)
 
   }
 
