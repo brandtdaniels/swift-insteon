@@ -205,6 +205,29 @@ struct RequestTests {
 
   }
 
+  // The guide's time for five retries of an extended message, 3.17 seconds, plus a second for
+  // the modem's echo.
+  @Test func waitsLongerForAnExtendedMessage() async throws {
+
+    let connection = ScriptedConnection { written, _ in written + [0x06] }
+    let modem = makeModem(connection)
+    let message = AllLinkDatabaseRequest.read(address: 0x0FFF).message(to: device)
+
+    try await run(modem) {
+
+      await #expect(throws: ModemError.deviceTimedOut(device)) {
+
+        async let answer = modem.request(message)
+        await clock.waitForSleeper(until: .milliseconds(4_170))
+        clock.advance(by: .milliseconds(4_170))
+        _ = try await answer
+
+      }
+
+    }
+
+  }
+
   @Test func blamesTheModemWhenItDoesntEchoTheMessage() async throws {
 
     let connection = ScriptedConnection { _, _ in [] }
@@ -312,8 +335,8 @@ struct RequestTests {
     try await run(modem) {
 
       async let responses = modem.readAllLinkDatabase(of: device)
-      await clock.waitForSleeper(until: .seconds(3))
-      clock.advance(by: .seconds(3))
+      await clock.waitForSleeper(until: Modem.defaultExtendedRequestTimeout)
+      clock.advance(by: Modem.defaultExtendedRequestTimeout)
 
       let read = try await responses
 

@@ -111,7 +111,8 @@ public actor Modem: SerialCommandSender {
   /// Canceling a send stops it: a send waiting for its turn leaves the queue, a send waiting
   /// for its echo stops waiting, and a rejected command isn't sent again. A command that was
   /// written still holds the modem, so the next send waits for the modem to answer it, or for
-  /// the echo timeout, before writing.
+  /// the time it was given to answer, before writing. For `SerialCommand.resetModem` that's
+  /// 20 seconds longer than the retry policy's answer timeout.
   ///
   /// - Parameter command: The command to send.
   /// - Throws: ``ModemError/rejected(_:)`` if the modem NAKs every attempt,
@@ -124,8 +125,21 @@ public actor Modem: SerialCommandSender {
 
   }
 
-  /// How long a request waits for a device's acknowledgement by default: 3 seconds.
+  /// How long a request for a standard message waits for the device's answer by default:
+  /// 3 seconds.
+  ///
+  /// The Developer's Guide gives 2.00 seconds for the INSTEON engine to retry a standard
+  /// message five times from Max Hops 3, the most it retries. The extra second covers the
+  /// modem's echo.
   public static let defaultRequestTimeout: Duration = .seconds(3)
+
+  /// How long a request for an extended message waits for the device's answer by default:
+  /// 4.17 seconds.
+  ///
+  /// The Developer's Guide gives 3.17 seconds for the INSTEON engine to retry an extended
+  /// message five times from Max Hops 3. The extra second covers the modem's echo, as in
+  /// ``Modem/defaultRequestTimeout``.
+  public static let defaultExtendedRequestTimeout: Duration = .milliseconds(4_170)
 
   /// Sends a standard direct message to a device and waits for the device to acknowledge it.
   ///
@@ -183,7 +197,7 @@ public actor Modem: SerialCommandSender {
   /// - Parameters:
   ///   - message: The message to send.
   ///   - timeout: How long to wait for the modem's echo and the device's acknowledgement
-  ///     together. Defaults to ``Modem/defaultRequestTimeout``.
+  ///     together. Defaults to ``Modem/defaultExtendedRequestTimeout``.
   /// - Returns: The device's acknowledgement.
   /// - Throws: ``ModemError/deviceRejected(_:_:)`` if the device rejects the message,
   ///   ``ModemError/deviceTimedOut(_:)`` if it doesn't answer, ``ModemError/rejected(_:)`` if
@@ -193,7 +207,7 @@ public actor Modem: SerialCommandSender {
   @discardableResult
   public func request(
     _ message: ExtendedMessage,
-    timeout: Duration = Modem.defaultRequestTimeout
+    timeout: Duration = Modem.defaultExtendedRequestTimeout
   ) async throws -> ReceivedMessage {
 
     precondition(message.flags.messageType == .direct, "Devices acknowledge only direct messages.")
@@ -227,7 +241,9 @@ public actor Modem: SerialCommandSender {
   ///   - reply: Reads the reply from a message, or returns `nil` if the message isn't it. It
   ///     sees only messages from the device that arrive after its acknowledgement.
   ///   - timeout: How long to wait for the modem's echo, the device's acknowledgement and its
-  ///     reply together. Defaults to ``Modem/defaultRequestTimeout``.
+  ///     reply together. Defaults to ``Modem/defaultExtendedRequestTimeout``, which covers the
+  ///     guide's retries of the message but not also those of the reply, so a reply that needs
+  ///     every retry can arrive late.
   /// - Returns: The device's reply.
   /// - Throws: ``ModemError/deviceRejected(_:_:)`` if the device rejects the message,
   ///   ``ModemError/deviceTimedOut(_:)`` if it doesn't acknowledge it or doesn't reply,
@@ -237,7 +253,7 @@ public actor Modem: SerialCommandSender {
   public func request<Reply: Sendable>(
     _ message: ExtendedMessage,
     awaitingReply reply: @escaping @Sendable (ReceivedMessage) -> Reply?,
-    timeout: Duration = Modem.defaultRequestTimeout
+    timeout: Duration = Modem.defaultExtendedRequestTimeout
   ) async throws -> Reply {
 
     precondition(message.flags.messageType == .direct, "Devices acknowledge only direct messages.")
@@ -271,7 +287,8 @@ public actor Modem: SerialCommandSender {
   ///
   /// - Parameters:
   ///   - device: The device whose database to read.
-  ///   - timeout: How long to wait for each record. Defaults to ``Modem/defaultRequestTimeout``.
+  ///   - timeout: How long to wait for each record. Defaults to
+  ///     ``Modem/defaultExtendedRequestTimeout``.
   /// - Returns: The records in the device's order. The last is the record that marks the end
   ///   of the database, whose address is where a new record goes, unless the read reached the
   ///   bottom of the database's memory first.
@@ -279,7 +296,7 @@ public actor Modem: SerialCommandSender {
   ///   at a record has failed.
   public func readAllLinkDatabase(
     of device: InsteonAddress,
-    timeout: Duration = Modem.defaultRequestTimeout
+    timeout: Duration = Modem.defaultExtendedRequestTimeout
   ) async throws -> [AllLinkRecordResponse] {
 
     var responses: [AllLinkRecordResponse] = []
@@ -319,14 +336,15 @@ public actor Modem: SerialCommandSender {
   /// - Parameters:
   ///   - device: The device whose database to read.
   ///   - address: The record's address, or `0x0000` for the first record.
-  ///   - timeout: How long to wait for each attempt. Defaults to ``Modem/defaultRequestTimeout``.
+  ///   - timeout: How long to wait for each attempt. Defaults to
+  ///     ``Modem/defaultExtendedRequestTimeout``.
   /// - Returns: The record and its address.
   /// - Throws: The errors of ``Modem/request(_:awaitingReply:timeout:)``, once every attempt
   ///   has failed.
   public func readAllLinkRecord(
     of device: InsteonAddress,
     at address: UInt16,
-    timeout: Duration = Modem.defaultRequestTimeout
+    timeout: Duration = Modem.defaultExtendedRequestTimeout
   ) async throws -> AllLinkRecordResponse {
 
     var attempt = 1
@@ -407,7 +425,8 @@ public actor Modem: SerialCommandSender {
     timeout: Duration
   ) async throws -> ReceivedMessage {
 
-    var steps = Self.exchange(for: command).steps + [Self.acknowledgement(from: device, of: command1)]
+    let modemExchange = Self.exchange(for: command)
+    var steps = modemExchange.steps + [Self.acknowledgement(from: device, of: command1)]
 
     if let isReply {
 
@@ -415,7 +434,7 @@ public actor Modem: SerialCommandSender {
 
     }
 
-    let exchange = Exchange(bytes: command.bytes, steps: steps, timeout: timeout)
+    let exchange = Exchange(bytes: command.bytes, steps: steps, timeout: timeout, transferTime: modemExchange.transferTime)
 
     // The last step, the acknowledgement or the reply after it, only accepts a message
     // received from the device.
@@ -583,8 +602,18 @@ public actor Modem: SerialCommandSender {
 
       },
       rejected: ModemError.rejected(number),
-      timedOut: ModemError.timedOut(number)
+      timedOut: ModemError.timedOut(number),
+      transferTime: transferTime(of: number)
     )
+
+  }
+
+  /// How much longer than the answer timeout a command may take. The Developer's Guide says
+  /// the modem answers Reset the IM once it has erased its memory, which takes about 20
+  /// seconds on a model with external EEPROM.
+  private static func transferTime(of number: SerialCommandNumber) -> Duration {
+
+    number == .resetModem ? .seconds(20) : .zero
 
   }
 

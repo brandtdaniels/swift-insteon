@@ -37,12 +37,13 @@ public struct Linker: Sendable {
   ///
   /// - Parameters:
   ///   - modem: The modem the links are made through.
-  ///   - timeout: How long to wait for each request to a device. Defaults to `Modem.defaultRequestTimeout`.
+  ///   - timeout: How long to wait for each request to a device. Defaults to
+  ///     `Modem.defaultExtendedRequestTimeout`, since most of the requests are extended.
   ///   - clock: The clock that times the wait for a link. Defaults to a `ContinuousClock`;
   ///     tests can pass a clock they control.
   public init(
     modem: any LinkingModem,
-    timeout: Duration = Modem.defaultRequestTimeout,
+    timeout: Duration = Modem.defaultExtendedRequestTimeout,
     clock: any Clock<Duration> = ContinuousClock()
   ) {
 
