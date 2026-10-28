@@ -415,7 +415,7 @@ struct RequestTests {
 
     try await run(modem) {
 
-      let records = try await modem.readAllLinkDatabase()
+      let records = try await modem.allLinkRecords()
 
       #expect(records.map(\.group) == [0x05, 0x01])
       #expect(records.map(\.flags.rawValue) == [0xE2, 0xA2])
@@ -423,6 +423,34 @@ struct RequestTests {
     }
 
     #expect(connection.written == [[0x02, 0x69], [0x02, 0x6A], [0x02, 0x6A]])
+
+  }
+
+  // A NAK without the echo means the modem is busy, so Get Next is sent again rather than
+  // ending the scan.
+  @Test func asksAgainForTheNextRecordWhileTheModemIsBusy() async throws {
+
+    let record: [UInt8] = [0x02, 0x57, 0xE2, 0x05] + device.bytes + [0x01, 0x20, 0x41]
+    let connection = ScriptedConnection { written, index in
+
+      switch index {
+      case 0, 2: written + [0x06] + record
+      case 1: [0x15]
+      default: written + [0x15]
+      }
+
+    }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let records = try await modem.allLinkRecords()
+
+      #expect(records.count == 2)
+
+    }
+
+    #expect(connection.written == [[0x02, 0x69], [0x02, 0x6A], [0x02, 0x6A], [0x02, 0x6A]])
 
   }
 
@@ -434,7 +462,7 @@ struct RequestTests {
 
     try await run(modem) {
 
-      let records = try await modem.readAllLinkDatabase()
+      let records = try await modem.allLinkRecords()
 
       #expect(records.isEmpty)
 
