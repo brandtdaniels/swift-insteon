@@ -91,6 +91,9 @@
       ]
     },
     {
+      "aliases": [
+        "Hub 2"
+      ],
       "capabilities": [
         {
           "kind": "modem"
@@ -100,6 +103,7 @@
           "port": 25105
         }
       ],
+      "description": "The central controller for an Insteon system. It drives its built-in modem over the local network, and runs scenes, schedules and alerts.",
       "identities": [
         {
           "category": "0x03",
@@ -123,7 +127,8 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -159,7 +164,7 @@
       "notes": [
         "Has one relay, with normally open, normally closed and common contacts, and two sense inputs.",
         "The relay's momentary mode can be set from 1 second to 30 minutes.",
-        "An I/O Module Expander, which has no INSTEON radio of its own, adds four more zones."
+        "An I/O Module Expander, which has no Insteon radio of its own, adds four more zones."
       ],
       "radio": "dual",
       "role": "both",
@@ -170,11 +175,15 @@
       ]
     },
     {
+      "aliases": [
+        "Keypad Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
         }
       ],
+      "description": "A wall keypad that dims and switches its connected light fixture and adds extra buttons for controlling other Insteon devices or scenes. Insteon sells it in 6-button and 8-button versions.",
       "identities": [
         {
           "category": "0x01",
@@ -188,14 +197,19 @@
         }
       ],
       "model": "2334",
-      "name": "Keypad Dimmer",
+      "name": "Dimmer Keypad",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
+      "aliases": [
+        "Mini Remote"
+      ],
       "batteryPowered": true,
       "capabilities": [],
+      "description": "A small rechargeable, battery-powered wireless remote that controls Insteon devices or groups of devices. Insteon sells it in 4-scene, 8-scene, and 1-scene switch versions, and it can be wall-mounted without wiring.",
       "identities": [
         {
           "category": "0x00",
@@ -244,7 +258,7 @@
         }
       ],
       "model": "2342",
-      "name": "Mini Remote",
+      "name": "Mini Remote Control",
       "notes": [
         "Comes as a 4-scene remote, an 8-scene remote, and a single on/off switch.",
         "Runs on a rechargeable battery and doesn't repeat messages."
@@ -253,7 +267,8 @@
       "role": "controller",
       "sources": [
         "HouseLinc device catalog",
-        "Mini Remote II PRD"
+        "Mini Remote II PRD",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -395,11 +410,15 @@
       ]
     },
     {
+      "aliases": [
+        "PowerLinc USB Modem"
+      ],
       "capabilities": [
         {
           "kind": "modem"
         }
       ],
+      "description": "A USB powerline modem that connects a computer to an Insteon network, so home automation software can send and receive Insteon messages.",
       "identities": [
         {
           "category": "0x03",
@@ -411,11 +430,12 @@
         }
       ],
       "model": "2413U",
-      "name": "PowerLinc USB Modem",
+      "name": "USB Modem",
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -744,11 +764,15 @@
       ]
     },
     {
+      "aliases": [
+        "Micro Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
         }
       ],
+      "description": "A small dimmer module that installs at a light fixture or behind an existing wall switch. It adds Insteon remote dimming control without replacing the original switch.",
       "identities": [
         {
           "category": "0x01",
@@ -767,12 +791,13 @@
         }
       ],
       "model": "2442-222",
-      "name": "Micro Dimmer",
+      "name": "Micro Dimmer Switch Module",
       "notes": [
         "HouseLinc lists the regional versions as the 2442-222, 2442-422 and 2442-522."
       ],
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -790,11 +815,15 @@
       ]
     },
     {
+      "aliases": [
+        "Micro On/Off"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
         }
       ],
+      "description": "A small on/off relay module that installs in a fixture box or behind an existing wall switch. It adds Insteon remote control to a light while keeping the original switch.",
       "identities": [
         {
           "category": "0x02",
@@ -813,12 +842,13 @@
         }
       ],
       "model": "2443-222",
-      "name": "Micro On/Off",
+      "name": "Micro On/Off Switch Module",
       "notes": [
         "HouseLinc lists the regional versions as the 2443-222, 2443-422 and 2443-522."
       ],
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -836,7 +866,11 @@
       ]
     },
     {
+      "aliases": [
+        "Micro Open/Close"
+      ],
       "capabilities": [],
+      "description": "A small in-box module that controls 110 V motorized devices such as projection screens, shutters, and curtains. It supports several switch types and has adjustable open and close travel times.",
       "identities": [
         {
           "category": "0x0E",
@@ -855,9 +889,10 @@
         }
       ],
       "model": "2444",
-      "name": "Micro Open/Close",
+      "name": "Micro Open/Close Module",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -1027,7 +1062,11 @@
       ]
     },
     {
+      "aliases": [
+        "I/O Linc"
+      ],
       "capabilities": [],
+      "description": "A plug-in module with a low-voltage sensor input and a relay output. It connects alarm sensors, door strikes, garage door openers, and other contact-closure devices to an Insteon network.",
       "identities": [
         {
           "category": "0x07",
@@ -1035,17 +1074,22 @@
         }
       ],
       "model": "2450",
-      "name": "I/O Linc",
+      "name": "I/O Module",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
+      "aliases": [
+        "DIN Rail Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
         }
       ],
+      "description": "A dimmer module that mounts on a DIN rail in an electrical panel to dim and switch lighting circuits remotely. It supports adjustable brightness levels and ramp rates.",
       "identities": [
         {
           "category": "0x01",
@@ -1064,20 +1108,25 @@
         }
       ],
       "model": "2452",
-      "name": "DIN Rail Dimmer",
+      "name": "Dimmer DIN Rail Module",
       "notes": [
         "HouseLinc also lists its identity under 2252-222."
       ],
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
+      "aliases": [
+        "DIN Rail On/Off"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
         }
       ],
+      "description": "A relay module that mounts on a DIN rail in an electrical panel to switch lighting circuits on and off remotely over Insteon.",
       "identities": [
         {
           "category": "0x02",
@@ -1096,9 +1145,10 @@
         }
       ],
       "model": "2453",
-      "name": "DIN Rail On/Off",
+      "name": "On/Off DIN Rail Module",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -1210,11 +1260,15 @@
       ]
     },
     {
+      "aliases": [
+        "LampLinc Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
         }
       ],
+      "description": "A plug-in module that lets a dimmable lamp be turned on and off and dimmed remotely. The lamp plugs into the module, which plugs into a wall outlet.",
       "groups": [
         {
           "name": "Load",
@@ -1229,7 +1283,7 @@
         }
       ],
       "model": "2457D2",
-      "name": "LampLinc Dimmer",
+      "name": "Dimmer Plug",
       "notes": [
         "Linking and unlinking modes time out after 4 minutes.",
         "Setting the on-level to 0 turns on resume dim."
@@ -1238,7 +1292,8 @@
       "role": "both",
       "sources": [
         "HouseLinc device catalog",
-        "LampLinc QA operational verification tests"
+        "LampLinc QA operational verification tests",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -1324,11 +1379,15 @@
       ]
     },
     {
+      "aliases": [
+        "OutletLinc Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
         }
       ],
+      "description": "An in-wall duplex outlet whose top receptacle can be dimmed and switched remotely over Insteon while the bottom receptacle stays always on. It controls plug-in lamps from Insteon keypads, remotes, or the Hub.",
       "identities": [
         {
           "category": "0x01",
@@ -1336,9 +1395,10 @@
         }
       ],
       "model": "2472DWH",
-      "name": "OutletLinc Dimmer",
+      "name": "Dimmer Outlet",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -1494,11 +1554,15 @@
       ]
     },
     {
+      "aliases": [
+        "In-LineLinc 0-10V Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
         }
       ],
+      "description": "A controller for dimmable lighting ballasts that use a 0-10 VDC control input. It also has two relay outputs that can switch non-dimmable ballasts of up to 5 amps each.",
       "groups": [
         {
           "name": "Load",
@@ -1513,9 +1577,9 @@
         }
       ],
       "model": "2475DA2",
-      "name": "In-LineLinc 0-10V Dimmer",
+      "name": "0-10V Ballast Dimmer",
       "notes": [
-        "HouseLinc names it INSTEON Ballast Dimmer.",
+        "HouseLinc names it Insteon Ballast Dimmer.",
         "Drives a 0-10 V output and two relayed loads; on cmd1 0x11 or 0x13, cmd2 0x01 selects load 1, 0x02 load 2 and 0x03 both.",
         "Turns on at 100% at power-up."
       ],
@@ -1523,15 +1587,20 @@
       "role": "both",
       "sources": [
         "HouseLinc device catalog",
-        "2475DA2 In-LineLinc 0-10V Dimmer-Switch PRD"
+        "2475DA2 In-LineLinc 0-10V Dimmer-Switch PRD",
+        "insteon.com product catalog"
       ]
     },
     {
+      "aliases": [
+        "FanLinc"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
         }
       ],
+      "description": "A module installed inside a ceiling fan's canopy that controls the fan speed (low, medium, high) and the fan's light kit. It can be controlled by other Insteon devices or the Hub.",
       "identities": [
         {
           "category": "0x01",
@@ -1539,9 +1608,10 @@
         }
       ],
       "model": "2475F",
-      "name": "FanLinc",
+      "name": "Ceiling Fan and Light Control Module",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -1738,11 +1808,15 @@
       ]
     },
     {
+      "aliases": [
+        "SwitchLinc Dimmer"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
         }
       ],
+      "description": "An in-wall dimmer switch that controls its light locally and can be controlled remotely by Insteon keypads, remotes, sensors, or the Hub. It is rated for up to 150 W of LED or 600 W of incandescent lighting.",
       "groups": [
         {
           "name": "Load",
@@ -1757,19 +1831,24 @@
         }
       ],
       "model": "2477D",
-      "name": "SwitchLinc Dimmer",
+      "name": "Dimmer Switch",
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
+      "aliases": [
+        "SwitchLinc Dimmer 1000W"
+      ],
       "capabilities": [
         {
           "kind": "dimmable"
         }
       ],
+      "description": "A higher-capacity version of the Insteon wall dimmer switch, rated for up to 250 W of dimmable LED or 1,000 W of incandescent or halogen lighting. It can be controlled locally or remotely over Insteon.",
       "groups": [
         {
           "name": "Load",
@@ -1784,20 +1863,25 @@
         }
       ],
       "model": "2477DH",
-      "name": "SwitchLinc Dimmer 1000W",
+      "name": "Dimmer Switch (High Wattage)",
       "radio": "dual",
       "role": "both",
       "sources": [
         "HouseLinc device catalog",
-        "2477DH SwitchLinc Dimmer 1000W PRD"
+        "2477DH SwitchLinc Dimmer 1000W PRD",
+        "insteon.com product catalog"
       ]
     },
     {
+      "aliases": [
+        "SwitchLinc Relay"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
         }
       ],
+      "description": "An in-wall on/off switch for non-dimmable loads such as fluorescent lights, ceiling fans, and exhaust fans, rated up to 17 amps. It can be controlled locally or remotely over Insteon.",
       "groups": [
         {
           "name": "Load",
@@ -1812,11 +1896,12 @@
         }
       ],
       "model": "2477S",
-      "name": "SwitchLinc Relay",
+      "name": "On/Off Switch",
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -2042,11 +2127,15 @@
       ]
     },
     {
+      "aliases": [
+        "KeypadLinc On/Off"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
         }
       ],
+      "description": "A wall keypad that switches its connected light fixture on and off and adds extra buttons for controlling other Insteon devices or scenes. It replaces a standard wall switch. Insteon sells it in a 6-button version.",
       "identities": [
         {
           "category": "0x02",
@@ -2058,12 +2147,13 @@
         }
       ],
       "model": "2487S",
-      "name": "KeypadLinc On/Off",
+      "name": "On/Off Keypad",
       "notes": [
         "HouseLinc also lists its identity under 2487S-50."
       ],
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -2191,11 +2281,15 @@
       ]
     },
     {
+      "aliases": [
+        "On/Off Outdoor Module"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
         }
       ],
+      "description": "A weather-resistant plug-in relay module for switching outdoor lights and appliances on and off remotely. It is rated NEMA 3R and works from -4 to 122 degrees Fahrenheit.",
       "groups": [
         {
           "name": "Load",
@@ -2210,22 +2304,27 @@
         }
       ],
       "model": "2634-222",
-      "name": "On/Off Outdoor Module",
+      "name": "Outdoor On/Off Plug",
       "notes": [
         "Has no X10."
       ],
       "radio": "dual",
       "sources": [
         "HouseLinc device catalog",
-        "2634-222 On/Off Outdoor Module II PRD"
+        "2634-222 On/Off Outdoor Module II PRD",
+        "insteon.com product catalog"
       ]
     },
     {
+      "aliases": [
+        "On/Off Module"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
         }
       ],
+      "description": "A plug-in relay module that switches lamps, fans, space heaters, and other small appliances on and off remotely. It handles loads of up to 15 amps or 1,800 W.",
       "groups": [
         {
           "name": "Load",
@@ -2240,19 +2339,24 @@
         }
       ],
       "model": "2635-222",
-      "name": "On/Off Module",
+      "name": "On/Off Plug",
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "insteon.com product catalog"
       ]
     },
     {
+      "aliases": [
+        "On/Off Outlet"
+      ],
       "capabilities": [
         {
           "kind": "onOff"
         }
       ],
+      "description": "An in-wall duplex outlet with two receptacles that can each be switched on and off independently over Insteon. It is used to control plug-in lamps, fans, and small appliances.",
       "groups": [
         {
           "name": "Outlet 1",
@@ -2272,7 +2376,7 @@
         }
       ],
       "model": "2663-222",
-      "name": "On/Off Outlet",
+      "name": "Dual On/Off Outlet",
       "notes": [
         "Both outlets are switched, each by its own group."
       ],
@@ -2280,7 +2384,8 @@
       "role": "both",
       "sources": [
         "HouseLinc device catalog",
-        "2663-2xx On/Off Outlet PRD"
+        "2663-2xx On/Off Outlet PRD",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -2485,7 +2590,7 @@
       "name": "Motorized Shades",
       "notes": [
         "On opens and off closes; fast on and fast off open and close fully; brighten and dim start opening and closing, and stopping ends the movement.",
-        "Doesn't repeat INSTEON messages."
+        "Doesn't repeat Insteon messages."
       ],
       "radio": "rf",
       "role": "responder",
@@ -2621,6 +2726,7 @@
           "kind": "heartbeat"
         }
       ],
+      "description": "A wireless, battery-powered sensor that mounts on a door or window and reports when it opens or closes. It can switch Insteon lights or, with the Hub, send phone alerts.",
       "groups": [
         {
           "name": "Open/close",
@@ -2660,7 +2766,8 @@
       "role": "controller",
       "sources": [
         "HouseLinc device catalog",
-        "Insteon command workbook, HeartBeat Status sheet"
+        "Insteon command workbook, HeartBeat Status sheet",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -2702,6 +2809,7 @@
           "kind": "heartbeat"
         }
       ],
+      "description": "A wireless, battery-powered motion sensor that can turn Insteon-controlled lights on when someone enters a room and off after they leave.",
       "groups": [
         {
           "name": "Motion",
@@ -2751,7 +2859,8 @@
       "radio": "rf",
       "role": "controller",
       "sources": [
-        "2844-x22 Motion Sensor II and III PRDs"
+        "2844-x22 Motion Sensor II and III PRDs",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -2778,6 +2887,7 @@
           "kind": "groupEvents"
         }
       ],
+      "description": "A wireless, battery-powered sensor recessed into a door frame that reports when the door opens or closes. It can trigger lights and other Insteon devices.",
       "groups": [
         {
           "name": "Open/close",
@@ -2817,7 +2927,8 @@
       "role": "controller",
       "sources": [
         "HouseLinc device catalog",
-        "2845-222 Door Sensor II PRD"
+        "2845-222 Door Sensor II PRD",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -2844,6 +2955,7 @@
           "kind": "heartbeat"
         }
       ],
+      "description": "A battery-powered sensor placed on the floor near sinks, toilets, washing machines, or water heaters that signals when it detects water. With an Insteon Hub or siren it can send alerts.",
       "groups": [
         {
           "name": "Dry",
@@ -2889,7 +3001,8 @@
       "sources": [
         "HouseLinc device catalog",
         "Insteon command workbook, HeartBeat Status sheet",
-        "2852-222 Leak Sensor PRD"
+        "2852-222 Leak Sensor PRD",
+        "insteon.com product catalog"
       ]
     },
     {
@@ -3120,7 +3233,7 @@
       "name": "Smoke Bridge",
       "notes": [
         "HouseLinc names it Smoke Detector.",
-        "It sends INSTEON messages over powerline only; its radio only listens for the smoke alarms it's paired with.",
+        "It sends Insteon messages over powerline only; its radio only listens for the smoke alarms it's paired with.",
         "Tapping its SET button sends each group's command as a test, ending with the all-clear.",
         "It sends a heartbeat to group 0x0A, which software can turn off; its interval isn't documented."
       ],
@@ -3143,7 +3256,7 @@
       "model": "2992-222",
       "name": "Range Extender",
       "notes": [
-        "Repeats INSTEON messages between powerline and RF, and bridges the two powerline phases.",
+        "Repeats Insteon messages between powerline and RF, and bridges the two powerline phases.",
         "Answers status requests and beeps; it has no load to control."
       ],
       "radio": "dual",
