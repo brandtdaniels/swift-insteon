@@ -9,7 +9,7 @@ Swift packages for working with [INSTEON](https://www.insteon.com) home automati
 | --- | --- |
 | [InsteonProtocol](Packages/InsteonProtocol) | The INSTEON protocol as value types: messages for devices, the serial commands that carry them through a modem, and the IBIOS commands of a PowerLinc Controller |
 | [InsteonModem](Packages/InsteonModem) | Control INSTEON devices through a PowerLinc Modem or USB Adapter on a USB or serial port, or a PowerLinc Controller (2414S) |
-| [InsteonLinking](Packages/InsteonLinking) | Link devices to each other and to the modem by writing their ALL-Link databases |
+| [InsteonLinking](Packages/InsteonLinking) | Link devices to each other and to the modem: by writing their ALL-Link databases, remotely, or with their SET buttons |
 | [InsteonHubClient](Packages/InsteonHubClient) | Control INSTEON devices through an INSTEON Hub on your local network, by driving its built-in modem with InsteonModem |
 | [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the INSTEON clients send requests through |
 

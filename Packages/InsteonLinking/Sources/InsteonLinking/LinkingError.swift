@@ -12,4 +12,11 @@ public enum LinkingError: Error, Hashable, Sendable {
   /// The modem closed before it reported its own address.
   case modemAddressUnavailable
 
+  /// A device with an i1 engine can't be put into linking or unlinking mode remotely; link it
+  /// with its SET button instead.
+  case remoteLinkingUnsupported(InsteonAddress)
+
+  /// The modem didn't report a link in time.
+  case linkingTimedOut
+
 }

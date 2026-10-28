@@ -28,6 +28,23 @@ try await Modem.withConnection(SerialPort(path: "/dev/ttyUSB0")) { modem in
 }
 ```
 
+### Three ways to link
+
+| Way | How | Engines |
+| --- | --- | --- |
+| Database | ``Linker/link(_:)`` writes both records directly, with exact link data | i2, and i2cs once linked to the modem |
+| Remote | ``Linker/linkRemotely(_:modemRole:modemGroup:deviceGroup:timeout:)`` puts the modem and the device into linking mode, as their SET buttons would | i2 and i2cs |
+| Manual | ``Linker/linkManually(modemRole:group:timeout:)`` puts the modem into linking mode and waits for someone to press a device's SET button | Every engine |
+
+Remote and manual linking work between the modem and one device, and the device memorizes
+its current state as its link data. Database linking works between any two devices, and sets
+the link data exactly. ``Unlinker`` has the same three ways.
+
+A device's engine decides how it's put into linking mode remotely: an i2 device is sent the
+standard Enter Linking Mode, and an i2cs device the extended one with a checksum. The linker
+asks the device for its engine first; an i2cs device that isn't linked to the modem rejects
+that request, which marks it as i2cs. An i1 device can't be linked remotely.
+
 ### Which devices accept database writes
 
 Writing records needs Read/Write ALL-Link Database, which every device with an i2 or i2cs
@@ -58,6 +75,7 @@ record first, deletes them all, and adds back the ones it's keeping.
 
 - ``AllLinkGroup``
 - ``LinkEndpoint``
+- ``ModemRole``
 
 ### Linking
 

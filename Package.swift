@@ -68,7 +68,7 @@ let package = Package(
     ),
     .testTarget(
       name: "InsteonLinkingTests",
-      dependencies: ["InsteonLinking", "InsteonModem", "InsteonProtocol"],
+      dependencies: ["InsteonLinking", "InsteonModem", "InsteonProtocol", "InsteonTestSupport"],
       path: "Packages/InsteonLinking/Tests/InsteonLinkingTests"
     ),
 
