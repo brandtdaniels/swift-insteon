@@ -133,6 +133,31 @@ struct HubDiscoveryTests {
 
   }
 
+  // A cellular or public network belongs to other people, so it's never searched.
+  @Test func searchesOnlyPrivateNetworks() async throws {
+
+    let client = ScriptedHTTPClient { _ in nil }
+    let network = FixedNetwork(fixed: [try subnet("100.64.12.7", 24), try subnet("203.0.113.9", 24)])
+
+    _ = try await HubDiscovery(httpClient: client, network: network).discover()
+
+    #expect(await client.requests.isEmpty)
+
+  }
+
+  @Test func returnsHubsInAddressOrder() async throws {
+
+    let hubChallenge = hubChallenge
+    let client = ScriptedHTTPClient { ["10.0.0.5", "10.0.1.9"].contains($0) ? hubChallenge : nil }
+    // The second subnet starts at a lower address than the first.
+    let network = FixedNetwork(fixed: [try subnet("10.0.1.50", 24), try subnet("10.0.0.10", 23)])
+
+    let hubs = try await HubDiscovery(httpClient: client, network: network).discover()
+
+    #expect(hubs.map(\.endpoint.host) == ["10.0.0.5", "10.0.1.9"])
+
+  }
+
   @Test func asksEachAddressOnceWhenSubnetsOverlap() async throws {
 
     let client = ScriptedHTTPClient { _ in nil }
@@ -257,6 +282,40 @@ struct GatedHTTPClient: HTTPClient {
     await gate.pass()
 
     throw URLError(.cannotConnectToHost)
+
+  }
+
+}
+
+struct IPv4SubnetTests {
+
+  @Test func readsDottedDecimal() throws {
+
+    let subnet = try #require(IPv4Subnet(address: "192.168.1.20", prefixLength: 24))
+
+    #expect(subnet.description == "192.168.1.0/24")
+    #expect(subnet.hosts.first == "192.168.1.1")
+    #expect(subnet.hosts.last == "192.168.1.254")
+
+  }
+
+  @Test(arguments: ["+192.168.1.20", "192.168.1", "192.168.1.256", "192.168..20", "192.168.1.٢"])
+  func rejectsAddressesThatArentDottedDecimal(_ address: String) {
+
+    #expect(IPv4Subnet(address: address, prefixLength: 24) == nil)
+
+  }
+
+  @Test func hasNoHostsInASubnetOfOneAddress() throws {
+
+    #expect(try #require(IPv4Subnet(address: "255.255.255.255", prefixLength: 32)).hosts.isEmpty)
+
+  }
+
+  @Test(arguments: [("10.1.2.3", 24, true), ("172.20.0.1", 16, true), ("192.168.0.1", 24, true), ("172.32.0.1", 24, false), ("100.64.0.1", 24, false), ("10.0.0.1", 7, false)])
+  func knowsThePrivateRanges(_ address: String, _ prefixLength: Int, _ isPrivate: Bool) throws {
+
+    #expect(try #require(IPv4Subnet(address: address, prefixLength: prefixLength)).isPrivate == isPrivate)
 
   }
 

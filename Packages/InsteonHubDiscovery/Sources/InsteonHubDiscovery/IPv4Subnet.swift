@@ -46,7 +46,8 @@ public struct IPv4Subnet: Hashable, Sendable {
 
     for part in parts {
 
-      guard part.allSatisfy(\.isASCII), let octet = UInt8(part) else {
+      // UInt8 also accepts a leading "+", which isn't dotted-decimal.
+      guard !part.isEmpty, part.allSatisfy({ $0.isASCII && $0.isNumber }), let octet = UInt8(part) else {
 
         return nil
 
@@ -73,17 +74,40 @@ public struct IPv4Subnet: Hashable, Sendable {
   /// hosts, so check ``IPv4Subnet/prefixLength`` first.
   public var hosts: [String] {
 
+    hostAddresses.map(Self.dottedDecimal)
+
+  }
+
+  /// The host addresses as numbers, in order.
+  var hostAddresses: Range<UInt32> {
+
     let network = address & mask
     let broadcast = network | ~mask
 
     // Subtracting can't overflow, since the broadcast address is never below the network's.
     guard broadcast - network > 1 else {
 
-      return []
+      return network..<network
 
     }
 
-    return (network + 1..<broadcast).map(Self.dottedDecimal)
+    return network + 1..<broadcast
+
+  }
+
+  /// Whether the subnet lies within the private address ranges of RFC 1918: `10.0.0.0/8`,
+  /// `172.16.0.0/12` and `192.168.0.0/16`, the ranges home networks use.
+  public var isPrivate: Bool {
+
+    let ranges: [(network: UInt32, prefixLength: Int)] = [(0x0A00_0000, 8), (0xAC10_0000, 12), (0xC0A8_0000, 16)]
+
+    return ranges.contains { range in
+
+      let rangeMask = UInt32.max << (32 - range.prefixLength)
+
+      return prefixLength >= range.prefixLength && address & rangeMask == range.network
+
+    }
 
   }
 

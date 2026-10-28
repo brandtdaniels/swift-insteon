@@ -4,8 +4,9 @@ import FoundationNetworking
 #endif
 import InsteonProtocol
 
-/// The requests the Hub's local HTTP interface accepts.
-enum HubRequest {
+/// The requests the Hub's local HTTP interface accepts. Package-wide, so Hub discovery asks for
+/// the buffer page exactly as ``Hub`` does.
+package enum HubRequest {
 
   /// Passes bytes to the Hub's modem.
   case write([UInt8])
@@ -47,7 +48,7 @@ enum HubRequest {
 
   /// The request, a GET for every action. It always goes to the Hub rather than a cache, since
   /// the buffer changes between reads.
-  func urlRequest(for endpoint: HubEndpoint) throws(HubError) -> URLRequest {
+  package func urlRequest(for endpoint: HubEndpoint) throws(HubError) -> URLRequest {
 
     // URLComponents traps on a negative port, so an out-of-range port is rejected first.
     guard (0...65_535).contains(endpoint.port) else {
