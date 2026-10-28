@@ -314,7 +314,9 @@ struct RequestTests {
       await clock.waitForSleeper(until: .seconds(3))
       clock.advance(by: .seconds(3))
 
-      #expect(try await responses.isEmpty)
+      let read = try await responses
+
+      #expect(read.isEmpty)
 
     }
 
