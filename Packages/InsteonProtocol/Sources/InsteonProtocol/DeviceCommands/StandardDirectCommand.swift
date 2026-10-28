@@ -32,10 +32,12 @@ public enum StandardDirectCommand: Hashable, Sendable {
 
   /// Puts the device into linking mode for `group`, as if its SET button were held (cmd1 `0x09`).
   ///
-  /// Like the SET button, this doesn't choose the device's role: it becomes the controller of
-  /// a device that's waiting to respond, and a responder to a controller that's already in
-  /// linking mode, such as a modem started with ``SerialCommand/startAllLinking(mode:group:)``.
-  /// Devices with only one group ignore `group`.
+  /// Sending it is remote linking, which links a device without anyone pressing its SET
+  /// button. Like the SET button, it doesn't choose the device's role: the device becomes the
+  /// controller of a device that's waiting to respond, and a responder to a controller that's
+  /// already in linking mode, such as a modem started with
+  /// ``SerialCommand/startAllLinking(mode:group:)``. Devices with only one group ignore `group`.
+  /// i2cs devices expect it in an extended message with a checksum.
   case enterLinkingMode(group: AllLinkGroup)
 
   /// Puts the device into unlinking mode for `group` (cmd1 `0x0A`).
