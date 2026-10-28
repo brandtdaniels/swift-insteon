@@ -204,7 +204,7 @@ public enum MessageIntegrity: String, Hashable, Sendable {
   /// - Returns: Whether sealing the user data leaves it unchanged.
   public func isIntact(_ userData: UserData, for command: Command) -> Bool {
 
-    scheme.seal(userData, for: command) == userData
+    scheme.isIntact(userData, for: command)
 
   }
 

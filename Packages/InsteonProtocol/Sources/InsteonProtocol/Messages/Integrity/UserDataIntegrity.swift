@@ -43,7 +43,9 @@ public struct UnprotectedIntegrity: UserDataIntegrity {
 ///
 /// Some i2 devices from before i2cs can check it too, once Set Operating Flags with cmd2
 /// `0x19` turns checking on; bit 4 of the reply to Get Operating Flags with cmd2 `0x05` says
-/// whether it's on, as Insteon's command workbook describes. Devices that check it NAK a
+/// whether it's on, as Insteon's command workbook describes. Others use their load-sense flag
+/// for it instead: Set Operating Flags with cmd2 `0x06`, and bit 5 of Get Operating Flags with
+/// cmd2 `0x00`. Devices that check it NAK a
 /// message whose checksum is wrong with cmd2 `0xFD`.
 public struct ChecksumIntegrity: UserDataIntegrity {
 

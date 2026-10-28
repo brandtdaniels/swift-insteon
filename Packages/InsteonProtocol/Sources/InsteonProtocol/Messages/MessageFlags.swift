@@ -130,15 +130,6 @@ extension MessageFlags: RawRepresentable {
 
   }
 
-  /// Whether ``MessageFlags/hopsLeft`` is no more than ``MessageFlags/maxHops``. Insteon's
-  /// command workbook says devices count a message with more hops left than it allows as a
-  /// bad message, neither acting on it nor repeating it.
-  public var hasConsistentHops: Bool {
-
-    hopsLeft <= maxHops
-
-  }
-
   /// The encoded flags byte.
   public var rawValue: UInt8 {
 
@@ -146,6 +137,19 @@ extension MessageFlags: RawRepresentable {
       | (isExtended ? 0b0001_0000 : 0)
       | hopsLeft.rawValue << 2
       | maxHops.rawValue
+
+  }
+
+}
+
+extension MessageFlags {
+
+  /// Whether ``MessageFlags/hopsLeft`` is no more than ``MessageFlags/maxHops``. Insteon's
+  /// command workbook says some devices count a bad hop count, such as more hops left than a
+  /// message allows, as a bad message, neither acting on it nor repeating it.
+  public var hasConsistentHops: Bool {
+
+    hopsLeft <= maxHops
 
   }
 

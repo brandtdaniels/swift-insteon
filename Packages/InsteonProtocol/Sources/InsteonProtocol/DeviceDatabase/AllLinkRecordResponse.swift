@@ -16,7 +16,7 @@ public struct AllLinkRecordResponse: Hashable, Sendable {
   /// The record.
   public var record: AllLinkRecord
 
-  /// Whether D14 holds the checksum of the response's other bytes, as an i2cs device sends
+  /// Whether D14 holds the checksum of cmd1, cmd2 and D1 through D13, as an i2cs device sends
   /// it. A record from an i2cs device that fails the check was damaged on the way; read it
   /// again.
   public var hasIntactChecksum: Bool
@@ -28,7 +28,12 @@ public struct AllLinkRecordResponse: Hashable, Sendable {
   ///   - address: The record's address.
   ///   - record: The record.
   ///   - hasIntactChecksum: Whether D14 held the response's checksum. Defaults to `true`.
-  public init(sender: InsteonAddress, address: UInt16, record: AllLinkRecord, hasIntactChecksum: Bool = true) {
+  public init(
+    sender: InsteonAddress,
+    address: UInt16,
+    record: AllLinkRecord,
+    hasIntactChecksum: Bool = true
+  ) {
 
     self.sender = sender
     self.address = address

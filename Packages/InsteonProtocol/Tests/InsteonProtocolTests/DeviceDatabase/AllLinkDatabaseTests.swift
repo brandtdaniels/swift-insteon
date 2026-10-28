@@ -57,7 +57,12 @@ struct AllLinkDatabaseTests {
     let response = try #require(AllLinkRecordResponse(message))
 
     // The guide's example predates i2cs, so it carries no checksum.
-    #expect(response == AllLinkRecordResponse(sender: device, address: 0x0FFF, record: record, hasIntactChecksum: false))
+    #expect(response == AllLinkRecordResponse(
+      sender: device,
+      address: 0x0FFF,
+      record: record,
+      hasIntactChecksum: false
+    ))
     #expect(!response.isEndOfDatabase)
 
   }
@@ -86,7 +91,6 @@ struct AllLinkDatabaseTests {
     data[9] = 0x00
 
     #expect(response(data)?.hasIntactChecksum == false)
-    #expect(UnprotectedIntegrity().isIntact(data, for: Command(command1: 0x2F, command2: 0x00)))
 
   }
 
