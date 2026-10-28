@@ -1,7 +1,7 @@
 import InsteonProtocol
 
 /// How sure the catalog is of a value: whether an Insteon document gives it, the documents
-/// disagree on it, it's inferred, or it's been confirmed on a device.
+/// disagree on it, it's inferred, or it's been seen on a device.
 ///
 /// An app can warn before it sends a command, or trusts a value, that isn't
 /// ``Verification/Status/documented`` or ``Verification/Status/observed``:
@@ -38,7 +38,8 @@ public struct Verification: Hashable, Sendable {
     /// Insteon's documents disagree, and the value is the one the catalog uses.
     public static let conflicting = Status(rawValue: "conflicting")
 
-    /// The value has been confirmed on a device.
+    /// The value has been seen on a device, running the firmware versions
+    /// ``Verification/firmware`` lists.
     public static let observed = Status(rawValue: "observed")
 
     /// The status as the catalog writes it.
@@ -53,7 +54,7 @@ public struct Verification: Hashable, Sendable {
   /// What the status rests on, such as what each document gives.
   public var note: String?
 
-  /// For an observed value, the firmware versions it was confirmed on.
+  /// For an observed value, the firmware versions the devices it was seen on were running.
   public var firmware: [FirmwareVersion]
 
   /// Creates a verification.
@@ -61,7 +62,8 @@ public struct Verification: Hashable, Sendable {
   /// - Parameters:
   ///   - status: How the catalog knows the value.
   ///   - note: What the status rests on.
-  ///   - firmware: For an observed value, the firmware versions it was confirmed on.
+  ///   - firmware: For an observed value, the firmware versions the devices it was seen on
+  ///     were running.
   public init(status: Status, note: String? = nil, firmware: [FirmwareVersion] = []) {
 
     self.status = status
