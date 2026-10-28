@@ -1,9 +1,11 @@
 /// A device's INSTEON Product Key (IPK), the 3-byte number that identifies its product.
 ///
 /// The Developer's Guide requires devices made after February 1, 2007 to store their product
-/// key and report it in a Product Data Response, which ``ProductData`` reads. Older devices
-/// don't answer the Product Data Request. Like a subcategory, a product key names a product
-/// only through a device database.
+/// key and report it in a Product Data Response, which ``ProductData`` reads. In practice the
+/// key wasn't kept up: Insteon's later command table marks the Product Data Request as no
+/// longer used, and many devices, newer ones especially, don't fill the key in. Identify a
+/// device by its ``DeviceCategory``, ``DeviceSubcategory`` and ``FirmwareVersion`` instead,
+/// and treat the key as a value the device happened to report.
 ///
 /// ```swift
 /// let key = ProductKey(0x00, 0x00, 0x1F)
