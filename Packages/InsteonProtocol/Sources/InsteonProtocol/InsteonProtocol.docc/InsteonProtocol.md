@@ -76,6 +76,12 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``SetButtonPressed``
 - ``ProductData``
 
+### Group commands
+
+- ``GroupCommand``
+- ``GroupCommandFilter``
+- ``SuccessReport``
+
 ### Broadcasts
 
 - ``Heartbeat``

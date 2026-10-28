@@ -31,6 +31,14 @@ Additional commands conform to `CommandConvertible`, so they never touch the mes
 
 No device data is built in, so every app can look devices up in one shared device database instead of keeping its own list.
 
+## Group commands
+
+`Sources/InsteonProtocol/GroupCommands` covers the commands controllers send to their ALL-Link groups, such as a keypad button or a sensor reporting motion:
+
+- `GroupCommand`: reads a command from an ALL-Link broadcast or cleanup
+- `GroupCommandFilter`: passes each command on once, dropping the cleanups that repeat a broadcast and repeated broadcasts
+- `SuccessReport`: reads the broadcast a controller sends after its cleanups, with the group's member count and failed cleanups
+
 ## Device ALL-Link databases
 
 `Sources/InsteonProtocol/DeviceDatabase` covers the records a device keeps in its own ALL-Link database:
