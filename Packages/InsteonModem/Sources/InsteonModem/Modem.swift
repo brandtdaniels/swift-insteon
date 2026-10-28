@@ -272,8 +272,9 @@ public actor Modem: SerialCommandSender {
   /// - Parameters:
   ///   - device: The device whose database to read.
   ///   - timeout: How long to wait for each record. Defaults to ``Modem/defaultRequestTimeout``.
-  /// - Returns: The records in use or used before, in the device's order, without the record
-  ///   that marks the end of the database.
+  /// - Returns: The records in the device's order. The last is the record that marks the end
+  ///   of the database, whose address is where a new record goes, unless the read reached the
+  ///   bottom of the database's memory first.
   /// - Throws: The errors of ``Modem/request(_:awaitingReply:timeout:)``, once every attempt
   ///   at a record has failed.
   public func readAllLinkDatabase(
@@ -288,13 +289,13 @@ public actor Modem: SerialCommandSender {
 
       let response = try await readAllLinkRecord(of: device, at: address, timeout: timeout)
 
+      responses.append(response)
+
       guard !response.isEndOfDatabase else {
 
         return responses
 
       }
-
-      responses.append(response)
 
       // Addresses count down by 8, and 0x0000 asks for the first record again, so the read
       // ends at the bottom of the database's memory.

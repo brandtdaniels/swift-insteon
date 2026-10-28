@@ -259,9 +259,10 @@ struct RequestTests {
 
       let responses = try await modem.readAllLinkDatabase(of: device)
 
-      #expect(responses.map(\.address) == [0x0FFF, 0x0FF7])
-      #expect(responses.map(\.record.flags.rawValue) == [0xE2, 0xA2])
-      #expect(responses.last?.record.data1 == 0xFE)
+      #expect(responses.map(\.address) == [0x0FFF, 0x0FF7, 0x0FEF])
+      #expect(responses.map(\.record.flags.rawValue) == [0xE2, 0xA2, 0x00])
+      #expect(responses[1].record.data1 == 0xFE)
+      #expect(responses.last?.isEndOfDatabase == true)
 
     }
 
@@ -316,7 +317,7 @@ struct RequestTests {
 
       let read = try await responses
 
-      #expect(read.isEmpty)
+      #expect(read.map(\.address) == [0x0FFF])
 
     }
 
