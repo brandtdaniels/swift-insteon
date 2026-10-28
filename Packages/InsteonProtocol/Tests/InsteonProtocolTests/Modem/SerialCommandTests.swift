@@ -49,12 +49,12 @@ struct SerialCommandTests {
     (.setRadio(.disabledUntilPowerCycle), "027D01"),
     (.readRadioStatus, "027E"),
     (.readDiagnostics(index: 0x08), "028108"),
-    // Insteon's command workbook: modify the controller record for group 7 and 10.A3.0F, then
-    // delete the responder record.
+    // Insteon's command workbook: modify the 0xA2 record for group 7 and 10.A3.0F, then delete
+    // the 0xE2 record.
     (
       .manageDeviceRecord(DeviceRecordRequest(
         device: InsteonAddress(0x08, 0xB6, 0xEA),
-        record: AllLinkRecord(flags: [.inUse, .controller], group: 0x07, address: InsteonAddress(0x10, 0xA3, 0x0F), data1: 0x07, data2: 0x1C),
+        record: AllLinkRecord(flags: [.inUse], group: 0x07, address: InsteonAddress(0x10, 0xA3, 0x0F), data1: 0x07, data2: 0x1C),
         options: [.modify]
       )),
       "028208B6EA020710A30F071C00"
@@ -62,7 +62,7 @@ struct SerialCommandTests {
     (
       .manageDeviceRecord(DeviceRecordRequest(
         device: InsteonAddress(0x08, 0xB6, 0xEA),
-        record: AllLinkRecord(flags: [.inUse], group: 0x07, address: InsteonAddress(0x10, 0xA3, 0x0F), data1: 0x7F, data2: 0x1C),
+        record: AllLinkRecord(flags: [.inUse, .controller], group: 0x07, address: InsteonAddress(0x10, 0xA3, 0x0F), data1: 0x7F, data2: 0x1C),
         options: [.delete]
       )),
       "028208B6EA440710A30F7F1C00"

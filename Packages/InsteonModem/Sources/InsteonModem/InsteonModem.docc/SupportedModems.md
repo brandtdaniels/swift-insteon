@@ -56,10 +56,14 @@ commands after those, such as Cancel Cleanup (`0x74`), Read and Write Database
 (`0x7A`) and Set RF Disable Flag (`0x7D`), appear only in Insteon's PLM serial command table,
 so a modem whose firmware doesn't implement one, such as a 2412 PowerLinc Modem, may reject it.
 
+Read RF Frequency (`0x7E`), Diagnostics (`0x81`) and Database Commands (`0x82`) come from
+later firmware in the same table. For Read RF Frequency, `SerialCommand` reads the modem's
+layout of the reply, not the development dongle's.
+
 The same table lists Set Status (`0x78`), Set RF Frequency (`0x7B`) and Set Venstar ACKs
 (`0x7C`) without their parameters, so `SerialCommand` doesn't include them. It also gives two
-layouts for the reply to Read RF Frequency (`0x7E`) and two sets of LED colors for Set Salad
-Flag (`0x7F`), depending on the product, so those are left out too.
+sets of LED colors for Set Salad Flag (`0x7F`), depending on the product, and two meanings for
+`0x80`, so those are left out too.
 
 A modem rejects a command it lacks with a NAK, the same answer it gives when it's busy, so
 ``Modem/send(_:)`` sends the command again as its ``RetryPolicy`` allows before it

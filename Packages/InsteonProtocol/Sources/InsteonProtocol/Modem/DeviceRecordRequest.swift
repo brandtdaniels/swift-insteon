@@ -2,9 +2,14 @@
 /// device's ALL-Link database, sent with ``SerialCommand/manageDeviceRecord(_:)``.
 ///
 /// The modem reads the device's database itself, a record at a time, and reports the record
-/// it finds with ``ModemReply/deviceRecordFound(address:record:)``. A record matches when it's
-/// in use, of the same kind as ``DeviceRecordRequest/record`` (controller or responder), and
-/// has its group and linked device; a group of `0xFF` matches every group.
+/// it finds with ``ModemReply/deviceRecordFound(address:record:)``. A record matches when its
+/// ``AllLinkRecordFlags/controller`` bit, group and linked device are those of
+/// ``DeviceRecordRequest/record``; a group of `0xFF` matches every group.
+///
+/// Insteon's command workbook annotates its examples as though a request with bit 6 clear
+/// looked for a controller record, but its captured exchange shows such a request finding an
+/// `0xA2` record, whose controller bit is clear. The request's bit 6 follows the captured
+/// exchange: it's the record's own bit 6.
 ///
 /// This is a later modem firmware command from Insteon's command workbook. The 2009
 /// Developer's Guide doesn't list it, and a modem without it NAKs the command.
@@ -24,8 +29,8 @@ public struct DeviceRecordRequest: Hashable, Sendable {
   /// The device whose database the modem reads.
   public var device: InsteonAddress
 
-  /// The record to match: its kind, from ``AllLinkRecordFlags/controller``, its group and its
-  /// linked device. Its data bytes are written by ``DeviceRecordOptions/modify``, and its third
+  /// The record to match: its ``AllLinkRecordFlags/controller`` bit, its group and its linked
+  /// device. Its data bytes are written by ``DeviceRecordOptions/modify``, and its third
   /// data byte is matched by ``DeviceRecordOptions/matchData3``.
   public var record: AllLinkRecord
 
@@ -46,11 +51,11 @@ public struct DeviceRecordRequest: Hashable, Sendable {
 
   }
 
-  /// The request's flags byte: the options, with bit 6 set to match a responder record rather
-  /// than a controller record.
+  /// The request's flags byte: the options, with bit 6 set to match a record whose
+  /// ``AllLinkRecordFlags/controller`` bit is set.
   var flags: UInt8 {
 
-    options.rawValue | (record.flags.contains(.controller) ? 0 : 1 << 6)
+    options.rawValue | (record.flags.contains(.controller) ? 1 << 6 : 0)
 
   }
 
@@ -78,7 +83,7 @@ public struct DeviceRecordOptions: OptionSet, Hashable, Sendable {
 
   /// Creates options from their bits.
   ///
-  /// - Parameter rawValue: The bits.
+  /// - Parameter rawValue: The bits. Bits 4 through 7 aren't options and are dropped.
   public init(rawValue: UInt8) {
 
     self.rawValue = rawValue & 0x0F

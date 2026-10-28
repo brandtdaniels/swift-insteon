@@ -78,11 +78,20 @@ private enum ModemFraming: Framing {
 
   static let negativeAcknowledgement: ModemReply = .negativeAcknowledgement
 
-  /// A host command's reply ends in an ACK or NAK. Anything else means its start byte didn't
-  /// begin a reply.
+  /// A host command's reply ends in an ACK or NAK, and so do the diagnostic and device record
+  /// reports (`0x5A` and `0x5B`). Anything else means its start byte didn't begin a reply.
   static func isReply(_ frame: ArraySlice<UInt8>) -> Bool {
 
-    SerialCommandNumber(rawValue: frame[frame.startIndex + 1]) == nil || frame.last.map { ControlByte.isAnswer($0) } == true
+    let number = frame[frame.startIndex + 1]
+    let endsInAnswer = frame.last.map { ControlByte.isAnswer($0) } == true
+
+    if number == 0x5A || number == 0x5B {
+
+      return endsInAnswer
+
+    }
+
+    return SerialCommandNumber(rawValue: number) == nil || endsInAnswer
 
   }
 
@@ -146,7 +155,7 @@ private enum ModemFraming: Framing {
 
       return .complete(MessageFlags(rawValue: bytes[5]).isExtended ? 23 : 9)
     case .beep:
-      // Later firmware echoes a parameter byte, which the Developer's Guide's form lacks.
+      // Later firmware echoes a parameter byte, which the form without one lacks.
       guard bytes.count >= 3 else {
 
         return .needMoreBytes

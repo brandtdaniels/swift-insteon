@@ -6,8 +6,7 @@
 /// device acknowledged. Insteon's command workbook gives the layout, with examples.
 public struct ModemDiagnosticRecord: Hashable, Sendable {
 
-  /// The message's sender. Insteon's examples show `AA.AA.02` for a message the modem sent
-  /// that wasn't acknowledged.
+  /// The message's sender: the modem's own address for a message the modem sent.
   public var sender: InsteonAddress
 
   /// The message's recipient.
