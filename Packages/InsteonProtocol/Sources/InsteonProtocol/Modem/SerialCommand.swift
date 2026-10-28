@@ -106,7 +106,8 @@ public enum SerialCommand: Hashable, Sendable {
   /// Sets the cmd1 and cmd2 bytes the modem sends in its ACKs to direct messages.
   case setAcknowledgementBytes(Command)
 
-  /// Puts an RF modem into its power-saving sleep mode. Sending it any byte wakes it.
+  /// Puts an RF modem into its power-saving sleep mode. Sending it any byte wakes it; wait at
+  /// least 40 ms after waking it before sending a command, as the Developer's Guide says.
   case rfSleep
 
   /// Requests the modem's configuration flags.
@@ -130,6 +131,9 @@ public enum SerialCommand: Hashable, Sendable {
   case writeDatabase(address: UInt16, record: AllLinkRecord)
 
   /// Makes the modem beep.
+  ///
+  /// Insteon's command workbook shows later firmware taking a parameter byte, `0x00` for a
+  /// beep and `0x01` for a double beep; this sends the Developer's Guide's form, with none.
   case beep
 
   /// Sets the data the modem stores in the responder record its next ALL-Link creates.
@@ -156,6 +160,21 @@ public enum SerialCommand: Hashable, Sendable {
   /// has no powerline connection, such as the USB Adapter (2448A7), reaches none until its radio
   /// is turned back on.
   case setRadio(RadioSetting)
+
+  /// Requests the state of the modem's radio, which the modem answers with
+  /// ``ModemReply/radioStatus(_:)``. From later modem firmware; others NAK it.
+  case readRadioStatus
+
+  /// Requests the modem's diagnostic records, which it answers with
+  /// ``ModemReply/diagnosticRecord(_:)``. From later modem firmware; others NAK it.
+  ///
+  /// - Parameter index: The first record's index, a multiple of 8 from `0x00` through `0xF8`.
+  case readDiagnostics(index: UInt8)
+
+  /// Has the modem find, and optionally change or delete, a record in another device's
+  /// ALL-Link database, which it answers with ``ModemReply/deviceRecordFound(address:record:)``.
+  /// From later modem firmware; others NAK it.
+  case manageDeviceRecord(DeviceRecordRequest)
 
   /// The byte that starts every serial command: `0x02`.
   public static let startOfText: UInt8 = 0x02
@@ -191,6 +210,9 @@ public enum SerialCommand: Hashable, Sendable {
     case .setResponderLinkData: .setResponderLinkData
     case .setApplicationRetries: .setApplicationRetries
     case .setRadio: .setRadio
+    case .readRadioStatus: .readRadioStatus
+    case .readDiagnostics: .readDiagnostics
+    case .manageDeviceRecord: .manageDeviceRecord
     }
 
   }
@@ -213,7 +235,7 @@ public enum SerialCommand: Hashable, Sendable {
       [category.rawValue, subcategory.rawValue, firmwareVersion?.rawValue ?? 0xFF]
     case let .setAcknowledgementByte(command2), let .setNegativeAcknowledgementByte(command2):
       [command2]
-    case let .setApplicationRetries(retries):
+    case let .setApplicationRetries(retries), let .readDiagnostics(retries):
       [retries]
     case let .setRadio(setting):
       [setting.rawValue]
@@ -229,9 +251,11 @@ public enum SerialCommand: Hashable, Sendable {
       address.bigEndianBytes
     case let .writeDatabase(address, record):
       address.bigEndianBytes + record.bytes
+    case let .manageDeviceRecord(request):
+      request.bytes
     case .getModemInfo, .cancelAllLinking, .resetModem, .getFirstAllLinkRecord,
       .getNextAllLinkRecord, .getAllLinkRecordForSender, .ledOn, .ledOff, .rfSleep,
-      .getModemConfiguration, .cancelCleanup, .beep:
+      .getModemConfiguration, .cancelCleanup, .beep, .readRadioStatus:
       []
     }
 

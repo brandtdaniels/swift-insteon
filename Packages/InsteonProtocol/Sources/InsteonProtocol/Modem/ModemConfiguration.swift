@@ -1,8 +1,11 @@
 /// The modem's configuration flags, set with ``SerialCommand/setModemConfiguration(_:)``.
 ///
 /// All flags default to off. Setting the configuration replaces every flag at once, so read
-/// the current flags with ``SerialCommand/getModemConfiguration`` before changing one. Bits 0–3
-/// are reserved and should be left clear.
+/// the current flags with ``SerialCommand/getModemConfiguration`` before changing one.
+///
+/// The Developer's Guide reserves bits 0–3. Insteon's command workbook shows later firmware
+/// using them, bit 2 to ignore X10 and the others for options it names without describing, so
+/// leave them as the modem reports them.
 public struct ModemConfiguration: OptionSet, Hashable, Sendable {
 
   /// The flags byte.
@@ -16,6 +19,9 @@ public struct ModemConfiguration: OptionSet, Hashable, Sendable {
     self.rawValue = rawValue
 
   }
+
+  /// Ignores X10 (bit 2), on later modem firmware.
+  public static let disableX10 = ModemConfiguration(rawValue: 1 << 2)
 
   /// Disables the host deadman timer, allowing more than 240 ms between bytes from the host
   /// (bit 4). Without it, the modem discards a command whose bytes arrive too slowly.

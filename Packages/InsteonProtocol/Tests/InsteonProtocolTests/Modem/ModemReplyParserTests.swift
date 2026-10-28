@@ -112,7 +112,40 @@ struct ModemReplyParserTests {
     ),
     ("027A05" + "06", .echo(CommandEcho(number: .setApplicationRetries, parameters: [0x05], isAccepted: true))),
     ("027D80" + "15", .echo(CommandEcho(number: .setRadio, parameters: [0x80], isAccepted: false))),
-    ("027D01" + "06", .echo(CommandEcho(number: .setRadio, parameters: [0x01], isAccepted: true)))
+    ("027D01" + "06", .echo(CommandEcho(number: .setRadio, parameters: [0x01], isAccepted: true))),
+    // Later firmware's beep echoes its parameter byte.
+    ("0277" + "01" + "15", .echo(CommandEcho(number: .beep, parameters: [0x01], isAccepted: false))),
+    // The examples in Insteon's command workbook.
+    ("0281" + "08" + "06", .echo(CommandEcho(number: .readDiagnostics, parameters: [0x08], isAccepted: true))),
+    (
+      "025A" + "27C77C" + "10A30F" + "E0" + "02" + "000D" + "06",
+      .diagnosticRecord(ModemDiagnosticRecord(
+        sender: InsteonAddress(0x27, 0xC7, 0x7C),
+        recipient: InsteonAddress(0x10, 0xA3, 0x0F),
+        flags: MessageFlags(rawValue: 0xE0),
+        count: 2,
+        totalCount: 0x000D
+      ))
+    ),
+    (
+      "0282" + "08B6EA" + "00" + "07" + "10A30F" + "FF1C00" + "06",
+      .echo(CommandEcho(
+        number: .manageDeviceRecord,
+        parameters: [0x08, 0xB6, 0xEA, 0x00, 0x07, 0x10, 0xA3, 0x0F, 0xFF, 0x1C, 0x00],
+        isAccepted: true
+      ))
+    ),
+    (
+      "025B" + "0FE7" + "A2" + "07" + "10A30F" + "071C00" + "06",
+      .deviceRecordFound(
+        address: 0x0FE7,
+        record: AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 0x07, address: InsteonAddress(0x10, 0xA3, 0x0F), data1: 0x07, data2: 0x1C)
+      )
+    ),
+    (
+      "027E" + "87" + "81" + "00" + "02" + "00" + "00" + "06",
+      .radioStatus(ModemRadioStatus(frequencyCode: 0x87, radioFlags: 0x81, lightFlags: 0x00, hardwareVersion: 0x02))
+    )
   ]
 
   @Test(arguments: replies)
@@ -285,6 +318,37 @@ struct ModemReplyParserTests {
     let replies = parser.parse(bytes("FF00" + "0299" + "15" + "0255"))
 
     #expect(replies == [.userReset])
+
+  }
+
+  // A diagnostic record's bytes can hold a start byte, such as the 0x02 of its count.
+  @Test func readsADiagnosticRecordWhoseBytesLookLikeAReply() {
+
+    var parser = ModemReplyParser()
+
+    let replies = parser.parse(bytes("025A" + "AAAA02" + "025012" + "03" + "01" + "0001" + "06" + "0255"))
+
+    #expect(replies.count == 2)
+    #expect(replies.last == .userReset)
+
+  }
+
+  @Test func reportsARejectedRadioStatusRequestOnceTheNextReplyArrives() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("027E" + "15" + Self.replies[0].0)) == [
+      .echo(CommandEcho(number: .readRadioStatus, parameters: [], isAccepted: false)),
+      Self.replies[0].1,
+    ])
+
+  }
+
+  @Test func readsWhetherTheRadioIsOn() {
+
+    #expect(!ModemRadioStatus(frequencyCode: 0x87, radioFlags: 0x81, lightFlags: 0, hardwareVersion: 2).isRadioEnabled)
+    #expect(ModemRadioStatus(frequencyCode: 0x87, radioFlags: 0x80, lightFlags: 0, hardwareVersion: 2).isRadioEnabled)
+    #expect(ModemDiagnosticRecord(sender: InsteonAddress(0, 0, 0), recipient: InsteonAddress(0, 0, 0), flags: MessageFlags(rawValue: 0), count: 0, totalCount: 0x0D).isEmpty)
 
   }
 

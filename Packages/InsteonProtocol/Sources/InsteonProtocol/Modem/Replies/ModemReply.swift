@@ -45,6 +45,21 @@ public enum ModemReply: Hashable, Sendable {
   ///   - record: The record.
   case databaseRecord(address: UInt16, record: AllLinkRecord)
 
+  /// A troubled exchange the modem recorded (`0x5A`), in reply to
+  /// ``SerialCommand/readDiagnostics(index:)``.
+  case diagnosticRecord(ModemDiagnosticRecord)
+
+  /// The record the modem found in another device's database (`0x5B`), in reply to
+  /// ``SerialCommand/manageDeviceRecord(_:)``, after any change or deletion it made.
+  ///
+  /// - Parameters:
+  ///   - address: The record's address in the device's database.
+  ///   - record: The record.
+  case deviceRecordFound(address: UInt16, record: AllLinkRecord)
+
+  /// The state of the modem's radio (`0x7E`), in reply to ``SerialCommand/readRadioStatus``.
+  case radioStatus(ModemRadioStatus)
+
   /// The modem's identity (`0x60`), in reply to ``SerialCommand/getModemInfo``.
   case modemInfo(ModemInfo)
 
