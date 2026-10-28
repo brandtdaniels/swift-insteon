@@ -23,37 +23,25 @@ public enum SmokeBridgeEvent: Hashable, Sendable {
   /// An alarm reports a malfunction: group 7.
   case malfunction
 
-  /// The bridge's periodic heartbeat: group `0x0A`.
-  case heartbeat
+  /// The bridge's periodic heartbeat, to group `0x0A`, with its command: on, fast on, off or
+  /// fast off (`0x11` to `0x14`).
+  case heartbeat(command1: UInt8)
 
   /// Reads a Smoke Bridge's event from a group command.
   ///
   /// - Parameter command: A command the bridge sent.
-  /// - Returns: `nil` if the command isn't an on, or a heartbeat, to one of the groups above.
+  /// - Returns: `nil` if the command isn't one of the events above.
   public init?(_ command: GroupCommand) {
 
-    if command.group == 0x0A {
-
-      self = .heartbeat
-
-      return
-
-    }
-
-    guard command.command1 == 0x11 else {
-
-      return nil
-
-    }
-
-    switch command.group.rawValue {
-    case 0x01: self = .smoke
-    case 0x02: self = .carbonMonoxide
-    case 0x03: self = .test
-    case 0x04: self = .unknownAlarm
-    case 0x05: self = .clear
-    case 0x06: self = .lowBattery
-    case 0x07: self = .malfunction
+    switch (command.group.rawValue, command.command1) {
+    case (0x01, 0x11): self = .smoke
+    case (0x02, 0x11): self = .carbonMonoxide
+    case (0x03, 0x11): self = .test
+    case (0x04, 0x11): self = .unknownAlarm
+    case (0x05, 0x11): self = .clear
+    case (0x06, 0x11): self = .lowBattery
+    case (0x07, 0x11): self = .malfunction
+    case let (0x0A, command1) where (0x11...0x14).contains(command1): self = .heartbeat(command1: command1)
     default: return nil
     }
 

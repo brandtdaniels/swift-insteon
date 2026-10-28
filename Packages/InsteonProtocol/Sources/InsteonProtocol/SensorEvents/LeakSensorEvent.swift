@@ -7,8 +7,10 @@ public enum LeakSensorEvent: Hashable, Sendable {
   /// Water was detected: on to group 2.
   case wet
 
-  /// The sensor's periodic heartbeat, to group 4.
-  case heartbeat
+  /// The sensor's periodic heartbeat, to group 4, with its command: on, fast on, off or fast
+  /// off (`0x11` to `0x14`). Insteon's heartbeat sheet says some sensors report their current
+  /// state in it, which depends on the model.
+  case heartbeat(command1: UInt8)
 
   /// Reads a leak sensor's event from a group command.
   ///
@@ -19,7 +21,7 @@ public enum LeakSensorEvent: Hashable, Sendable {
     switch (command.group.rawValue, command.command1) {
     case (0x01, 0x11): self = .dry
     case (0x02, 0x11): self = .wet
-    case (0x04, _): self = .heartbeat
+    case let (0x04, command1) where (0x11...0x14).contains(command1): self = .heartbeat(command1: command1)
     default: return nil
     }
 
