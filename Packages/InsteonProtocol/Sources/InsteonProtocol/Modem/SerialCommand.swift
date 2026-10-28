@@ -147,6 +147,11 @@ public enum SerialCommand: Hashable, Sendable {
   case setApplicationRetries(UInt8)
 
   /// Turns the modem's radio on or off.
+  ///
+  /// ``RadioSetting/enabled`` and ``RadioSetting/disabled`` are saved, so they outlast a power
+  /// cycle. A modem with its radio off reaches devices only over the powerline, and one that
+  /// has no powerline connection, such as the USB Adapter (2448A7), reaches none until its radio
+  /// is turned back on.
   case setRadio(RadioSetting)
 
   /// The byte that starts every serial command: `0x02`.

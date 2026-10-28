@@ -48,13 +48,20 @@ extension ExtendedDirectCommand: CommandConvertible {
 
 extension ExtendedDirectCommand {
 
-  /// The earliest engine on which every device accepts the command: ``InsteonEngine/i2``.
+  /// The earliest engine on which every device accepts the command, or `nil` when that
+  /// depends on the product.
   ///
   /// The i2 engine adds all three commands, which some i1 devices also accept. What a device
-  /// reads or writes with them is specific to the product.
+  /// reads or writes with them is specific to the product, and only some products accept a
+  /// ``ExtendedDirectCommand/getSet(variant:)`` variant other than `0x00`.
   public var minimumEngine: InsteonEngine? {
 
-    .i2
+    switch self {
+    case let .getSet(variant):
+      variant == 0x00 ? .i2 : nil
+    case .readWriteAllLinkDatabase, .triggerAllLinkGroup:
+      .i2
+    }
 
   }
 

@@ -43,8 +43,10 @@ struct SerialCommandTests {
     (.beep, "0277"),
     (.setResponderLinkData(data1: 0xFF, data2: 0x1F, data3: 0x03), "0279FF1F03"),
     (.setApplicationRetries(0x05), "027A05"),
+    (.setRadio(.enabled), "027D80"),
     (.setRadio(.disabled), "027D81"),
-    (.setRadio(.enabledUntilPowerCycle), "027D00")
+    (.setRadio(.enabledUntilPowerCycle), "027D00"),
+    (.setRadio(.disabledUntilPowerCycle), "027D01")
   ]
 
   @Test(arguments: encodings)

@@ -270,11 +270,12 @@ extension StandardDirectCommand {
   /// depends on the product.
   ///
   /// Every device accepts the base commands, such as on, off, ping and the ALL-Link group
-  /// commands. The i2 engine adds remote linking, the operating flags and status request
-  /// variants `0x01` through `0x04`, which some i1 devices also accept. What a variant or flag reports still depends on
-  /// the product. Other commands, such as ``StandardDirectCommand/beep`` and the ramp rate
-  /// commands, are specific to certain products and firmware versions; look those up in a
-  /// product database.
+  /// commands. The i2 engine adds remote linking, which i1 devices don't accept, along with setting
+  /// operating flags, operating flags requests `0x00` through `0x02` and status request variants
+  /// `0x01` through `0x04`, which some i1 devices also accept. What a request, variant or flag
+  /// reports still depends on the product. Other requests and commands, such as
+  /// ``StandardDirectCommand/beep`` and the ramp rate commands, are specific to certain products
+  /// and firmware versions; look those up in a device database.
   public var minimumEngine: InsteonEngine? {
 
     switch self {
@@ -288,8 +289,9 @@ extension StandardDirectCommand {
       case 0x01...0x04: .i2
       default: nil
       }
-    case .exitLinkingMode, .enterLinkingMode, .enterUnlinkingMode, .getOperatingFlags,
-         .setOperatingFlags:
+    case let .getOperatingFlags(request):
+      request.rawValue <= OperatingFlagsRequest.signalToNoise.rawValue ? .i2 : nil
+    case .exitLinkingMode, .enterLinkingMode, .enterUnlinkingMode, .setOperatingFlags:
       .i2
     case .productDataRequest, .instantChange, .remoteSetButtonTap, .onAtRampRate, .offAtRampRate,
          .beep:
