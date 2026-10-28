@@ -54,18 +54,8 @@ import InsteonProtocol
 let lamp = InsteonAddress("1A.2B.3C")!
 
 try await Modem.withConnection(SerialPort(path: "/dev/ttyUSB0")) { modem in
-  let replies = await modem.replies()
-
-  try await modem.send(.sendStandardMessage(
-    StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF))
-  ))
-
-  for await reply in replies {
-    if case let .messageReceived(message) = reply, message.sender == lamp {
-      // The lamp acknowledged the command.
-      break
-    }
-  }
+  // Returns once the lamp acknowledges the command, and throws if it rejects it.
+  try await modem.request(StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF)))
 }
 ```
 

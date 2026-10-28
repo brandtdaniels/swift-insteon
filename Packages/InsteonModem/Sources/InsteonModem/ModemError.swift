@@ -13,4 +13,10 @@ public enum ModemError: Error, Hashable, Sendable {
   /// The modem is closed: its connection ended, or ``Modem/run()`` returned.
   case connectionClosed
 
+  /// A device rejected a message with a NAK, for the reason it gave.
+  case deviceRejected(InsteonAddress, NAKReason)
+
+  /// A device didn't acknowledge a message within the request's timeout.
+  case deviceTimedOut(InsteonAddress)
+
 }
