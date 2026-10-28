@@ -31,7 +31,6 @@ RULES = [
     (r"\bclean-up", "cleanup"),
     (r"\b[Ss]et button\b", "SET button"),
     (r"(?<!Insteon )(?<!Modem )(?<!Hub )\b[Dd]eveloper'?s? [Gg]uides?\b|\b[Tt]he guide\b", "the document's title, such as Insteon Developer's Guide"),
-    (r"\bPRDs?\b|[Pp]roduct requirements|[Ww]orkbook|[Cc]ommand sheets?|[Tt]est log|SKU list|for Hub app|Insteon's Hub app|InsteonDevices\.db", "a public document's title, or no citation"),
 ]
 
 FENCE = re.compile(r"^\s*(?:///?\s*)?(```|~~~)")

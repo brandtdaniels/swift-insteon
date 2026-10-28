@@ -38,8 +38,7 @@ everywhere. `Scripts/check-terms.py` checks the forms it can, and CI runs it.
 
 ## Documents
 
-Cite only public documents, each by its own title, never as "the guide" alone. Where a fact
-comes from no public document, give it without a citation.
+Cite each document by its own title, never as "the guide" alone.
 
 | Document | Cite as |
 | --- | --- |
