@@ -9,9 +9,6 @@ public enum LinkingError: Error, Hashable, Sendable {
   /// A record written to a device's ALL-Link database read back differently.
   case recordNotWritten(InsteonAddress, address: UInt16)
 
-  /// The modem closed before it reported its own address.
-  case modemAddressUnavailable
-
   /// A device with an i1 engine can't be put into linking or unlinking mode remotely; link it
   /// with its SET button instead.
   case remoteLinkingUnsupported(InsteonAddress)
