@@ -146,6 +146,37 @@ struct CommandSetTests {
 
   }
 
+  @Test func readsHowSureTheCatalogIsOfEachValue() throws {
+
+    let commandSet = #"""
+      {
+        "id": "a", "name": "A", "description": "A.",
+        "operatingFlags": [
+          { "name": "ledOff", "description": "LED off.", "query": "0x00", "bit": "0x10", "on": "0x08", "off": "0x09",
+            "verification": { "status": "conflicting", "note": "The guide reads it as LED on." } },
+          { "name": "keyBeep", "description": "Beep.", "query": "0x00", "bit": "0x20" }
+        ],
+        "readings": [{ "name": "delta", "description": "Delta.", "query": "0x01",
+          "verification": { "status": "observed", "note": "Read from a device.", "firmware": ["0x45", "0x41"] } }],
+        "standardCommands": [{ "name": "beep", "description": "Beeps.", "command1": "0x30",
+          "verification": { "status": "somethingNewer", "note": "Later." } }],
+        "sources": ["A"]
+      }
+      """#
+    let catalog = try DeviceCatalog(json: Data(#"{ "schemaVersion": 1, "devices": [], "commandSets": [\#(commandSet)] }"#.utf8))
+    let decoded = try #require(catalog.commandSet(id: "a"))
+    let beep = try #require(decoded.standardCommand(named: "beep"))
+
+    #expect(decoded.operatingFlags[0].verification == Verification(status: .conflicting, note: "The guide reads it as LED on."))
+    #expect(!decoded.operatingFlags[0].verification.isSettled)
+    #expect(decoded.operatingFlags[1].verification == .documented)
+    #expect(decoded.readings[0].verification.firmware == [0x45, 0x41])
+    #expect(decoded.readings[0].verification.isSettled)
+    #expect(beep.verification.status.rawValue == "somethingNewer")
+    #expect(!beep.verification.isSettled)
+
+  }
+
   @Test func readsACatalogWithoutCommandSets() throws {
 
     let catalog = try DeviceCatalog(json: Data(#"{ "schemaVersion": 1, "devices": [] }"#.utf8))
