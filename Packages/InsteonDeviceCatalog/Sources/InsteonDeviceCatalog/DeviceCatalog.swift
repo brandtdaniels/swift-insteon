@@ -1,27 +1,27 @@
 import Foundation
 import InsteonProtocol
 
-/// A database of device profiles, for finding what a device is and can do from the identity it
+/// A catalog of device profiles, for finding what a device is and can do from the identity it
 /// reports.
 ///
-/// The package ships a copy of the INSTEON device database, which ``DeviceDatabase/bundled()``
-/// loads. An app can keep a newer copy with ``DeviceDatabaseUpdater``, or load one it
-/// downloaded itself with ``DeviceDatabase/init(json:)``.
+/// The package ships a copy of the INSTEON device catalog, which ``DeviceCatalog/bundled()``
+/// loads. An app can keep a newer copy with ``DeviceCatalogUpdater``, or load one it
+/// downloaded itself with ``DeviceCatalog/init(json:)``.
 ///
 /// ```swift
-/// let database = try DeviceDatabase.bundled()
+/// let catalog = try DeviceCatalog.bundled()
 ///
 /// if let pressed = SetButtonPressed(message),
-///    let profile = database.profile(category: pressed.category, subcategory: pressed.subcategory, firmwareVersion: pressed.firmwareVersion) {
+///    let profile = catalog.profile(category: pressed.category, subcategory: pressed.subcategory, firmwareVersion: pressed.firmwareVersion) {
 ///   print(profile.model, profile.name)
 /// }
 /// ```
 ///
 /// A device with no profile can still be handled by what its category implies, such as
 /// dimming for `DeviceCategory.dimmableLightingControl`.
-public struct DeviceDatabase: Hashable, Sendable {
+public struct DeviceCatalog: Hashable, Sendable {
 
-  /// The version of the database's format this package reads: `1`.
+  /// The version of the catalog's format this package reads: `1`.
   public static let schemaVersion = 1
 
   /// Every profile, in the order they were given.
@@ -39,7 +39,7 @@ public struct DeviceDatabase: Hashable, Sendable {
 
   }
 
-  /// Creates a database of profiles.
+  /// Creates a catalog of profiles.
   ///
   /// - Parameter profiles: The profiles.
   public init(profiles: [DeviceProfile]) {
@@ -61,48 +61,48 @@ public struct DeviceDatabase: Hashable, Sendable {
 
   }
 
-  /// Reads a database from the JSON the INSTEON device database publishes as `database.json`.
+  /// Reads a catalog from the JSON the INSTEON device catalog publishes as `catalog.json`.
   ///
-  /// - Parameter json: The database's JSON.
-  /// - Throws: ``DeviceDatabaseError/unsupportedSchemaVersion(_:)`` if the database is in a
-  ///   format other than ``DeviceDatabase/schemaVersion``, or `DecodingError` if the JSON
-  ///   isn't a database.
+  /// - Parameter json: The catalog's JSON.
+  /// - Throws: ``DeviceCatalogError/unsupportedSchemaVersion(_:)`` if the catalog is in a
+  ///   format other than ``DeviceCatalog/schemaVersion``, or `DecodingError` if the JSON
+  ///   isn't a catalog.
   public init(json: Data) throws {
 
     self.init(profiles: try JSONDecoder().decode(Contents.self, from: json).devices)
 
   }
 
-  /// Loads the copy of the database the package ships with.
+  /// Loads the copy of the catalog the package ships with.
   ///
   /// The copy is read once, the first time it's asked for.
   ///
-  /// - Returns: The database.
-  /// - Throws: ``DeviceDatabaseError/missingBundledDatabase`` if the copy isn't in the
+  /// - Returns: The catalog.
+  /// - Throws: ``DeviceCatalogError/missingBundledCatalog`` if the copy isn't in the
   ///   package's resources, or the error reading it.
-  public static func bundled() throws -> DeviceDatabase {
+  public static func bundled() throws -> DeviceCatalog {
 
     try bundledCopy.get()
 
   }
 
   /// The copy the package ships with, or the error reading it.
-  private static let bundledCopy = Result<DeviceDatabase, any Error> {
+  private static let bundledCopy = Result<DeviceCatalog, any Error> {
 
-    try DeviceDatabase(json: bundledJSON())
+    try DeviceCatalog(json: bundledJSON())
 
   }
 
   /// The JSON of the copy the package ships with, such as to save as an app's own copy.
   ///
   /// - Returns: The JSON.
-  /// - Throws: ``DeviceDatabaseError/missingBundledDatabase`` if the copy isn't in the
+  /// - Throws: ``DeviceCatalogError/missingBundledCatalog`` if the copy isn't in the
   ///   package's resources, or the error reading it.
   public static func bundledJSON() throws -> Data {
 
-    guard let url = Bundle.module.url(forResource: "database", withExtension: "json") else {
+    guard let url = Bundle.module.url(forResource: "catalog", withExtension: "json") else {
 
-      throw DeviceDatabaseError.missingBundledDatabase
+      throw DeviceCatalogError.missingBundledCatalog
 
     }
 
@@ -120,7 +120,7 @@ public struct DeviceDatabase: Hashable, Sendable {
   ///   - category: The category the device reported.
   ///   - subcategory: The subcategory the device reported.
   ///   - firmwareVersion: The firmware version the device reported, if any.
-  /// - Returns: The matching profile, or `nil` if there's none. The published database never
+  /// - Returns: The matching profile, or `nil` if there's none. The published catalog never
   ///   has two profiles claim the same identity.
   public func profile(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> DeviceProfile? {
 
@@ -158,7 +158,7 @@ public struct DeviceDatabase: Hashable, Sendable {
 
   }
 
-  /// The database's contents, with its format version checked before its profiles are read.
+  /// The catalog's contents, with its format version checked before its profiles are read.
   private struct Contents: Decodable {
 
     private enum CodingKeys: String, CodingKey {
@@ -175,9 +175,9 @@ public struct DeviceDatabase: Hashable, Sendable {
       let container = try decoder.container(keyedBy: CodingKeys.self)
       let version = try container.decode(Int.self, forKey: .schemaVersion)
 
-      guard version == DeviceDatabase.schemaVersion else {
+      guard version == DeviceCatalog.schemaVersion else {
 
-        throw DeviceDatabaseError.unsupportedSchemaVersion(version)
+        throw DeviceCatalogError.unsupportedSchemaVersion(version)
 
       }
 
@@ -189,13 +189,13 @@ public struct DeviceDatabase: Hashable, Sendable {
 
 }
 
-/// Errors reading a ``DeviceDatabase``.
-public enum DeviceDatabaseError: Error, Hashable, Sendable {
+/// Errors reading a ``DeviceCatalog``.
+public enum DeviceCatalogError: Error, Hashable, Sendable {
 
-  /// The database is in a format version this package doesn't read, with that version.
+  /// The catalog is in a format version this package doesn't read, with that version.
   case unsupportedSchemaVersion(Int)
 
-  /// The copy of the database the package ships with isn't in its resources.
-  case missingBundledDatabase
+  /// The copy of the catalog the package ships with isn't in its resources.
+  case missingBundledCatalog
 
 }

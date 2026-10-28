@@ -1,11 +1,11 @@
 import Foundation
 import Testing
-import InsteonDeviceDatabase
+import InsteonDeviceCatalog
 import InsteonProtocol
 
-struct DeviceDatabaseTests {
+struct DeviceCatalogTests {
 
-  /// A database in the published format, with `profiles` as its devices.
+  /// A catalog in the published format, with `profiles` as its devices.
   static func json(_ profiles: String, schemaVersion: Int = 1) -> Data {
 
     Data(#"{ "schemaVersion": \#(schemaVersion), "devices": [\#(profiles)] }"#.utf8)
@@ -64,9 +64,9 @@ struct DeviceDatabaseTests {
 
   @Test func readsAProfile() throws {
 
-    let database = try DeviceDatabase(json: Self.json(Self.leakSensor))
+    let catalog = try DeviceCatalog(json: Self.json(Self.leakSensor))
 
-    #expect(database.profiles == [
+    #expect(catalog.profiles == [
       DeviceProfile(
         model: "2852",
         name: "Leak Sensor",
@@ -99,25 +99,25 @@ struct DeviceDatabaseTests {
 
   @Test func findsAProfileByIdentityOrModel() throws {
 
-    let database = try DeviceDatabase(json: Self.json(Self.leakSensor))
+    let catalog = try DeviceCatalog(json: Self.json(Self.leakSensor))
 
-    #expect(database.profile(category: 0x10, subcategory: 0x0D, firmwareVersion: 0x41)?.model == "2852")
-    #expect(database.profile(category: 0x10, subcategory: 0x08, firmwareVersion: nil)?.model == "2852")
-    #expect(database.profile(category: 0x10, subcategory: 0x09, firmwareVersion: nil) == nil)
-    #expect(database.profile(model: "2852")?.name == "Leak Sensor")
-    #expect(database.profile(model: "2853") == nil)
+    #expect(catalog.profile(category: 0x10, subcategory: 0x0D, firmwareVersion: 0x41)?.model == "2852")
+    #expect(catalog.profile(category: 0x10, subcategory: 0x08, firmwareVersion: nil)?.model == "2852")
+    #expect(catalog.profile(category: 0x10, subcategory: 0x09, firmwareVersion: nil) == nil)
+    #expect(catalog.profile(model: "2852")?.name == "Leak Sensor")
+    #expect(catalog.profile(model: "2853") == nil)
 
   }
 
   @Test func tellsFirmwareVersionsApart() throws {
 
-    let database = try DeviceDatabase(json: Self.json(Self.dimmers))
+    let catalog = try DeviceCatalog(json: Self.json(Self.dimmers))
 
-    #expect(database.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x3F)?.model == "1000")
-    #expect(database.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x40)?.model == "1001")
+    #expect(catalog.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x3F)?.model == "1000")
+    #expect(catalog.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x40)?.model == "1001")
     // Without a firmware version, neither range can be chosen.
-    #expect(database.profile(category: 0x01, subcategory: 0x20, firmwareVersion: nil) == nil)
-    #expect(database.profile(model: "1001")?.capabilities.last == .thermostat(modeValues: .tempLinc, measuresHumidity: true))
+    #expect(catalog.profile(category: 0x01, subcategory: 0x20, firmwareVersion: nil) == nil)
+    #expect(catalog.profile(model: "1001")?.capabilities.last == .thermostat(modeValues: .tempLinc, measuresHumidity: true))
 
   }
 
@@ -139,16 +139,16 @@ struct DeviceDatabaseTests {
         "sources": ["B"]
       }
       """#
-    let database = try DeviceDatabase(json: Self.json(profiles))
+    let catalog = try DeviceCatalog(json: Self.json(profiles))
 
-    #expect(database.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x45)?.model == "1001")
-    #expect(database.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x3F)?.model == "1000")
+    #expect(catalog.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x45)?.model == "1001")
+    #expect(catalog.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x3F)?.model == "1000")
     // 0xFF means the device gave no version.
-    #expect(database.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0xFF)?.model == "1000")
+    #expect(catalog.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0xFF)?.model == "1000")
 
   }
 
-  // A later version of the database can add values this package doesn't read.
+  // A later version of the catalog can add values this package doesn't read.
   @Test func passesOverValuesItDoesntRead() throws {
 
     let profile = #"""
@@ -166,7 +166,7 @@ struct DeviceDatabaseTests {
         "sources": ["A"]
       }
       """#
-    let read = try #require(try DeviceDatabase(json: Self.json(profile)).profiles.first)
+    let read = try #require(try DeviceCatalog(json: Self.json(profile)).profiles.first)
 
     #expect(read.radio == nil)
     #expect(read.role == nil)
@@ -182,7 +182,7 @@ struct DeviceDatabaseTests {
 
     #expect(throws: DecodingError.self) {
 
-      try DeviceDatabase(json: Self.json(profile))
+      try DeviceCatalog(json: Self.json(profile))
 
     }
 
@@ -190,7 +190,7 @@ struct DeviceDatabaseTests {
 
   @Test func saysWhatAGroupCommandMeans() throws {
 
-    let profile = try #require(try DeviceDatabase(json: Self.json(Self.leakSensor)).profiles.first)
+    let profile = try #require(try DeviceCatalog(json: Self.json(Self.leakSensor)).profiles.first)
 
     #expect(profile.event(group: 0x02, command1: 0x11) == "wet")
     #expect(profile.event(group: 0x02, command1: 0x13) == nil)
@@ -200,9 +200,9 @@ struct DeviceDatabaseTests {
 
   @Test func refusesAnotherFormatVersion() {
 
-    #expect(throws: DeviceDatabaseError.unsupportedSchemaVersion(2)) {
+    #expect(throws: DeviceCatalogError.unsupportedSchemaVersion(2)) {
 
-      try DeviceDatabase(json: Self.json(Self.leakSensor, schemaVersion: 2))
+      try DeviceCatalog(json: Self.json(Self.leakSensor, schemaVersion: 2))
 
     }
 
@@ -215,7 +215,7 @@ struct DeviceDatabaseTests {
 
     #expect(throws: DecodingError.self) {
 
-      try DeviceDatabase(json: Self.json(profile))
+      try DeviceCatalog(json: Self.json(profile))
 
     }
 
@@ -227,7 +227,7 @@ struct DeviceDatabaseTests {
 
     #expect(throws: DecodingError.self) {
 
-      try DeviceDatabase(json: Self.json(profile))
+      try DeviceCatalog(json: Self.json(profile))
 
     }
 
@@ -235,17 +235,17 @@ struct DeviceDatabaseTests {
 
   @Test func loadsTheBundledCopy() throws {
 
-    let database = try DeviceDatabase.bundled()
+    let catalog = try DeviceCatalog.bundled()
 
-    #expect(database.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x41)?.model == "2477D")
-    #expect(database.profile(category: 0x10, subcategory: 0x08, firmwareVersion: nil)?.event(group: 0x02, command1: 0x11) == "wet")
+    #expect(catalog.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x41)?.model == "2477D")
+    #expect(catalog.profile(category: 0x10, subcategory: 0x08, firmwareVersion: nil)?.event(group: 0x02, command1: 0x11) == "wet")
 
-    // The published database never has two profiles claim one identity.
-    for profile in database.profiles {
+    // The published catalog never has two profiles claim one identity.
+    for profile in catalog.profiles {
 
       for identity in profile.identities where identity.firmware == nil {
 
-        #expect(database.profile(category: identity.category, subcategory: identity.subcategory, firmwareVersion: nil) == profile)
+        #expect(catalog.profile(category: identity.category, subcategory: identity.subcategory, firmwareVersion: nil) == profile)
 
       }
 

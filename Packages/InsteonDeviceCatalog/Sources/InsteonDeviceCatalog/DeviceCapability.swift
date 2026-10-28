@@ -99,7 +99,7 @@ extension DeviceCapability {
   }
 
   /// Decodes a capability, or returns `nil` for one this package doesn't read: a kind, or a
-  /// thermostat's mode values, from a later version of the database.
+  /// thermostat's mode values, from a later version of the catalog.
   init?(from decoder: any Decoder) throws {
 
     let container = try decoder.container(keyedBy: CodingKeys.self)

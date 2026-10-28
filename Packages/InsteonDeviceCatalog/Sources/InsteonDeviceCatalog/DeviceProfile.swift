@@ -3,7 +3,7 @@ import InsteonProtocol
 /// What one INSTEON product is and can do: its model, the identities it reports, its ALL-Link
 /// groups and its capabilities.
 ///
-/// A ``DeviceDatabase`` finds a device's profile from the category, subcategory and firmware
+/// A ``DeviceCatalog`` finds a device's profile from the category, subcategory and firmware
 /// version it reports, so an app can support a product by what its profile says rather than
 /// by code written for it.
 public struct DeviceProfile: Hashable, Sendable {
@@ -154,7 +154,7 @@ public struct DeviceProfile: Hashable, Sendable {
   /// What the product means by a command it sent to one of its groups.
   ///
   /// ```swift
-  /// if let profile = database.profile(category: 0x10, subcategory: 0x08, firmwareVersion: nil),
+  /// if let profile = catalog.profile(category: 0x10, subcategory: 0x08, firmwareVersion: nil),
   ///    profile.event(group: command.group, command1: command.command1) == "wet" {
   ///   print("The leak sensor is wet")
   /// }
@@ -253,7 +253,7 @@ extension DeviceProfile: Decodable {
 
   /// Decodes a profile from its JSON.
   ///
-  /// Values from a later version of the database that this package doesn't read are passed
+  /// Values from a later version of the catalog that this package doesn't read are passed
   /// over rather than failing the profile: an unknown radio or role reads as `nil`, a group
   /// with an unknown role is skipped, a group with an unknown way of linking reads as
   /// ``DeviceProfile/Group/Linking/software``, and an unknown capability is skipped.

@@ -5,7 +5,7 @@ public enum DeviceEvent: Hashable, Sendable {
 
   /// A device reported its identity: when its SET button was held, in reply to an ID
   /// request, in a heartbeat broadcast, or when its status changed. Carries the profile its
-  /// identity matches, or `nil` if the database has none.
+  /// identity matches, or `nil` if the catalog has none.
   case identified(InsteonAddress, profile: DeviceProfile?)
 
   /// A device sent a command to one of its groups, with what its profile says the command

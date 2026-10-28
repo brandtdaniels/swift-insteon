@@ -20,10 +20,10 @@ let package = Package(
     .library(name: "InsteonModem", targets: ["InsteonModem"]),
     .library(name: "InsteonLinking", targets: ["InsteonLinking"]),
     .library(name: "InsteonScheduling", targets: ["InsteonScheduling"]),
-    .library(name: "InsteonDeviceDatabase", targets: ["InsteonDeviceDatabase"])
+    .library(name: "InsteonDeviceCatalog", targets: ["InsteonDeviceCatalog"])
   ],
   dependencies: [
-    // SHA-256 for DeviceDatabaseUpdater: CryptoKit on Apple platforms, BoringSSL elsewhere.
+    // SHA-256 for DeviceCatalogUpdater: CryptoKit on Apple platforms, BoringSSL elsewhere.
     .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMinor(from: "5.0.3"))
   ],
   targets: [
@@ -113,24 +113,24 @@ let package = Package(
     ),
 
     .target(
-      name: "InsteonDeviceDatabase",
+      name: "InsteonDeviceCatalog",
       dependencies: [
         "InsteonNetworking",
         "InsteonProtocol",
         .product(name: "Crypto", package: "swift-crypto")
       ],
-      path: "Packages/InsteonDeviceDatabase/Sources/InsteonDeviceDatabase",
-      resources: [.copy("Resources/database.json")]
+      path: "Packages/InsteonDeviceCatalog/Sources/InsteonDeviceCatalog",
+      resources: [.copy("Resources/catalog.json")]
     ),
     .testTarget(
-      name: "InsteonDeviceDatabaseTests",
+      name: "InsteonDeviceCatalogTests",
       dependencies: [
-        "InsteonDeviceDatabase",
+        "InsteonDeviceCatalog",
         "InsteonNetworking",
         "InsteonProtocol",
         .product(name: "Crypto", package: "swift-crypto")
       ],
-      path: "Packages/InsteonDeviceDatabase/Tests/InsteonDeviceDatabaseTests"
+      path: "Packages/InsteonDeviceCatalog/Tests/InsteonDeviceCatalogTests"
     ),
 
     // Test doubles shared by the test targets. Not a product.
