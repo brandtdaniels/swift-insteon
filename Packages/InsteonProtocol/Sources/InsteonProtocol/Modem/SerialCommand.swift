@@ -42,6 +42,18 @@ public enum SerialCommand: Hashable, Sendable {
   ///   - group: The ALL-Link group to link.
   case startAllLinking(mode: AllLinkMode, group: AllLinkGroupNumber)
 
+  /// Puts the modem into ALL-Linking mode for a group, with bit 2 of the mode set so the link
+  /// uses the data from ``SerialCommand/setResponderLinkData(data1:data2:data3:)``.
+  ///
+  /// The Insteon Hub 2242 Developer's Guide says its modem uses that data only with bit 2 set.
+  /// Insteon's command workbook shows other firmware using the data without it, and giving
+  /// bit 2 another meaning, so use this form for a modem that needs it.
+  ///
+  /// - Parameters:
+  ///   - mode: The role the modem takes in the link.
+  ///   - group: The ALL-Link group to link.
+  case startAllLinkingWithLinkData(mode: AllLinkMode, group: AllLinkGroupNumber)
+
   /// Takes the modem out of ALL-Linking mode.
   case cancelAllLinking
 
@@ -142,7 +154,9 @@ public enum SerialCommand: Hashable, Sendable {
   /// The three bytes become ``AllLinkRecord/data1``, ``AllLinkRecord/data2`` and
   /// ``AllLinkRecord/data3`` of the record ``SerialCommand/startAllLinking(mode:group:)``
   /// creates when the modem is the responder. Insteon's command table describes the data as being for the next
-  /// link, so send this before each link that needs it.
+  /// link, so send this before each link that needs it. The Insteon Hub 2242 Developer's Guide
+  /// says its modem uses the data only when linking starts with
+  /// ``SerialCommand/startAllLinkingWithLinkData(mode:group:)``.
   ///
   /// - Parameters:
   ///   - data1: The record's first data byte.
@@ -188,7 +202,7 @@ public enum SerialCommand: Hashable, Sendable {
     case .sendAllLinkCommand: .sendAllLinkCommand
     case .sendStandardMessage, .sendExtendedMessage: .sendMessage
     case .sendX10: .sendX10
-    case .startAllLinking: .startAllLinking
+    case .startAllLinking, .startAllLinkingWithLinkData: .startAllLinking
     case .cancelAllLinking: .cancelAllLinking
     case .setHostDeviceCategory: .setHostDeviceCategory
     case .resetModem: .resetModem
@@ -230,6 +244,8 @@ public enum SerialCommand: Hashable, Sendable {
       message.bytes
     case let .sendX10(code):
       code.bytes
+    case let .startAllLinkingWithLinkData(mode, group):
+      [mode.rawValue | 1 << 2, group.rawValue]
     case let .startAllLinking(mode, group):
       [mode.rawValue, group.rawValue]
     case let .setHostDeviceCategory(category, subcategory, firmwareVersion):

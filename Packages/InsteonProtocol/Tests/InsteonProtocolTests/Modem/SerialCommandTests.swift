@@ -22,6 +22,7 @@ struct SerialCommandTests {
     (.sendX10(.command(.a, .on)), "02636280"),
     (.startAllLinking(mode: .controller, group: 0x01), "02640101"),
     (.startAllLinking(mode: .delete, group: 0x00), "0264FF00"),
+    (.startAllLinkingWithLinkData(mode: .responder, group: 0x01), "02640401"),
     (.cancelAllLinking, "0265"),
     (.setHostDeviceCategory(category: 0x03, subcategory: 0x15, firmwareVersion: nil), "02660315FF"),
     (.resetModem, "0267"),
