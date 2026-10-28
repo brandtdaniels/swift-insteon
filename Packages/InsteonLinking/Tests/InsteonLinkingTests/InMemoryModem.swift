@@ -160,6 +160,8 @@ actor InMemoryModem: LinkingModem {
 
     if message.command.command1 == 0x0D {
 
+      linkingSteps.append(.device(device, message.command, isExtended: false))
+
       // An i2cs device rejects a modem it isn't linked to.
       guard !unlinkedDevices.contains(device) else {
 
