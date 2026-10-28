@@ -4,13 +4,13 @@ Add INSTEON devices to a Hub Pro, read its settings, and update its software.
 
 ## Overview
 
-The Hub Pro (2243-222) has an INSTEON modem like the other Hubs, but it was sold as a HomeKit
-bridge, and how to reach its modem directly isn't documented, so `InsteonHubClient` doesn't
-support it. Current versions of HomeKit no longer support it either.
+The Hub Pro (2243-222) is built on the same foundations as the other Hubs, with an INSTEON
+modem that `HubConnection` in `InsteonHubClient` drives the same way. It was also sold as a
+HomeKit bridge, which current versions of HomeKit no longer support.
 
-``HubProClient`` uses the Hub Pro's local HTTP interface, which adds and removes INSTEON
-devices, reports the Hub Pro's network settings and software versions, and installs software
-updates.
+``HubProClient`` covers the requests only the Hub Pro has, which Insteon's app used alongside
+HomeKit: it adds and removes INSTEON devices from the bridge, reports the Hub Pro's network
+settings and software versions, and installs software updates.
 
 ```swift
 import InsteonHubPro
@@ -27,14 +27,13 @@ if try await hubPro.settings().isUpdateAvailable {
 
 ### Finding a Hub Pro
 
-The local interface needs the Hub Pro's IP address. Insteon's app looked it up by INSTEON ID
-through Insteon's cloud service; the router's list of clients shows it too. The Hub Pro's
-INSTEON ID is printed on it.
+The Hub Pro answers Hub discovery like the other Hubs, so `HubDiscovery` in
+`InsteonHubDiscovery` finds its address.
 
 ### What the local interface trusts
 
-The local interface is plain HTTP without authentication, so anything on the network can add
-or remove devices or start an update. Keep it on the local network and don't forward its
+These requests are plain HTTP without authentication, so anything on the network can add or
+remove devices or start an update. Keep it on the local network and don't forward its
 port.
 
 ## Topics
