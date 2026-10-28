@@ -26,26 +26,28 @@ public struct DiscoveredModem: Hashable, Sendable {
 
 }
 
-/// Finds INSTEON modems on the computer's USB serial ports.
+/// Finds INSTEON modems on the computer's USB-to-serial adapters.
 ///
-/// Discovery lists the serial devices a USB modem appears as, opens each at 19200 baud, and
-/// sends Get IM Info (`0x60`). A device that answers with a modem's category, `0x03`, is
-/// reported along with what it said about itself. Many modems connect through a common
+/// Discovery opens each device at 19200 baud and asks it for its modem information with
+/// ``Modem/modemInfo()``. A device that answers with a modem's category,
+/// `DeviceCategory.networkBridges`, is reported along with what it said about itself. A NAK
+/// means a modem that's busy, so it's asked once more. Many modems connect through a common
 /// USB-to-serial chip rather than one with SmartLabs' USB vendor ID, so the answer, rather
-/// than the device's name, is what identifies a modem.
+/// than the device's vendor, is what identifies a modem.
 ///
 /// ```swift
-/// for modem in await ModemDiscovery().discover() {
+/// for modem in try await ModemDiscovery().discover() {
 ///   print(modem.path, modem.info.address)
 /// }
 /// ```
 ///
-/// The devices are asked one at a time, and each that doesn't answer costs
-/// ``ModemDiscovery/timeout``. Asking writes two bytes to each listed device, so only the
-/// names USB serial adapters take are listed: `/dev/cu.usbserial-*` and `/dev/cu.usbmodem*` on
-/// macOS, and `/dev/serial/by-id/*`, or else `/dev/ttyUSB*` and `/dev/ttyACM*`, on Linux. A
-/// PowerLinc Controller (2414S) runs IBIOS at 4800 baud rather than the modem commands, so it
-/// isn't found. A device another program has open may not answer.
+/// Opening a serial device reconfigures it, and some boards, such as Arduino-based ones and 3D
+/// printers, restart when they're opened. So discovery lists only the names USB-to-serial
+/// adapters take, which PowerLinc Modems use and those boards don't: `/dev/cu.usbserial*`,
+/// `/dev/cu.SLAB_USBtoUART*` and `/dev/cu.wchusbserial*` on macOS, and `/dev/ttyUSB*` on Linux.
+/// Run it only when the user asks, or give it the paths the user picked with
+/// ``ModemDiscovery/init(paths:timeout:)``. A device another program has open may not answer,
+/// and a PowerLinc Controller (2414S), which runs IBIOS at 4800 baud, isn't found.
 ///
 /// Available on macOS and Linux.
 public struct ModemDiscovery: Sendable {
@@ -62,15 +64,33 @@ public struct ModemDiscovery: Sendable {
 
   private let clock: any Clock<Duration>
 
-  /// Creates a discovery of the computer's USB serial ports.
+  /// Creates a discovery of the computer's USB-to-serial adapters.
   ///
   /// - Parameter timeout: How long each device has to answer. Defaults to
   ///   ``ModemDiscovery/defaultTimeout``.
   public init(timeout: Duration = ModemDiscovery.defaultTimeout) {
 
+    self.init(timeout: timeout, devices: { try ModemDiscovery.usbSerialAdapters() })
+
+  }
+
+  /// Creates a discovery of particular serial devices, such as ones the user picked.
+  ///
+  /// - Parameters:
+  ///   - paths: The serial devices to ask.
+  ///   - timeout: How long each device has to answer. Defaults to
+  ///     ``ModemDiscovery/defaultTimeout``.
+  public init(paths: [String], timeout: Duration = ModemDiscovery.defaultTimeout) {
+
+    self.init(timeout: timeout, devices: { paths })
+
+  }
+
+  private init(timeout: Duration, devices: @escaping @Sendable () throws -> [String]) {
+
     self.init(
       timeout: timeout,
-      devices: { try ModemDiscovery.usbSerialDevices() },
+      devices: devices,
       open: { path in
 
         let port = try SerialPort(path: path)
@@ -99,35 +119,50 @@ public struct ModemDiscovery: Sendable {
 
   }
 
-  /// Asks each USB serial device whether it's an INSTEON modem.
+  /// Asks each device, all at once, whether it's an INSTEON modem.
   ///
-  /// - Returns: The modems found, in the order of their paths. Empty if the devices can't be
-  ///   listed.
-  public func discover() async -> [DiscoveredModem] {
+  /// - Returns: The modems found, in the order of their paths.
+  /// - Throws: The error listing the devices, if they can't be listed, or `CancellationError`
+  ///   if the task is canceled.
+  public func discover() async throws -> [DiscoveredModem] {
 
-    var modems: [DiscoveredModem] = []
+    let paths = try devices()
 
-    for path in (try? devices()) ?? [] {
+    let modems = await withTaskGroup(of: DiscoveredModem?.self) { group in
 
-      guard !Task.isCancelled else {
+      for path in paths {
 
-        break
+        group.addTask {
+
+          await probe(path).map { DiscoveredModem(path: path, info: $0) }
+
+        }
 
       }
 
-      if let info = await probe(path) {
+      var modems: [DiscoveredModem] = []
 
-        modems.append(DiscoveredModem(path: path, info: info))
+      for await modem in group {
+
+        if let modem {
+
+          modems.append(modem)
+
+        }
 
       }
+
+      return modems
 
     }
 
-    return modems
+    try Task.checkCancellation()
+
+    return modems.sorted { $0.path < $1.path }
 
   }
 
-  /// Asks one device for its modem information.
+  /// Asks one device for its modem information, and closes it.
   ///
   /// - Returns: What the device reported, or `nil` if it can't be opened, doesn't answer in
   ///   time, or isn't a modem.
@@ -141,31 +176,16 @@ public struct ModemDiscovery: Sendable {
 
     defer { close() }
 
-    // One attempt: a device that doesn't answer the first time isn't a modem.
-    let policy = RetryPolicy(attempts: 1, answerTimeout: timeout)
+    // A NAK means a busy modem, so it's asked once more.
+    let policy = RetryPolicy(attempts: 2, delay: .milliseconds(100), answerTimeout: timeout)
 
-    let info = try? await Modem.withConnection(connection, retryPolicy: policy, clock: clock) { modem -> ModemInfo? in
+    let info = try? await Modem.withConnection(connection, retryPolicy: policy, clock: clock) { modem in
 
-      let replies = await modem.replies()
-
-      try await modem.send(.getModemInfo)
-
-      for await reply in replies {
-
-        if case let .modemInfo(info) = reply {
-
-          return info
-
-        }
-
-      }
-
-      return nil
+      try await modem.modemInfo()
 
     }
 
-    // Every INSTEON modem reports category 0x03.
-    guard let info, info.category == 0x03 else {
+    guard let info, info.category == .networkBridges else {
 
       return nil
 
@@ -175,33 +195,21 @@ public struct ModemDiscovery: Sendable {
 
   }
 
-  /// The serial devices USB adapters appear as, in path order.
-  static func usbSerialDevices() throws -> [String] {
-
-    let manager = FileManager.default
+  /// The serial devices USB-to-serial adapters appear as, in path order.
+  static func usbSerialAdapters() throws -> [String] {
 
     #if os(macOS)
-    let directory = "/dev"
-    let prefixes = ["cu.usbserial", "cu.usbmodem"]
+    // FTDI and Prolific adapters, Silicon Labs CP210x, and WCH CH340.
+    let prefixes = ["cu.usbserial", "cu.SLAB_USBtoUART", "cu.wchusbserial"]
     #else
-    // The stable names under by-id point to the same devices as ttyUSB and ttyACM, so they're
-    // used instead when there are any.
-    let byID = "/dev/serial/by-id"
-
-    if let names = try? manager.contentsOfDirectory(atPath: byID), !names.isEmpty {
-
-      return names.sorted().map { "\(byID)/\($0)" }
-
-    }
-
-    let directory = "/dev"
-    let prefixes = ["ttyUSB", "ttyACM"]
+    // Every USB-to-serial converter driver, but not the CDC-ACM boards on ttyACM.
+    let prefixes = ["ttyUSB"]
     #endif
 
-    return try manager.contentsOfDirectory(atPath: directory)
+    return try FileManager.default.contentsOfDirectory(atPath: "/dev")
       .filter { name in prefixes.contains { name.hasPrefix($0) } }
       .sorted()
-      .map { "\(directory)/\($0)" }
+      .map { "/dev/\($0)" }
 
   }
 
