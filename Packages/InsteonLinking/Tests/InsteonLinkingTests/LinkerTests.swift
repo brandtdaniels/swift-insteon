@@ -118,6 +118,18 @@ struct LinkerTests {
 
   }
 
+  // An i3 device may set its fast fail and smart hop bits in a record it's written.
+  @Test func acceptsARecordWhoseDeviceMaintainedFlagsChanged() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setMaintainedFlags(0b0000_1001, of: lamp)
+
+    try await Linker(modem: modem).link(group(controller: .device(keypad), responder: .device(lamp)))
+
+    #expect(await modem.record(of: lamp, at: 0x0FFF).flags.rawValue == responderRecord(of: keypad).flags.rawValue | 0b0000_1001)
+
+  }
+
   @Test func throwsWhenADatabaseIsFull() async throws {
 
     let modem = InMemoryModem()

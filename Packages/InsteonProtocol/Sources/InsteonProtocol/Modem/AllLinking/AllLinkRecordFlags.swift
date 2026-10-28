@@ -18,6 +18,12 @@ public struct AllLinkRecordFlags: OptionSet, Hashable, Sendable {
 
   }
 
+  /// The device fails fast when a message to the record's device goes unanswered (bit 0), as
+  /// i3 devices define it.
+  ///
+  /// The i3 developer specifications say the device may change it at its own discretion.
+  public static let fastFail = AllLinkRecordFlags(rawValue: 1 << 0)
+
   /// The record has been used before; when clear, the record marks the end of the database
   /// (bit 1).
   public static let usedBefore = AllLinkRecordFlags(rawValue: 1 << 1)
@@ -42,5 +48,12 @@ public struct AllLinkRecordFlags: OptionSet, Hashable, Sendable {
     (rawValue >> 3) & 0b11
 
   }
+
+  /// The bits a device may change in a record on its own: ``AllLinkRecordFlags/fastFail`` and
+  /// the smart hops bits 3 and 4.
+  ///
+  /// The i3 developer specifications say some flags "may be modified at the switch's
+  /// discretion", and leave fast fail and the smart hop count out of their database checksum.
+  public static let deviceMaintained = AllLinkRecordFlags(rawValue: 0b0001_1001)
 
 }

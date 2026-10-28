@@ -223,9 +223,14 @@ struct DatabaseEditor {
 
     _ = try await modem.request(AllLinkDatabaseRequest.write(record, address: address).message(to: device), timeout: timeout)
 
-    let written = try await modem.readAllLinkRecord(of: device, at: address, timeout: timeout)
+    var written = try await modem.readAllLinkRecord(of: device, at: address, timeout: timeout).record
+    var expected = record
 
-    guard written.record == record else {
+    // A device may change some flags on its own, such as its smart hop count.
+    written.flags.subtract(.deviceMaintained)
+    expected.flags.subtract(.deviceMaintained)
+
+    guard written == expected else {
 
       throw LinkingError.recordNotWritten(device, address: address)
 

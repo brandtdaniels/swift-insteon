@@ -34,6 +34,9 @@ actor InMemoryModem: LinkingModem {
   /// Devices that acknowledge writes without storing them.
   var forgetfulDevices: Set<InsteonAddress> = []
 
+  /// Flag bits each device sets on its own in every record written to it.
+  var maintainedFlags: [InsteonAddress: UInt8] = [:]
+
   /// Something the modem was asked to do in linking, in order.
   enum LinkingStep: Hashable {
 
@@ -187,6 +190,14 @@ actor InMemoryModem: LinkingModem {
 
   }
 
+  /// The device sets `bits` in every record written to it, as an i3 device may set its fast
+  /// fail and smart hop bits.
+  func setMaintainedFlags(_ bits: UInt8, of device: InsteonAddress) {
+
+    maintainedFlags[device] = bits
+
+  }
+
   /// Someone changes a device's database without the linker, such as by pressing its SET
   /// button, so its delta changes.
   func changeDatabase(of device: InsteonAddress) {
@@ -326,7 +337,7 @@ actor InMemoryModem: LinkingModem {
 
         changeDatabase(of: device)
         databases[device, default: [:]][recordAddress] = AllLinkRecord(
-          flags: AllLinkRecordFlags(rawValue: data[6]),
+          flags: AllLinkRecordFlags(rawValue: data[6] | maintainedFlags[device, default: 0]),
           group: AllLinkGroupNumber(rawValue: data[7]),
           address: InsteonAddress(data[8], data[9], data[10]),
           data1: data[11],

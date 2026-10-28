@@ -7,12 +7,12 @@ struct ProductTests {
 
   let modem = InsteonAddress(0x11, 0x22, 0x33)
 
-  func broadcast(to destination: InsteonAddress, command1: UInt8, command2: UInt8 = 0xFF) -> ReceivedMessage {
+  func broadcast(to destination: InsteonAddress, command1: UInt8, command2: UInt8 = 0xFF, maxHops: MessageFlags.HopCount = .three) -> ReceivedMessage {
 
     ReceivedMessage(
       sender: device,
       destination: destination,
-      flags: MessageFlags(messageType: .broadcast),
+      flags: MessageFlags(messageType: .broadcast, maxHops: maxHops),
       command: Command(command1: command1, command2: command2)
     )
 
@@ -76,7 +76,7 @@ struct ProductTests {
   @Test(arguments: [(UInt8(0x00), PowerlinePhaseTest.Phase.a), (0x01, .b)])
   func readsThePowerlinePhase(_ command2: UInt8, _ phase: PowerlinePhaseTest.Phase) throws {
 
-    let test = try #require(PowerlinePhaseTest(broadcast(to: InsteonAddress(0x00, 0x00, 0x00), command1: 0x03, command2: command2)))
+    let test = try #require(PowerlinePhaseTest(broadcast(to: InsteonAddress(0x01, 0x20, 0x41), command1: 0x03, command2: command2, maxHops: .zero)))
 
     #expect(test == PowerlinePhaseTest(sender: device, phase: phase))
 
@@ -84,7 +84,19 @@ struct ProductTests {
 
   @Test func ignoresAPowerlinePhaseTestWithAnUnknownPhase() {
 
-    #expect(PowerlinePhaseTest(broadcast(to: InsteonAddress(0x00, 0x00, 0x00), command1: 0x03, command2: 0x02)) == nil)
+    #expect(PowerlinePhaseTest(broadcast(to: InsteonAddress(0x01, 0x20, 0x41), command1: 0x03, command2: 0x02, maxHops: .zero)) == nil)
+
+  }
+
+  // The i3 Keypad's Test RF broadcast: To 00 00 00, flags 8F, cmd1 03, cmd2 00.
+  @Test func readsAnI3TestRFBroadcastRatherThanAPhaseTest() throws {
+
+    let message = broadcast(to: InsteonAddress(0x00, 0x00, 0x00), command1: 0x03, command2: 0x00)
+
+    #expect(message.flags.rawValue == 0x8F)
+    #expect(PowerlinePhaseTest(message) == nil)
+    #expect(try #require(RadioRangeTest(message)) == RadioRangeTest(sender: device))
+    #expect(RadioRangeTest(broadcast(to: InsteonAddress(0x00, 0x00, 0x00), command1: 0x03, command2: 0x00, maxHops: .zero)) == nil)
 
   }
 

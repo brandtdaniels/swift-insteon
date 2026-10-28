@@ -2,7 +2,8 @@
 ///
 /// The codes count down from `0xFF`. Devices with an i1 or i2 ``InsteonEngine`` use `0xFD`
 /// through `0xFF`; i2cs devices use the full set below and read `0xFD` and `0xFF` slightly
-/// differently, as each code's documentation notes. Any other value is reserved.
+/// differently, as each code's documentation notes. i3 devices add `0xF8`. Any other value is
+/// reserved.
 ///
 /// ```swift
 /// if message.flags.messageType == .directNegativeAcknowledgement,
@@ -51,5 +52,8 @@ public struct NAKReason: RawRepresentable, Hashable, Sendable {
 
   /// The device's ALL-Link database is full (`0xF9`, i2cs).
   public static let databaseFull = NAKReason(rawValue: 0xF9)
+
+  /// The device has no hardware to carry out the command (`0xF8`, i3).
+  public static let noHardware = NAKReason(rawValue: 0xF8)
 
 }

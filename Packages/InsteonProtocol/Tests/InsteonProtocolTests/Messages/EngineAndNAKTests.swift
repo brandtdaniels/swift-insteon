@@ -55,6 +55,7 @@ struct EngineAndNAKTests {
     #expect(NAKReason(rawValue: 0xFF) == .notLinked)
     #expect(NAKReason.invalidCommand.rawValue == 0xFD)
     #expect(NAKReason.databaseFull.rawValue == 0xF9)
+    #expect(NAKReason.noHardware.rawValue == 0xF8)
 
   }
 
