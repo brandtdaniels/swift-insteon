@@ -9,10 +9,10 @@ import InsteonProtocol
 /// supported by its profile alone. An identity the database doesn't know leaves the device's
 /// profile as it was.
 ///
-/// Group commands pass through a ``GroupCommandFilter`` first, so each command a device sends
+/// Group commands pass through a `GroupCommandFilter` first, so each command a device sends
 /// is reported once however many times it's repeated or cleaned up. A broadcast that reports
 /// an identity, which sensors also send twice, is reported once within the filter's
-/// ``GroupCommandFilter/duplicateWindow``.
+/// `duplicateWindow`.
 ///
 /// ```swift
 /// var interpreter = DeviceEventInterpreter<ContinuousClock.Instant>(database: try .bundled())
