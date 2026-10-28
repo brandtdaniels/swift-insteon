@@ -46,6 +46,18 @@ struct RequestTests {
 
   }
 
+  /// An ALL-Link Record Response from `device` for the record at `address`, as `0x51` bytes.
+  func recordResponse(at address: UInt16, _ record: [UInt8]) -> [UInt8] {
+
+    let flags = MessageFlags(messageType: .direct, isExtended: true, maxHops: .three, hopsLeft: .two)
+    let header: [UInt8] = [0x02, 0x51] + device.bytes + modemAddress.bytes
+    let command: [UInt8] = [flags.rawValue, 0x2F, 0x00]
+    let userData: [UInt8] = [0x00, 0x01, UInt8(address >> 8), UInt8(address & 0xFF), 0x00] + record + [0x00]
+
+    return header + command + userData
+
+  }
+
   @Test func returnsTheDevicesAcknowledgement() async throws {
 
     let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x0D, command2: 0x02)
@@ -229,6 +241,106 @@ struct RequestTests {
     }
 
     #expect(connection.written == [[0x02, 0x62] + message.bytes])
+
+  }
+
+  @Test func readsEveryRecordUntilTheEndOfTheDatabase() async throws {
+
+    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x2F, command2: 0x00)
+    let records: [[UInt8]] = [
+      recordResponse(at: 0x0FFF, [0xE2, 0x04, 0x00, 0x5E, 0x5D, 0x00, 0x00, 0x04]),
+      recordResponse(at: 0x0FF7, [0xA2, 0x05, 0x00, 0x5E, 0x5D, 0xFE, 0x1F, 0x01]),
+      recordResponse(at: 0x0FEF, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
+    ]
+    let connection = ScriptedConnection { written, index in written + [0x06] + acknowledgement + records[index] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let responses = try await modem.readAllLinkDatabase(of: device)
+
+      #expect(responses.map(\.address) == [0x0FFF, 0x0FF7])
+      #expect(responses.map(\.record.flags.rawValue) == [0xE2, 0xA2])
+      #expect(responses.last?.record.data1 == 0xFE)
+
+    }
+
+    let requested: [UInt16] = [0x0000, 0x0FF7, 0x0FEF]
+    #expect(connection.written == requested.map {
+      [0x02, 0x62] + AllLinkDatabaseRequest.read(address: $0).message(to: device).bytes
+    })
+
+  }
+
+  @Test func waitsForTheReplyAfterTheAcknowledgement() async throws {
+
+    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x2F, command2: 0x00)
+    // A record response before the acknowledgement belongs to an earlier request.
+    let early = recordResponse(at: 0x0FF7, [0xA2, 0x05, 0x00, 0x5E, 0x5D, 0xFE, 0x1F, 0x01])
+    let current = recordResponse(at: 0x0FFF, [0xE2, 0x04, 0x00, 0x5E, 0x5D, 0x00, 0x00, 0x04])
+    let connection = ScriptedConnection { written, _ in written + [0x06] + early + acknowledgement + current }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let response = try await modem.request(
+        AllLinkDatabaseRequest.read(address: 0x0000).message(to: device),
+        awaitingReply: { AllLinkRecordResponse($0) }
+      )
+
+      #expect(response.address == 0x0FFF)
+
+    }
+
+  }
+
+  @Test func asksForARecordAgainWhenItDoesntArrive() async throws {
+
+    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x2F, command2: 0x00)
+    let end = recordResponse(at: 0x0FFF, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    // The first record response is lost.
+    let connection = ScriptedConnection { written, index in
+
+      let record: [UInt8] = index == 0 ? [] : end
+
+      return written + [0x06] + acknowledgement + record
+
+    }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      async let responses = modem.readAllLinkDatabase(of: device)
+      await clock.waitForSleeper(until: .seconds(3))
+      clock.advance(by: .seconds(3))
+
+      let read = try await responses
+
+      #expect(read.isEmpty)
+
+    }
+
+    #expect(connection.written.count == 2)
+
+  }
+
+  @Test func stopsAtTheBottomOfTheDatabasesMemory() async throws {
+
+    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x2F, command2: 0x00)
+    let last = recordResponse(at: 0x0008, [0xA2, 0x01, 0x00, 0x5E, 0x5D, 0xFE, 0x1F, 0x01])
+    let connection = ScriptedConnection { written, _ in written + [0x06] + acknowledgement + last }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let responses = try await modem.readAllLinkDatabase(of: device)
+
+      #expect(responses.map(\.address) == [0x0008])
+
+    }
+
+    // Address 0x0000 would ask for the first record again.
+    #expect(connection.written.count == 1)
 
   }
 

@@ -31,6 +31,13 @@ Additional commands conform to `CommandConvertible`, so they never touch the mes
 
 No device data is built in, so every app can look devices up in one shared device database instead of keeping its own list.
 
+## Device ALL-Link databases
+
+`Sources/InsteonProtocol/DeviceDatabase` covers the records a device keeps in its own ALL-Link database:
+
+- `AllLinkDatabaseRequest`: reads one record, every record, or writes a record, as the user data of a Read/Write ALL-Link Database message
+- `AllLinkRecordResponse`: reads a record a device sends back, with its address
+
 ## Modem
 
 `Sources/InsteonProtocol/Modem` covers the serial commands a host sends to an INSTEON modem, such as a PowerLinc Modem or the modem inside an INSTEON Hub:

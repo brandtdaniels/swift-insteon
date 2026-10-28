@@ -189,11 +189,11 @@ private enum ModemFraming: Framing {
     case 0x56:
       return .allLinkCleanupFailed(group: AllLinkGroupNumber(rawValue: body[1]), address: address(body, at: 2))
     case 0x57:
-      return .allLinkRecord(record(body, at: 0))
+      return .allLinkRecord(AllLinkRecord(body, at: 0))
     case 0x58:
       return .allLinkCleanupStatus(isComplete: body[0] == ControlByte.acknowledgement)
     case 0x59:
-      return .databaseRecord(address: UInt16(highByte: body[0], lowByte: body[1]), record: record(body, at: 2))
+      return .databaseRecord(address: UInt16(highByte: body[0], lowByte: body[1]), record: AllLinkRecord(body, at: 2))
     case 0x60 where body.count == 7 && body.last == ControlByte.acknowledgement:
       return .modemInfo(ModemInfo(reportedBytes: Array(body.prefix(6))))
     case 0x73 where body.count == 4 && body.last == ControlByte.acknowledgement:
@@ -223,19 +223,6 @@ private enum ModemFraming: Framing {
   private static func address(_ bytes: [UInt8], at index: Int) -> InsteonAddress {
 
     InsteonAddress(bytes[index], bytes[index + 1], bytes[index + 2])
-
-  }
-
-  private static func record(_ bytes: [UInt8], at index: Int) -> AllLinkRecord {
-
-    AllLinkRecord(
-      flags: AllLinkRecordFlags(rawValue: bytes[index]),
-      group: AllLinkGroupNumber(rawValue: bytes[index + 1]),
-      address: address(bytes, at: index + 2),
-      data1: bytes[index + 5],
-      data2: bytes[index + 6],
-      data3: bytes[index + 7]
-    )
 
   }
 

@@ -30,6 +30,8 @@ public actor Modem: SerialCommandSender {
 
   private let pacer: CommandPacer<ModemReplyParser>
 
+  private let retryPolicy: RetryPolicy
+
   /// Creates a modem that talks over a connection.
   ///
   /// - Parameters:
@@ -43,6 +45,7 @@ public actor Modem: SerialCommandSender {
     clock: any Clock<Duration> = ContinuousClock()
   ) {
 
+    self.retryPolicy = retryPolicy
     pacer = CommandPacer(
       connection: connection,
       parser: ModemReplyParser(),
@@ -204,6 +207,143 @@ public actor Modem: SerialCommandSender {
 
   }
 
+  /// Sends an extended direct message to a device and waits for the reply the device sends
+  /// after acknowledging it.
+  ///
+  /// Some commands are answered in two parts: the device acknowledges the message, then sends
+  /// the data it asked for in a message of its own, such as an ALL-Link Record Response. The
+  /// request holds the modem's turn until that reply arrives. Otherwise this works like the
+  /// request that returns the acknowledgement.
+  ///
+  /// ```swift
+  /// let response = try await modem.request(
+  ///   AllLinkDatabaseRequest.read(address: 0x0000).message(to: device),
+  ///   awaitingReply: AllLinkRecordResponse.init
+  /// )
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - message: The message to send.
+  ///   - reply: Reads the reply from a message, or returns `nil` if the message isn't it. It
+  ///     sees only messages from the device that arrive after its acknowledgement.
+  ///   - timeout: How long to wait for the modem's echo, the device's acknowledgement and its
+  ///     reply together. Defaults to ``Modem/defaultRequestTimeout``.
+  /// - Returns: The device's reply.
+  /// - Throws: ``ModemError/deviceRejected(_:_:)`` if the device rejects the message,
+  ///   ``ModemError/deviceTimedOut(_:)`` if it doesn't acknowledge it or doesn't reply,
+  ///   ``ModemError/rejected(_:)`` if the modem NAKs every attempt, ``ModemError/timedOut(_:)``
+  ///   if the modem doesn't echo the message, ``ModemError/connectionClosed`` if the modem is
+  ///   closed, `CancellationError` if the task is canceled, or the connection's error.
+  public func request<Reply: Sendable>(
+    _ message: ExtendedMessage,
+    awaitingReply reply: @escaping @Sendable (ReceivedMessage) -> Reply?,
+    timeout: Duration = Modem.defaultRequestTimeout
+  ) async throws -> Reply {
+
+    precondition(message.flags.messageType == .direct, "Devices acknowledge only direct messages.")
+
+    let answer = try await request(
+      .sendExtendedMessage(message),
+      to: message.destination,
+      command1: message.command.command1,
+      awaitingReply: { reply($0) != nil },
+      timeout: timeout
+    )
+
+    // The last step accepted the answer only because `reply` read it.
+    guard let value = reply(answer) else {
+
+      preconditionFailure("A request's reply is the message its reader accepted.")
+
+    }
+
+    return value
+
+  }
+
+  /// Reads every record in a device's ALL-Link database, one record at a time.
+  ///
+  /// Each record is requested by its address, starting with `0x0000` for the first and then
+  /// counting down by 8 from the address the device reports, until the device reports the
+  /// record that marks the end of its database. A record that doesn't arrive in time is asked
+  /// for again, as many times as the modem's ``RetryPolicy`` allows, so a message lost on the
+  /// network costs one short wait rather than the whole read.
+  ///
+  /// - Parameters:
+  ///   - device: The device whose database to read.
+  ///   - timeout: How long to wait for each record. Defaults to ``Modem/defaultRequestTimeout``.
+  /// - Returns: The records in use or used before, in the device's order, without the record
+  ///   that marks the end of the database.
+  /// - Throws: The errors of ``Modem/request(_:awaitingReply:timeout:)``, once every attempt
+  ///   at a record has failed.
+  public func readAllLinkDatabase(
+    of device: InsteonAddress,
+    timeout: Duration = Modem.defaultRequestTimeout
+  ) async throws -> [AllLinkRecordResponse] {
+
+    var responses: [AllLinkRecordResponse] = []
+    var address: UInt16 = 0x0000
+
+    while true {
+
+      let response = try await readAllLinkRecord(of: device, at: address, timeout: timeout)
+
+      guard !response.isEndOfDatabase else {
+
+        return responses
+
+      }
+
+      responses.append(response)
+
+      // Addresses count down by 8, and 0x0000 asks for the first record again, so the read
+      // ends at the bottom of the database's memory.
+      guard response.address > 8 else {
+
+        return responses
+
+      }
+
+      address = response.address - 8
+
+    }
+
+  }
+
+  /// Reads one record, asking again when it doesn't arrive in time.
+  private func readAllLinkRecord(
+    of device: InsteonAddress,
+    at address: UInt16,
+    timeout: Duration
+  ) async throws -> AllLinkRecordResponse {
+
+    var attempt = 1
+
+    while true {
+
+      do {
+
+        return try await request(
+          AllLinkDatabaseRequest.read(address: address).message(to: device),
+          awaitingReply: { message in
+
+            // Address 0x0000 asks for the first record, which the device reports at its own address.
+            AllLinkRecordResponse(message).flatMap { address == 0x0000 || $0.address == address ? $0 : nil }
+
+          },
+          timeout: timeout
+        )
+
+      } catch let ModemError.deviceTimedOut(address) where address == device && attempt < retryPolicy.attempts {
+
+        attempt += 1
+
+      }
+
+    }
+
+  }
+
   /// Returns a stream of everything the modem sends after this call.
   ///
   /// Each call returns a new stream, so several parts of an app can listen at once. A stream
@@ -220,23 +360,29 @@ public actor Modem: SerialCommandSender {
     _ command: SerialCommand,
     to device: InsteonAddress,
     command1: UInt8,
+    awaitingReply isReply: (@Sendable (ReceivedMessage) -> Bool)? = nil,
     timeout: Duration
   ) async throws -> ReceivedMessage {
 
-    let exchange = Exchange(
-      bytes: command.bytes,
-      steps: Self.exchange(for: command).steps + [Self.acknowledgement(from: device, of: command1)],
-      timeout: timeout
-    )
+    var steps = Self.exchange(for: command).steps + [Self.acknowledgement(from: device, of: command1)]
 
-    // The last step only accepts a message received from the device.
-    guard case let .messageReceived(acknowledgement) = try await pacer.send([exchange])[0] else {
+    if let isReply {
+
+      steps.append(Self.reply(from: device, matching: isReply))
+
+    }
+
+    let exchange = Exchange(bytes: command.bytes, steps: steps, timeout: timeout)
+
+    // The last step, the acknowledgement or the reply after it, only accepts a message
+    // received from the device.
+    guard case let .messageReceived(answer) = try await pacer.send([exchange])[0] else {
 
       preconditionFailure("A request is answered only by a message from its device.")
 
     }
 
-    return acknowledgement
+    return answer
 
   }
 
@@ -274,6 +420,29 @@ public actor Modem: SerialCommandSender {
         default:
           return nil
         }
+
+      },
+      timedOut: ModemError.deviceTimedOut(device)
+    )
+
+  }
+
+  /// The step that waits for a message a device sends after acknowledging a request.
+  private static func reply(
+    from device: InsteonAddress,
+    matching isReply: @escaping @Sendable (ReceivedMessage) -> Bool
+  ) -> AnswerStep<ModemReply> {
+
+    AnswerStep(
+      verdict: { reply in
+
+        guard case let .messageReceived(message) = reply, message.sender == device, isReply(message) else {
+
+          return nil
+
+        }
+
+        return .accepted
 
       },
       timedOut: ModemError.deviceTimedOut(device)
