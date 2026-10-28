@@ -259,9 +259,10 @@ struct RequestTests {
 
       let responses = try await modem.readAllLinkDatabase(of: device)
 
-      #expect(responses.map(\.address) == [0x0FFF, 0x0FF7])
-      #expect(responses.map(\.record.flags.rawValue) == [0xE2, 0xA2])
-      #expect(responses.last?.record.data1 == 0xFE)
+      #expect(responses.map(\.address) == [0x0FFF, 0x0FF7, 0x0FEF])
+      #expect(responses.map(\.record.flags.rawValue) == [0xE2, 0xA2, 0x00])
+      #expect(responses[1].record.data1 == 0xFE)
+      #expect(responses.last?.isEndOfDatabase == true)
 
     }
 
@@ -316,7 +317,7 @@ struct RequestTests {
 
       let read = try await responses
 
-      #expect(read.isEmpty)
+      #expect(read.map(\.address) == [0x0FFF])
 
     }
 
@@ -341,6 +342,35 @@ struct RequestTests {
 
     // Address 0x0000 would ask for the first record again.
     #expect(connection.written.count == 1)
+
+  }
+
+  @Test func findsEveryModemRecordForAGroupAndDevice() async throws {
+
+    let controller: [UInt8] = [0x02, 0x57, 0xE2, 0x05] + device.bytes + [0x01, 0x20, 0x41]
+    let responder: [UInt8] = [0x02, 0x57, 0xA2, 0x05] + device.bytes + [0x00, 0x00, 0x00]
+    // The modem NAKs the search once there are no more records, and isn't asked again.
+    let connection = ScriptedConnection { written, index in
+
+      switch index {
+      case 0: written + [0x06] + controller
+      case 1: written + [0x06] + responder
+      default: written + [0x15]
+      }
+
+    }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let records = try await modem.allLinkRecords(group: 0x05, device: device)
+
+      #expect(records.map(\.flags.rawValue) == [0xE2, 0xA2])
+      #expect(records.first?.data2 == 0x20)
+
+    }
+
+    #expect(connection.written.map { $0[2] } == [0x00, 0x01, 0x01])
 
   }
 

@@ -15,7 +15,8 @@ let package = Package(
     .library(name: "InsteonProtocol", targets: ["InsteonProtocol"]),
     .library(name: "InsteonNetworking", targets: ["InsteonNetworking"]),
     .library(name: "InsteonHubClient", targets: ["InsteonHubClient"]),
-    .library(name: "InsteonModem", targets: ["InsteonModem"])
+    .library(name: "InsteonModem", targets: ["InsteonModem"]),
+    .library(name: "InsteonLinking", targets: ["InsteonLinking"])
   ],
   targets: [
     .target(
@@ -58,6 +59,17 @@ let package = Package(
       name: "InsteonModemTests",
       dependencies: ["InsteonModem", "InsteonProtocol", "InsteonTestSupport"],
       path: "Packages/InsteonModem/Tests/InsteonModemTests"
+    ),
+
+    .target(
+      name: "InsteonLinking",
+      dependencies: ["InsteonModem", "InsteonProtocol"],
+      path: "Packages/InsteonLinking/Sources/InsteonLinking"
+    ),
+    .testTarget(
+      name: "InsteonLinkingTests",
+      dependencies: ["InsteonLinking", "InsteonModem", "InsteonProtocol"],
+      path: "Packages/InsteonLinking/Tests/InsteonLinkingTests"
     ),
 
     // Test doubles shared by the test targets. Not a product.
