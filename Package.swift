@@ -11,10 +11,6 @@ let package = Package(
     .watchOS(.v9),
     .visionOS(.v1)
   ],
-  dependencies: [
-    // SHA-256 for DeviceDatabaseUpdater: CryptoKit on Apple platforms, BoringSSL elsewhere.
-    .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMinor(from: "5.0.3"))
-  ],
   products: [
     .library(name: "InsteonProtocol", targets: ["InsteonProtocol"]),
     .library(name: "InsteonNetworking", targets: ["InsteonNetworking"]),
@@ -25,6 +21,10 @@ let package = Package(
     .library(name: "InsteonLinking", targets: ["InsteonLinking"]),
     .library(name: "InsteonScheduling", targets: ["InsteonScheduling"]),
     .library(name: "InsteonDeviceDatabase", targets: ["InsteonDeviceDatabase"])
+  ],
+  dependencies: [
+    // SHA-256 for DeviceDatabaseUpdater: CryptoKit on Apple platforms, BoringSSL elsewhere.
+    .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMinor(from: "5.0.3"))
   ],
   targets: [
     .target(
