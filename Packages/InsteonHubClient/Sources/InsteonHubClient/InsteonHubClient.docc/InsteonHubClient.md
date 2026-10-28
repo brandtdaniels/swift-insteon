@@ -52,6 +52,19 @@ The Hub requires the user name and password printed on it. Store them securely, 
 the keychain, rather than in source code. Requests go through `HTTPClient` from
 InsteonNetworking, so you can supply your own HTTP stack or a stub in tests.
 
+### Reaching a Hub away from home
+
+The Hub's interface is meant for the local network: it's plain HTTP, so its password and
+every command cross the network unencrypted, and the Hub has no way to be reached securely
+from outside. Insteon's apps reached Hubs away from home through Insteon's own cloud
+services rather than the Hub's interface, and this library doesn't use those.
+
+To reach a Hub away from home, bring the app onto the home network instead of exposing the
+Hub: connect through a VPN or tunnel into the home network, such as WireGuard or a mesh VPN,
+and use the Hub's local address as usual. Or run an always-on app at home, on a Mac or a
+small server, that talks to the Hub locally and offers its own authenticated, encrypted
+interface to your other devices. Don't forward the Hub's port through the router.
+
 ### Supported Hubs
 
 Both supported Hubs were sold as the INSTEON Hub, so they're identified here by model number.
