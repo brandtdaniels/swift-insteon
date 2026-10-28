@@ -1,6 +1,6 @@
 import InsteonProtocol
 
-/// A command a 2242 Hub runs itself, sent in its short form rather than as a serial command
+/// A command a Hub 2242 runs itself, sent in its short form rather than as a serial command
 /// for its modem.
 ///
 /// The Insteon Hub Developer's Guide gives the short form as `/0?<cmd1><group>=I=0`: the

@@ -2,7 +2,7 @@ import InsteonProtocol
 
 extension Hub {
 
-  /// Reads a page of a 2242 Hub's slots: the device and group each is for, and its state.
+  /// Reads a page of a Hub 2242's slots: the device and group each is for, and its state.
   ///
   /// - Parameter page: The page, from 1 through 16.
   /// - Returns: The page's slots, in order.
@@ -18,7 +18,7 @@ extension Hub {
 
   }
 
-  /// Writes a timer into a 2242 Hub's slot, which the Hub then runs on its own.
+  /// Writes a timer into a Hub 2242's slot, which the Hub then runs on its own.
   ///
   /// The Hub's timer request also carries the slot's state and its device and group, so the
   /// slot's page is read first and those are written back unchanged, as Insteon's Hub app does.
@@ -55,7 +55,7 @@ extension Hub {
 
   }
 
-  /// Sets the commands a 2242 Hub sends when a slot's timer turns it on and off.
+  /// Sets the commands a Hub 2242 sends when a slot's timer turns it on and off.
   ///
   /// - Parameters:
   ///   - commands: The commands, or `nil` to send none.
@@ -74,7 +74,7 @@ extension Hub {
 
   }
 
-  /// Sets a 2242 Hub's clock, which its timers run by.
+  /// Sets a Hub 2242's clock, which its timers run by.
   ///
   /// The Hub keeps the time of day and the day of the week, but not the date or time zone.
   ///

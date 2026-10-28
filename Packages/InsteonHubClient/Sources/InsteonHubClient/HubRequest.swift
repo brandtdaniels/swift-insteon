@@ -11,7 +11,7 @@ package enum HubRequest {
   /// Passes bytes to the Hub's modem.
   case write([UInt8])
 
-  /// Sends a command in a 2242 Hub's short form.
+  /// Sends a command in a Hub 2242's short form.
   case shortCommand(HubShortCommand)
 
   /// Reads the buffer of bytes the modem has sent back.
@@ -20,19 +20,19 @@ package enum HubRequest {
   /// Clears the buffer.
   case clearBuffer
 
-  /// Reads a page of a 2242 Hub's slot statuses.
+  /// Reads a page of a Hub 2242's slot statuses.
   case readSlots(page: Int)
 
-  /// Writes a 2242 Hub slot's timer, with the fields already joined.
+  /// Writes a Hub 2242 slot's timer, with the fields already joined.
   case writeTimer(HubSlot, fields: String)
 
-  /// Writes the commands a 2242 Hub slot's timer sends, or clears them.
+  /// Writes the commands a Hub 2242 slot's timer sends, or clears them.
   case writeCommands(HubSlot, HubSlotCommands?)
 
-  /// Sets a 2242 Hub's clock.
+  /// Sets a Hub 2242's clock.
   case setTime(HubClockTime)
 
-  /// Sets a 2242 Hub's day of the week.
+  /// Sets a Hub 2242's day of the week.
   case setWeekday(HubWeekday)
 
   var path: String {

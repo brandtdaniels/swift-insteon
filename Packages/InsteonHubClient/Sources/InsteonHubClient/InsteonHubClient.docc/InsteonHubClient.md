@@ -82,7 +82,7 @@ their local interface; it didn't drive the 2243. A Hub's modem reports its model
 
 ### Timers the Hub runs
 
-A 2242 Hub runs timers on its own, so they keep running with no app connected. It keeps them in
+A Hub 2242 runs timers on its own, so they keep running with no app connected. It keeps them in
 256 numbered slots, 16 pages of 16, one page per room. Each slot has a name, an on time and an
 off time, the days of the week it runs, and the serial commands it sends to turn on and off.
 Timers go in slots 1 through 239, the ones Insteon's Hub app used: slot 240 holds the Hub's unlock
@@ -95,7 +95,7 @@ times by month, and it keeps the time of day and day of the week, which
 state, but not its times.
 
 These requests follow the ones Insteon's Hub app sent to the 2242, including fields whose
-meaning the app doesn't give. They haven't been verified on a Hub. The 2245 Hub runs timers too,
+meaning the app doesn't give. They haven't been verified on a Hub. The Hub 2245 runs timers too,
 but Insteon's app wrote them only through Insteon's cloud, never through the Hub's local
 interface. Insteon's Hub app grew out of its SmartLinc app, so the SmartLinc 2412N may accept
 the same requests.
