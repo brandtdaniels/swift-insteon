@@ -60,7 +60,7 @@ public struct DeviceStandardCommand: Hashable, Sendable {
   ///   - reply: The value the acknowledgement carries in cmd2.
   ///   - followUp: A value one more message with the same cmd1 may carry.
   ///   - extendedWhen: The operating flag that has the command sent as an extended message.
-  ///   - verification: How sure the catalog is of the command. Defaults to documented.
+  ///   - verification: How sure the catalog is of the command. Defaults to ``Verification/documented``.
   public init(
     name: SettingName,
     summary: String,
@@ -296,7 +296,7 @@ public struct DeviceExtendedCommand: Hashable, Sendable {
   ///   - parameters: The values the caller gives.
   ///   - integrity: How the command's user data is protected.
   ///   - reply: The extended reply that answers the command.
-  ///   - verification: How sure the catalog is of the command. Defaults to documented.
+  ///   - verification: How sure the catalog is of the command. Defaults to ``Verification/documented``.
   public init(
     name: SettingName,
     summary: String,
@@ -466,7 +466,7 @@ public struct DeviceDirectMessage: Hashable, Sendable {
   ///   - summary: What the message reports.
   ///   - command1: The message's cmd1.
   ///   - value: The value it carries in cmd2.
-  ///   - verification: How sure the catalog is of the message. Defaults to documented.
+  ///   - verification: How sure the catalog is of the message. Defaults to ``Verification/documented``.
   public init(name: SettingName, summary: String, command1: UInt8, value: MessageField, verification: Verification = .documented) {
 
     self.name = name

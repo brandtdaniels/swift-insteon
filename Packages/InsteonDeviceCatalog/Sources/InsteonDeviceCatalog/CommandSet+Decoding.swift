@@ -37,7 +37,6 @@ extension CommandSet: Decodable {
 
     let extendedWhen: String?
 
-
     let verification: Verification?
 
   }
@@ -49,7 +48,6 @@ extension CommandSet: Decodable {
     let description: String
 
     let query: ProfileByte
-
 
     let verification: Verification?
 
@@ -64,7 +62,6 @@ extension CommandSet: Decodable {
     let command2: ProfileByte
 
     let extendedWhen: String?
-
 
     let verification: Verification?
 
@@ -100,7 +97,6 @@ extension CommandSet: Decodable {
 
     let range: Range?
 
-
     let verification: Verification?
 
   }
@@ -124,7 +120,6 @@ extension CommandSet: Decodable {
     let perButton: Bool
 
     let bytes: [Byte]
-
 
     let verification: Verification?
 
@@ -188,7 +183,6 @@ extension CommandSet: Decodable {
 
     let range: FieldRange?
 
-
     let verification: Verification?
 
   }
@@ -218,7 +212,6 @@ extension CommandSet: Decodable {
     let followUp: Field?
 
     let extendedWhen: String?
-
 
     let verification: Verification?
 
@@ -258,7 +251,6 @@ extension CommandSet: Decodable {
 
     let reply: ExtendedReply?
 
-
     let verification: Verification?
 
   }
@@ -272,7 +264,6 @@ extension CommandSet: Decodable {
     let command1: ProfileByte
 
     let value: Field
-
 
     let verification: Verification?
 

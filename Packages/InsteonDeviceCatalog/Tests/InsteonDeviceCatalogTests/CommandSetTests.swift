@@ -158,8 +158,17 @@ struct CommandSetTests {
         ],
         "readings": [{ "name": "delta", "description": "Delta.", "query": "0x01",
           "verification": { "status": "observed", "note": "Read from a device.", "firmware": ["0x45", "0x41"] } }],
-        "standardCommands": [{ "name": "beep", "description": "Beeps.", "command1": "0x30",
-          "verification": { "status": "somethingNewer", "note": "Later." } }],
+        "extendedSettings": {
+          "perButton": false,
+          "values": [{ "name": "rampRate", "description": "Ramp rate.", "byte": 7,
+            "verification": { "status": "inferred", "note": "Read from an example." } }]
+        },
+        "standardCommands": [
+          { "name": "beep", "description": "Beeps.", "command1": "0x30",
+            "verification": { "status": "somethingNewer", "note": "Later." } },
+          { "name": "status", "description": "Status.", "command1": "0x19",
+            "reply": { "name": "level", "description": "Level.", "verification": { "status": "conflicting", "note": "Two sheets." } } }
+        ],
         "sources": ["A"]
       }
       """#
@@ -174,6 +183,9 @@ struct CommandSetTests {
     #expect(decoded.readings[0].verification.isSettled)
     #expect(beep.verification.status.rawValue == "somethingNewer")
     #expect(!beep.verification.isSettled)
+    #expect(decoded.extendedSettings?.values.first?.verification.status == .inferred)
+    #expect(decoded.standardCommand(named: "status")?.reply?.verification.status == .conflicting)
+    #expect(decoded.standardCommand(named: "status")?.verification == .documented)
 
   }
 

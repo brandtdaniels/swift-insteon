@@ -8,7 +8,7 @@ import InsteonProtocol
 ///
 /// ```swift
 /// if let command = commandSet.standardCommand(named: "beep"), !command.verification.isSettled {
-///   print("Insteon's documents aren't sure of this command:", command.verification.note ?? "")
+///   print("The catalog isn't sure of this command:", command.verification.note ?? "")
 /// }
 /// ```
 public struct Verification: Hashable, Sendable {
