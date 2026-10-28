@@ -1,8 +1,9 @@
 /// A test powerline phase broadcast, which a dual-band device sends so devices that hear it
 /// can show whether they're on the same phase of the home's wiring.
 ///
-/// The device sends it with max hops 0, so only devices in range hear it. A device on the same
-/// phase blinks its LED fast for 10 seconds, and one on the opposite phase blinks slowly.
+/// The Developer's Guide says it's "only sent by i2/RF devices, with Max Hops = 0", so only
+/// devices in range hear it. A device on the same phase blinks its LED fast for 10 seconds,
+/// and one on the opposite phase blinks slowly.
 public struct PowerlinePhaseTest: Hashable, Sendable {
 
   /// A phase of a home's split-phase wiring.
@@ -38,11 +39,13 @@ public struct PowerlinePhaseTest: Hashable, Sendable {
   ///
   /// - Parameter message: A message the modem received.
   /// - Returns: `nil` unless the message is a standard-length broadcast with cmd1 `0x03` and
-  ///   cmd2 `0x00` or `0x01`.
+  ///   cmd2 `0x00` or `0x01`. A broadcast to `00.00.00` with cmd2 `0x00` is an i3 device's
+  ///   ``RadioRangeTest`` instead.
   public init?(_ message: ReceivedMessage) {
 
     guard
       message.isStandardBroadcast(command1: 0x03),
+      message.destination != RadioRangeTest.destination,
       let phase = Phase(rawValue: message.command.command2)
     else {
 
