@@ -95,6 +95,7 @@ what the device is, from a device database.
 ### Broadcasts
 
 - ``Heartbeat``
+- ``HeartbeatMonitor``
 - ``PowerlinePhaseTest``
 - ``DeviceStatusChanged``
 
