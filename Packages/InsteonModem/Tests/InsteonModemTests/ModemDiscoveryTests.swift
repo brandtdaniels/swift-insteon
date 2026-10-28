@@ -60,15 +60,16 @@ struct ModemDiscoveryTests {
 
   }
 
-  @Test func findsTheDevicesThatAnswerAsAModem() async {
+  @Test func findsTheDevicesThatAnswerAsAModem() async throws {
 
+    let closed = ClosedDevices()
     let discovery = makeDiscovery([
       "/dev/ttyUSB0": Self.modem(category: 0x03),
       // Something else on a serial port that happens to answer.
       "/dev/ttyUSB1": Self.modem(category: 0x07),
-    ])
+    ], closed: closed)
 
-    let modems = await discovery.discover()
+    let modems = try await discovery.discover()
 
     #expect(modems == [
       DiscoveredModem(
@@ -76,38 +77,64 @@ struct ModemDiscoveryTests {
         info: ModemInfo(address: InsteonAddress(0x11, 0x22, 0x33), category: 0x03, subcategory: 0x15, firmwareVersion: 0x9E)
       ),
     ])
+    #expect(closed.closed.sorted() == ["/dev/ttyUSB0", "/dev/ttyUSB1"])
 
   }
 
-  @Test func asksForTheModemsInformationAndClosesEachDevice() async {
+  // A NAK means the modem is busy, which is still a modem.
+  @Test func asksABusyModemAgain() async throws {
+
+    let modem = ScriptedConnection { written, index in
+
+      index == 0 ? [0x15] : written + [0x11, 0x22, 0x33, 0x03, 0x15, 0x9E, 0x06]
+
+    }
+    let discovery = makeDiscovery(["/dev/ttyUSB0": modem])
+
+    async let modems = discovery.discover()
+    await clock.waitForSleeper(until: .milliseconds(100))
+    clock.advance(by: .milliseconds(100))
+
+    let found = try await modems
+
+    #expect(found.map(\.path) == ["/dev/ttyUSB0"])
+    #expect(modem.written.count == 2)
+
+  }
+
+  @Test func asksForTheModemsInformationAndClosesEachDevice() async throws {
 
     let modem = Self.modem(category: 0x03)
     let closed = ClosedDevices()
     let discovery = makeDiscovery(["/dev/ttyUSB0": modem], closed: closed)
 
-    _ = await discovery.discover()
+    _ = try await discovery.discover()
 
     #expect(modem.written == [[0x02, 0x60]])
     #expect(closed.closed == ["/dev/ttyUSB0"])
 
   }
 
-  @Test func movesOnFromADeviceThatDoesntAnswer() async {
+  @Test func movesOnFromADeviceThatDoesntAnswer() async throws {
 
+    let closed = ClosedDevices()
     let discovery = makeDiscovery([
       "/dev/ttyUSB0": ScriptedConnection { _, _ in [] },
       "/dev/ttyUSB1": Self.modem(category: 0x03),
-    ])
+    ], closed: closed)
 
     async let modems = discovery.discover()
     await clock.waitForSleeper(until: .seconds(1))
     clock.advance(by: .seconds(1))
 
-    #expect(await modems.map(\.path) == ["/dev/ttyUSB1"])
+    let found = try await modems
+
+    #expect(found.map(\.path) == ["/dev/ttyUSB1"])
+    #expect(closed.closed.sorted() == ["/dev/ttyUSB0", "/dev/ttyUSB1"])
 
   }
 
-  @Test func skipsADeviceThatWontOpen() async {
+  @Test func skipsADeviceThatWontOpen() async throws {
 
     let listed = ModemDiscovery(
       timeout: .seconds(1),
@@ -116,7 +143,7 @@ struct ModemDiscoveryTests {
       clock: clock
     )
 
-    #expect(await listed.discover().isEmpty)
+    #expect(try await listed.discover().isEmpty)
 
   }
 

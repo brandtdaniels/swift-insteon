@@ -125,6 +125,24 @@ public actor Modem: SerialCommandSender {
 
   }
 
+  /// Asks the modem about itself with Get IM Info (`0x60`).
+  ///
+  /// - Returns: The modem's address, device category, subcategory and firmware version. Every
+  ///   INSTEON modem reports category `DeviceCategory.networkBridges`, and the subcategory
+  ///   names the model; see <doc:SupportedModems>.
+  /// - Throws: The errors of ``Modem/send(_:)``.
+  public func modemInfo() async throws -> ModemInfo {
+
+    guard case let .modemInfo(info) = try await pacer.send([Self.exchange(for: .getModemInfo)])[0] else {
+
+      preconditionFailure("Get IM Info is answered only by the modem's information.")
+
+    }
+
+    return info
+
+  }
+
   /// How long a request for a standard message waits for the device's answer by default:
   /// 3 seconds.
   ///
