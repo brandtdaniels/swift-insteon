@@ -280,14 +280,60 @@ struct RequestTests {
 
     try await run(modem) {
 
-      let reply = try await modem.request(
+      let response = try await modem.request(
         AllLinkDatabaseRequest.read(address: 0x0000).message(to: device),
-        awaitingReply: { AllLinkRecordResponse($0) != nil }
+        awaitingReply: { AllLinkRecordResponse($0) }
       )
 
-      #expect(AllLinkRecordResponse(reply)?.address == 0x0FFF)
+      #expect(response.address == 0x0FFF)
 
     }
+
+  }
+
+  @Test func asksForARecordAgainWhenItDoesntArrive() async throws {
+
+    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x2F, command2: 0x00)
+    let end = recordResponse(at: 0x0FFF, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    // The first record response is lost.
+    let connection = ScriptedConnection { written, index in
+
+      written + [0x06] + acknowledgement + (index == 0 ? [] : end)
+
+    }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      async let responses = modem.readAllLinkDatabase(of: device)
+      await clock.waitForSleeper(until: .seconds(3))
+      clock.advance(by: .seconds(3))
+
+      #expect(try await responses.isEmpty)
+
+    }
+
+    #expect(connection.written.count == 2)
+
+  }
+
+  @Test func stopsAtTheBottomOfTheDatabasesMemory() async throws {
+
+    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x2F, command2: 0x00)
+    let last = recordResponse(at: 0x0008, [0xA2, 0x01, 0x00, 0x5E, 0x5D, 0xFE, 0x1F, 0x01])
+    let connection = ScriptedConnection { written, _ in written + [0x06] + acknowledgement + last }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let responses = try await modem.readAllLinkDatabase(of: device)
+
+      #expect(responses.map(\.address) == [0x0008])
+
+    }
+
+    // Address 0x0000 would ask for the first record again.
+    #expect(connection.written.count == 1)
 
   }
 

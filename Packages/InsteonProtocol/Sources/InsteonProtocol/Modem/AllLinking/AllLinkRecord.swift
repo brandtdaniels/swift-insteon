@@ -55,6 +55,28 @@ public struct AllLinkRecord: Hashable, Sendable {
 
 }
 
+extension AllLinkRecord {
+
+  /// Reads a record from its eight bytes: flags, group, address and the three data bytes.
+  ///
+  /// - Parameters:
+  ///   - bytes: The bytes holding the record.
+  ///   - index: The position of the record's first byte.
+  init(_ bytes: [UInt8], at index: Int) {
+
+    self.init(
+      flags: AllLinkRecordFlags(rawValue: bytes[index]),
+      group: AllLinkGroupNumber(rawValue: bytes[index + 1]),
+      address: InsteonAddress(bytes[index + 2], bytes[index + 3], bytes[index + 4]),
+      data1: bytes[index + 5],
+      data2: bytes[index + 6],
+      data3: bytes[index + 7]
+    )
+
+  }
+
+}
+
 // MARK: - ByteEncodable
 
 extension AllLinkRecord: ByteEncodable {

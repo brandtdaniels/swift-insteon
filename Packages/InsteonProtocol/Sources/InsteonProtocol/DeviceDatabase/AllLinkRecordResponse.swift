@@ -31,13 +31,13 @@ public struct AllLinkRecordResponse: Hashable, Sendable {
   /// Reads a record response from a received message.
   ///
   /// - Parameter message: A message the modem received.
-  /// - Returns: `nil` unless the message is an extended direct message with cmd1 `0x2F` and
-  ///   D2 `0x01`.
+  /// - Returns: `nil` unless the message is an extended direct message with cmd1 `0x2F`,
+  ///   cmd2 `0x00` and D2 `0x01`.
   public init?(_ message: ReceivedMessage) {
 
     guard
       message.flags.messageType == .direct,
-      message.command.command1 == 0x2F,
+      message.command == ExtendedDirectCommand.readWriteAllLinkDatabase.command,
       let data = message.userData,
       data[2] == 0x01
     else {
@@ -49,14 +49,7 @@ public struct AllLinkRecordResponse: Hashable, Sendable {
     self.init(
       sender: message.sender,
       address: UInt16(highByte: data[3], lowByte: data[4]),
-      record: AllLinkRecord(
-        flags: AllLinkRecordFlags(rawValue: data[6]),
-        group: AllLinkGroupNumber(rawValue: data[7]),
-        address: InsteonAddress(data[8], data[9], data[10]),
-        data1: data[11],
-        data2: data[12],
-        data3: data[13]
-      )
+      record: AllLinkRecord(data.bytes, at: 5)
     )
 
   }
