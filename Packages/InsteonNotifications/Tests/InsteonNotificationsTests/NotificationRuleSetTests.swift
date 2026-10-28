@@ -83,7 +83,8 @@ struct NotificationRuleSetTests {
 
   }
 
-  @Test func replacesARuleWithTheSameIdentifierAndForgetsWhenItFired() {
+  // A rename keeps the rule's cooldown; a new trigger starts afresh.
+  @Test func replacesARuleWithTheSameIdentifier() {
 
     let door = NotificationRule(id: "door", name: "Front door opened", trigger: .event("opened", from: frontDoor), cooldown: .seconds(300))
     var rules = NotificationRuleSet<ContinuousClock.Instant>(rules: [door])
@@ -96,12 +97,95 @@ struct NotificationRuleSetTests {
     rules.add(renamed)
 
     #expect(rules.rules == [renamed])
-    #expect(rules.notifications(for: opened, at: start.advanced(by: .seconds(1))).map(\.rule.name) == ["Front door"])
+    #expect(rules.lastFired("door") == start)
+    #expect(rules.notifications(for: opened, at: start.advanced(by: .seconds(1))).isEmpty)
+
+    var closed = renamed
+    closed.trigger = .event("closed", from: frontDoor)
+    rules.add(closed)
+
+    #expect(rules.lastFired("door") == nil)
+    #expect(rules.notifications(for: groupCommand(from: frontDoor, command1: 0x13, event: "closed"), at: start.advanced(by: .seconds(2))).map(\.rule.name) == ["Front door"])
 
     rules.remove("door")
 
     #expect(rules.rule(id: "door") == nil)
     #expect(rules.notifications(for: opened, at: start.advanced(by: .seconds(600))).isEmpty)
+
+  }
+
+  @Test func notifiesOfASilenceThatBeganDuringItsCooldownOrWhileOff() {
+
+    let quiet = NotificationRule(id: "quiet", name: "Leak sensor quiet", trigger: .silence(of: leakSensor), cooldown: .seconds(600))
+    var rules = NotificationRuleSet<ContinuousClock.Instant>(rules: [quiet])
+
+    #expect(rules.notifications(forSilent: [leakSensor], at: start).count == 1)
+    #expect(rules.notifications(forSilent: [], at: start.advanced(by: .seconds(60))).isEmpty)
+
+    // Silent again within the cooldown: held until the cooldown ends.
+    #expect(rules.notifications(forSilent: [leakSensor], at: start.advanced(by: .seconds(120))).isEmpty)
+    #expect(rules.notifications(forSilent: [leakSensor], at: start.advanced(by: .seconds(600))).count == 1)
+    #expect(rules.hasNotifiedSilence("quiet"))
+
+    // Turned off, heard from, silent again, then turned back on.
+    var off = quiet
+    off.isEnabled = false
+    rules.add(off)
+
+    #expect(rules.notifications(forSilent: [], at: start.advanced(by: .seconds(700))).isEmpty)
+    #expect(rules.notifications(forSilent: [leakSensor], at: start.advanced(by: .seconds(1_300))).isEmpty)
+
+    rules.add(quiet)
+
+    #expect(rules.notifications(forSilent: [leakSensor], at: start.advanced(by: .seconds(1_400))).count == 1)
+
+    rules.remove("quiet")
+
+    #expect(rules.notifications(forSilent: [], at: start.advanced(by: .seconds(1_500))).isEmpty)
+    #expect(rules.notifications(forSilent: [leakSensor], at: start.advanced(by: .seconds(1_600))).isEmpty)
+
+  }
+
+  // After a relaunch, a sensor that's still silent doesn't notify again.
+  @Test func restoresWhatARuleKnewBefore() {
+
+    let quiet = NotificationRule(id: "quiet", name: "Leak sensor quiet", trigger: .silence(of: leakSensor), cooldown: .seconds(600))
+    var rules = NotificationRuleSet<ContinuousClock.Instant>(rules: [quiet])
+
+    rules.restore("quiet", lastFired: start, silenceNotified: true)
+
+    #expect(rules.lastFired("quiet") == start)
+    #expect(rules.notifications(forSilent: [leakSensor], at: start.advanced(by: .seconds(900))).isEmpty)
+
+    rules.restore("quiet", lastFired: nil, silenceNotified: false)
+
+    #expect(rules.notifications(forSilent: [leakSensor], at: start.advanced(by: .seconds(901))).count == 1)
+
+  }
+
+  // An event stamped before the last firing, from a clock that stepped back, still fires a rule
+  // with no cooldown.
+  @Test func firesARuleWithNoCooldownWhateverTheOrderOfInstants() {
+
+    let door = NotificationRule(id: "door", name: "Front door opened", trigger: .event("opened", from: frontDoor))
+    var rules = NotificationRuleSet<ContinuousClock.Instant>(rules: [door])
+    let opened = groupCommand(from: frontDoor, command1: 0x11, event: "opened")
+
+    #expect(rules.notifications(for: opened, at: start.advanced(by: .seconds(10))).count == 1)
+    #expect(rules.notifications(for: opened, at: start).count == 1)
+
+  }
+
+  // A group command trigger matches whatever the profile calls the command, and heartbeats.
+  @Test func matchesAGroupCommandWhateverItsNameAndAHeartbeat() {
+
+    let trigger = NotificationTrigger.groupCommand(command1: 0x11, group: 0x04, from: leakSensor)
+    let heartbeat = GroupCommand(controller: leakSensor, group: 0x04, command1: 0x11, command2: nil, source: .broadcast)
+
+    #expect(trigger.matches(groupCommand(from: leakSensor, group: 0x04, command1: 0x11, event: "lowBattery")))
+    #expect(trigger.matches(.heartbeat(heartbeat)))
+    #expect(!NotificationTrigger.event("wet", from: leakSensor).matches(.heartbeat(heartbeat)))
+    #expect(!NotificationTrigger.silence(of: leakSensor).matches(.heartbeat(heartbeat)))
 
   }
 

@@ -23,14 +23,18 @@ import InsteonProtocol
 /// ```
 ///
 /// The rule set keeps no clock of its own: give it the time each event arrived, from any
-/// clock, so tests can use one they control.
+/// clock, so tests can use one they control. It keeps nothing across launches either: to carry
+/// a rule's cooldown and silence over, save how long ago it last fired,
+/// ``NotificationRuleSet/lastFired(_:)`` measured against the wall clock, and whether
+/// ``NotificationRuleSet/hasNotifiedSilence(_:)``, and give them back with
+/// ``NotificationRuleSet/restore(_:lastFired:silenceNotified:)``.
 public struct NotificationRuleSet<Instant: InstantProtocol>: Sendable where Instant.Duration == Duration, Instant: Sendable {
 
   /// The rules, in the order they were added.
   public private(set) var rules: [NotificationRule]
 
   /// When each rule last fired.
-  private var lastFired: [NotificationRuleID: Instant] = [:]
+  private var firings: [NotificationRuleID: Instant] = [:]
 
   /// The silence rules whose device is still silent since they fired.
   private var silent: Set<NotificationRuleID> = []
@@ -61,15 +65,24 @@ public struct NotificationRuleSet<Instant: InstantProtocol>: Sendable where Inst
 
   }
 
-  /// Adds a rule, or replaces the rule with its identifier and forgets when that one fired.
+  /// Adds a rule, or replaces the rule with its identifier.
+  ///
+  /// A replacement with the same trigger, such as one renamed or turned on or off, keeps
+  /// when the rule last fired, so its cooldown and silence carry on. One with a new trigger
+  /// starts afresh.
   ///
   /// - Parameter rule: The rule.
   public mutating func add(_ rule: NotificationRule) {
 
     if let index = rules.firstIndex(where: { $0.id == rule.id }) {
 
+      if rules[index].trigger != rule.trigger {
+
+        forget(rule.id)
+
+      }
+
       rules[index] = rule
-      forget(rule.id)
 
     } else {
 
@@ -89,6 +102,49 @@ public struct NotificationRuleSet<Instant: InstantProtocol>: Sendable where Inst
 
   }
 
+  /// When a rule last fired.
+  ///
+  /// - Parameter id: The rule's identifier.
+  /// - Returns: When it last fired, or `nil` if it hasn't since it was added or restored.
+  public func lastFired(_ id: NotificationRuleID) -> Instant? {
+
+    firings[id]
+
+  }
+
+  /// Whether a silence rule has fired for its device's current silence, and so won't fire
+  /// again until the device has been heard from.
+  ///
+  /// - Parameter id: The rule's identifier.
+  /// - Returns: Whether the rule has notified of the current silence.
+  public func hasNotifiedSilence(_ id: NotificationRuleID) -> Bool {
+
+    silent.contains(id)
+
+  }
+
+  /// Gives a rule back what it knew before, such as from a previous launch.
+  ///
+  /// - Parameters:
+  ///   - id: The rule's identifier.
+  ///   - lastFired: When it last fired, or `nil` if it hasn't.
+  ///   - silenceNotified: Whether it has notified of its device's current silence.
+  public mutating func restore(_ id: NotificationRuleID, lastFired: Instant?, silenceNotified: Bool) {
+
+    firings[id] = lastFired
+
+    if silenceNotified {
+
+      silent.insert(id)
+
+    } else {
+
+      silent.remove(id)
+
+    }
+
+  }
+
   /// The notifications an event sets off.
   ///
   /// - Parameters:
@@ -105,7 +161,9 @@ public struct NotificationRuleSet<Instant: InstantProtocol>: Sendable where Inst
   /// The notifications silent devices set off.
   ///
   /// A silence rule fires once when its device goes silent, and again only after the device
-  /// has been heard from and gone silent again.
+  /// has been heard from and gone silent again. A device that goes silent during the rule's
+  /// cooldown, or while the rule is off, notifies at the first check after, should it still be
+  /// silent.
   ///
   /// - Parameters:
   ///   - devices: The devices a `HeartbeatMonitor` finds silent.
@@ -151,13 +209,15 @@ public struct NotificationRuleSet<Instant: InstantProtocol>: Sendable where Inst
 
     for rule in candidates where rule.isEnabled {
 
-      if let last = lastFired[rule.id], last.duration(to: instant) < rule.cooldown {
+      // An instant earlier than the last firing, from a clock that stepped back, counts as
+      // no time since.
+      if let last = firings[rule.id], max(.zero, last.duration(to: instant)) < rule.cooldown {
 
         continue
 
       }
 
-      lastFired[rule.id] = instant
+      firings[rule.id] = instant
       notifications.append(DeviceNotification(rule: rule, instant: instant))
 
     }
@@ -169,7 +229,7 @@ public struct NotificationRuleSet<Instant: InstantProtocol>: Sendable where Inst
   /// Forgets when a rule fired.
   private mutating func forget(_ id: NotificationRuleID) {
 
-    lastFired[id] = nil
+    firings[id] = nil
     silent.remove(id)
 
   }

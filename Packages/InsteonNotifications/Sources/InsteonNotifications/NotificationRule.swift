@@ -23,7 +23,7 @@ public struct NotificationRule: Hashable, Sendable, Identifiable {
   public var trigger: NotificationTrigger
 
   /// How long after firing the rule stays quiet, so a busy motion sensor doesn't notify on
-  /// every pass. Zero lets it fire every time.
+  /// every pass. Zero, or less, lets it fire every time.
   public var cooldown: Duration
 
   /// Whether the rule fires at all.
@@ -38,8 +38,6 @@ public struct NotificationRule: Hashable, Sendable, Identifiable {
   ///   - cooldown: How long after firing the rule stays quiet. Defaults to zero.
   ///   - isEnabled: Whether the rule fires at all. Defaults to `true`.
   public init(id: NotificationRuleID, name: String, trigger: NotificationTrigger, cooldown: Duration = .zero, isEnabled: Bool = true) {
-
-    precondition(cooldown >= .zero, "A notification rule's cooldown can't be negative.")
 
     self.id = id
     self.name = name
@@ -88,11 +86,15 @@ public enum NotificationTrigger: Hashable, Sendable {
   case event(DeviceEventName, from: InsteonAddress)
 
   /// A device sends a command to one of its groups, for a product whose profile names none,
-  /// such as a switch turning on (cmd1 `0x11`) or off (cmd1 `0x13`) from its paddle.
+  /// such as a switch turning on (cmd1 `0x11`) or off (cmd1 `0x13`) from its paddle. It
+  /// matches whatever the profile calls the command, and a command to the profile's
+  /// heartbeat group too.
   case groupCommand(command1: UInt8, group: AllLinkGroupNumber, from: InsteonAddress)
 
   /// A device goes silent: a `HeartbeatMonitor` watching it hasn't heard from it for longer
-  /// than its allowance. The rule fires once each time the device goes silent.
+  /// than its allowance. The rule fires once each time the device goes silent; if that's
+  /// during the rule's cooldown, it fires at the first check after the cooldown, should the
+  /// device still be silent.
   case silence(of: InsteonAddress)
 
   /// The device the trigger is about.
@@ -112,18 +114,13 @@ public enum NotificationTrigger: Hashable, Sendable {
   ///   never matches an event.
   public func matches(_ event: DeviceEvent) -> Bool {
 
-    guard case let .groupCommand(command, name) = event else {
-
-      return false
-
-    }
-
-    switch self {
-    case let .event(eventName, device):
+    switch (self, event) {
+    case let (.event(eventName, device), .groupCommand(command, name)):
       return command.controller == device && name == eventName
-    case let .groupCommand(command1, group, device):
+    case let (.groupCommand(command1, group, device), .groupCommand(command, _)),
+         let (.groupCommand(command1, group, device), .heartbeat(command)):
       return command.controller == device && command.group == group && command.command1 == command1
-    case .silence:
+    default:
       return false
     }
 
