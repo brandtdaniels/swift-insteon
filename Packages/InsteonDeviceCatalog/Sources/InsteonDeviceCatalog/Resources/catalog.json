@@ -8,9 +8,38 @@
         {
           "kind": "hub",
           "port": 25105
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x2B"
         },
         {
-          "kind": "i2cs"
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x2E"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x2F"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x30"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x31"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x32"
         }
       ],
       "identities": [
@@ -63,9 +92,23 @@
         {
           "kind": "hubPro",
           "port": 80
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x18"
         },
         {
-          "kind": "i2cs"
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x2C"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x2D"
         }
       ],
       "identities": [
@@ -107,12 +150,31 @@
         {
           "kind": "hub",
           "port": 25105
-        },
-        {
-          "kind": "i2cs"
         }
       ],
       "description": "The central controller for an Insteon system. It drives its built-in modem over the local network, and runs scenes, schedules and alerts.",
+      "engines": [
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x33"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x34"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x35"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "subcategory": "0x36"
+        }
+      ],
       "identities": [
         {
           "category": "0x03",
@@ -144,9 +206,28 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x07",
+          "engine": "i2cs",
+          "subcategory": "0x0E"
         },
         {
-          "kind": "i2cs"
+          "category": "0x07",
+          "engine": "i2cs",
+          "subcategory": "0x0F"
+        },
+        {
+          "category": "0x07",
+          "engine": "i2cs",
+          "subcategory": "0x10"
+        },
+        {
+          "category": "0x07",
+          "engine": "i2cs",
+          "subcategory": "0x11"
         }
       ],
       "identities": [
@@ -193,12 +274,21 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
-        {
-          "kind": "i2cs"
         }
       ],
       "description": "A wall keypad that dims and switches its connected light fixture and adds extra buttons for controlling other Insteon devices or scenes. Insteon sells it in 6-button and 8-button versions.",
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x41"
+        },
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x42"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -223,12 +313,55 @@
         "Mini Remote"
       ],
       "batteryPowered": true,
-      "capabilities": [
+      "capabilities": [],
+      "description": "A small rechargeable, battery-powered wireless remote that controls Insteon devices or groups of devices. Insteon sells it in 4-scene, 8-scene, and 1-scene switch versions, and it can be wall-mounted without wiring.",
+      "engines": [
         {
-          "kind": "i2cs"
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x1A"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x1B"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x1C"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x16"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x14"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x15"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x18"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x17"
+        },
+        {
+          "category": "0x00",
+          "engine": "i2cs",
+          "subcategory": "0x19"
         }
       ],
-      "description": "A small rechargeable, battery-powered wireless remote that controls Insteon devices or groups of devices. Insteon sells it in 4-scene, 8-scene, and 1-scene switch versions, and it can be wall-mounted without wiring.",
       "identities": [
         {
           "category": "0x00",
@@ -294,20 +427,17 @@
       "aliases": [
         "IRLinc Receiver"
       ],
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x03",
-              "firmware": {
-                "only": [
-                  "0x40"
-                ]
-              },
-              "subcategory": "0x06"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x40"
+            ]
+          },
+          "subcategory": "0x06"
         }
       ],
       "identities": [
@@ -326,20 +456,17 @@
       "aliases": [
         "IRLinc Transmitter"
       ],
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x03",
-              "firmware": {
-                "only": [
-                  "0x4A"
-                ]
-              },
-              "subcategory": "0x07"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x4A"
+            ]
+          },
+          "subcategory": "0x07"
         }
       ],
       "identities": [
@@ -358,26 +485,23 @@
       "aliases": [
         "SmartLinc"
       ],
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x03",
-              "firmware": {
-                "only": [
-                  "0x9B",
-                  "0xE0",
-                  "0xE1",
-                  "0xE2",
-                  "0xE3",
-                  "0xE4",
-                  "0xE8"
-                ]
-              },
-              "subcategory": "0x10"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x9B",
+              "0xE0",
+              "0xE1",
+              "0xE2",
+              "0xE3",
+              "0xE4",
+              "0xE8"
+            ]
+          },
+          "subcategory": "0x10"
         }
       ],
       "identities": [
@@ -483,46 +607,45 @@
       "capabilities": [
         {
           "kind": "modem"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "except": [
+              "0x88",
+              "0x92",
+              "0x98",
+              "0x99",
+              "0xE3"
+            ]
+          },
+          "subcategory": "0x11"
         },
         {
-          "identities": [
-            {
-              "category": "0x03",
-              "firmware": {
-                "except": [
-                  "0x88",
-                  "0x92",
-                  "0x98",
-                  "0x99",
-                  "0xE3"
-                ]
-              },
-              "subcategory": "0x11"
-            },
-            {
-              "category": "0x03",
-              "firmware": {
-                "only": [
-                  "0x3B",
-                  "0x92",
-                  "0x98",
-                  "0x99",
-                  "0x9A",
-                  "0x9B",
-                  "0xC8",
-                  "0xC9",
-                  "0xCB",
-                  "0xCD",
-                  "0xCE",
-                  "0xE0",
-                  "0xE3",
-                  "0xE4"
-                ]
-              },
-              "subcategory": "0x19"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x3B",
+              "0x92",
+              "0x98",
+              "0x99",
+              "0x9A",
+              "0x9B",
+              "0xC8",
+              "0xC9",
+              "0xCB",
+              "0xCD",
+              "0xCE",
+              "0xE0",
+              "0xE3",
+              "0xE4"
+            ]
+          },
+          "subcategory": "0x19"
         }
       ],
       "identities": [
@@ -550,39 +673,38 @@
       "capabilities": [
         {
           "kind": "modem"
-        },
-        {
-          "identities": [
-            {
-              "category": "0x03",
-              "firmware": {
-                "only": [
-                  "0x9A",
-                  "0x9B"
-                ]
-              },
-              "subcategory": "0x15"
-            },
-            {
-              "category": "0x03",
-              "firmware": {
-                "only": [
-                  "0x9A",
-                  "0x9B",
-                  "0xEB",
-                  "0xEC",
-                  "0xED",
-                  "0xEE",
-                  "0xEF"
-                ]
-              },
-              "subcategory": "0x1A"
-            }
-          ],
-          "kind": "i2cs"
         }
       ],
       "description": "A USB powerline modem that connects a computer to an Insteon network, so home automation software can send and receive Insteon messages.",
+      "engines": [
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x9A",
+              "0x9B"
+            ]
+          },
+          "subcategory": "0x15"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x9A",
+              "0x9B",
+              "0xEB",
+              "0xEC",
+              "0xED",
+              "0xEE",
+              "0xEF"
+            ]
+          },
+          "subcategory": "0x1A"
+        }
+      ],
       "identities": [
         {
           "category": "0x03",
@@ -640,20 +762,17 @@
       "aliases": [
         "iMeter Solo"
       ],
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x09",
-              "firmware": {
-                "only": [
-                  "0x30"
-                ]
-              },
-              "subcategory": "0x07"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x09",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x30"
+            ]
+          },
+          "subcategory": "0x07"
         }
       ],
       "identities": [
@@ -849,20 +968,17 @@
       ]
     },
     {
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x05",
-              "firmware": {
-                "only": [
-                  "0x95"
-                ]
-              },
-              "subcategory": "0x03"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x05",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x95"
+            ]
+          },
+          "subcategory": "0x03"
         }
       ],
       "identities": [
@@ -1119,23 +1235,20 @@
       ]
     },
     {
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x00",
-              "firmware": {
-                "only": [
-                  "0x37",
-                  "0x94",
-                  "0x95",
-                  "0x96"
-                ]
-              },
-              "subcategory": "0x10"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x00",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x37",
+              "0x94",
+              "0x95",
+              "0x96"
+            ]
+          },
+          "subcategory": "0x10"
         }
       ],
       "identities": [
@@ -1154,25 +1267,22 @@
       ]
     },
     {
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x00",
-              "firmware": {
-                "only": [
-                  "0x37",
-                  "0x92",
-                  "0x93",
-                  "0x94",
-                  "0x95",
-                  "0x96"
-                ]
-              },
-              "subcategory": "0x12"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x00",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x37",
+              "0x92",
+              "0x93",
+              "0x94",
+              "0x95",
+              "0x96"
+            ]
+          },
+          "subcategory": "0x12"
         }
       ],
       "identities": [
@@ -1191,23 +1301,20 @@
       ]
     },
     {
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x00",
-              "firmware": {
-                "only": [
-                  "0x37",
-                  "0x94",
-                  "0x95",
-                  "0x96"
-                ]
-              },
-              "subcategory": "0x11"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x00",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x37",
+              "0x94",
+              "0x95",
+              "0x96"
+            ]
+          },
+          "subcategory": "0x11"
         }
       ],
       "identities": [
@@ -1229,9 +1336,18 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x3D"
         },
         {
-          "kind": "i2cs"
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x3E"
         }
       ],
       "identities": [
@@ -1256,9 +1372,18 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x3F"
         },
         {
-          "kind": "i2cs"
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x40"
         }
       ],
       "identities": [
@@ -1327,29 +1452,27 @@
       "aliases": [
         "TouchLinc"
       ],
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x03",
-              "firmware": {
-                "only": [
-                  "0x98"
-                ]
-              },
-              "subcategory": "0x24"
-            },
-            {
-              "category": "0x03",
-              "firmware": {
-                "only": [
-                  "0x98"
-                ]
-              },
-              "subcategory": "0x27"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x98"
+            ]
+          },
+          "subcategory": "0x24"
+        },
+        {
+          "category": "0x03",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x98"
+            ]
+          },
+          "subcategory": "0x27"
         }
       ],
       "identities": [
@@ -1372,9 +1495,12 @@
       "aliases": [
         "I/O Linc"
       ],
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "kind": "i2cs"
+          "category": "0x07",
+          "engine": "i2cs",
+          "subcategory": "0x0D"
         }
       ],
       "identities": [
@@ -1393,32 +1519,29 @@
       "aliases": [
         "I/O Linc"
       ],
-      "capabilities": [
+      "capabilities": [],
+      "description": "A plug-in module with a low-voltage sensor input and a relay output. It connects alarm sensors, door strikes, garage door openers, and other contact-closure devices to an Insteon network.",
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x07",
-              "firmware": {
-                "only": [
-                  "0x40",
-                  "0x41",
-                  "0xA1",
-                  "0xA2",
-                  "0xA3",
-                  "0xA4",
-                  "0xA5",
-                  "0xA6",
-                  "0xA7",
-                  "0xA8"
-                ]
-              },
-              "subcategory": "0x00"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x07",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x40",
+              "0x41",
+              "0xA1",
+              "0xA2",
+              "0xA3",
+              "0xA4",
+              "0xA5",
+              "0xA6",
+              "0xA7",
+              "0xA8"
+            ]
+          },
+          "subcategory": "0x00"
         }
       ],
-      "description": "A plug-in module with a low-voltage sensor input and a relay output. It connects alarm sensors, door strikes, garage door openers, and other contact-closure devices to an Insteon network.",
       "identities": [
         {
           "category": "0x07",
@@ -1552,26 +1675,24 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x01",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xD1",
-                  "0xD2",
-                  "0xD3",
-                  "0xD4",
-                  "0xD5",
-                  "0xD6"
-                ]
-              },
-              "subcategory": "0x00"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x00"
         }
       ],
       "identities": [
@@ -1593,26 +1714,24 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x02",
-              "firmware": {
-                "only": [
-                  "0x42",
-                  "0xD1",
-                  "0xD2",
-                  "0xD3",
-                  "0xD4",
-                  "0xD5",
-                  "0xD6"
-                ]
-              },
-              "subcategory": "0x09"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x42",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x09"
         }
       ],
       "identities": [
@@ -1634,22 +1753,20 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x02",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xD5",
-                  "0xD6"
-                ]
-              },
-              "subcategory": "0x06"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x06"
         }
       ],
       "identities": [
@@ -1692,36 +1809,34 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
-        {
-          "identities": [
-            {
-              "category": "0x01",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0x42",
-                  "0x43",
-                  "0xCB",
-                  "0xCC",
-                  "0xCD",
-                  "0xCF",
-                  "0xD0",
-                  "0xD1",
-                  "0xD2",
-                  "0xD3",
-                  "0xD4",
-                  "0xD5",
-                  "0xD6"
-                ]
-              },
-              "subcategory": "0x0E"
-            }
-          ],
-          "kind": "i2cs"
         }
       ],
       "description": "A plug-in module that lets a dimmable lamp be turned on and off and dimmed remotely. The lamp plugs into the module, which plugs into a wall outlet.",
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0x42",
+              "0x43",
+              "0xCB",
+              "0xCC",
+              "0xCD",
+              "0xCF",
+              "0xD0",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x0E"
+        }
+      ],
       "groups": [
         {
           "name": "Load",
@@ -1756,21 +1871,19 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x01",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xD6"
-                ]
-              },
-              "subcategory": "0x22"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x22"
         }
       ],
       "identities": [
@@ -1789,22 +1902,19 @@
       "aliases": [
         "MorningLinc"
       ],
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x0F",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xD5",
-                  "0xD6"
-                ]
-              },
-              "subcategory": "0x06"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x0F",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x06"
         }
       ],
       "identities": [
@@ -1826,26 +1936,24 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x01",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xD1",
-                  "0xD2",
-                  "0xD3",
-                  "0xD4",
-                  "0xD5",
-                  "0xD6"
-                ]
-              },
-              "subcategory": "0x1F"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x1F"
         }
       ],
       "identities": [
@@ -1874,21 +1982,19 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x02",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xD5"
-                ]
-              },
-              "subcategory": "0x1A"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD5"
+            ]
+          },
+          "subcategory": "0x1A"
         }
       ],
       "identities": [
@@ -1917,33 +2023,31 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
-        {
-          "identities": [
-            {
-              "category": "0x01",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0x44",
-                  "0xB3",
-                  "0xB5",
-                  "0xB6",
-                  "0xB7",
-                  "0xB8",
-                  "0xB9",
-                  "0xBA",
-                  "0xBB",
-                  "0xBC"
-                ]
-              },
-              "subcategory": "0x21"
-            }
-          ],
-          "kind": "i2cs"
         }
       ],
       "description": "An in-wall duplex outlet whose top receptacle can be dimmed and switched remotely over Insteon while the bottom receptacle stays always on. It controls plug-in lamps from Insteon keypads, remotes, or the Hub.",
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0x44",
+              "0xB3",
+              "0xB5",
+              "0xB6",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xBA",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x21"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -1964,30 +2068,28 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x02",
-              "firmware": {
-                "only": [
-                  "0x42",
-                  "0xCD",
-                  "0xCE",
-                  "0xCF",
-                  "0xD0",
-                  "0xD1",
-                  "0xD2",
-                  "0xD3",
-                  "0xD4",
-                  "0xD5",
-                  "0xD6"
-                ]
-              },
-              "subcategory": "0x08"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x42",
+              "0xCD",
+              "0xCE",
+              "0xCF",
+              "0xD0",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x08"
         }
       ],
       "identities": [
@@ -2030,9 +2132,13 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
+        }
+      ],
+      "engines": [
         {
-          "kind": "i2cs"
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x24"
         }
       ],
       "groups": [
@@ -2089,28 +2195,26 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x01",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xCF",
-                  "0xD1",
-                  "0xD2",
-                  "0xD3",
-                  "0xD4",
-                  "0xD5",
-                  "0xD6",
-                  "0xD7"
-                ]
-              },
-              "subcategory": "0x1A"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xCF",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6",
+              "0xD7"
+            ]
+          },
+          "subcategory": "0x1A"
         }
       ],
       "groups": [
@@ -2149,9 +2253,13 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
+        }
+      ],
+      "engines": [
         {
-          "kind": "i2cs"
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x32"
         }
       ],
       "groups": [
@@ -2186,12 +2294,16 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
-        {
-          "kind": "i2cs"
         }
       ],
       "description": "A controller for dimmable lighting ballasts that use a 0-10 VDC control input. It also has two relay outputs that can switch non-dimmable ballasts of up to 5 amps each.",
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x25"
+        }
+      ],
       "groups": [
         {
           "name": "Load",
@@ -2227,24 +2339,22 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
-        {
-          "identities": [
-            {
-              "category": "0x01",
-              "firmware": {
-                "except": [
-                  "0x3B",
-                  "0xBA"
-                ]
-              },
-              "subcategory": "0x2E"
-            }
-          ],
-          "kind": "i2cs"
         }
       ],
       "description": "A module installed inside a ceiling fan's canopy that controls the fan speed (low, medium, high) and the fan's light kit. It can be controlled by other Insteon devices or the Hub.",
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "except": [
+              "0x3B",
+              "0xBA"
+            ]
+          },
+          "subcategory": "0x2E"
+        }
+      ],
       "identities": [
         {
           "category": "0x01",
@@ -2265,26 +2375,24 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x02",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xD1",
-                  "0xD2",
-                  "0xD3",
-                  "0xD4",
-                  "0xD5",
-                  "0xD6"
-                ]
-              },
-              "subcategory": "0x10"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x10"
         }
       ],
       "groups": [
@@ -2319,23 +2427,21 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x02",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xD4",
-                  "0xD5",
-                  "0xD6"
-                ]
-              },
-              "subcategory": "0x14"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x14"
         }
       ],
       "identities": [
@@ -2357,20 +2463,18 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x02",
-              "firmware": {
-                "only": [
-                  "0x41"
-                ]
-              },
-              "subcategory": "0x2B"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41"
+            ]
+          },
+          "subcategory": "0x2B"
         }
       ],
       "identities": [
@@ -2392,23 +2496,21 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x02",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0x43",
-                  "0xBB",
-                  "0xBC"
-                ]
-              },
-              "subcategory": "0x1F"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0x43",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x1F"
         }
       ],
       "identities": [
@@ -2430,54 +2532,53 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xCC",
+              "0xCD",
+              "0xCE",
+              "0xCF",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6",
+              "0xD7"
+            ]
+          },
+          "subcategory": "0x19"
         },
         {
-          "identities": [
-            {
-              "category": "0x01",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xB7",
-                  "0xB8",
-                  "0xB9",
-                  "0xCC",
-                  "0xCD",
-                  "0xCE",
-                  "0xCF",
-                  "0xD2",
-                  "0xD3",
-                  "0xD4",
-                  "0xD5",
-                  "0xD6",
-                  "0xD7"
-                ]
-              },
-              "subcategory": "0x19"
-            },
-            {
-              "category": "0x01",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xB7",
-                  "0xB8",
-                  "0xB9",
-                  "0xBA",
-                  "0xBB",
-                  "0xBC",
-                  "0xBE",
-                  "0xBF",
-                  "0xCC",
-                  "0xCD",
-                  "0xCE",
-                  "0xCF"
-                ]
-              },
-              "subcategory": "0x30"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xBA",
+              "0xBB",
+              "0xBC",
+              "0xBE",
+              "0xBF",
+              "0xCC",
+              "0xCD",
+              "0xCE",
+              "0xCF"
+            ]
+          },
+          "subcategory": "0x30"
         }
       ],
       "identities": [
@@ -2532,40 +2633,39 @@
       "capabilities": [
         {
           "kind": "onOff"
+        }
+      ],
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41"
+            ]
+          },
+          "subcategory": "0x15"
         },
         {
-          "identities": [
-            {
-              "category": "0x02",
-              "firmware": {
-                "only": [
-                  "0x41"
-                ]
-              },
-              "subcategory": "0x15"
-            },
-            {
-              "category": "0x02",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xCC",
-                  "0xCD",
-                  "0xCE",
-                  "0xCF",
-                  "0xD0",
-                  "0xD1",
-                  "0xD2",
-                  "0xD3",
-                  "0xD4",
-                  "0xD5",
-                  "0xD6"
-                ]
-              },
-              "subcategory": "0x1C"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xCC",
+              "0xCD",
+              "0xCE",
+              "0xCF",
+              "0xD0",
+              "0xD1",
+              "0xD2",
+              "0xD3",
+              "0xD4",
+              "0xD5",
+              "0xD6"
+            ]
+          },
+          "subcategory": "0x1C"
         }
       ],
       "identities": [
@@ -2664,28 +2764,26 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
-        {
-          "identities": [
-            {
-              "category": "0x01",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0x42",
-                  "0x43",
-                  "0x44",
-                  "0xBB",
-                  "0xBC"
-                ]
-              },
-              "subcategory": "0x2D"
-            }
-          ],
-          "kind": "i2cs"
         }
       ],
       "description": "A higher-capacity version of the Insteon wall dimmer switch, rated for up to 250 W of dimmable LED or 1,000 W of incandescent or halogen lighting. It can be controlled locally or remotely over Insteon.",
+      "engines": [
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0x42",
+              "0x43",
+              "0x44",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x2D"
+        }
+      ],
       "groups": [
         {
           "name": "Load",
@@ -2716,12 +2814,16 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
-        {
-          "kind": "i2cs"
         }
       ],
       "description": "An in-wall on/off switch for non-dimmable loads such as fluorescent lights, ceiling fans, and exhaust fans, rated up to 17 amps. It can be controlled locally or remotely over Insteon.",
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "subcategory": "0x2A"
+        }
+      ],
       "groups": [
         {
           "name": "Load",
@@ -2748,22 +2850,20 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x09",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xD4",
-                  "0xD5"
-                ]
-              },
-              "subcategory": "0x0A"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x09",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xD4",
+              "0xD5"
+            ]
+          },
+          "subcategory": "0x0A"
         }
       ],
       "identities": [
@@ -2782,21 +2882,19 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x09",
-              "firmware": {
-                "except": [
-                  "0x3A",
-                  "0x40"
-                ]
-              },
-              "subcategory": "0x0B"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x09",
+          "engine": "i2cs",
+          "firmware": {
+            "except": [
+              "0x3A",
+              "0x40"
+            ]
+          },
+          "subcategory": "0x0B"
         }
       ],
       "identities": [
@@ -2818,22 +2916,20 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x01",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xBC",
-                  "0xBD"
-                ]
-              },
-              "subcategory": "0x31"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xBC",
+              "0xBD"
+            ]
+          },
+          "subcategory": "0x31"
         }
       ],
       "groups": [
@@ -2961,30 +3057,28 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x01",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xB2",
-                  "0xB3",
-                  "0xB5",
-                  "0xB6",
-                  "0xB7",
-                  "0xB8",
-                  "0xB9",
-                  "0xBA",
-                  "0xBB",
-                  "0xBC"
-                ]
-              },
-              "subcategory": "0x1B"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xB2",
+              "0xB3",
+              "0xB5",
+              "0xB6",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xBA",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x1B"
         }
       ],
       "identities": [
@@ -3015,30 +3109,28 @@
       "capabilities": [
         {
           "kind": "dimmable"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x01",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xB2",
-                  "0xB3",
-                  "0xB5",
-                  "0xB6",
-                  "0xB7",
-                  "0xB8",
-                  "0xB9",
-                  "0xBA",
-                  "0xBB",
-                  "0xBC"
-                ]
-              },
-              "subcategory": "0x1C"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x01",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xB2",
+              "0xB3",
+              "0xB5",
+              "0xB6",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xBA",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x1C"
         }
       ],
       "identities": [
@@ -3069,30 +3161,28 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
+        }
+      ],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x02",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xB2",
-                  "0xB3",
-                  "0xB5",
-                  "0xB6",
-                  "0xB7",
-                  "0xB8",
-                  "0xB9",
-                  "0xBA",
-                  "0xBB",
-                  "0xBC"
-                ]
-              },
-              "subcategory": "0x0F"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xB2",
+              "0xB3",
+              "0xB5",
+              "0xB6",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xBA",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x0F"
         }
       ],
       "identities": [
@@ -3116,49 +3206,48 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
-        {
-          "identities": [
-            {
-              "category": "0x02",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xB2",
-                  "0xB3",
-                  "0xB5",
-                  "0xB6",
-                  "0xB7",
-                  "0xB8",
-                  "0xB9",
-                  "0xBA",
-                  "0xBB",
-                  "0xBC"
-                ]
-              },
-              "subcategory": "0x1E"
-            },
-            {
-              "category": "0x02",
-              "firmware": {
-                "only": [
-                  "0x41",
-                  "0xB6",
-                  "0xB7",
-                  "0xB8",
-                  "0xB9",
-                  "0xBA",
-                  "0xBB",
-                  "0xBC"
-                ]
-              },
-              "subcategory": "0x2C"
-            }
-          ],
-          "kind": "i2cs"
         }
       ],
       "description": "A wall keypad that switches its connected light fixture on and off and adds extra buttons for controlling other Insteon devices or scenes. It replaces a standard wall switch. Insteon sells it in a 6-button version.",
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xB2",
+              "0xB3",
+              "0xB5",
+              "0xB6",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xBA",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x1E"
+        },
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x41",
+              "0xB6",
+              "0xB7",
+              "0xB8",
+              "0xB9",
+              "0xBA",
+              "0xBB",
+              "0xBC"
+            ]
+          },
+          "subcategory": "0x2C"
+        }
+      ],
       "identities": [
         {
           "category": "0x02",
@@ -3180,22 +3269,19 @@
       ]
     },
     {
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x05",
-              "firmware": {
-                "only": [
-                  "0x95",
-                  "0xD3",
-                  "0xD4"
-                ]
-              },
-              "subcategory": "0x0E"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x05",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x95",
+              "0xD3",
+              "0xD4"
+            ]
+          },
+          "subcategory": "0x0E"
         }
       ],
       "identities": [
@@ -3330,12 +3416,16 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
-        {
-          "kind": "i2cs"
         }
       ],
       "description": "A weather-resistant plug-in relay module for switching outdoor lights and appliances on and off remotely. It is rated NEMA 3R and works from -4 to 122 degrees Fahrenheit.",
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "subcategory": "0x38"
+        }
+      ],
       "groups": [
         {
           "name": "Load",
@@ -3400,12 +3490,16 @@
       "capabilities": [
         {
           "kind": "onOff"
-        },
-        {
-          "kind": "i2cs"
         }
       ],
       "description": "An in-wall duplex outlet with two receptacles that can each be switched on and off independently over Insteon. It is used to control plug-in lamps, fans, and small appliances.",
+      "engines": [
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "subcategory": "0x39"
+        }
+      ],
       "groups": [
         {
           "name": "Outlet 1",
@@ -3727,34 +3821,33 @@
       ]
     },
     {
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "identities": [
-            {
-              "category": "0x10",
-              "firmware": {
-                "except": [
-                  "0x22",
-                  "0x24",
-                  "0x26",
-                  "0x30",
-                  "0x34",
-                  "0x36",
-                  "0x82"
-                ]
-              },
-              "subcategory": "0x01"
-            },
-            {
-              "category": "0x10",
-              "subcategory": "0x04"
-            },
-            {
-              "category": "0x10",
-              "subcategory": "0x05"
-            }
-          ],
-          "kind": "i2cs"
+          "category": "0x10",
+          "engine": "i2cs",
+          "firmware": {
+            "except": [
+              "0x22",
+              "0x24",
+              "0x26",
+              "0x30",
+              "0x34",
+              "0x36",
+              "0x82"
+            ]
+          },
+          "subcategory": "0x01"
+        },
+        {
+          "category": "0x10",
+          "engine": "i2cs",
+          "subcategory": "0x04"
+        },
+        {
+          "category": "0x10",
+          "engine": "i2cs",
+          "subcategory": "0x05"
         }
       ],
       "identities": [
@@ -3805,43 +3898,43 @@
           "group": "0x04",
           "intervalMinutes": 1428,
           "kind": "heartbeat"
-        },
-        {
-          "identities": [
-            {
-              "category": "0x10",
-              "firmware": {
-                "only": [
-                  "0x32",
-                  "0x33",
-                  "0x34",
-                  "0x40",
-                  "0x41",
-                  "0x42",
-                  "0x43",
-                  "0x81",
-                  "0x83",
-                  "0x84",
-                  "0x86",
-                  "0x87",
-                  "0x88"
-                ]
-              },
-              "subcategory": "0x02"
-            },
-            {
-              "category": "0x10",
-              "subcategory": "0x06"
-            },
-            {
-              "category": "0x10",
-              "subcategory": "0x07"
-            }
-          ],
-          "kind": "i2cs"
         }
       ],
       "description": "A wireless, battery-powered sensor that mounts on a door or window and reports when it opens or closes. It can switch Insteon lights or, with the Hub, send phone alerts.",
+      "engines": [
+        {
+          "category": "0x10",
+          "engine": "i2cs",
+          "firmware": {
+            "only": [
+              "0x32",
+              "0x33",
+              "0x34",
+              "0x40",
+              "0x41",
+              "0x42",
+              "0x43",
+              "0x81",
+              "0x83",
+              "0x84",
+              "0x86",
+              "0x87",
+              "0x88"
+            ]
+          },
+          "subcategory": "0x02"
+        },
+        {
+          "category": "0x10",
+          "engine": "i2cs",
+          "subcategory": "0x06"
+        },
+        {
+          "category": "0x10",
+          "engine": "i2cs",
+          "subcategory": "0x07"
+        }
+      ],
       "groups": [
         {
           "name": "Open/close",
@@ -4167,9 +4260,12 @@
       ]
     },
     {
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "kind": "i2cs"
+          "category": "0x0F",
+          "engine": "i2cs",
+          "subcategory": "0x0A"
         }
       ],
       "identities": [
@@ -4186,9 +4282,22 @@
     },
     {
       "batteryPowered": true,
-      "capabilities": [
+      "capabilities": [],
+      "engines": [
         {
-          "kind": "i2cs"
+          "category": "0x0F",
+          "engine": "i2cs",
+          "subcategory": "0x07"
+        },
+        {
+          "category": "0x0F",
+          "engine": "i2cs",
+          "subcategory": "0x08"
+        },
+        {
+          "category": "0x0F",
+          "engine": "i2cs",
+          "subcategory": "0x09"
         }
       ],
       "identities": [

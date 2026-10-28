@@ -97,6 +97,10 @@ public struct DeviceProfile: Hashable, Sendable {
   /// The category, subcategory and firmware versions the product reports.
   public var identities: [DeviceIdentity]
 
+  /// Which Insteon engine the product runs under each identity and firmware version, where a
+  /// source states it. A version no entry covers runs an engine the catalog doesn't know.
+  public var engines: [DeviceEngine]
+
   /// How the product communicates, or `nil` if no source states it.
   public var radio: Radio?
 
@@ -128,6 +132,7 @@ public struct DeviceProfile: Hashable, Sendable {
   ///   - aliases: Other names the product is known by.
   ///   - summary: What the product is.
   ///   - identities: The identities the product reports.
+  ///   - engines: The engine the product runs under each identity and firmware version.
   ///   - radio: How the product communicates.
   ///   - role: The ALL-Link roles the product can take.
   ///   - isBatteryPowered: Whether the product runs on batteries.
@@ -141,6 +146,7 @@ public struct DeviceProfile: Hashable, Sendable {
     aliases: [String] = [],
     summary: String? = nil,
     identities: [DeviceIdentity],
+    engines: [DeviceEngine] = [],
     radio: Radio? = nil,
     role: LinkRole? = nil,
     isBatteryPowered: Bool = false,
@@ -155,6 +161,7 @@ public struct DeviceProfile: Hashable, Sendable {
     self.aliases = aliases
     self.summary = summary
     self.identities = identities
+    self.engines = engines
     self.radio = radio
     self.role = role
     self.isBatteryPowered = isBatteryPowered
@@ -224,39 +231,11 @@ public struct DeviceProfile: Hashable, Sendable {
 
   }
 
-  /// The capabilities a device of this product has, given the identity and firmware version it
-  /// reported.
-  ///
-  /// Most capabilities apply to every identity and firmware version. One with a
-  /// ``CapabilityCoverage``, such as ``DeviceCapability/i2cs(_:)``, is left out unless its
-  /// coverage includes the device.
-  ///
-  /// - Parameters:
-  ///   - category: The category the device reported.
-  ///   - subcategory: The subcategory the device reported.
-  ///   - firmwareVersion: The firmware version the device reported, if any.
-  /// - Returns: The device's capabilities.
-  public func capabilities(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> [DeviceCapability] {
-
-    capabilities.filter { capability in
-
-      guard case let .i2cs(coverage) = capability else {
-
-        return true
-
-      }
-
-      return coverage.covers(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion)
-
-    }
-
-  }
-
-  /// Whether a device of this product runs the i2CS engine, and so rejects an extended message
-  /// whose D14 checksum is wrong, given the identity and firmware version it reported.
+  /// The Insteon engine a device of this product runs, given the identity and firmware version
+  /// it reported.
   ///
   /// ```swift
-  /// let integrity: any UserDataIntegrity = profile.runsI2CS(category: category, subcategory: subcategory, firmwareVersion: version)
+  /// let integrity: any UserDataIntegrity = profile.engine(category: category, subcategory: subcategory, firmwareVersion: version) == .i2cs
   ///   ? ChecksumIntegrity()
   ///   : UnprotectedIntegrity()
   /// ```
@@ -265,15 +244,11 @@ public struct DeviceProfile: Hashable, Sendable {
   ///   - category: The category the device reported.
   ///   - subcategory: The subcategory the device reported.
   ///   - firmwareVersion: The firmware version the device reported, if any.
-  /// - Returns: `true` if the profile's ``DeviceCapability/i2cs(_:)`` capability covers the
-  ///   device; `false` if it doesn't, or the profile has none.
-  public func runsI2CS(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> Bool {
+  /// - Returns: The engine of the entry in ``DeviceProfile/engines`` that covers the device, or
+  ///   `nil` if none does.
+  public func engine(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> InsteonEngine? {
 
-    capabilities(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion).contains { capability in
-
-      if case .i2cs = capability { true } else { false }
-
-    }
+    engines.first { $0.covers(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion) }?.engine
 
   }
 
@@ -302,6 +277,7 @@ extension DeviceProfile: Decodable {
     case aliases
     case summary = "description"
     case identities
+    case engines
     case radio
     case role
     case batteryPowered
@@ -324,6 +300,19 @@ extension DeviceProfile: Decodable {
 
   }
 
+  /// An engine entry, or `nil` for an engine this package doesn't read.
+  private struct EngineEntry: Decodable {
+
+    let engine: DeviceEngine?
+
+    init(from decoder: any Decoder) throws {
+
+      engine = try DeviceEngine(from: decoder)
+
+    }
+
+  }
+
   /// A capability, or `nil` for one this package doesn't read.
   private struct CapabilityEntry: Decodable {
 
@@ -342,7 +331,7 @@ extension DeviceProfile: Decodable {
   /// Values from a later version of the catalog that this package doesn't read are passed
   /// over rather than failing the profile: an unknown radio or role reads as `nil`, a group
   /// with an unknown role is skipped, a group with an unknown way of linking reads as
-  /// ``DeviceProfile/Group/Linking/software``, and an unknown capability is skipped.
+  /// ``DeviceProfile/Group/Linking/software``, and an unknown capability or engine is skipped.
   ///
   /// - Parameter decoder: The decoder to read from.
   /// - Throws: `DecodingError` if the JSON isn't a profile.
@@ -356,6 +345,7 @@ extension DeviceProfile: Decodable {
       aliases: try container.decodeIfPresent([String].self, forKey: .aliases) ?? [],
       summary: try container.decodeIfPresent(String.self, forKey: .summary),
       identities: try container.decode([DeviceIdentity].self, forKey: .identities),
+      engines: try (container.decodeIfPresent([EngineEntry].self, forKey: .engines) ?? []).compactMap(\.engine),
       radio: try container.decodeIfPresent(String.self, forKey: .radio).flatMap(Radio.init(rawValue:)),
       role: try container.decodeIfPresent(String.self, forKey: .role).flatMap(LinkRole.init(rawValue:)),
       isBatteryPowered: try container.decodeIfPresent(Bool.self, forKey: .batteryPowered) ?? false,

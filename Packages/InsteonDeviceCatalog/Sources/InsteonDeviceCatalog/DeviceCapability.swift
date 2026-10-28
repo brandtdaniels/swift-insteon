@@ -69,11 +69,6 @@ public enum DeviceCapability: Hashable, Sendable {
   /// has gone quiet.
   case heartbeat(group: AllLinkGroupNumber, interval: Duration)
 
-  /// Runs the i2CS engine, which rejects an extended message whose D14 checksum is wrong, on
-  /// the identities and firmware versions the coverage includes. Send such a device extended
-  /// messages with InsteonProtocol's `ChecksumIntegrity`.
-  case i2cs(CapabilityCoverage)
-
 }
 
 extension DeviceCapability {
@@ -90,7 +85,6 @@ extension DeviceCapability {
     case events
     case group
     case intervalMinutes
-    case identities
 
   }
 
@@ -145,8 +139,6 @@ extension DeviceCapability {
       }
 
       self = .heartbeat(group: AllLinkGroupNumber(rawValue: try container.decode(ProfileByte.self, forKey: .group).value), interval: .seconds(minutes * 60))
-    case "i2cs":
-      self = .i2cs(try container.decodeIfPresent([ScopedIdentity].self, forKey: .identities).map(CapabilityCoverage.identities) ?? .everyVersion)
     default:
       return nil
     }

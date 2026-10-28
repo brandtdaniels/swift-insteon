@@ -1,6 +1,6 @@
 import InsteonProtocol
 
-/// The firmware versions that have a capability.
+/// Firmware versions: only some, or every version except some.
 public enum FirmwareSelection: Hashable, Sendable {
 
   /// Only these versions.
@@ -33,9 +33,18 @@ public enum FirmwareSelection: Hashable, Sendable {
 
 }
 
-/// One of a product's identities that a capability applies to, and the firmware versions
-/// under it that have the capability.
-public struct ScopedIdentity: Hashable, Sendable {
+/// The Insteon engine a product runs under one of its identities, and the firmware versions
+/// that run it.
+///
+/// A product's identities and firmware versions can run different engines, so the catalog
+/// gives the engine per identity and firmware rather than per product. A device also reports
+/// its engine in reply to InsteonProtocol's `StandardDirectCommand.getEngineVersion`, which is
+/// the surer source; the catalog's entries are for deciding before asking, or for a device
+/// that doesn't answer.
+public struct DeviceEngine: Hashable, Sendable {
+
+  /// The engine.
+  public var engine: InsteonEngine
 
   /// The category the product reports.
   public var category: DeviceCategory
@@ -43,32 +52,33 @@ public struct ScopedIdentity: Hashable, Sendable {
   /// The subcategory the product reports.
   public var subcategory: DeviceSubcategory
 
-  /// The firmware versions that have the capability, or `nil` for every version.
+  /// The firmware versions that run the engine, or `nil` for every version.
   public var firmware: FirmwareSelection?
 
-  /// Creates a scoped identity.
+  /// Creates an engine entry.
   ///
   /// - Parameters:
+  ///   - engine: The engine.
   ///   - category: The category the product reports.
   ///   - subcategory: The subcategory the product reports.
-  ///   - firmware: The firmware versions that have the capability, or `nil` for every
-  ///     version.
-  public init(category: DeviceCategory, subcategory: DeviceSubcategory, firmware: FirmwareSelection? = nil) {
+  ///   - firmware: The firmware versions that run the engine, or `nil` for every version.
+  public init(engine: InsteonEngine, category: DeviceCategory, subcategory: DeviceSubcategory, firmware: FirmwareSelection? = nil) {
 
+    self.engine = engine
     self.category = category
     self.subcategory = subcategory
     self.firmware = firmware
 
   }
 
-  /// Whether a device reporting these values has the capability.
+  /// Whether a device reporting these values runs the engine.
   ///
   /// - Parameters:
   ///   - category: The category the device reported.
   ///   - subcategory: The subcategory the device reported.
   ///   - firmwareVersion: The firmware version the device reported, if any.
-  /// - Returns: `true` if the identity matches and, when it selects firmware, the version is
-  ///   selected.
+  /// - Returns: `true` if the identity matches and, when the entry selects firmware, the
+  ///   version is selected.
   public func covers(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> Bool {
 
     guard category == self.category, subcategory == self.subcategory else {
@@ -83,39 +93,11 @@ public struct ScopedIdentity: Hashable, Sendable {
 
 }
 
-/// Which of a product's identities and firmware versions have a capability.
-public enum CapabilityCoverage: Hashable, Sendable {
-
-  /// Every identity and firmware version of the product.
-  case everyVersion
-
-  /// Only these identities, each with the firmware versions that have the capability.
-  case identities([ScopedIdentity])
-
-  /// Whether a device reporting these values has the capability.
-  ///
-  /// - Parameters:
-  ///   - category: The category the device reported.
-  ///   - subcategory: The subcategory the device reported.
-  ///   - firmwareVersion: The firmware version the device reported, if any.
-  /// - Returns: `true` if the coverage includes the device.
-  public func covers(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> Bool {
-
-    switch self {
-    case .everyVersion:
-      true
-    case let .identities(identities):
-      identities.contains { $0.covers(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion) }
-    }
-
-  }
-
-}
-
-extension ScopedIdentity: Decodable {
+extension DeviceEngine {
 
   private enum CodingKeys: String, CodingKey {
 
+    case engine
     case category
     case subcategory
     case firmware
@@ -130,12 +112,16 @@ extension ScopedIdentity: Decodable {
 
   }
 
-  /// Decodes a scoped identity from a capability's `identities`.
+  /// The catalog's names for the engines.
+  private static let engines: [String: InsteonEngine] = ["i1": .i1, "i2": .i2, "i2cs": .i2cs]
+
+  /// Decodes an engine entry, or returns `nil` for an engine from a later version of the
+  /// catalog.
   ///
   /// - Parameter decoder: The decoder to read from.
   /// - Throws: `DecodingError` if a byte isn't written as `0x` and two hexadecimal digits, or
   ///   a firmware selection doesn't have exactly one of `only` and `except`.
-  public init(from decoder: any Decoder) throws {
+  init?(from decoder: any Decoder) throws {
 
     let container = try decoder.container(keyedBy: CodingKeys.self)
     var firmware: FirmwareSelection?
@@ -153,11 +139,16 @@ extension ScopedIdentity: Decodable {
 
     }
 
-    self.init(
-      category: DeviceCategory(rawValue: try container.decode(ProfileByte.self, forKey: .category).value),
-      subcategory: DeviceSubcategory(rawValue: try container.decode(ProfileByte.self, forKey: .subcategory).value),
-      firmware: firmware
-    )
+    let category = DeviceCategory(rawValue: try container.decode(ProfileByte.self, forKey: .category).value)
+    let subcategory = DeviceSubcategory(rawValue: try container.decode(ProfileByte.self, forKey: .subcategory).value)
+
+    guard let engine = Self.engines[try container.decode(String.self, forKey: .engine)] else {
+
+      return nil
+
+    }
+
+    self.init(engine: engine, category: category, subcategory: subcategory, firmware: firmware)
 
   }
 

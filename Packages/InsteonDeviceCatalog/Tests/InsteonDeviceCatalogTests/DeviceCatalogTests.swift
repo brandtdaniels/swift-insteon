@@ -266,58 +266,56 @@ struct DeviceCatalogTests {
 
   }
 
-  @Test func readsI2CSForSomeIdentitiesAndFirmware() throws {
+  @Test func readsTheEngineForEachIdentityAndFirmware() throws {
 
     let profile = #"""
       {
         "model": "1",
-        "name": "Dimmer Switch",
+        "name": "I/O Module",
         "identities": [
-          { "category": "0x01", "subcategory": "0x19" },
-          { "category": "0x01", "subcategory": "0x30" },
-          { "category": "0x01", "subcategory": "0x31" }
+          { "category": "0x07", "subcategory": "0x00" },
+          { "category": "0x07", "subcategory": "0x01" },
+          { "category": "0x07", "subcategory": "0x02" }
         ],
-        "capabilities": [
-          { "kind": "dimmable" },
-          {
-            "kind": "i2cs",
-            "identities": [
-              { "category": "0x01", "subcategory": "0x19", "firmware": { "only": ["0x41", "0xD1"] } },
-              { "category": "0x01", "subcategory": "0x30", "firmware": { "except": ["0x38"] } }
-            ]
-          }
+        "engines": [
+          { "engine": "i1", "category": "0x07", "subcategory": "0x00", "firmware": { "only": ["0x31"] } },
+          { "engine": "i2cs", "category": "0x07", "subcategory": "0x00", "firmware": { "only": ["0x41", "0xA1"] } },
+          { "engine": "i2", "category": "0x07", "subcategory": "0x01", "firmware": { "except": ["0x41"] } },
+          { "engine": "i3", "category": "0x07", "subcategory": "0x02" }
         ],
+        "capabilities": [],
         "sources": ["A"]
       }
       """#
     let read = try #require(try DeviceCatalog(json: Self.json(profile)).profiles.first)
 
-    #expect(read.capabilities.last == .i2cs(.identities([
-      ScopedIdentity(category: 0x01, subcategory: 0x19, firmware: .only([0x41, 0xD1])),
-      ScopedIdentity(category: 0x01, subcategory: 0x30, firmware: .except([0x38])),
-    ])))
+    // The entry for an engine this package doesn't read is skipped.
+    #expect(read.engines == [
+      DeviceEngine(engine: .i1, category: 0x07, subcategory: 0x00, firmware: .only([0x31])),
+      DeviceEngine(engine: .i2cs, category: 0x07, subcategory: 0x00, firmware: .only([0x41, 0xA1])),
+      DeviceEngine(engine: .i2, category: 0x07, subcategory: 0x01, firmware: .except([0x41])),
+    ])
 
-    #expect(read.runsI2CS(category: 0x01, subcategory: 0x19, firmwareVersion: 0xD1))
-    #expect(!read.runsI2CS(category: 0x01, subcategory: 0x19, firmwareVersion: 0x40))
-    #expect(read.runsI2CS(category: 0x01, subcategory: 0x30, firmwareVersion: 0x40))
-    #expect(!read.runsI2CS(category: 0x01, subcategory: 0x30, firmwareVersion: 0x38))
-    #expect(!read.runsI2CS(category: 0x01, subcategory: 0x31, firmwareVersion: 0x41))
+    #expect(read.engine(category: 0x07, subcategory: 0x00, firmwareVersion: 0x31) == .i1)
+    #expect(read.engine(category: 0x07, subcategory: 0x00, firmwareVersion: 0xA1) == .i2cs)
+    #expect(read.engine(category: 0x07, subcategory: 0x00, firmwareVersion: 0x40) == nil)
+    #expect(read.engine(category: 0x07, subcategory: 0x01, firmwareVersion: 0x40) == .i2)
+    #expect(read.engine(category: 0x07, subcategory: 0x01, firmwareVersion: 0x41) == nil)
+    #expect(read.engine(category: 0x07, subcategory: 0x02, firmwareVersion: 0x41) == nil)
 
     // Without a firmware version, or with 0xFF, a selection can't include the device.
-    #expect(!read.runsI2CS(category: 0x01, subcategory: 0x19, firmwareVersion: nil))
-    #expect(!read.runsI2CS(category: 0x01, subcategory: 0x30, firmwareVersion: 0xFF))
-
-    #expect(read.capabilities(category: 0x01, subcategory: 0x31, firmwareVersion: 0x41) == [.dimmable])
+    #expect(read.engine(category: 0x07, subcategory: 0x00, firmwareVersion: nil) == nil)
+    #expect(read.engine(category: 0x07, subcategory: 0x01, firmwareVersion: 0xFF) == nil)
 
   }
 
-  @Test func readsI2CSForEveryVersion() throws {
+  @Test func readsAnEngineForEveryVersion() throws {
 
-    let profile = #"{ "model": "1", "name": "A", "identities": [{ "category": "0x01", "subcategory": "0x01" }], "capabilities": [{ "kind": "i2cs" }], "sources": ["A"] }"#
+    let profile = #"{ "model": "1", "name": "A", "identities": [{ "category": "0x01", "subcategory": "0x01" }], "engines": [{ "engine": "i2cs", "category": "0x01", "subcategory": "0x01" }], "capabilities": [], "sources": ["A"] }"#
     let read = try #require(try DeviceCatalog(json: Self.json(profile)).profiles.first)
 
-    #expect(read.capabilities == [.i2cs(.everyVersion)])
-    #expect(read.runsI2CS(category: 0x01, subcategory: 0x01, firmwareVersion: nil))
+    #expect(read.engine(category: 0x01, subcategory: 0x01, firmwareVersion: nil) == .i2cs)
+    #expect(read.engine(category: 0x01, subcategory: 0x02, firmwareVersion: nil) == nil)
 
   }
 
@@ -325,7 +323,7 @@ struct DeviceCatalogTests {
 
     for selection in [#"{ "only": ["0x41"], "except": ["0x40"] }"#, "{}"] {
 
-      let profile = #"{ "model": "1", "name": "A", "identities": [{ "category": "0x01", "subcategory": "0x01" }], "capabilities": [{ "kind": "i2cs", "identities": [{ "category": "0x01", "subcategory": "0x01", "firmware": \#(selection) }] }], "sources": ["A"] }"#
+      let profile = #"{ "model": "1", "name": "A", "identities": [{ "category": "0x01", "subcategory": "0x01" }], "engines": [{ "engine": "i2cs", "category": "0x01", "subcategory": "0x01", "firmware": \#(selection) }], "capabilities": [], "sources": ["A"] }"#
 
       #expect(throws: DecodingError.self) {
 
@@ -347,8 +345,8 @@ struct DeviceCatalogTests {
     // HouseLinc lists 0x41 under the 2476D's checksum class for subcategory 0x19, and 0x38
     // under its earlier class.
     let dimmer = try #require(catalog.profile(model: "2476D"))
-    #expect(dimmer.runsI2CS(category: 0x01, subcategory: 0x19, firmwareVersion: 0x41))
-    #expect(!dimmer.runsI2CS(category: 0x01, subcategory: 0x19, firmwareVersion: 0x38))
+    #expect(dimmer.engine(category: 0x01, subcategory: 0x19, firmwareVersion: 0x41) == .i2cs)
+    #expect(dimmer.engine(category: 0x01, subcategory: 0x19, firmwareVersion: 0x38) == nil)
 
     // The published catalog never has two profiles claim one identity.
     for profile in catalog.profiles {
