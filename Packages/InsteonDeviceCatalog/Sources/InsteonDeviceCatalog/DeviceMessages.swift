@@ -102,6 +102,10 @@ public struct DeviceStandardCommand: Hashable, Sendable {
 
   /// Reads the value the acknowledgement carries.
   ///
+  /// Acknowledgements carry only cmd1, so read only the acknowledgement of this command: the
+  /// one that answers its request. Another command with the same cmd1 is acknowledged the same
+  /// way.
+  ///
   /// - Parameter message: A message the modem received.
   /// - Returns: The value, or `nil` unless the command has a reply and the message is an
   ///   acknowledgement with the command's cmd1.
@@ -134,9 +138,26 @@ public struct DeviceStandardCommand: Hashable, Sendable {
 
   }
 
+  /// The command as an extended message, for a device whose
+  /// ``DeviceStandardCommand/extendedWhen`` flag is set.
+  ///
+  /// - Parameters:
+  ///   - device: The device to send it to.
+  ///   - value: The value for cmd2, for a command that takes one. Ignored otherwise.
+  /// - Returns: The message, with ``DeviceStandardCommand/protectedUserData(for:)`` and no
+  ///   integrity bytes.
+  /// - Throws: ``FieldError`` if the command takes a value and it's missing or doesn't fit.
+  public func extendedMessage(to device: InsteonAddress, value: FieldValue? = nil) throws(FieldError) -> ExtendedMessage {
+
+    let standard = try command(value)
+
+    return ExtendedMessage(to: device, command: standard, userData: Self.protectedUserData(for: standard), integrity: UnprotectedIntegrity())
+
+  }
+
   /// The user data that sends a command as an extended message, for a device whose
   /// ``DeviceStandardCommand/extendedWhen`` flag is set: cmd1 and cmd2 again in D1 and D2, and
-  /// `0x00` after. Send it with `UnprotectedIntegrity`.
+  /// `0x00` after, with no integrity bytes.
   ///
   /// - Parameter command: The command.
   /// - Returns: The user data.

@@ -178,6 +178,105 @@ struct MessageFieldTests {
 
   }
 
+  @Test func sendsAProtectedCommandAsAnExtendedMessage() throws {
+
+    let setHeat = try #require(try commandSet("thermostatAdapter").standardCommand(named: "setHeatSetpoint"))
+    let message = try setHeat.extendedMessage(to: thermostat, value: .number(68))
+
+    #expect(message.command == Command(command1: 0x6D, command2: 0x88))
+    #expect(message.userData.bytes == [0x6D, 0x88] + Array(repeating: 0x00, count: 12))
+
+  }
+
+  @Test func readsAndWritesButtonsAndUnnamedValues() throws {
+
+    let buttons = MessageField(name: "buttons", summary: "Buttons.", location: .userData([4]), kind: .buttons)
+    let level = MessageField(name: "level", summary: "Level.", location: .command2, mask: 0x0F, kind: .enumeration(FieldEnumeration(name: "level", entries: [.init(value: 0x0F, name: "full")])))
+
+    #expect(try buttons.encoded(.buttons([1, 3, 8]), over: [0x00]) == [0x85])
+    #expect(buttons.value(command2: 0x00, userData: try UserData([0, 0, 0, 0x85])) == .buttons([1, 3, 8]))
+    #expect(throws: FieldError.outOfRange("buttons")) { try buttons.encoded(.buttons([9]), over: [0x00]) }
+    #expect(try level.encoded(.unnamed(3), over: [0xA0]) == [0xA3])
+    #expect(level.value(command2: 0xAF, userData: nil) == .named("full"))
+    #expect(throws: FieldError.outOfRange("level")) { try level.encoded(.unnamed(16), over: [0x00]) }
+
+  }
+
+  // A name or flag that stands for more bits than the field has can't be written.
+  @Test func refusesANameWiderThanItsMask() throws {
+
+    let field = MessageField(name: "mode", summary: "Mode.", location: .command2, mask: 0x0F, kind: .enumeration(FieldEnumeration(name: "mode", entries: [.init(value: 0x10, name: "wide")])))
+
+    #expect(throws: FieldError.outOfRange("mode")) { try field.encoded(.named("wide"), over: [0x00]) }
+
+  }
+
+  @Test func passesOverAReplyWhoseMatchBytesDiffer() throws {
+
+    let reply = try #require(try commandSet("tempLinc").extendedCommand(named: "readSettings")?.reply)
+    var userData = UserData()
+    userData[2] = 0x01
+    userData[3] = 0x01
+
+    #expect(reply.values(in: message(.direct, 0x2E, 0x00, userData: userData)) == nil)
+
+  }
+
+  @Test func checksFieldLayouts() {
+
+    #expect(MessageField.isValid(location: .userData([9, 10]), mask: nil))
+    #expect(MessageField.isValid(location: .command2, mask: 0xF0))
+    #expect(!MessageField.isValid(location: .userData([9, 10]), mask: 0x0F))
+    #expect(!MessageField.isValid(location: .command2, mask: 0x00))
+    #expect(!MessageField.isValid(location: .command2, mask: 0x05))
+    #expect(!MessageField.isValid(location: .userData([1, 2, 3, 4, 5])))
+    #expect(!MessageField.isValid(location: .userData([4, 4]), mask: nil))
+    #expect(!MessageField.isValid(location: .userData([15]), mask: nil))
+
+  }
+
+  @Test func leavesOutACommandWithALaterIntegrityScheme() throws {
+
+    let json = #"""
+      { "schemaVersion": 1, "devices": [], "commandSets": [{
+        "id": "a", "name": "A", "description": "A.", "sources": ["A"],
+        "extendedCommands": [
+          { "name": "later", "description": "Later.", "command1": "0x2E", "command2": "0x05", "integrity": "somethingNewer" },
+          { "name": "known", "description": "Known.", "command1": "0x2E", "command2": "0x06", "integrity": "checksum" }
+        ]
+      }] }
+      """#
+
+    let commands = try #require(try DeviceCatalog(json: Data(json.utf8)).commandSet(id: "a"))
+
+    #expect(commands.extendedCommands.map(\.name) == ["known"])
+    #expect(commands.extendedCommand(named: "known")?.integrity == .checksum)
+
+  }
+
+  @Test(arguments: [
+    #"{ "name": "v", "description": "V.", "byte": 3, "mask": "0x05" }"#,
+    #"{ "name": "v", "description": "V.", "bytes": [3, 4], "mask": "0x0F" }"#,
+    #"{ "name": "v", "description": "V.", "byte": 3, "bytes": [3, 4] }"#,
+    #"{ "name": "v", "description": "V.", "bytes": [1, 2, 3, 4, 5] }"#,
+  ])
+  func refusesAFieldItCantRead(_ field: String) {
+
+    let json = #"""
+      { "schemaVersion": 1, "devices": [], "commandSets": [{
+        "id": "a", "name": "A", "description": "A.", "sources": ["A"],
+        "extendedCommands": [{ "name": "c", "description": "C.", "command1": "0x2E", "command2": "0x05", "parameters": [\#(field)] }]
+      }] }
+      """#
+
+    #expect(throws: DecodingError.self) {
+
+      try DeviceCatalog(json: Data(json.utf8))
+
+    }
+
+  }
+
   @Test func refusesAFieldWithAnEnumerationItDoesntHave() {
 
     let json = #"""

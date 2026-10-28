@@ -26,8 +26,11 @@ import InsteonProtocol
 /// A thermostat's commands and reports work the same way:
 ///
 /// ```swift
-/// let setHeat = commands.standardCommand(named: "setHeatSetpoint")
-/// try await modem.request(StandardMessage(to: thermostat, command: try setHeat!.command(.number(68))))
+/// guard let setHeat = commands.standardCommand(named: "setHeatSetpoint") else {
+///   return
+/// }
+///
+/// try await modem.request(StandardMessage(to: thermostat, command: try setHeat.command(.number(68))))
 ///
 /// // Then, among the messages the modem receives:
 /// if let (report, value) = commands.directMessage(in: message) {

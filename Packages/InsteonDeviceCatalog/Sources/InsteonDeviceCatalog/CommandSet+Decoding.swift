@@ -261,13 +261,15 @@ extension CommandSet: Decodable {
   ///
   /// A value of a kind from a later version of the catalog reads as
   /// ``SettingValue/Kind/number``, and a field's as a ``FieldKind/number(isSigned:scale:unit:)``.
-  /// A unit from a later version reads as none, and an integrity scheme as
-  /// ``MessageIntegrity/unprotected``.
+  /// A unit from a later version reads as none, and an extended command whose integrity scheme
+  /// is from a later version is left out.
   ///
   /// - Parameter decoder: The decoder to read from.
   /// - Throws: `DecodingError` if the JSON isn't a command set, a byte isn't written as `0x`
-  ///   and two hexadecimal digits, a position is outside its message's user data, a range ends
-  ///   before it starts, or a field names an enumeration the command set doesn't have.
+  ///   and two hexadecimal digits, a position is outside its message's user data, a field's bytes
+  ///   or mask can't be read, a range ends before it starts, a standard command has both a
+  ///   fixed cmd2 and a parameter, or a field names an enumeration the command set doesn't
+  ///   have.
   public init(from decoder: any Decoder) throws {
 
     let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -339,10 +341,15 @@ extension CommandSet: Decodable {
     func field(_ field: Field, in key: CodingKeys, extended: Bool) throws -> MessageField {
 
       let positions = field.byte.map { [$0] } ?? field.bytes ?? []
+      let location: FieldLocation = extended ? .userData(positions) : .command2
 
-      guard extended == !positions.isEmpty, positions.allSatisfy({ (1...UserData.count).contains($0) }) else {
+      guard
+        field.byte == nil || field.bytes == nil,
+        extended == !positions.isEmpty,
+        MessageField.isValid(location: location, mask: field.mask?.value)
+      else {
 
-        throw corrupted(key, "The \(field.name) value isn't in cmd2 or D1 through D14 as its message needs.")
+        throw corrupted(key, "The \(field.name) value isn't in cmd2 or one to four distinct bytes from D1 through D14 as its message needs, or its mask isn't contiguous bits of one byte.")
 
       }
 
@@ -384,7 +391,7 @@ extension CommandSet: Decodable {
       return MessageField(
         name: SettingName(rawValue: field.name),
         summary: field.description,
-        location: extended ? .userData(positions) : .command2,
+        location: location,
         mask: field.mask?.value,
         kind: kind,
         range: range
@@ -408,15 +415,28 @@ extension CommandSet: Decodable {
 
     }
 
-    func integrity(_ name: String?) -> MessageIntegrity {
+    // A scheme from a later version of the catalog reads as nil, so its command is skipped.
+    func integrity(_ name: String?) -> MessageIntegrity? {
 
-      name.flatMap(MessageIntegrity.init(rawValue:)) ?? .unprotected
+      guard let name else {
+
+        return .unprotected
+
+      }
+
+      return MessageIntegrity(rawValue: name)
 
     }
 
-    standardCommands = try (container.decodeIfPresent([StandardCommand].self, forKey: .standardCommands) ?? []).map { command in
+    standardCommands = try (container.decodeIfPresent([StandardCommand].self, forKey: .standardCommands) ?? []).map { command -> DeviceStandardCommand in
 
-      DeviceStandardCommand(
+      guard command.parameter == nil || command.command2 == nil else {
+
+        throw corrupted(.standardCommands, "The \(command.name) command has both a fixed cmd2 and a parameter.")
+
+      }
+
+      return DeviceStandardCommand(
         name: SettingName(rawValue: command.name),
         summary: command.description,
         command1: command.command1.value,
@@ -429,15 +449,29 @@ extension CommandSet: Decodable {
 
     }
 
-    extendedCommands = try (container.decodeIfPresent([ExtendedCommand].self, forKey: .extendedCommands) ?? []).map { command in
+    extendedCommands = try (container.decodeIfPresent([ExtendedCommand].self, forKey: .extendedCommands) ?? []).compactMap { command -> DeviceExtendedCommand? in
 
-      let reply = try command.reply.map { reply in
+      guard let commandIntegrity = integrity(command.integrity) else {
 
-        DeviceExtendedReply(
-          command: Command(command1: reply.command1?.value ?? command.command1.value, command2: reply.command2.value),
-          match: try fixedBytes(reply.match, in: .extendedCommands),
-          integrity: integrity(reply.integrity),
-          values: try reply.values.map { try field($0, in: .extendedCommands, extended: true) }
+        return nil
+
+      }
+
+      var reply: DeviceExtendedReply?
+
+      if let decoded = command.reply {
+
+        guard let replyIntegrity = integrity(decoded.integrity) else {
+
+          return nil
+
+        }
+
+        reply = DeviceExtendedReply(
+          command: Command(command1: decoded.command1?.value ?? command.command1.value, command2: decoded.command2.value),
+          match: try fixedBytes(decoded.match, in: .extendedCommands),
+          integrity: replyIntegrity,
+          values: try decoded.values.map { try field($0, in: .extendedCommands, extended: true) }
         )
 
       }
@@ -449,7 +483,7 @@ extension CommandSet: Decodable {
         isPerButton: command.perButton ?? false,
         fixedBytes: try fixedBytes(command.fixed, in: .extendedCommands),
         parameters: try (command.parameters ?? []).map { try field($0, in: .extendedCommands, extended: true) },
-        integrity: integrity(command.integrity),
+        integrity: commandIntegrity,
         reply: reply
       )
 

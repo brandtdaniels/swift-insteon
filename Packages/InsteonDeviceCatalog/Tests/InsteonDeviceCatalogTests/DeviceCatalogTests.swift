@@ -57,7 +57,7 @@ struct DeviceCatalogTests {
       "model": "1001",
       "name": "Later Dimmer",
       "identities": [{ "category": "0x01", "subcategory": "0x20", "firmware": { "from": "0x40", "through": "0xFF" } }],
-      "capabilities": [{ "kind": "dimmable" }, { "kind": "thermostat", "modeValues": "tempLinc", "humidity": true }],
+      "capabilities": [{ "kind": "dimmable" }, { "kind": "thermostat", "humidity": true }],
       "sources": ["B"]
     }
     """#

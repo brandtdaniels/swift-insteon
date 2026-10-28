@@ -17,7 +17,7 @@ public struct MessageField: Hashable, Sendable {
   /// Where the field is.
   public var location: FieldLocation
 
-  /// The bits of the byte that hold the field, if not all of them. They should be contiguous.
+  /// The bits of a single-byte field that hold it, if not all of them. They're contiguous.
   public var mask: UInt8?
 
   /// How to read the field.
@@ -28,6 +28,8 @@ public struct MessageField: Hashable, Sendable {
 
   /// Creates a field.
   ///
+  /// A field is at most four bytes, and a masked field is one byte.
+  ///
   /// - Parameters:
   ///   - name: The field's name.
   ///   - summary: What the field is.
@@ -36,6 +38,8 @@ public struct MessageField: Hashable, Sendable {
   ///   - kind: How to read the field.
   ///   - range: The values the field can take, in its unit.
   public init(name: SettingName, summary: String, location: FieldLocation, mask: UInt8? = nil, kind: FieldKind = .number(), range: ClosedRange<Double>? = nil) {
+
+    precondition(Self.isValid(location: location, mask: mask), "A field is one to four distinct bytes, and a masked field is one byte with contiguous bits.")
 
     self.name = name
     self.summary = summary
@@ -116,6 +120,42 @@ public struct MessageField: Hashable, Sendable {
 
   }
 
+  /// Whether a location and mask describe a field that can be read and written: one to four
+  /// distinct user data bytes from D1 through D14, or cmd2, and a mask of contiguous bits on a
+  /// single byte.
+  ///
+  /// - Parameters:
+  ///   - location: Where the field is.
+  ///   - mask: The bits that hold the field, if not all of them.
+  /// - Returns: Whether the field is valid.
+  public static func isValid(location: FieldLocation, mask: UInt8? = nil) -> Bool {
+
+    var byteCount = 1
+
+    if case let .userData(positions) = location {
+
+      guard (1...4).contains(positions.count), Set(positions).count == positions.count, positions.allSatisfy({ (1...UserData.count).contains($0) }) else {
+
+        return false
+
+      }
+
+      byteCount = positions.count
+
+    }
+
+    guard let mask else {
+
+      return true
+
+    }
+
+    let shifted = mask >> mask.trailingZeroBitCount
+
+    return mask != 0 && byteCount == 1 && shifted & (shifted &+ 1) == 0
+
+  }
+
   /// The user data bytes the field is in, or an empty list for cmd2.
   var positions: [Int] {
 
@@ -147,6 +187,21 @@ public struct MessageField: Hashable, Sendable {
   }
 
   private func rawValue(for value: FieldValue, width: Int) throws(FieldError) -> UInt64 {
+
+    let raw = try unboundedRawValue(for: value, width: width)
+
+    // A name or flag can stand for more bits than the field has.
+    guard raw < UInt64(1) << width else {
+
+      throw .outOfRange(name)
+
+    }
+
+    return raw
+
+  }
+
+  private func unboundedRawValue(for value: FieldValue, width: Int) throws(FieldError) -> UInt64 {
 
     let limit = UInt64(1) << width
 
