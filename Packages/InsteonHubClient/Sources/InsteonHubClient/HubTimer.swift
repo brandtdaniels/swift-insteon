@@ -36,7 +36,7 @@ public struct HubClockTime: Hashable, Sendable {
   }
 
   /// The time as a timer's field. The Hub reads `00:00` there as no time, so midnight is
-  /// written `24:00`, as the Insteon for Hub app writes it.
+  /// written `24:00`.
   var timerText: String {
 
     hour == 0 && minute == 0 ? "24:00" : clockText
@@ -133,7 +133,7 @@ public struct HubWeekdays: OptionSet, Hashable, Sendable {
 /// A name a Hub 2242 shows for a slot.
 ///
 /// The Hub's requests separate their fields with `=`, so a name is limited to ASCII letters and
-/// digits. The Insteon for Hub app removed the spaces from its names before writing them.
+/// digits, so leave out spaces.
 public struct HubSlotName: RawRepresentable, Hashable, Sendable {
 
   /// The name.
@@ -161,7 +161,7 @@ public struct HubSlotName: RawRepresentable, Hashable, Sendable {
 /// the days it does so.
 ///
 /// The Hub sends the slot's on and off commands, which ``Hub/setCommands(_:for:)`` sets. A timer
-/// with no times and no days runs never, which is how the Insteon for Hub app removed a timer.
+/// with no times and no days runs never, which removes it.
 public struct HubTimer: Hashable, Sendable {
 
   /// The name the Hub shows for the slot.

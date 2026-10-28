@@ -95,7 +95,7 @@ struct MessageFieldTests {
 
   }
 
-  // Insteon for Hub sends the status request with 0x92 0x96 in D13 and D14.
+  // The status request carries 0x92 0x96 in D13 and D14.
   @Test func sealsAnExtendedCommandWithItsCRC() throws {
 
     let readStatus = try #require(try commandSet("tempLinc").extendedCommand(named: "readStatus"))

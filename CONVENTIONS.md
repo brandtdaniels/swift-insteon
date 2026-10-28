@@ -38,7 +38,7 @@ everywhere. `Scripts/check-terms.py` checks the forms it can, and CI runs it.
 
 ## Documents
 
-Cite each document by its own title, never as "the guide" alone:
+Cite each document by its own title, never as "the guide" alone.
 
 | Document | Cite as |
 | --- | --- |
@@ -49,9 +49,7 @@ Cite each document by its own title, never as "the guide" alone:
 | The device lists | Insteon Device Categories and Product Keys (October 2008), Insteon Device Categories (January 2014) |
 | The i2CS notes | Insteon Firmware Update i2CS Developer Notes |
 | A product's notes | Its title's subject, then Developer Notes: Leak Sensor Developer Notes, KeypadLinc Developer Notes |
-| A product requirements document | The model and name, then PRD: 2477S SwitchLinc Relay PRD |
 | HouseLinc's data | HouseLinc device catalog |
-| Insteon's app | Insteon for Hub app |
 
 ## Spelling and style
 

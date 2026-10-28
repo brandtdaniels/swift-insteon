@@ -54,8 +54,7 @@ struct HubTimerTests {
 
   }
 
-  // the Insteon for Hub app pairs the devices and the flags in order, whether or not they
-  // alternate.
+  // The devices and the flags pair up in order, whether or not they alternate.
   @Test func readsAPageListingDevicesThenFlagsInEitherQuotes() async throws {
 
     let (hub, _) = makeHub(answering: #"<S D='1A.DC.49.01'/><S D="00.00.00.00"/><S D="13"/><S D='00'/>"#)
@@ -79,7 +78,7 @@ struct HubTimerTests {
 
   }
 
-  // Insteon's own example: the plug on Monday through Sunday at 10:55, never off, keeping the
+  // An example: the plug on Monday through Sunday at 10:55, never off, keeping the
   // slot's device and group.
   @Test func writesATimerAsInsteonsAppDoes() async throws {
 

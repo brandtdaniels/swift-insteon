@@ -6,13 +6,11 @@
 /// ``AllLinkRecordFlags/controller`` bit, group and linked device are those of
 /// ``DeviceRecordRequest/record``; a group of `0xFF` matches every group.
 ///
-/// Insteon's command workbook annotates its examples as though a request with bit 6 clear
-/// looked for a controller record, but its captured exchange shows such a request finding an
-/// `0xA2` record, whose controller bit is clear. The request's bit 6 follows the captured
-/// exchange: it's the record's own bit 6.
+/// A request with bit 6 clear finds an `0xA2` record, whose controller bit is clear: the
+/// request's bit 6 is the record's own bit 6.
 ///
-/// This is a later modem firmware command from Insteon's command workbook. The Insteon
-/// Insteon Developer's Guide doesn't list it, and a modem without it NAKs the command.
+/// This is a later modem firmware command. The Insteon Developer's Guide doesn't list it, and a
+/// modem without it NAKs the command.
 ///
 /// ```swift
 /// // Change the on-level and ramp rate of the switch's responder record for group 7.

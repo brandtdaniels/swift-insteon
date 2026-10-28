@@ -32,15 +32,14 @@ public struct AllLinkRecordFlags: OptionSet, Hashable, Sendable {
   /// The record is in use; when clear, the record is available (bit 7).
   ///
   /// A deleted record keeps its other bits, so `0x62` is an erased record that had
-  /// ``AllLinkRecordFlags/controller`` set and `0x22` one that didn't, as Insteon's command
-  /// workbook lists them; `0x00` is a never-used record that ends the database.
+  /// ``AllLinkRecordFlags/controller`` set and `0x22` one that didn't; `0x00` is a never-used
+  /// record that ends the database.
   public static let inUse = AllLinkRecordFlags(rawValue: 1 << 7)
 
-  /// Bits 3 and 4, from 0 through 3, which Insteon's command workbook labels SmartHop.
+  /// Bits 3 and 4, from 0 through 3, the record's smart hop count.
   ///
-  /// The workbook lists `0xEA`, `0xF2` and `0xFA` for a record that's otherwise `0xE2`, and
-  /// `0xAA`, `0xB2` and `0xBA` for one that's otherwise `0xA2`, as all the smart hop settings,
-  /// without saying more about what they mean.
+  /// A record that's otherwise `0xE2` reads `0xEA`, `0xF2` or `0xFA` with smart hops set, and
+  /// one that's otherwise `0xA2` reads `0xAA`, `0xB2` or `0xBA`.
   public var smartHops: UInt8 {
 
     (rawValue >> 3) & 0b11

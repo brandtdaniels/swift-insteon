@@ -3,7 +3,7 @@
 ///
 /// Later modem firmware keeps the last 32 distinct exchanges that went wrong: NAKs, messages
 /// that took all three hops, Success Reports with errors, and messages from the modem that no
-/// device acknowledged. Insteon's command workbook gives the layout, with examples.
+/// device acknowledged.
 public struct ModemDiagnosticRecord: Hashable, Sendable {
 
   /// The message's sender: the modem's own address for a message the modem sent.

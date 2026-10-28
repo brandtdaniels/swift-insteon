@@ -11,7 +11,7 @@ struct AllLinkingTests {
 
   }
 
-  // Insteon's command workbook: smart hops set on a controller record.
+  // Smart hops set on a controller record.
   @Test func readsSmartHops() {
 
     #expect(AllLinkRecordFlags(rawValue: 0xE2).smartHops == 0)

@@ -4,8 +4,8 @@ import InsteonProtocol
 ///
 /// The Hub arranges its slots as 16 pages of 16, and numbers them from 1: slot `n` is index `(n -
 /// 1) % 16 + 1` on page `(n - 1) / 16 + 1`. Each page is one of the Hub's rooms. Timers go in slots
-/// 1 through 239, the ones the Insteon for Hub app used: slot 240 holds the Hub's unlock code, and
-/// the last page is the thermostat room, which the app kept disabled.
+/// 1 through 239: slot 240 holds the Hub's unlock code, and the last page is the thermostat room,
+/// which stays disabled.
 public struct HubSlot: RawRepresentable, Hashable, Sendable, Comparable {
 
   /// The slot that holds the Hub's unlock code.
@@ -135,8 +135,8 @@ public struct HubSlotStatus: Hashable, Sendable {
   /// Parses one page of slot statuses from the Hub's `b.xml` response.
   ///
   /// The page lists `S` elements whose `D` attributes are either a slot's device and group, such as
-  /// `1A.DC.49.01`, or a slot's flags in hex. As the Insteon for Hub app reads the page, the first
-  /// device and group goes with the first flags, and so on, in slot order.
+  /// `1A.DC.49.01`, or a slot's flags in hex. The first device and group goes with the first
+  /// flags, and so on, in slot order.
   ///
   /// - Parameters:
   ///   - response: The response body as text.
