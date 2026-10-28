@@ -133,7 +133,7 @@ public actor Modem: SerialCommandSender {
   /// status request is answered by the device's first acknowledgement, since it carries other
   /// data in cmd1. With the modem's monitor mode on, an acknowledgement the device sends
   /// another controller for the same cmd1 can answer it too. An i2cs device that's still
-  /// searching its ALL-Link database answers with ``NAKReason/databaseSearchPending`` first,
+  /// searching its ALL-Link database answers with `NAKReason.databaseSearchPending` first,
   /// and then again once its search finishes, so the request keeps waiting.
   ///
   /// ```swift
@@ -174,7 +174,7 @@ public actor Modem: SerialCommandSender {
   /// Sends an extended direct message to a device and waits for the device to acknowledge it.
   ///
   /// The device acknowledges an extended message with a standard one. Data it sends in reply,
-  /// such as the extended reply to ``ExtendedDirectCommand/getSet(variant:)``, follows through
+  /// such as the extended reply to `ExtendedDirectCommand.getSet(variant:)`, follows through
   /// ``Modem/replies()``. Otherwise this works like the request for a standard message.
   ///
   /// - Parameters:
