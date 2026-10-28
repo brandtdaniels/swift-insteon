@@ -80,11 +80,6 @@ their local interface; it didn't drive the 2243. A Hub's modem reports its model
 `SerialCommand.getModemInfo`: category `0x03` with subcategory `0x33` to `0x36` for the 2245,
 `0x2B` or `0x2E` to `0x32` for the 2242, or `0x18`, `0x2C` or `0x2D` for the 2243.
 
-SmartLabs' HouseLinc software drove the 2242 and 2245 the same way, which suggests they share
-their local interface, and had no such support for the 2243. A Hub's modem reports its model
-through `SerialCommand.getModemInfo`: category `0x03` with subcategory `0x33` to `0x36` for
-the 2245, or `0x2B` or `0x2E` to `0x32` for the 2242.
-
 ## Topics
 
 ### Connecting

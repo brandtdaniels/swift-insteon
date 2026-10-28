@@ -2,7 +2,7 @@ import Foundation
 
 /// The times of sunrise and sunset at a place, for schedules that run relative to them.
 ///
-/// Supply one from a solar calculator or a service you trust; the package doesn't include one.
+/// Use ``SolarCalculator``, or supply times from a service you trust.
 public protocol SunTimes: Sendable {
 
   /// When the sun rises on a day.
