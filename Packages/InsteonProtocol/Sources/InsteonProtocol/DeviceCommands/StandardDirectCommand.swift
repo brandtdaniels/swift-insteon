@@ -37,12 +37,13 @@ public enum StandardDirectCommand: Hashable, Sendable {
   /// controller of a device that's waiting to respond, and a responder to a controller that's
   /// already in linking mode, such as a modem started with
   /// ``SerialCommand/startAllLinking(mode:group:)``. Devices with only one group ignore `group`.
-  /// i2cs devices expect it in an extended message with a checksum.
+  /// i2cs devices expect it in an extended message with a checksum. i1 devices don't accept it,
+  /// so they're linked with their SET button.
   case enterLinkingMode(group: AllLinkGroup)
 
   /// Puts the device into unlinking mode for `group` (cmd1 `0x0A`).
   ///
-  /// Devices with only one group ignore `group`.
+  /// Devices with only one group ignore `group`. i1 devices don't accept it.
   case enterUnlinkingMode(group: AllLinkGroup)
 
   /// Requests the device's INSTEON engine version (cmd1 `0x0D`).
@@ -268,18 +269,18 @@ extension StandardDirectCommand {
   /// The earliest engine on which every device accepts the command, or `nil` when that
   /// depends on the product.
   ///
-  /// Every device accepts the base commands, such as on, off, ping and linking. The i2 engine
-  /// adds exit linking mode, the operating flags and status request variants `0x01` through
-  /// `0x04`, which some i1 devices also accept. What a variant or flag reports still depends on
+  /// Every device accepts the base commands, such as on, off, ping and the ALL-Link group
+  /// commands. The i2 engine adds remote linking, the operating flags and status request
+  /// variants `0x01` through `0x04`, which some i1 devices also accept. What a variant or flag reports still depends on
   /// the product. Other commands, such as ``StandardDirectCommand/beep`` and the ramp rate
   /// commands, are specific to certain products and firmware versions; look those up in a
   /// product database.
   public var minimumEngine: InsteonEngine? {
 
     switch self {
-    case .assignToAllLinkGroup, .deleteFromAllLinkGroup, .enterLinkingMode, .enterUnlinkingMode,
-         .getEngineVersion, .ping, .idRequest, .on, .fastOn, .off, .fastOff, .brightenOneStep,
-         .dimOneStep, .startManualChange, .stopManualChange:
+    case .assignToAllLinkGroup, .deleteFromAllLinkGroup, .getEngineVersion, .ping, .idRequest, .on,
+         .fastOn, .off, .fastOff, .brightenOneStep, .dimOneStep, .startManualChange,
+         .stopManualChange:
       .i1
     case let .statusRequest(variant):
       switch variant {
@@ -287,7 +288,8 @@ extension StandardDirectCommand {
       case 0x01...0x04: .i2
       default: nil
       }
-    case .exitLinkingMode, .getOperatingFlags, .setOperatingFlags:
+    case .exitLinkingMode, .enterLinkingMode, .enterUnlinkingMode, .getOperatingFlags,
+         .setOperatingFlags:
       .i2
     case .productDataRequest, .instantChange, .remoteSetButtonTap, .onAtRampRate, .offAtRampRate,
          .beep:
