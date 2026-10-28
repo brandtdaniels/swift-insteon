@@ -106,6 +106,11 @@ changing the modem's records.
 - ``AllLinkGroupReader``
 - ``AllLinkGroupReading``
 
+### Identifying devices
+
+- ``DeviceIdentifier``
+- ``DeviceIdentification``
+
 ### Modems
 
 - ``LinkingModem``
