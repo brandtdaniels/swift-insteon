@@ -46,7 +46,7 @@ subcategory tells the models apart. HouseLinc's device catalog lists these:
 | 2243 (Hub Pro) | `0x18`, `0x2C`, `0x2D` |
 
 The catalog also lists a Hub as `0x37` without a model number. For any other modem, look the
-category and subcategory up in a device database.
+category and subcategory up in the [Insteon device catalog](https://github.com/brandtdaniels/insteon-device-catalog), which InsteonDeviceCatalog reads.
 
 ### Commands a modem may lack
 
