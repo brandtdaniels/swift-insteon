@@ -1,4 +1,4 @@
-/// A device's INSTEON Device Subcategory (SubCat), which identifies a kind of device within its
+/// A device's Insteon Device Subcategory (SubCat), which identifies a kind of device within its
 /// ``DeviceCategory``.
 ///
 /// Together, the category and subcategory identify a product model, such as a particular

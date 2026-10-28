@@ -1,4 +1,4 @@
-/// The flags byte that follows the addresses in every INSTEON message.
+/// The flags byte that follows the addresses in every Insteon message.
 ///
 /// The byte packs four fields:
 ///
@@ -13,7 +13,7 @@
 /// may repeat up to three times.
 public struct MessageFlags: Hashable, Sendable {
 
-  /// The kind of an INSTEON message, from bits 7–5 of the flags byte.
+  /// The kind of an Insteon message, from bits 7–5 of the flags byte.
   public enum MessageType: UInt8, CaseIterable, Hashable, Sendable {
 
     /// A message addressed to a single device.

@@ -1,6 +1,6 @@
 # InsteonModem
 
-Talk to an INSTEON modem, such as a PowerLinc Modem connected by USB (2413U) or serial cable (2413S).
+Talk to an Insteon modem, such as a PowerLinc Modem connected by USB (2413U) or serial cable (2413S).
 
 ## Supported modems
 
@@ -9,8 +9,8 @@ Talk to an INSTEON modem, such as a PowerLinc Modem connected by USB (2413U) or 
 | 2413U, 2413UH, 2413S, 2413SH | PowerLinc Modem | USB or serial, through `SerialPort` | Supported |
 | 2412U, 2412UH, 2412S, 2412SH | PowerLinc Modem | USB or serial, through `SerialPort` | Supported; commands after `0x73` may be rejected |
 | 2448A7, 2448A7H | USB Adapter | USB, through `SerialPort` | Supported, by radio only; expect X10 and Beep to be rejected |
-| 2245 | Hub 2 | Network, through `HubConnection` in InsteonHubClient | Supported |
-| 2242 | Hub 1 | Network, through `HubConnection` in InsteonHubClient | Expected to work; its buffer format hasn't been verified |
+| 2245 | Hub | Network, through `HubConnection` in InsteonHubClient | Supported |
+| 2242 | Hub | Network, through `HubConnection` in InsteonHubClient | Expected to work; its buffer format hasn't been verified |
 | 2243 | Hub Pro | Network, through `HubConnection` in InsteonHubClient | Expected to work: it's built on the same foundations as the other Hubs, though it hasn't been verified |
 | 2414S | PowerLinc Controller | Serial at 4800 baud, through `SerialPort` | Supported by `PowerLincController`, which speaks IBIOS: standard messages, X10 and version |
 | 2414U | PowerLinc Controller | USB HID | Not supported: it connects through USB HID, not a serial port |

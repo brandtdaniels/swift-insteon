@@ -1,4 +1,4 @@
-/// A standard-length INSTEON message: destination, flags and two command bytes.
+/// A standard-length Insteon message: destination, flags and two command bytes.
 ///
 /// ```swift
 /// let message = StandardMessage(

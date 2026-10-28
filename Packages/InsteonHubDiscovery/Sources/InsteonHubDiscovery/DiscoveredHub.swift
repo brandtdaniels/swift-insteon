@@ -1,10 +1,10 @@
 import InsteonHubClient
 import InsteonProtocol
 
-/// An INSTEON Hub that ``HubDiscovery`` found on the local network, or that
+/// An Insteon Hub that ``HubDiscovery`` found on the local network, or that
 /// ``InsteonConnectLookup`` found listed for it.
 ///
-/// The same Hub found both ways compares unequal when only one knows its INSTEON ID, so merge
+/// The same Hub found both ways compares unequal when only one knows its Insteon ID, so merge
 /// results by ``DiscoveredHub/endpoint``.
 ///
 /// Connect to it with the user name and password printed on the Hub:
@@ -17,7 +17,7 @@ public struct DiscoveredHub: Hashable, Sendable {
   /// Where the Hub answers on the local network.
   public var endpoint: HubEndpoint
 
-  /// The Hub's INSTEON ID, printed on its label, when the way it was found reports one, so a
+  /// The Hub's Insteon ID, printed on its label, when the way it was found reports one, so a
   /// user with several Hubs can tell them apart. ``HubDiscovery`` doesn't;
   /// ``InsteonConnectLookup`` does.
   public var insteonID: InsteonAddress?
@@ -26,7 +26,7 @@ public struct DiscoveredHub: Hashable, Sendable {
   ///
   /// - Parameters:
   ///   - endpoint: Where the Hub answers.
-  ///   - insteonID: The Hub's INSTEON ID, if known. Defaults to `nil`.
+  ///   - insteonID: The Hub's Insteon ID, if known. Defaults to `nil`.
   public init(endpoint: HubEndpoint, insteonID: InsteonAddress? = nil) {
 
     self.endpoint = endpoint

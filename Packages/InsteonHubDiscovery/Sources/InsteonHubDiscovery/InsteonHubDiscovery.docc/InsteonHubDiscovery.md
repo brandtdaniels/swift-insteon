@@ -1,6 +1,6 @@
 # ``InsteonHubDiscovery``
 
-Find INSTEON Hubs on the local network, by asking the network itself or Insteon Connect.
+Find Insteon Hubs on the local network, by asking the network itself or Insteon Connect.
 
 ## Overview
 
@@ -44,7 +44,7 @@ whose subcategory names its model.
 Each Hub also reports its local address to Insteon's servers, and Insteon Connect's Get Info
 page lists the Hubs that reported from the same public IP address within the past 24 hours.
 ``InsteonConnectLookup`` reads that page, the way Insteon's own apps found Hubs. It doesn't
-probe the local network and it gives each Hub's INSTEON ID, which tells several Hubs apart,
+probe the local network and it gives each Hub's Insteon ID, which tells several Hubs apart,
 but it needs the internet, sends the network's public IP address to Insteon, and misses a
 Hub that hasn't reported recently. It's opt-in: nothing in this library calls it for you.
 

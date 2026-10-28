@@ -1,7 +1,7 @@
 /// The identity a modem reports in reply to ``SerialCommand/getModemInfo``.
 public struct ModemInfo: Hashable, Sendable {
 
-  /// The modem's INSTEON address.
+  /// The modem's Insteon address.
   public var address: InsteonAddress
 
   /// The modem's device category.

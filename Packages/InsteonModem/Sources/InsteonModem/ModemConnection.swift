@@ -1,4 +1,4 @@
-/// A byte-level connection to an INSTEON modem, such as a serial port.
+/// A byte-level connection to an Insteon modem, such as a serial port.
 ///
 /// ``Modem`` and ``PowerLincController`` speak their device's protocol over any connection, so
 /// supporting another way of reaching a device only means conforming to this protocol.

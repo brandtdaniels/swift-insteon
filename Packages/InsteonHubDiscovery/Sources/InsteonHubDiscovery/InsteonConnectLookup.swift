@@ -32,7 +32,7 @@ public enum InsteonConnectError: Error, Hashable, Sendable {
 ///
 /// The lookup sends Insteon no credentials, but Insteon sees the network's public IP address,
 /// as it does for any request. The page also lists each Hub's MAC address, network settings
-/// and firmware versions; only the Hub's local address and INSTEON ID are kept. A Hub that
+/// and firmware versions; only the Hub's local address and Insteon ID are kept. A Hub that
 /// hasn't reported recently, or can't reach the internet, isn't listed; power-cycling it
 /// makes it report again.
 ///
@@ -74,7 +74,7 @@ public struct InsteonConnectLookup: Sendable {
 
   /// The Hubs Insteon Connect lists for this network.
   ///
-  /// - Returns: The Hubs in the page's order, each with its local endpoint and INSTEON ID.
+  /// - Returns: The Hubs in the page's order, each with its local endpoint and Insteon ID.
   ///   Empty when the page says it found no Hub.
   /// - Throws: ``InsteonConnectError/unexpectedStatus(_:)`` if the page doesn't load,
   ///   ``InsteonConnectError/unrecognizedPage`` if it can't be read, or the client's error.

@@ -1,10 +1,10 @@
 # Message Format
 
-How an INSTEON message is laid out, byte by byte.
+How an Insteon message is laid out, byte by byte.
 
 ## Overview
 
-A message on the INSTEON network starts with the sender's and recipient's addresses. When you
+A message on the Insteon network starts with the sender's and recipient's addresses. When you
 send through a modem, the modem fills in its own address as the sender, so the messages in
 this package start with the destination.
 
@@ -33,7 +33,7 @@ messages carry configuration and database records too large for cmd2.
 | 3–2 | Hops left | Retransmissions remaining, 0–3 |
 | 1–0 | Max hops | Retransmissions allowed, 0–3 |
 
-INSTEON devices repeat messages they hear to extend range. Each repeat decrements the hops
+Insteon devices repeat messages they hear to extend range. Each repeat decrements the hops
 left; a message is not repeated once it reaches zero, or by the device it's addressed to. A
 message is sent with hops left equal to max hops.
 
@@ -64,14 +64,14 @@ carries the reason in cmd2; read it with ``NAKReason``.
 
 ### Engines
 
-Each device runs an INSTEON engine, which reports through
+Each device runs an Insteon engine, which reports through
 ``StandardDirectCommand/getEngineVersion``. Every engine supports the base commands; the i2
 engine adds more, and the i2cs engine also requires checksums on extended messages. A command's
 `minimumEngine` gives the engine from which every device supports it. See ``InsteonEngine``.
 
 ### Integrity of extended messages
 
-The INSTEON radio layer checks each message, but i2cs devices also verify an extended message's
+The Insteon radio layer checks each message, but i2cs devices also verify an extended message's
 user data before acting on it:
 
 - Most commands use a one-byte checksum in D14 (``ChecksumIntegrity``): the two's complement

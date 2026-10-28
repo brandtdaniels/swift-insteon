@@ -5,7 +5,7 @@ import FoundationNetworking
 
 /// Sends HTTP requests.
 ///
-/// This is the only networking dependency of the INSTEON clients. Use
+/// This is the only networking dependency of the Insteon clients. Use
 /// ``URLSessionHTTPClient`` by default, conform another HTTP stack to it, or supply a stub in
 /// tests. Add cross-cutting behavior, such as authentication, by wrapping a client in a
 /// decorator like ``BasicAuthenticationHTTPClient``.

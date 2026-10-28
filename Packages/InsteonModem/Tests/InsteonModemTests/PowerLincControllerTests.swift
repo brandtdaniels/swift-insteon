@@ -3,7 +3,7 @@ import InsteonModem
 import InsteonProtocol
 import InsteonTestSupport
 
-/// The bytes written come from the worked examples in the INSTEON Developer's Guide, chapter 9.
+/// The bytes written come from the worked examples in the Insteon Developer's Guide, chapter 9.
 /// Like ``ModemTests``, every test runs on a ``TestClock``.
 struct PowerLincControllerTests {
 

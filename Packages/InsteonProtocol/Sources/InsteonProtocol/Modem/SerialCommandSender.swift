@@ -1,6 +1,6 @@
-/// A connection to an INSTEON modem that can send it serial commands.
+/// A connection to an Insteon modem that can send it serial commands.
 ///
-/// Depend on this protocol rather than a specific connection, such as an INSTEON Hub or a
+/// Depend on this protocol rather than a specific connection, such as an Insteon Hub or a
 /// PowerLinc Modem on a serial port, so the connection can be swapped or replaced in tests.
 public protocol SerialCommandSender: Sendable {
 

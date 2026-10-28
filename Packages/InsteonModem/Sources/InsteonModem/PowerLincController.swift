@@ -3,7 +3,7 @@ import InsteonProtocol
 /// Talks to a PowerLinc Controller (2414S) over a ``ModemConnection``, using IBIOS.
 ///
 /// A PowerLinc Controller doesn't take modem commands. Instead it gives the host access to its
-/// memory: an INSTEON message is sent by writing it into the controller's construction buffer
+/// memory: an Insteon message is sent by writing it into the controller's construction buffer
 /// and setting its request-to-send flag. Sending a `SerialCommand` translates the modem
 /// commands the controller can carry, so code written against `SerialCommandSender` works with
 /// it too:
@@ -14,8 +14,8 @@ import InsteonProtocol
 /// | `SerialCommand.sendX10(_:)` | Downloads the X10 byte to `0x0165`, confirms it with Get Checksum, then sets bit 7 of `0x0166` and bit 3 for a command |
 /// | `SerialCommand.getModemInfo` | Get Version, answered with `IBIOSReply.version(_:)` |
 ///
-/// The addresses come from the worked examples in the INSTEON Developer's Guide, chapter 9,
-/// which use the i1 INSTEON engine. Other commands, including extended messages, throw
+/// The addresses come from the worked examples in the Insteon Developer's Guide, chapter 9,
+/// which use the i1 Insteon engine. Other commands, including extended messages, throw
 /// ``PowerLincControllerError/unsupported(_:)``.
 ///
 /// The controller's serial port runs at 4800 baud, and messages from devices arrive through

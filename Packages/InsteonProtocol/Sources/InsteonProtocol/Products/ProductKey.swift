@@ -1,4 +1,4 @@
-/// A device's INSTEON Product Key (IPK), the 3-byte number that identifies its product.
+/// A device's Insteon Product Key (IPK), the 3-byte number that identifies its product.
 ///
 /// The Developer's Guide requires devices made after February 1, 2007 to store their product
 /// key and report it in a Product Data Response, which ``ProductData`` reads. In practice the

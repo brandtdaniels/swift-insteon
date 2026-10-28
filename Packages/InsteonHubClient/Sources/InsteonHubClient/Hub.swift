@@ -1,7 +1,7 @@
 import Foundation
 import InsteonNetworking
 
-/// The local HTTP interface of an INSTEON Hub, model 2245 or 2242.
+/// The local HTTP interface of an Insteon Hub, model 2245 or 2242.
 ///
 /// The Hub passes bytes to its built-in modem and collects the modem's replies in a buffer.
 /// These are the Hub's three requests, with no pacing or retries; to send commands, wrap the

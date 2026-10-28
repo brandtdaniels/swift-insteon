@@ -51,7 +51,7 @@ public enum StandardDirectCommand: Hashable, Sendable {
   /// Devices with only one group ignore `group`. i1 devices don't accept it.
   case enterUnlinkingMode(group: AllLinkGroupNumber)
 
-  /// Requests the device's INSTEON engine version (cmd1 `0x0D`).
+  /// Requests the device's Insteon engine version (cmd1 `0x0D`).
   ///
   /// The acknowledgement's cmd2 identifies the engine; read it with ``InsteonEngine``.
   case getEngineVersion

@@ -4,7 +4,7 @@ Work out when schedules run, in a home's time zone, through daylight saving chan
 
 ## Overview
 
-The INSTEON Hub 2 kept its schedules in Insteon's cloud, and only the Hub 1 ran timers of its
+The 2245 Hub kept its schedules in Insteon's cloud, and only the 2242 Hub ran timers of its
 own, so a schedule today belongs to an app that stays running at home. ``ScheduleCalendar``
 works out when each ``Schedule`` next runs: at a clock time or relative to sunrise or sunset,
 on some days of the week.

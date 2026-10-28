@@ -1,6 +1,6 @@
 /// Turns the bytes a device sends over a serial connection into replies, as they arrive.
 ///
-/// ``ModemReplyParser`` parses the replies of an INSTEON modem, and ``IBIOSReplyParser`` those
+/// ``ModemReplyParser`` parses the replies of an Insteon modem, and ``IBIOSReplyParser`` those
 /// of a device running IBIOS. Feed a parser bytes in any chunk size: it keeps an incomplete reply
 /// until the rest of its bytes arrive.
 public protocol ReplyParser: Sendable {

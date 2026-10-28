@@ -1,10 +1,10 @@
 # Supported Modems
 
-The INSTEON modems ``Modem`` works with, and how they differ.
+The Insteon modems ``Modem`` works with, and how they differ.
 
 ## Overview
 
-``Modem`` speaks the INSTEON modem (IM) serial commands, so it works with every modem that
+``Modem`` speaks the Insteon modem (IM) serial commands, so it works with every modem that
 uses them, whatever the connection:
 
 | Model | Product | Connection | Support |
@@ -14,8 +14,8 @@ uses them, whatever the connection:
 | 2412U, 2412UH | PowerLinc Modem | USB, through ``SerialPort`` | Supported; some commands may be rejected, see <doc:SupportedModems#Commands-a-modem-may-lack> |
 | 2412S, 2412SH | PowerLinc Modem | Serial, through ``SerialPort`` | Supported; some commands may be rejected, see <doc:SupportedModems#Commands-a-modem-may-lack> |
 | 2448A7, 2448A7H | USB Adapter | USB, through ``SerialPort`` | Supported, by radio only; see <doc:SupportedModems#The-USB-Adapter> |
-| 2245 | Hub 2 | Network, through `HubConnection` in InsteonHubClient | Supported |
-| 2242 | Hub 1 | Network, through `HubConnection` in InsteonHubClient | Expected to work: it serves the same local HTTP requests, though its buffer format hasn't been verified |
+| 2245 | Hub | Network, through `HubConnection` in InsteonHubClient | Supported |
+| 2242 | Hub | Network, through `HubConnection` in InsteonHubClient | Expected to work: it serves the same local HTTP requests, though its buffer format hasn't been verified |
 | 2243 | Hub Pro | Network, through `HubConnection` in InsteonHubClient | Expected to work: it's built on the same foundations as the other Hubs and answers Hub discovery, though it hasn't been verified |
 | 2414S | PowerLinc Controller | Serial at 4800 baud, through ``SerialPort`` | Supported by ``PowerLincController`` rather than ``Modem``; see <doc:SupportedModems#The-PowerLinc-Controller> |
 
@@ -29,7 +29,7 @@ These aren't supported:
 
 The reply to `SerialCommand.getModemInfo` carries the modem's device category, subcategory and
 firmware version in a `ModemInfo`. Every modem in the table reports category `0x03`, and the
-subcategory tells the models apart. SmartLabs' HouseLinc device catalog lists these:
+subcategory tells the models apart. HouseLinc's device catalog lists these:
 
 | Model | Subcategories |
 | --- | --- |
@@ -50,7 +50,7 @@ category and subcategory up in a device database.
 
 ### Commands a modem may lack
 
-The INSTEON Developer's Guide defines the IM serial commands `0x60` through `0x73`. The
+The Insteon Developer's Guide defines the IM serial commands `0x60` through `0x73`. The
 commands after those, such as Cancel Cleanup (`0x74`), Read and Write Database
 (`0x75`, `0x76`), Beep (`0x77`), Set Responder Link Data (`0x79`), Set Application Retries
 (`0x7A`) and Set RF Disable Flag (`0x7D`), appear only in Insteon's PLM serial command table,
@@ -67,14 +67,14 @@ throws ``ModemError/rejected(_:)``.
 
 ### The USB Adapter
 
-The USB Adapter (2448A7) sends and receives INSTEON messages by radio only. In Insteon's
+The USB Adapter (2448A7) sends and receives Insteon messages by radio only. In Insteon's
 test log for it, it rejects X10 commands and Beep, so expect ``ModemError/rejected(_:)`` for
 `SerialCommand.sendX10(_:)` and `SerialCommand.beep`.
 
 ### The PowerLinc Controller
 
 The PowerLinc Controller (2414S) runs IBIOS rather than the IM serial commands: the host sends
-an INSTEON message by writing it into the controller's memory and setting a flag.
+an Insteon message by writing it into the controller's memory and setting a flag.
 ``PowerLincController`` does that for standard messages and X10, confirming each write with
 Get Checksum before it sets the flag, since the controller's ACK means only that it received
 the bytes. It also answers
@@ -82,6 +82,6 @@ the bytes. It also answers
 `SerialCommandSender` works with it. It doesn't carry extended messages or the modem's
 ALL-Link database commands.
 
-The memory addresses it uses come from the worked examples in the INSTEON Developer's Guide,
-which use the controller's i1 INSTEON engine. Messages from devices arrive through the SALad
+The memory addresses it uses come from the worked examples in the Insteon Developer's Guide,
+which use the controller's i1 Insteon engine. Messages from devices arrive through the SALad
 program the controller ships with.

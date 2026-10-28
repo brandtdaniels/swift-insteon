@@ -44,7 +44,7 @@ public enum ThermostatReading: UInt8, Hashable, Sendable, CaseIterable {
   /// the thermostat sends the cool setpoint in a second message with cmd1 `0x6A`.
   case setpoint = 0b01
 
-  /// The deadband between the heat and cool setpoints. SmartLabs' Venstar/Totaline adapter
+  /// The deadband between the heat and cool setpoints. Insteon's Venstar/Totaline adapter
   /// doesn't support it.
   case deadband = 0b10
 

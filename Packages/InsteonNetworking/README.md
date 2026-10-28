@@ -1,6 +1,6 @@
 # InsteonNetworking
 
-The HTTP abstraction the INSTEON clients send requests through.
+The HTTP abstraction the Insteon clients send requests through.
 
 - `HTTPClient`: an async protocol for sending a request and getting back `HTTPResponse`
 - `URLSessionHTTPClient`: the default implementation, an adapter over `URLSession`

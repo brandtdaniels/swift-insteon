@@ -1,4 +1,4 @@
-/// Turns the bytes an INSTEON modem sends into ``ModemReply`` values.
+/// Turns the bytes an Insteon modem sends into ``ModemReply`` values.
 ///
 /// The parser keeps any incomplete reply until the rest of its bytes arrive, so feed it bytes
 /// as you receive them, in any chunk size. A NAK byte (`0x15`) where a reply would start is
@@ -71,7 +71,7 @@ public struct ModemReplyParser: ReplyParser, Hashable, Sendable {
 
 }
 
-/// The frames of the INSTEON modem (IM) serial protocol.
+/// The frames of the Insteon modem (IM) serial protocol.
 private enum ModemFraming: Framing {
 
   static let negativeAcknowledgement: ModemReply = .negativeAcknowledgement

@@ -4,7 +4,7 @@ import InsteonProtocol
 /// A catalog of device profiles, for finding what a device is and can do from the identity it
 /// reports.
 ///
-/// The package ships a copy of the INSTEON device catalog, which ``DeviceCatalog/bundled()``
+/// The package ships a copy of the Insteon device catalog, which ``DeviceCatalog/bundled()``
 /// loads. An app can keep a newer copy with ``DeviceCatalogUpdater``, or load one it
 /// downloaded itself with ``DeviceCatalog/init(json:)``.
 ///
@@ -61,7 +61,7 @@ public struct DeviceCatalog: Hashable, Sendable {
 
   }
 
-  /// Reads a catalog from the JSON the INSTEON device catalog publishes as `catalog.json`.
+  /// Reads a catalog from the JSON the Insteon device catalog publishes as `catalog.json`.
   ///
   /// - Parameter json: The catalog's JSON.
   /// - Throws: ``DeviceCatalogError/unsupportedSchemaVersion(_:)`` if the catalog is in a

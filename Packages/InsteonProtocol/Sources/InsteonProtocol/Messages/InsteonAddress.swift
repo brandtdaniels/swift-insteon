@@ -1,6 +1,6 @@
-/// The three-byte address that identifies an INSTEON device.
+/// The three-byte address that identifies an Insteon device.
 ///
-/// Every INSTEON device is assigned a unique address at the factory. It is printed on the
+/// Every Insteon device is assigned a unique address at the factory. It is printed on the
 /// device as three hexadecimal bytes, for example `1A.2B.3C`.
 ///
 /// ```swift

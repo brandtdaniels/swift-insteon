@@ -5,7 +5,7 @@ import InsteonProtocol
 /// a modem: its own information, sending commands and messages, reading the modem's and
 /// devices' ALL-Link databases, and hearing what the modem reports.
 ///
-/// `Modem` from InsteonModem conforms, over a serial port or an INSTEON Hub. Tests can
+/// `Modem` from InsteonModem conforms, over a serial port or an Insteon Hub. Tests can
 /// conform a type that keeps databases in memory.
 public protocol LinkingModem: Sendable {
 

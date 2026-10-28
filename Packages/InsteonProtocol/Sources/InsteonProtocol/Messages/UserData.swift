@@ -1,7 +1,7 @@
 /// The 14 bytes of user data, D1 through D14, carried by an extended-length message.
 ///
 /// User data starts as all zeros. Set individual bytes by their 1-based position, as the
-/// INSTEON documentation numbers them:
+/// Insteon documentation numbers them:
 ///
 /// ```swift
 /// var userData = UserData()

@@ -1,10 +1,10 @@
 # ``InsteonNetworking``
 
-The HTTP abstraction the INSTEON clients send requests through.
+The HTTP abstraction the Insteon clients send requests through.
 
 ## Overview
 
-The INSTEON clients depend on ``HTTPClient`` instead of a particular HTTP stack, so you
+The Insteon clients depend on ``HTTPClient`` instead of a particular HTTP stack, so you
 choose how requests are sent. ``URLSessionHTTPClient`` is the default. Add behavior such as
 authentication by wrapping a client in a decorator:
 

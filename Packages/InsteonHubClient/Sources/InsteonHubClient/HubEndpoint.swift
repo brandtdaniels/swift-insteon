@@ -1,4 +1,4 @@
-/// Where an INSTEON Hub can be reached on the local network.
+/// Where an Insteon Hub can be reached on the local network.
 public struct HubEndpoint: Hashable, Sendable {
 
   /// The port of the local HTTP interface on Hub models 2245 and 2242: `25105`.

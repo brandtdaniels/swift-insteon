@@ -1,13 +1,13 @@
 # ``InsteonProtocol``
 
-The INSTEON protocol as value types: messages for devices, and the serial commands that carry
+The Insteon protocol as value types: messages for devices, and the serial commands that carry
 them through a modem.
 
 ## Overview
 
-INSTEON devices talk to each other over the power line and RF using short messages. A host,
-such as your app, reaches them through an INSTEON modem, like a PowerLinc Modem or the modem
-inside an INSTEON Hub, by sending it serial commands. This module models both layers and
+Insteon devices talk to each other over the power line and RF using short messages. A host,
+such as your app, reaches them through an Insteon modem, like a PowerLinc Modem or the modem
+inside an Insteon Hub, by sending it serial commands. This module models both layers and
 encodes them to bytes:
 
 ```swift

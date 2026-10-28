@@ -1,10 +1,10 @@
-/// A device's INSTEON Device Category (DevCat), such as `0x01` for dimmable lighting control.
+/// A device's Insteon Device Category (DevCat), such as `0x01` for dimmable lighting control.
 ///
 /// The category groups devices that share a family of commands: what a direct command means
 /// depends on the category of the device that receives it. Together with the device
 /// subcategory (SubCat), it identifies a kind of device.
 ///
-/// The INSTEON Developer's Guide defines categories `0x00` through `0x16`, each available as a
+/// The Insteon Developer's Guide defines categories `0x00` through `0x16`, each available as a
 /// constant with its ``DeviceCategory/name``, and reserves `0x17` through `0xFE`. Names for
 /// subcategories, which identify products, come from a device database rather than from this
 /// package.
@@ -101,7 +101,7 @@ public struct DeviceCategory: RawRepresentable, Hashable, Sendable {
   /// Unassigned (`0xFF`): devices whose category and subcategory are assigned by software.
   public static let unassigned = DeviceCategory(rawValue: 0xFF)
 
-  /// The category's name in the INSTEON Developer's Guide, or `nil` for a reserved category.
+  /// The category's name in the Insteon Developer's Guide, or `nil` for a reserved category.
   public var name: String? {
 
     switch rawValue {

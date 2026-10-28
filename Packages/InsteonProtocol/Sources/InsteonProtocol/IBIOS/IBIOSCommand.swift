@@ -1,7 +1,7 @@
-/// A serial command a host sends to a device running IBIOS, the INSTEON BIOS, such as a
+/// A serial command a host sends to a device running IBIOS, the Insteon BIOS, such as a
 /// PowerLinc Controller (2414U, 2414S).
 ///
-/// IBIOS gives the host direct access to the device's memory: a host sends an INSTEON message,
+/// IBIOS gives the host direct access to the device's memory: a host sends an Insteon message,
 /// for example, by writing it into memory with ``IBIOSCommand/download(address:data:)`` and
 /// setting a flag with ``IBIOSCommand/mask(address:or:and:)``. Every command starts with
 /// ``SerialCommand/startOfText`` (`0x02`) and its number, and IBIOS echoes it with an ACK

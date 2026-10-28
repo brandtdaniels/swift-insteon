@@ -1,6 +1,6 @@
 # InsteonLinking
 
-Link INSTEON devices to each other and to the modem: by writing the records of each link into the devices' ALL-Link databases, remotely by putting a device into linking mode, or manually with its SET button.
+Link Insteon devices to each other and to the modem: by writing the records of each link into the devices' ALL-Link databases, remotely by putting a device into linking mode, or manually with its SET button.
 
 ## Types
 

@@ -1,10 +1,10 @@
 # ``InsteonHubClient``
 
-Control INSTEON devices through an INSTEON Hub on your local network.
+Control Insteon devices through an Insteon Hub on your local network.
 
 ## Overview
 
-An INSTEON Hub has a built-in INSTEON modem that it exposes through a local HTTP interface. ``HubConnection`` turns that interface into a `ModemConnection`, so a `Modem`
+An Insteon Hub has a built-in Insteon modem that it exposes through a local HTTP interface. ``HubConnection`` turns that interface into a `ModemConnection`, so a `Modem`
 from InsteonModem drives a Hub exactly as it drives a USB or serial PowerLinc Modem, with the
 same pacing, retries and stream of replies.
 
@@ -71,11 +71,11 @@ The Hubs were sold under similar names, so they're identified here by model numb
 
 | Model | Also known as | Support |
 | --- | --- | --- |
-| 2245 | Hub 2 | Supported |
-| 2242 | Hub 1 | Expected to work: it serves the same local HTTP requests on the same port, though its buffer format hasn't been verified |
+| 2245 | Hub | Supported |
+| 2242 | Hub | Expected to work: it serves the same local HTTP requests on the same port, though its buffer format hasn't been verified |
 | 2243 | Hub Pro | Expected to work: it's built on the same foundations and answers Hub discovery, though it hasn't been verified. `InsteonHubPro` covers the requests only it has |
 
-SmartLabs' HouseLinc software drove the 2242 and 2245 the same way, which suggests they share
+HouseLinc drove the 2242 and 2245 the same way, which suggests they share
 their local interface; it didn't drive the 2243. A Hub's modem reports its model through
 `SerialCommand.getModemInfo`: category `0x03` with subcategory `0x33` to `0x36` for the 2245,
 `0x2B` or `0x2E` to `0x32` for the 2242, or `0x18`, `0x2C` or `0x2D` for the 2243.

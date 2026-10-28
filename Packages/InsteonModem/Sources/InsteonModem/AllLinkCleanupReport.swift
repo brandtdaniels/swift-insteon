@@ -16,7 +16,7 @@ public struct AllLinkCleanupReport: Hashable, Sendable {
   public var unacknowledged: [InsteonAddress]
 
   /// Whether the modem sent every member its cleanup. `false` if it stopped partway, which the
-  /// Developer's Guide says is normal when other INSTEON traffic is detected; the members it
+  /// Developer's Guide says is normal when other Insteon traffic is detected; the members it
   /// didn't reach are in neither list.
   public var isComplete: Bool
 
