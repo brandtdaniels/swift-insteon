@@ -104,6 +104,7 @@ what the device is, from a device database.
 - ``TempLincMode``
 - ``ThermostatModeCode``
 - ``ThermostatStatusReport``
+- ``TempLincEvent``
 - ``ThermostatOption``
 
 ### Broadcasts

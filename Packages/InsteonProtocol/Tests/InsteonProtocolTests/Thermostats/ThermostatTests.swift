@@ -91,4 +91,26 @@ struct ThermostatTests {
 
   }
 
+  // The TempLinc's groups: 1 cooling, 2 heating, 3 dehumidifying and 4 humidifying.
+  @Test func readsATempLincsGroupEvents() {
+
+    func event(_ command1: UInt8, group: AllLinkGroupNumber) -> TempLincEvent? {
+
+      TempLincEvent(GroupCommand(controller: thermostat, group: group, command1: command1, command2: 0x00, source: .broadcast))
+
+    }
+
+    #expect(event(0x11, group: 0x01) == .coolingStarted)
+    #expect(event(0x13, group: 0x01) == .coolingStopped)
+    #expect(event(0x11, group: 0x02) == .heatingStarted)
+    #expect(event(0x13, group: 0x02) == .heatingStopped)
+    #expect(event(0x11, group: 0x03) == .dehumidifyingStarted)
+    #expect(event(0x13, group: 0x03) == .dehumidifyingStopped)
+    #expect(event(0x11, group: 0x04) == .humidifyingStarted)
+    #expect(event(0x13, group: 0x04) == .humidifyingStopped)
+    #expect(event(0x11, group: 0xFE) == nil)
+    #expect(event(0x12, group: 0x01) == nil)
+
+  }
+
 }
