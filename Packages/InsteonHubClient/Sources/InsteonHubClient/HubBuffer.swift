@@ -3,7 +3,9 @@ import Foundation
 /// The Hub's buffer of bytes received from its modem, as read with ``Hub/readBuffer()``.
 ///
 /// The Hub keeps the modem's replies in a ring buffer: new bytes overwrite the oldest once
-/// it fills, and ``HubBuffer/endIndex`` marks where the Hub writes the next byte. Use a
+/// it fills, and ``HubBuffer/endIndex`` marks where the Hub writes the next byte. The Insteon
+/// Hub 2242 Developer's Guide gives its size as 50 bytes, so a burst of replies, such as the
+/// cleanup acknowledgements of a group command to several devices, can wrap it between reads. Use a
 /// ``HubBufferCursor`` to pick out the bytes that are new since the last read.
 public struct HubBuffer: Hashable, Sendable {
 

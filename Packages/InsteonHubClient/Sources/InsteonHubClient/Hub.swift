@@ -65,6 +65,19 @@ public struct Hub: Sendable {
 
   }
 
+  /// Sends a command a 2242 Hub runs itself, in its short form.
+  ///
+  /// The Hub's modem echoes the serial command it sends for it into the buffer, such as
+  /// `02 61 01 11 01 06` for On to group 1, and devices' cleanup acknowledgements follow.
+  ///
+  /// - Parameter command: The command.
+  /// - Throws: ``HubError`` if the Hub rejected the request, or the HTTP client's error.
+  public func send(_ command: HubShortCommand) async throws {
+
+    _ = try await perform(.shortCommand(command))
+
+  }
+
   /// Reads the buffer of bytes the modem has sent back.
   ///
   /// - Returns: The Hub's buffer.

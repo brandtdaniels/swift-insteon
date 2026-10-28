@@ -40,6 +40,28 @@ struct HubTests {
 
   }
 
+  // The Insteon Hub 2242 Developer's Guide's examples: the command in hex, the group in decimal.
+  @Test func sendsShortCommandsWithTheGroupInDecimal() async throws {
+
+    let stub = StubHTTPClient()
+    let hub = Hub(endpoint: endpoint, httpClient: stub)
+
+    try await hub.send(.groupCommand(command1: 0x11, group: 0x01))
+    try await hub.send(.groupCommand(command1: 0x13, group: 182))
+    try await hub.send(.startLinking(group: 0x01))
+    try await hub.send(.startUnlinking(group: 239))
+    try await hub.send(.cancelLinking)
+
+    #expect(await stub.requests.map { $0.url?.absoluteString } == [
+      "http://hub.local:25105/0?1101=I=0",
+      "http://hub.local:25105/0?13182=I=0",
+      "http://hub.local:25105/0?0901=I=0",
+      "http://hub.local:25105/0?0A239=I=0",
+      "http://hub.local:25105/0?08=I=0",
+    ])
+
+  }
+
   @Test func clearsTheBuffer() async throws {
 
     let stub = StubHTTPClient()

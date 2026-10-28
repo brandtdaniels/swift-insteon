@@ -11,6 +11,9 @@ package enum HubRequest {
   /// Passes bytes to the Hub's modem.
   case write([UInt8])
 
+  /// Sends a command in a 2242 Hub's short form.
+  case shortCommand(HubShortCommand)
+
   /// Reads the buffer of bytes the modem has sent back.
   case readBuffer
 
@@ -36,6 +39,7 @@ package enum HubRequest {
 
     switch self {
     case .write: "/3"
+    case .shortCommand: "/0"
     case .readBuffer: "/buffstatus.xml"
     case .clearBuffer, .setWeekday: "/1"
     case .readSlots: "/b.xml"
@@ -51,6 +55,7 @@ package enum HubRequest {
 
     switch self {
     case let .write(bytes): "\(Self.hex(bytes))=I=3"
+    case let .shortCommand(command): "\(command.text)=I=0"
     case .readBuffer: nil
     case .clearBuffer: "XB=M=1"
     case let .readSlots(page): "01=\(page < 10 ? "0" : "")\(page)=F"
