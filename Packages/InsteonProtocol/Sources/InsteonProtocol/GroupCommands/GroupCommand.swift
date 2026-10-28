@@ -64,9 +64,9 @@ public struct GroupCommand: Hashable, Sendable {
   /// Reads a group command from an ALL-Link broadcast or ALL-Link cleanup message.
   ///
   /// - Parameter message: A message the modem received.
-  /// - Returns: `nil` unless the message is a standard ALL-Link broadcast, other than a
-  ///   ``SuccessReport`` or an i2cs device's SET button announcement, cmd1 `0x01` or `0x02`,
-  ///   or a standard ALL-Link cleanup.
+  /// - Returns: `nil` unless the message is a standard ALL-Link cleanup or a standard ALL-Link
+  ///   broadcast. A broadcast that is a ``SuccessReport``, or an i2cs device's SET button
+  ///   announcement (cmd1 `0x01` or `0x02`), also returns `nil`.
   public init?(_ message: ReceivedMessage) {
 
     guard !message.flags.isExtended else {
@@ -80,7 +80,8 @@ public struct GroupCommand: Hashable, Sendable {
       // The guide: the To address holds the group number in its low byte. A Success Report
       // uses the To address for other things, and so does the announcement an i2cs device
       // sends when its SET button is held, which carries its category, subcategory and
-      // firmware there, cmd1 0x01 to link or 0x02 to unlink, and the group in cmd2. The guide
+      // firmware there, cmd1 0x01 to link or 0x02 to unlink, and in cmd2 what product
+      // specifications call either the group or the hardware revision. The guide
       // reserves cmd1 0x00 through 0x10 in ALL-Link messages.
       guard ![SuccessReport.command1, 0x01, 0x02].contains(message.command.command1) else {
 

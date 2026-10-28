@@ -11,24 +11,28 @@
 /// let message = alias.message(to: lamp)
 /// ```
 ///
-/// This sets standard-length substitutes. For an extended substitute, set D4 to `0x01` and
-/// follow with a ``ExtendedDirectCommand/setAllLinkCommandAliasExtendedData`` message.
+/// This type sets standard-length substitutes only. For an extended substitute, build the
+/// ``ExtendedDirectCommand/setAllLinkCommandAlias`` user data yourself with D4 `0x01`, and
+/// follow it with a ``ExtendedDirectCommand/setAllLinkCommandAliasExtendedData`` message.
 public struct AllLinkCommandAlias: Hashable, Sendable {
 
   /// The alias command to replace.
-  public var command: AllLinkCommand
+  public var allLinkCommand: AllLinkCommand
 
   /// The standard direct command to carry out in its place.
   public var substitute: Command
 
   /// Creates an alias.
   ///
+  /// The Developer's Guide says ALL-Link Recall never has a substitute, so a responder may
+  /// ignore one set for ``AllLinkCommand/recall``.
+  ///
   /// - Parameters:
   ///   - command: The alias command to replace.
   ///   - substitute: The standard direct command to carry out in its place.
   public init(_ command: AllLinkCommand, substitute: some StandardCommandConvertible) {
 
-    self.command = command
+    self.allLinkCommand = command
     self.substitute = substitute.command
 
   }
@@ -48,7 +52,7 @@ public struct AllLinkCommandAlias: Hashable, Sendable {
   public var userData: UserData {
 
     var userData = UserData()
-    userData[1] = command.rawValue
+    userData[1] = allLinkCommand.rawValue
     userData[2] = substitute.command1
     userData[3] = substitute.command2
 

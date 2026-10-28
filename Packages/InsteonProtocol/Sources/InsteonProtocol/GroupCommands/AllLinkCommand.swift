@@ -3,9 +3,9 @@
 /// ALL-Link Recall is the one every responder carries out: it returns to the state it saved
 /// when it was linked. The others are alias commands, which a responder ignores unless it has a
 /// substitute direct command for them, either built in or set with
-/// ``AllLinkCommandAlias``. Lighting controls, device categories `0x01` and `0x02`, have the
-/// built-in substitutes in ``AllLinkCommand/lightingSubstitute``, so older controllers use the
-/// aliases as Light On, Light Off and the rest.
+/// ``AllLinkCommandAlias``. Legacy controllers send them as Light On (ALL-Link Recall), Light Off
+/// and the rest, which is why lighting controls, device categories `0x01` and `0x02`, default
+/// to the substitutes in ``AllLinkCommand/lightingSubstitute``.
 ///
 /// A toggle button, or a pair of buttons, sends a high-state command and its low-state partner
 /// for one group: most often ALL-Link Recall for on and ALL-Link Alias 1 Low for off.
@@ -39,14 +39,14 @@ public enum AllLinkCommand: UInt8, Hashable, Sendable, CaseIterable {
   /// ALL-Link Alias 4 High (cmd1 `0x17`). Lighting controls default to Light Start Manual
   /// Change.
   ///
-  /// Some legacy controllers, the ControLinc, SwitchLinc and KeypadLinc V2, put a direction in
-  /// the broadcast's cmd2, `0x01` to brighten and `0x00` to dim, and send no cleanups after it.
+  /// The ControLinc V2, SwitchLinc V2 and KeypadLinc V2 put a direction in the broadcast's
+  /// cmd2, `0x01` to brighten and `0x00` to dim, which the LampLinc V2 also reads, and these
+  /// controllers send no cleanups after it.
   case alias4High = 0x17
 
   /// ALL-Link Alias 4 Low (cmd1 `0x18`). Lighting controls default to Light Stop Manual Change.
   ///
-  /// Some legacy controllers, the ControLinc, SwitchLinc and KeypadLinc V2, send no cleanups
-  /// after it.
+  /// The ControLinc V2, SwitchLinc V2 and KeypadLinc V2 send no cleanups after it.
   case alias4Low = 0x18
 
   /// ALL-Link Alias 5 (cmd1 `0x21`). Lighting controls default to Light Instant Change, which

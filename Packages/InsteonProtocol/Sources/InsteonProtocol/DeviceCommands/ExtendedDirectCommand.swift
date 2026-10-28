@@ -33,8 +33,9 @@ public enum ExtendedDirectCommand: Hashable, Sendable {
   /// Carries the user data of an extended substitute set with
   /// ``ExtendedDirectCommand/setAllLinkCommandAlias`` (cmd1 `0x03`, cmd2 `0x05`).
   ///
-  /// D1 through D14 are the substitute command's user data, so D14 is the integrity byte only
-  /// when the message is sent with ``UnprotectedIntegrity``.
+  /// D1 through D14 are the substitute's user data. The default ``ChecksumIntegrity``
+  /// overwrites D14 with this message's checksum; to send the substitute's D14 as given, use
+  /// ``UnprotectedIntegrity``.
   case setAllLinkCommandAliasExtendedData
 
 }
@@ -73,7 +74,8 @@ extension ExtendedDirectCommand {
   /// The i2 engine adds the get/set, ALL-Link database and trigger commands, which some i1
   /// devices also accept. What a device reads or writes with them is specific to the product,
   /// and only some products accept a ``ExtendedDirectCommand/getSet(variant:)`` variant other
-  /// than `0x00`. Only some products accept the ALL-Link command alias commands.
+  /// than `0x00`. The Developer's Guide defines the ALL-Link command alias commands for every
+  /// device category, but whether a device accepts them depends on the product.
   public var minimumEngine: InsteonEngine? {
 
     switch self {
