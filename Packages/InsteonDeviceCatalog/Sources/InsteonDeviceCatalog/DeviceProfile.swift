@@ -101,6 +101,11 @@ public struct DeviceProfile: Hashable, Sendable {
   /// source states it. A version no entry covers runs an engine the catalog doesn't know.
   public var engines: [DeviceEngine]
 
+  /// Which command set the product uses under each identity and firmware version, where a
+  /// source states it. ``DeviceCatalog/commandSet(category:subcategory:firmwareVersion:)``
+  /// finds the command set a device uses.
+  public var commandSets: [CommandSetEntry]
+
   /// How the product communicates, or `nil` if no source states it.
   public var radio: Radio?
 
@@ -133,6 +138,8 @@ public struct DeviceProfile: Hashable, Sendable {
   ///   - summary: What the product is.
   ///   - identities: The identities the product reports.
   ///   - engines: The engine the product runs under each identity and firmware version.
+  ///   - commandSets: The command set the product uses under each identity and firmware
+  ///     version.
   ///   - radio: How the product communicates.
   ///   - role: The ALL-Link roles the product can take.
   ///   - isBatteryPowered: Whether the product runs on batteries.
@@ -147,6 +154,7 @@ public struct DeviceProfile: Hashable, Sendable {
     summary: String? = nil,
     identities: [DeviceIdentity],
     engines: [DeviceEngine] = [],
+    commandSets: [CommandSetEntry] = [],
     radio: Radio? = nil,
     role: LinkRole? = nil,
     isBatteryPowered: Bool = false,
@@ -162,6 +170,7 @@ public struct DeviceProfile: Hashable, Sendable {
     self.summary = summary
     self.identities = identities
     self.engines = engines
+    self.commandSets = commandSets
     self.radio = radio
     self.role = role
     self.isBatteryPowered = isBatteryPowered
@@ -278,6 +287,7 @@ extension DeviceProfile: Decodable {
     case summary = "description"
     case identities
     case engines
+    case commandSets
     case radio
     case role
     case batteryPowered
@@ -346,6 +356,7 @@ extension DeviceProfile: Decodable {
       summary: try container.decodeIfPresent(String.self, forKey: .summary),
       identities: try container.decode([DeviceIdentity].self, forKey: .identities),
       engines: try (container.decodeIfPresent([EngineEntry].self, forKey: .engines) ?? []).compactMap(\.engine),
+      commandSets: try container.decodeIfPresent([CommandSetEntry].self, forKey: .commandSets) ?? [],
       radio: try container.decodeIfPresent(String.self, forKey: .radio).flatMap(Radio.init(rawValue:)),
       role: try container.decodeIfPresent(String.self, forKey: .role).flatMap(LinkRole.init(rawValue:)),
       isBatteryPowered: try container.decodeIfPresent(Bool.self, forKey: .batteryPowered) ?? false,

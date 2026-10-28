@@ -27,6 +27,9 @@ public struct DeviceCatalog: Hashable, Sendable {
   /// Every profile, in the order they were given.
   public let profiles: [DeviceProfile]
 
+  /// Every command set, in the order they were given.
+  public let commandSets: [CommandSet]
+
   /// The indexes in ``profiles`` of the profiles with an identity for each category and
   /// subcategory.
   private let index: [Key: [Int]]
@@ -41,8 +44,10 @@ public struct DeviceCatalog: Hashable, Sendable {
 
   /// Creates a catalog of profiles.
   ///
-  /// - Parameter profiles: The profiles.
-  public init(profiles: [DeviceProfile]) {
+  /// - Parameters:
+  ///   - profiles: The profiles.
+  ///   - commandSets: The command sets the profiles name. Defaults to none.
+  public init(profiles: [DeviceProfile], commandSets: [CommandSet] = []) {
 
     var index: [Key: [Int]] = [:]
 
@@ -57,6 +62,7 @@ public struct DeviceCatalog: Hashable, Sendable {
     }
 
     self.profiles = profiles
+    self.commandSets = commandSets
     self.index = index
 
   }
@@ -69,7 +75,9 @@ public struct DeviceCatalog: Hashable, Sendable {
   ///   isn't a catalog.
   public init(json: Data) throws {
 
-    self.init(profiles: try JSONDecoder().decode(Contents.self, from: json).devices)
+    let contents = try JSONDecoder().decode(Contents.self, from: json)
+
+    self.init(profiles: contents.devices, commandSets: contents.commandSets)
 
   }
 
@@ -148,6 +156,39 @@ public struct DeviceCatalog: Hashable, Sendable {
 
   }
 
+  /// The command set a device uses, given the identity and firmware version it reported.
+  ///
+  /// - Parameters:
+  ///   - category: The category the device reported.
+  ///   - subcategory: The subcategory the device reported.
+  ///   - firmwareVersion: The firmware version the device reported, if any.
+  /// - Returns: The command set the device's profile names for the identity and version, or
+  ///   `nil` if there's no profile, it names none, or the catalog doesn't have the one it names.
+  public func commandSet(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> CommandSet? {
+
+    guard
+      let profile = profile(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion),
+      let entry = profile.commandSets.first(where: { $0.covers(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion) })
+    else {
+
+      return nil
+
+    }
+
+    return commandSet(id: entry.commandSet)
+
+  }
+
+  /// The command set with an identifier.
+  ///
+  /// - Parameter id: The identifier, such as `"keypadLinc"`.
+  /// - Returns: The command set, or `nil` if the catalog has none with that identifier.
+  public func commandSet(id: CommandSetID) -> CommandSet? {
+
+    commandSets.first { $0.id == id }
+
+  }
+
   /// The profiles a search finds, in catalog order.
   ///
   /// Every word of the search must appear in a profile's model, name, aliases or identities,
@@ -179,10 +220,13 @@ public struct DeviceCatalog: Hashable, Sendable {
 
       case schemaVersion
       case devices
+      case commandSets
 
     }
 
     let devices: [DeviceProfile]
+
+    let commandSets: [CommandSet]
 
     init(from decoder: any Decoder) throws {
 
@@ -196,6 +240,7 @@ public struct DeviceCatalog: Hashable, Sendable {
       }
 
       devices = try container.decode([DeviceProfile].self, forKey: .devices)
+      commandSets = try container.decodeIfPresent([CommandSet].self, forKey: .commandSets) ?? []
 
     }
 

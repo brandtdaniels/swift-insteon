@@ -93,6 +93,40 @@ public struct DeviceEngine: Hashable, Sendable {
 
 }
 
+extension FirmwareSelection: Decodable {
+
+  private enum CodingKeys: String, CodingKey {
+
+    case only
+    case except
+
+  }
+
+  /// Decodes a selection from the catalog's JSON: `{ "only": [...] }` or
+  /// `{ "except": [...] }`.
+  ///
+  /// - Parameter decoder: The decoder to read from.
+  /// - Throws: `DecodingError` if a byte isn't written as `0x` and two hexadecimal digits, or
+  ///   the selection doesn't have exactly one of `only` and `except`.
+  public init(from decoder: any Decoder) throws {
+
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    let only = try container.decodeIfPresent([ProfileByte].self, forKey: .only)
+    let except = try container.decodeIfPresent([ProfileByte].self, forKey: .except)
+
+    switch (only, except) {
+    case let (only?, nil):
+      self = .only(Set(only.map { FirmwareVersion(rawValue: $0.value) }))
+    case let (nil, except?):
+      self = .except(Set(except.map { FirmwareVersion(rawValue: $0.value) }))
+    default:
+      throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "A firmware selection has exactly one of only and except."))
+    }
+
+  }
+
+}
+
 extension DeviceEngine {
 
   private enum CodingKeys: String, CodingKey {
@@ -101,14 +135,6 @@ extension DeviceEngine {
     case category
     case subcategory
     case firmware
-
-  }
-
-  private struct Selection: Decodable {
-
-    let only: [ProfileByte]?
-
-    let except: [ProfileByte]?
 
   }
 
@@ -124,20 +150,7 @@ extension DeviceEngine {
   init?(from decoder: any Decoder) throws {
 
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    var firmware: FirmwareSelection?
-
-    if let selection = try container.decodeIfPresent(Selection.self, forKey: .firmware) {
-
-      switch (selection.only, selection.except) {
-      case let (only?, nil):
-        firmware = .only(Set(only.map { FirmwareVersion(rawValue: $0.value) }))
-      case let (nil, except?):
-        firmware = .except(Set(except.map { FirmwareVersion(rawValue: $0.value) }))
-      default:
-        throw DecodingError.dataCorruptedError(forKey: .firmware, in: container, debugDescription: "A firmware selection has exactly one of only and except.")
-      }
-
-    }
+    let firmware = try container.decodeIfPresent(FirmwareSelection.self, forKey: .firmware)
 
     let category = DeviceCategory(rawValue: try container.decode(ProfileByte.self, forKey: .category).value)
     let subcategory = DeviceSubcategory(rawValue: try container.decode(ProfileByte.self, forKey: .subcategory).value)

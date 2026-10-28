@@ -42,6 +42,12 @@ each device's profile when the device reports its identity, such as when its SET
 held to link it, and from then on reports what the device's group commands mean and when it
 sends a heartbeat.
 
+``DeviceCatalog/commandSet(category:subcategory:firmwareVersion:)`` finds the ``CommandSet`` a
+device uses: its operating flags, read with Get Operating Flags and changed with Set Operating
+Flags, and the values it reads and writes with extended Get and Set, such as a dimmer's ramp
+rate or a keypad's button masks. Many products share a command set, so the catalog describes
+each once.
+
 ``DeviceCatalog/profiles(matching:)`` searches the catalog by model, name, alias or identity,
 such as for an app's list of supported products.
 
@@ -75,3 +81,17 @@ dimming for dimmable lighting control.
 - ``FirmwareSelection``
 - ``ProductModel``
 - ``DeviceEventName``
+
+### Settings
+
+- ``CommandSet``
+- ``CommandSetID``
+- ``CommandSetEntry``
+- ``SettingName``
+- ``OperatingFlag``
+- ``OperatingReading``
+- ``OperatingFlagCommand``
+- ``ExtendedSettings``
+- ``SettingValue``
+- ``SettingWrite``
+- ``SettingWriteError``
