@@ -118,6 +118,37 @@ struct DeviceCatalogTests {
 
   }
 
+  @Test func readsHowSureTheCatalogIsOfAProfile() throws {
+
+    let profile = #"""
+      {
+        "model": "2476SS",
+        "name": "On/Off Switch with Sense",
+        "identities": [
+          { "category": "0x02", "subcategory": "0x15", "verification": { "status": "conflicting", "note": "Two lists." } },
+          { "category": "0x02", "subcategory": "0x16" }
+        ],
+        "engines": [{ "engine": "i2cs", "category": "0x02", "subcategory": "0x15",
+          "verification": { "status": "observed", "note": "A device reported it.", "firmware": ["0x41"] } }],
+        "commandSets": [{ "commandSet": "relay", "category": "0x02", "subcategory": "0x15",
+          "verification": { "status": "inferred", "note": "A similar product." } }],
+        "groups": [{ "number": "0x01", "name": "Load", "role": "both",
+          "verification": { "status": "inferred", "note": "Its manual." } }],
+        "capabilities": [],
+        "sources": ["A"],
+        "verification": { "status": "inferred", "note": "No document names it." }
+      }
+      """#
+    let read = try #require(try DeviceCatalog(json: Self.json(profile)).profiles.first)
+
+    #expect(read.verification == Verification(status: .inferred, note: "No document names it."))
+    #expect(read.identities.map(\.verification.status) == [.conflicting, .documented])
+    #expect(read.engines.first?.verification.firmware == [0x41])
+    #expect(read.commandSets.first?.verification.status == .inferred)
+    #expect(read.groups.first?.verification.status == .inferred)
+
+  }
+
   @Test func searchesModelsNamesAliasesAndIdentities() throws {
 
     let catalog = try DeviceCatalog.bundled()

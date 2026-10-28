@@ -21,6 +21,9 @@ public struct DeviceIdentity: Hashable, Sendable {
   /// Where the variant was sold, when the subcategory tells regions apart, such as `"Europe"`.
   public var region: String?
 
+  /// How sure the catalog is of the identity.
+  public var verification: Verification
+
   /// Creates an identity.
   ///
   /// - Parameters:
@@ -28,12 +31,14 @@ public struct DeviceIdentity: Hashable, Sendable {
   ///   - subcategory: The subcategory the product reports.
   ///   - firmware: The firmware versions the identity covers, or `nil` for every version.
   ///   - region: Where the variant was sold.
-  public init(category: DeviceCategory, subcategory: DeviceSubcategory, firmware: ClosedRange<FirmwareVersion>? = nil, region: String? = nil) {
+  ///   - verification: How sure the catalog is of the identity. Defaults to ``Verification/documented``.
+  public init(category: DeviceCategory, subcategory: DeviceSubcategory, firmware: ClosedRange<FirmwareVersion>? = nil, region: String? = nil, verification: Verification = .documented) {
 
     self.category = category
     self.subcategory = subcategory
     self.firmware = firmware
     self.region = region
+    self.verification = verification
 
   }
 
@@ -81,6 +86,7 @@ extension DeviceIdentity: Decodable {
     case subcategory
     case firmware
     case region
+    case verification
 
   }
 
@@ -118,7 +124,8 @@ extension DeviceIdentity: Decodable {
       category: DeviceCategory(rawValue: try container.decode(ProfileByte.self, forKey: .category).value),
       subcategory: DeviceSubcategory(rawValue: try container.decode(ProfileByte.self, forKey: .subcategory).value),
       firmware: firmware,
-      region: try container.decodeIfPresent(String.self, forKey: .region)
+      region: try container.decodeIfPresent(String.self, forKey: .region),
+      verification: try container.decodeIfPresent(Verification.self, forKey: .verification) ?? .documented
     )
 
   }
