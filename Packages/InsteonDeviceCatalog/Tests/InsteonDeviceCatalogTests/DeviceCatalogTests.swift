@@ -150,7 +150,7 @@ struct DeviceCatalogTests {
     #expect(catalog.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x40)?.model == "1001")
     // Without a firmware version, neither range can be chosen.
     #expect(catalog.profile(category: 0x01, subcategory: 0x20, firmwareVersion: nil) == nil)
-    #expect(catalog.profile(model: "1001")?.capabilities.last == .thermostat(modeValues: .tempLinc, measuresHumidity: true))
+    #expect(catalog.profile(model: "1001")?.capabilities.last == .thermostat(measuresHumidity: true))
 
   }
 
@@ -195,7 +195,7 @@ struct DeviceCatalogTests {
           { "number": "0x01", "name": "Kept", "role": "controller", "linkable": "remotely" },
           { "number": "0x02", "name": "Skipped", "role": "observer" }
         ],
-        "capabilities": [{ "kind": "thermostat", "modeValues": "venstar" }, { "kind": "dimmable" }],
+        "capabilities": [{ "kind": "somethingNewer" }, { "kind": "dimmable" }],
         "sources": ["A"]
       }
       """#

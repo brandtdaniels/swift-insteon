@@ -8,7 +8,7 @@ it reports.
 Every Insteon device reports a category, a subcategory and a firmware version: when it's asked
 to identify itself, when its SET button is pressed, and in some heartbeats. The Insteon device
 catalog turns those into a ``DeviceProfile``: the product's model and name, its ALL-Link
-groups, and its capabilities, such as dimming, a thermostat's mode values, what a sensor means
+groups, and its capabilities, such as dimming, what a sensor means
 by each command it sends, and how often it sends a heartbeat.
 
 So a product is supported by adding its profile to the catalog, rather than by writing code
@@ -44,9 +44,10 @@ sends a heartbeat.
 
 ``DeviceCatalog/commandSet(category:subcategory:firmwareVersion:)`` finds the ``CommandSet`` a
 device uses: its operating flags, read with Get Operating Flags and changed with Set Operating
-Flags, and the values it reads and writes with extended Get and Set, such as a dimmer's ramp
-rate or a keypad's button masks. Many products share a command set, so the catalog describes
-each once.
+Flags, the values it reads and writes with extended Get and Set, such as a dimmer's ramp
+rate or a keypad's button masks, its other standard and extended direct commands, such as a
+thermostat's setpoints, and the direct messages it sends on its own, such as a thermostat's
+reports. Many products share a command set, so the catalog describes each once.
 
 ``DeviceCatalog/profiles(matching:)`` searches the catalog by model, name, alias or identity,
 such as for an app's list of supported products.
@@ -95,3 +96,20 @@ dimming for dimmable lighting control.
 - ``SettingValue``
 - ``SettingWrite``
 - ``SettingWriteError``
+
+### Messages
+
+- ``DeviceStandardCommand``
+- ``DeviceExtendedCommand``
+- ``DeviceExtendedReply``
+- ``DeviceDirectMessage``
+- ``FixedUserDataByte``
+- ``MessageIntegrity``
+- ``MessageField``
+- ``FieldLocation``
+- ``FieldKind``
+- ``FieldUnit``
+- ``FieldEnumeration``
+- ``FieldBit``
+- ``FieldValue``
+- ``FieldError``

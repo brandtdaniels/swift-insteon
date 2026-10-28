@@ -82,21 +82,6 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``GroupCommandFilter``
 - ``SuccessReport``
 
-### Thermostats
-
-- ``ThermostatCommand``
-- ``ThermostatReading``
-- ``ThermostatZone``
-- ``ThermostatModeSetting``
-- ``ThermostatFanSetting``
-- ``ThermostatTemperature``
-- ``ThermostatMode``
-- ``TempLincMode``
-- ``ThermostatModeCode``
-- ``ThermostatStatusReport``
-- ``TempLincEvent``
-- ``ThermostatOption``
-
 ### Broadcasts
 
 - ``Heartbeat``
