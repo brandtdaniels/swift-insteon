@@ -180,6 +180,19 @@ public struct DeviceProfile: Hashable, Sendable {
 
   }
 
+  /// The group the product sends its heartbeat to, or `nil` if it sends none to a group.
+  public var heartbeatGroup: AllLinkGroupNumber? {
+
+    for case let .heartbeat(group, _) in capabilities {
+
+      return group
+
+    }
+
+    return nil
+
+  }
+
   /// The interval between the product's heartbeats, or `nil` if it sends none or its profile
   /// doesn't give the interval.
   public var heartbeatInterval: Duration? {
