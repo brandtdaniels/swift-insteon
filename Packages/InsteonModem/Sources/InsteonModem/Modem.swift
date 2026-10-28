@@ -394,10 +394,42 @@ public actor Modem: SerialCommandSender {
     var records: [AllLinkRecord] = []
     var action = AllLinkRecordAction.findFirst
 
-    while let record = try await find(action, matching: key) {
+    while let record = try await nextRecord(answering: .manageAllLinkRecord(action: action, record: key)) {
 
       records.append(record)
       action = .findNext
+
+    }
+
+    return records
+
+  }
+
+  /// Reads every record in the modem's own ALL-Link database.
+  ///
+  /// The modem reports its records one at a time: Get First ALL-Link Record (`0x69`) starts
+  /// the scan and Get Next ALL-Link Record (`0x6A`) continues it, each answered by an ALL-Link
+  /// Record Response. The Developer's Guide says the modem NAKs Get First when its database is
+  /// empty and Get Next when there are no more records, so a NAK ends the scan rather than
+  /// being sent again.
+  ///
+  /// The scan holds no turn between records, so a command sent between them, such as one that
+  /// changes the database, can leave the modem's place in it somewhere else. Read the database
+  /// when nothing else is changing it.
+  ///
+  /// - Returns: The modem's records, in its order. An empty database returns an empty array.
+  /// - Throws: ``ModemError/timedOut(_:)`` if the modem doesn't answer,
+  ///   ``ModemError/connectionClosed`` if the modem is closed, `CancellationError` if the task
+  ///   is canceled, or the connection's error.
+  public func readAllLinkDatabase() async throws -> [AllLinkRecord] {
+
+    var records: [AllLinkRecord] = []
+    var command = SerialCommand.getFirstAllLinkRecord
+
+    while let record = try await nextRecord(answering: command) {
+
+      records.append(record)
+      command = .getNextAllLinkRecord
 
     }
 
@@ -489,16 +521,17 @@ public actor Modem: SerialCommandSender {
 
   }
 
-  /// Asks the modem for the next record matching a group and address.
+  /// Sends a command that the modem answers with one of its ALL-Link records, such as a search
+  /// or a step of a scan.
   ///
   /// - Returns: The record, or `nil` once the modem NAKs because there are no more.
-  private func find(_ action: AllLinkRecordAction, matching key: AllLinkRecord) async throws -> AllLinkRecord? {
+  private func nextRecord(answering command: SerialCommand) async throws -> AllLinkRecord? {
 
     struct NotFound: Error {}
 
-    let command = SerialCommand.manageAllLinkRecord(action: action, record: key)
+    let number = command.number
     let parameters = command.parameters
-    let timedOut = ModemError.timedOut(.manageAllLinkRecord)
+    let timedOut = ModemError.timedOut(number)
 
     let exchange = Exchange<ModemReply>(
       bytes: command.bytes,
@@ -507,11 +540,11 @@ public actor Modem: SerialCommandSender {
           verdict: { reply in
 
             switch reply {
-            case let .echo(echo) where echo.number == .manageAllLinkRecord && echo.parameters == parameters:
-              // A NAK to a search means there's no matching record.
+            case let .echo(echo) where echo.number == number && echo.parameters == parameters:
+              // A NAK to a search or a scan means there's no record to report.
               return echo.isAccepted ? .accepted : .failed(NotFound())
             case .negativeAcknowledgement:
-              return .rejected(ModemError.rejected(.manageAllLinkRecord))
+              return .rejected(ModemError.rejected(number))
             default:
               return nil
             }
@@ -540,7 +573,7 @@ public actor Modem: SerialCommandSender {
 
       guard case let .allLinkRecord(record) = try await pacer.send([exchange])[0] else {
 
-        preconditionFailure("A search is answered only by an ALL-Link Record Response.")
+        preconditionFailure("A search or a scan is answered only by an ALL-Link Record Response.")
 
       }
 
