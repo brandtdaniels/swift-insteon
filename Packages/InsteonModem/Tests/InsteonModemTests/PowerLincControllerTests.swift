@@ -128,7 +128,7 @@ struct PowerLincControllerTests {
   @Test(arguments: [
     SerialCommand.beep,
     .getFirstAllLinkRecord,
-    .sendExtendedMessage(ExtendedMessage(to: InsteonAddress(0x00, 0x02, 0xAC), command: ExtendedDirectCommand.getSet))
+    .sendExtendedMessage(ExtendedMessage(to: InsteonAddress(0x00, 0x02, 0xAC), command: ExtendedDirectCommand.getSet()))
   ])
   func rejectsCommandsItCantCarry(_ command: SerialCommand) async throws {
 

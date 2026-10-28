@@ -110,7 +110,9 @@ struct ModemReplyParserTests {
       "0279" + "FF1F03" + "15",
       .echo(CommandEcho(number: .setResponderLinkData, parameters: [0xFF, 0x1F, 0x03], isAccepted: false))
     ),
-    ("027A05" + "06", .echo(CommandEcho(number: .setApplicationRetries, parameters: [0x05], isAccepted: true)))
+    ("027A05" + "06", .echo(CommandEcho(number: .setApplicationRetries, parameters: [0x05], isAccepted: true))),
+    ("027D80" + "15", .echo(CommandEcho(number: .setRadio, parameters: [0x80], isAccepted: false))),
+    ("027D01" + "06", .echo(CommandEcho(number: .setRadio, parameters: [0x01], isAccepted: true)))
   ]
 
   @Test(arguments: replies)
@@ -160,7 +162,7 @@ struct ModemReplyParserTests {
     var parser = ModemReplyParser()
     let message = ExtendedMessage(
       to: Self.device,
-      command: ExtendedDirectCommand.getSet,
+      command: ExtendedDirectCommand.getSet(),
       userData: try UserData([0x01])
     )
 

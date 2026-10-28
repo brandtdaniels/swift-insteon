@@ -36,12 +36,14 @@ in a device database.
 
 The INSTEON Developer's Guide defines the IM serial commands `0x60` through `0x73`. The
 commands after those, such as Cancel Cleanup (`0x74`), Read and Write Database
-(`0x75`, `0x76`), Beep (`0x77`), Set Responder Link Data (`0x79`) and Set Application Retries
-(`0x7A`), appear only in Insteon's PLM serial command table, so a modem whose firmware doesn't
-implement one, such as a 2412 PowerLinc Modem, may reject it.
+(`0x75`, `0x76`), Beep (`0x77`), Set Responder Link Data (`0x79`), Set Application Retries
+(`0x7A`) and Set RF Disable Flag (`0x7D`), appear only in Insteon's PLM serial command table,
+so a modem whose firmware doesn't implement one, such as a 2412 PowerLinc Modem, may reject it.
 
 The same table lists Set Status (`0x78`), Set RF Frequency (`0x7B`) and Set Venstar ACKs
-(`0x7C`) without their parameters, so `SerialCommand` doesn't include them.
+(`0x7C`) without their parameters, so `SerialCommand` doesn't include them. It also gives two
+layouts for the reply to Read RF Frequency (`0x7E`) and two sets of LED colors for Set Salad
+Flag (`0x7F`), depending on the product, so those are left out too.
 
 A modem rejects a command it lacks with a NAK, the same answer it gives when it's busy, so
 ``Modem/send(_:)`` sends the command again as its ``RetryPolicy`` allows before it

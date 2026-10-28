@@ -4,7 +4,8 @@ import InsteonProtocol
 struct DeviceCommandTests {
 
   static let extendedDirectCommands: [(ExtendedDirectCommand, Command)] = [
-    (.getSet, Command(command1: 0x2E)),
+    (.getSet(), Command(command1: 0x2E)),
+    (.getSet(variant: 0x02), Command(command1: 0x2E, command2: 0x02)),
     (.readWriteAllLinkDatabase, Command(command1: 0x2F)),
     (.triggerAllLinkGroup, Command(command1: 0x30))
   ]
@@ -33,6 +34,7 @@ struct DeviceCommandTests {
     (.getOperatingFlags(.operatingFlags), Command(command1: 0x1F, command2: 0x00)),
     (.getOperatingFlags(.allLinkDatabaseDelta), Command(command1: 0x1F, command2: 0x01)),
     (.getOperatingFlags(.signalToNoise), Command(command1: 0x1F, command2: 0x02)),
+    (.getOperatingFlags(0x05), Command(command1: 0x1F, command2: 0x05)),
     (.setOperatingFlags(flag: 0x05), Command(command1: 0x20, command2: 0x05)),
     (.instantChange(level: 0x40), Command(command1: 0x21, command2: 0x40)),
     (.remoteSetButtonTap(.one), Command(command1: 0x25, command2: 0x01)),

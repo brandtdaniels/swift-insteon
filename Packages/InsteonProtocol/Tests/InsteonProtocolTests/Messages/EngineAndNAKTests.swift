@@ -22,11 +22,14 @@ struct EngineAndNAKTests {
     (.on(level: 0xFF), .i1),
     (.assignToAllLinkGroup(group: 0x01), .i1),
     (.deleteFromAllLinkGroup(group: 0x01), .i1),
-    (.enterLinkingMode(group: 0x01), .i1),
+    (.enterLinkingMode(group: 0x01), .i2),
+    (.enterUnlinkingMode(group: 0x01), .i2),
     (.statusRequest(variant: 0x00), .i1),
     (.statusRequest(variant: 0x02), .i2),
     (.exitLinkingMode, .i2),
     (.getOperatingFlags(.operatingFlags), .i2),
+    (.getOperatingFlags(.signalToNoise), .i2),
+    (.getOperatingFlags(0x05), nil),
     (.beep, nil),
     (.onAtRampRate(onLevel: 0xF, rampRate: 0xF), nil),
   ]
@@ -38,9 +41,11 @@ struct EngineAndNAKTests {
 
   }
 
-  @Test func extendedCommandsNeedTheI2Engine() {
+  @Test func extendedCommandsKnowTheirMinimumEngine() {
 
-    #expect(ExtendedDirectCommand.getSet.minimumEngine == .i2)
+    #expect(ExtendedDirectCommand.getSet().minimumEngine == .i2)
+    #expect(ExtendedDirectCommand.readWriteAllLinkDatabase.minimumEngine == .i2)
+    #expect(ExtendedDirectCommand.getSet(variant: 0x02).minimumEngine == nil)
     #expect(Command(command1: 0x30).minimumEngine == nil)
 
   }

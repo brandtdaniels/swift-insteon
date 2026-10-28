@@ -30,10 +30,20 @@ public enum StandardDirectCommand: Hashable, Sendable {
   /// Devices also leave linking mode on their own after a timeout.
   case exitLinkingMode
 
-  /// Puts the device into linking mode as a controller of `group` (cmd1 `0x09`).
+  /// Puts the device into linking mode for `group`, as if its SET button were held (cmd1 `0x09`).
+  ///
+  /// Sending it is remote linking, which links a device without anyone pressing its SET
+  /// button. Like the SET button, it doesn't choose the device's role: the device becomes the
+  /// controller of a device that's waiting to respond, and a responder to a controller that's
+  /// already in linking mode, such as a modem started with
+  /// ``SerialCommand/startAllLinking(mode:group:)``. Devices with only one group ignore `group`.
+  /// i2cs devices expect it in an extended message with a checksum. i1 devices don't accept it,
+  /// so they're linked with their SET button.
   case enterLinkingMode(group: AllLinkGroup)
 
   /// Puts the device into unlinking mode for `group` (cmd1 `0x0A`).
+  ///
+  /// Devices with only one group ignore `group`. i1 devices don't accept it.
   case enterUnlinkingMode(group: AllLinkGroup)
 
   /// Requests the device's INSTEON engine version (cmd1 `0x0D`).
@@ -130,17 +140,50 @@ public enum ManualChangeDirection: UInt8, Hashable, Sendable {
 
 }
 
-/// The information requested by ``StandardDirectCommand/getOperatingFlags(_:)``.
-public enum OperatingFlagsRequest: UInt8, Hashable, Sendable {
+/// The information requested by ``StandardDirectCommand/getOperatingFlags(_:)``, sent as cmd2.
+///
+/// The developer guide defines `0x00` through `0x02`. Devices define other requests for their
+/// own data, such as `0x05` and `0x06` for more flags on KeypadLinc and SwitchLinc dimmers;
+/// create those from their byte. What each request returns depends on the product.
+///
+/// ```swift
+/// let moreFlags: OperatingFlagsRequest = 0x05
+/// ```
+public struct OperatingFlagsRequest: RawRepresentable, Hashable, Sendable {
 
-  /// The device's operating flags.
-  case operatingFlags = 0x00
+  /// The request's byte.
+  public let rawValue: UInt8
 
-  /// The device's ALL-Link database delta, which changes whenever the database does.
-  case allLinkDatabaseDelta = 0x01
+  /// Creates a request from its byte.
+  ///
+  /// - Parameter rawValue: The request's byte.
+  public init(rawValue: UInt8) {
 
-  /// The device's measured signal-to-noise value.
-  case signalToNoise = 0x02
+    self.rawValue = rawValue
+
+  }
+
+  /// The device's operating flags (`0x00`).
+  public static let operatingFlags = OperatingFlagsRequest(rawValue: 0x00)
+
+  /// The device's ALL-Link database delta, which changes whenever the database does (`0x01`).
+  public static let allLinkDatabaseDelta = OperatingFlagsRequest(rawValue: 0x01)
+
+  /// The device's measured signal-to-noise value (`0x02`).
+  public static let signalToNoise = OperatingFlagsRequest(rawValue: 0x02)
+
+}
+
+extension OperatingFlagsRequest: ExpressibleByIntegerLiteral {
+
+  /// Creates a request from an integer literal.
+  ///
+  /// - Parameter value: The request's byte.
+  public init(integerLiteral value: UInt8) {
+
+    self.init(rawValue: value)
+
+  }
 
 }
 
@@ -226,18 +269,19 @@ extension StandardDirectCommand {
   /// The earliest engine on which every device accepts the command, or `nil` when that
   /// depends on the product.
   ///
-  /// Every device accepts the base commands, such as on, off, ping and linking. The i2 engine
-  /// adds exit linking mode, the operating flags and status request variants `0x01` through
-  /// `0x04`, which some i1 devices also accept. What a variant or flag reports still depends on
-  /// the product. Other commands, such as ``StandardDirectCommand/beep`` and the ramp rate
-  /// commands, are specific to certain products and firmware versions; look those up in a
-  /// product database.
+  /// Every device accepts the base commands, such as on, off, ping and the ALL-Link group
+  /// commands. The i2 engine adds remote linking, which i1 devices don't accept, along with setting
+  /// operating flags, operating flags requests `0x00` through `0x02` and status request variants
+  /// `0x01` through `0x04`, which some i1 devices also accept. What a request, variant or flag
+  /// reports still depends on the product. Other requests and commands, such as
+  /// ``StandardDirectCommand/beep`` and the ramp rate commands, are specific to certain products
+  /// and firmware versions; look those up in a device database.
   public var minimumEngine: InsteonEngine? {
 
     switch self {
-    case .assignToAllLinkGroup, .deleteFromAllLinkGroup, .enterLinkingMode, .enterUnlinkingMode,
-         .getEngineVersion, .ping, .idRequest, .on, .fastOn, .off, .fastOff, .brightenOneStep,
-         .dimOneStep, .startManualChange, .stopManualChange:
+    case .assignToAllLinkGroup, .deleteFromAllLinkGroup, .getEngineVersion, .ping, .idRequest, .on,
+         .fastOn, .off, .fastOff, .brightenOneStep, .dimOneStep, .startManualChange,
+         .stopManualChange:
       .i1
     case let .statusRequest(variant):
       switch variant {
@@ -245,7 +289,9 @@ extension StandardDirectCommand {
       case 0x01...0x04: .i2
       default: nil
       }
-    case .exitLinkingMode, .getOperatingFlags, .setOperatingFlags:
+    case let .getOperatingFlags(request):
+      request.rawValue <= OperatingFlagsRequest.signalToNoise.rawValue ? .i2 : nil
+    case .exitLinkingMode, .enterLinkingMode, .enterUnlinkingMode, .setOperatingFlags:
       .i2
     case .productDataRequest, .instantChange, .remoteSetButtonTap, .onAtRampRate, .offAtRampRate,
          .beep:

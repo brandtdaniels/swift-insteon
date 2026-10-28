@@ -4,8 +4,12 @@
 /// ``UserData``.
 public enum ExtendedDirectCommand: Hashable, Sendable {
 
-  /// Reads or writes device configuration selected by the user data (cmd1 `0x2E`, cmd2 `0x00`).
-  case getSet
+  /// Reads or writes device configuration selected by the user data (cmd1 `0x2E`).
+  ///
+  /// Most devices expect `variant` `0x00`. Some define others for their own data, such as
+  /// `0x02`, which reads a thermostat's operation information and is sent with
+  /// ``CRCIntegrity``.
+  case getSet(variant: UInt8 = 0x00)
 
   /// Reads or writes records in the device's ALL-Link database (cmd1 `0x2F`, cmd2 `0x00`).
   case readWriteAllLinkDatabase
@@ -28,8 +32,8 @@ extension ExtendedDirectCommand: CommandConvertible {
   public var command: Command {
 
     switch self {
-    case .getSet:
-      Command(command1: 0x2E)
+    case let .getSet(variant):
+      Command(command1: 0x2E, command2: variant)
     case .readWriteAllLinkDatabase:
       Command(command1: 0x2F)
     case .triggerAllLinkGroup:
@@ -44,13 +48,20 @@ extension ExtendedDirectCommand: CommandConvertible {
 
 extension ExtendedDirectCommand {
 
-  /// The earliest engine on which every device accepts the command: ``InsteonEngine/i2``.
+  /// The earliest engine on which every device accepts the command, or `nil` when that
+  /// depends on the product.
   ///
   /// The i2 engine adds all three commands, which some i1 devices also accept. What a device
-  /// reads or writes with them is specific to the product.
+  /// reads or writes with them is specific to the product, and only some products accept a
+  /// ``ExtendedDirectCommand/getSet(variant:)`` variant other than `0x00`.
   public var minimumEngine: InsteonEngine? {
 
-    .i2
+    switch self {
+    case let .getSet(variant):
+      variant == 0x00 ? .i2 : nil
+    case .readWriteAllLinkDatabase, .triggerAllLinkGroup:
+      .i2
+    }
 
   }
 
