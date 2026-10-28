@@ -105,6 +105,41 @@ struct InsteonConnectLookupTests {
 
   }
 
+  @Test func keepsEachHubOnceAndUsesTheDefaultPort() async throws {
+
+    let (lookup, _) = makeLookup(answering: GetInfoPage.page(
+      GetInfoPage.hubBlock(link: "http://10.0.1.10", insteonID: "A0.B1.C2"),
+      GetInfoPage.hubBlock(link: "http://10.0.1.10:25105/", insteonID: "A0.B1.C2")
+    ))
+
+    #expect(try await lookup.hubs().map(\.endpoint) == [HubEndpoint(host: "10.0.1.10")])
+
+  }
+
+  // Other parsers read a leading zero as octal, so 010.0.0.1 could reach 8.0.0.1, a public
+  // address, rather than 10.0.0.1.
+  @Test func ignoresALinkWithALeadingZero() async throws {
+
+    let (lookup, _) = makeLookup(answering: GetInfoPage.page(
+      GetInfoPage.hubBlock(link: "http://010.0.0.1:25105", insteonID: "A0.B1.C2"),
+      GetInfoPage.hubBlock(link: "http://10.0.1.11:25105", insteonID: "1A.2B.3C")
+    ))
+
+    #expect(try await lookup.hubs().map(\.endpoint.host) == ["10.0.1.11"])
+
+  }
+
+  @Test func readsHubsEvenWhenThePageAlsoSaysItFoundNone() async throws {
+
+    let (lookup, _) = makeLookup(answering: GetInfoPage.page(
+      "<div style=\"display: none\">Sorry, cannot find an Insteon Hub on your network.</div>",
+      GetInfoPage.hubBlock(link: "http://10.0.1.10:25105", insteonID: "A0.B1.C2")
+    ))
+
+    #expect(try await lookup.hubs().count == 1)
+
+  }
+
   @Test func reportsAPageItCantRead() async throws {
 
     let (lookup, _) = makeLookup(answering: "<html><body>Please sign in</body></html>")

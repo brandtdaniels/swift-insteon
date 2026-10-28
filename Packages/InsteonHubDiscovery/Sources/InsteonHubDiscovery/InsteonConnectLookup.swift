@@ -56,10 +56,16 @@ public struct InsteonConnectLookup: Sendable {
   ///
   /// - Parameters:
   ///   - httpClient: The client to request the page with. Defaults to a
-  ///     `URLSessionHTTPClient`.
+  ///     `URLSessionHTTPClient`. It must not add credentials, so a
+  ///     `BasicAuthenticationHTTPClient` is refused.
   ///   - timeout: How long to wait for the page. Defaults to
   ///     ``InsteonConnectLookup/defaultTimeout``.
   public init(httpClient: any HTTPClient = URLSessionHTTPClient(), timeout: Duration = InsteonConnectLookup.defaultTimeout) {
+
+    precondition(
+      !(httpClient is BasicAuthenticationHTTPClient),
+      "The lookup must not send the Hub's credentials to Insteon."
+    )
 
     self.httpClient = httpClient
     self.timeout = timeout
@@ -76,7 +82,9 @@ public struct InsteonConnectLookup: Sendable {
 
     var request = URLRequest(url: Self.pageURL)
     request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-    request.timeoutInterval = Self.seconds(timeout)
+    // Cookies would let Insteon link one lookup to the next.
+    request.httpShouldHandleCookies = false
+    request.timeoutInterval = timeout.timeInterval
 
     let response = try await httpClient.send(request)
 
@@ -98,19 +106,14 @@ public struct InsteonConnectLookup: Sendable {
   /// on your network" when there are none.
   ///
   /// Only Hubs at a private address (`10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16`) are
-  /// kept, since the address is where the Hub's password will be sent.
+  /// kept, since the address is where the Hub's password will be sent, and each address is
+  /// kept once. A link without a port is to the Hub's default port.
   ///
   /// - Parameter page: The page's HTML.
   /// - Returns: The Hubs in the page's order.
   /// - Throws: ``InsteonConnectError/unrecognizedPage`` if the page neither lists a Hub nor
   ///   says it found none.
   static func hubs(inPage page: String) throws(InsteonConnectError) -> [DiscoveredHub] {
-
-    if page.range(of: "cannot find an Insteon Hub", options: .caseInsensitive) != nil {
-
-      return []
-
-    }
 
     var hubs: [DiscoveredHub] = []
     var sawLink = false
@@ -120,12 +123,15 @@ public struct InsteonConnectLookup: Sendable {
 
     for (index, line) in lines.enumerated() {
 
-      if let endpoint = endpoint(in: line) {
+      if let link = link(in: line) {
 
         sawLink = true
         current = nil
 
-        if IPv4Subnet(address: endpoint.host, prefixLength: 32)?.isPrivate == true {
+        // The host is rebuilt from the parsed address, so it's the address that was checked.
+        let endpoint = HubEndpoint(host: IPv4Subnet.dottedDecimal(link.address), port: link.port)
+
+        if IPv4Subnet(address: link.address, mask: .max).isPrivate, !hubs.contains(where: { $0.endpoint == endpoint }) {
 
           current = hubs.count
           hubs.append(DiscoveredHub(endpoint: endpoint))
@@ -140,13 +146,19 @@ public struct InsteonConnectLookup: Sendable {
 
     }
 
-    guard sawLink else {
+    if sawLink {
+
+      return hubs
+
+    }
+
+    guard page.range(of: "cannot find an Insteon Hub", options: .caseInsensitive) != nil else {
 
       throw .unrecognizedPage
 
     }
 
-    return hubs
+    return []
 
   }
 
@@ -183,8 +195,8 @@ public struct InsteonConnectLookup: Sendable {
 
   }
 
-  /// A Hub's endpoint from a line that's a link such as `http://10.0.1.10:25105`.
-  private static func endpoint(in line: String) -> HubEndpoint? {
+  /// The address and port of a line that's a link such as `http://10.0.1.10:25105`.
+  private static func link(in line: String) -> (address: UInt32, port: Int)? {
 
     guard line.lowercased().hasPrefix("http://") else {
 
@@ -196,9 +208,9 @@ public struct InsteonConnectLookup: Sendable {
     let parts = authority.split(separator: ":", omittingEmptySubsequences: false)
 
     guard
-      parts.count == 2,
-      IPv4Subnet(address: String(parts[0]), prefixLength: 32) != nil,
-      let port = Int(parts[1]),
+      (1...2).contains(parts.count),
+      let host = IPv4Subnet(address: String(parts[0]), prefixLength: 32),
+      let port = parts.count == 2 ? Int(parts[1]) : HubEndpoint.defaultPort,
       (1...65_535).contains(port)
     else {
 
@@ -206,7 +218,7 @@ public struct InsteonConnectLookup: Sendable {
 
     }
 
-    return HubEndpoint(host: String(parts[0]), port: port)
+    return (host.address, port)
 
   }
 
@@ -222,15 +234,6 @@ public struct InsteonConnectLookup: Sendable {
     }
 
     return label.trimmingCharacters(in: .whitespaces)
-
-  }
-
-  /// A duration in seconds, as `URLRequest` takes it.
-  private static func seconds(_ duration: Duration) -> TimeInterval {
-
-    let (seconds, attoseconds) = duration.components
-
-    return TimeInterval(seconds) + TimeInterval(attoseconds) / 1e18
 
   }
 
