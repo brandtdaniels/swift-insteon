@@ -5,7 +5,7 @@ import InsteonNetworking
 ///
 /// The Hub passes bytes to its built-in modem and collects the modem's replies in a buffer.
 /// These are the Hub's requests, with no pacing or retries; to send commands, wrap the Hub in a
-/// ``HubConnection`` and drive it with a `Modem`, as you would a USB modem. A 2242 Hub also
+/// ``HubConnection`` and drive it with a `Modem`, as you would a USB modem. A Hub 2242 also
 /// runs timers, which ``Hub/setTimer(_:for:)`` and the methods beside it write.
 ///
 /// The Hub requires HTTP basic authentication with the user name and password printed on it.
@@ -65,7 +65,7 @@ public struct Hub: Sendable {
 
   }
 
-  /// Sends a command a 2242 Hub runs itself, in its short form.
+  /// Sends a command a Hub 2242 runs itself, in its short form.
   ///
   /// The Hub's modem echoes the serial command it sends for it into the buffer, such as
   /// `02 61 01 11 01 06` for On to group 1, and devices' cleanup acknowledgements follow.

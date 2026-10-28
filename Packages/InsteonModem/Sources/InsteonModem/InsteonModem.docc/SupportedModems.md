@@ -55,7 +55,7 @@ commands after those, such as Cancel Cleanup (`0x74`), Read and Write Database
 (`0x75`, `0x76`), Beep (`0x77`), Set Responder Link Data (`0x79`), Set Application Retries
 (`0x7A`) and Set RF Disable Flag (`0x7D`), appear only in Insteon's PLM serial command table,
 so a modem whose firmware doesn't implement one, such as a 2412 PowerLinc Modem, may reject it.
-The Insteon Hub 2242 Developer's Guide marks `0x79` through `0x7C` as commands for modems with
+The Insteon Hub Developer's Guide marks `0x79` through `0x7C` as commands for modems with
 a radio only, so a powerline-only modem may reject those too.
 
 Read RF Frequency (`0x7E`), Diagnostics (`0x81`) and Database Commands (`0x82`) come from

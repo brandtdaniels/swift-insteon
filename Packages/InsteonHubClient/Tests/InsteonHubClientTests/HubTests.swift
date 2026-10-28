@@ -40,7 +40,7 @@ struct HubTests {
 
   }
 
-  // The Insteon Hub 2242 Developer's Guide's examples: the command in hex, the group in decimal.
+  // The Insteon Hub Developer's Guide's examples: the command in hex, the group in decimal.
   @Test func sendsShortCommandsWithTheGroupInDecimal() async throws {
 
     let stub = StubHTTPClient()

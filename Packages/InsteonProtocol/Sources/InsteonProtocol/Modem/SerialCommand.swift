@@ -45,7 +45,7 @@ public enum SerialCommand: Hashable, Sendable {
   /// Puts the modem into ALL-Linking mode for a group, with bit 2 of the mode set so the link
   /// uses the data from ``SerialCommand/setResponderLinkData(data1:data2:data3:)``.
   ///
-  /// The Insteon Hub 2242 Developer's Guide says its modem uses that data only with bit 2 set.
+  /// The Insteon Hub Developer's Guide says its modem uses that data only with bit 2 set.
   /// Insteon's command workbook shows other firmware using the data without it, and giving
   /// bit 2 another meaning, so use this form for a modem that needs it.
   ///
@@ -154,7 +154,7 @@ public enum SerialCommand: Hashable, Sendable {
   /// The three bytes become ``AllLinkRecord/data1``, ``AllLinkRecord/data2`` and
   /// ``AllLinkRecord/data3`` of the record ``SerialCommand/startAllLinking(mode:group:)``
   /// creates when the modem is the responder. Insteon's command table describes the data as being for the next
-  /// link, so send this before each link that needs it. The Insteon Hub 2242 Developer's Guide
+  /// link, so send this before each link that needs it. The Insteon Hub Developer's Guide
   /// says its modem uses the data only when linking starts with
   /// ``SerialCommand/startAllLinkingWithLinkData(mode:group:)``.
   ///

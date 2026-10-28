@@ -1,6 +1,6 @@
 import InsteonProtocol
 
-/// A time of day a 2242 Hub's timer fires at, to the minute.
+/// A time of day a Hub 2242's timer fires at, to the minute.
 public struct HubClockTime: Hashable, Sendable {
 
   /// The hour, from 0 through 23.
@@ -51,7 +51,7 @@ public struct HubClockTime: Hashable, Sendable {
 
 }
 
-/// When a 2242 Hub's timer turns its slot on or off.
+/// When a Hub 2242's timer turns its slot on or off.
 public enum HubTimerTime: Hashable, Sendable {
 
   /// At a time of day.
@@ -65,7 +65,7 @@ public enum HubTimerTime: Hashable, Sendable {
 
 }
 
-/// A day of the week, as a 2242 Hub's timers and clock name them.
+/// A day of the week, as a Hub 2242's timers and clock name them.
 public enum HubWeekday: Int, Hashable, Sendable, CaseIterable {
 
   /// Monday.
@@ -91,7 +91,7 @@ public enum HubWeekday: Int, Hashable, Sendable, CaseIterable {
 
 }
 
-/// The days of the week a 2242 Hub's timer runs on.
+/// The days of the week a Hub 2242's timer runs on.
 public struct HubWeekdays: OptionSet, Hashable, Sendable {
 
   /// Every day of the week.
@@ -130,7 +130,7 @@ public struct HubWeekdays: OptionSet, Hashable, Sendable {
 
 }
 
-/// A name a 2242 Hub shows for a slot.
+/// A name a Hub 2242 shows for a slot.
 ///
 /// The Hub's requests separate their fields with `=`, so a name is limited to ASCII letters and
 /// digits. Insteon's Hub app removed the spaces from its names before writing them.
@@ -157,7 +157,7 @@ public struct HubSlotName: RawRepresentable, Hashable, Sendable {
 
 }
 
-/// A timer a 2242 Hub runs for one of its slots: the times it turns the slot on and off, and
+/// A timer a Hub 2242 runs for one of its slots: the times it turns the slot on and off, and
 /// the days it does so.
 ///
 /// The Hub sends the slot's on and off commands, which ``Hub/setCommands(_:for:)`` sets. A
@@ -194,7 +194,7 @@ public struct HubTimer: Hashable, Sendable {
 
 }
 
-/// The commands a 2242 Hub sends when a slot's timer turns it on and off.
+/// The commands a Hub 2242 sends when a slot's timer turns it on and off.
 ///
 /// Each is a serial command for the Hub's modem, such as sending a device a standard message or
 /// sending an ALL-Link group command.

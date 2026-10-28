@@ -1,6 +1,6 @@
 import InsteonProtocol
 
-/// One of the 256 slots in which a 2242 Hub keeps a scene or device it runs timers for.
+/// One of the 256 slots in which a Hub 2242 keeps a scene or device it runs timers for.
 ///
 /// The Hub arranges its slots as 16 pages of 16, and numbers them from 1: slot `n` is index
 /// `(n - 1) % 16 + 1` on page `(n - 1) / 16 + 1`. Each page is one of the Hub's rooms. Timers go
@@ -69,7 +69,7 @@ public struct HubSlot: RawRepresentable, Hashable, Sendable, Comparable {
 
 }
 
-/// What a 2242 Hub reports about a slot's state.
+/// What a Hub 2242 reports about a slot's state.
 public struct HubSlotFlags: OptionSet, Hashable, Sendable {
 
   /// The slot is the active one for its device and group.
@@ -101,7 +101,7 @@ public struct HubSlotFlags: OptionSet, Hashable, Sendable {
 
 }
 
-/// A slot's device and group, and its state, as a 2242 Hub reports them.
+/// A slot's device and group, and its state, as a Hub 2242 reports them.
 public struct HubSlotStatus: Hashable, Sendable {
 
   /// The slot.
