@@ -51,11 +51,15 @@ struct LinkingSession: Sendable {
 
     return try await awaitLink(
       with: device,
+      modemMode: modemMode,
+      group: modemGroup,
       expecting: expectedMode,
       within: linkingTimeout,
       cleanUp: {
 
-        // Exit Linking Mode is accepted as a standard message by every engine that has it.
+        // Insteon's command sheet: every engine that has Exit Linking Mode acts on it as a
+        // standard message, and an i2cs device does so even while it NAKs a modem it isn't
+        // linked to.
         _ = try? await modem.request(StandardMessage(to: device, command: StandardDirectCommand.exitLinkingMode), timeout: timeout)
 
       },
@@ -87,7 +91,7 @@ struct LinkingSession: Sendable {
     within linkingTimeout: Duration
   ) async throws -> AllLinkingCompleted {
 
-    try await awaitLink(with: nil, expecting: expectedMode, within: linkingTimeout, cleanUp: {}) {
+    try await awaitLink(with: nil, modemMode: modemMode, group: group, expecting: expectedMode, within: linkingTimeout, cleanUp: {}) {
 
       try await modem.send(.startAllLinking(mode: modemMode, group: group))
 
@@ -143,11 +147,14 @@ struct LinkingSession: Sendable {
   /// Runs `start`, which puts the modem and the device into their modes, then waits for the
   /// modem to report the link.
   ///
-  /// When the wait fails, the modem is taken out of linking mode and `cleanUp` runs. A
-  /// canceled task can't send anything, so then a task of its own does both, rather than
-  /// leaving the modem open to any device that's linked for 4 minutes.
+  /// When the wait fails, the modem is taken out of linking mode and `cleanUp` runs before the
+  /// error is thrown, so the next session can't start while the modem is still in this one. A
+  /// canceled task can't send anything, so then a task of its own does both while this one
+  /// waits, rather than leaving the modem open to any device that's linked for 4 minutes.
   private func awaitLink(
     with device: InsteonAddress?,
+    modemMode: AllLinkMode,
+    group: AllLinkGroupNumber,
     expecting expectedMode: AllLinkMode,
     within linkingTimeout: Duration,
     cleanUp: @escaping @Sendable () async -> Void,
@@ -161,7 +168,11 @@ struct LinkingSession: Sendable {
 
       try await start()
 
-      return try await firstLink(in: replies, with: device, expecting: expectedMode, within: linkingTimeout)
+      // The guide says Start ALL-Linking assigns the group the modem reports. That's the
+      // modem's own group only when it controls the link, so a responder's isn't checked.
+      let reportedGroup = modemMode == .responder ? nil : group
+
+      return try await firstLink(in: replies, with: device, group: reportedGroup, expecting: expectedMode, within: linkingTimeout)
 
     } catch {
 
@@ -173,9 +184,9 @@ struct LinkingSession: Sendable {
 
       }
 
-      if error is CancellationError {
+      if Task.isCancelled {
 
-        Task { await restore() }
+        await Task { await restore() }.value
 
       } else {
 
@@ -192,6 +203,7 @@ struct LinkingSession: Sendable {
   private func firstLink(
     in replies: AsyncStream<ModemReply>,
     with device: InsteonAddress?,
+    group: AllLinkGroupNumber?,
     expecting expectedMode: AllLinkMode,
     within linkingTimeout: Duration
   ) async throws -> AllLinkingCompleted {
@@ -211,8 +223,8 @@ struct LinkingSession: Sendable {
           }
 
           // Another device linked while the modem was waiting, or the modem made a different
-          // kind of link than asked, so the caller has to know.
-          guard device == nil || link.address == device, link.mode == expectedMode else {
+          // kind of link or a link in another group than asked, so the caller has to know.
+          guard device == nil || link.address == device, group == nil || link.group == group, link.mode == expectedMode else {
 
             throw LinkingError.unexpectedLink(link)
 

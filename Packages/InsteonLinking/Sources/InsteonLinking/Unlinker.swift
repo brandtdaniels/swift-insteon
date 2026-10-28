@@ -88,8 +88,9 @@ public struct Unlinker: Sendable {
   /// follows.
   ///
   /// The modem reports the removed link. A modem that removes a responder record may not
-  /// report it, so when no report arrives in that role, the modem's own database is checked
-  /// for the record instead. i1 devices can't be unlinked remotely; use
+  /// report it, so in that role the modem's own database is checked for the record before and,
+  /// when no report arrives, after: the unlink succeeds if the record was there and is gone.
+  /// i1 devices can't be unlinked remotely; use
   /// ``Unlinker/unlinkManually(modemRole:group:timeout:)``.
   ///
   /// - Parameters:
@@ -113,6 +114,7 @@ public struct Unlinker: Sendable {
   ) async throws {
 
     let session = LinkingSession(modem: modem, timeout: timeout, clock: clock)
+    let hadResponderRecord = if modemRole == .responder { try await hasResponderRecord(of: device, in: deviceGroup) } else { false }
 
     do {
 
@@ -127,12 +129,9 @@ public struct Unlinker: Sendable {
         within: linkingTimeout
       )
 
-    } catch LinkingError.linkingTimedOut where modemRole == .responder {
+    } catch LinkingError.linkingTimedOut where hadResponderRecord {
 
-      // The modem's responder record links the device in the device's group.
-      let remaining = try await modem.allLinkRecords(group: deviceGroup, device: device)
-
-      guard remaining.contains(where: { !$0.flags.contains(.controller) }) else {
+      guard try await hasResponderRecord(of: device, in: deviceGroup) else {
 
         return
 
@@ -141,6 +140,13 @@ public struct Unlinker: Sendable {
       throw LinkingError.linkingTimedOut
 
     }
+
+  }
+
+  /// Whether the modem has a responder record of `device`, which is kept in the device's group.
+  private func hasResponderRecord(of device: InsteonAddress, in group: AllLinkGroupNumber) async throws -> Bool {
+
+    try await modem.allLinkRecords(group: group, device: device).contains { !$0.flags.contains(.controller) }
 
   }
 

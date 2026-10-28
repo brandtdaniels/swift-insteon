@@ -20,8 +20,8 @@ public enum LinkingError: Error, Hashable, Sendable {
   case linkingTimedOut
 
   /// The modem reported a link other than the one asked for: with another device, which a
-  /// person linked with its SET button while the modem was waiting, or of another kind, such
-  /// as a new link where an unlink was asked for.
+  /// person linked with its SET button while the modem was waiting, in another group, or of
+  /// another kind, such as a new link where an unlink was asked for.
   case unexpectedLink(AllLinkingCompleted)
 
 }

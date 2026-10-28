@@ -57,6 +57,12 @@ actor InMemoryModem: LinkingModem {
   /// Devices that never complete a link.
   var silentDevices: Set<InsteonAddress> = []
 
+  /// Devices whose unlinks the modem carries out without reporting them.
+  var unreportedUnlinks: Set<InsteonAddress> = []
+
+  /// The group the modem reports for each device's links, when it isn't the modem's group.
+  var reportedGroups: [InsteonAddress: AllLinkGroupNumber] = [:]
+
   /// The mode the modem is in, if it's linking.
   private var linkingMode: (mode: AllLinkMode, group: AllLinkGroupNumber)?
 
@@ -88,6 +94,18 @@ actor InMemoryModem: LinkingModem {
   func setSilent(_ device: InsteonAddress) {
 
     silentDevices.insert(device)
+
+  }
+
+  func setUnlinkUnreported(_ device: InsteonAddress) {
+
+    unreportedUnlinks.insert(device)
+
+  }
+
+  func setReportedGroup(_ group: AllLinkGroupNumber, of device: InsteonAddress) {
+
+    reportedGroups[device] = group
 
   }
 
@@ -321,7 +339,23 @@ actor InMemoryModem: LinkingModem {
   /// Reports a link once the modem and a device are both in linking mode.
   private func completeLink() {
 
-    guard let linking = linkingMode, let waiting = waitingDevice, !silentDevices.contains(waiting.address) else {
+    guard let linking = linkingMode, let waiting = waitingDevice else {
+
+      return
+
+    }
+
+    if waiting.isUnlinking, unreportedUnlinks.contains(waiting.address) {
+
+      modemRecords.removeAll { $0.address == waiting.address && $0.group == linking.group && !$0.flags.contains(.controller) }
+      linkingMode = nil
+      waitingDevice = nil
+
+      return
+
+    }
+
+    guard !silentDevices.contains(waiting.address) else {
 
       return
 
@@ -330,7 +364,7 @@ actor InMemoryModem: LinkingModem {
     let linkCode = linking.mode == .delete || waiting.isUnlinking ? 0xFF : linking.mode.rawValue
     let link = AllLinkingCompleted(
       linkCode: linkCode,
-      group: linking.group,
+      group: reportedGroups[waiting.address] ?? linking.group,
       address: waiting.address,
       category: nil,
       subcategory: nil,

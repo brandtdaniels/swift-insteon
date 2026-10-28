@@ -112,6 +112,36 @@ struct RemoteLinkingTests {
 
   }
 
+  @Test func takesTheModemAndDeviceOutOfLinkingModeBeforeACanceledLinkReturns() async throws {
+
+    let modem = InMemoryModem()
+    let links = linker(modem)
+    await modem.setSilent(lamp)
+
+    let link = Task { try await links.linkRemotely(lamp, modemRole: .controller, modemGroup: 0x04, deviceGroup: 0x00) }
+    await clock.waitForSleeper(until: Linker.defaultRemoteLinkingTimeout)
+    link.cancel()
+
+    await #expect(throws: CancellationError.self) { try await link.value }
+    #expect(await modem.linkingSteps.suffix(2) == [.cancel, .device(lamp, Command(command1: 0x08), isExtended: false)])
+
+  }
+
+  @Test func refusesTheDevicesLinkInAnotherGroup() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setReportedGroup(0x05, of: lamp)
+
+    await #expect(throws: LinkingError.self) {
+
+      try await linker(modem).linkRemotely(lamp, modemRole: .controller, modemGroup: 0x04, deviceGroup: 0x00)
+
+    }
+
+    #expect(await modem.linkingSteps.contains(.cancel))
+
+  }
+
   @Test func linksWhicheverDeviceHasItsSetButtonPressed() async throws {
 
     let modem = InMemoryModem()
@@ -188,13 +218,32 @@ struct RemoteLinkingTests {
   @Test func checksTheModemsDatabaseWhenAResponderUnlinkIsntReported() async throws {
 
     let modem = InMemoryModem()
-    await modem.setSilent(lamp)
+    await modem.setUnlinkUnreported(lamp)
+    await modem.setModemRecords([AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 0x01, address: lamp)])
 
     async let unlink: Void = unlinker(modem).unlinkRemotely(lamp, modemRole: .responder, modemGroup: 0x01, deviceGroup: 0x01)
     await clock.waitForSleeper(until: Linker.defaultRemoteLinkingTimeout)
     clock.advance(by: Linker.defaultRemoteLinkingTimeout)
 
     try await unlink
+    #expect(await modem.modemRecords.isEmpty)
+
+  }
+
+  // Without a record to begin with, the database can't show that anything was unlinked.
+  @Test func failsAnUnreportedResponderUnlinkWhenTheModemHadNoRecord() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setSilent(lamp)
+
+    await #expect(throws: LinkingError.linkingTimedOut) {
+
+      async let unlink: Void = unlinker(modem).unlinkRemotely(lamp, modemRole: .responder, modemGroup: 0x01, deviceGroup: 0x01)
+      await clock.waitForSleeper(until: Linker.defaultRemoteLinkingTimeout)
+      clock.advance(by: Linker.defaultRemoteLinkingTimeout)
+      try await unlink
+
+    }
 
   }
 

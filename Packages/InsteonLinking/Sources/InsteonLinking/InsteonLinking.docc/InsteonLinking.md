@@ -47,8 +47,9 @@ that request, which marks it as i2cs. An i1 device can't be linked remotely.
 
 While the modem waits, any device whose SET button is pressed can link to it. So a wait that
 fails takes the modem out of linking mode, and the device too after a remote link, and the
-linker reports a link with a device other than the one asked for, or of another kind, as
-``LinkingError/unexpectedLink(_:)``.
+linker reports a link with a device other than the one asked for, in another group, or of
+another kind, as ``LinkingError/unexpectedLink(_:)``. A canceled link returns once the modem is
+out of linking mode, so the next one can start right away.
 
 ### Which devices accept database writes
 
