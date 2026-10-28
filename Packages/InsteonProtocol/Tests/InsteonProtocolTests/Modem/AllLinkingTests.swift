@@ -11,6 +11,16 @@ struct AllLinkingTests {
 
   }
 
+  // Insteon's command workbook: smart hops set on a controller record.
+  @Test func readsSmartHops() {
+
+    #expect(AllLinkRecordFlags(rawValue: 0xE2).smartHops == 0)
+    #expect(AllLinkRecordFlags(rawValue: 0xEA).smartHops == 1)
+    #expect(AllLinkRecordFlags(rawValue: 0xF2).smartHops == 2)
+    #expect(AllLinkRecordFlags(rawValue: 0xFA).smartHops == 3)
+
+  }
+
   @Test func groupNumberForEveryGroupIsFF() {
 
     #expect(AllLinkGroupNumber.all.rawValue == 0xFF)

@@ -41,6 +41,14 @@ struct MessageFlagsTests {
 
   }
 
+  @Test func findsHopsLeftThatExceedMaxHops() {
+
+    #expect(MessageFlags(rawValue: 0x0F).hasConsistentHops)
+    #expect(MessageFlags(rawValue: 0x0B).hasConsistentHops)
+    #expect(!MessageFlags(rawValue: 0x0D).hasConsistentHops)
+
+  }
+
   @Test func hopsLeftDefaultsToMaxHops() {
 
     #expect(MessageFlags(messageType: .direct, maxHops: .two).hopsLeft == .two)

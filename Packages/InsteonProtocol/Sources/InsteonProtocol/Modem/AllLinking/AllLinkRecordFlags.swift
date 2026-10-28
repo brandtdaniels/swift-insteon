@@ -26,6 +26,22 @@ public struct AllLinkRecordFlags: OptionSet, Hashable, Sendable {
   public static let controller = AllLinkRecordFlags(rawValue: 1 << 6)
 
   /// The record is in use; when clear, the record is available (bit 7).
+  ///
+  /// A deleted record keeps its other bits, so Insteon's command workbook shows an erased
+  /// controller record as `0x62` and an erased responder record as `0x22`, and a never-used
+  /// record at the end of the database as `0x00`.
   public static let inUse = AllLinkRecordFlags(rawValue: 1 << 7)
+
+  /// The number of hops a device that keeps smart hops has learned it needs to reach the
+  /// linked device, from 0 through 3 (bits 3 and 4).
+  ///
+  /// Insteon's command workbook shows these bits set on records of devices with later
+  /// firmware, such as `0xF2`, `0xFA` and `0xEA` for a controller record that's otherwise
+  /// `0xE2`. The Developer's Guide leaves them to the product.
+  public var smartHops: UInt8 {
+
+    (rawValue >> 3) & 0b11
+
+  }
 
 }
