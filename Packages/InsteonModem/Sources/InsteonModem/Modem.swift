@@ -111,7 +111,7 @@ public actor Modem: SerialCommandSender {
   /// Canceling a send stops it: a send waiting for its turn leaves the queue, a send waiting
   /// for its echo stops waiting, and a rejected command isn't sent again. A command that was
   /// written still holds the modem, so the next send waits for the modem to answer it, or for
-  /// the time it was given to answer, before writing. For ``SerialCommand/resetModem`` that's
+  /// the time it was given to answer, before writing. For `SerialCommand.resetModem` that's
   /// 20 seconds longer than the retry policy's answer timeout.
   ///
   /// - Parameter command: The command to send.
