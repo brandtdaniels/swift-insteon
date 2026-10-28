@@ -2,7 +2,7 @@
 ///
 /// Like ``ModemReplyParser``, it keeps any incomplete reply until the rest of its bytes arrive,
 /// reports a NAK byte (`0x15`) where a reply would start as
-/// ``IBIOSReply/negativeAcknowledgement``, and skips other bytes up to the next start byte
+/// ``IBIOSReply/negativeAcknowledgment``, and skips other bytes up to the next start byte
 /// (`0x02`).
 ///
 /// A NAK that follows a command's number, such as `02 48 15`, begins the same way as a reply
@@ -33,7 +33,7 @@ public struct IBIOSReplyParser: ReplyParser, Hashable, Sendable {
   ///   don't start with such a NAK. Those bytes are kept.
   public mutating func finishPendingReply() -> [IBIOSReply] {
 
-    guard let number = reader.takeShortNegativeAcknowledgement(of: IBIOSCommandNumber.init(rawValue:)) else {
+    guard let number = reader.takeShortNegativeAcknowledgment(of: IBIOSCommandNumber.init(rawValue:)) else {
 
       return []
 
@@ -48,7 +48,7 @@ public struct IBIOSReplyParser: ReplyParser, Hashable, Sendable {
 /// The frames of the IBIOS serial protocol.
 private enum IBIOSFraming: Framing {
 
-  static let negativeAcknowledgement: IBIOSReply = .negativeAcknowledgement
+  static let negativeAcknowledgment: IBIOSReply = .negativeAcknowledgment
 
   /// The commands a host sends, which IBIOS echoes with an ACK or NAK.
   static let echoedCommands = Set(IBIOSCommandNumber.allCases.map(\.rawValue))
@@ -76,7 +76,7 @@ private enum IBIOSFraming: Framing {
     // An echo of `0x02`, the number and a NAK can't be told apart from an echo whose first
     // parameter is 0x15 until the full echo would have arrived, unless the next frame starts
     // right after the NAK. Reading on would take that frame's bytes as the echo's.
-    if bytes.count >= 5, bytes[2] == ControlByte.negativeAcknowledgement, bytes[3] == ControlByte.startOfText, frameNumbers.contains(bytes[4]) {
+    if bytes.count >= 5, bytes[2] == ControlByte.negativeAcknowledgment, bytes[3] == ControlByte.startOfText, frameNumbers.contains(bytes[4]) {
 
       return .complete(3)
 
@@ -100,7 +100,7 @@ private enum IBIOSFraming: Framing {
 
     }
 
-    return bytes[2] == ControlByte.negativeAcknowledgement ? .complete(3) : .unrecognized
+    return bytes[2] == ControlByte.negativeAcknowledgment ? .complete(3) : .unrecognized
 
   }
 
@@ -177,7 +177,7 @@ private enum IBIOSFraming: Framing {
 
     if let number = IBIOSCommandNumber(rawValue: frame[1]) {
 
-      let isAccepted = body.last == ControlByte.acknowledgement
+      let isAccepted = body.last == ControlByte.acknowledgment
 
       switch number {
       case .upload where isAccepted:

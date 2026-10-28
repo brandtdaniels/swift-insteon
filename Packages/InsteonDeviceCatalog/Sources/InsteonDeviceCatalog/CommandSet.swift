@@ -20,7 +20,7 @@ import InsteonProtocol
 /// try await modem.request(StandardMessage(to: keypad, command: turnOff))
 /// ```
 ///
-/// An i2cs device expects Set Operating Flags and extended Set as extended messages with a
+/// An i2CS device expects Set Operating Flags and extended Set as extended messages with a
 /// checksum in D14.
 ///
 /// A thermostat's commands and reports work the same way:
@@ -300,20 +300,20 @@ public struct OperatingFlag: Hashable, Sendable {
 
   }
 
-  /// Whether the bit is set in the acknowledgement of ``OperatingFlag/readCommand``.
+  /// Whether the bit is set in the acknowledgment of ``OperatingFlag/readCommand``.
   ///
-  /// - Parameter acknowledgement: The device's acknowledgement.
-  /// - Returns: Whether the bit is 1, or `nil` if the message isn't an acknowledgement of
+  /// - Parameter acknowledgment: The device's acknowledgment.
+  /// - Returns: Whether the bit is 1, or `nil` if the message isn't an acknowledgment of
   ///   Get Operating Flags.
-  public func isSet(in acknowledgement: ReceivedMessage) -> Bool? {
+  public func isSet(in acknowledgment: ReceivedMessage) -> Bool? {
 
-    guard acknowledgement.flags.messageType == .directAcknowledgement, acknowledgement.command.command1 == 0x1F else {
+    guard acknowledgment.flags.messageType == .directAcknowledgment, acknowledgment.command.command1 == 0x1F else {
 
       return nil
 
     }
 
-    return acknowledgement.command.command2 & bit != 0
+    return acknowledgment.command.command2 & bit != 0
 
   }
 
@@ -330,7 +330,7 @@ public struct OperatingFlag: Hashable, Sendable {
 
 }
 
-/// A Get Operating Flags request whose whole reply is a value, such as the link database's
+/// A Get Operating Flags request whose whole reply is a value, such as the ALL-Link database's
 /// delta.
 public struct OperatingReading: Hashable, Sendable {
 

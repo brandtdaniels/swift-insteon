@@ -9,7 +9,7 @@ import InsteonProtocol
 /// responder's link data exactly, where linking with the SET button records whatever state the
 /// responder is in at the time.
 ///
-/// Devices with an i2 or i2cs engine accept database writes. An i2cs device accepts them only
+/// Devices with an i2 or i2CS engine accept database writes. An i2CS device accepts them only
 /// from a modem it's already linked to, and rejects them with `NAKReason.notLinked`
 /// otherwise. i1 devices don't have database writes.
 ///
@@ -72,7 +72,7 @@ public struct Linker: Sendable {
   ///
   /// - Parameter group: The group to link.
   /// - Throws: ``LinkingError`` if a device's database is full or a record doesn't read back
-  ///   as written, or the modem's errors, such as `ModemError.deviceRejected` from an i2cs
+  ///   as written, or the modem's errors, such as `ModemError.deviceRejected` from an i2CS
   ///   device that isn't linked to the modem.
   public func link(_ group: AllLinkGroup) async throws {
 
@@ -82,7 +82,7 @@ public struct Linker: Sendable {
 
     for responder in group.responders {
 
-      // The responder's record goes first, so a responder that rejects it, such as an i2cs
+      // The responder's record goes first, so a responder that rejects it, such as an i2CS
       // device that isn't linked to the modem, doesn't leave the controller with a link to it.
       try await editor.write(
         AllLinkRecord(
@@ -128,7 +128,7 @@ public struct Linker: Sendable {
   /// its group. The device memorizes its current state as its link data, so a dimmable device
   /// should be fully on the first time it links, as the developer guide advises.
   ///
-  /// Devices with an i2 engine are sent the standard Enter Linking Mode, and i2cs devices the
+  /// Devices with an i2 engine are sent the standard Enter Linking Mode, and i2CS devices the
   /// extended one with a checksum. i1 devices can't be linked remotely; use
   /// ``Linker/linkManually(modemRole:group:timeout:)``.
   ///

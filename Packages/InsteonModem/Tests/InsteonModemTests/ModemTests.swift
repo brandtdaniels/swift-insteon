@@ -358,8 +358,8 @@ struct ModemTests {
 
   @Test func ignoresALateEchoOfAnEarlierCommand() async throws {
 
-    let late = SerialCommand.setAcknowledgementByte(0x01)
-    let current = SerialCommand.setAcknowledgementByte(0x02)
+    let late = SerialCommand.setAcknowledgmentByte(0x01)
+    let current = SerialCommand.setAcknowledgmentByte(0x02)
     let connection = ScriptedConnection { _, index in
 
       switch index {
@@ -374,7 +374,7 @@ struct ModemTests {
 
     try await run(modem) {
 
-      await #expect(throws: ModemError.timedOut(.setAcknowledgementByte)) {
+      await #expect(throws: ModemError.timedOut(.setAcknowledgmentByte)) {
 
         async let sent: Void = modem.send(late)
         await clock.waitForSleeper(until: .seconds(2))

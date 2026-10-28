@@ -1,6 +1,6 @@
 import InsteonProtocol
 
-/// Talks to a PowerLinc Controller (2414S) over a ``ModemConnection``, using IBIOS.
+/// Talks to a PowerLinc Controller 2414S over a ``ModemConnection``, using IBIOS.
 ///
 /// A PowerLinc Controller doesn't take modem commands. Instead it gives the host access to its
 /// memory: an Insteon message is sent by writing it into the controller's construction buffer
@@ -305,7 +305,7 @@ public actor PowerLincController: SerialCommandSender {
       }
 
       return checksums.isEmpty || checksums.contains(checksum)
-    case (.negativeAcknowledgement, _):
+    case (.negativeAcknowledgment, _):
       return false
     default:
       return nil

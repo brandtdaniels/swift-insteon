@@ -10,7 +10,7 @@ The Insteon protocol as Swift value types, encoded to the bytes Insteon modems a
 - `MessageFlags`: the flags byte, with typed message type and hop counts
 - `StandardMessage` and `ExtendedMessage`: messages ready for a modem's send command
 - `Command` and `CommandConvertible`: the two command bytes, and the protocol device commands conform to
-- `UserData`, plus `ChecksumIntegrity` and `CRCIntegrity`: extended-message data with the integrity bytes i2cs devices require
+- `UserData`, plus `ChecksumIntegrity` and `CRCIntegrity`: extended-message data with the integrity bytes i2CS devices require
 
 The message format is fixed by the protocol.
 
@@ -61,7 +61,7 @@ No device data is built in, so every app can look devices up in the [Insteon dev
 
 ## PowerLinc Controller
 
-`Sources/InsteonProtocol/IBIOS` covers IBIOS, the serial protocol of the PowerLinc Controller (2414U, 2414S), which gives the host access to the device's memory instead of modem commands:
+`Sources/InsteonProtocol/IBIOS` covers IBIOS, the serial protocol of the PowerLinc Controller 2414U and 2414S, which gives the host access to the device's memory instead of modem commands:
 
 - `IBIOSCommand` and `IBIOSCommandNumber`: download, upload, checksum, mask, simulated event and get version, encoded to bytes with their checksums
 - `IBIOSReplyParser` and `IBIOSReply`: turn the bytes the controller sends into typed replies: echoes with ACK/NAK, memory, event reports, and the Insteon messages and X10 its SALad program reports

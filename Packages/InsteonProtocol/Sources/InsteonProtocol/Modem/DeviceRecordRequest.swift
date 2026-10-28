@@ -15,7 +15,7 @@
 /// Developer's Guide doesn't list it, and a modem without it NAKs the command.
 ///
 /// ```swift
-/// // Change the on level and ramp rate of the switch's responder record for group 7.
+/// // Change the on-level and ramp rate of the switch's responder record for group 7.
 /// let request = DeviceRecordRequest(
 ///   device: kitchenSwitch,
 ///   record: AllLinkRecord(flags: [.inUse], group: 0x07, address: modemAddress, data1: 0x7F, data2: 0x1C),

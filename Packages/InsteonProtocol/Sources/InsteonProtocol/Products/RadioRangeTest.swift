@@ -3,7 +3,7 @@
 ///
 /// The i3 developer specifications describe it: pressing the device's SET button three times
 /// while its Programming Lock is set starts the broadcasts, and a fourth press stops them. The
-/// device sends them by radio only, never over the power line, and they're never hopped; a
+/// device sends them by radio only, never over the powerline, and they're never hopped; a
 /// device that hears one flashes its LED once.
 ///
 /// It has the same cmd1 and cmd2 as a ``PowerlinePhaseTest`` for phase A. Its To address is

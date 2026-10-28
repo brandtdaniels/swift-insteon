@@ -8,7 +8,7 @@ import InsteonProtocol
 /// what was last read from them. Reading a device's database takes a request for every
 /// record, so the cache keeps what it read along with the device's ALL-Link database delta at
 /// the time. The delta is a byte the device changes whenever its database does, and it
-/// arrives in the acknowledgement of a status request. Before handing back a copy, the cache
+/// arrives in the acknowledgment of a status request. Before handing back a copy, the cache
 /// asks for the delta again: one standard message instead of a read. A device whose delta has
 /// changed is read again. ``Linker`` and ``Unlinker`` forget a device's copy whenever they
 /// change its database, so it's read again rather than guessed.
@@ -77,7 +77,7 @@ public actor AllLinkDatabaseCache {
   /// - Parameter device: The device whose database to return.
   /// - Returns: The device's records in its order, ending with the record that marks the end
   ///   of the database, as `Modem.readAllLinkDatabase(of:timeout:)` returns them.
-  /// - Throws: The modem's errors, such as `ModemError.deviceRejected` from an i2cs device
+  /// - Throws: The modem's errors, such as `ModemError.deviceRejected` from an i2CS device
   ///   that isn't linked to the modem.
   public func records(of device: InsteonAddress) async throws -> [AllLinkRecordResponse] {
 
@@ -131,16 +131,16 @@ public actor AllLinkDatabaseCache {
 
   }
 
-  /// The device's ALL-Link database delta, which its acknowledgement of a status request
+  /// The device's ALL-Link database delta, which its acknowledgment of a status request
   /// carries in cmd1.
   private func databaseDelta(of device: InsteonAddress) async throws -> UInt8 {
 
-    let acknowledgement = try await modem.request(
+    let acknowledgment = try await modem.request(
       StandardMessage(to: device, command: StandardDirectCommand.statusRequest()),
       timeout: timeout
     )
 
-    return acknowledgement.command.command1
+    return acknowledgment.command.command1
 
   }
 

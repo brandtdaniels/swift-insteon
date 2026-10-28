@@ -11,7 +11,7 @@ public protocol SerialCommandSender: Sendable {
   ///
   /// - Parameter command: The command to send.
   /// - Throws: An error if the command could not be delivered, or if the connection waits for
-  ///   the modem's acknowledgement and the modem rejects the command.
+  ///   the modem's acknowledgment and the modem rejects the command.
   func send(_ command: SerialCommand) async throws
 
 }

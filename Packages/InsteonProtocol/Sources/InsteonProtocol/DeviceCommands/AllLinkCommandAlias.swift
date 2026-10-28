@@ -60,7 +60,7 @@ public struct AllLinkCommandAlias: Hashable, Sendable {
 
   }
 
-  /// The extended message that sets the alias, sealed with a checksum, which i2cs devices
+  /// The extended message that sets the alias, sealed with a checksum, which i2CS devices
   /// require.
   ///
   /// - Parameter device: The responder to set it on.

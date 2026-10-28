@@ -2,7 +2,7 @@
 /// ``AllLinkDatabaseRequest``.
 ///
 /// The response is an extended ``ExtendedDirectCommand/readWriteAllLinkDatabase`` message with
-/// D2 `0x01`: D3 and D4 hold the record's address and D6 through D13 hold the record. An i2cs
+/// D2 `0x01`: D3 and D4 hold the record's address and D6 through D13 hold the record. An i2CS
 /// device puts a checksum in D14, which ``AllLinkRecordResponse/hasIntactChecksum`` checks;
 /// older devices may not, so a record from one of them can fail the check and still be whole.
 public struct AllLinkRecordResponse: Hashable, Sendable {
@@ -16,8 +16,8 @@ public struct AllLinkRecordResponse: Hashable, Sendable {
   /// The record.
   public var record: AllLinkRecord
 
-  /// Whether D14 holds the checksum of cmd1, cmd2 and D1 through D13, as an i2cs device sends
-  /// it. A record from an i2cs device that fails the check was damaged on the way; read it
+  /// Whether D14 holds the checksum of cmd1, cmd2 and D1 through D13, as an i2CS device sends
+  /// it. A record from an i2CS device that fails the check was damaged on the way; read it
   /// again.
   public var hasIntactChecksum: Bool
 

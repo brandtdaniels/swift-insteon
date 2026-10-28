@@ -5,7 +5,7 @@ them through a modem.
 
 ## Overview
 
-Insteon devices talk to each other over the power line and RF using short messages. A host,
+Insteon devices talk to each other over the powerline and RF using short messages. A host,
 such as your app, reaches them through an Insteon modem, like a PowerLinc Modem or the modem
 inside an Insteon Hub, by sending it serial commands. This module models both layers and
 encodes them to bytes:

@@ -5,7 +5,7 @@ import FoundationNetworking
 import InsteonNetworking
 import InsteonProtocol
 
-/// Adds and removes Insteon devices on a Hub Pro (2243-222), reads its settings, and starts
+/// Adds and removes Insteon devices on a Hub Pro 2243, reads its settings, and starts
 /// its software update, through its local HTTP interface.
 ///
 /// The interface is plain HTTP on port 80, without authentication, and every request is a

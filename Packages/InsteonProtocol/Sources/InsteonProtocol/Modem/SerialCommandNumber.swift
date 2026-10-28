@@ -29,7 +29,7 @@ public enum SerialCommandNumber: UInt8, CaseIterable, Hashable, Sendable {
   case resetModem = 0x67
 
   /// Set Insteon ACK Message Byte (`0x68`).
-  case setAcknowledgementByte = 0x68
+  case setAcknowledgmentByte = 0x68
 
   /// Get First ALL-Link Record (`0x69`).
   case getFirstAllLinkRecord = 0x69
@@ -53,10 +53,10 @@ public enum SerialCommandNumber: UInt8, CaseIterable, Hashable, Sendable {
   case manageAllLinkRecord = 0x6F
 
   /// Set Insteon NAK Message Byte (`0x70`).
-  case setNegativeAcknowledgementByte = 0x70
+  case setNegativeAcknowledgmentByte = 0x70
 
   /// Set Insteon ACK Message Two Bytes (`0x71`).
-  case setAcknowledgementBytes = 0x71
+  case setAcknowledgmentBytes = 0x71
 
   /// RF Sleep (`0x72`).
   case rfSleep = 0x72

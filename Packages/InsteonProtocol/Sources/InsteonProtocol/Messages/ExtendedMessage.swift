@@ -39,7 +39,7 @@ public struct ExtendedMessage: Message {
   ///   - command: The command to send.
   ///   - userData: The user data to send. Its integrity bytes are overwritten by `integrity`.
   ///   - integrity: How to protect the user data. Defaults to ``ChecksumIntegrity``,
-  ///     which i2cs devices require and i1 and i2 devices ignore.
+  ///     which i2CS devices require and i1 and i2 devices ignore.
   ///   - messageType: The kind of message. Defaults to ``ExtendedMessage/MessageType/direct``.
   ///   - maxHops: The number of retransmissions to allow. Defaults to three.
   public init(
@@ -81,7 +81,7 @@ extension ExtendedMessage {
 
   /// The kinds of message that exist at extended length.
   ///
-  /// ALL-Link broadcasts, ALL-Link cleanups and acknowledgements are standard length only.
+  /// ALL-Link broadcasts, ALL-Link cleanups and acknowledgments are standard length only.
   public enum MessageType: Hashable, Sendable, CaseIterable {
 
     /// A message to one device.

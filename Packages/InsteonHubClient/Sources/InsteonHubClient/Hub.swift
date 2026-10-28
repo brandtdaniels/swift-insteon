@@ -1,7 +1,7 @@
 import Foundation
 import InsteonNetworking
 
-/// The local HTTP interface of an Insteon Hub, model 2245 or 2242.
+/// The local HTTP interface of a Hub 2245 or Hub 2242.
 ///
 /// The Hub passes bytes to its built-in modem and collects the modem's replies in a buffer.
 /// These are the Hub's requests, with no pacing or retries; to send commands, wrap the Hub in a
@@ -68,7 +68,7 @@ public struct Hub: Sendable {
   /// Sends a command a Hub 2242 runs itself, in its short form.
   ///
   /// The Hub's modem echoes the serial command it sends for it into the buffer, such as
-  /// `02 61 01 11 01 06` for On to group 1, and devices' cleanup acknowledgements follow.
+  /// `02 61 01 11 01 06` for On to group 1, and devices' cleanup acknowledgments follow.
   ///
   /// - Parameter command: The command.
   /// - Throws: ``HubError`` if the Hub rejected the request, or the HTTP client's error.

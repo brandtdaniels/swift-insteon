@@ -2,7 +2,7 @@ import Foundation
 import InsteonModem
 import InsteonProtocol
 
-/// A `ModemConnection` to the modem inside an Insteon Hub, model 2245 or 2242.
+/// A `ModemConnection` to the modem inside a Hub 2245 or Hub 2242.
 ///
 /// Writes go to the Hub as HTTP requests, and the Hub's reply buffer is polled for the bytes
 /// the modem sends back. Drive it with a `Modem` to get the same pacing, retries and stream of
@@ -264,15 +264,15 @@ public actor HubConnection: ModemConnection {
   /// run on as a single lone NAK, which `Modem` reads as the rejection and retries.
   private static func collapsingNAKRun(_ bytes: [UInt8]) -> [UInt8] {
 
-    let negativeAcknowledgement = ControlByte.negativeAcknowledgement
+    let negativeAcknowledgment = ControlByte.negativeAcknowledgment
 
-    guard bytes.count > 1, bytes.allSatisfy({ $0 == negativeAcknowledgement }) else {
+    guard bytes.count > 1, bytes.allSatisfy({ $0 == negativeAcknowledgment }) else {
 
       return bytes
 
     }
 
-    return [negativeAcknowledgement]
+    return [negativeAcknowledgment]
 
   }
 

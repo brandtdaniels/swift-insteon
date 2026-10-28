@@ -56,7 +56,7 @@ struct AllLinkDatabaseTests {
 
     let response = try #require(AllLinkRecordResponse(message))
 
-    // The guide's example predates i2cs, so it carries no checksum.
+    // The guide's example predates i2CS, so it carries no checksum.
     #expect(response == AllLinkRecordResponse(
       sender: device,
       address: 0x0FFF,
@@ -67,7 +67,7 @@ struct AllLinkDatabaseTests {
 
   }
 
-  // A response logged in Insteon's command workbook, whose D14 is the i2cs checksum.
+  // A response logged in Insteon's command workbook, whose D14 is the i2CS checksum.
   @Test func checksTheChecksumAnI2csDeviceSends() throws {
 
     var data = try UserData([0x00, 0x01, 0x0F, 0xFF, 0x00, 0xE2, 0x01, 0x13, 0xD0, 0x91, 0x05, 0x1C, 0x01])

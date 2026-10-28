@@ -9,6 +9,14 @@ permissions:
   contents: read
 
 jobs:
+  terms:
+    name: Terms
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the docs and comments for ruled-out terms
+        run: python3 Scripts/check-terms.py
+
   macos:
     name: macOS
     runs-on: macos-latest

@@ -175,7 +175,7 @@ public actor Modem: SerialCommandSender {
   /// The modem broadcasts the command to the group, then sends each member a cleanup message,
   /// as Send ALL-Link Command (`0x61`) describes. The modem's turn is held until the modem's
   /// ALL-Link Cleanup Status Report (`0x58`), since the guide says any message sent before then
-  /// cancels the rest of the cleanups. Meanwhile each member's cleanup acknowledgement, cleanup
+  /// cancels the rest of the cleanups. Meanwhile each member's cleanup acknowledgment, cleanup
   /// NAK or ALL-Link Cleanup Failure Report (`0x56`) is collected.
   ///
   /// ```swift
@@ -258,16 +258,16 @@ public actor Modem: SerialCommandSender {
       switch reply {
       case let .echo(echo) where isAcceptedEcho(echo, of: serialCommand):
         hasStarted = true
-      // A cleanup acknowledgement repeats the command, with the group in cmd2.
+      // A cleanup acknowledgment repeats the command, with the group in cmd2.
       case let .messageReceived(message)
         where hasStarted && message.command == Command(command1: command1, command2: group.rawValue)
-          && message.flags.messageType == .allLinkCleanupAcknowledgement:
+          && message.flags.messageType == .allLinkCleanupAcknowledgment:
         acknowledged.append(message.sender)
       // A cleanup NAK carries its reason in cmd2. A device still searching its database
       // answers again once it's done, so that one isn't a failure.
       case let .messageReceived(message)
         where hasStarted && message.command.command1 == command1
-          && message.flags.messageType == .allLinkCleanupNegativeAcknowledgement
+          && message.flags.messageType == .allLinkCleanupNegativeAcknowledgment
           && message.nakReason != .databaseSearchPending:
         unacknowledged.append(message.sender)
       case let .allLinkCleanupFailed(failedGroup, address) where hasStarted && failedGroup == group:
@@ -328,26 +328,26 @@ public actor Modem: SerialCommandSender {
   /// Devices acknowledge only direct messages, so `message` must be one. The request takes the modem's turn until the device answers, so no other command is sent
   /// while the message is crossing the network. The modem echoes the message first, and the
   /// message is sent again as the retry policy allows if the modem is busy. Then the first
-  /// acknowledgement from the device that repeats the message's cmd1 answers the request; a
-  /// status request is answered by the device's first acknowledgement, since it carries other
-  /// data in cmd1. With the modem's monitor mode on, an acknowledgement the device sends
-  /// another controller for the same cmd1 can answer it too. An i2cs device that's still
+  /// acknowledgment from the device that repeats the message's cmd1 answers the request; a
+  /// status request is answered by the device's first acknowledgment, since it carries other
+  /// data in cmd1. With the modem's monitor mode on, an acknowledgment the device sends
+  /// another controller for the same cmd1 can answer it too. An i2CS device that's still
   /// searching its ALL-Link database answers with `NAKReason.databaseSearchPending` first,
   /// and then again once its search finishes, so the request keeps waiting.
   ///
   /// ```swift
   /// let device = InsteonAddress(0x1A, 0x2B, 0x3C)
-  /// let acknowledgement = try await modem.request(
+  /// let acknowledgment = try await modem.request(
   ///   StandardMessage(to: device, command: StandardDirectCommand.getEngineVersion)
   /// )
-  /// let engine = InsteonEngine(rawValue: acknowledgement.command.command2)
+  /// let engine = InsteonEngine(rawValue: acknowledgment.command.command2)
   /// ```
   ///
   /// - Parameters:
   ///   - message: The message to send.
-  ///   - timeout: How long to wait for the modem's echo and the device's acknowledgement
+  ///   - timeout: How long to wait for the modem's echo and the device's acknowledgment
   ///     together. Defaults to ``Modem/defaultRequestTimeout``.
-  /// - Returns: The device's acknowledgement.
+  /// - Returns: The device's acknowledgment.
   /// - Throws: ``ModemError/deviceRejected(_:_:)`` if the device rejects the message,
   ///   ``ModemError/deviceTimedOut(_:)`` if it doesn't answer, ``ModemError/rejected(_:)`` if
   ///   the modem NAKs every attempt, ``ModemError/timedOut(_:)`` if the modem doesn't echo
@@ -378,9 +378,9 @@ public actor Modem: SerialCommandSender {
   ///
   /// - Parameters:
   ///   - message: The message to send.
-  ///   - timeout: How long to wait for the modem's echo and the device's acknowledgement
+  ///   - timeout: How long to wait for the modem's echo and the device's acknowledgment
   ///     together. Defaults to ``Modem/defaultExtendedRequestTimeout``.
-  /// - Returns: The device's acknowledgement.
+  /// - Returns: The device's acknowledgment.
   /// - Throws: ``ModemError/deviceRejected(_:_:)`` if the device rejects the message,
   ///   ``ModemError/deviceTimedOut(_:)`` if it doesn't answer, ``ModemError/rejected(_:)`` if
   ///   the modem NAKs every attempt, ``ModemError/timedOut(_:)`` if the modem doesn't echo
@@ -409,7 +409,7 @@ public actor Modem: SerialCommandSender {
   /// Some commands are answered in two parts: the device acknowledges the message, then sends
   /// the data it asked for in a message of its own, such as an ALL-Link Record Response. The
   /// request holds the modem's turn until that reply arrives. Otherwise this works like the
-  /// request that returns the acknowledgement.
+  /// request that returns the acknowledgment.
   ///
   /// ```swift
   /// let response = try await modem.request(
@@ -421,8 +421,8 @@ public actor Modem: SerialCommandSender {
   /// - Parameters:
   ///   - message: The message to send.
   ///   - reply: Reads the reply from a message, or returns `nil` if the message isn't it. It
-  ///     sees only messages from the device that arrive after its acknowledgement.
-  ///   - timeout: How long to wait for the modem's echo, the device's acknowledgement and its
+  ///     sees only messages from the device that arrive after its acknowledgment.
+  ///   - timeout: How long to wait for the modem's echo, the device's acknowledgment and its
   ///     reply together. Defaults to ``Modem/defaultExtendedRequestTimeout``, which covers the
   ///     guide's retries of the message but not also those of the reply, so a reply that needs
   ///     every retry can arrive late.
@@ -626,7 +626,7 @@ public actor Modem: SerialCommandSender {
   ) async throws -> ReceivedMessage {
 
     let modemExchange = Self.exchange(for: command)
-    var steps = modemExchange.steps + [Self.acknowledgement(from: device, of: command1)]
+    var steps = modemExchange.steps + [Self.acknowledgment(from: device, of: command1)]
 
     if let isReply {
 
@@ -636,7 +636,7 @@ public actor Modem: SerialCommandSender {
 
     let exchange = Exchange(bytes: command.bytes, steps: steps, timeout: timeout, transferTime: modemExchange.transferTime)
 
-    // The last step, the acknowledgement or the reply after it, only accepts a message
+    // The last step, the acknowledgment or the reply after it, only accepts a message
     // received from the device.
     guard case let .messageReceived(answer) = try await pacer.send([exchange])[0] else {
 
@@ -650,9 +650,9 @@ public actor Modem: SerialCommandSender {
 
   /// The step that waits for a device to acknowledge a direct message.
   ///
-  /// The acknowledgement repeats the message's cmd1, except for a status request (`0x19`),
-  /// whose acknowledgement carries the device's ALL-Link database delta in its place.
-  private static func acknowledgement(from device: InsteonAddress, of command1: UInt8) -> AnswerStep<ModemReply> {
+  /// The acknowledgment repeats the message's cmd1, except for a status request (`0x19`),
+  /// whose acknowledgment carries the device's ALL-Link database delta in its place.
+  private static func acknowledgment(from device: InsteonAddress, of command1: UInt8) -> AnswerStep<ModemReply> {
 
     AnswerStep(
       verdict: { reply in
@@ -668,9 +668,9 @@ public actor Modem: SerialCommandSender {
         }
 
         switch message.flags.messageType {
-        case .directAcknowledgement:
+        case .directAcknowledgment:
           return .accepted
-        case .directNegativeAcknowledgement:
+        case .directNegativeAcknowledgment:
           guard let reason = message.nakReason, reason != .databaseSearchPending else {
 
             // The device answers again once its database search finishes.
@@ -736,7 +736,7 @@ public actor Modem: SerialCommandSender {
             case let .echo(echo) where echo.number == number && echo.parameters == parameters:
               // A NAK to a search or a scan means there's no record to report.
               return echo.isAccepted ? .accepted : .failed(NotFound())
-            case .negativeAcknowledgement:
+            case .negativeAcknowledgment:
               return .rejected(ModemError.rejected(number))
             default:
               return nil
@@ -821,7 +821,7 @@ public actor Modem: SerialCommandSender {
              .modemConfiguration where number == .getModemConfiguration,
              .radioStatus where number == .readRadioStatus:
           return true
-        case .negativeAcknowledgement:
+        case .negativeAcknowledgment:
           return false
         default:
           return nil

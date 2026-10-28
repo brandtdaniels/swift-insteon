@@ -29,8 +29,8 @@ public enum StandardDirectCommand: Hashable, Sendable {
   ///
   /// Devices also leave linking mode on their own after a timeout. Insteon's documents disagree
   /// on which devices accept the command: one command table lists it for every i2 device,
-  /// another says only SmartLinc and i2cs products support it, and the Developer's Guide
-  /// reserves cmd1 `0x08`. The i2cs command sheet says an i2cs device always acts on it, as a
+  /// another says only SmartLinc and i2CS products support it, and the Developer's Guide
+  /// reserves cmd1 `0x08`. The i2CS command sheet says an i2CS device always acts on it, as a
   /// standard or extended message, even when it NAKs it because the sender isn't in its
   /// ALL-Link database.
   case exitLinkingMode
@@ -42,7 +42,7 @@ public enum StandardDirectCommand: Hashable, Sendable {
   /// controller of a device that's waiting to respond, and a responder to a controller that's
   /// already in linking mode, such as a modem started with
   /// ``SerialCommand/startAllLinking(mode:group:)``. Devices with only one group ignore `group`.
-  /// i2cs devices expect it in an extended message with a checksum. i1 devices don't accept it,
+  /// i2CS devices expect it in an extended message with a checksum. i1 devices don't accept it,
   /// so they're linked with their SET button.
   case enterLinkingMode(group: AllLinkGroupNumber)
 
@@ -53,7 +53,7 @@ public enum StandardDirectCommand: Hashable, Sendable {
 
   /// Requests the device's Insteon engine version (cmd1 `0x0D`).
   ///
-  /// The acknowledgement's cmd2 identifies the engine; read it with ``InsteonEngine``.
+  /// The acknowledgment's cmd2 identifies the engine; read it with ``InsteonEngine``.
   case getEngineVersion
 
   /// Checks that the device is reachable (cmd1 `0x0F`).
@@ -92,7 +92,7 @@ public enum StandardDirectCommand: Hashable, Sendable {
 
   /// Requests the device's current state (cmd1 `0x19`).
   ///
-  /// For most devices, the acknowledgement's cmd2 is the current level and its cmd1 is the
+  /// For most devices, the acknowledgment's cmd2 is the current level and its cmd1 is the
   /// ALL-Link database delta. Some devices use `variant` to select other status, such as a
   /// second load; most expect `0x00`.
   case statusRequest(variant: UInt8 = 0x00)
@@ -102,7 +102,7 @@ public enum StandardDirectCommand: Hashable, Sendable {
 
   /// Sets or clears one of the device's operating flags (cmd1 `0x20`).
   ///
-  /// `flag` selects the flag and the operation; its meaning varies by device. i2cs devices
+  /// `flag` selects the flag and the operation; its meaning varies by device. i2CS devices
   /// accept it only in an extended message, which carries a checksum, so send it to them with
   /// `ExtendedMessage`.
   case setOperatingFlags(flag: UInt8)

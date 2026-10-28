@@ -28,7 +28,7 @@ actor InMemoryModem: LinkingModem {
   /// Every write to a device's database, in order.
   private(set) var writes: [Write] = []
 
-  /// Devices that reject every request, as an i2cs device does before it's linked to the modem.
+  /// Devices that reject every request, as an i2CS device does before it's linked to the modem.
   var unlinkedDevices: Set<InsteonAddress> = []
 
   /// Devices that acknowledge writes without storing them.
@@ -253,11 +253,11 @@ actor InMemoryModem: LinkingModem {
 
       }
 
-      // A status request's acknowledgement carries the database delta in cmd1.
+      // A status request's acknowledgment carries the database delta in cmd1.
       return ReceivedMessage(
         sender: device,
         destination: address,
-        flags: MessageFlags(messageType: .directAcknowledgement),
+        flags: MessageFlags(messageType: .directAcknowledgment),
         command: Command(command1: deltas[device, default: 0], command2: 0x00)
       )
 
@@ -267,7 +267,7 @@ actor InMemoryModem: LinkingModem {
 
       linkingSteps.append(.device(device, message.command, isExtended: false))
 
-      // An i2cs device rejects a modem it isn't linked to.
+      // An i2CS device rejects a modem it isn't linked to.
       guard !unlinkedDevices.contains(device) else {
 
         throw ModemError.deviceRejected(device, .notLinked)
@@ -296,7 +296,7 @@ actor InMemoryModem: LinkingModem {
     return ReceivedMessage(
       sender: device,
       destination: address,
-      flags: MessageFlags(messageType: .directAcknowledgement),
+      flags: MessageFlags(messageType: .directAcknowledgment),
       command: Command(command1: message.command.command1, command2: command2)
     )
 
@@ -313,7 +313,7 @@ actor InMemoryModem: LinkingModem {
       return ReceivedMessage(
         sender: device,
         destination: address,
-        flags: MessageFlags(messageType: .directAcknowledgement),
+        flags: MessageFlags(messageType: .directAcknowledgment),
         command: message.command
       )
 
@@ -352,7 +352,7 @@ actor InMemoryModem: LinkingModem {
     return ReceivedMessage(
       sender: device,
       destination: address,
-      flags: MessageFlags(messageType: .directAcknowledgement),
+      flags: MessageFlags(messageType: .directAcknowledgment),
       command: message.command
     )
 

@@ -1,6 +1,6 @@
 # InsteonModem
 
-Talk to an Insteon modem, such as a PowerLinc Modem connected by USB (2413U) or serial cable (2413S).
+Talk to an Insteon modem, such as a PowerLinc Modem 2413U connected by USB or 2413S connected by serial cable.
 
 ## Supported modems
 
@@ -22,7 +22,7 @@ The Supported Modems article in the documentation explains each caveat.
 
 - `Modem`: sends serial commands one at a time, waits for the modem to accept each, retries when it's busy, and streams everything it sends back; sends messages to devices and waits for each device to acknowledge them, or for the reply that follows; reads a device's ALL-Link database; conforms to `SerialCommandSender`
 - `ModemConnection`: the byte-level connection `Modem` talks over
-- `PowerLincController`: sends standard messages and X10 through a PowerLinc Controller (2414S) using IBIOS, and streams what it reports; conforms to `SerialCommandSender`
+- `PowerLincController`: sends standard messages and X10 through a PowerLinc Controller 2414S using IBIOS, and streams what it reports; conforms to `SerialCommandSender`
 - `SerialPort`: a `ModemConnection` to a serial or USB modem, on macOS and Linux, at 19200 or 4800 baud
 - `ModemDiscovery`: finds modems on the computer's USB-to-serial adapters, or on serial devices the user picks, by asking each for its modem information, on macOS and Linux
 

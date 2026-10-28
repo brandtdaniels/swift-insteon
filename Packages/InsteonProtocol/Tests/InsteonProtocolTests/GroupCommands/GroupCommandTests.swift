@@ -55,7 +55,7 @@ struct GroupCommandTests {
 
   }
 
-  // The i2cs announcement in the On/Off Module's specification: AA BB CC 01 XX XX CF 01 01.
+  // The i2CS announcement in the On/Off Module's specification: AA BB CC 01 XX XX CF 01 01.
   @Test func doesntReadASetButtonAnnouncementAsAGroupCommand() {
 
     for command1: UInt8 in [0x01, 0x02] {

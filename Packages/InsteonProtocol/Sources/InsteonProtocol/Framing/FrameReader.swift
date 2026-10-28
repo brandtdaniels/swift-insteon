@@ -9,15 +9,15 @@ package enum ControlByte {
   package static let endOfText: UInt8 = 0x03
 
   /// Acknowledge (`0x06`): the device accepted a command.
-  package static let acknowledgement: UInt8 = 0x06
+  package static let acknowledgment: UInt8 = 0x06
 
   /// Negative Acknowledge (`0x15`): the device rejected a command, usually because it was busy.
-  package static let negativeAcknowledgement: UInt8 = 0x15
+  package static let negativeAcknowledgment: UInt8 = 0x15
 
   /// Whether a byte ends an answer to a command: an ACK or a NAK.
   package static func isAnswer(_ byte: UInt8) -> Bool {
 
-    byte == acknowledgement || byte == negativeAcknowledgement
+    byte == acknowledgment || byte == negativeAcknowledgment
 
   }
 
@@ -44,7 +44,7 @@ protocol Framing {
   associatedtype Reply
 
   /// The reply a lone NAK byte stands for, where a frame would start.
-  static var negativeAcknowledgement: Reply { get }
+  static var negativeAcknowledgment: Reply { get }
 
   /// The length of the frame at the start of `bytes`, which start with ``ControlByte/startOfText``.
   static func frameLength(of bytes: [UInt8]) -> FrameLength
@@ -70,7 +70,7 @@ extension Framing {
 /// Splits the bytes a device sends into frames, keeping an incomplete one until the rest of its
 /// bytes arrive.
 ///
-/// A NAK byte where a frame would start is reported as ``Framing/negativeAcknowledgement``.
+/// A NAK byte where a frame would start is reported as ``Framing/negativeAcknowledgment``.
 /// Other bytes that don't start a frame are skipped up to the next start byte, NAK bytes among
 /// them.
 struct FrameReader<Format: Framing>: Hashable, Sendable {
@@ -101,11 +101,11 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
   /// - Parameter command: The command a number belongs to, or `nil` if it isn't one that can be
   ///   answered this way.
   /// - Returns: The command, or `nil` if the pending bytes don't start with such a NAK.
-  mutating func takeShortNegativeAcknowledgement<Number>(of command: (UInt8) -> Number?) -> Number? {
+  mutating func takeShortNegativeAcknowledgment<Number>(of command: (UInt8) -> Number?) -> Number? {
 
     guard
       pending.count >= 3,
-      pending[2] == ControlByte.negativeAcknowledgement,
+      pending[2] == ControlByte.negativeAcknowledgment,
       let number = command(pending[1])
     else {
 
@@ -127,11 +127,11 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
     while true {
 
       // A device sometimes answers a command with a lone NAK instead of an echo.
-      if !isSkipping, pending.first == ControlByte.negativeAcknowledgement {
+      if !isSkipping, pending.first == ControlByte.negativeAcknowledgment {
 
         pending.removeFirst()
 
-        return Format.negativeAcknowledgement
+        return Format.negativeAcknowledgment
 
       }
 

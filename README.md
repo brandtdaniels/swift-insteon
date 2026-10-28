@@ -8,7 +8,7 @@ Swift packages for working with [Insteon](https://www.insteon.com) home automati
 | Library | Description |
 | --- | --- |
 | [InsteonProtocol](Packages/InsteonProtocol) | The Insteon protocol as value types: messages for devices, the serial commands that carry them through a modem, and the IBIOS commands of a PowerLinc Controller |
-| [InsteonModem](Packages/InsteonModem) | Control Insteon devices through a PowerLinc Modem or USB Adapter on a USB or serial port, or a PowerLinc Controller (2414S) |
+| [InsteonModem](Packages/InsteonModem) | Control Insteon devices through a PowerLinc Modem or USB Adapter on a USB or serial port, or a PowerLinc Controller 2414S |
 | [InsteonLinking](Packages/InsteonLinking) | Link devices to each other and to the modem: by writing their ALL-Link databases, remotely, or with their SET buttons |
 | [InsteonHubClient](Packages/InsteonHubClient) | Control Insteon devices through an Insteon Hub on your local network, by driving its built-in modem with InsteonModem |
 | [InsteonHubDiscovery](Packages/InsteonHubDiscovery) | Find Insteon Hubs on your local network, by asking the network itself or Insteon Connect |
@@ -98,7 +98,7 @@ let getConfiguration = ExtendedMessage(
   command: ExtendedDirectCommand.getSet(),
   userData: userData
 )
-getConfiguration.hexString  // ends in "D1", the checksum i2cs devices require
+getConfiguration.hexString  // ends in "D1", the checksum i2CS devices require
 ```
 
 Commands the typed catalogs don't cover can be sent as raw bytes with `Command(command1:command2:)`, or added by conforming your own type to `CommandConvertible`.
@@ -115,6 +115,8 @@ swift test
 ```
 
 Each library lives in `Packages/<Name>`, with its sources, tests and DocC catalog, and is built from the root `Package.swift`. `Scripts/build-docs.sh` builds every library's documentation and fails on any warning.
+
+[CONVENTIONS.md](CONVENTIONS.md) says how the docs name Insteon's products, commands and documents, and `python3 Scripts/check-terms.py` checks the forms it rules out.
 
 ## License
 

@@ -1,6 +1,6 @@
 # InsteonHubClient
 
-Control Insteon devices through an Insteon Hub on your local network: model 2245, or models 2242 and 2243 (the Hub Pro), which are built on the same foundations.
+Control Insteon devices through an Insteon Hub on your local network: the Hub 2245, or the Hub 2242 and Hub Pro 2243, which are built on the same foundations.
 
 - `HubConnection`: a `ModemConnection` to the Hub's built-in modem, so a `Modem` from InsteonModem drives a Hub just like a USB or serial modem
 - `Hub`: the Hub's HTTP interface underneath, which writes bytes to the modem and reads and clears the buffer of its replies

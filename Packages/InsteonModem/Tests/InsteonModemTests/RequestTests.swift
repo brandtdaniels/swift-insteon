@@ -58,10 +58,10 @@ struct RequestTests {
 
   }
 
-  @Test func returnsTheDevicesAcknowledgement() async throws {
+  @Test func returnsTheDevicesAcknowledgment() async throws {
 
-    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x0D, command2: 0x02)
-    let connection = ScriptedConnection { written, _ in written + [0x06] + acknowledgement }
+    let acknowledgment = received(from: device, .directAcknowledgment, command1: 0x0D, command2: 0x02)
+    let connection = ScriptedConnection { written, _ in written + [0x06] + acknowledgment }
     let modem = makeModem(connection)
 
     try await run(modem) {
@@ -69,7 +69,7 @@ struct RequestTests {
       let answer = try await modem.request(engineVersionRequest)
 
       #expect(answer.sender == device)
-      #expect(answer.flags.messageType == .directAcknowledgement)
+      #expect(answer.flags.messageType == .directAcknowledgment)
       #expect(answer.command == Command(command1: 0x0D, command2: 0x02))
 
     }
@@ -80,7 +80,7 @@ struct RequestTests {
 
   @Test func throwsTheReasonADeviceGivesForRejectingAMessage() async throws {
 
-    let rejection = received(from: device, .directNegativeAcknowledgement, command1: 0x0D, command2: 0xFF)
+    let rejection = received(from: device, .directNegativeAcknowledgment, command1: 0x0D, command2: 0xFF)
     let connection = ScriptedConnection { written, _ in written + [0x06] + rejection }
     let modem = makeModem(connection)
 
@@ -101,26 +101,26 @@ struct RequestTests {
 
   @Test func keepsWaitingWhileADeviceSearchesItsDatabase() async throws {
 
-    let pending = received(from: device, .directNegativeAcknowledgement, command1: 0x0D, command2: 0xFC)
-    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x0D, command2: 0x02)
-    let connection = ScriptedConnection { written, _ in written + [0x06] + pending + acknowledgement }
+    let pending = received(from: device, .directNegativeAcknowledgment, command1: 0x0D, command2: 0xFC)
+    let acknowledgment = received(from: device, .directAcknowledgment, command1: 0x0D, command2: 0x02)
+    let connection = ScriptedConnection { written, _ in written + [0x06] + pending + acknowledgment }
     let modem = makeModem(connection)
 
     try await run(modem) {
 
       let answer = try await modem.request(engineVersionRequest)
 
-      #expect(answer.flags.messageType == .directAcknowledgement)
+      #expect(answer.flags.messageType == .directAcknowledgment)
 
     }
 
   }
 
-  @Test func ignoresAcknowledgementsBeforeTheEchoAndFromOtherDevices() async throws {
+  @Test func ignoresAcknowledgmentsBeforeTheEchoAndFromOtherDevices() async throws {
 
-    let stale = received(from: device, .directAcknowledgement, command1: 0x0D, command2: 0x00)
-    let other = received(from: InsteonAddress(0x44, 0x55, 0x66), .directAcknowledgement, command1: 0x0D, command2: 0x01)
-    let current = received(from: device, .directAcknowledgement, command1: 0x0D, command2: 0x02)
+    let stale = received(from: device, .directAcknowledgment, command1: 0x0D, command2: 0x00)
+    let other = received(from: InsteonAddress(0x44, 0x55, 0x66), .directAcknowledgment, command1: 0x0D, command2: 0x01)
+    let current = received(from: device, .directAcknowledgment, command1: 0x0D, command2: 0x02)
     let connection = ScriptedConnection { written, _ in stale + written + [0x06] + other + current }
     let modem = makeModem(connection)
 
@@ -134,10 +134,10 @@ struct RequestTests {
 
   }
 
-  @Test func ignoresAnAcknowledgementOfAnotherCommand() async throws {
+  @Test func ignoresAnAcknowledgmentOfAnotherCommand() async throws {
 
-    let late = received(from: device, .directAcknowledgement, command1: 0x11, command2: 0xFF)
-    let current = received(from: device, .directAcknowledgement, command1: 0x0D, command2: 0x02)
+    let late = received(from: device, .directAcknowledgment, command1: 0x11, command2: 0xFF)
+    let current = received(from: device, .directAcknowledgment, command1: 0x0D, command2: 0x02)
     let connection = ScriptedConnection { written, _ in written + [0x06] + late + current }
     let modem = makeModem(connection)
 
@@ -151,12 +151,12 @@ struct RequestTests {
 
   }
 
-  // A status request's acknowledgement carries the ALL-Link database delta in cmd1.
-  @Test func acceptsAStatusRequestsAcknowledgementWhateverItsCommand1() async throws {
+  // A status request's acknowledgment carries the ALL-Link database delta in cmd1.
+  @Test func acceptsAStatusRequestsAcknowledgmentWhateverItsCommand1() async throws {
 
     let request = StandardMessage(to: device, command: StandardDirectCommand.statusRequest())
-    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x05, command2: 0xFF)
-    let connection = ScriptedConnection { written, _ in written + [0x06] + acknowledgement }
+    let acknowledgment = received(from: device, .directAcknowledgment, command1: 0x05, command2: 0xFF)
+    let connection = ScriptedConnection { written, _ in written + [0x06] + acknowledgment }
     let modem = makeModem(connection)
 
     try await run(modem) {
@@ -171,10 +171,10 @@ struct RequestTests {
 
   @Test func sendsTheMessageAgainWhileTheModemIsBusy() async throws {
 
-    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x0D, command2: 0x02)
+    let acknowledgment = received(from: device, .directAcknowledgment, command1: 0x0D, command2: 0x02)
     let connection = ScriptedConnection { written, index in
 
-      index == 0 ? written + [0x15] : written + [0x06] + acknowledgement
+      index == 0 ? written + [0x15] : written + [0x06] + acknowledgment
 
     }
     let modem = makeModem(connection)
@@ -248,11 +248,11 @@ struct RequestTests {
 
   }
 
-  @Test func returnsTheAcknowledgementOfAnExtendedMessage() async throws {
+  @Test func returnsTheAcknowledgmentOfAnExtendedMessage() async throws {
 
     let message = ExtendedMessage(to: device, command: ExtendedDirectCommand.getSet())
-    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x2E, command2: 0x00)
-    let connection = ScriptedConnection { written, _ in written + [0x06] + acknowledgement }
+    let acknowledgment = received(from: device, .directAcknowledgment, command1: 0x2E, command2: 0x00)
+    let connection = ScriptedConnection { written, _ in written + [0x06] + acknowledgment }
     let modem = makeModem(connection)
 
     try await run(modem) {
@@ -269,13 +269,13 @@ struct RequestTests {
 
   @Test func readsEveryRecordUntilTheEndOfTheDatabase() async throws {
 
-    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x2F, command2: 0x00)
+    let acknowledgment = received(from: device, .directAcknowledgment, command1: 0x2F, command2: 0x00)
     let records: [[UInt8]] = [
       recordResponse(at: 0x0FFF, [0xE2, 0x04, 0x00, 0x5E, 0x5D, 0x00, 0x00, 0x04]),
       recordResponse(at: 0x0FF7, [0xA2, 0x05, 0x00, 0x5E, 0x5D, 0xFE, 0x1F, 0x01]),
       recordResponse(at: 0x0FEF, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
     ]
-    let connection = ScriptedConnection { written, index in written + [0x06] + acknowledgement + records[index] }
+    let connection = ScriptedConnection { written, index in written + [0x06] + acknowledgment + records[index] }
     let modem = makeModem(connection)
 
     try await run(modem) {
@@ -296,13 +296,13 @@ struct RequestTests {
 
   }
 
-  @Test func waitsForTheReplyAfterTheAcknowledgement() async throws {
+  @Test func waitsForTheReplyAfterTheAcknowledgment() async throws {
 
-    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x2F, command2: 0x00)
-    // A record response before the acknowledgement belongs to an earlier request.
+    let acknowledgment = received(from: device, .directAcknowledgment, command1: 0x2F, command2: 0x00)
+    // A record response before the acknowledgment belongs to an earlier request.
     let early = recordResponse(at: 0x0FF7, [0xA2, 0x05, 0x00, 0x5E, 0x5D, 0xFE, 0x1F, 0x01])
     let current = recordResponse(at: 0x0FFF, [0xE2, 0x04, 0x00, 0x5E, 0x5D, 0x00, 0x00, 0x04])
-    let connection = ScriptedConnection { written, _ in written + [0x06] + early + acknowledgement + current }
+    let connection = ScriptedConnection { written, _ in written + [0x06] + early + acknowledgment + current }
     let modem = makeModem(connection)
 
     try await run(modem) {
@@ -320,14 +320,14 @@ struct RequestTests {
 
   @Test func asksForARecordAgainWhenItDoesntArrive() async throws {
 
-    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x2F, command2: 0x00)
+    let acknowledgment = received(from: device, .directAcknowledgment, command1: 0x2F, command2: 0x00)
     let end = recordResponse(at: 0x0FFF, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
     // The first record response is lost.
     let connection = ScriptedConnection { written, index in
 
       let record: [UInt8] = index == 0 ? [] : end
 
-      return written + [0x06] + acknowledgement + record
+      return written + [0x06] + acknowledgment + record
 
     }
     let modem = makeModem(connection)
@@ -350,9 +350,9 @@ struct RequestTests {
 
   @Test func stopsAtTheBottomOfTheDatabasesMemory() async throws {
 
-    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x2F, command2: 0x00)
+    let acknowledgment = received(from: device, .directAcknowledgment, command1: 0x2F, command2: 0x00)
     let last = recordResponse(at: 0x0008, [0xA2, 0x01, 0x00, 0x5E, 0x5D, 0xFE, 0x1F, 0x01])
-    let connection = ScriptedConnection { written, _ in written + [0x06] + acknowledgement + last }
+    let connection = ScriptedConnection { written, _ in written + [0x06] + acknowledgment + last }
     let modem = makeModem(connection)
 
     try await run(modem) {
@@ -482,7 +482,7 @@ struct RequestTests {
 
     let lamp = device
     let keypad = self.keypad
-    let ack = received(from: lamp, .allLinkCleanupAcknowledgement, command1: 0x11, command2: 0x01)
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgment, command1: 0x11, command2: 0x01)
     let failure: [UInt8] = [0x02, 0x56, 0x01, 0x01] + keypad.bytes
     let connection = ScriptedConnection { written, _ in written + [0x06] + ack + failure + [0x02, 0x58, 0x06] }
     let modem = makeModem(connection)
@@ -519,7 +519,7 @@ struct RequestTests {
   @Test func ignoresAnEarlierCommandsCleanups() async throws {
 
     let lamp = device
-    let ack = received(from: lamp, .allLinkCleanupAcknowledgement, command1: 0x11, command2: 0x01)
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgment, command1: 0x11, command2: 0x01)
     let connection = ScriptedConnection { written, _ in [0x02, 0x58, 0x15] + written + [0x06] + ack + [0x02, 0x58, 0x06] }
     let modem = makeModem(connection)
 
@@ -533,12 +533,12 @@ struct RequestTests {
 
   }
 
-  // An i2cs member still searching its database NAKs, then acknowledges once it's done.
+  // An i2CS member still searching its database NAKs, then acknowledges once it's done.
   @Test func countsAMemberThatAnswersAfterSearchingItsDatabase() async throws {
 
     let lamp = device
-    let pending = received(from: lamp, .allLinkCleanupNegativeAcknowledgement, command1: 0x11, command2: 0xFC)
-    let ack = received(from: lamp, .allLinkCleanupAcknowledgement, command1: 0x11, command2: 0x01)
+    let pending = received(from: lamp, .allLinkCleanupNegativeAcknowledgment, command1: 0x11, command2: 0xFC)
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgment, command1: 0x11, command2: 0x01)
     let connection = ScriptedConnection { written, _ in written + [0x06] + pending + ack + [0x02, 0x58, 0x06] }
     let modem = makeModem(connection)
 
@@ -552,14 +552,14 @@ struct RequestTests {
 
   }
 
-  // A cleanup carries its group in cmd2, so an acknowledgement for another group, such as a
+  // A cleanup carries its group in cmd2, so an acknowledgment for another group, such as a
   // keypad's own scene heard in monitor mode, isn't counted.
   @Test func countsOnlyThisGroupsCleanups() async throws {
 
     let lamp = device
     let keypad = self.keypad
-    let otherGroup = received(from: keypad, .allLinkCleanupAcknowledgement, command1: 0x11, command2: 0x03)
-    let ack = received(from: lamp, .allLinkCleanupAcknowledgement, command1: 0x11, command2: 0x01)
+    let otherGroup = received(from: keypad, .allLinkCleanupAcknowledgment, command1: 0x11, command2: 0x03)
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgment, command1: 0x11, command2: 0x01)
     let failure: [UInt8] = [0x02, 0x56, 0x01, 0x01] + lamp.bytes
     let connection = ScriptedConnection { written, _ in written + [0x06] + otherGroup + ack + failure + [0x02, 0x58, 0x06] }
     let modem = makeModem(connection)

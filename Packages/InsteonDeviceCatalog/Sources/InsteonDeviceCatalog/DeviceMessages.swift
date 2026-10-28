@@ -39,11 +39,11 @@ public struct DeviceStandardCommand: Hashable, Sendable {
   /// What goes in cmd2.
   public var command2: Command2
 
-  /// The value the acknowledgement carries in cmd2, if any.
+  /// The value the acknowledgment carries in cmd2, if any.
   public var reply: MessageField?
 
   /// A value one more standard direct message with the same cmd1 may carry after the
-  /// acknowledgement, when the device has it, such as a second setpoint.
+  /// acknowledgment, when the device has it, such as a second setpoint.
   public var followUp: MessageField?
 
   /// The operating flag that, while set, has the command sent as an extended message, with
@@ -57,7 +57,7 @@ public struct DeviceStandardCommand: Hashable, Sendable {
   ///   - summary: What the command does.
   ///   - command1: The command's cmd1.
   ///   - command2: What goes in cmd2.
-  ///   - reply: The value the acknowledgement carries in cmd2.
+  ///   - reply: The value the acknowledgment carries in cmd2.
   ///   - followUp: A value one more message with the same cmd1 may carry.
   ///   - extendedWhen: The operating flag that has the command sent as an extended message.
   ///   - verification: How sure the catalog is of the command. Defaults to ``Verification/documented``.
@@ -106,18 +106,18 @@ public struct DeviceStandardCommand: Hashable, Sendable {
 
   }
 
-  /// Reads the value the acknowledgement carries.
+  /// Reads the value the acknowledgment carries.
   ///
-  /// Acknowledgements carry only cmd1, so read only the acknowledgement of this command: the
+  /// Acknowledgments carry only cmd1, so read only the acknowledgment of this command: the
   /// one that answers its request. Another command with the same cmd1 is acknowledged the same
   /// way.
   ///
   /// - Parameter message: A message the modem received.
   /// - Returns: The value, or `nil` unless the command has a reply and the message is an
-  ///   acknowledgement with the command's cmd1.
+  ///   acknowledgment with the command's cmd1.
   public func reply(in message: ReceivedMessage) -> FieldValue? {
 
-    guard let reply, message.flags.messageType == .directAcknowledgement, message.command.command1 == command1 else {
+    guard let reply, message.flags.messageType == .directAcknowledgment, message.command.command1 == command1 else {
 
       return nil
 
@@ -127,7 +127,7 @@ public struct DeviceStandardCommand: Hashable, Sendable {
 
   }
 
-  /// Reads the value a message after the acknowledgement carries.
+  /// Reads the value a message after the acknowledgment carries.
   ///
   /// - Parameter message: A message the modem received.
   /// - Returns: The value, or `nil` unless the command has a follow-up and the message is a

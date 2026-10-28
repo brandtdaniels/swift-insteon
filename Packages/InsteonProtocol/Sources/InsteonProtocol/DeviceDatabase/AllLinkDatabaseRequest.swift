@@ -56,7 +56,7 @@ public enum AllLinkDatabaseRequest: Hashable, Sendable {
   }
 
   /// The extended message that sends the request to a device, sealed with a checksum, which
-  /// i2cs devices require.
+  /// i2CS devices require.
   ///
   /// - Parameter device: The device whose database to read or write.
   /// - Returns: The message.

@@ -11,13 +11,13 @@ public struct DeviceProfile: Hashable, Sendable {
   /// How a product communicates.
   public enum Radio: String, Hashable, Sendable {
 
-    /// Over the power line only.
+    /// Over the powerline only.
     case powerline
 
     /// Over RF only.
     case rf
 
-    /// Over both the power line and RF.
+    /// Over both the powerline and RF.
     case dual
 
   }

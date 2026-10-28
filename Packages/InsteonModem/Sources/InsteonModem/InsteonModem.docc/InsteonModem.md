@@ -9,7 +9,7 @@ A PowerLinc Modem (2413U by USB, 2413S by serial cable), or another modem from
 modem's serial protocol over any ``ModemConnection``:
 it sends commands one at a time, waits for the modem to accept each one, retries when the
 modem is busy, and publishes everything the modem sends back. A request sends a message to a
-device and waits for the device's acknowledgement, too:
+device and waits for the device's acknowledgment, too:
 
 ```swift
 import InsteonModem

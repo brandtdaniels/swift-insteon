@@ -4,7 +4,7 @@ Add Insteon devices to a Hub Pro, read its settings, and update its software.
 
 ## Overview
 
-The Hub Pro (2243-222) is built on the same foundations as the other Hubs, with an Insteon
+The Hub Pro 2243 is built on the same foundations as the other Hubs, with an Insteon
 modem that `HubConnection` in `InsteonHubClient` drives the same way. It was also sold as a
 HomeKit bridge, which current versions of HomeKit no longer support.
 

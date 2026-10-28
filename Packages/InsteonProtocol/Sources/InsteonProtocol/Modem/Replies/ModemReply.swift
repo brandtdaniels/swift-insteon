@@ -8,7 +8,7 @@ public enum ModemReply: Hashable, Sendable {
   /// A device sent a message (`0x50` for standard length, `0x51` for extended).
   case messageReceived(ReceivedMessage)
 
-  /// An X10 transmission was heard on the power line (`0x52`).
+  /// An X10 transmission was heard on the powerline (`0x52`).
   case x10Received(X10Code)
 
   /// ALL-Linking finished with another device (`0x53`).
@@ -71,6 +71,6 @@ public enum ModemReply: Hashable, Sendable {
 
   /// A lone NAK (`0x15`): the modem rejected the last command without echoing it, usually
   /// because it was busy. Send the command again after a short delay.
-  case negativeAcknowledgement
+  case negativeAcknowledgment
 
 }

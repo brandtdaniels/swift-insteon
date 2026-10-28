@@ -65,7 +65,7 @@ public struct GroupCommand: Hashable, Sendable {
   ///
   /// - Parameter message: A message the modem received.
   /// - Returns: `nil` unless the message is a standard ALL-Link cleanup or a standard ALL-Link
-  ///   broadcast. A broadcast that is a ``SuccessReport``, or an i2cs device's SET button
+  ///   broadcast. A broadcast that is a ``SuccessReport``, or an i2CS device's SET button
   ///   announcement (cmd1 `0x01` or `0x02`), also returns `nil`.
   public init?(_ message: ReceivedMessage) {
 
@@ -78,7 +78,7 @@ public struct GroupCommand: Hashable, Sendable {
     switch message.flags.messageType {
     case .allLinkBroadcast:
       // The guide: the To address holds the group number in its low byte. A Success Report
-      // uses the To address for other things, and so does the announcement an i2cs device
+      // uses the To address for other things, and so does the announcement an i2CS device
       // sends when its SET button is held, which carries its category, subcategory and
       // firmware there, cmd1 0x01 to link or 0x02 to unlink, and in cmd2 what product
       // specifications call either the group or the hardware revision. The guide

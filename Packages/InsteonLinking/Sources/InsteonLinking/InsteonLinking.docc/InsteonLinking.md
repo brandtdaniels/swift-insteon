@@ -32,8 +32,8 @@ try await Modem.withConnection(SerialPort(path: "/dev/ttyUSB0")) { modem in
 
 | Way | How | Engines |
 | --- | --- | --- |
-| Database | ``Linker/link(_:)`` writes both records directly, with exact link data | i2, and i2cs once linked to the modem |
-| Remote | ``Linker/linkRemotely(_:modemRole:modemGroup:deviceGroup:timeout:)`` puts the modem and the device into linking mode, as their SET buttons would | i2 and i2cs |
+| Database | ``Linker/link(_:)`` writes both records directly, with exact link data | i2, and i2CS once linked to the modem |
+| Remote | ``Linker/linkRemotely(_:modemRole:modemGroup:deviceGroup:timeout:)`` puts the modem and the device into linking mode, as their SET buttons would | i2 and i2CS |
 | Manual | ``Linker/linkManually(modemRole:group:timeout:)`` puts the modem into linking mode and waits for someone to press a device's SET button | Every engine |
 
 Remote and manual linking work between the modem and one device, and the device memorizes
@@ -41,9 +41,9 @@ its current state as its link data. Database linking works between any two devic
 the link data exactly. ``Unlinker`` has the same three ways.
 
 A device's engine decides how it's put into linking mode remotely: an i2 device is sent the
-standard Enter Linking Mode, and an i2cs device the extended one with a checksum. The linker
-asks the device for its engine first; an i2cs device that isn't linked to the modem rejects
-that request, which marks it as i2cs. An i1 device can't be linked remotely.
+standard Enter Linking Mode, and an i2CS device the extended one with a checksum. The linker
+asks the device for its engine first; an i2CS device that isn't linked to the modem rejects
+that request, which marks it as i2CS. An i1 device can't be linked remotely.
 
 While the modem waits, any device whose SET button is pressed can link to it. So a wait that
 fails takes the modem out of linking mode, and the device too after a remote link, and the
@@ -53,9 +53,9 @@ out of linking mode, so the next one can start right away.
 
 ### Which devices accept database writes
 
-Writing records needs Read/Write ALL-Link Database, which every device with an i2 or i2cs
-engine has and i1 devices don't. An i2cs device accepts it only from a device it's already
-linked to, so link the modem to an i2cs device with its SET button first.
+Writing records needs Read/Write ALL-Link Database, which every device with an i2 or i2CS
+engine has and i1 devices don't. An i2CS device accepts it only from a device it's already
+linked to, so link the modem to an i2CS device with its SET button first.
 
 ### How records are written
 

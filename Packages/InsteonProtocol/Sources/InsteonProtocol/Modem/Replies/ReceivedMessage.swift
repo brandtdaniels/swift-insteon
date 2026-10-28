@@ -50,7 +50,7 @@ extension ReceivedMessage {
   public var nakReason: NAKReason? {
 
     switch flags.messageType {
-    case .directNegativeAcknowledgement, .allLinkCleanupNegativeAcknowledgement:
+    case .directNegativeAcknowledgment, .allLinkCleanupNegativeAcknowledgment:
       NAKReason(rawValue: command.command2)
     default:
       nil

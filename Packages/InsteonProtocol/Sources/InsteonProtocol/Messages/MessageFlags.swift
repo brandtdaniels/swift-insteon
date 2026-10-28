@@ -19,26 +19,26 @@ public struct MessageFlags: Hashable, Sendable {
     /// A message addressed to a single device.
     case direct = 0b000
 
-    /// A device's acknowledgement of a direct message.
-    case directAcknowledgement = 0b001
+    /// A device's acknowledgment of a direct message.
+    case directAcknowledgment = 0b001
 
     /// A direct follow-up to an ALL-Link broadcast, sent to each member of the group in turn.
     case allLinkCleanup = 0b010
 
-    /// A device's acknowledgement of an ALL-Link cleanup message.
-    case allLinkCleanupAcknowledgement = 0b011
+    /// A device's acknowledgment of an ALL-Link cleanup message.
+    case allLinkCleanupAcknowledgment = 0b011
 
     /// A message for every device that hears it; the destination address carries other data.
     case broadcast = 0b100
 
-    /// A device's negative acknowledgement of a direct message.
-    case directNegativeAcknowledgement = 0b101
+    /// A device's negative acknowledgment of a direct message.
+    case directNegativeAcknowledgment = 0b101
 
     /// A message for the members of an ALL-Link group; the destination's low byte is the group.
     case allLinkBroadcast = 0b110
 
-    /// A device's negative acknowledgement of an ALL-Link cleanup message.
-    case allLinkCleanupNegativeAcknowledgement = 0b111
+    /// A device's negative acknowledgment of an ALL-Link cleanup message.
+    case allLinkCleanupNegativeAcknowledgment = 0b111
 
   }
 
