@@ -194,7 +194,11 @@ struct ModemTests {
 
   @Test func doesntWriteAnUnchangedConfiguration() async throws {
 
-    let connection = ScriptedConnection { _, _ in [0x02, 0x73, 0x40, 0x05, 0x00, 0x06] }
+    let connection = ScriptedConnection { written, _ in
+
+      written == [0x02, 0x73] ? [0x02, 0x73, 0x40, 0x05, 0x00, 0x06] : written + [0x06]
+
+    }
     let modem = makeModem(connection)
 
     try await run(modem) { try await modem.updateConfiguration { $0.insert(.monitorMode) } }

@@ -189,7 +189,7 @@ public actor Modem: SerialCommandSender {
   /// ```
   ///
   /// - Parameter change: Changes the flags the modem reported.
-  /// - Returns: The flags the modem now has.
+  /// - Returns: The flags as the modem reported them, or as it accepted them if they changed.
   /// - Throws: The errors of ``Modem/send(_:)``.
   @discardableResult
   public func updateConfiguration(
