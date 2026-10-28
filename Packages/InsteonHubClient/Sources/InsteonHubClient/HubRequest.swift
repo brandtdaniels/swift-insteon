@@ -17,12 +17,30 @@ package enum HubRequest {
   /// Clears the buffer.
   case clearBuffer
 
+  /// Reads a page of a 2242 Hub's slot statuses.
+  case readSlots(page: Int)
+
+  /// Writes a 2242 Hub slot's timer, with the fields already joined.
+  case writeTimer(HubSlot, fields: String)
+
+  /// Writes the commands a 2242 Hub slot's timer sends, or clears them.
+  case writeCommands(HubSlot, HubSlotCommands?)
+
+  /// Sets a 2242 Hub's clock.
+  case setTime(HubClockTime)
+
+  /// Sets a 2242 Hub's day of the week.
+  case setWeekday(HubWeekday)
+
   var path: String {
 
     switch self {
     case .write: "/3"
     case .readBuffer: "/buffstatus.xml"
-    case .clearBuffer: "/1"
+    case .clearBuffer, .setWeekday: "/1"
+    case .readSlots: "/b.xml"
+    case .writeTimer, .writeCommands: "/2"
+    case .setTime: "/hnetwork.htm"
     }
 
   }
@@ -35,6 +53,13 @@ package enum HubRequest {
     case let .write(bytes): "\(Self.hex(bytes))=I=3"
     case .readBuffer: nil
     case .clearBuffer: "XB=M=1"
+    case let .readSlots(page): "01=\(page < 10 ? "0" : "")\(page)=F"
+    case let .writeTimer(slot, fields): "S\(slot.rawValue)=\(fields)"
+    case let .writeCommands(slot, commands?): "C\(slot.rawValue)=\(Self.hex(commands.on.bytes))=2tt\(Self.hex(commands.off.bytes))"
+    case let .writeCommands(slot, nil): "C\(slot.rawValue)=-=2ff-"
+    // The fields after the time are what Insteon's Hub app sends; it doesn't say what they mean.
+    case let .setTime(time): "TD=\(time.clockText)=1=falsefalse"
+    case let .setWeekday(day): "D=1=1=" + HubWeekday.allCases.map { $0 == day ? "t=" : "f=" }.joined()
     }
 
   }
