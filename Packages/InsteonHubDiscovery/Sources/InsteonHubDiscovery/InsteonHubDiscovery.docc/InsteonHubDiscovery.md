@@ -1,6 +1,6 @@
 # ``InsteonHubDiscovery``
 
-Find INSTEON Hubs on the local network, without Insteon's servers.
+Find INSTEON Hubs on the local network, by asking the network itself or Insteon Connect.
 
 ## Overview
 
@@ -39,6 +39,19 @@ unencrypted, so show the user the address and let them confirm it before connect
 their credentials. Once connected, `SerialCommand.getModemInfo` reports the Hub's modem,
 whose subcategory names its model.
 
+### Asking Insteon Connect
+
+Each Hub also reports its local address to Insteon's servers, and Insteon Connect's Get Info
+page lists the Hubs that reported from the same public IP address within the past 24 hours.
+``InsteonConnectLookup`` reads that page, the way Insteon's own apps found Hubs. It doesn't
+probe the local network and it gives each Hub's INSTEON ID, which tells several Hubs apart,
+but it needs the internet, sends the network's public IP address to Insteon, and misses a
+Hub that hasn't reported recently. It's opt-in: nothing in this library calls it for you.
+
+```swift
+let hubs = try await InsteonConnectLookup().hubs()
+```
+
 ### Local network permission
 
 On iOS, iPadOS, tvOS and visionOS, an app that reaches devices on the local network must say
@@ -50,7 +63,9 @@ the first time discovery runs, and until they do, every probe fails as if no Hub
 ### Discovering Hubs
 
 - ``HubDiscovery``
+- ``InsteonConnectLookup``
 - ``DiscoveredHub``
+- ``InsteonConnectError``
 
 ### The local network
 

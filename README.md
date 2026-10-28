@@ -11,7 +11,7 @@ Swift packages for working with [INSTEON](https://www.insteon.com) home automati
 | [InsteonModem](Packages/InsteonModem) | Control INSTEON devices through a PowerLinc Modem or USB Adapter on a USB or serial port, or a PowerLinc Controller (2414S) |
 | [InsteonLinking](Packages/InsteonLinking) | Link devices to each other and to the modem: by writing their ALL-Link databases, remotely, or with their SET buttons |
 | [InsteonHubClient](Packages/InsteonHubClient) | Control INSTEON devices through an INSTEON Hub on your local network, by driving its built-in modem with InsteonModem |
-| [InsteonHubDiscovery](Packages/InsteonHubDiscovery) | Find INSTEON Hubs on your local network, without Insteon's servers |
+| [InsteonHubDiscovery](Packages/InsteonHubDiscovery) | Find INSTEON Hubs on your local network, by asking the network itself or Insteon Connect |
 | [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the INSTEON clients send requests through |
 
 The [Supported Modems](Packages/InsteonModem/Sources/InsteonModem/InsteonModem.docc/SupportedModems.md) article lists every modem, Hub and controller, and how well each is supported.
