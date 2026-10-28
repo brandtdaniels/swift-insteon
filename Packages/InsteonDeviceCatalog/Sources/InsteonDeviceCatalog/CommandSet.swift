@@ -1,8 +1,9 @@
 import InsteonProtocol
 
-/// The settings a family of products shares, as the catalog describes them: operating flags
-/// read with Get Operating Flags and set with Set Operating Flags, and values read and written
-/// with extended Get and Set.
+/// The settings and messages a family of products shares, as the catalog describes them, in
+/// Insteon's own message types: operating flags read with Get Operating Flags and set with Set
+/// Operating Flags, values read and written with extended Get and Set, other standard and
+/// extended direct commands, and the direct messages the products send on their own.
 ///
 /// A profile names the command set each of its identities uses, so an app reads and changes a
 /// device's settings from the catalog rather than from code written for the product:
@@ -21,6 +22,21 @@ import InsteonProtocol
 ///
 /// An i2cs device expects Set Operating Flags and extended Set as extended messages with a
 /// checksum in D14.
+///
+/// A thermostat's commands and reports work the same way:
+///
+/// ```swift
+/// guard let setHeat = commands.standardCommand(named: "setHeatSetpoint") else {
+///   return
+/// }
+///
+/// try await modem.request(StandardMessage(to: thermostat, command: try setHeat.command(.number(68))))
+///
+/// // Then, among the messages the modem receives:
+/// if let (report, value) = commands.directMessage(in: message) {
+///   print(report.name, value)   // temperatureReport number(70.5)
+/// }
+/// ```
 public struct CommandSet: Hashable, Sendable, Identifiable {
 
   /// The command set's identifier, which profiles name.
@@ -46,6 +62,19 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
   /// describe them.
   public var extendedSettings: ExtendedSettings?
 
+  /// Standard direct commands beyond the operating flags.
+  public var standardCommands: [DeviceStandardCommand]
+
+  /// Extended direct commands beyond extended Get and Set with cmd2 `0x00`.
+  public var extendedCommands: [DeviceExtendedCommand]
+
+  /// Standard direct messages the products send on their own.
+  public var directMessages: [DeviceDirectMessage]
+
+  /// The flag, value or bit that's true when the device displays Celsius, for values in
+  /// ``FieldUnit/displayDegrees``, or `nil` if the command set doesn't say how to tell.
+  public var celsiusIndicator: SettingName?
+
   /// Where Insteon's documents disagree, and which one the command set follows.
   public var notes: [String]
 
@@ -62,6 +91,10 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
   ///   - readings: Get Operating Flags queries whose whole reply is a value.
   ///   - flagCommands: Set Operating Flags commands with no documented bit.
   ///   - extendedSettings: The values read and written with extended Get and Set.
+  ///   - standardCommands: Standard direct commands beyond the operating flags.
+  ///   - extendedCommands: Extended direct commands beyond extended Get and Set.
+  ///   - directMessages: Standard direct messages the products send on their own.
+  ///   - celsiusIndicator: The flag, value or bit that's true when the device displays Celsius.
   ///   - notes: Where Insteon's documents disagree.
   ///   - sources: The documents the command set comes from.
   public init(
@@ -72,6 +105,10 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
     readings: [OperatingReading] = [],
     flagCommands: [OperatingFlagCommand] = [],
     extendedSettings: ExtendedSettings? = nil,
+    standardCommands: [DeviceStandardCommand] = [],
+    extendedCommands: [DeviceExtendedCommand] = [],
+    directMessages: [DeviceDirectMessage] = [],
+    celsiusIndicator: SettingName? = nil,
     notes: [String] = [],
     sources: [String] = []
   ) {
@@ -83,6 +120,10 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
     self.readings = readings
     self.flagCommands = flagCommands
     self.extendedSettings = extendedSettings
+    self.standardCommands = standardCommands
+    self.extendedCommands = extendedCommands
+    self.directMessages = directMessages
+    self.celsiusIndicator = celsiusIndicator
     self.notes = notes
     self.sources = sources
 
@@ -95,6 +136,47 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
   public func operatingFlag(named name: SettingName) -> OperatingFlag? {
 
     operatingFlags.first { $0.name == name }
+
+  }
+
+  /// The standard command with a name.
+  ///
+  /// - Parameter name: The command's name, such as `"setHeatSetpoint"`.
+  /// - Returns: The command, or `nil` if the command set has none by that name.
+  public func standardCommand(named name: SettingName) -> DeviceStandardCommand? {
+
+    standardCommands.first { $0.name == name }
+
+  }
+
+  /// The extended command with a name.
+  ///
+  /// - Parameter name: The command's name, such as `"readStatus"`.
+  /// - Returns: The command, or `nil` if the command set has none by that name.
+  public func extendedCommand(named name: SettingName) -> DeviceExtendedCommand? {
+
+    extendedCommands.first { $0.name == name }
+
+  }
+
+  /// Reads a message the device sent on its own.
+  ///
+  /// - Parameter message: A message the modem received.
+  /// - Returns: The direct message it is and the value it carries, or `nil` if it's none of
+  ///   the command set's direct messages.
+  public func directMessage(in message: ReceivedMessage) -> (message: DeviceDirectMessage, value: FieldValue)? {
+
+    for directMessage in directMessages {
+
+      if let value = directMessage.value(in: message) {
+
+        return (directMessage, value)
+
+      }
+
+    }
+
+    return nil
 
   }
 
@@ -179,6 +261,10 @@ public struct OperatingFlag: Hashable, Sendable {
   /// The Set Operating Flags cmd2 that sets the bit to 0, if there's one.
   public var off: UInt8?
 
+  /// The operating flag that, while set, has the Set Operating Flags commands sent as extended
+  /// messages, with ``DeviceStandardCommand/protectedUserData(for:)``.
+  public var extendedWhen: SettingName?
+
   /// Creates an operating flag.
   ///
   /// - Parameters:
@@ -188,7 +274,9 @@ public struct OperatingFlag: Hashable, Sendable {
   ///   - bit: The bit's mask in the reply's cmd2.
   ///   - on: The Set Operating Flags cmd2 that sets the bit to 1.
   ///   - off: The Set Operating Flags cmd2 that sets the bit to 0.
-  public init(name: SettingName, summary: String, query: OperatingFlagsRequest, bit: UInt8, on: UInt8? = nil, off: UInt8? = nil) {
+  ///   - extendedWhen: The operating flag that has the Set Operating Flags commands sent as
+  ///     extended messages.
+  public init(name: SettingName, summary: String, query: OperatingFlagsRequest, bit: UInt8, on: UInt8? = nil, off: UInt8? = nil, extendedWhen: SettingName? = nil) {
 
     self.name = name
     self.summary = summary
@@ -196,6 +284,7 @@ public struct OperatingFlag: Hashable, Sendable {
     self.bit = bit
     self.on = on
     self.off = off
+    self.extendedWhen = extendedWhen
 
   }
 
@@ -277,17 +366,23 @@ public struct OperatingFlagCommand: Hashable, Sendable {
   /// The command: Set Operating Flags with its cmd2.
   public var command: StandardDirectCommand
 
+  /// The operating flag that, while set, has the command sent as an extended message, with
+  /// ``DeviceStandardCommand/protectedUserData(for:)``.
+  public var extendedWhen: SettingName?
+
   /// Creates a flag command.
   ///
   /// - Parameters:
   ///   - name: The command's name.
   ///   - summary: What the command does.
   ///   - command2: The Set Operating Flags cmd2.
-  public init(name: SettingName, summary: String, command2: UInt8) {
+  ///   - extendedWhen: The operating flag that has the command sent as an extended message.
+  public init(name: SettingName, summary: String, command2: UInt8, extendedWhen: SettingName? = nil) {
 
     self.name = name
     self.summary = summary
     self.command = .setOperatingFlags(flag: command2)
+    self.extendedWhen = extendedWhen
 
   }
 

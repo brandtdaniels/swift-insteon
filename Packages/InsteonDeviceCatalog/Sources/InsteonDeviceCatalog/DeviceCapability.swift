@@ -3,18 +3,6 @@ import InsteonProtocol
 /// Something a product can do, as its device profile describes it.
 public enum DeviceCapability: Hashable, Sendable {
 
-  /// Which mode values a thermostat uses in its mode status reports.
-  public enum ThermostatModeValues: String, Hashable, Sendable {
-
-    /// The values in Insteon's thermostat command tables, which InsteonProtocol's
-    /// `ThermostatMode` reads.
-    case commandTable
-
-    /// A TempLinc's own values, which InsteonProtocol's `TempLincMode` reads.
-    case tempLinc
-
-  }
-
   /// What a product means by a command it sends to one of its groups.
   public struct GroupEvent: Hashable, Sendable {
 
@@ -59,8 +47,9 @@ public enum DeviceCapability: Hashable, Sendable {
   /// its software.
   case hubPro(port: UInt16)
 
-  /// A thermostat, with the mode values it reports and whether it measures humidity.
-  case thermostat(modeValues: ThermostatModeValues, measuresHumidity: Bool)
+  /// A thermostat, and whether it measures humidity. Its command set describes its commands
+  /// and reports.
+  case thermostat(measuresHumidity: Bool)
 
   /// What the product means by the commands it sends to its groups.
   case groupEvents([GroupEvent])
@@ -80,7 +69,6 @@ extension DeviceCapability {
 
     case kind
     case port
-    case modeValues
     case humidity
     case events
     case group
@@ -98,8 +86,7 @@ extension DeviceCapability {
 
   }
 
-  /// Decodes a capability, or returns `nil` for one this package doesn't read: a kind, or a
-  /// thermostat's mode values, from a later version of the catalog.
+  /// Decodes a capability, or returns `nil` for a kind from a later version of the catalog.
   init?(from decoder: any Decoder) throws {
 
     let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -116,13 +103,7 @@ extension DeviceCapability {
     case "hubPro":
       self = .hubPro(port: try container.decode(UInt16.self, forKey: .port))
     case "thermostat":
-      guard let modeValues = ThermostatModeValues(rawValue: try container.decode(String.self, forKey: .modeValues)) else {
-
-        return nil
-
-      }
-
-      self = .thermostat(modeValues: modeValues, measuresHumidity: try container.decodeIfPresent(Bool.self, forKey: .humidity) ?? false)
+      self = .thermostat(measuresHumidity: try container.decodeIfPresent(Bool.self, forKey: .humidity) ?? false)
     case "groupEvents":
       self = .groupEvents(try container.decode([Event].self, forKey: .events).map { event in
 
