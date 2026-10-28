@@ -85,4 +85,13 @@ public enum SerialCommandNumber: UInt8, CaseIterable, Hashable, Sendable {
   /// Set RF Disable Flag (`0x7D`).
   case setRadio = 0x7D
 
+  /// Read RF Frequency (`0x7E`), from later modem firmware.
+  case readRadioStatus = 0x7E
+
+  /// Diagnostics (`0x81`), from later modem firmware.
+  case readDiagnostics = 0x81
+
+  /// Database Commands (`0x82`), from later modem firmware.
+  case manageDeviceRecord = 0x82
+
 }

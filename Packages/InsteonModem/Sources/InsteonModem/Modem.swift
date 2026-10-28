@@ -143,6 +143,24 @@ public actor Modem: SerialCommandSender {
 
   }
 
+  /// Asks the modem about its radio with Read RF Frequency (`0x7E`), which only later modem
+  /// firmware answers.
+  ///
+  /// - Returns: The radio's frequency code and flags, and whether it's on.
+  /// - Throws: ``ModemError/rejected(_:)`` from a modem without the command, or the errors of
+  ///   ``Modem/send(_:)``.
+  public func radioStatus() async throws -> ModemRadioStatus {
+
+    guard case let .radioStatus(status) = try await pacer.send([Self.exchange(for: .readRadioStatus)])[0] else {
+
+      preconditionFailure("Read RF Frequency is answered only by the radio's status.")
+
+    }
+
+    return status
+
+  }
+
   /// How long ``Modem/sendAllLinkCommand(group:command:timeout:)`` waits for the cleanups by
   /// default: 10 seconds.
   ///
@@ -800,7 +818,8 @@ public actor Modem: SerialCommandSender {
           return isAcceptedEcho(echo, of: command)
         // These commands are answered with their data in place of a plain echo.
         case .modemInfo where number == .getModemInfo,
-             .modemConfiguration where number == .getModemConfiguration:
+             .modemConfiguration where number == .getModemConfiguration,
+             .radioStatus where number == .readRadioStatus:
           return true
         case .negativeAcknowledgement:
           return false

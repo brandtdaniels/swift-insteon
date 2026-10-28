@@ -134,6 +134,7 @@ struct ModemTests {
   @Test(arguments: [
     (SerialCommand.getModemInfo, [UInt8]([0x02, 0x60, 0x1A, 0x2B, 0x3C, 0x03, 0x37, 0x9C, 0x06])),
     (SerialCommand.getModemConfiguration, [UInt8]([0x02, 0x73, 0x40, 0x05, 0x00, 0x06])),
+    (SerialCommand.readRadioStatus, [UInt8]([0x02, 0x7E, 0x87, 0x80, 0x00, 0x02, 0x00, 0x00, 0x06])),
   ])
   func sendReturnsWhenTheModemRepliesWithData(command: SerialCommand, reply: [UInt8]) async throws {
 
@@ -143,6 +144,20 @@ struct ModemTests {
     try await run(modem) { try await modem.send(command) }
 
     #expect(connection.written == [command.bytes])
+
+  }
+
+  @Test func readsTheRadiosStatus() async throws {
+
+    let connection = ScriptedConnection { _, _ in [0x02, 0x7E, 0x87, 0x81, 0x00, 0x02, 0x00, 0x00, 0x06] }
+    let modem = makeModem(connection)
+    var status: ModemRadioStatus?
+
+    try await run(modem) { status = try await modem.radioStatus() }
+
+    #expect(connection.written == [[0x02, 0x7E]])
+    #expect(status?.isRadioEnabled == false)
+    #expect(status?.frequencyCode == 0x87)
 
   }
 

@@ -6,9 +6,9 @@
 /// recognizable reply are skipped until the next start byte (`0x02`), NAK bytes among them,
 /// and so is a start byte whose reply doesn't end in an ACK or NAK where one is expected.
 ///
-/// A NAK to ``SerialCommand/getModemInfo`` or ``SerialCommand/getModemConfiguration`` is
-/// reported once more bytes arrive, since until then it can't be told apart from a reply whose
-/// data starts with `0x15`. If no more bytes are coming, ``ModemReplyParser/finishPendingReply()``
+/// A NAK to ``SerialCommand/getModemInfo``, ``SerialCommand/getModemConfiguration`` or
+/// ``SerialCommand/readRadioStatus`` is reported once more bytes arrive, since until then it
+/// can't be told apart from a reply whose data starts with `0x15`. If no more bytes are coming, ``ModemReplyParser/finishPendingReply()``
 /// reports it.
 ///
 /// ```swift
@@ -37,10 +37,11 @@ public struct ModemReplyParser: ReplyParser, Hashable, Sendable {
 
   }
 
-  /// Reports a NAK to ``SerialCommand/getModemInfo`` or ``SerialCommand/getModemConfiguration``
-  /// that's waiting for more bytes, along with any replies after it.
+  /// Reports a NAK to ``SerialCommand/getModemInfo``, ``SerialCommand/getModemConfiguration``
+  /// or ``SerialCommand/readRadioStatus`` that's waiting for more bytes, along with any
+  /// replies after it.
   ///
-  /// The NAK (`02 60 15` or `02 73 15`) begins the same way as a reply whose data starts with
+  /// The NAK (such as `02 60 15`) begins the same way as a reply whose data starts with
   /// `0x15`, so ``ModemReplyParser/parse(_:)`` waits for more bytes before reporting it. Call
   /// this once no more bytes are coming, for example when the reply has timed out.
   ///
@@ -54,6 +55,7 @@ public struct ModemReplyParser: ReplyParser, Hashable, Sendable {
       switch SerialCommandNumber(rawValue: byte) {
       case .getModemInfo: .getModemInfo
       case .getModemConfiguration: .getModemConfiguration
+      case .readRadioStatus: .readRadioStatus
       default: nil
       }
 
@@ -104,6 +106,7 @@ private enum ModemFraming: Framing {
     case 0x57: return .complete(10)
     case 0x58: return .complete(3)
     case 0x59: return .complete(12)
+    case 0x5A, 0x5B: return .complete(13)
     default:
       guard let number = SerialCommandNumber(rawValue: bytes[1]) else {
 
@@ -121,10 +124,10 @@ private enum ModemFraming: Framing {
   private static func replyLength(to number: SerialCommandNumber, in bytes: [UInt8]) -> FrameLength {
 
     switch number {
-    case .getModemInfo, .getModemConfiguration:
+    case .getModemInfo, .getModemConfiguration, .readRadioStatus:
       // A NAK can follow the number directly, but the data's first byte can also be 0x15, so
       // a full-length reply that ends in an ACK or NAK takes precedence.
-      let dataLength = number == .getModemInfo ? 9 : 6
+      let dataLength = number == .getModemConfiguration ? 6 : 9
 
       guard bytes.count >= dataLength else {
 
@@ -142,11 +145,20 @@ private enum ModemFraming: Framing {
       }
 
       return .complete(MessageFlags(rawValue: bytes[5]).isExtended ? 23 : 9)
+    case .beep:
+      // Later firmware echoes a parameter byte, which the Developer's Guide's form lacks.
+      guard bytes.count >= 3 else {
+
+        return .needMoreBytes
+
+      }
+
+      return .complete(ControlByte.isAnswer(bytes[2]) ? 3 : 4)
     case .cancelAllLinking, .resetModem, .getFirstAllLinkRecord, .getNextAllLinkRecord,
-         .getAllLinkRecordForSender, .ledOn, .ledOff, .rfSleep, .cancelCleanup, .beep:
+         .getAllLinkRecordForSender, .ledOn, .ledOff, .rfSleep, .cancelCleanup:
       return .complete(3)
     case .setAcknowledgementByte, .setModemConfiguration, .setNegativeAcknowledgementByte,
-         .setApplicationRetries, .setRadio:
+         .setApplicationRetries, .setRadio, .readDiagnostics:
       return .complete(4)
     case .sendX10, .startAllLinking, .setAcknowledgementBytes, .readDatabase:
       return .complete(5)
@@ -156,6 +168,8 @@ private enum ModemFraming: Framing {
       return .complete(12)
     case .writeDatabase:
       return .complete(13)
+    case .manageDeviceRecord:
+      return .complete(14)
     }
 
   }
@@ -194,6 +208,18 @@ private enum ModemFraming: Framing {
       return .allLinkCleanupStatus(isComplete: body[0] == ControlByte.acknowledgement)
     case 0x59:
       return .databaseRecord(address: UInt16(highByte: body[0], lowByte: body[1]), record: AllLinkRecord(body, at: 2))
+    case 0x5A:
+      return .diagnosticRecord(ModemDiagnosticRecord(body))
+    case 0x5B:
+      return .deviceRecordFound(address: UInt16(highByte: body[0], lowByte: body[1]), record: AllLinkRecord(body, at: 2))
+    case 0x7E where body.count == 7 && body.last == ControlByte.acknowledgement:
+      return .radioStatus(ModemRadioStatus(
+        frequencyCode: body[0],
+        radioFlags: body[1],
+        lightFlags: body[2],
+        hardwareVersion: body[3],
+        reserved: [body[4], body[5]]
+      ))
     case 0x60 where body.count == 7 && body.last == ControlByte.acknowledgement:
       return .modemInfo(ModemInfo(reportedBytes: Array(body.prefix(6))))
     case 0x73 where body.count == 4 && body.last == ControlByte.acknowledgement:
@@ -202,10 +228,11 @@ private enum ModemFraming: Framing {
         applicationRetries: body[1],
         databaseDelta: body[2]
       ))
-    case 0x60, 0x73:
+    case 0x60, 0x73, 0x7E:
       // A rejected request: these commands have no parameters to echo.
       return .echo(CommandEcho(
-        number: frame[1] == 0x60 ? .getModemInfo : .getModemConfiguration,
+        // Only these numbers reach this case.
+        number: SerialCommandNumber(rawValue: frame[1])!,
         parameters: [],
         isAccepted: false
       ))

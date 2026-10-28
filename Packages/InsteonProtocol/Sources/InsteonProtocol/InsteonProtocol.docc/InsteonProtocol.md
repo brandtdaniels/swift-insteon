@@ -100,6 +100,8 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``SerialCommandSender``
 - ``ModemConfiguration``
 - ``RadioSetting``
+- ``DeviceRecordRequest``
+- ``DeviceRecordOptions``
 
 ### Modem replies
 
@@ -111,6 +113,8 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``ModemConfigurationReport``
 - ``AllLinkingCompleted``
 - ``ModemButtonEvent``
+- ``ModemDiagnosticRecord``
+- ``ModemRadioStatus``
 
 ### PowerLinc Controller (IBIOS)
 
