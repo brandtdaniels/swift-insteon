@@ -4,8 +4,9 @@ import InsteonNetworking
 /// The local HTTP interface of an Insteon Hub, model 2245 or 2242.
 ///
 /// The Hub passes bytes to its built-in modem and collects the modem's replies in a buffer.
-/// These are the Hub's three requests, with no pacing or retries; to send commands, wrap the
-/// Hub in a ``HubConnection`` and drive it with a `Modem`, as you would a USB modem.
+/// These are the Hub's requests, with no pacing or retries; to send commands, wrap the Hub in a
+/// ``HubConnection`` and drive it with a `Modem`, as you would a USB modem. A 2242 Hub also
+/// runs timers, which ``Hub/setTimer(_:for:)`` and the methods beside it write.
 ///
 /// The Hub requires HTTP basic authentication with the user name and password printed on it.
 /// ``Hub/init(endpoint:user:password:httpClient:)`` adds it for you; to authenticate another
@@ -88,7 +89,7 @@ public struct Hub: Sendable {
 
   }
 
-  private func perform(_ request: HubRequest) async throws -> HTTPResponse {
+  func perform(_ request: HubRequest) async throws -> HTTPResponse {
 
     let response = try await httpClient.send(request.urlRequest(for: endpoint))
 

@@ -11,4 +11,10 @@ public enum HubError: Error, Hashable, Sendable {
   /// The Hub's buffer status could not be parsed.
   case malformedBuffer
 
+  /// A 2242 Hub's page of slot statuses could not be parsed.
+  case malformedSlotPage
+
+  /// The slot holds the Hub's unlock code, so it can't hold a timer.
+  case reservedSlot(HubSlot)
+
 }
