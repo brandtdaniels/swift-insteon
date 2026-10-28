@@ -41,7 +41,7 @@ struct Exchange<Reply>: Sendable {
   var timeout: Duration?
 
   /// How much longer than the timeout to wait for the answer, for a command that moves a lot
-  /// of data.
+  /// of data or takes a long time to carry out.
   var transferTime: Duration
 
   /// Whether a rejection means the exchange before this one went wrong, so each new attempt

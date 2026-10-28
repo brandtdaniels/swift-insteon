@@ -111,7 +111,8 @@ public actor Modem: SerialCommandSender {
   /// Canceling a send stops it: a send waiting for its turn leaves the queue, a send waiting
   /// for its echo stops waiting, and a rejected command isn't sent again. A command that was
   /// written still holds the modem, so the next send waits for the modem to answer it, or for
-  /// the echo timeout, before writing.
+  /// the time it was given to answer, before writing. For ``SerialCommand/resetModem`` that's
+  /// 20 seconds longer than the retry policy's answer timeout.
   ///
   /// - Parameter command: The command to send.
   /// - Throws: ``ModemError/rejected(_:)`` if the modem NAKs every attempt,
@@ -240,7 +241,9 @@ public actor Modem: SerialCommandSender {
   ///   - reply: Reads the reply from a message, or returns `nil` if the message isn't it. It
   ///     sees only messages from the device that arrive after its acknowledgement.
   ///   - timeout: How long to wait for the modem's echo, the device's acknowledgement and its
-  ///     reply together. Defaults to ``Modem/defaultExtendedRequestTimeout``.
+  ///     reply together. Defaults to ``Modem/defaultExtendedRequestTimeout``, which covers the
+  ///     guide's retries of the message but not also those of the reply, so a reply that needs
+  ///     every retry can arrive late.
   /// - Returns: The device's reply.
   /// - Throws: ``ModemError/deviceRejected(_:_:)`` if the device rejects the message,
   ///   ``ModemError/deviceTimedOut(_:)`` if it doesn't acknowledge it or doesn't reply,
@@ -422,7 +425,8 @@ public actor Modem: SerialCommandSender {
     timeout: Duration
   ) async throws -> ReceivedMessage {
 
-    var steps = Self.exchange(for: command).steps + [Self.acknowledgement(from: device, of: command1)]
+    let modemExchange = Self.exchange(for: command)
+    var steps = modemExchange.steps + [Self.acknowledgement(from: device, of: command1)]
 
     if let isReply {
 
@@ -430,7 +434,7 @@ public actor Modem: SerialCommandSender {
 
     }
 
-    let exchange = Exchange(bytes: command.bytes, steps: steps, timeout: timeout)
+    let exchange = Exchange(bytes: command.bytes, steps: steps, timeout: timeout, transferTime: modemExchange.transferTime)
 
     // The last step, the acknowledgement or the reply after it, only accepts a message
     // received from the device.
