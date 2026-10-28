@@ -1,4 +1,4 @@
-/// The commands the Developer's Guide defines for ALL-Link broadcasts and cleanups.
+/// The commands the Insteon Developer's Guide defines for ALL-Link broadcasts and cleanups.
 ///
 /// ALL-Link Recall is the one every responder carries out: it returns to the state it saved
 /// when it was linked. The others are alias commands, which a responder ignores unless it has a
@@ -111,7 +111,7 @@ public enum AllLinkCommand: UInt8, Hashable, Sendable, CaseIterable {
   /// place of the command unless it has been given another, or `nil` for
   /// ``AllLinkCommand/recall``, which never has a substitute.
   ///
-  /// The Developer's Guide lists Light Dim One Step's bytes as `0x1500` in its ALL-Link
+  /// The Insteon Developer's Guide lists Light Dim One Step's bytes as `0x1500` in its ALL-Link
   /// command table, the same as Light Brighten One Step's; its table of default substitutes
   /// names Light Dim One Step, which is cmd1 `0x16`.
   public var lightingSubstitute: Command? {
@@ -145,8 +145,8 @@ public enum AllLinkCommand: UInt8, Hashable, Sendable, CaseIterable {
 
 extension GroupCommand {
 
-  /// The ALL-Link command the controller sent, or `nil` if cmd1 is one the Developer's Guide
-  /// doesn't define for ALL-Link messages, such as a sensor's or thermostat's own commands.
+  /// The ALL-Link command the controller sent, or `nil` if cmd1 is one the Insteon Developer's
+  /// Guide doesn't define for ALL-Link messages, such as a sensor's or thermostat's own commands.
   public var allLinkCommand: AllLinkCommand? {
 
     AllLinkCommand(rawValue: command1)

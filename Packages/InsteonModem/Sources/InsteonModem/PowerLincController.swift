@@ -154,7 +154,7 @@ public actor PowerLincController: SerialCommandSender {
 
   // MARK: - Translating modem commands
 
-  /// Addresses in the controller's memory, from the developer guide's worked examples.
+  /// Addresses in the controller's memory, from the Insteon Developer's Guide's worked examples.
   private enum Memory {
 
     /// The To address in the message construction buffer. The controller fills in the From
@@ -178,8 +178,8 @@ public actor PowerLincController: SerialCommandSender {
 
   }
 
-  /// The exchanges that carry a modem command. Each download is confirmed with Get Checksum
-  /// before the flag that sends it is set, as the developer guide advises, since an ACK means
+  /// The exchanges that carry a modem command. Each download is confirmed with Get Checksum before
+  /// the flag that sends it is set, as the Insteon Developer's Guide advises, since an ACK means
   /// only that the controller received the bytes.
   private static func exchanges(for command: SerialCommand) throws(PowerLincControllerError) -> [Exchange<IBIOSReply>] {
 
@@ -211,7 +211,7 @@ public actor PowerLincController: SerialCommandSender {
     let length = UInt16(data.count)
     let confirmation = IBIOSCommand.getChecksum(address: address, length: length)
 
-    // The developer guide describes this checksum as covering the region's bytes, and the
+    // The Insteon Developer's Guide describes this checksum as covering the region's bytes, and the
     // download's as also covering its address and length, so either confirms the data.
     let checksums: Set<UInt16> = [
       IBIOSCommand.checksum(of: data),

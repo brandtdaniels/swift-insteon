@@ -18,7 +18,8 @@ struct ProductTests {
 
   }
 
-  // The guide's example: a device with DevCat 0x01 and SubCat 0x03 that reports no firmware.
+  // The Insteon Developer's Guide's example: a device with DevCat 0x01 and SubCat 0x03 that reports
+  // no firmware.
   @Test func readsSetButtonPressedFromTheToAddress() throws {
 
     let identity = try #require(SetButtonPressed(broadcast(to: InsteonAddress(0x01, 0x03, 0xFF), command1: 0x01)))
@@ -202,7 +203,7 @@ struct ProductTests {
 
   }
 
-  // The names in the developer guide's table of device categories.
+  // The names in the Insteon Developer's Guide's table of device categories.
   @Test(arguments: [
     (DeviceCategory.generalizedControllers, UInt8(0x00), "Generalized Controllers"),
     (.dimmableLightingControl, 0x01, "Dimmable Lighting Control"),

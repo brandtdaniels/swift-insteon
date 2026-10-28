@@ -24,7 +24,7 @@ public struct AllLinkCommandAlias: Hashable, Sendable {
 
   /// Creates an alias.
   ///
-  /// The Developer's Guide says ALL-Link Recall never has a substitute, so a responder may
+  /// The Insteon Developer's Guide says ALL-Link Recall never has a substitute, so a responder may
   /// ignore one set for ``AllLinkCommand/recall``.
   ///
   /// - Parameters:

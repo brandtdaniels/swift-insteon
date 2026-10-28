@@ -164,7 +164,7 @@ public actor Modem: SerialCommandSender {
   /// How long ``Modem/sendAllLinkCommand(group:command:timeout:)`` waits for the cleanups by
   /// default: 10 seconds.
   ///
-  /// The Developer's Guide gives the worst case as 2.150 seconds from the broadcast to the
+  /// The Insteon Developer's Guide gives the worst case as 2.150 seconds from the broadcast to the
   /// first member's cleanup report and 1.550 seconds to each one after, so 10 seconds covers a
   /// group of up to six members that all need every retry. Pass more for a larger group.
   public static let defaultAllLinkCommandTimeout: Duration = .seconds(10)
@@ -172,11 +172,11 @@ public actor Modem: SerialCommandSender {
   /// Sends a command to one of the modem's ALL-Link groups and waits for the modem to finish
   /// its cleanups.
   ///
-  /// The modem broadcasts the command to the group, then sends each member a cleanup message,
-  /// as Send ALL-Link Command (`0x61`) describes. The modem's turn is held until the modem's
-  /// ALL-Link Cleanup Status Report (`0x58`), since the guide says any message sent before then
-  /// cancels the rest of the cleanups. Meanwhile each member's cleanup acknowledgment, cleanup
-  /// NAK or ALL-Link Cleanup Failure Report (`0x56`) is collected.
+  /// The modem broadcasts the command to the group, then sends each member a cleanup message, as
+  /// Send ALL-Link Command (`0x61`) describes. The modem's turn is held until the modem's ALL-Link
+  /// Cleanup Status Report (`0x58`), since the Insteon Developer's Guide says any message sent
+  /// before then cancels the rest of the cleanups. Meanwhile each member's cleanup acknowledgment,
+  /// cleanup NAK or ALL-Link Cleanup Failure Report (`0x56`) is collected.
   ///
   /// ```swift
   /// let report = try await modem.sendAllLinkCommand(group: 0x01, command: StandardDirectCommand.on(level: 0xFF).command)
@@ -188,9 +188,9 @@ public actor Modem: SerialCommandSender {
   ///
   /// - Parameters:
   ///   - group: The modem's ALL-Link group to send the command to.
-  ///   - command: The command to broadcast. Its cmd2 goes in the broadcast; the cleanups carry
-  ///     the group number instead. The guide says not to send Light Start Manual Change
-  ///     (cmd1 `0x17`) this way, so it isn't allowed.
+  ///   - command: The command to broadcast. Its cmd2 goes in the broadcast; the cleanups carry the
+  ///     group number instead. The Insteon Developer's Guide says not to send Light Start Manual
+  ///     Change (cmd1 `0x17`) this way, so it isn't allowed.
   ///   - timeout: How long to wait for the modem's echo and every cleanup together. Defaults to
   ///     ``Modem/defaultAllLinkCommandTimeout``.
   /// - Returns: Which members acknowledged their cleanup, which didn't, and whether the modem
@@ -310,7 +310,7 @@ public actor Modem: SerialCommandSender {
   /// How long a request for a standard message waits for the device's answer by default:
   /// 3 seconds.
   ///
-  /// The Developer's Guide gives 2.00 seconds for the Insteon engine to retry a standard
+  /// The Insteon Developer's Guide gives 2.00 seconds for the Insteon engine to retry a standard
   /// message five times from Max Hops 3, the most it retries. The extra second covers the
   /// modem's echo.
   public static let defaultRequestTimeout: Duration = .seconds(3)
@@ -318,7 +318,7 @@ public actor Modem: SerialCommandSender {
   /// How long a request for an extended message waits for the device's answer by default:
   /// 4.17 seconds.
   ///
-  /// The Developer's Guide gives 3.17 seconds for the Insteon engine to retry an extended
+  /// The Insteon Developer's Guide gives 3.17 seconds for the Insteon engine to retry an extended
   /// message five times from Max Hops 3. The extra second covers the modem's echo, as in
   /// ``Modem/defaultRequestTimeout``.
   public static let defaultExtendedRequestTimeout: Duration = .milliseconds(4_170)
@@ -584,11 +584,11 @@ public actor Modem: SerialCommandSender {
 
   /// Reads every record in the modem's own ALL-Link database.
   ///
-  /// The modem reports its records one at a time: Get First ALL-Link Record (`0x69`) starts
-  /// the scan and Get Next ALL-Link Record (`0x6A`) continues it, each answered by an ALL-Link
-  /// Record Response. The Developer's Guide says the modem NAKs Get First when its database is
-  /// empty and Get Next when there are no more records, so that NAK ends the scan. A NAK
-  /// without the echo means the modem is busy, so the command is sent again.
+  /// The modem reports its records one at a time: Get First ALL-Link Record (`0x69`) starts the
+  /// scan and Get Next ALL-Link Record (`0x6A`) continues it, each answered by an ALL-Link Record
+  /// Response. The Insteon Developer's Guide says the modem NAKs Get First when its database is
+  /// empty and Get Next when there are no more records, so that NAK ends the scan. A NAK without
+  /// the echo means the modem is busy, so the command is sent again.
   ///
   /// The scan holds the modem's turn from the first record to the last, so no other command
   /// can move the modem's place in its database partway through. A record that's lost after
@@ -835,7 +835,7 @@ public actor Modem: SerialCommandSender {
 
   }
 
-  /// How much longer than the answer timeout a command may take. The Developer's Guide says
+  /// How much longer than the answer timeout a command may take. The Insteon Developer's Guide says
   /// the modem answers Reset the IM once it has erased its memory, which takes about 20
   /// seconds on a model with external EEPROM.
   private static func transferTime(of number: SerialCommandNumber) -> Duration {

@@ -171,8 +171,9 @@ struct LinkingSession: Sendable {
 
       try await start()
 
-      // The guide says Start ALL-Linking assigns the group the modem reports. That's the
-      // modem's own group only when it controls the link, so a responder's isn't checked.
+      // The Insteon Developer's Guide says Start ALL-Linking assigns the group the modem reports.
+      // That's the modem's own group only when it controls the link, so a responder's isn't
+      // checked.
       let reportedGroup = modemMode == .responder ? nil : group
 
       let link = try await firstLink(in: replies, with: device, group: reportedGroup, expecting: expectedMode, within: linkingTimeout)

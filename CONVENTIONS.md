@@ -19,8 +19,8 @@ everywhere. `Scripts/check-terms.py` checks the forms it can, and CI runs it.
 ## Protocol
 
 - Engines: **i1, i2, i2CS, i3**. The Swift case and the catalog's JSON value stay `i2cs`.
-- **ALL-Link**, **ALL-Linking**, **ALL-Link group**, **ALL-Link database**, **ALL-Link
-  Cleanup**. Never "link database" on its own.
+- **ALL-Link**, **ALL-Linking**, **ALL-Link group**, **ALL-Link database**, and **ALL-Link
+  cleanup** (ALL-Link Cleanup in report names). Never "link database" on its own.
 - **cleanup**, **SET button**, **SET Button Pressed**, **on-level**, **ramp rate**,
   **heartbeat**, **powerline**, **dual-band** (Dual-Band in product names).
 - **ACK**, **NAK**, and **acknowledgment** in American spelling, in prose and in Swift names,

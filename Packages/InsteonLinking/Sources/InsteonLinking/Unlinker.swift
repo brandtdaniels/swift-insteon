@@ -5,7 +5,7 @@ import InsteonProtocol
 ///
 /// The unlinker deletes each link's two records from the ALL-Link databases of the controller
 /// and the responder, the reverse of ``Linker``. A device's record is deleted by clearing its
-/// in-use bit, as the developer guide describes, so the space is reused by the next link.
+/// in-use bit, as the Insteon Developer's Guide describes, so the space is reused by the next link.
 ///
 /// ```swift
 /// try await Unlinker(modem: modem).unlink(group)

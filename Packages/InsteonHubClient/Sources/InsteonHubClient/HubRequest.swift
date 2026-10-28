@@ -62,7 +62,8 @@ package enum HubRequest {
     case let .writeTimer(slot, fields): "S\(slot.rawValue)=\(fields)"
     case let .writeCommands(slot, commands?): "C\(slot.rawValue)=\(Self.hex(commands.on.bytes))=2tt\(Self.hex(commands.off.bytes))"
     case let .writeCommands(slot, nil): "C\(slot.rawValue)=-=2ff-"
-    // The fields after the time are what Insteon's Hub app sends; it doesn't say what they mean.
+    // The fields after the time are what the Insteon for Hub app sends; it doesn't say what they
+    // mean.
     case let .setTime(time): "TD=\(time.clockText)=1=falsefalse"
     case let .setWeekday(day): "D=1=1=" + HubWeekday.allCases.map { $0 == day ? "t=" : "f=" }.joined()
     }

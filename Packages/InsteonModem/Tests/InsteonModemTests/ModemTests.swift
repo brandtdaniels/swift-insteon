@@ -245,8 +245,8 @@ struct ModemTests {
 
   }
 
-  // The guide: the modem answers once it has erased its memory, which takes about 20 seconds
-  // on a model with external EEPROM.
+  // The Insteon Developer's Guide: the modem answers once it has erased its memory, which takes
+  // about 20 seconds on a model with external EEPROM.
   @Test func waitsForTheModemToEraseItsMemoryWhenItResets() async throws {
 
     let connection = ScriptedConnection { _, _ in [] }

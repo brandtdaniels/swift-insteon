@@ -54,7 +54,8 @@ struct HubTimerTests {
 
   }
 
-  // Insteon's Hub app pairs the devices and the flags in order, whether or not they alternate.
+  // the Insteon for Hub app pairs the devices and the flags in order, whether or not they
+  // alternate.
   @Test func readsAPageListingDevicesThenFlagsInEitherQuotes() async throws {
 
     let (hub, _) = makeHub(answering: #"<S D='1A.DC.49.01'/><S D="00.00.00.00"/><S D="13"/><S D='00'/>"#)

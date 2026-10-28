@@ -56,7 +56,7 @@ struct AllLinkDatabaseTests {
 
     let response = try #require(AllLinkRecordResponse(message))
 
-    // The guide's example predates i2CS, so it carries no checksum.
+    // The Insteon Developer's Guide's example predates i2CS, so it carries no checksum.
     #expect(response == AllLinkRecordResponse(
       sender: device,
       address: 0x0FFF,

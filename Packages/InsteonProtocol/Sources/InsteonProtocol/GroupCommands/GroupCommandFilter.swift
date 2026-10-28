@@ -32,13 +32,13 @@ public struct GroupCommandFilter<Instant: InstantProtocol>: Sendable where Insta
 
   /// How long after a broadcast the same broadcast counts as a repeat by default: 1 second.
   ///
-  /// The Developer's Guide doesn't give a time, so this is chosen to cover a device sending a
-  /// broadcast twice in a row while letting a person's second press through.
+  /// The Insteon Developer's Guide doesn't give a time, so this is chosen to cover a device sending
+  /// a broadcast twice in a row while letting a person's second press through.
   public static var defaultDuplicateWindow: Duration { .seconds(1) }
 
   /// How long after a command its cleanups are expected by default: 10 seconds.
   ///
-  /// The Developer's Guide gives the worst case as 2.150 seconds from the broadcast to the
+  /// The Insteon Developer's Guide gives the worst case as 2.150 seconds from the broadcast to the
   /// first member's cleanup and 1.550 seconds to each one after, so 10 seconds covers a group
   /// of up to six members that all need every retry.
   public static var defaultCleanupWindow: Duration { .seconds(10) }

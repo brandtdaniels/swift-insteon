@@ -205,8 +205,8 @@ struct RequestTests {
 
   }
 
-  // The guide's time for five retries of an extended message, 3.17 seconds, plus a second for
-  // the modem's echo.
+  // The Insteon Developer's Guide's time for five retries of an extended message, 3.17 seconds,
+  // plus a second for the modem's echo.
   @Test func waitsLongerForAnExtendedMessage() async throws {
 
     let connection = ScriptedConnection { written, _ in written + [0x06] }
@@ -454,7 +454,7 @@ struct RequestTests {
 
   }
 
-  // The guide: the modem NAKs Get First when its database is empty.
+  // The Insteon Developer's Guide: the modem NAKs Get First when its database is empty.
   @Test func readsAnEmptyModemDatabase() async throws {
 
     let connection = ScriptedConnection { written, _ in written + [0x15] }
@@ -499,7 +499,8 @@ struct RequestTests {
 
   }
 
-  // The guide: other Insteon traffic stops the cleanups, and the status report says so.
+  // The Insteon Developer's Guide: other Insteon traffic stops the cleanups, and the status report
+  // says so.
   @Test func reportsCleanupsCutShort() async throws {
 
     let connection = ScriptedConnection { written, _ in written + [0x06, 0x02, 0x58, 0x15] }

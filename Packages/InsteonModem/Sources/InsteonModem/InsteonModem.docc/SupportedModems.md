@@ -21,7 +21,7 @@ uses them, whatever the connection:
 
 These aren't supported:
 
-- **PowerLinc Controller 2414U, by USB:** it connects through USB HID rather than a serial
+- **PowerLinc Controller 2414U:** it connects through USB HID rather than a serial
   port.
 - **Central Controller 2412N (SmartLinc):** its interface isn't documented.
 
@@ -42,8 +42,8 @@ subcategory tells the models apart. HouseLinc's device catalog lists these:
 | 2245 | `0x33` to `0x36`, one for each region |
 | 2242 | `0x2B`, `0x2E` to `0x32`, one or more for each region |
 | 2414S | `0x01` |
-| 2412N (SmartLinc) | `0x10` |
-| Hub Pro 2243 | `0x18`, `0x2C`, `0x2D` |
+| 2412N | `0x10` |
+| 2243 | `0x18`, `0x2C`, `0x2D` |
 
 The catalog also lists a Hub as `0x37` without a model number. For any other modem, look the
 category and subcategory up in the [Insteon device catalog](https://github.com/brandtdaniels/insteon-device-catalog), which InsteonDeviceCatalog reads.

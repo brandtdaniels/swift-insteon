@@ -126,7 +126,7 @@ public struct Linker: Sendable {
   /// When the modem is the controller, the modem goes first and the device joins its group as
   /// a responder; when the modem is the responder, the device goes first as the controller of
   /// its group. The device memorizes its current state as its link data, so a dimmable device
-  /// should be fully on the first time it links, as the developer guide advises.
+  /// should be fully on the first time it links, as the Insteon Developer's Guide advises.
   ///
   /// Devices with an i2 engine are sent the standard Enter Linking Mode, and i2CS devices the
   /// extended one with a checksum. i1 devices can't be linked remotely; use

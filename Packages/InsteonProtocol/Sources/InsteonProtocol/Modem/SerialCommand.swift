@@ -68,8 +68,8 @@ public enum SerialCommand: Hashable, Sendable {
 
   /// Resets the modem to factory defaults, erasing its entire ALL-Link database.
   ///
-  /// The modem answers once it has erased its memory, which the Developer's Guide says takes
-  /// about 20 seconds on a model with external EEPROM and about 2 seconds on one without.
+  /// The modem answers once it has erased its memory, which the Insteon Developer's Guide says
+  /// takes about 20 seconds on a model with external EEPROM and about 2 seconds on one without.
   case resetModem
 
   /// Sets the cmd2 byte the modem sends in its ACKs to direct messages.
@@ -119,7 +119,7 @@ public enum SerialCommand: Hashable, Sendable {
   case setAcknowledgmentBytes(Command)
 
   /// Puts an RF modem into its power-saving sleep mode. Sending it any byte wakes it; wait at
-  /// least 40 ms after waking it before sending a command, as the Developer's Guide says.
+  /// least 40 ms after waking it before sending a command, as the Insteon Developer's Guide says.
   case rfSleep
 
   /// Requests the modem's configuration flags.

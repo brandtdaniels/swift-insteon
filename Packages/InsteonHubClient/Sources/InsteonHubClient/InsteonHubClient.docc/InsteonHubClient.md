@@ -85,7 +85,7 @@ their local interface; it didn't drive the Hub Pro 2243. A Hub's modem reports i
 A Hub 2242 runs timers on its own, so they keep running with no app connected. It keeps them in
 256 numbered slots, 16 pages of 16, one page per room. Each slot has a name, an on time and an
 off time, the days of the week it runs, and the serial commands it sends to turn on and off.
-Timers go in slots 1 through 239, the ones Insteon's Hub app used: slot 240 holds the Hub's unlock
+Timers go in slots 1 through 239, the ones the Insteon for Hub app used: slot 240 holds the Hub's unlock
 code, and the last page is the thermostat room, which the app kept disabled.
 
 ``Hub/setCommands(_:for:)`` sets what a slot sends, and ``Hub/setTimer(_:for:)`` sets when.
@@ -94,10 +94,10 @@ times by month, and it keeps the time of day and day of the week, which
 ``Hub/setClock(to:on:)`` sets. ``Hub/slotStatuses(page:)`` reads each slot's device, group and
 state, but not its times.
 
-These requests follow the ones Insteon's Hub app sent to the Hub 2242, including fields whose
+These requests follow the ones the Insteon for Hub app sent to the Hub 2242, including fields whose
 meaning the app doesn't give. They haven't been verified on a Hub. The Hub 2245 runs timers too,
 but Insteon's app wrote them only through Insteon's cloud, never through the Hub's local
-interface. Insteon's Hub app grew out of its SmartLinc app, so the SmartLinc 2412N may accept
+interface. The Insteon for Hub app grew out of its SmartLinc app, so the SmartLinc 2412N may accept
 the same requests.
 
 ## Topics

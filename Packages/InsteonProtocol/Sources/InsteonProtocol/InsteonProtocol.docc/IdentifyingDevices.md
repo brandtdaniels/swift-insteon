@@ -16,7 +16,7 @@ device's SET button to link it.
 
 Devices that support ``StandardDirectCommand/productDataRequest`` answer it with an extended
 message, which ``ProductData`` reads. Besides the category and subcategory, it carries the
-device's ``ProductKey``. The Developer's Guide requires one of devices made after
+device's ``ProductKey``. The Insteon Developer's Guide requires one of devices made after
 February 1, 2007, but many devices don't fill it in, so identify devices by their category,
 subcategory and firmware version.
 

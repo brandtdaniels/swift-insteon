@@ -33,7 +33,7 @@ public struct GroupCommand: Hashable, Sendable {
   public var group: AllLinkGroupNumber
 
   /// The command, such as `0x11` for on or `0x13` for off. ``GroupCommand/allLinkCommand``
-  /// names the ones the Developer's Guide defines.
+  /// names the ones the Insteon Developer's Guide defines.
   public var command1: UInt8
 
   /// The broadcast's cmd2, or `nil` for a command read from a cleanup, whose cmd2 carries the
@@ -77,12 +77,12 @@ public struct GroupCommand: Hashable, Sendable {
 
     switch message.flags.messageType {
     case .allLinkBroadcast:
-      // The guide: the To address holds the group number in its low byte. A Success Report
-      // uses the To address for other things, and so does the announcement an i2CS device
-      // sends when its SET button is held, which carries its category, subcategory and
+      // The Insteon Developer's Guide: the To address holds the group number in its low byte. A
+      // Success Report uses the To address for other things, and so does the announcement an i2CS
+      // device sends when its SET button is held, which carries its category, subcategory and
       // firmware there, cmd1 0x01 to link or 0x02 to unlink, and in cmd2 what product
-      // specifications call either the group or the hardware revision. The guide
-      // reserves cmd1 0x00 through 0x10 in ALL-Link messages.
+      // specifications call either the group or the hardware revision. The Insteon Developer's
+      // Guide reserves cmd1 0x00 through 0x10 in ALL-Link messages.
       guard ![SuccessReport.command1, 0x01, 0x02].contains(message.command.command1) else {
 
         return nil

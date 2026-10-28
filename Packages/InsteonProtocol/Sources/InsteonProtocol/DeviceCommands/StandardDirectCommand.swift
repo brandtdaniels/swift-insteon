@@ -29,7 +29,7 @@ public enum StandardDirectCommand: Hashable, Sendable {
   ///
   /// Devices also leave linking mode on their own after a timeout. Insteon's documents disagree
   /// on which devices accept the command: one command table lists it for every i2 device,
-  /// another says only SmartLinc and i2CS products support it, and the Developer's Guide
+  /// another says only SmartLinc and i2CS products support it, and the Insteon Developer's Guide
   /// reserves cmd1 `0x08`. The i2CS command sheet says an i2CS device always acts on it, as a
   /// standard or extended message, even when it NAKs it because the sender isn't in its
   /// ALL-Link database.
@@ -149,8 +149,8 @@ public enum ManualChangeDirection: UInt8, Hashable, Sendable {
 
 /// The information requested by ``StandardDirectCommand/getOperatingFlags(_:)``, sent as cmd2.
 ///
-/// The developer guide defines `0x00` through `0x02`. Devices define other requests for their
-/// own data, such as `0x05` and `0x06` for more flags on KeypadLinc and SwitchLinc dimmers;
+/// The Insteon Developer's Guide defines `0x00` through `0x02`. Devices define other requests for
+/// their own data, such as `0x05` and `0x06` for more flags on KeypadLinc and SwitchLinc dimmers;
 /// create those from their byte. What each request returns depends on the product.
 ///
 /// ```swift

@@ -1,7 +1,7 @@
 /// A test powerline phase broadcast, which a dual-band device sends so devices that hear it
 /// can show whether they're on the same phase of the home's wiring.
 ///
-/// The Developer's Guide says it's "only sent by i2/RF devices, with Max Hops = 0", so only
+/// The Insteon Developer's Guide says it's "only sent by i2/RF devices, with Max Hops = 0", so only
 /// devices in range hear it. A device on the same phase blinks its LED fast for 10 seconds,
 /// and one on the opposite phase blinks slowly.
 public struct PowerlinePhaseTest: Hashable, Sendable {
