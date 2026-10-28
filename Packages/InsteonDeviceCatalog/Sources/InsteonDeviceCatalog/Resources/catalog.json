@@ -8847,7 +8847,30 @@
       ]
     },
     {
-      "capabilities": [],
+      "batteryPowered": true,
+      "capabilities": [
+        {
+          "events": [
+            {
+              "command1": "0x11",
+              "event": "motion",
+              "group": "0x01"
+            },
+            {
+              "command1": "0x13",
+              "event": "motionStopped",
+              "group": "0x01"
+            }
+          ],
+          "kind": "groupEvents"
+        },
+        {
+          "group": "0x04",
+          "intervalMinutes": 1428,
+          "kind": "heartbeat"
+        }
+      ],
+      "description": "A wireless, battery-powered motion sensor that sends on when it detects motion and off when the motion has stopped.",
       "engines": [
         {
           "category": "0x10",
@@ -8876,6 +8899,18 @@
           "subcategory": "0x05"
         }
       ],
+      "groups": [
+        {
+          "name": "Motion",
+          "number": "0x01",
+          "role": "controller"
+        },
+        {
+          "name": "Heartbeat",
+          "number": "0x04",
+          "role": "controller"
+        }
+      ],
       "identities": [
         {
           "category": "0x10",
@@ -8896,10 +8931,14 @@
       "model": "2842",
       "name": "Motion Sensor",
       "notes": [
-        "HouseLinc also lists its US identity under the 2420M."
+        "HouseLinc also lists its US identity under the 2420M.",
+        "Its heartbeat's cmd1, 0x11 to 0x14, gives the battery level from fully charged to almost empty."
       ],
+      "radio": "rf",
+      "role": "controller",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc device catalog",
+        "Insteon command workbook, HeartBeat Status sheet"
       ]
     },
     {
@@ -9033,6 +9072,46 @@
               "command1": "0x11",
               "event": "lowBattery",
               "group": "0x03"
+            },
+            {
+              "command1": "0x11",
+              "event": "motionStopped",
+              "group": "0x05"
+            },
+            {
+              "command1": "0x11",
+              "event": "light",
+              "group": "0x06"
+            },
+            {
+              "command1": "0x11",
+              "event": "hot",
+              "group": "0x07"
+            },
+            {
+              "command1": "0x13",
+              "event": "notHot",
+              "group": "0x07"
+            },
+            {
+              "command1": "0x11",
+              "event": "cold",
+              "group": "0x08"
+            },
+            {
+              "command1": "0x13",
+              "event": "notCold",
+              "group": "0x08"
+            },
+            {
+              "command1": "0x11",
+              "event": "notHot",
+              "group": "0x09"
+            },
+            {
+              "command1": "0x11",
+              "event": "notCold",
+              "group": "0x0A"
             }
           ],
           "kind": "groupEvents"
@@ -9064,6 +9143,36 @@
           "name": "Heartbeat",
           "number": "0x04",
           "role": "controller"
+        },
+        {
+          "name": "Motion stopped, alternate",
+          "number": "0x05",
+          "role": "controller"
+        },
+        {
+          "name": "Dawn, alternate",
+          "number": "0x06",
+          "role": "controller"
+        },
+        {
+          "name": "Hot",
+          "number": "0x07",
+          "role": "controller"
+        },
+        {
+          "name": "Cold",
+          "number": "0x08",
+          "role": "controller"
+        },
+        {
+          "name": "Not hot, alternate",
+          "number": "0x09",
+          "role": "controller"
+        },
+        {
+          "name": "Not cold, alternate",
+          "number": "0x0A",
+          "role": "controller"
         }
       ],
       "identities": [
@@ -9088,7 +9197,8 @@
       "notes": [
         "Groups other than 1 are off by default.",
         "Its heartbeat's cmd1, 0x11 to 0x14, gives the battery level from fully charged to almost empty.",
-        "Optional groups report temperature and light levels."
+        "Optional groups report temperature and light levels.",
+        "Groups 5, 6, 9 and 10 report the end of motion, dawn, heat and cold as an on instead of an off to groups 1, 2, 7 and 8; the Motion Sensor III sends to them only when they have links. Groups 7 to 10 are the Motion Sensor III's."
       ],
       "radio": "rf",
       "role": "controller",

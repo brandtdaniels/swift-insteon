@@ -33,12 +33,11 @@ No device data is built in, so every app can look devices up in one shared devic
 
 ## Group commands
 
-`Sources/InsteonProtocol/GroupCommands` covers the commands controllers send to their ALL-Link groups, such as a keypad button or a sensor reporting motion:
+`Sources/InsteonProtocol/GroupCommands` covers the commands controllers send to their ALL-Link groups, such as a keypad button or a sensor reporting motion. What a product means by each command comes from the device catalog, which InsteonDeviceCatalog's `DeviceEventInterpreter` reads:
 
 - `GroupCommand`: reads a command from an ALL-Link broadcast or cleanup
 - `GroupCommandFilter`: passes each command on once, dropping the cleanups that repeat a broadcast and repeated broadcasts
 - `SuccessReport`: reads the broadcast a controller sends after its cleanups, with the group's member count and failed cleanups
-- `MotionSensorEvent`, `OpenCloseSensorEvent`, `LeakSensorEvent` and `SmokeBridgeEvent`: what those sensors' group commands mean, as Insteon's command sheets give them
 
 ## Device ALL-Link databases
 

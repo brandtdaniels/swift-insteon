@@ -342,6 +342,15 @@ struct DeviceCatalogTests {
     #expect(catalog.profile(category: 0x01, subcategory: 0x20, firmwareVersion: 0x41)?.model == "2477D")
     #expect(catalog.profile(category: 0x10, subcategory: 0x08, firmwareVersion: nil)?.event(group: 0x02, command1: 0x11) == "wet")
 
+    // The motion sensors' events, which once had types of their own.
+    let motionSensorII = try #require(catalog.profile(model: "2844"))
+    #expect(motionSensorII.event(group: 0x01, command1: 0x11) == "motion")
+    #expect(motionSensorII.event(group: 0x05, command1: 0x11) == "motionStopped")
+    #expect(motionSensorII.event(group: 0x06, command1: 0x11) == "light")
+    #expect(catalog.profile(model: "2842")?.event(group: 0x01, command1: 0x13) == "motionStopped")
+    #expect(catalog.profile(model: "2842")?.heartbeatGroup == 0x04)
+    #expect(catalog.profile(model: "2982-222")?.event(group: 0x07, command1: 0x11) == "malfunction")
+
     // HouseLinc lists 0x41 under the 2476D's checksum class for subcategory 0x19, and 0x38
     // under its earlier class.
     let dimmer = try #require(catalog.profile(model: "2476D"))
