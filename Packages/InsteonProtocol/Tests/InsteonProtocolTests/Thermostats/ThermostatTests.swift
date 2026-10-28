@@ -80,14 +80,17 @@ struct ThermostatTests {
 
   }
 
-  // The same mode report means auto to a Venstar adapter and cool to a TempLinc.
+  // The same mode report means the program to a Venstar adapter and manual auto to a
+  // TempLinc, as Insteon's command workbook gives the TempLinc's status report.
   @Test func readsAModeCodeByTheThermostatsModel() {
 
-    let code = ThermostatModeCode(rawValue: 0x03)
+    let code = ThermostatModeCode(rawValue: 0x05)
 
-    #expect(ThermostatMode(rawValue: code.rawValue) == .auto)
-    #expect(TempLincMode(rawValue: code.rawValue) == .cool)
-    #expect(TempLincMode(rawValue: 0x05) == nil)
+    #expect(ThermostatMode(rawValue: code.rawValue) == .program)
+    #expect(TempLincMode(rawValue: code.rawValue) == .manualAuto)
+    #expect(TempLincMode(rawValue: 0x02) == .cool)
+    #expect(TempLincMode(rawValue: 0x08) == .fanAuto)
+    #expect(TempLincMode(rawValue: 0x06) == nil)
 
   }
 
