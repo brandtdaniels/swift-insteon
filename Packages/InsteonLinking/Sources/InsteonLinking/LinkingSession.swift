@@ -61,7 +61,7 @@ struct LinkingSession: Sendable {
       cleanUp: {
 
         // Insteon's command sheet: every engine that has Exit Linking Mode acts on it as a
-        // standard message, and an i2cs device does so even while it NAKs a modem it isn't
+        // standard message, and an i2CS device does so even while it NAKs a modem it isn't
         // linked to.
         _ = try? await modem.request(StandardMessage(to: device, command: StandardDirectCommand.exitLinkingMode), timeout: timeout)
 
@@ -106,19 +106,19 @@ struct LinkingSession: Sendable {
 
   /// The engine a device runs, which decides whether and how it can be linked remotely.
   ///
-  /// An i2cs device rejects requests from a modem it isn't linked to, so a device that rejects
-  /// the request as not linked runs i2cs. A device that reports an engine this package doesn't
-  /// know is treated as i2cs too, whose extended messages earlier engines also accept.
+  /// An i2CS device rejects requests from a modem it isn't linked to, so a device that rejects
+  /// the request as not linked runs i2CS. A device that reports an engine this package doesn't
+  /// know is treated as i2CS too, whose extended messages earlier engines also accept.
   private func engine(of device: InsteonAddress) async throws -> InsteonEngine {
 
     do {
 
-      let acknowledgement = try await modem.request(
+      let acknowledgment = try await modem.request(
         StandardMessage(to: device, command: StandardDirectCommand.getEngineVersion),
         timeout: timeout
       )
 
-      return InsteonEngine(rawValue: acknowledgement.command.command2) ?? .i2cs
+      return InsteonEngine(rawValue: acknowledgment.command.command2) ?? .i2cs
 
     } catch let ModemError.deviceRejected(address, reason) where address == device && reason == .notLinked {
 
@@ -129,7 +129,7 @@ struct LinkingSession: Sendable {
   }
 
   /// Sends a device a command in the form its engine expects: standard for i1 and i2, and
-  /// extended with a checksum for i2cs, as Insteon's command sheet gives for Enter Linking
+  /// extended with a checksum for i2CS, as Insteon's command sheet gives for Enter Linking
   /// Mode and Enter Unlinking Mode.
   private func send(_ command: StandardDirectCommand, to device: InsteonAddress, engine: InsteonEngine) async throws {
 
@@ -171,8 +171,9 @@ struct LinkingSession: Sendable {
 
       try await start()
 
-      // The guide says Start ALL-Linking assigns the group the modem reports. That's the
-      // modem's own group only when it controls the link, so a responder's isn't checked.
+      // The Insteon Developer's Guide says Start ALL-Linking assigns the group the modem reports.
+      // That's the modem's own group only when it controls the link, so a responder's isn't
+      // checked.
       let reportedGroup = modemMode == .responder ? nil : group
 
       let link = try await firstLink(in: replies, with: device, group: reportedGroup, expecting: expectedMode, within: linkingTimeout)

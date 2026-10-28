@@ -32,7 +32,7 @@ public enum SerialCommand: Hashable, Sendable {
   /// Sends an extended-length Insteon message.
   case sendExtendedMessage(ExtendedMessage)
 
-  /// Sends an X10 unit address or command over the power line.
+  /// Sends an X10 unit address or command over the powerline.
   case sendX10(X10Code)
 
   /// Puts the modem into ALL-Linking mode for a group.
@@ -68,12 +68,12 @@ public enum SerialCommand: Hashable, Sendable {
 
   /// Resets the modem to factory defaults, erasing its entire ALL-Link database.
   ///
-  /// The modem answers once it has erased its memory, which the Developer's Guide says takes
-  /// about 20 seconds on a model with external EEPROM and about 2 seconds on one without.
+  /// The modem answers once it has erased its memory, which the Insteon Developer's Guide says
+  /// takes about 20 seconds on a model with external EEPROM and about 2 seconds on one without.
   case resetModem
 
   /// Sets the cmd2 byte the modem sends in its ACKs to direct messages.
-  case setAcknowledgementByte(UInt8)
+  case setAcknowledgmentByte(UInt8)
 
   /// Requests the first record in the modem's ALL-Link database.
   ///
@@ -113,13 +113,13 @@ public enum SerialCommand: Hashable, Sendable {
   case manageAllLinkRecord(action: AllLinkRecordAction, record: AllLinkRecord)
 
   /// Sets the cmd2 byte the modem sends in its NAKs to direct messages.
-  case setNegativeAcknowledgementByte(UInt8)
+  case setNegativeAcknowledgmentByte(UInt8)
 
   /// Sets the cmd1 and cmd2 bytes the modem sends in its ACKs to direct messages.
-  case setAcknowledgementBytes(Command)
+  case setAcknowledgmentBytes(Command)
 
   /// Puts an RF modem into its power-saving sleep mode. Sending it any byte wakes it; wait at
-  /// least 40 ms after waking it before sending a command, as the Developer's Guide says.
+  /// least 40 ms after waking it before sending a command, as the Insteon Developer's Guide says.
   case rfSleep
 
   /// Requests the modem's configuration flags.
@@ -172,7 +172,7 @@ public enum SerialCommand: Hashable, Sendable {
   ///
   /// ``RadioSetting/enabled`` and ``RadioSetting/disabled`` are saved, so they outlast a power
   /// cycle. A modem with its radio off reaches devices only over the powerline, and one that
-  /// has no powerline connection, such as the USB Adapter (2448A7), reaches none until its radio
+  /// has no powerline connection, such as the USB Adapter 2448A7, reaches none until its radio
   /// is turned back on.
   case setRadio(RadioSetting)
 
@@ -206,7 +206,7 @@ public enum SerialCommand: Hashable, Sendable {
     case .cancelAllLinking: .cancelAllLinking
     case .setHostDeviceCategory: .setHostDeviceCategory
     case .resetModem: .resetModem
-    case .setAcknowledgementByte: .setAcknowledgementByte
+    case .setAcknowledgmentByte: .setAcknowledgmentByte
     case .getFirstAllLinkRecord: .getFirstAllLinkRecord
     case .getNextAllLinkRecord: .getNextAllLinkRecord
     case .setModemConfiguration: .setModemConfiguration
@@ -214,8 +214,8 @@ public enum SerialCommand: Hashable, Sendable {
     case .ledOn: .ledOn
     case .ledOff: .ledOff
     case .manageAllLinkRecord: .manageAllLinkRecord
-    case .setNegativeAcknowledgementByte: .setNegativeAcknowledgementByte
-    case .setAcknowledgementBytes: .setAcknowledgementBytes
+    case .setNegativeAcknowledgmentByte: .setNegativeAcknowledgmentByte
+    case .setAcknowledgmentBytes: .setAcknowledgmentBytes
     case .rfSleep: .rfSleep
     case .getModemConfiguration: .getModemConfiguration
     case .cancelCleanup: .cancelCleanup
@@ -250,7 +250,7 @@ public enum SerialCommand: Hashable, Sendable {
       [mode.rawValue, group.rawValue]
     case let .setHostDeviceCategory(category, subcategory, firmwareVersion):
       [category.rawValue, subcategory.rawValue, firmwareVersion?.rawValue ?? 0xFF]
-    case let .setAcknowledgementByte(command2), let .setNegativeAcknowledgementByte(command2):
+    case let .setAcknowledgmentByte(command2), let .setNegativeAcknowledgmentByte(command2):
       [command2]
     case let .setApplicationRetries(retries), let .readDiagnostics(retries):
       [retries]
@@ -262,7 +262,7 @@ public enum SerialCommand: Hashable, Sendable {
       [configuration.rawValue]
     case let .manageAllLinkRecord(action, record):
       [action.rawValue] + record.bytes
-    case let .setAcknowledgementBytes(command):
+    case let .setAcknowledgmentBytes(command):
       command.bytes
     case let .readDatabase(address):
       address.bigEndianBytes

@@ -33,7 +33,7 @@ struct Exchange<Reply>: Sendable {
   let bytes: [UInt8]
 
   /// The steps of the answer, in order, such as a modem's echo and then a device's
-  /// acknowledgement. Only the current step sees each reply, and the reply that completes the
+  /// acknowledgment. Only the current step sees each reply, and the reply that completes the
   /// last step answers the command.
   let steps: [AnswerStep<Reply>]
 

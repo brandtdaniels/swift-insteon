@@ -5,7 +5,7 @@ import Foundation
 /// The Hub keeps the modem's replies in a ring buffer: new bytes overwrite the oldest once
 /// it fills, and ``HubBuffer/endIndex`` marks where the Hub writes the next byte. The
 /// Insteon Hub Developer's Guide gives its size as 50 bytes, so a burst of replies, such as the
-/// cleanup acknowledgements of a group command to several devices, can wrap it between reads. Use a
+/// cleanup acknowledgments of a group command to several devices, can wrap it between reads. Use a
 /// ``HubBufferCursor`` to pick out the bytes that are new since the last read.
 public struct HubBuffer: Hashable, Sendable {
 

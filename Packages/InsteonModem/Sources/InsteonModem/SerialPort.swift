@@ -7,12 +7,12 @@ import Darwin
 import Glibc
 #endif
 
-/// A ``ModemConnection`` to a modem on a serial port, such as a PowerLinc Modem connected by
-/// USB (2413U, 2412U) or serial cable (2413S, 2412S), or a USB Adapter (2448A7). See
-/// <doc:SupportedModems> for every model.
+/// A ``ModemConnection`` to a modem on a serial port, such as a PowerLinc Modem 2413U or 2412U
+/// connected by USB, a PowerLinc Modem 2413S or 2412S connected by serial cable, or a USB
+/// Adapter 2448A7. See <doc:SupportedModems> for every model.
 ///
 /// The port is opened in raw mode at 19200 baud, 8 data bits, no parity and one stop bit, the
-/// settings Insteon modems use, without hardware flow control. A PowerLinc Controller (2414S)
+/// settings Insteon modems use, without hardware flow control. A PowerLinc Controller 2414S
 /// uses 4800 baud instead; see ``SerialPort/BaudRate``. Each command is written in a
 /// single call, because the modem discards a command if more than 240 ms pass between its
 /// bytes. On macOS, USB modems appear as `/dev/cu.usbserial-*`; on
@@ -26,7 +26,7 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
   /// The speed of a serial connection.
   public enum BaudRate: Hashable, Sendable {
 
-    /// 4800 baud, which a PowerLinc Controller (2414S) uses.
+    /// 4800 baud, which a PowerLinc Controller 2414S uses.
     case baud4800
 
     /// 19200 baud, which Insteon modems use.

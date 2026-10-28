@@ -71,11 +71,11 @@ extension ExtendedDirectCommand {
   /// The earliest engine on which every device accepts the command, or `nil` when that
   /// depends on the product.
   ///
-  /// The i2 engine adds the get/set, ALL-Link database and trigger commands, which some i1
-  /// devices also accept. What a device reads or writes with them is specific to the product,
-  /// and only some products accept a ``ExtendedDirectCommand/getSet(variant:)`` variant other
-  /// than `0x00`. The Developer's Guide defines the ALL-Link command alias commands for every
-  /// device category, but whether a device accepts them depends on the product.
+  /// The i2 engine adds the get/set, ALL-Link database and trigger commands, which some i1 devices
+  /// also accept. What a device reads or writes with them is specific to the product, and only some
+  /// products accept a ``ExtendedDirectCommand/getSet(variant:)`` variant other than `0x00`. The
+  /// Insteon Developer's Guide defines the ALL-Link command alias commands for every device
+  /// category, but whether a device accepts them depends on the product.
   public var minimumEngine: InsteonEngine? {
 
     switch self {

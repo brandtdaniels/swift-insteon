@@ -52,7 +52,7 @@ struct RemoteLinkingTests {
 
   }
 
-  // An i2cs device rejects a modem it isn't linked to, which is how it's told apart.
+  // An i2CS device rejects a modem it isn't linked to, which is how it's told apart.
   @Test func treatsADeviceThatRejectsAnUnlinkedModemAsI2cs() async throws {
 
     let modem = InMemoryModem()

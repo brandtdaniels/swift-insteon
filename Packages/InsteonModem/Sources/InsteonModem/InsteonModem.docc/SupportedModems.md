@@ -21,9 +21,9 @@ uses them, whatever the connection:
 
 These aren't supported:
 
-- **PowerLinc Controller by USB (2414U):** it connects through USB HID rather than a serial
+- **PowerLinc Controller 2414U:** it connects through USB HID rather than a serial
   port.
-- **SmartLinc (2412N):** its interface isn't documented.
+- **Central Controller 2412N (SmartLinc):** its interface isn't documented.
 
 ### Identifying a modem
 
@@ -42,8 +42,8 @@ subcategory tells the models apart. HouseLinc's device catalog lists these:
 | 2245 | `0x33` to `0x36`, one for each region |
 | 2242 | `0x2B`, `0x2E` to `0x32`, one or more for each region |
 | 2414S | `0x01` |
-| 2412N (SmartLinc) | `0x10` |
-| 2243 (Hub Pro) | `0x18`, `0x2C`, `0x2D` |
+| 2412N | `0x10` |
+| 2243 | `0x18`, `0x2C`, `0x2D` |
 
 The catalog also lists a Hub as `0x37` without a model number. For any other modem, look the
 category and subcategory up in the [Insteon device catalog](https://github.com/brandtdaniels/insteon-device-catalog), which InsteonDeviceCatalog reads.
@@ -54,7 +54,7 @@ The Insteon Developer's Guide defines the IM serial commands `0x60` through `0x7
 commands after those, such as Cancel Cleanup (`0x74`), Read and Write Database
 (`0x75`, `0x76`), Beep (`0x77`), Set Responder Link Data (`0x79`), Set Application Retries
 (`0x7A`) and Set RF Disable Flag (`0x7D`), appear only in Insteon's PLM serial command table,
-so a modem whose firmware doesn't implement one, such as a 2412 PowerLinc Modem, may reject it.
+so a modem whose firmware doesn't implement one, such as a PowerLinc Modem 2412, may reject it.
 The Insteon Hub Developer's Guide marks `0x79` through `0x7C` as commands for modems with
 a radio only, so a powerline-only modem may reject those too.
 
@@ -73,13 +73,13 @@ throws ``ModemError/rejected(_:)``.
 
 ### The USB Adapter
 
-The USB Adapter (2448A7) sends and receives Insteon messages by radio only. In Insteon's
+The USB Adapter 2448A7 sends and receives Insteon messages by radio only. In Insteon's
 test log for it, it rejects X10 commands and Beep, so expect ``ModemError/rejected(_:)`` for
 `SerialCommand.sendX10(_:)` and `SerialCommand.beep`.
 
 ### The PowerLinc Controller
 
-The PowerLinc Controller (2414S) runs IBIOS rather than the IM serial commands: the host sends
+The PowerLinc Controller 2414S runs IBIOS rather than the IM serial commands: the host sends
 an Insteon message by writing it into the controller's memory and setting a flag.
 ``PowerLincController`` does that for standard messages and X10, confirming each write with
 Get Checksum before it sets the flag, since the controller's ACK means only that it received

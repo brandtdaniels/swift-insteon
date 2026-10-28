@@ -2,7 +2,7 @@
 ///
 /// The parser keeps any incomplete reply until the rest of its bytes arrive, so feed it bytes
 /// as you receive them, in any chunk size. A NAK byte (`0x15`) where a reply would start is
-/// reported as ``ModemReply/negativeAcknowledgement``. Other bytes that don't start a
+/// reported as ``ModemReply/negativeAcknowledgment``. Other bytes that don't start a
 /// recognizable reply are skipped until the next start byte (`0x02`), NAK bytes among them,
 /// and so is a start byte whose reply doesn't end in an ACK or NAK where one is expected.
 ///
@@ -49,7 +49,7 @@ public struct ModemReplyParser: ReplyParser, Hashable, Sendable {
   ///   don't start with such a NAK. Those bytes are kept.
   public mutating func finishPendingReply() -> [ModemReply] {
 
-    let number = reader.takeShortNegativeAcknowledgement { byte -> SerialCommandNumber? in
+    let number = reader.takeShortNegativeAcknowledgment { byte -> SerialCommandNumber? in
 
       // Only these commands' NAKs are held back.
       switch SerialCommandNumber(rawValue: byte) {
@@ -76,7 +76,7 @@ public struct ModemReplyParser: ReplyParser, Hashable, Sendable {
 /// The frames of the Insteon modem (IM) serial protocol.
 private enum ModemFraming: Framing {
 
-  static let negativeAcknowledgement: ModemReply = .negativeAcknowledgement
+  static let negativeAcknowledgment: ModemReply = .negativeAcknowledgment
 
   /// A host command's reply ends in an ACK or NAK, and so do the diagnostic and device record
   /// reports (`0x5A` and `0x5B`). Anything else means its start byte didn't begin a reply.
@@ -140,7 +140,7 @@ private enum ModemFraming: Framing {
 
       guard bytes.count >= dataLength else {
 
-        return bytes.count >= 3 && bytes[2] != ControlByte.negativeAcknowledgement ? .complete(dataLength) : .needMoreBytes
+        return bytes.count >= 3 && bytes[2] != ControlByte.negativeAcknowledgment ? .complete(dataLength) : .needMoreBytes
 
       }
 
@@ -166,10 +166,10 @@ private enum ModemFraming: Framing {
     case .cancelAllLinking, .resetModem, .getFirstAllLinkRecord, .getNextAllLinkRecord,
          .getAllLinkRecordForSender, .ledOn, .ledOff, .rfSleep, .cancelCleanup:
       return .complete(3)
-    case .setAcknowledgementByte, .setModemConfiguration, .setNegativeAcknowledgementByte,
+    case .setAcknowledgmentByte, .setModemConfiguration, .setNegativeAcknowledgmentByte,
          .setApplicationRetries, .setRadio, .readDiagnostics:
       return .complete(4)
-    case .sendX10, .startAllLinking, .setAcknowledgementBytes, .readDatabase:
+    case .sendX10, .startAllLinking, .setAcknowledgmentBytes, .readDatabase:
       return .complete(5)
     case .sendAllLinkCommand, .setHostDeviceCategory, .setResponderLinkData:
       return .complete(6)
@@ -214,14 +214,14 @@ private enum ModemFraming: Framing {
     case 0x57:
       return .allLinkRecord(AllLinkRecord(body, at: 0))
     case 0x58:
-      return .allLinkCleanupStatus(isComplete: body[0] == ControlByte.acknowledgement)
+      return .allLinkCleanupStatus(isComplete: body[0] == ControlByte.acknowledgment)
     case 0x59:
       return .databaseRecord(address: UInt16(highByte: body[0], lowByte: body[1]), record: AllLinkRecord(body, at: 2))
     case 0x5A:
       return .diagnosticRecord(ModemDiagnosticRecord(body))
     case 0x5B:
       return .deviceRecordFound(address: UInt16(highByte: body[0], lowByte: body[1]), record: AllLinkRecord(body, at: 2))
-    case 0x7E where body.count == 7 && body.last == ControlByte.acknowledgement:
+    case 0x7E where body.count == 7 && body.last == ControlByte.acknowledgment:
       return .radioStatus(ModemRadioStatus(
         frequencyCode: body[0],
         radioFlags: body[1],
@@ -229,9 +229,9 @@ private enum ModemFraming: Framing {
         hardwareVersion: body[3],
         reserved: [body[4], body[5]]
       ))
-    case 0x60 where body.count == 7 && body.last == ControlByte.acknowledgement:
+    case 0x60 where body.count == 7 && body.last == ControlByte.acknowledgment:
       return .modemInfo(ModemInfo(reportedBytes: Array(body.prefix(6))))
-    case 0x73 where body.count == 4 && body.last == ControlByte.acknowledgement:
+    case 0x73 where body.count == 4 && body.last == ControlByte.acknowledgment:
       return .modemConfiguration(ModemConfigurationReport(
         configuration: ModemConfiguration(rawValue: body[0]),
         applicationRetries: body[1],
@@ -250,7 +250,7 @@ private enum ModemFraming: Framing {
         // Only recognized numbers reach `decode`, and all of them are host commands here.
         number: SerialCommandNumber(rawValue: frame[1])!,
         parameters: Array(body.dropLast()),
-        isAccepted: body.last == ControlByte.acknowledgement
+        isAccepted: body.last == ControlByte.acknowledgment
       ))
     }
 

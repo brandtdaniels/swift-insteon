@@ -370,15 +370,15 @@ struct ModemReplyParserTests {
 
   }
 
-  @Test func reportsALoneNegativeAcknowledgement() {
+  @Test func reportsALoneNegativeAcknowledgment() {
 
     var parser = ModemReplyParser()
 
-    #expect(parser.parse(bytes("15" + "0255")) == [.negativeAcknowledgement, .userReset])
+    #expect(parser.parse(bytes("15" + "0255")) == [.negativeAcknowledgment, .userReset])
 
   }
 
-  @Test func ignoresANegativeAcknowledgementAmongSkippedBytes() {
+  @Test func ignoresANegativeAcknowledgmentAmongSkippedBytes() {
 
     var parser = ModemReplyParser()
 
@@ -420,7 +420,7 @@ struct ModemReplyParserTests {
 
   }
 
-  @Test func keepsNegativeAcknowledgementInsideAnEcho() {
+  @Test func keepsNegativeAcknowledgmentInsideAnEcho() {
 
     var parser = ModemReplyParser()
 
@@ -604,13 +604,13 @@ struct ModemReplyParserTests {
     let nak = ReceivedMessage(
       sender: InsteonAddress(0xAA, 0xBB, 0xCC),
       destination: InsteonAddress(0x11, 0x22, 0x33),
-      flags: MessageFlags(messageType: .directNegativeAcknowledgement),
+      flags: MessageFlags(messageType: .directNegativeAcknowledgment),
       command: Command(command1: 0x11, command2: 0xFF)
     )
     let ack = ReceivedMessage(
       sender: nak.sender,
       destination: nak.destination,
-      flags: MessageFlags(messageType: .directAcknowledgement),
+      flags: MessageFlags(messageType: .directAcknowledgment),
       command: Command(command1: 0x11, command2: 0xFF)
     )
 

@@ -1,6 +1,6 @@
 /// A scheme for protecting an extended message's user data against corruption.
 ///
-/// i2cs Insteon devices reject extended messages whose integrity bytes don't match. Which
+/// i2CS Insteon devices reject extended messages whose integrity bytes don't match. Which
 /// scheme a device expects depends on the device and command; most use ``ChecksumIntegrity``,
 /// and some devices use ``CRCIntegrity`` for certain commands. Conform your own type to
 /// support another scheme.
@@ -36,12 +36,12 @@ public struct UnprotectedIntegrity: UserDataIntegrity {
 
 }
 
-/// Stores a one-byte checksum in D14, as i2cs devices require.
+/// Stores a one-byte checksum in D14, as i2CS devices require.
 ///
 /// The checksum is the two's complement of the low byte of the sum of cmd1, cmd2 and
 /// D1 through D13, so that all 16 bytes sum to zero modulo 256.
 ///
-/// Some i2 devices from before i2cs can check it too, once Set Operating Flags with cmd2
+/// Some i2 devices from before i2CS can check it too, once Set Operating Flags with cmd2
 /// `0x19` turns checking on; bit 4 of the reply to Get Operating Flags with cmd2 `0x05` says
 /// whether it's on, as Insteon's command workbook describes. Others use their load-sense flag
 /// for it instead: Set Operating Flags with cmd2 `0x06`, and bit 5 of Get Operating Flags with
@@ -117,7 +117,7 @@ public struct CRCIntegrity: UserDataIntegrity {
 
 extension UserDataIntegrity {
 
-  /// Whether user data's integrity bytes match its contents, such as for the checksum an i2cs
+  /// Whether user data's integrity bytes match its contents, such as for the checksum an i2CS
   /// device puts in a record it sends from its ALL-Link database.
   ///
   /// - Parameters:

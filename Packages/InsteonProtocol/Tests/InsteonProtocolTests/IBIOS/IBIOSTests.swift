@@ -59,7 +59,7 @@ struct IBIOSTests {
     ("02490237", .debugReport(address: 0x0237)),
     ("024103" + "010203", .data([0x01, 0x02, 0x03])),
     ("0243" + "427574746F6E" + "03", .text("Button")),
-    ("15", .negativeAcknowledgement)
+    ("15", .negativeAcknowledgment)
   ]
 
   @Test(arguments: replies)

@@ -1,7 +1,7 @@
 /// A device's Product Data Response, its reply to ``StandardDirectCommand/productDataRequest``.
 ///
 /// The response is an extended direct message (cmd1 `0x03`) whose user data carries, in the
-/// Developer's Guide:
+/// Insteon Developer's Guide:
 ///
 /// | Byte | Contents |
 /// | --- | --- |

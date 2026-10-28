@@ -11,11 +11,11 @@
 /// `0xA2` record, whose controller bit is clear. The request's bit 6 follows the captured
 /// exchange: it's the record's own bit 6.
 ///
-/// This is a later modem firmware command from Insteon's command workbook. The 2009
-/// Developer's Guide doesn't list it, and a modem without it NAKs the command.
+/// This is a later modem firmware command from Insteon's command workbook. The Insteon
+/// Insteon Developer's Guide doesn't list it, and a modem without it NAKs the command.
 ///
 /// ```swift
-/// // Change the on level and ramp rate of the switch's responder record for group 7.
+/// // Change the on-level and ramp rate of the switch's responder record for group 7.
 /// let request = DeviceRecordRequest(
 ///   device: kitchenSwitch,
 ///   record: AllLinkRecord(flags: [.inUse], group: 0x07, address: modemAddress, data1: 0x7F, data2: 0x1C),

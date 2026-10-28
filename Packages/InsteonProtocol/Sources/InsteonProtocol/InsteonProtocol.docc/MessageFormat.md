@@ -28,7 +28,7 @@ messages carry configuration and database records too large for cmd2.
 
 | Bits | Field | Values |
 | --- | --- | --- |
-| 7–5 | Message type | Direct, broadcast, ALL-Link broadcast, ALL-Link cleanup, and acknowledgements of each |
+| 7–5 | Message type | Direct, broadcast, ALL-Link broadcast, ALL-Link cleanup, and acknowledgments of each |
 | 4 | Extended | `1` for extended-length messages |
 | 3–2 | Hops left | Retransmissions remaining, 0–3 |
 | 1–0 | Max hops | Retransmissions allowed, 0–3 |
@@ -54,9 +54,9 @@ What the destination and cmd2 carry depends on the message type:
 | ALL-Link cleanup | A device in the group | The group |
 
 Direct and broadcast messages can be standard or extended. ALL-Link broadcasts and cleanups,
-and the acknowledgements of every type, are standard only.
+and the acknowledgments of every type, are standard only.
 
-### Acknowledgements
+### Acknowledgments
 
 A device acknowledges a direct or ALL-Link cleanup message with an ACK of the same type. A
 direct ACK can carry data in cmd2, such as the level in reply to a status request. A NAK
@@ -66,12 +66,12 @@ carries the reason in cmd2; read it with ``NAKReason``.
 
 Each device runs an Insteon engine, which reports through
 ``StandardDirectCommand/getEngineVersion``. Every engine supports the base commands; the i2
-engine adds more, and the i2cs engine also requires checksums on extended messages. A command's
+engine adds more, and the i2CS engine also requires checksums on extended messages. A command's
 `minimumEngine` gives the engine from which every device supports it. See ``InsteonEngine``.
 
 ### Integrity of extended messages
 
-The Insteon radio layer checks each message, but i2cs devices also verify an extended message's
+The Insteon radio layer checks each message, but i2CS devices also verify an extended message's
 user data before acting on it:
 
 - Most commands use a one-byte checksum in D14 (``ChecksumIntegrity``): the two's complement

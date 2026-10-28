@@ -20,9 +20,9 @@ extension Hub {
 
   /// Writes a timer into a Hub 2242's slot, which the Hub then runs on its own.
   ///
-  /// The Hub's timer request also carries the slot's state and its device and group, so the
-  /// slot's page is read first and those are written back unchanged, as Insteon's Hub app does.
-  /// Set what the timer sends with ``Hub/setCommands(_:for:)``.
+  /// The Hub's timer request also carries the slot's state and its device and group, so the slot's
+  /// page is read first and those are written back unchanged, as the Insteon for Hub app does. Set
+  /// what the timer sends with ``Hub/setCommands(_:for:)``.
   ///
   /// ```swift
   /// try await hub.setCommands(
@@ -89,7 +89,7 @@ extension Hub {
 
   }
 
-  /// The timer request's fields after the slot number, in the order Insteon's Hub app writes
+  /// The timer request's fields after the slot number, in the order the Insteon for Hub app writes
   /// them: the name, the on and off times with fields the app always writes between them, the
   /// days Monday through Sunday, the slot's active, on and off flags, the slot's device and
   /// group, whether the slot raises an alert, and the kinds of the on and off times.

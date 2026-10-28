@@ -51,7 +51,7 @@ public enum IBIOSReply: Hashable, Sendable {
 
   /// A lone NAK (`0x15`): the device rejected the last command without echoing it, usually
   /// because it was busy. Send the command again after a short delay.
-  case negativeAcknowledgement
+  case negativeAcknowledgment
 
 }
 

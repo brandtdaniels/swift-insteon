@@ -47,7 +47,7 @@ public struct DiscoveredModem: Hashable, Sendable {
 /// `/dev/cu.SLAB_USBtoUART*` and `/dev/cu.wchusbserial*` on macOS, and `/dev/ttyUSB*` on Linux.
 /// Run it only when the user asks, or give it the paths the user picked with
 /// ``ModemDiscovery/init(paths:timeout:)``. A device another program has open may not answer,
-/// and a PowerLinc Controller (2414S), which runs IBIOS at 4800 baud, isn't found.
+/// and a PowerLinc Controller 2414S, which runs IBIOS at 4800 baud, isn't found.
 ///
 /// Available on macOS and Linux.
 public struct ModemDiscovery: Sendable {

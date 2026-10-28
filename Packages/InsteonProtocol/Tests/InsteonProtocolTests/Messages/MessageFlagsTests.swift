@@ -5,13 +5,13 @@ struct MessageFlagsTests {
 
   static let messageTypeBits: [(MessageFlags.MessageType, UInt8)] = [
     (.direct, 0x00),
-    (.directAcknowledgement, 0x20),
+    (.directAcknowledgment, 0x20),
     (.allLinkCleanup, 0x40),
-    (.allLinkCleanupAcknowledgement, 0x60),
+    (.allLinkCleanupAcknowledgment, 0x60),
     (.broadcast, 0x80),
-    (.directNegativeAcknowledgement, 0xA0),
+    (.directNegativeAcknowledgment, 0xA0),
     (.allLinkBroadcast, 0xC0),
-    (.allLinkCleanupNegativeAcknowledgement, 0xE0)
+    (.allLinkCleanupNegativeAcknowledgment, 0xE0)
   ]
 
   @Test func directFlagsAreThreeHopStandardDirect() {
@@ -67,7 +67,7 @@ struct MessageFlagsTests {
 
     let flags = MessageFlags(rawValue: 0x2B)
 
-    #expect(flags.messageType == .directAcknowledgement)
+    #expect(flags.messageType == .directAcknowledgment)
     #expect(flags.isExtended == false)
     #expect(flags.hopsLeft == .two)
     #expect(flags.maxHops == .three)

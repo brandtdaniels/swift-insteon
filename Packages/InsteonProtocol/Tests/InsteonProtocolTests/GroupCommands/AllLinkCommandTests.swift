@@ -7,7 +7,7 @@ struct AllLinkCommandTests {
 
   let lamp = InsteonAddress(0x1A, 0x2B, 0x3C)
 
-  // The Developer's Guide's toggle and paired button table, and its lighting defaults.
+  // The Insteon Developer's Guide's toggle and paired button table, and its lighting defaults.
   @Test func pairsEachHighStateCommandWithItsLowState() {
 
     #expect(AllLinkCommand.recall.partner == .alias1Low)

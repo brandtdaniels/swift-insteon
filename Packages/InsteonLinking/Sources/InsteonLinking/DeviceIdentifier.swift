@@ -15,7 +15,7 @@ public struct DeviceIdentification: Hashable, Sendable {
   /// The engine the device runs, or `nil` if it reported an engine this package doesn't know.
   public var engine: InsteonEngine?
 
-  /// Whether the device accepts requests from the modem. An i2cs device rejects a modem it
+  /// Whether the device accepts requests from the modem. An i2CS device rejects a modem it
   /// isn't linked to, and then can't be asked for its identity until it's linked.
   public var acceptsModem: Bool
 
@@ -46,8 +46,8 @@ public struct DeviceIdentification: Hashable, Sendable {
 /// ``DeviceIdentifier/identify(_:)`` asks a device for its engine with
 /// `StandardDirectCommand.getEngineVersion`, then for its category, subcategory and firmware
 /// version with `StandardDirectCommand.idRequest`, which the device answers with a SET Button
-/// Pressed broadcast. An i2cs device that isn't linked to the modem rejects both, so it's
-/// identified as i2cs without an identity; linking it with
+/// Pressed broadcast. An i2CS device that isn't linked to the modem rejects both, so it's
+/// identified as i2CS without an identity; linking it with
 /// ``Linker/linkRemotely(_:modemRole:modemGroup:deviceGroup:timeout:)`` reports its category and subcategory in `AllLinkingCompleted`.
 ///
 /// ```swift
@@ -63,7 +63,7 @@ public struct DeviceIdentifier: Sendable {
   /// The modem the devices are asked through.
   public let modem: any LinkingModem
 
-  /// How long to wait for each acknowledgement, and for the broadcast that answers an ID
+  /// How long to wait for each acknowledgment, and for the broadcast that answers an ID
   /// request.
   public let timeout: Duration
 
@@ -74,7 +74,7 @@ public struct DeviceIdentifier: Sendable {
   ///
   /// - Parameters:
   ///   - modem: The modem the devices are asked through.
-  ///   - timeout: How long to wait for each acknowledgement, and for the broadcast that
+  ///   - timeout: How long to wait for each acknowledgment, and for the broadcast that
   ///     answers an ID request. Defaults to `Modem.defaultRequestTimeout`.
   ///   - clock: The clock that times the wait for the broadcast. Defaults to a
   ///     `ContinuousClock`; tests can pass a clock they control.
@@ -99,13 +99,13 @@ public struct DeviceIdentifier: Sendable {
 
     do {
 
-      let acknowledgement = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.getEngineVersion), timeout: timeout)
+      let acknowledgment = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.getEngineVersion), timeout: timeout)
 
-      engine = InsteonEngine(rawValue: acknowledgement.command.command2)
+      engine = InsteonEngine(rawValue: acknowledgment.command.command2)
 
     } catch let ModemError.deviceRejected(address, reason) where address == device && reason == .notLinked {
 
-      // Only an i2cs device rejects a modem it isn't linked to.
+      // Only an i2CS device rejects a modem it isn't linked to.
       return DeviceIdentification(device: device, engine: .i2cs, acceptsModem: false, identity: nil)
 
     }

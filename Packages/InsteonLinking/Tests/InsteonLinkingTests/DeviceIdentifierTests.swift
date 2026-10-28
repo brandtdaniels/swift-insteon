@@ -36,7 +36,7 @@ struct DeviceIdentifierTests {
 
   }
 
-  // An i2cs device rejects a modem it isn't linked to, so it can't be asked for its identity.
+  // An i2CS device rejects a modem it isn't linked to, so it can't be asked for its identity.
   @Test func identifiesADeviceThatRejectsTheModemAsI2cs() async throws {
 
     let modem = InMemoryModem()

@@ -66,14 +66,14 @@ struct MessageFieldTests {
 
   }
 
-  @Test func readsAnAcknowledgementAndItsFollowUp() throws {
+  @Test func readsAnAcknowledgmentAndItsFollowUp() throws {
 
     let readSetpoints = try #require(try commandSet("thermostatAdapter").standardCommand(named: "readSetpoints"))
 
-    #expect(readSetpoints.reply(in: message(.directAcknowledgement, 0x6A, 0x88)) == .number(68))
+    #expect(readSetpoints.reply(in: message(.directAcknowledgment, 0x6A, 0x88)) == .number(68))
     #expect(readSetpoints.followUp(in: message(.direct, 0x6A, 0x9C)) == .number(78))
     #expect(readSetpoints.reply(in: message(.direct, 0x6A, 0x88)) == nil)
-    #expect(readSetpoints.reply(in: message(.directAcknowledgement, 0x6B, 0x88)) == nil)
+    #expect(readSetpoints.reply(in: message(.directAcknowledgment, 0x6B, 0x88)) == nil)
 
   }
 
@@ -90,7 +90,7 @@ struct MessageFieldTests {
     #expect(tempLinc.directMessage(in: message(.direct, 0x70, 0x06))?.value == .unnamed(6))
     #expect(tempLinc.directMessage(in: message(.direct, 0x6E, 0x8D))?.message.name == "temperatureReport")
     #expect(tempLinc.directMessage(in: message(.direct, 0x6E, 0x8D))?.value == .number(70.5))
-    #expect(tempLinc.directMessage(in: message(.directAcknowledgement, 0x6E, 0x8D)) == nil)
+    #expect(tempLinc.directMessage(in: message(.directAcknowledgment, 0x6E, 0x8D)) == nil)
     #expect(tempLinc.celsiusIndicator == "displayCelsius")
 
   }

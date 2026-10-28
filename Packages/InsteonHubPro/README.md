@@ -1,6 +1,6 @@
 # InsteonHubPro
 
-Add Insteon devices to a Hub Pro (2243-222) and manage it through its local HTTP interface.
+Add Insteon devices to a Hub Pro 2243 and manage it through its local HTTP interface.
 
 - `HubProClient`: adds and removes devices, reads the Hub Pro's settings, and starts its software update
 - `HubProSettings`: the Hub Pro's network settings and software versions

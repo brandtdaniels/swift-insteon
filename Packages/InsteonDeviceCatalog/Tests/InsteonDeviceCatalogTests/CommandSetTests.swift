@@ -73,7 +73,7 @@ struct CommandSetTests {
 
     let commands = try #require(try catalog().commandSet(id: "keypad"))
     let beep = try #require(commands.operatingFlag(named: "keyBeep"))
-    let ack = ReceivedMessage(sender: keypad, destination: modem, flags: MessageFlags(messageType: .directAcknowledgement), command: Command(command1: 0x1F, command2: 0x28))
+    let ack = ReceivedMessage(sender: keypad, destination: modem, flags: MessageFlags(messageType: .directAcknowledgment), command: Command(command1: 0x1F, command2: 0x28))
 
     #expect(beep.readCommand.command == Command(command1: 0x1F, command2: 0x00))
     #expect(beep.isSet(in: ack) == true)
@@ -84,7 +84,7 @@ struct CommandSetTests {
     #expect(commands.readings.first?.query == 0x01)
     #expect(commands.flagCommands.first?.command.command == Command(command1: 0x20, command2: 0x1C))
 
-    let other = ReceivedMessage(sender: keypad, destination: modem, flags: MessageFlags(messageType: .directAcknowledgement), command: Command(command1: 0x19, command2: 0x28))
+    let other = ReceivedMessage(sender: keypad, destination: modem, flags: MessageFlags(messageType: .directAcknowledgment), command: Command(command1: 0x19, command2: 0x28))
     #expect(beep.isSet(in: other) == nil)
 
   }

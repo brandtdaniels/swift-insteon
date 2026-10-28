@@ -1,5 +1,5 @@
 /// A serial command a host sends to a device running IBIOS, the Insteon BIOS, such as a
-/// PowerLinc Controller (2414U, 2414S).
+/// PowerLinc Controller 2414U or 2414S.
 ///
 /// IBIOS gives the host direct access to the device's memory: a host sends an Insteon message,
 /// for example, by writing it into memory with ``IBIOSCommand/download(address:data:)`` and

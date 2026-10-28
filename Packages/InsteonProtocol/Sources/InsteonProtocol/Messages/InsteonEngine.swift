@@ -1,12 +1,12 @@
 /// The generation of Insteon engine a device runs, which sets the commands every such device
 /// supports and how strictly it checks extended messages.
 ///
-/// A device reports its engine in the acknowledgement of
+/// A device reports its engine in the acknowledgment of
 /// ``StandardDirectCommand/getEngineVersion``: cmd2 is the engine's raw value. Engines are
 /// ordered, so a device with a higher engine supports everything a lower one does.
 ///
 /// ```swift
-/// if let engine = InsteonEngine(rawValue: acknowledgement.command.command2),
+/// if let engine = InsteonEngine(rawValue: acknowledgment.command.command2),
 ///    let minimum = StandardDirectCommand.exitLinkingMode.minimumEngine,
 ///    engine >= minimum {
 ///   // Every device with this engine supports the command.
