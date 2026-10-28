@@ -11,6 +11,9 @@ public protocol LinkingModem: Sendable {
   /// Sends a serial command and waits for the modem to accept it.
   func send(_ command: SerialCommand) async throws
 
+  /// Sends a standard direct message to a device and waits for the device to acknowledge it.
+  func request(_ message: StandardMessage, timeout: Duration) async throws -> ReceivedMessage
+
   /// Sends an extended direct message to a device and waits for the device to acknowledge it.
   func request(_ message: ExtendedMessage, timeout: Duration) async throws -> ReceivedMessage
 

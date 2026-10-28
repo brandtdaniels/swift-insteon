@@ -30,15 +30,25 @@ public struct Linker: Sendable {
   /// How long to wait for each request to a device.
   public let timeout: Duration
 
+  /// The clock that times the wait for a link.
+  public let clock: any Clock<Duration>
+
   /// Creates a linker.
   ///
   /// - Parameters:
   ///   - modem: The modem the links are made through.
   ///   - timeout: How long to wait for each request to a device. Defaults to `Modem.defaultRequestTimeout`.
-  public init(modem: any LinkingModem, timeout: Duration = Modem.defaultRequestTimeout) {
+  ///   - clock: The clock that times the wait for a link. Defaults to a `ContinuousClock`;
+  ///     tests can pass a clock they control.
+  public init(
+    modem: any LinkingModem,
+    timeout: Duration = Modem.defaultRequestTimeout,
+    clock: any Clock<Duration> = ContinuousClock()
+  ) {
 
     self.modem = modem
     self.timeout = timeout
+    self.clock = clock
 
   }
 
@@ -87,6 +97,94 @@ public struct Linker: Sendable {
       )
 
     }
+
+  }
+
+  // MARK: - Remote and manual linking
+
+  /// How long ``Linker/linkRemotely(_:modemRole:modemGroup:deviceGroup:timeout:)`` waits for
+  /// the modem to report the link by default: 30 seconds.
+  public static let defaultRemoteLinkingTimeout: Duration = .seconds(30)
+
+  /// How long ``Linker/linkManually(modemRole:group:timeout:)`` waits for someone to press a
+  /// device's SET button by default: 4 minutes, the time the modem stays in linking mode.
+  public static let defaultManualLinkingTimeout: Duration = .seconds(240)
+
+  /// Links a device to the modem without anyone pressing its SET button.
+  ///
+  /// The linker asks the device for its engine, then puts the modem and the device into
+  /// linking mode, as their SET buttons would, and waits for the modem to report the link.
+  /// When the modem is the controller, the modem goes first and the device joins its group as
+  /// a responder; when the modem is the responder, the device goes first as the controller of
+  /// its group. The device memorizes its current state as its link data, so a dimmable device
+  /// should be fully on the first time it links, as the developer guide advises.
+  ///
+  /// Devices with an i2 engine are sent the standard Enter Linking Mode, and i2cs devices the
+  /// extended one with a checksum. i1 devices can't be linked remotely; use
+  /// ``Linker/linkManually(modemRole:group:timeout:)``.
+  ///
+  /// - Parameters:
+  ///   - device: The device to link.
+  ///   - modemRole: Whether the modem controls the device or responds to it.
+  ///   - modemGroup: The modem's group: the group the device joins, or the group the modem
+  ///     joins it in.
+  ///   - deviceGroup: The device's group or button. Devices with only one group ignore it.
+  ///   - linkingTimeout: How long to wait for the modem to report the link. Defaults to
+  ///     ``Linker/defaultRemoteLinkingTimeout``.
+  /// - Returns: The link the modem reports.
+  /// - Throws: ``LinkingError/remoteLinkingUnsupported(_:)`` for an i1 device,
+  ///   ``LinkingError/linkingTimedOut`` if the modem doesn't report the link in time,
+  ///   ``LinkingError/unexpectedLink(_:)`` if it reports a different link, or the modem's
+  ///   errors. When the link fails, the modem and the device are taken out of linking mode.
+  @discardableResult
+  public func linkRemotely(
+    _ device: InsteonAddress,
+    modemRole: ModemRole,
+    modemGroup: AllLinkGroupNumber,
+    deviceGroup: AllLinkGroupNumber,
+    timeout linkingTimeout: Duration = Linker.defaultRemoteLinkingTimeout
+  ) async throws -> AllLinkingCompleted {
+
+    try await LinkingSession(modem: modem, timeout: timeout, clock: clock).remote(
+      device,
+      deviceCommand: .enterLinkingMode(group: deviceGroup),
+      modemMode: modemRole.linkingMode,
+      modemGroup: modemGroup,
+      // The controller enters linking mode first and the responder joins it.
+      deviceFirst: modemRole == .responder,
+      expecting: modemRole.linkingMode,
+      within: linkingTimeout
+    )
+
+  }
+
+  /// Puts the modem into linking mode and waits for someone to press a device's SET button.
+  ///
+  /// This works with devices of every engine, and is how an i1 device is linked. When the
+  /// modem is the responder, put the device into linking mode with its SET button first, so
+  /// it's waiting as the controller when the modem joins.
+  ///
+  /// - Parameters:
+  ///   - modemRole: Whether the modem controls the device or responds to it.
+  ///   - group: The modem's group.
+  ///   - linkingTimeout: How long to wait. Defaults to ``Linker/defaultManualLinkingTimeout``.
+  /// - Returns: The link the modem reports, including the device's address.
+  /// - Throws: ``LinkingError/linkingTimedOut`` if no device links in time,
+  ///   ``LinkingError/unexpectedLink(_:)`` if the modem reports a different kind of link, or
+  ///   the modem's errors. When the link fails, the modem is taken out of linking mode.
+  @discardableResult
+  public func linkManually(
+    modemRole: ModemRole,
+    group: AllLinkGroupNumber,
+    timeout linkingTimeout: Duration = Linker.defaultManualLinkingTimeout
+  ) async throws -> AllLinkingCompleted {
+
+    try await LinkingSession(modem: modem, timeout: timeout, clock: clock).manual(
+      modemMode: modemRole.linkingMode,
+      group: group,
+      expecting: modemRole.linkingMode,
+      within: linkingTimeout
+    )
 
   }
 

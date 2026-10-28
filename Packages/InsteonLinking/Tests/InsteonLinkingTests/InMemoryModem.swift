@@ -34,6 +34,41 @@ actor InMemoryModem: LinkingModem {
   /// Devices that acknowledge writes without storing them.
   var forgetfulDevices: Set<InsteonAddress> = []
 
+  /// Something the modem was asked to do in linking, in order.
+  enum LinkingStep: Hashable {
+
+    /// The modem entered linking or unlinking mode.
+    case modem(AllLinkMode, AllLinkGroupNumber)
+
+    /// The modem left linking mode.
+    case cancel
+
+    /// A device was sent a command, in a standard or extended message.
+    case device(InsteonAddress, Command, isExtended: Bool)
+
+  }
+
+  /// The linking steps taken, in order.
+  private(set) var linkingSteps: [LinkingStep] = []
+
+  /// The engine each device reports. Devices not listed report i2.
+  var engines: [InsteonAddress: InsteonEngine] = [:]
+
+  /// Devices that never complete a link.
+  var silentDevices: Set<InsteonAddress> = []
+
+  /// Devices whose unlinks the modem carries out without reporting them.
+  var unreportedUnlinks: Set<InsteonAddress> = []
+
+  /// The group the modem reports for each device's links, when it isn't the modem's group.
+  var reportedGroups: [InsteonAddress: AllLinkGroupNumber] = [:]
+
+  /// The mode the modem is in, if it's linking.
+  private var linkingMode: (mode: AllLinkMode, group: AllLinkGroupNumber)?
+
+  /// The device waiting in linking or unlinking mode, if any.
+  private var waitingDevice: (address: InsteonAddress, isUnlinking: Bool)?
+
   /// How many records were deleted from the modem.
   private(set) var modemDeletions = 0
 
@@ -47,6 +82,38 @@ actor InMemoryModem: LinkingModem {
   func setModemRecords(_ records: [AllLinkRecord]) {
 
     modemRecords = records
+
+  }
+
+  func setEngine(_ engine: InsteonEngine, of device: InsteonAddress) {
+
+    engines[device] = engine
+
+  }
+
+  func setSilent(_ device: InsteonAddress) {
+
+    silentDevices.insert(device)
+
+  }
+
+  func setUnlinkUnreported(_ device: InsteonAddress) {
+
+    unreportedUnlinks.insert(device)
+
+  }
+
+  func setReportedGroup(_ group: AllLinkGroupNumber, of device: InsteonAddress) {
+
+    reportedGroups[device] = group
+
+  }
+
+  /// Someone presses a device's SET button: it enters linking mode, or unlinking mode.
+  func pressSetButton(of device: InsteonAddress, unlinking: Bool = false) {
+
+    waitingDevice = (device, unlinking)
+    completeLink()
 
   }
 
@@ -91,15 +158,68 @@ actor InMemoryModem: LinkingModem {
       }
     case let .manageAllLinkRecord(action, record):
       try manage(record, action: action)
+    case let .startAllLinking(mode, group):
+      linkingSteps.append(.modem(mode, group))
+      linkingMode = (mode, group)
+      completeLink()
+    case .cancelAllLinking:
+      linkingSteps.append(.cancel)
+      linkingMode = nil
     default:
       break
     }
 
   }
 
+  func request(_ message: StandardMessage, timeout: Duration) async throws -> ReceivedMessage {
+
+    let device = message.destination
+    var command2 = message.command.command2
+
+    if message.command.command1 == 0x0D {
+
+      linkingSteps.append(.device(device, message.command, isExtended: false))
+
+      // An i2cs device rejects a modem it isn't linked to.
+      guard !unlinkedDevices.contains(device) else {
+
+        throw ModemError.deviceRejected(device, .notLinked)
+
+      }
+
+      command2 = (engines[device] ?? .i2).rawValue
+
+    } else {
+
+      enterLinking(device, message.command, isExtended: false)
+
+    }
+
+    return ReceivedMessage(
+      sender: device,
+      destination: address,
+      flags: MessageFlags(messageType: .directAcknowledgement),
+      command: Command(command1: message.command.command1, command2: command2)
+    )
+
+  }
+
   func request(_ message: ExtendedMessage, timeout: Duration) async throws -> ReceivedMessage {
 
     let device = message.destination
+
+    if [0x09, 0x0A].contains(message.command.command1) {
+
+      enterLinking(device, message.command, isExtended: true)
+
+      return ReceivedMessage(
+        sender: device,
+        destination: address,
+        flags: MessageFlags(messageType: .directAcknowledgement),
+        command: message.command
+      )
+
+    }
 
     guard !unlinkedDevices.contains(device) else {
 
@@ -195,6 +315,70 @@ actor InMemoryModem: LinkingModem {
     subscribers.append(continuation)
 
     return stream
+
+  }
+
+  // MARK: - Linking
+
+  private func enterLinking(_ device: InsteonAddress, _ command: Command, isExtended: Bool) {
+
+    linkingSteps.append(.device(device, command, isExtended: isExtended))
+
+    switch command.command1 {
+    case 0x09, 0x0A:
+      waitingDevice = (device, command.command1 == 0x0A)
+      completeLink()
+    case 0x08:
+      waitingDevice = nil
+    default:
+      break
+    }
+
+  }
+
+  /// Reports a link once the modem and a device are both in linking mode.
+  private func completeLink() {
+
+    guard let linking = linkingMode, let waiting = waitingDevice else {
+
+      return
+
+    }
+
+    if waiting.isUnlinking, unreportedUnlinks.contains(waiting.address) {
+
+      modemRecords.removeAll { $0.address == waiting.address && $0.group == linking.group && !$0.flags.contains(.controller) }
+      linkingMode = nil
+      waitingDevice = nil
+
+      return
+
+    }
+
+    guard !silentDevices.contains(waiting.address) else {
+
+      return
+
+    }
+
+    let linkCode = linking.mode == .delete || waiting.isUnlinking ? 0xFF : linking.mode.rawValue
+    let link = AllLinkingCompleted(
+      linkCode: linkCode,
+      group: reportedGroups[waiting.address] ?? linking.group,
+      address: waiting.address,
+      category: nil,
+      subcategory: nil,
+      firmwareVersion: nil
+    )
+
+    linkingMode = nil
+    waitingDevice = nil
+
+    for subscriber in subscribers {
+
+      subscriber.yield(.allLinkingCompleted(link))
+
+    }
 
   }
 
