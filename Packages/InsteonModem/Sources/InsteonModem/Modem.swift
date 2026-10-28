@@ -126,11 +126,13 @@ public actor Modem: SerialCommandSender {
 
   /// Sends a standard direct message to a device and waits for the device to acknowledge it.
   ///
-  /// Devices acknowledge only direct messages, so a broadcast sent this way times out. The
-  /// request takes the modem's turn until the device answers, so no other command is sent
+  /// Devices acknowledge only direct messages, so `message` must be one. The request takes the modem's turn until the device answers, so no other command is sent
   /// while the message is crossing the network. The modem echoes the message first, and the
   /// message is sent again as the retry policy allows if the modem is busy. Then the first
-  /// acknowledgement from the device answers the request. An i2cs device that's still
+  /// acknowledgement from the device that repeats the message's cmd1 answers the request; a
+  /// status request is answered by the device's first acknowledgement, since it carries other
+  /// data in cmd1. With the modem's monitor mode on, an acknowledgement the device sends
+  /// another controller for the same cmd1 can answer it too. An i2cs device that's still
   /// searching its ALL-Link database answers with ``NAKReason/databaseSearchPending`` first,
   /// and then again once its search finishes, so the request keeps waiting.
   ///
@@ -149,7 +151,8 @@ public actor Modem: SerialCommandSender {
   /// - Returns: The device's acknowledgement.
   /// - Throws: ``ModemError/deviceRejected(_:_:)`` if the device rejects the message,
   ///   ``ModemError/deviceTimedOut(_:)`` if it doesn't answer, ``ModemError/rejected(_:)`` if
-  ///   the modem NAKs every attempt, ``ModemError/connectionClosed`` if the modem is closed,
+  ///   the modem NAKs every attempt, ``ModemError/timedOut(_:)`` if the modem doesn't echo
+  ///   the message, ``ModemError/connectionClosed`` if the modem is closed,
   ///   `CancellationError` if the task is canceled, or the connection's error.
   @discardableResult
   public func request(
@@ -157,7 +160,14 @@ public actor Modem: SerialCommandSender {
     timeout: Duration = Modem.defaultRequestTimeout
   ) async throws -> ReceivedMessage {
 
-    try await request(.sendStandardMessage(message), to: message.destination, timeout: timeout)
+    precondition(message.flags.messageType == .direct, "Devices acknowledge only direct messages.")
+
+    return try await request(
+      .sendStandardMessage(message),
+      to: message.destination,
+      command1: message.command.command1,
+      timeout: timeout
+    )
 
   }
 
@@ -174,7 +184,8 @@ public actor Modem: SerialCommandSender {
   /// - Returns: The device's acknowledgement.
   /// - Throws: ``ModemError/deviceRejected(_:_:)`` if the device rejects the message,
   ///   ``ModemError/deviceTimedOut(_:)`` if it doesn't answer, ``ModemError/rejected(_:)`` if
-  ///   the modem NAKs every attempt, ``ModemError/connectionClosed`` if the modem is closed,
+  ///   the modem NAKs every attempt, ``ModemError/timedOut(_:)`` if the modem doesn't echo
+  ///   the message, ``ModemError/connectionClosed`` if the modem is closed,
   ///   `CancellationError` if the task is canceled, or the connection's error.
   @discardableResult
   public func request(
@@ -182,7 +193,14 @@ public actor Modem: SerialCommandSender {
     timeout: Duration = Modem.defaultRequestTimeout
   ) async throws -> ReceivedMessage {
 
-    try await request(.sendExtendedMessage(message), to: message.destination, timeout: timeout)
+    precondition(message.flags.messageType == .direct, "Devices acknowledge only direct messages.")
+
+    return try await request(
+      .sendExtendedMessage(message),
+      to: message.destination,
+      command1: message.command.command1,
+      timeout: timeout
+    )
 
   }
 
@@ -198,12 +216,16 @@ public actor Modem: SerialCommandSender {
 
   }
 
-  private func request(_ command: SerialCommand, to device: InsteonAddress, timeout: Duration) async throws -> ReceivedMessage {
+  private func request(
+    _ command: SerialCommand,
+    to device: InsteonAddress,
+    command1: UInt8,
+    timeout: Duration
+  ) async throws -> ReceivedMessage {
 
     let exchange = Exchange(
       bytes: command.bytes,
-      steps: Self.exchange(for: command).steps + [Self.acknowledgement(from: device)],
-      timedOut: ModemError.deviceTimedOut(device),
+      steps: Self.exchange(for: command).steps + [Self.acknowledgement(from: device, of: command1)],
       timeout: timeout
     )
 
@@ -219,29 +241,43 @@ public actor Modem: SerialCommandSender {
   }
 
   /// The step that waits for a device to acknowledge a direct message.
-  private static func acknowledgement(from device: InsteonAddress) -> @Sendable (ModemReply) -> Verdict? {
+  ///
+  /// The acknowledgement repeats the message's cmd1, except for a status request (`0x19`),
+  /// whose acknowledgement carries the device's ALL-Link database delta in its place.
+  private static func acknowledgement(from device: InsteonAddress, of command1: UInt8) -> AnswerStep<ModemReply> {
 
-    { reply in
+    AnswerStep(
+      verdict: { reply in
 
-      guard case let .messageReceived(message) = reply, message.sender == device else {
+        guard
+          case let .messageReceived(message) = reply,
+          message.sender == device,
+          command1 == 0x19 || message.command.command1 == command1
+        else {
 
-        return nil
+          return nil
 
-      }
+        }
 
-      switch message.flags.messageType {
-      case .directAcknowledgement:
-        return .accepted
-      case .directNegativeAcknowledgement:
-        let reason = NAKReason(rawValue: message.command.command2)
+        switch message.flags.messageType {
+        case .directAcknowledgement:
+          return .accepted
+        case .directNegativeAcknowledgement:
+          guard let reason = message.nakReason, reason != .databaseSearchPending else {
 
-        // The device answers again once its database search finishes.
-        return reason == .databaseSearchPending ? nil : .failed(ModemError.deviceRejected(device, reason))
-      default:
-        return nil
-      }
+            // The device answers again once its database search finishes.
+            return nil
 
-    }
+          }
+
+          return .failed(ModemError.deviceRejected(device, reason))
+        default:
+          return nil
+        }
+
+      },
+      timedOut: ModemError.deviceTimedOut(device)
+    )
 
   }
 

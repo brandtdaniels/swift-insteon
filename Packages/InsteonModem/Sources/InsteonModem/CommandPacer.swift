@@ -15,6 +15,17 @@ enum Verdict: Sendable {
 
 }
 
+/// One step of the answer to an ``Exchange``, such as a modem's echo.
+struct AnswerStep<Reply>: Sendable {
+
+  /// What a reply means for the step, or `nil` if it's about something else.
+  let verdict: @Sendable (Reply) -> Verdict?
+
+  /// The error to throw if the step isn't completed in time.
+  let timedOut: any Error
+
+}
+
 /// A command for ``CommandPacer`` to write, and how to recognize the answer to it.
 struct Exchange<Reply>: Sendable {
 
@@ -22,13 +33,9 @@ struct Exchange<Reply>: Sendable {
   let bytes: [UInt8]
 
   /// The steps of the answer, in order, such as a modem's echo and then a device's
-  /// acknowledgement. Each says what a reply means for it, or `nil` if the reply is about
-  /// something else. Only the current step sees each reply, and the reply that completes the
+  /// acknowledgement. Only the current step sees each reply, and the reply that completes the
   /// last step answers the command.
-  let steps: [@Sendable (Reply) -> Verdict?]
-
-  /// The error to throw if the answer doesn't arrive.
-  let timedOut: any Error
+  let steps: [AnswerStep<Reply>]
 
   /// How long to wait for the answer, or `nil` for the retry policy's answer timeout.
   var timeout: Duration?
@@ -45,8 +52,7 @@ struct Exchange<Reply>: Sendable {
   /// Creates an exchange whose answer comes in steps.
   init(
     bytes: [UInt8],
-    steps: [@Sendable (Reply) -> Verdict?],
-    timedOut: any Error,
+    steps: [AnswerStep<Reply>],
     timeout: Duration? = nil,
     transferTime: Duration = .zero,
     repeatsPrevious: Bool = false
@@ -56,7 +62,6 @@ struct Exchange<Reply>: Sendable {
 
     self.bytes = bytes
     self.steps = steps
-    self.timedOut = timedOut
     self.timeout = timeout
     self.transferTime = transferTime
     self.repeatsPrevious = repeatsPrevious
@@ -69,6 +74,7 @@ struct Exchange<Reply>: Sendable {
   ///   - answer: Whether a reply answers the command: `true` if it accepts it, `false` if it
   ///     rejects it, or `nil` if it's about something else.
   ///   - rejected: The error to throw if the device rejects every attempt.
+  ///   - timedOut: The error to throw if the device doesn't answer.
   init(
     bytes: [UInt8],
     answer: @escaping @Sendable (Reply) -> Bool?,
@@ -80,8 +86,9 @@ struct Exchange<Reply>: Sendable {
 
     self.init(
       bytes: bytes,
-      steps: [{ reply in answer(reply).map { $0 ? .accepted : .rejected(rejected) } }],
-      timedOut: timedOut,
+      steps: [
+        AnswerStep(verdict: { reply in answer(reply).map { $0 ? .accepted : .rejected(rejected) } }, timedOut: timedOut)
+      ],
       transferTime: transferTime,
       repeatsPrevious: repeatsPrevious
     )
@@ -120,12 +127,10 @@ actor CommandPacer<Parser: ReplyParser> {
 
     let id: Int
 
-    let steps: [@Sendable (Reply) -> Verdict?]
+    let steps: [AnswerStep<Reply>]
 
     /// The step the next reply is checked against.
     var step = 0
-
-    let timedOut: any Error
 
     let timeout: Duration
 
@@ -239,8 +244,8 @@ actor CommandPacer<Parser: ReplyParser> {
   ///
   /// - Parameter exchanges: The commands to write, in order.
   /// - Returns: The reply that answered each command, in order.
-  /// - Throws: The error of a reply that rejected or failed a command, an exchange's
-  ///   `timedOut` error, `closedError` if the device is closed, `CancellationError` if the
+  /// - Throws: The error of a reply that rejected or failed a command, the `timedOut` error of
+  ///   a step that wasn't completed in time, `closedError` if the device is closed, `CancellationError` if the
   ///   task is canceled, or the connection's error.
   @discardableResult
   func send(_ exchanges: [Exchange<Reply>]) async throws -> [Reply] {
@@ -293,44 +298,39 @@ actor CommandPacer<Parser: ReplyParser> {
   /// - Returns: The reply that answered the exchange.
   private func perform(_ exchange: Exchange<Reply>, repeating previous: Exchange<Reply>? = nil) async throws -> Reply {
 
-    let attempts = retryPolicy.attempts
+    try Task.checkCancellation()
 
-    // The first attempt sends only the exchange, so its rejection is always set before a
-    // previous exchange can be rejected.
-    var rejection: (any Error)?
+    var rejection: any Error
 
-    for attempt in 1...attempts {
+    switch try await transmit(exchange) {
+    case let .accepted(reply):
+      return reply
+    case let .rejected(error):
+      rejection = error
+    }
 
+    for _ in 1..<retryPolicy.attempts {
+
+      try await clock.sleep(for: retryPolicy.delay)
       try Task.checkCancellation()
 
-      var isPreviousAccepted = true
+      // A previous exchange that's rejected counts as this one being rejected again.
+      if let previous, case .rejected = try await transmit(previous) {
 
-      if attempt > 1, let previous, case .rejected = try await transmit(previous) {
-
-        isPreviousAccepted = false
-
-      }
-
-      if isPreviousAccepted {
-
-        switch try await transmit(exchange) {
-        case let .accepted(reply):
-          return reply
-        case let .rejected(error):
-          rejection = error
-        }
+        continue
 
       }
 
-      if attempt < attempts {
-
-        try await clock.sleep(for: retryPolicy.delay)
-
+      switch try await transmit(exchange) {
+      case let .accepted(reply):
+        return reply
+      case let .rejected(error):
+        rejection = error
       }
 
     }
 
-    throw rejection ?? exchange.timedOut
+    throw rejection
 
   }
 
@@ -353,7 +353,6 @@ actor CommandPacer<Parser: ReplyParser> {
     pendingAnswer = PendingAnswer(
       id: id,
       steps: exchange.steps,
-      timedOut: exchange.timedOut,
       timeout: timeout,
       result: continuation
     )
@@ -452,7 +451,7 @@ actor CommandPacer<Parser: ReplyParser> {
     }
 
     deliver(parser.finishPendingReply())
-    failAnswer(id, with: pending.timedOut)
+    failAnswer(id, with: pending.steps[pending.step].timedOut)
 
   }
 
@@ -534,7 +533,7 @@ actor CommandPacer<Parser: ReplyParser> {
 
     for reply in replies {
 
-      if let pending = pendingAnswer, let verdict = pending.steps[pending.step](reply) {
+      if let pending = pendingAnswer, let verdict = pending.steps[pending.step].verdict(reply) {
 
         switch verdict {
         case .accepted where pending.step < pending.steps.count - 1:

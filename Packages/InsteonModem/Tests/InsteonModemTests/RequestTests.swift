@@ -122,6 +122,41 @@ struct RequestTests {
 
   }
 
+  @Test func ignoresAnAcknowledgementOfAnotherCommand() async throws {
+
+    let late = received(from: device, .directAcknowledgement, command1: 0x11, command2: 0xFF)
+    let current = received(from: device, .directAcknowledgement, command1: 0x0D, command2: 0x02)
+    let connection = ScriptedConnection { written, _ in written + [0x06] + late + current }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let answer = try await modem.request(engineVersionRequest)
+
+      #expect(answer.command == Command(command1: 0x0D, command2: 0x02))
+
+    }
+
+  }
+
+  // A status request's acknowledgement carries the ALL-Link database delta in cmd1.
+  @Test func acceptsAStatusRequestsAcknowledgementWhateverItsCommand1() async throws {
+
+    let request = StandardMessage(to: device, command: StandardDirectCommand.statusRequest())
+    let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x05, command2: 0xFF)
+    let connection = ScriptedConnection { written, _ in written + [0x06] + acknowledgement }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let answer = try await modem.request(request)
+
+      #expect(answer.command == Command(command1: 0x05, command2: 0xFF))
+
+    }
+
+  }
+
   @Test func sendsTheMessageAgainWhileTheModemIsBusy() async throws {
 
     let acknowledgement = received(from: device, .directAcknowledgement, command1: 0x0D, command2: 0x02)
@@ -150,6 +185,26 @@ struct RequestTests {
         async let answer = modem.request(engineVersionRequest, timeout: .seconds(5))
         await clock.waitForSleeper(until: .seconds(5))
         clock.advance(by: .seconds(5))
+        _ = try await answer
+
+      }
+
+    }
+
+  }
+
+  @Test func blamesTheModemWhenItDoesntEchoTheMessage() async throws {
+
+    let connection = ScriptedConnection { _, _ in [] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      await #expect(throws: ModemError.timedOut(.sendMessage)) {
+
+        async let answer = modem.request(engineVersionRequest)
+        await clock.waitForSleeper(until: .seconds(3))
+        clock.advance(by: .seconds(3))
         _ = try await answer
 
       }
