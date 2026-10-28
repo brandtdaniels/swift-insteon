@@ -321,15 +321,33 @@ struct ModemReplyParserTests {
 
   }
 
-  // A diagnostic record's bytes can hold a start byte, such as the 0x02 of its count.
+  // A diagnostic record's addresses can hold a start byte followed by a reply's number.
   @Test func readsADiagnosticRecordWhoseBytesLookLikeAReply() {
 
     var parser = ModemReplyParser()
 
     let replies = parser.parse(bytes("025A" + "AAAA02" + "025012" + "03" + "01" + "0001" + "06" + "0255"))
 
-    #expect(replies.count == 2)
-    #expect(replies.last == .userReset)
+    #expect(replies == [
+      .diagnosticRecord(ModemDiagnosticRecord(
+        sender: InsteonAddress(0xAA, 0xAA, 0x02),
+        recipient: InsteonAddress(0x02, 0x50, 0x12),
+        flags: MessageFlags(rawValue: 0x03),
+        count: 1,
+        totalCount: 1
+      )),
+      .userReset,
+    ])
+
+  }
+
+  // Without an ACK at the end, a 0x5A start isn't a report, so the parser looks for the next
+  // start byte.
+  @Test func skipsAReportThatDoesntEndInAnAnswer() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("025A" + "0000000000000000000000" + "0255")) == [.userReset])
 
   }
 

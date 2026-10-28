@@ -133,7 +133,8 @@ public enum SerialCommand: Hashable, Sendable {
   /// Makes the modem beep.
   ///
   /// Insteon's command workbook shows later firmware taking a parameter byte, `0x00` for a
-  /// beep and `0x01` for a double beep; this sends the Developer's Guide's form, with none.
+  /// beep and `0x01` for a double beep; this sends the form without one, as Insteon's PLM serial
+  /// command table first gave it.
   case beep
 
   /// Sets the data the modem stores in the responder record its next ALL-Link creates.
@@ -165,10 +166,10 @@ public enum SerialCommand: Hashable, Sendable {
   /// ``ModemReply/radioStatus(_:)``. From later modem firmware; others NAK it.
   case readRadioStatus
 
-  /// Requests the modem's diagnostic records, which it answers with
+  /// Requests one of the modem's diagnostic records, which it answers with
   /// ``ModemReply/diagnosticRecord(_:)``. From later modem firmware; others NAK it.
   ///
-  /// - Parameter index: The first record's index, a multiple of 8 from `0x00` through `0xF8`.
+  /// - Parameter index: The record's index, a multiple of 8 from `0x00` through `0xF8`.
   case readDiagnostics(index: UInt8)
 
   /// Has the modem find, and optionally change or delete, a record in another device's

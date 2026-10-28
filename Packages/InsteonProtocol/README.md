@@ -50,7 +50,7 @@ No device data is built in, so every app can look devices up in the [Insteon dev
 
 `Sources/InsteonProtocol/Modem` covers the serial commands a host sends to an Insteon modem, such as a PowerLinc Modem or the modem inside an Insteon Hub:
 
-- `SerialCommand`: the host-to-modem commands `0x60` through `0x77`, `0x79`, `0x7A` and `0x7D`, encoded to bytes
+- `SerialCommand`: the host-to-modem commands `0x60` through `0x77`, `0x79`, `0x7A`, `0x7D`, `0x7E`, `0x81` and `0x82`, encoded to bytes
 - `SerialCommandSender`: the protocol modem connections conform to
 - `AllLinkGroupNumber`, `AllLinkRecord`, `AllLinkRecordFlags`, `AllLinkRecordAction` and `AllLinkMode`: ALL-Link group numbers, database records and linking
 - `ModemConfiguration`: the modem's configuration flags
