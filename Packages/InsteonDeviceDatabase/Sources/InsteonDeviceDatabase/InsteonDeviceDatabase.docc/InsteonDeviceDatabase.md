@@ -37,6 +37,11 @@ print(profile.heartbeatInterval ?? .zero)
 only when the published manifest's SHA-256 differs from the app's copy, and uses the download
 only if it hashes to that SHA-256. Updating is optional.
 
+``DeviceEventInterpreter`` reads the messages a modem receives as ``DeviceEvent``s. It learns
+each device's profile when the device reports its identity, such as when its SET button is
+held to link it, and from then on reports what the device's group commands mean and when it
+sends a heartbeat.
+
 A device with no profile can still be handled by what its `DeviceCategory` implies, such as
 dimming for dimmable lighting control.
 
@@ -52,6 +57,11 @@ dimming for dimmable lighting control.
 - ``DeviceDatabaseUpdater``
 - ``DeviceDatabaseUpdate``
 - ``DeviceDatabaseUpdateError``
+
+### Reading events
+
+- ``DeviceEventInterpreter``
+- ``DeviceEvent``
 
 ### Profiles
 
