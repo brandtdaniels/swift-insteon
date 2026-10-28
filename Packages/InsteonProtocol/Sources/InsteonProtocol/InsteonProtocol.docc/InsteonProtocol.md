@@ -121,6 +121,11 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``AllLinkRecordFlags``
 - ``AllLinkRecordAction``
 
+### Device ALL-Link databases
+
+- ``AllLinkDatabaseRequest``
+- ``AllLinkRecordResponse``
+
 ### X10
 
 - ``X10Code``
