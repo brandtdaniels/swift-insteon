@@ -88,15 +88,23 @@ struct ProductTests {
 
   }
 
-  // The i3 Keypad's Test RF broadcast: To 00 00 00, flags 8F, cmd1 03, cmd2 00.
-  @Test func readsAnI3TestRFBroadcastRatherThanAPhaseTest() throws {
+  // The i3 Keypad's Test RF broadcast: To 00 00 00, cmd1 03, cmd2 00. The specification's
+  // example flags are 8F, but it says the broadcast is never hopped, so either max hops is read.
+  @Test(arguments: [MessageFlags.HopCount.three, .zero])
+  func readsAnI3TestRFBroadcastRatherThanAPhaseTest(_ maxHops: MessageFlags.HopCount) throws {
 
-    let message = broadcast(to: InsteonAddress(0x00, 0x00, 0x00), command1: 0x03, command2: 0x00)
+    let message = broadcast(to: InsteonAddress(0x00, 0x00, 0x00), command1: 0x03, command2: 0x00, maxHops: maxHops)
+    let test = try #require(RadioRangeTest(message))
 
-    #expect(message.flags.rawValue == 0x8F)
+    #expect(test == RadioRangeTest(sender: device))
     #expect(PowerlinePhaseTest(message) == nil)
-    #expect(try #require(RadioRangeTest(message)) == RadioRangeTest(sender: device))
-    #expect(RadioRangeTest(broadcast(to: InsteonAddress(0x00, 0x00, 0x00), command1: 0x03, command2: 0x00, maxHops: .zero)) == nil)
+
+  }
+
+  @Test func readsATestRFBroadcastOnlyToItsOwnAddressAndCommand() {
+
+    #expect(RadioRangeTest(broadcast(to: InsteonAddress(0x01, 0x20, 0x41), command1: 0x03, command2: 0x00)) == nil)
+    #expect(RadioRangeTest(broadcast(to: InsteonAddress(0x00, 0x00, 0x00), command1: 0x03, command2: 0x01)) == nil)
 
   }
 

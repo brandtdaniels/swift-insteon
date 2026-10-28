@@ -122,11 +122,25 @@ struct LinkerTests {
   @Test func acceptsARecordWhoseDeviceMaintainedFlagsChanged() async throws {
 
     let modem = InMemoryModem()
-    await modem.setMaintainedFlags(0b0000_1001, of: lamp)
+    await modem.setMaintainedFlags(AllLinkRecordFlags(rawValue: 0b0000_1001), of: lamp)
 
     try await Linker(modem: modem).link(group(controller: .device(keypad), responder: .device(lamp)))
 
     #expect(await modem.record(of: lamp, at: 0x0FFF).flags.rawValue == responderRecord(of: keypad).flags.rawValue | 0b0000_1001)
+
+  }
+
+  // A record that differs only in the bits the device keeps isn't written again.
+  @Test func leavesARecordWhoseOnlyDifferenceIsDeviceMaintainedFlags() async throws {
+
+    let modem = InMemoryModem()
+    var existing = responderRecord(of: keypad)
+    existing.flags.formUnion(AllLinkRecordFlags(rawValue: 0b0000_1001))
+    await modem.setDatabase([0x0FFF: existing], of: lamp)
+
+    try await Linker(modem: modem).link(group(controller: .device(keypad), responder: .device(lamp)))
+
+    #expect(await modem.writes.filter { $0.device == lamp }.isEmpty)
 
   }
 

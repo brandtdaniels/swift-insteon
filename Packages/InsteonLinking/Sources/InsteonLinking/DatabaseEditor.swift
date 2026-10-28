@@ -180,7 +180,7 @@ struct DatabaseEditor {
 
       }
 
-      for index in matches where records[index].record != record {
+      for index in matches where !Self.isSame(records[index].record, record) {
 
         try await write(record, at: records[index].address, in: device)
         records[index].record = record
@@ -218,19 +218,26 @@ struct DatabaseEditor {
 
   }
 
+  /// Whether two records are the same but for the flags a device may change on its own, such
+  /// as its smart hop count.
+  private static func isSame(_ record: AllLinkRecord, _ other: AllLinkRecord) -> Bool {
+
+    var record = record, other = other
+    record.flags.subtract(.deviceMaintained)
+    other.flags.subtract(.deviceMaintained)
+
+    return record == other
+
+  }
+
   /// Writes a record at an address and reads it back.
   private func write(_ record: AllLinkRecord, at address: UInt16, in device: InsteonAddress) async throws {
 
     _ = try await modem.request(AllLinkDatabaseRequest.write(record, address: address).message(to: device), timeout: timeout)
 
-    var written = try await modem.readAllLinkRecord(of: device, at: address, timeout: timeout).record
-    var expected = record
+    let written = try await modem.readAllLinkRecord(of: device, at: address, timeout: timeout)
 
-    // A device may change some flags on its own, such as its smart hop count.
-    written.flags.subtract(.deviceMaintained)
-    expected.flags.subtract(.deviceMaintained)
-
-    guard written == expected else {
+    guard Self.isSame(written.record, record) else {
 
       throw LinkingError.recordNotWritten(device, address: address)
 

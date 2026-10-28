@@ -6,8 +6,9 @@
 /// device sends them by radio only, never over the power line, and they're never hopped; a
 /// device that hears one flashes its LED once.
 ///
-/// It has the same cmd1 and cmd2 as a ``PowerlinePhaseTest`` for phase A, but its To address is
-/// `00.00.00` and its flags byte is `0x8F`, with max hops 3, where a phase test has max hops 0.
+/// It has the same cmd1 and cmd2 as a ``PowerlinePhaseTest`` for phase A. Its To address is
+/// `00.00.00`, where a phase test's, like any broadcast's, holds the sender's category,
+/// subcategory and firmware version.
 public struct RadioRangeTest: Hashable, Sendable {
 
   /// The device that sent the broadcast.
@@ -25,15 +26,14 @@ public struct RadioRangeTest: Hashable, Sendable {
   /// Reads a Test RF broadcast from a received message.
   ///
   /// - Parameter message: A message the modem received.
-  /// - Returns: `nil` unless the message is a standard-length broadcast to `00.00.00` with max
-  ///   hops other than 0, cmd1 `0x03` and cmd2 `0x00`.
+  /// - Returns: `nil` unless the message is a standard-length broadcast to `00.00.00` with
+  ///   cmd1 `0x03` and cmd2 `0x00`.
   public init?(_ message: ReceivedMessage) {
 
     guard
       message.isStandardBroadcast(command1: 0x03),
       message.command.command2 == 0x00,
-      message.destination == InsteonAddress(0x00, 0x00, 0x00),
-      message.flags.maxHops != .zero
+      message.destination == RadioRangeTest.destination
     else {
 
       return nil
@@ -43,5 +43,8 @@ public struct RadioRangeTest: Hashable, Sendable {
     self.init(sender: message.sender)
 
   }
+
+  /// The To address of a Test RF broadcast.
+  static let destination = InsteonAddress(0x00, 0x00, 0x00)
 
 }

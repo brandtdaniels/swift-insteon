@@ -18,10 +18,8 @@ public struct AllLinkRecordFlags: OptionSet, Hashable, Sendable {
 
   }
 
-  /// The device fails fast when a message to the record's device goes unanswered (bit 0), as
-  /// i3 devices define it.
-  ///
-  /// The i3 developer specifications say the device may change it at its own discretion.
+  /// Bit 0, which the i3 developer specifications name Fast Fail without describing it
+  /// further. They say a device may change it at its own discretion.
   public static let fastFail = AllLinkRecordFlags(rawValue: 1 << 0)
 
   /// The record has been used before; when clear, the record marks the end of the database
