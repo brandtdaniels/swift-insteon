@@ -107,6 +107,17 @@ what the device is, from a device database.
 - ``TempLincEvent``
 - ``ThermostatOption``
 
+### Keypads, dimmers, switches and outlets
+
+- ``LightingSetting``
+- ``LightingSettings``
+- ``LightingOption``
+- ``KeypadButton``
+- ``KeypadButtonSet``
+- ``RampRate``
+- ``LEDBrightness``
+- ``FanSpeed``
+
 ### Broadcasts
 
 - ``Heartbeat``
