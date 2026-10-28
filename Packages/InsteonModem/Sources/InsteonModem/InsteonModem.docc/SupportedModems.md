@@ -40,15 +40,13 @@ subcategory tells the models apart. SmartLabs' HouseLinc device catalog lists th
 | 2448A7 | `0x1F`, `0x20` |
 | 2448A7H | `0x21`, `0x23` |
 | 2245 | `0x33` to `0x36`, one for each region |
-| 2242 | `0x2B`, `0x2E` to `0x32`, one or more for each region, and `0x37` in later revisions |
+| 2242 | `0x2B`, `0x2E` to `0x32`, one or more for each region |
 | 2414S | `0x01` |
 | 2412N (SmartLinc) | `0x10` |
-| 2243 (Hub Pro) | `0x3A` |
+| 2243 (Hub Pro) | `0x18`, `0x2C`, `0x2D` |
 
-SmartLabs' product records give the Hub Pro's subcategory and the 2242's later one. An
-earlier product, the Central Controller, also used the model number 2243, with subcategories
-`0x18`, `0x2C` and `0x2D`. For any other modem, look the category and subcategory up in a
-device database.
+The catalog also lists a Hub as `0x37` without a model number. For any other modem, look the
+category and subcategory up in a device database.
 
 ### Commands a modem may lack
 
