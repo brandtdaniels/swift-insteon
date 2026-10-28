@@ -20,7 +20,8 @@ let package = Package(
     .library(name: "InsteonModem", targets: ["InsteonModem"]),
     .library(name: "InsteonLinking", targets: ["InsteonLinking"]),
     .library(name: "InsteonScheduling", targets: ["InsteonScheduling"]),
-    .library(name: "InsteonDeviceCatalog", targets: ["InsteonDeviceCatalog"])
+    .library(name: "InsteonDeviceCatalog", targets: ["InsteonDeviceCatalog"]),
+    .library(name: "InsteonNotifications", targets: ["InsteonNotifications"])
   ],
   dependencies: [
     // SHA-256 for DeviceCatalogUpdater: CryptoKit on Apple platforms, BoringSSL elsewhere.
@@ -131,6 +132,17 @@ let package = Package(
         .product(name: "Crypto", package: "swift-crypto")
       ],
       path: "Packages/InsteonDeviceCatalog/Tests/InsteonDeviceCatalogTests"
+    ),
+
+    .target(
+      name: "InsteonNotifications",
+      dependencies: ["InsteonDeviceCatalog", "InsteonProtocol"],
+      path: "Packages/InsteonNotifications/Sources/InsteonNotifications"
+    ),
+    .testTarget(
+      name: "InsteonNotificationsTests",
+      dependencies: ["InsteonNotifications", "InsteonDeviceCatalog", "InsteonProtocol"],
+      path: "Packages/InsteonNotifications/Tests/InsteonNotificationsTests"
     ),
 
     // Test doubles shared by the test targets. Not a product.

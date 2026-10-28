@@ -15,6 +15,7 @@ Swift packages for working with [Insteon](https://www.insteon.com) home automati
 | [InsteonHubPro](Packages/InsteonHubPro) | Add Insteon devices to a Hub Pro and read its settings and update its software through its local interface |
 | [InsteonScheduling](Packages/InsteonScheduling) | Work out when schedules run, at clock times or around sunrise and sunset, in a home's time zone through daylight saving changes |
 | [InsteonDeviceCatalog](Packages/InsteonDeviceCatalog) | Look a device up in the [Insteon device catalog](https://github.com/brandtdaniels/insteon-device-catalog) by the category, subcategory and firmware version it reports, to find what it is and can do, such as its groups, what its group commands mean and its heartbeat interval, and read its messages as named events |
+| [InsteonNotifications](Packages/InsteonNotifications) | Let people know when their devices do something they care about, such as a leak sensor turning wet, a door opening or a sensor going quiet |
 | [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the Insteon clients send requests through |
 
 The [Supported Modems](Packages/InsteonModem/Sources/InsteonModem/InsteonModem.docc/SupportedModems.md) article lists every modem, Hub and controller, and how well each is supported.
