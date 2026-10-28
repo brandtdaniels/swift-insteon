@@ -54,6 +54,13 @@ actor InMemoryModem: LinkingModem {
   /// The engine each device reports. Devices not listed report i2.
   var engines: [InsteonAddress: InsteonEngine] = [:]
 
+  /// Engine versions devices report that ``InsteonEngine`` doesn't name, by device.
+  var unknownEngines: [InsteonAddress: UInt8] = [:]
+
+  /// The SET Button Pressed broadcast each device sends in reply to an ID request. Devices not
+  /// listed don't reply.
+  var identities: [InsteonAddress: SetButtonPressed] = [:]
+
   /// Devices that never complete a link.
   var silentDevices: Set<InsteonAddress> = []
 
@@ -115,6 +122,42 @@ actor InMemoryModem: LinkingModem {
   func setReportedGroup(_ group: AllLinkGroupNumber, of device: InsteonAddress) {
 
     reportedGroups[device] = group
+
+  }
+
+  func setUnknownEngine(_ version: UInt8, of device: InsteonAddress) {
+
+    unknownEngines[device] = version
+
+  }
+
+  func setIdentity(_ identity: SetButtonPressed) {
+
+    identities[identity.sender] = identity
+
+  }
+
+  /// A device broadcasts its identity, if it has one.
+  func broadcastIdentity(of device: InsteonAddress) {
+
+    guard let identity = identities[device] else {
+
+      return
+
+    }
+
+    let broadcast = ReceivedMessage(
+      sender: device,
+      destination: InsteonAddress(identity.category.rawValue, identity.subcategory.rawValue, identity.firmwareVersion?.rawValue ?? 0xFF),
+      flags: MessageFlags(messageType: .broadcast),
+      command: Command(command1: identity.role.rawValue, command2: 0x00)
+    )
+
+    for subscriber in subscribers {
+
+      subscriber.yield(.messageReceived(broadcast))
+
+    }
 
   }
 
@@ -220,7 +263,18 @@ actor InMemoryModem: LinkingModem {
 
       }
 
-      command2 = (engines[device] ?? .i2).rawValue
+      command2 = unknownEngines[device] ?? (engines[device] ?? .i2).rawValue
+
+    } else if message.command.command1 == 0x10 {
+
+      guard !unlinkedDevices.contains(device) else {
+
+        throw ModemError.deviceRejected(device, .notLinked)
+
+      }
+
+      // The device acknowledges, then broadcasts its identity.
+      broadcastIdentity(of: device)
 
     } else {
 
