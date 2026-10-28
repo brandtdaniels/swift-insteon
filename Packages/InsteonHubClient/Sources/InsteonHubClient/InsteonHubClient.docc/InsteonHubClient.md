@@ -22,9 +22,9 @@ let hub = Hub(
 // Polls the Hub for replies while the closure sends commands.
 try await Modem.withConnection(HubConnection(hub: hub)) { modem in
   let lamp = InsteonAddress(0xAA, 0xBB, 0xCC)
-  try await modem.send(.sendStandardMessage(
-    StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF))
-  ))
+
+  // Returns once the lamp's acknowledgement shows up in the Hub's buffer.
+  try await modem.request(StandardMessage(to: lamp, command: StandardDirectCommand.on(level: 0xFF)))
 }
 ```
 

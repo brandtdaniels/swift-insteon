@@ -20,7 +20,7 @@ The Supported Modems article in the documentation explains each caveat.
 
 ## Types
 
-- `Modem`: sends serial commands one at a time, waits for the modem to accept each, retries when it's busy, and streams everything it sends back; conforms to `SerialCommandSender`
+- `Modem`: sends serial commands one at a time, waits for the modem to accept each, retries when it's busy, and streams everything it sends back; sends messages to devices and waits for each device to acknowledge them; conforms to `SerialCommandSender`
 - `ModemConnection`: the byte-level connection `Modem` talks over
 - `PowerLincController`: sends standard messages and X10 through a PowerLinc Controller (2414S) using IBIOS, and streams what it reports; conforms to `SerialCommandSender`
 - `SerialPort`: a `ModemConnection` to a serial or USB modem, on macOS and Linux, at 19200 or 4800 baud
