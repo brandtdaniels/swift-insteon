@@ -13,9 +13,9 @@ struct ThermostatTests {
 
     #expect(ThermostatCommand.raiseSetpoint(halfDegrees: 2).command == Command(command1: 0x68, command2: 0x02))
     #expect(ThermostatCommand.lowerSetpoint(halfDegrees: 2).command == Command(command1: 0x69, command2: 0x02))
-    #expect(ThermostatCommand.readTemperature.command == Command(command1: 0x6A, command2: 0x00))
-    #expect(ThermostatCommand.readSetpoints.command == Command(command1: 0x6A, command2: 0x20))
-    #expect(ThermostatCommand.readHumidity.command == Command(command1: 0x6A, command2: 0x60))
+    #expect(ThermostatCommand.readZone(.temperature).command == Command(command1: 0x6A, command2: 0x00))
+    #expect(ThermostatCommand.readZone(.setpoint).command == Command(command1: 0x6A, command2: 0x20))
+    #expect(ThermostatCommand.readZone(.humidity).command == Command(command1: 0x6A, command2: 0x60))
     #expect(ThermostatCommand.readMode.command == Command(command1: 0x6B, command2: 0x02))
     #expect(ThermostatCommand.setMode(.programAuto).command == Command(command1: 0x6B, command2: 0x0C))
     #expect(ThermostatCommand.setFan(.auto).command == Command(command1: 0x6B, command2: 0x08))
@@ -67,6 +67,17 @@ struct ThermostatTests {
 
     #expect(StandardDirectCommand.setOperatingFlags(flag: ThermostatDisplayOption.celsius.rawValue).command
       == Command(command1: 0x20, command2: 0x06))
+
+  }
+
+  // The datasheet: bits 0 to 4 are the zone, bits 5 and 6 the value.
+  @Test func addressesAZone() throws {
+
+    let zone3 = try #require(ThermostatZone(rawValue: 3))
+
+    #expect(ThermostatCommand.readZone(.deadband, zone: zone3).command == Command(command1: 0x6A, command2: 0x43))
+    #expect(ThermostatCommand.readZone(.humidity, zone: try #require(ThermostatZone(rawValue: 31))).command.command2 == 0x7F)
+    #expect(ThermostatZone(rawValue: 32) == nil)
 
   }
 

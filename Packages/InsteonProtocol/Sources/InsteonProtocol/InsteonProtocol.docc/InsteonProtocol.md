@@ -95,6 +95,8 @@ what the device is, from a device database.
 ### Thermostats
 
 - ``ThermostatCommand``
+- ``ThermostatReading``
+- ``ThermostatZone``
 - ``ThermostatModeSetting``
 - ``ThermostatFanSetting``
 - ``ThermostatTemperature``

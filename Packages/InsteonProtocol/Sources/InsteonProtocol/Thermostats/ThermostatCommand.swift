@@ -1,11 +1,11 @@
 /// Commands a thermostat accepts in a standard direct message, from Insteon's thermostat
-/// command tables.
+/// command tables and SmartLabs' Thermostat Adapter (Venstar/Totaline) datasheet.
 ///
 /// Temperatures and setpoints are ``ThermostatTemperature`` values, in half degrees of the
 /// scale the thermostat displays. A read returns its value in cmd2 of the acknowledgement:
 ///
 /// ```swift
-/// let ack = try await modem.request(StandardMessage(to: thermostat, command: ThermostatCommand.readTemperature))
+/// let ack = try await modem.request(StandardMessage(to: thermostat, command: ThermostatCommand.readZone(.temperature)))
 /// let temperature = ThermostatTemperature(rawValue: ack.command.command2)
 ///
 /// try await modem.request(StandardMessage(to: thermostat, command: ThermostatCommand.setHeatSetpoint(ThermostatTemperature(degrees: 68)!)))
@@ -22,21 +22,11 @@ public enum ThermostatCommand: Hashable, Sendable {
   /// Lowers the setpoint by a number of half degrees (cmd1 `0x69`).
   case lowerSetpoint(halfDegrees: UInt8)
 
-  /// Reads the current temperature, as a ``ThermostatTemperature`` in the acknowledgement's
-  /// cmd2 (cmd1 `0x6A`, cmd2 `0x00`).
-  case readTemperature
-
-  /// Reads the setpoint, as a ``ThermostatTemperature`` in the acknowledgement's cmd2 (cmd1
-  /// `0x6A`, cmd2 `0x20`).
+  /// Reads one of a zone's values, in the acknowledgement's cmd2 (cmd1 `0x6A`).
   ///
-  /// In auto mode the thermostat has two setpoints: the acknowledgement carries the heat
-  /// setpoint, and the thermostat sends the cool setpoint in a second message with cmd1
-  /// `0x6A`.
-  case readSetpoints
-
-  /// Reads the relative humidity, in percent, in the acknowledgement's cmd2 (cmd1 `0x6A`,
-  /// cmd2 `0x60`), on thermostats that measure it.
-  case readHumidity
+  /// cmd2 holds the zone in bits 0 to 4 and the value to read in bits 5 and 6, so the main
+  /// zone's temperature is `0x00`, its setpoint `0x20` and its humidity `0x60`.
+  case readZone(ThermostatReading, zone: ThermostatZone = .main)
 
   /// Reads the mode, as a ``ThermostatMode`` in the acknowledgement's cmd2 (cmd1 `0x6B`,
   /// cmd2 `0x02`).
@@ -118,12 +108,8 @@ extension ThermostatCommand: StandardCommandConvertible {
       Command(command1: 0x68, command2: halfDegrees)
     case let .lowerSetpoint(halfDegrees):
       Command(command1: 0x69, command2: halfDegrees)
-    case .readTemperature:
-      Command(command1: 0x6A, command2: 0x00)
-    case .readSetpoints:
-      Command(command1: 0x6A, command2: 0x20)
-    case .readHumidity:
-      Command(command1: 0x6A, command2: 0x60)
+    case let .readZone(reading, zone):
+      Command(command1: 0x6A, command2: reading.rawValue << 5 | zone.rawValue)
     case .readMode:
       Command(command1: 0x6B, command2: 0x02)
     case let .setMode(mode):
