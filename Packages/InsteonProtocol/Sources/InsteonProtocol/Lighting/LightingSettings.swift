@@ -97,12 +97,13 @@ public struct LightingSettings: Hashable, Sendable {
   ///
   /// - Parameter message: A message the modem received.
   /// - Returns: `nil` unless the message is an extended direct get/set reply (cmd1 `0x2E`,
-  ///   `0x01` in D2) for a button from 1 to 8.
+  ///   cmd2 `0x00`, `0x01` in D2) for a button from 1 to 8. A thermostat's get/set replies,
+  ///   whose cmd2 isn't `0x00`, read as `nil`.
   public init?(_ message: ReceivedMessage) {
 
     guard
       message.flags.messageType == .direct,
-      message.command.command1 == 0x2E,
+      message.command == Command(command1: 0x2E, command2: 0x00),
       let userData = message.userData,
       userData[2] == 0x01,
       let button = KeypadButton(rawValue: userData[1])

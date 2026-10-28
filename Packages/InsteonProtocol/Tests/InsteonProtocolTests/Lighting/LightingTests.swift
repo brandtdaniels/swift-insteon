@@ -111,8 +111,15 @@ struct LightingTests {
     )
     let other = ReceivedMessage(sender: keypad, destination: modem, flags: .direct, command: Command(command1: 0x11, command2: 0xFF))
 
+    let schedule = try UserData([0x01, 0x01])
+    let thermostat = ReceivedMessage(
+      sender: keypad, destination: modem, flags: MessageFlags(messageType: .direct, isExtended: true),
+      command: Command(command1: 0x2E, command2: 0x02), userData: schedule
+    )
+
     #expect(LightingSettings(request) == nil)
     #expect(LightingSettings(other) == nil)
+    #expect(LightingSettings(thermostat) == nil)
     let fifth = try LightingSettings.requestUserData(for: button(5))
     #expect(fifth.bytes.prefix(2) == [0x05, 0x00])
 
