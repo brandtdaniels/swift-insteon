@@ -17,8 +17,8 @@ public enum ThermostatStatusReport: Hashable, Sendable {
   /// The relative humidity changed, in percent (cmd1 `0x6F`).
   case humidity(percent: UInt8)
 
-  /// The mode changed (cmd1 `0x70`).
-  case mode(ThermostatMode)
+  /// The mode changed (cmd1 `0x70`), in the thermostat's own values.
+  case mode(ThermostatModeCode)
 
   /// The cool setpoint changed (cmd1 `0x71`).
   case coolSetpoint(ThermostatTemperature)
@@ -30,7 +30,7 @@ public enum ThermostatStatusReport: Hashable, Sendable {
   ///
   /// - Parameter message: A message the modem received.
   /// - Returns: `nil` unless the message is a standard direct message with one of the report
-  ///   commands above, and for a mode report, a known ``ThermostatMode``.
+  ///   commands above.
   public init?(_ message: ReceivedMessage) {
 
     guard message.flags.messageType == .direct, !message.flags.isExtended else {
@@ -44,14 +44,7 @@ public enum ThermostatStatusReport: Hashable, Sendable {
     switch message.command.command1 {
     case 0x6E: self = .temperature(ThermostatTemperature(rawValue: value))
     case 0x6F: self = .humidity(percent: value)
-    case 0x70:
-      guard let mode = ThermostatMode(rawValue: value) else {
-
-        return nil
-
-      }
-
-      self = .mode(mode)
+    case 0x70: self = .mode(ThermostatModeCode(rawValue: value))
     case 0x71: self = .coolSetpoint(ThermostatTemperature(rawValue: value))
     case 0x72: self = .heatSetpoint(ThermostatTemperature(rawValue: value))
     default: return nil

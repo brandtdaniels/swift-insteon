@@ -1,5 +1,9 @@
-/// The mode a thermostat reports, in the acknowledgement to
-/// ``ThermostatCommand/readMode`` or in a ``ThermostatStatusReport``.
+/// The mode a thermostat reports in the acknowledgement to ``ThermostatCommand/readMode``, and
+/// in a mode ``ThermostatStatusReport`` from thermostats that use the same values, as Insteon's
+/// command tables and the Venstar adapter give them.
+///
+/// The TempLinc Thermostat (2441TH) and TempLinc Wireless Zone Thermostat (2441ZTH) report
+/// their modes with other values; read those with ``TempLincMode``.
 public enum ThermostatMode: UInt8, Hashable, Sendable, CaseIterable {
 
   /// Heating and cooling are off.

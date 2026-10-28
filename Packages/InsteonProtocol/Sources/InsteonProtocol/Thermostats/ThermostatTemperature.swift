@@ -2,7 +2,7 @@
 ///
 /// Thermostats send temperatures and setpoints doubled, in one byte, so `0xA0` is 80 degrees.
 /// The degrees are in whichever scale the thermostat displays, Fahrenheit or Celsius, which
-/// ``ThermostatDisplayOption`` sets.
+/// ``ThermostatOption`` sets.
 public struct ThermostatTemperature: Hashable, Sendable, RawRepresentable {
 
   /// The temperature in half degrees.

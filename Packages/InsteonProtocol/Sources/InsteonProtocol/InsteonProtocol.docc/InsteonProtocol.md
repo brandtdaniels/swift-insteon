@@ -101,8 +101,10 @@ what the device is, from a device database.
 - ``ThermostatFanSetting``
 - ``ThermostatTemperature``
 - ``ThermostatMode``
+- ``TempLincMode``
+- ``ThermostatModeCode``
 - ``ThermostatStatusReport``
-- ``ThermostatDisplayOption``
+- ``ThermostatOption``
 
 ### Broadcasts
 

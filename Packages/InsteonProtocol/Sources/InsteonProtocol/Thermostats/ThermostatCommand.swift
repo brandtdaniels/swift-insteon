@@ -1,5 +1,9 @@
 /// Commands a thermostat accepts in a standard direct message, from Insteon's thermostat
-/// command tables and SmartLabs' Thermostat Adapter (Venstar/Totaline) datasheet.
+/// command tables, SmartLabs' Thermostat Adapter (Venstar/Totaline) datasheet and the TempLinc
+/// Thermostat (2441TH) product requirements.
+///
+/// Thermostats don't all accept every command, or give every value the same meaning, so check
+/// the notes on each against the thermostat's model.
 ///
 /// Temperatures and setpoints are ``ThermostatTemperature`` values, in half degrees of the
 /// scale the thermostat displays. A read returns its value in cmd2 of the acknowledgement:
@@ -29,7 +33,8 @@ public enum ThermostatCommand: Hashable, Sendable {
   case readZone(ThermostatReading, zone: ThermostatZone = .main)
 
   /// Reads the mode, as a ``ThermostatMode`` in the acknowledgement's cmd2 (cmd1 `0x6B`,
-  /// cmd2 `0x02`).
+  /// cmd2 `0x02`). A TempLinc doesn't accept it; it reports its mode in a
+  /// ``ThermostatStatusReport`` instead.
   case readMode
 
   /// Sets the mode (cmd1 `0x6B`).
@@ -68,19 +73,22 @@ public enum ThermostatModeSetting: UInt8, Hashable, Sendable, CaseIterable {
   /// Cool to the cool setpoint (cmd2 `0x05`).
   case cool = 0x05
 
-  /// Heat or cool, whichever the temperature needs (cmd2 `0x06`).
+  /// Heat or cool, whichever the temperature needs (cmd2 `0x06`). A TempLinc calls this
+  /// manual auto: at the setpoints set by hand.
   case auto = 0x06
 
   /// Turn heating and cooling off (cmd2 `0x09`).
   case off = 0x09
 
-  /// Heat, following the thermostat's program (cmd2 `0x0A`).
+  /// Heat, following the thermostat's program (cmd2 `0x0A`). A TempLinc instead takes
+  /// `0x0A` as its programmed auto mode: heat or cool, following its program.
   case programHeat = 0x0A
 
-  /// Cool, following the thermostat's program (cmd2 `0x0B`).
+  /// Cool, following the thermostat's program (cmd2 `0x0B`). A TempLinc doesn't accept it.
   case programCool = 0x0B
 
-  /// Heat or cool, following the thermostat's program (cmd2 `0x0C`).
+  /// Heat or cool, following the thermostat's program (cmd2 `0x0C`). A TempLinc doesn't accept
+  /// it; use ``ThermostatModeSetting/programHeat``, its `0x0A`.
   case programAuto = 0x0C
 
 }

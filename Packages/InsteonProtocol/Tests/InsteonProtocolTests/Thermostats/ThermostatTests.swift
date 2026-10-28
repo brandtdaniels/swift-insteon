@@ -54,8 +54,7 @@ struct ThermostatTests {
 
     #expect(report(0x6E, 0x8C) == .temperature(ThermostatTemperature(rawValue: 0x8C)))
     #expect(report(0x6F, 0x2D) == .humidity(percent: 45))
-    #expect(report(0x70, 0x03) == .mode(.auto))
-    #expect(report(0x70, 0x08) == nil)
+    #expect(report(0x70, 0x03) == .mode(ThermostatModeCode(rawValue: 0x03)))
     #expect(report(0x71, 0x30) == .coolSetpoint(ThermostatTemperature(rawValue: 0x30)))
     #expect(report(0x72, 0x24) == .heatSetpoint(ThermostatTemperature(rawValue: 0x24)))
     #expect(report(0x6E, 0x8C, flags: MessageFlags(messageType: .directAcknowledgement)) == nil)
@@ -65,7 +64,7 @@ struct ThermostatTests {
 
   @Test func namesTheDisplayFlags() {
 
-    #expect(StandardDirectCommand.setOperatingFlags(flag: ThermostatDisplayOption.celsius.rawValue).command
+    #expect(StandardDirectCommand.setOperatingFlags(flag: ThermostatOption.celsius.rawValue).command
       == Command(command1: 0x20, command2: 0x06))
 
   }
@@ -78,6 +77,17 @@ struct ThermostatTests {
     #expect(ThermostatCommand.readZone(.deadband, zone: zone3).command == Command(command1: 0x6A, command2: 0x43))
     #expect(ThermostatCommand.readZone(.humidity, zone: try #require(ThermostatZone(rawValue: 31))).command.command2 == 0x7F)
     #expect(ThermostatZone(rawValue: 32) == nil)
+
+  }
+
+  // The same mode report means auto to a Venstar adapter and cool to a TempLinc.
+  @Test func readsAModeCodeByTheThermostatsModel() {
+
+    let code = ThermostatModeCode(rawValue: 0x03)
+
+    #expect(ThermostatMode(rawValue: code.rawValue) == .auto)
+    #expect(TempLincMode(rawValue: code.rawValue) == .cool)
+    #expect(TempLincMode(rawValue: 0x05) == nil)
 
   }
 
