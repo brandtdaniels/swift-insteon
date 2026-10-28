@@ -49,9 +49,12 @@ struct RequestTests {
   /// An ALL-Link Record Response from `device` for the record at `address`, as `0x51` bytes.
   func recordResponse(at address: UInt16, _ record: [UInt8]) -> [UInt8] {
 
-    [0x02, 0x51] + device.bytes + modemAddress.bytes
-      + [MessageFlags(messageType: .direct, isExtended: true, maxHops: .three, hopsLeft: .two).rawValue, 0x2F, 0x00]
-      + [0x00, 0x01, UInt8(address >> 8), UInt8(address & 0xFF), 0x00] + record + [0x00]
+    let flags = MessageFlags(messageType: .direct, isExtended: true, maxHops: .three, hopsLeft: .two)
+    let header: [UInt8] = [0x02, 0x51] + device.bytes + modemAddress.bytes
+    let command: [UInt8] = [flags.rawValue, 0x2F, 0x00]
+    let userData: [UInt8] = [0x00, 0x01, UInt8(address >> 8), UInt8(address & 0xFF), 0x00] + record + [0x00]
+
+    return header + command + userData
 
   }
 
@@ -298,7 +301,9 @@ struct RequestTests {
     // The first record response is lost.
     let connection = ScriptedConnection { written, index in
 
-      written + [0x06] + acknowledgement + (index == 0 ? [] : end)
+      let record: [UInt8] = index == 0 ? [] : end
+
+      return written + [0x06] + acknowledgement + record
 
     }
     let modem = makeModem(connection)
