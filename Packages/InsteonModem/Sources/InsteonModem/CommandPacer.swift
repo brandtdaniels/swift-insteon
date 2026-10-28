@@ -286,6 +286,14 @@ actor CommandPacer<Parser: ReplyParser> {
 
     }
 
+    /// Returns a stream of everything the device sends after this call, so a body that
+    /// listens from within its turn hears only what follows its own commands.
+    func replies() async -> AsyncStream<Reply> {
+
+      await pacer.replies()
+
+    }
+
   }
 
   /// Holds one turn while `body` sends commands, for a sequence whose next command depends on

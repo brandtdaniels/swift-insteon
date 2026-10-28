@@ -533,6 +533,48 @@ struct RequestTests {
 
   }
 
+  // An i2cs member still searching its database NAKs, then acknowledges once it's done.
+  @Test func countsAMemberThatAnswersAfterSearchingItsDatabase() async throws {
+
+    let lamp = device
+    let pending = received(from: lamp, .allLinkCleanupNegativeAcknowledgement, command1: 0x11, command2: 0xFC)
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgement, command1: 0x11, command2: 0x01)
+    let connection = ScriptedConnection { written, _ in written + [0x06] + pending + ack + [0x02, 0x58, 0x06] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let report = try await modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+
+      #expect(report == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [], isComplete: true))
+
+    }
+
+  }
+
+  // A cleanup carries its group in cmd2, so an acknowledgement for another group, such as a
+  // keypad's own scene heard in monitor mode, isn't counted.
+  @Test func countsOnlyThisGroupsCleanups() async throws {
+
+    let lamp = device
+    let keypad = self.keypad
+    let otherGroup = received(from: keypad, .allLinkCleanupAcknowledgement, command1: 0x11, command2: 0x03)
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgement, command1: 0x11, command2: 0x01)
+    let failure: [UInt8] = [0x02, 0x56, 0x01, 0x01] + lamp.bytes
+    let connection = ScriptedConnection { written, _ in written + [0x06] + otherGroup + ack + failure + [0x02, 0x58, 0x06] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let report = try await modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+
+      // The lamp acknowledged, so a later failure report for it doesn't list it twice.
+      #expect(report == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [], isComplete: true))
+
+    }
+
+  }
+
   @Test func waitsForTheCleanupsUpToTheTimeout() async throws {
 
     let connection = ScriptedConnection { written, _ in written + [0x06] }
