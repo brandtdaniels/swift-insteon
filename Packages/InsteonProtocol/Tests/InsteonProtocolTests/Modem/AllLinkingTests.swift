@@ -11,6 +11,13 @@ struct AllLinkingTests {
 
   }
 
+  @Test func groupNumberForEveryGroupIsFF() {
+
+    #expect(AllLinkGroupNumber.all.rawValue == 0xFF)
+    #expect(AllLinkGroupNumber.all.description == "255")
+
+  }
+
   @Test func encodesRecord() {
 
     let record = AllLinkRecord(flags: [.inUse], group: 0xFF, address: InsteonAddress(0x01, 0x02, 0x03))

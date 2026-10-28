@@ -12,7 +12,7 @@ public struct AllLinkRecord: Hashable, Sendable {
   public var flags: AllLinkRecordFlags
 
   /// The ALL-Link group the link belongs to.
-  public var group: AllLinkGroup
+  public var group: AllLinkGroupNumber
 
   /// The address of the linked device.
   public var address: InsteonAddress
@@ -37,7 +37,7 @@ public struct AllLinkRecord: Hashable, Sendable {
   ///   - data3: The third byte of link data. Defaults to `0x00`.
   public init(
     flags: AllLinkRecordFlags,
-    group: AllLinkGroup,
+    group: AllLinkGroupNumber,
     address: InsteonAddress,
     data1: UInt8 = 0x00,
     data2: UInt8 = 0x00,

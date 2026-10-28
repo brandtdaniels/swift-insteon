@@ -176,7 +176,7 @@ private enum ModemFraming: Framing {
 
       return .allLinkingCompleted(AllLinkingCompleted(
         linkCode: body[0],
-        group: AllLinkGroup(rawValue: body[1]),
+        group: AllLinkGroupNumber(rawValue: body[1]),
         address: address(body, at: 2),
         category: isController ? DeviceCategory(rawValue: body[5]) : nil,
         subcategory: isController ? DeviceSubcategory(rawValue: body[6]) : nil,
@@ -187,7 +187,7 @@ private enum ModemFraming: Framing {
     case 0x55:
       return .userReset
     case 0x56:
-      return .allLinkCleanupFailed(group: AllLinkGroup(rawValue: body[1]), address: address(body, at: 2))
+      return .allLinkCleanupFailed(group: AllLinkGroupNumber(rawValue: body[1]), address: address(body, at: 2))
     case 0x57:
       return .allLinkRecord(record(body, at: 0))
     case 0x58:
@@ -230,7 +230,7 @@ private enum ModemFraming: Framing {
 
     AllLinkRecord(
       flags: AllLinkRecordFlags(rawValue: bytes[index]),
-      group: AllLinkGroup(rawValue: bytes[index + 1]),
+      group: AllLinkGroupNumber(rawValue: bytes[index + 1]),
       address: address(bytes, at: index + 2),
       data1: bytes[index + 5],
       data2: bytes[index + 6],

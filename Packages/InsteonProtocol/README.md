@@ -37,7 +37,7 @@ No device data is built in, so every app can look devices up in one shared devic
 
 - `SerialCommand`: the host-to-modem commands `0x60` through `0x77`, `0x79`, `0x7A` and `0x7D`, encoded to bytes
 - `SerialCommandSender`: the protocol modem connections conform to
-- `AllLinkGroup`, `AllLinkRecord`, `AllLinkRecordFlags`, `AllLinkRecordAction` and `AllLinkMode`: ALL-Link groups, database records and linking
+- `AllLinkGroupNumber`, `AllLinkRecord`, `AllLinkRecordFlags`, `AllLinkRecordAction` and `AllLinkMode`: ALL-Link group numbers, database records and linking
 - `ModemConfiguration`: the modem's configuration flags
 - `X10Code`: X10 unit addresses and commands
 - `ModemReplyParser` and `ModemReply`, through the `ReplyParser` protocol: turn the bytes a modem sends back into typed replies: command echoes with ACK/NAK, lone NAKs, messages received from devices, ALL-Link records and more

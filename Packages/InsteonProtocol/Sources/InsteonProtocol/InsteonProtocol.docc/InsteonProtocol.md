@@ -115,7 +115,7 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 
 ### ALL-Linking
 
-- ``AllLinkGroup``
+- ``AllLinkGroupNumber``
 - ``AllLinkMode``
 - ``AllLinkRecord``
 - ``AllLinkRecordFlags``
