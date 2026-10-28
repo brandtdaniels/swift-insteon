@@ -79,6 +79,8 @@ dimming for dimmable lighting control.
 - ``DeviceCapability``
 - ``DeviceEngine``
 - ``FirmwareSelection``
+- ``ProductModel``
+- ``DeviceEventName``
 
 ### Settings
 
@@ -93,5 +95,3 @@ dimming for dimmable lighting control.
 - ``SettingValue``
 - ``SettingWrite``
 - ``SettingWriteError``
-- ``ProductModel``
-- ``DeviceEventName``
