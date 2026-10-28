@@ -73,23 +73,38 @@ struct DeviceEventInterpreterTests {
 
   }
 
-  @Test func readsTheHeartbeatGroupAsAHeartbeat() throws {
+  @Test func readsTheHeartbeatGroupAsAHeartbeatWithItsCommand() throws {
 
     var interpreter = try interpreter()
     _ = interpreter.events(from: identity(command1: 0x02), at: start)
 
-    #expect(interpreter.events(from: groupBroadcast(group: 0x04, command1: 0x11), at: start) == [.heartbeat(sensor)])
+    // The leak sensor's heartbeat is off when it's wet.
+    #expect(interpreter.events(from: groupBroadcast(group: 0x04, command1: 0x13), at: start)
+      == [.heartbeat(GroupCommand(controller: sensor, group: 0x04, command1: 0x13, command2: 0x00, source: .broadcast))])
 
   }
 
-  @Test func readsAHeartbeatBroadcast() throws {
+  @Test func readsAHeartbeatBroadcastWithItsBatteryLevel() throws {
 
     var interpreter = try interpreter()
+    let expected = try #require(interpreter.database.profile(model: "2852"))
 
     let events = interpreter.events(from: identity(command1: 0x04, command2: 0x80), at: start)
 
-    #expect(events == [.identified(sensor, profile: interpreter.profile(of: sensor)), .heartbeat(sensor)])
-    #expect(interpreter.profile(of: sensor) != nil)
+    #expect(events == [
+      .identified(sensor, profile: expected),
+      .heartbeatBroadcast(Heartbeat(sender: sensor, batteryLevel: 0x80, category: 0x10, subcategory: 0x08, firmwareVersion: 0x41)),
+    ])
+
+  }
+
+  @Test func reportsARepeatedIdentityBroadcastOnce() throws {
+
+    var interpreter = try interpreter()
+    _ = interpreter.events(from: identity(command1: 0x27), at: start)
+
+    #expect(interpreter.events(from: identity(command1: 0x27), at: start + .milliseconds(300)).isEmpty)
+    #expect(interpreter.events(from: identity(command1: 0x27), at: start + .seconds(2)).last == .statusChanged(sensor))
 
   }
 
@@ -113,15 +128,30 @@ struct DeviceEventInterpreterTests {
 
   }
 
-  @Test func forgetsADeviceThatReportsAnUnknownIdentity() throws {
+  // A heartbeat from a device the database doesn't know mustn't undo what the app remembered.
+  @Test func keepsAProfileWhenTheIdentityIsUnknown() throws {
 
     var interpreter = try interpreter()
-    _ = interpreter.events(from: identity(command1: 0x02), at: start)
+    let profile = try #require(interpreter.database.profile(model: "2852"))
+    interpreter.remember(profile, for: sensor)
 
-    let events = interpreter.events(from: identity(command1: 0x02, category: 0x01, subcategory: 0x20), at: start)
+    let events = interpreter.events(from: identity(command1: 0x04, category: 0x01, subcategory: 0x20), at: start)
 
-    #expect(events == [.identified(sensor, profile: nil)])
+    #expect(events.first == .identified(sensor, profile: nil))
+    #expect(interpreter.profile(of: sensor) == profile)
+
+  }
+
+  @Test func findsProfilesAgainInANewDatabase() throws {
+
+    var interpreter = try interpreter()
+    _ = interpreter.events(from: identity(command1: 0x02, category: 0x01, subcategory: 0x20), at: start)
     #expect(interpreter.profile(of: sensor) == nil)
+
+    let dimmer = #"{ "model": "2477D", "name": "SwitchLinc Dimmer", "identities": [{ "category": "0x01", "subcategory": "0x20" }], "capabilities": [{ "kind": "dimmable" }], "sources": ["A"] }"#
+    interpreter.database = try DeviceDatabase(json: DeviceDatabaseTests.json(dimmer))
+
+    #expect(interpreter.profile(of: sensor)?.model == "2477D")
 
   }
 

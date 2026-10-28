@@ -12,9 +12,13 @@ public enum DeviceEvent: Hashable, Sendable {
   /// means, or `nil` if the device's profile isn't known or doesn't say.
   case groupCommand(GroupCommand, event: DeviceEventName?)
 
-  /// A device sent its periodic heartbeat, as a heartbeat broadcast or as a command to the
-  /// heartbeat group its profile gives.
-  case heartbeat(InsteonAddress)
+  /// A device sent its periodic heartbeat to the heartbeat group its profile gives. Some
+  /// devices report their state or battery level in the command, as their profile's notes
+  /// describe.
+  case heartbeat(GroupCommand)
+
+  /// A device sent a heartbeat broadcast (cmd1 `0x04`), with its battery level.
+  case heartbeatBroadcast(Heartbeat)
 
   /// A device's status changed. Ask the device for its new status with
   /// `StandardDirectCommand.statusRequest(variant:)`.
