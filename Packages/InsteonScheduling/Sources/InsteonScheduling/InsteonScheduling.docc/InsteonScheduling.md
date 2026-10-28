@@ -21,9 +21,19 @@ calendar.timeZone = TimeZone(identifier: "America/Denver")!
 let schedules = ScheduleCalendar(calendar: calendar)
 let porchLights = Schedule(time: .clock(hour: 18, minute: 30))
 
-while let next = schedules.nextRun(of: porchLights, after: .now) {
-  try await Task.sleep(for: .seconds(next.timeIntervalSinceNow))
-  try await modem.sendAllLinkCommand(group: 0x01, command: StandardDirectCommand.on(level: 0xFF).command)
+// Each run is looked for after the last, so a sleep that wakes early can't repeat it.
+var last = Date.now
+
+while let next = schedules.nextRun(of: porchLights, after: last) {
+  try await Task.sleep(for: .seconds(max(0, next.timeIntervalSinceNow)))
+
+  do {
+    try await modem.sendAllLinkCommand(group: 0x01, command: StandardDirectCommand.on(level: 0xFF).command)
+  } catch {
+    // Report the failure, and keep the schedule going.
+  }
+
+  last = next
 }
 ```
 

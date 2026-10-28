@@ -87,6 +87,35 @@ struct ScheduleCalendarTests {
 
   }
 
+  // Six hours after the 19:00 sunset is 1:00 the next morning. Just after midnight, that run,
+  // from the day before's sunset, is the next one.
+  @Test func findsARunAnOffsetMovedPastMidnight() throws {
+
+    let late = Schedule(time: .sunset(offset: .seconds(6 * 3600)))
+
+    // 00:10 daylight time on March 11, to 01:00 daylight time.
+    #expect(schedules.nextRun(of: late, after: try date("2026-03-11T06:10:00Z")) == (try date("2026-03-11T07:00:00Z")))
+
+  }
+
+  // Eight hours before the 7:00 sunrise is 23:00 the night before, so a Monday schedule runs
+  // late on Monday, from Tuesday's sunrise.
+  @Test func countsWeekdaysByTheDayTheRunHappens() throws {
+
+    let monday = Schedule(time: .sunrise(offset: .seconds(-8 * 3600)), weekdays: [.monday])
+
+    // From Saturday, March 7, to 23:00 daylight time on Monday, March 9.
+    #expect(schedules.nextRun(of: monday, after: try date("2026-03-07T12:00:00Z")) == (try date("2026-03-10T05:00:00Z")))
+
+  }
+
+  @Test(arguments: [(24, 0), (18, 75), (-1, 0)])
+  func neverRunsAtAClockTimeThatDoesntExist(_ hour: Int, _ minute: Int) throws {
+
+    #expect(schedules.nextRun(of: Schedule(time: .clock(hour: hour, minute: minute)), after: try date("2026-03-10T06:00:00Z")) == nil)
+
+  }
+
   @Test func neverRunsWithoutSunTimesOrWeekdays() throws {
 
     let calendar = schedules.calendar

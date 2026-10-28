@@ -64,31 +64,71 @@ public struct ScheduleCalendar: Sendable {
 
   /// The next time a schedule runs after a date.
   ///
+  /// A schedule's weekdays are the days it runs on, so a run that an offset moves past
+  /// midnight, such as six hours after sunset, counts on the day it happens.
+  ///
   /// - Parameters:
   ///   - schedule: The schedule.
   ///   - date: The date to look after.
-  /// - Returns: The next run, strictly after `date`, or `nil` if there's none within a year,
-  ///   as for a schedule with no weekdays, or one relative to sunrise or sunset with no
-  ///   ``ScheduleCalendar/sunTimes`` or none of the sun events it needs.
+  /// - Returns: The next run, strictly after `date`, or `nil` if there's none: for a schedule
+  ///   with no weekdays, a clock time outside 0:00 to 23:59, a time relative to sunrise or
+  ///   sunset with no ``ScheduleCalendar/sunTimes``, or no sun event within a year.
   public func nextRun(of schedule: Schedule, after date: Date) -> Date? {
 
-    var day = calendar.startOfDay(for: date)
+    guard !schedule.weekdays.isEmpty else {
+
+      return nil
+
+    }
+
+    switch schedule.time {
+    case let .clock(hour, minute):
+      guard (0...23).contains(hour), (0...59).contains(minute) else {
+
+        return nil
+
+      }
+    case .sunrise, .sunset:
+      guard sunTimes != nil else {
+
+        return nil
+
+      }
+    }
+
+    // A run from the day before can land after midnight, so the search starts a day early.
+    guard var day = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: date)) else {
+
+      return nil
+
+    }
+
+    var earliest: Date?
 
     // A year of days covers every weekday and a polar night or day.
-    for _ in 0..<367 {
+    for _ in 0..<368 {
 
-      if let weekday = Weekday(rawValue: calendar.component(.weekday, from: day)),
+      if let run = time(of: schedule.time, on: day),
+         run > date,
+         let weekday = Weekday(rawValue: calendar.component(.weekday, from: run)),
          schedule.weekdays.contains(weekday),
-         let run = time(of: schedule.time, on: day),
-         run > date {
+         earliest.map({ run < $0 }) ?? true {
 
-        return run
+        earliest = run
+
+      }
+
+      // Runs keep their order from day to day, except around a large offset; one more day
+      // settles which is first.
+      if let earliest, let start = calendar.date(byAdding: .day, value: -1, to: day), earliest < start {
+
+        return earliest
 
       }
 
       guard let next = calendar.date(byAdding: .day, value: 1, to: day) else {
 
-        return nil
+        return earliest
 
       }
 
@@ -96,7 +136,7 @@ public struct ScheduleCalendar: Sendable {
 
     }
 
-    return nil
+    return earliest
 
   }
 
@@ -106,13 +146,35 @@ public struct ScheduleCalendar: Sendable {
     switch time {
     case let .clock(hour, minute):
       // Starting just before the day finds the first time the day reaches the hour and minute.
-      return calendar.nextDate(
+      guard let run = calendar.nextDate(
         after: day.addingTimeInterval(-1),
         matching: DateComponents(hour: hour, minute: minute, second: 0),
         matchingPolicy: .nextTimePreservingSmallerComponents,
         repeatedTimePolicy: .first,
         direction: .forward
-      ).flatMap { calendar.isDate($0, inSameDayAs: day) ? $0 : nil }
+      ) else {
+
+        return nil
+
+      }
+
+      if calendar.isDate(run, inSameDayAs: day) {
+
+        return run
+
+      }
+
+      // A time the clocks skip late in the evening can move just past midnight; anything
+      // else on another day belongs to that day.
+      let shifted = calendar.component(.hour, from: run) != hour || calendar.component(.minute, from: run) != minute
+
+      guard shifted, let nextDay = calendar.date(byAdding: .day, value: 1, to: day), calendar.isDate(run, inSameDayAs: nextDay) else {
+
+        return nil
+
+      }
+
+      return run
     case let .sunrise(offset):
       return sunTimes?.sunrise(on: day, in: calendar).map { $0.addingTimeInterval(Self.seconds(offset)) }
     case let .sunset(offset):
