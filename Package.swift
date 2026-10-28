@@ -53,12 +53,12 @@ let package = Package(
 
     .target(
       name: "InsteonHubDiscovery",
-      dependencies: ["InsteonHubClient", "InsteonNetworking"],
+      dependencies: ["InsteonHubClient", "InsteonNetworking", "InsteonProtocol"],
       path: "Packages/InsteonHubDiscovery/Sources/InsteonHubDiscovery"
     ),
     .testTarget(
       name: "InsteonHubDiscoveryTests",
-      dependencies: ["InsteonHubDiscovery", "InsteonHubClient", "InsteonNetworking"],
+      dependencies: ["InsteonHubDiscovery", "InsteonHubClient", "InsteonNetworking", "InsteonProtocol"],
       path: "Packages/InsteonHubDiscovery/Tests/InsteonHubDiscoveryTests"
     ),
 
