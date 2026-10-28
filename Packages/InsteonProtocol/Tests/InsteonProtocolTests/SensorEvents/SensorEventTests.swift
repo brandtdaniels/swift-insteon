@@ -22,7 +22,8 @@ struct SensorEventTests {
     #expect(MotionSensorEvent(command(0x13, toGroup: 0x02)) == .light)
     #expect(MotionSensorEvent(command(0x11, toGroup: 0x06)) == .light)
     #expect(MotionSensorEvent(command(0x11, toGroup: 0x03)) == .lowBattery)
-    #expect(MotionSensorEvent(command(0x12, toGroup: 0x04)) == .heartbeat)
+    #expect(MotionSensorEvent(command(0x12, toGroup: 0x04)) == .heartbeat(command1: 0x12))
+    #expect(MotionSensorEvent(command(0x17, toGroup: 0x04)) == nil)
     #expect(MotionSensorEvent(command(0x11, toGroup: 0x07)) == nil)
 
   }
@@ -32,7 +33,7 @@ struct SensorEventTests {
 
     let events: [AllLinkGroupNumber: SmokeBridgeEvent] = [
       0x01: .smoke, 0x02: .carbonMonoxide, 0x03: .test, 0x04: .unknownAlarm,
-      0x05: .clear, 0x06: .lowBattery, 0x07: .malfunction, 0x0A: .heartbeat,
+      0x05: .clear, 0x06: .lowBattery, 0x07: .malfunction, 0x0A: .heartbeat(command1: 0x11),
     ]
 
     for (group, event) in events {
@@ -51,7 +52,7 @@ struct SensorEventTests {
 
     #expect(LeakSensorEvent(command(0x11, toGroup: 0x01)) == .dry)
     #expect(LeakSensorEvent(command(0x11, toGroup: 0x02)) == .wet)
-    #expect(LeakSensorEvent(command(0x11, toGroup: 0x04)) == .heartbeat)
+    #expect(LeakSensorEvent(command(0x13, toGroup: 0x04)) == .heartbeat(command1: 0x13))
     #expect(LeakSensorEvent(command(0x13, toGroup: 0x02)) == nil)
 
   }
@@ -61,7 +62,7 @@ struct SensorEventTests {
 
     #expect(OpenCloseSensorEvent(command(0x11, toGroup: 0x01)) == .opened)
     #expect(OpenCloseSensorEvent(command(0x13, toGroup: 0x01)) == .closed)
-    #expect(OpenCloseSensorEvent(command(0x13, toGroup: 0x04)) == .heartbeat)
+    #expect(OpenCloseSensorEvent(command(0x13, toGroup: 0x04)) == .heartbeat(command1: 0x13))
     #expect(OpenCloseSensorEvent(command(0x11, toGroup: 0x02)) == nil)
 
   }

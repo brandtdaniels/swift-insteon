@@ -26,8 +26,10 @@ public enum MotionSensorEvent: Hashable, Sendable {
   /// The battery is low: on to group 3.
   case lowBattery
 
-  /// The sensor's periodic heartbeat, to group 4.
-  case heartbeat
+  /// The sensor's periodic heartbeat, to group 4, with its command: on, fast on, off or fast
+  /// off (`0x11` to `0x14`). Insteon's heartbeat sheet says some sensors report their current
+  /// state in it, which depends on the model.
+  case heartbeat(command1: UInt8)
 
   /// Reads a motion sensor's event from a group command.
   ///
@@ -41,7 +43,7 @@ public enum MotionSensorEvent: Hashable, Sendable {
     case (0x02, 0x11): self = .dark
     case (0x02, 0x13), (0x06, 0x11): self = .light
     case (0x03, 0x11): self = .lowBattery
-    case (0x04, _): self = .heartbeat
+    case let (0x04, command1) where (0x11...0x14).contains(command1): self = .heartbeat(command1: command1)
     default: return nil
     }
 

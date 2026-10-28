@@ -6,7 +6,8 @@
 ///
 /// Many sensors send their heartbeat as an ALL-Link broadcast to a heartbeat group instead,
 /// such as group 4 on the open/close, leak and motion sensors, which this type doesn't read.
-/// Read those from the ALL-Link broadcast's group and command.
+/// Read those with ``MotionSensorEvent``, ``OpenCloseSensorEvent``, ``LeakSensorEvent`` or
+/// ``SmokeBridgeEvent``.
 ///
 /// ```swift
 /// var parser = ModemReplyParser()
