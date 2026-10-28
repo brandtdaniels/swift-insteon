@@ -22,6 +22,22 @@ public enum ExtendedDirectCommand: Hashable, Sendable {
   /// be linked.
   case triggerAllLinkGroup
 
+  /// Sets the direct command a responder carries out in place of an ALL-Link alias command
+  /// (cmd1 `0x03`, cmd2 `0x04`).
+  ///
+  /// Build its user data with ``AllLinkCommandAlias``. When D4 is `0x01`, the substitute is an
+  /// extended command, and a ``ExtendedDirectCommand/setAllLinkCommandAliasExtendedData``
+  /// message follows.
+  case setAllLinkCommandAlias
+
+  /// Carries the user data of an extended substitute set with
+  /// ``ExtendedDirectCommand/setAllLinkCommandAlias`` (cmd1 `0x03`, cmd2 `0x05`).
+  ///
+  /// D1 through D14 are the substitute's user data. The default ``ChecksumIntegrity``
+  /// overwrites D14 with this message's checksum; to send the substitute's D14 as given, use
+  /// ``UnprotectedIntegrity``.
+  case setAllLinkCommandAliasExtendedData
+
 }
 
 // MARK: - CommandConvertible
@@ -38,6 +54,10 @@ extension ExtendedDirectCommand: CommandConvertible {
       Command(command1: 0x2F)
     case .triggerAllLinkGroup:
       Command(command1: 0x30)
+    case .setAllLinkCommandAlias:
+      Command(command1: 0x03, command2: 0x04)
+    case .setAllLinkCommandAliasExtendedData:
+      Command(command1: 0x03, command2: 0x05)
     }
 
   }
@@ -51,9 +71,11 @@ extension ExtendedDirectCommand {
   /// The earliest engine on which every device accepts the command, or `nil` when that
   /// depends on the product.
   ///
-  /// The i2 engine adds all three commands, which some i1 devices also accept. What a device
-  /// reads or writes with them is specific to the product, and only some products accept a
-  /// ``ExtendedDirectCommand/getSet(variant:)`` variant other than `0x00`.
+  /// The i2 engine adds the get/set, ALL-Link database and trigger commands, which some i1
+  /// devices also accept. What a device reads or writes with them is specific to the product,
+  /// and only some products accept a ``ExtendedDirectCommand/getSet(variant:)`` variant other
+  /// than `0x00`. The Developer's Guide defines the ALL-Link command alias commands for every
+  /// device category, but whether a device accepts them depends on the product.
   public var minimumEngine: InsteonEngine? {
 
     switch self {
@@ -61,6 +83,8 @@ extension ExtendedDirectCommand {
       variant == 0x00 ? .i2 : nil
     case .readWriteAllLinkDatabase, .triggerAllLinkGroup:
       .i2
+    case .setAllLinkCommandAlias, .setAllLinkCommandAliasExtendedData:
+      nil
     }
 
   }

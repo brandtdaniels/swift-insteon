@@ -55,6 +55,24 @@ struct GroupCommandTests {
 
   }
 
+  // The i2cs announcement in the On/Off Module's specification: AA BB CC 01 XX XX CF 01 01.
+  @Test func doesntReadASetButtonAnnouncementAsAGroupCommand() {
+
+    for command1: UInt8 in [0x01, 0x02] {
+
+      let announcement = ReceivedMessage(
+        sender: keypad,
+        destination: InsteonAddress(0x01, 0x2A, 0x45),
+        flags: MessageFlags(messageType: .allLinkBroadcast),
+        command: Command(command1: command1, command2: 0x01)
+      )
+
+      #expect(GroupCommand(announcement) == nil)
+
+    }
+
+  }
+
   @Test func ignoresMessagesThatArentGroupCommands() {
 
     let direct = ReceivedMessage(sender: keypad, destination: modem, flags: .direct, command: Command(command1: 0x11))

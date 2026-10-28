@@ -47,6 +47,8 @@ struct EngineAndNAKTests {
     #expect(ExtendedDirectCommand.readWriteAllLinkDatabase.minimumEngine == .i2)
     #expect(ExtendedDirectCommand.getSet(variant: 0x02).minimumEngine == nil)
     #expect(Command(command1: 0x30).minimumEngine == nil)
+    #expect(ExtendedDirectCommand.setAllLinkCommandAlias.minimumEngine == nil)
+    #expect(ExtendedDirectCommand.setAllLinkCommandAliasExtendedData.minimumEngine == nil)
 
   }
 

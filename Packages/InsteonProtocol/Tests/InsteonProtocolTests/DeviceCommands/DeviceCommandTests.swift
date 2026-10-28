@@ -7,7 +7,9 @@ struct DeviceCommandTests {
     (.getSet(), Command(command1: 0x2E)),
     (.getSet(variant: 0x02), Command(command1: 0x2E, command2: 0x02)),
     (.readWriteAllLinkDatabase, Command(command1: 0x2F)),
-    (.triggerAllLinkGroup, Command(command1: 0x30))
+    (.triggerAllLinkGroup, Command(command1: 0x30)),
+    (.setAllLinkCommandAlias, Command(command1: 0x03, command2: 0x04)),
+    (.setAllLinkCommandAliasExtendedData, Command(command1: 0x03, command2: 0x05))
   ]
 
   static let standardDirectCommands: [(StandardDirectCommand, Command)] = [

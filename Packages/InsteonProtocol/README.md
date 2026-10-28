@@ -36,6 +36,8 @@ No device data is built in, so every app can look devices up in the [Insteon dev
 `Sources/InsteonProtocol/GroupCommands` covers the commands controllers send to their ALL-Link groups, such as a keypad button or a sensor reporting motion. What a product means by each command comes from the device catalog, which InsteonDeviceCatalog's `DeviceEventInterpreter` reads:
 
 - `GroupCommand`: reads a command from an ALL-Link broadcast or cleanup
+- `AllLinkCommand`: names ALL-Link Recall and the alias commands, pairs each toggle state with its partner, and gives lighting controls' built-in substitutes
+- `AllLinkCommandAlias`: sets the direct command a responder carries out in place of an alias command, as the user data of a Set ALL-Link Command Alias message
 - `GroupCommandFilter`: passes each command on once, dropping the cleanups that repeat a broadcast and repeated broadcasts
 - `SuccessReport`: reads the broadcast a controller sends after its cleanups, with the group's member count and failed cleanups
 

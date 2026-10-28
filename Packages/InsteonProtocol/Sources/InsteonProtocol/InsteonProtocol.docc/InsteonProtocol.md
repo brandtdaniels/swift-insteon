@@ -56,6 +56,7 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``ManualChangeDirection``
 - ``OperatingFlagsRequest``
 - ``SetButtonTapCount``
+- ``AllLinkCommandAlias``
 
 ### Extended user data
 
@@ -79,6 +80,7 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 ### Group commands
 
 - ``GroupCommand``
+- ``AllLinkCommand``
 - ``GroupCommandFilter``
 - ``SuccessReport``
 
