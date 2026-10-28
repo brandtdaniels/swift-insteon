@@ -53,19 +53,18 @@ category and subcategory up in the [Insteon device catalog](https://github.com/b
 The Insteon Developer's Guide defines the IM serial commands `0x60` through `0x73`. The
 commands after those, such as Cancel Cleanup (`0x74`), Read and Write Database
 (`0x75`, `0x76`), Beep (`0x77`), Set Responder Link Data (`0x79`), Set Application Retries
-(`0x7A`) and Set RF Disable Flag (`0x7D`), appear only in Insteon's PLM serial command table,
+(`0x7A`) and Set RF Disable Flag (`0x7D`), aren't in the Insteon Developer's Guide,
 so a modem whose firmware doesn't implement one, such as a PowerLinc Modem 2412, may reject it.
 The Insteon Hub Developer's Guide marks `0x79` through `0x7C` as commands for modems with
 a radio only, so a powerline-only modem may reject those too.
 
 Read RF Frequency (`0x7E`), Diagnostics (`0x81`) and Database Commands (`0x82`) come from
-later firmware in the same table. For Read RF Frequency, `SerialCommand` reads the modem's
+later firmware. For Read RF Frequency, `SerialCommand` reads the modem's
 layout of the reply, not the development dongle's.
 
-The same table lists Set Status (`0x78`), Set RF Frequency (`0x7B`) and Set Venstar ACKs
-(`0x7C`) without their parameters, so `SerialCommand` doesn't include them. It also gives two
-sets of LED colors for Set Salad Flag (`0x7F`), depending on the product, and two meanings for
-`0x80`, so those are left out too.
+Set Status (`0x78`), Set RF Frequency (`0x7B`) and Set Venstar ACKs (`0x7C`) have no known
+parameters, so `SerialCommand` doesn't include them. Set Salad Flag (`0x7F`) sets different LED
+colors on different products, and `0x80` has two meanings, so those are left out too.
 
 A modem rejects a command it lacks with a NAK, the same answer it gives when it's busy, so
 ``Modem/send(_:)`` sends the command again as its ``RetryPolicy`` allows before it
@@ -73,8 +72,8 @@ throws ``ModemError/rejected(_:)``.
 
 ### The USB Adapter
 
-The USB Adapter 2448A7 sends and receives Insteon messages by radio only. In Insteon's
-test log for it, it rejects X10 commands and Beep, so expect ``ModemError/rejected(_:)`` for
+The USB Adapter 2448A7 sends and receives Insteon messages by radio only. It rejects X10
+commands and Beep, so expect ``ModemError/rejected(_:)`` for
 `SerialCommand.sendX10(_:)` and `SerialCommand.beep`.
 
 ### The PowerLinc Controller

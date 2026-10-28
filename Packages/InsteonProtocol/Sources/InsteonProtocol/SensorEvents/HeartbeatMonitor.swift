@@ -1,11 +1,11 @@
 /// Finds battery-powered devices that have gone quiet, such as a leak sensor whose battery
 /// died or that was moved out of range.
 ///
-/// Sensors send a heartbeat periodically, so a sensor that hasn't been heard from in much
-/// longer than that has likely stopped working. Insteon's heartbeat status sheet gives the
-/// interval as 23.8 hours for the leak, open/close and motion sensors, with the first
-/// heartbeat as late as 23.8 hours after the batteries go in. A device is silent once nothing
-/// has been heard from it for longer than ``HeartbeatMonitor/allowance``.
+/// Sensors send a heartbeat periodically, so a sensor that hasn't been heard from in much longer
+/// than that has likely stopped working. The interval is about 23.8 hours for the leak, open/close
+/// and motion sensors, with the first heartbeat as late as 23.8 hours after the batteries go in. A
+/// device is silent once nothing has been heard from it for longer than
+/// ``HeartbeatMonitor/allowance``.
 ///
 /// Any message counts, not only a heartbeat: the sheet notes that a sensor restarts its
 /// heartbeat interval when its button is pressed, so a sensor that's in use may send no
@@ -32,7 +32,7 @@
 public struct HeartbeatMonitor<Instant: InstantProtocol>: Sendable where Instant.Duration == Duration, Instant: Sendable {
 
   /// How long a device can go unheard before it's silent by default: 71.4 hours, three of the
-  /// heartbeat intervals Insteon's heartbeat status sheet gives.
+  /// sensors' 23.8-hour heartbeat intervals.
   ///
   /// Three intervals let a heartbeat be lost, such as to interference, and the next one
   /// arrive late without the device being reported.

@@ -50,7 +50,7 @@ struct SerialCommandTests {
     (.setRadio(.disabledUntilPowerCycle), "027D01"),
     (.readRadioStatus, "027E"),
     (.readDiagnostics(index: 0x08), "028108"),
-    // Insteon's command workbook: modify the 0xA2 record for group 7 and 10.A3.0F, then delete
+    // Modify the 0xA2 record for group 7 and 10.A3.0F, then delete
     // the 0xE2 record.
     (
       .manageDeviceRecord(DeviceRecordRequest(

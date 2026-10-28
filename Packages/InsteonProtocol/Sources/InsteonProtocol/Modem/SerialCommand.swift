@@ -45,9 +45,9 @@ public enum SerialCommand: Hashable, Sendable {
   /// Puts the modem into ALL-Linking mode for a group, with bit 2 of the mode set so the link
   /// uses the data from ``SerialCommand/setResponderLinkData(data1:data2:data3:)``.
   ///
-  /// The Insteon Hub Developer's Guide says its modem uses that data only with bit 2 set.
-  /// Insteon's command workbook shows other firmware using the data without it, and giving
-  /// bit 2 another meaning, so use this form for a modem that needs it.
+  /// The Insteon Hub Developer's Guide says its modem uses that data only with bit 2 set. Other
+  /// firmware uses the data without it, and gives bit 2 another meaning, so use this form for a
+  /// modem that needs it.
   ///
   /// - Parameters:
   ///   - mode: The role the modem takes in the link.
@@ -144,19 +144,17 @@ public enum SerialCommand: Hashable, Sendable {
 
   /// Makes the modem beep.
   ///
-  /// Insteon's command workbook shows later firmware taking a parameter byte, `0x00` for a
-  /// beep and `0x01` for a double beep; this sends the form without one, as Insteon's PLM serial
-  /// command table first gave it.
+  /// Later firmware takes a parameter byte, `0x00` for a beep and `0x01` for a double beep; this
+  /// sends the form without one, which every firmware with Beep accepts.
   case beep
 
   /// Sets the data the modem stores in the responder record its next ALL-Link creates.
   ///
   /// The three bytes become ``AllLinkRecord/data1``, ``AllLinkRecord/data2`` and
-  /// ``AllLinkRecord/data3`` of the record ``SerialCommand/startAllLinking(mode:group:)``
-  /// creates when the modem is the responder. Insteon's command table describes the data as being for the next
-  /// link, so send this before each link that needs it. The Insteon Hub Developer's Guide
-  /// says its modem uses the data only when linking starts with
-  /// ``SerialCommand/startAllLinkingWithLinkData(mode:group:)``.
+  /// ``AllLinkRecord/data3`` of the record ``SerialCommand/startAllLinking(mode:group:)`` creates
+  /// when the modem is the responder. The data is for the next link, so send this before each link
+  /// that needs it. The Insteon Hub Developer's Guide says its modem uses the data only when
+  /// linking starts with ``SerialCommand/startAllLinkingWithLinkData(mode:group:)``.
   ///
   /// - Parameters:
   ///   - data1: The record's first data byte.

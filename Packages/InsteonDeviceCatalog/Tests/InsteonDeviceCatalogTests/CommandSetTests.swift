@@ -33,7 +33,7 @@ struct CommandSetTests {
         ]
       },
       "notes": ["A note."],
-      "sources": ["Insteon command workbook"]
+      "sources": ["Insteon Developer's Guide"]
     }
     """#
 
@@ -111,7 +111,7 @@ struct CommandSetTests {
 
   }
 
-  // The radio group for buttons 3 to 6 from Insteon's command workbook: 03 03 38 3C for button 3.
+  // The radio group for buttons 3 to 6: 03 03 38 3C for button 3.
   @Test func writesASetsBytes() throws {
 
     let settings = try #require(try catalog().commandSet(id: "keypad")?.extendedSettings)

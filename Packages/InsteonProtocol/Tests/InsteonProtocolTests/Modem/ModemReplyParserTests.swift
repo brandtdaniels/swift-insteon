@@ -115,7 +115,7 @@ struct ModemReplyParserTests {
     ("027D01" + "06", .echo(CommandEcho(number: .setRadio, parameters: [0x01], isAccepted: true))),
     // Later firmware's beep echoes its parameter byte.
     ("0277" + "01" + "15", .echo(CommandEcho(number: .beep, parameters: [0x01], isAccepted: false))),
-    // The examples in Insteon's command workbook.
+    // Captured examples.
     ("0281" + "08" + "06", .echo(CommandEcho(number: .readDiagnostics, parameters: [0x08], isAccepted: true))),
     (
       "025A" + "27C77C" + "10A30F" + "E0" + "02" + "000D" + "06",
@@ -205,7 +205,7 @@ struct ModemReplyParserTests {
 
   }
 
-  // Replies captured in Insteon's own PLM test log, received back to back.
+  // Captured replies, received back to back.
   @Test func parsesInsteonTrace() {
 
     var parser = ModemReplyParser()
@@ -241,7 +241,7 @@ struct ModemReplyParserTests {
 
   }
 
-  // From Insteon's PLM test log: the responder link data set with 0x79 shows up in the record
+  // Captured: the responder link data set with 0x79 shows up in the record
   // that the next ALL-Linking creates. Before linking, the log puts the device into linking mode
   // for group 2 with an extended message, so the link is in group 2 although the modem was
   // asked for group 1.

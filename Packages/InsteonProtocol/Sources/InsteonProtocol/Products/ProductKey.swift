@@ -2,10 +2,10 @@
 ///
 /// The Insteon Developer's Guide requires devices made after February 1, 2007 to store their
 /// product key and report it in a Product Data Response, which ``ProductData`` reads. In practice
-/// the key wasn't kept up: Insteon's later command table marks the Product Data Request as no
-/// longer used, and many devices, newer ones especially, don't fill the key in. Identify a device
-/// by its ``DeviceCategory``, ``DeviceSubcategory`` and ``FirmwareVersion`` instead, and treat the
-/// key as a value the device happened to report.
+/// the key wasn't kept up: later sources mark the Product Data Request as no longer used, and many
+/// devices, newer ones especially, don't fill the key in. Identify a device by its
+/// ``DeviceCategory``, ``DeviceSubcategory`` and ``FirmwareVersion`` instead, and treat the key as
+/// a value the device happened to report.
 ///
 /// ```swift
 /// let key = ProductKey(0x00, 0x00, 0x1F)

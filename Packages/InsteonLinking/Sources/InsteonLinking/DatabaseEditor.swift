@@ -54,7 +54,7 @@ struct DatabaseEditor {
 
   }
 
-  /// The flags of a record in use, as in Insteon's own examples: `0xE2` for a controller
+  /// The flags of a record in use: `0xE2` for a controller
   /// record and `0xA2` for a responder record, which also set the product-dependent bit 5.
   static func flags(isController: Bool) -> AllLinkRecordFlags {
 

@@ -12,8 +12,8 @@
 /// | D7–D8 | Reserved, `0xFF` |
 /// | D9–D14 | ``userDefined``, which some manufacturers use for the firmware version |
 ///
-/// Insteon's later command tables agree on D2 through D6 but give D1 as a group or button and
-/// D7 as a version, so this type doesn't read D1, D7 or D8.
+/// Later sources agree on D2 through D6 but give D1 as a group or button and D7 as a version, so
+/// this type doesn't read D1, D7 or D8.
 ///
 /// Not every device answers the request; every device identifies itself with
 /// ``SetButtonPressed``.

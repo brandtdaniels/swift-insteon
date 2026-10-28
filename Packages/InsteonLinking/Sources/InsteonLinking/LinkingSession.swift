@@ -60,9 +60,8 @@ struct LinkingSession: Sendable {
       within: linkingTimeout,
       cleanUp: {
 
-        // Insteon's command sheet: every engine that has Exit Linking Mode acts on it as a
-        // standard message, and an i2CS device does so even while it NAKs a modem it isn't
-        // linked to.
+        // Every engine that has Exit Linking Mode acts on it as a standard message, and an i2CS
+        // device does so even while it NAKs a modem it isn't linked to.
         _ = try? await modem.request(StandardMessage(to: device, command: StandardDirectCommand.exitLinkingMode), timeout: timeout)
 
       },
@@ -129,8 +128,7 @@ struct LinkingSession: Sendable {
   }
 
   /// Sends a device a command in the form its engine expects: standard for i1 and i2, and
-  /// extended with a checksum for i2CS, as Insteon's command sheet gives for Enter Linking
-  /// Mode and Enter Unlinking Mode.
+  /// extended with a checksum for i2CS, as Enter Linking Mode and Enter Unlinking Mode take.
   private func send(_ command: StandardDirectCommand, to device: InsteonAddress, engine: InsteonEngine) async throws {
 
     if engine >= .i2cs {

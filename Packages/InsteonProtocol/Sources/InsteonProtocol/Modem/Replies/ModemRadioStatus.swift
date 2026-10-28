@@ -1,16 +1,14 @@
 /// The state of a modem's radio, reported in reply to ``SerialCommand/readRadioStatus``.
 ///
 /// Later modem firmware answers with six bytes: its radio frequency code, its radio flags,
-/// its LED flags, its hardware version and two more bytes. Insteon's command workbook gives
-/// the layout, and the Insteon for Hub app reads the radio flags to tell whether a Hub's radio
-/// is off.
+/// its LED flags, its hardware version and two more bytes. The radio flags tell whether the
+/// radio is off.
 ///
-/// The workbook also gives a second layout, for a development dongle, whose first and last
-/// bytes split the frequency and whose second byte holds linking flags instead; this reads
-/// the modem layout.
+/// A development dongle answers with another layout, whose first and last bytes split the
+/// frequency and whose second byte holds linking flags instead; this reads the modem layout.
 public struct ModemRadioStatus: Hashable, Sendable {
 
-  /// The code of the frequency the radio is set to, as Insteon's frequency table gives it.
+  /// The code of the frequency the radio is set to, as the modem reports it.
   public var frequencyCode: UInt8
 
   /// The radio flags, which ``SerialCommand/setRadio(_:)`` sets.

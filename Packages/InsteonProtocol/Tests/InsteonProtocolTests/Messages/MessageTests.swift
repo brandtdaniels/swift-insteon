@@ -51,7 +51,7 @@ struct MessageTests {
 
   }
 
-  // A message captured in Insteon's own PLM test log: enter linking mode for group 8,
+  // A captured message: enter linking mode for group 8,
   // sent extended with its checksum.
   @Test func checksumMatchesInsteonTrace() {
 
