@@ -110,13 +110,13 @@ let package = Package(
 
     .target(
       name: "InsteonDeviceDatabase",
-      dependencies: ["InsteonProtocol"],
+      dependencies: ["InsteonNetworking", "InsteonProtocol"],
       path: "Packages/InsteonDeviceDatabase/Sources/InsteonDeviceDatabase",
       resources: [.copy("Resources/database.json")]
     ),
     .testTarget(
       name: "InsteonDeviceDatabaseTests",
-      dependencies: ["InsteonDeviceDatabase", "InsteonProtocol"],
+      dependencies: ["InsteonDeviceDatabase", "InsteonNetworking", "InsteonProtocol"],
       path: "Packages/InsteonDeviceDatabase/Tests/InsteonDeviceDatabaseTests"
     ),
 
