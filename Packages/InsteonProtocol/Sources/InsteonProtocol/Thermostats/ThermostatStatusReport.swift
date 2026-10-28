@@ -1,8 +1,9 @@
-/// A change a thermostat reports on its own, to each device linked to it while it was off.
+/// A change a thermostat reports on its own.
 ///
-/// Linking a device to a thermostat while the thermostat is off makes the device a recipient
-/// of its status reports: the thermostat sends each one a direct message whenever its
-/// temperature, humidity, mode or setpoints change.
+/// A thermostat sends each of its report recipients a direct message whenever its
+/// temperature, humidity, mode or setpoints change. A Venstar adapter reports to each device
+/// linked to it while it was off. A TempLinc reports to each device linked to its group
+/// `0xFE`, which only software can link, a few seconds after a change settles.
 ///
 /// ```swift
 /// if case let .messageReceived(message) = reply, let report = ThermostatStatusReport(message) {

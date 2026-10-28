@@ -1,6 +1,10 @@
 /// The mode a TempLinc Thermostat (2441TH) or TempLinc Wireless Zone Thermostat (2441ZTH)
-/// reports in a mode ``ThermostatStatusReport``, as SmartLabs' TempLinc product requirements
-/// give it.
+/// reports in a mode ``ThermostatStatusReport``, as the final revisions of SmartLabs' TempLinc
+/// product requirements give it.
+///
+/// Earlier revisions and the TempLinc engineering specification give only off, auto (`0x01`),
+/// heat and cool; the final revisions call `0x01` manual auto and add the programmed auto mode
+/// as `0x04`.
 ///
 /// ```swift
 /// if case let .mode(code) = report, let mode = TempLincMode(rawValue: code.rawValue) {

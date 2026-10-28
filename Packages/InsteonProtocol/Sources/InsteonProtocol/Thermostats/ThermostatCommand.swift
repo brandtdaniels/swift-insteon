@@ -33,7 +33,8 @@ public enum ThermostatCommand: Hashable, Sendable {
   case readZone(ThermostatReading, zone: ThermostatZone = .main)
 
   /// Reads the mode, as a ``ThermostatMode`` in the acknowledgement's cmd2 (cmd1 `0x6B`,
-  /// cmd2 `0x02`). A TempLinc doesn't accept it; it reports its mode in a
+  /// cmd2 `0x02`). The TempLinc engineering specification gives it with these values, but the
+  /// final TempLinc product requirements drop it; a TempLinc reports its mode in a
   /// ``ThermostatStatusReport`` instead.
   case readMode
 
