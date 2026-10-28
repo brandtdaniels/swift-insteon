@@ -80,14 +80,15 @@ struct DeviceIdentifierTests {
     let other = InsteonAddress(0x44, 0x55, 0x66)
     await modem.setIdentity(SetButtonPressed(sender: other, role: .controller, category: 0x10, subcategory: 0x01, firmwareVersion: nil))
 
-    // The fake broadcasts only for the device asked, so another device's broadcast is sent
-    // while the identifier waits.
+    // The lamp doesn't answer its ID request at once: another device's broadcast arrives
+    // first, then the lamp's, so the identity can only be the lamp's if the other is skipped.
     async let identification = identifier(modem).identify(lamp)
     await clock.waitForSleeper(until: Modem.defaultRequestTimeout)
     await modem.broadcastIdentity(of: other)
-    clock.advance(by: Modem.defaultRequestTimeout)
+    await modem.setIdentity(identity)
+    await modem.broadcastIdentity(of: lamp)
 
-    #expect((try await identification).identity == nil)
+    #expect((try await identification).identity == identity)
 
   }
 
