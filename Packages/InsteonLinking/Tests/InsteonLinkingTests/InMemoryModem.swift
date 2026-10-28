@@ -304,11 +304,14 @@ actor InMemoryModem: LinkingModem {
 
     linkingSteps.append(.device(device, command, isExtended: isExtended))
 
-    if [0x09, 0x0A].contains(command.command1) {
-
+    switch command.command1 {
+    case 0x09, 0x0A:
       waitingDevice = (device, command.command1 == 0x0A)
       completeLink()
-
+    case 0x08:
+      waitingDevice = nil
+    default:
+      break
     }
 
   }

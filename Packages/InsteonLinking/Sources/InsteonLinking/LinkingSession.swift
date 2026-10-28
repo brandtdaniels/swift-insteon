@@ -12,12 +12,97 @@ struct LinkingSession: Sendable {
 
   let clock: any Clock<Duration>
 
+  /// Links or unlinks a device without anyone pressing its SET button.
+  ///
+  /// The device is asked for its engine, then the modem and the device enter their modes in
+  /// the given order, and the modem's report of the link is awaited. If the wait fails, the
+  /// modem is taken out of linking mode and the device is sent Exit Linking Mode, so neither
+  /// is left open to linking.
+  ///
+  /// - Parameters:
+  ///   - device: The device to link or unlink.
+  ///   - deviceCommand: Enter Linking Mode or Enter Unlinking Mode.
+  ///   - modemMode: The modem's linking mode.
+  ///   - modemGroup: The modem's group.
+  ///   - deviceFirst: Whether the device enters its mode before the modem.
+  ///   - expectedMode: The mode the modem reports for the link: its role, or `AllLinkMode.delete`.
+  ///   - linkingTimeout: How long to wait for the modem's report.
+  func remote(
+    _ device: InsteonAddress,
+    deviceCommand: StandardDirectCommand,
+    modemMode: AllLinkMode,
+    modemGroup: AllLinkGroupNumber,
+    deviceFirst: Bool,
+    expecting expectedMode: AllLinkMode,
+    within linkingTimeout: Duration
+  ) async throws -> AllLinkingCompleted {
+
+    let engine = try await engine(of: device)
+
+    // i1 devices don't accept Enter Linking Mode or Enter Unlinking Mode.
+    guard let minimum = deviceCommand.minimumEngine, engine >= minimum else {
+
+      throw LinkingError.remoteLinkingUnsupported(device)
+
+    }
+
+    let modem = modem
+    let timeout = timeout
+
+    return try await awaitLink(
+      with: device,
+      expecting: expectedMode,
+      within: linkingTimeout,
+      cleanUp: {
+
+        // Exit Linking Mode is accepted as a standard message by every engine that has it.
+        _ = try? await modem.request(StandardMessage(to: device, command: StandardDirectCommand.exitLinkingMode), timeout: timeout)
+
+      },
+      starting: {
+
+        if deviceFirst {
+
+          try await send(deviceCommand, to: device, engine: engine)
+          try await modem.send(.startAllLinking(mode: modemMode, group: modemGroup))
+
+        } else {
+
+          try await modem.send(.startAllLinking(mode: modemMode, group: modemGroup))
+          try await send(deviceCommand, to: device, engine: engine)
+
+        }
+
+      }
+    )
+
+  }
+
+  /// Puts the modem into a linking mode and waits for whichever device a person links with
+  /// its SET button.
+  func manual(
+    modemMode: AllLinkMode,
+    group: AllLinkGroupNumber,
+    expecting expectedMode: AllLinkMode,
+    within linkingTimeout: Duration
+  ) async throws -> AllLinkingCompleted {
+
+    try await awaitLink(with: nil, expecting: expectedMode, within: linkingTimeout, cleanUp: {}) {
+
+      try await modem.send(.startAllLinking(mode: modemMode, group: group))
+
+    }
+
+  }
+
+  // MARK: - Engines
+
   /// The engine a device runs, which decides whether and how it can be linked remotely.
   ///
   /// An i2cs device rejects requests from a modem it isn't linked to, so a device that rejects
   /// the request as not linked runs i2cs. A device that reports an engine this package doesn't
   /// know is treated as i2cs too, whose extended messages earlier engines also accept.
-  func engine(of device: InsteonAddress) async throws -> InsteonEngine {
+  private func engine(of device: InsteonAddress) async throws -> InsteonEngine {
 
     do {
 
@@ -36,35 +121,36 @@ struct LinkingSession: Sendable {
 
   }
 
-  /// Sends a device Enter Linking Mode or Enter Unlinking Mode in the form its engine expects:
-  /// standard for i2, and extended with a checksum for i2cs. i1 devices can't be put into
-  /// either mode remotely.
-  func send(_ command: StandardDirectCommand, to device: InsteonAddress, engine: InsteonEngine) async throws {
+  /// Sends a device a command in the form its engine expects: standard for i1 and i2, and
+  /// extended with a checksum for i2cs, as Insteon's command sheet gives for Enter Linking
+  /// Mode and Enter Unlinking Mode.
+  private func send(_ command: StandardDirectCommand, to device: InsteonAddress, engine: InsteonEngine) async throws {
 
-    switch engine {
-    case .i1:
-      throw LinkingError.remoteLinkingUnsupported(device)
-    case .i2:
-      _ = try await modem.request(StandardMessage(to: device, command: command), timeout: timeout)
-    case .i2cs:
+    if engine >= .i2cs {
+
       _ = try await modem.request(ExtendedMessage(to: device, command: command), timeout: timeout)
+
+    } else {
+
+      _ = try await modem.request(StandardMessage(to: device, command: command), timeout: timeout)
+
     }
 
   }
 
-  /// Runs `start`, which puts the modem and the device into linking or unlinking mode, then
-  /// waits for the modem to report the link.
+  // MARK: - Waiting
+
+  /// Runs `start`, which puts the modem and the device into their modes, then waits for the
+  /// modem to report the link.
   ///
-  /// When the wait fails, the modem is taken out of linking mode. A canceled wait can't send
-  /// the modem anything, so the modem leaves linking mode on its own after 4 minutes.
-  ///
-  /// - Parameters:
-  ///   - device: The device whose link to wait for, or `nil` for the first device that links.
-  ///   - linkingTimeout: How long to wait for the link.
-  ///   - start: Puts the modem and the device into linking or unlinking mode.
-  func awaitLink(
+  /// When the wait fails, the modem is taken out of linking mode and `cleanUp` runs. A
+  /// canceled task can't send anything, so then a task of its own does both, rather than
+  /// leaving the modem open to any device that's linked for 4 minutes.
+  private func awaitLink(
     with device: InsteonAddress?,
+    expecting expectedMode: AllLinkMode,
     within linkingTimeout: Duration,
+    cleanUp: @escaping @Sendable () async -> Void,
     starting start: () async throws -> Void
   ) async throws -> AllLinkingCompleted {
 
@@ -75,13 +161,25 @@ struct LinkingSession: Sendable {
 
       try await start()
 
-      return try await firstLink(in: replies, with: device, within: linkingTimeout)
+      return try await firstLink(in: replies, with: device, expecting: expectedMode, within: linkingTimeout)
 
     } catch {
 
-      if !(error is CancellationError) {
+      let modem = modem
+      let restore: @Sendable () async -> Void = {
 
         _ = try? await modem.send(.cancelAllLinking)
+        await cleanUp()
+
+      }
+
+      if error is CancellationError {
+
+        Task { await restore() }
+
+      } else {
+
+        await restore()
 
       }
 
@@ -94,6 +192,7 @@ struct LinkingSession: Sendable {
   private func firstLink(
     in replies: AsyncStream<ModemReply>,
     with device: InsteonAddress?,
+    expecting expectedMode: AllLinkMode,
     within linkingTimeout: Duration
   ) async throws -> AllLinkingCompleted {
 
@@ -105,16 +204,27 @@ struct LinkingSession: Sendable {
 
         for await reply in replies {
 
-          if case let .allLinkingCompleted(link) = reply, device == nil || link.address == device {
+          guard case let .allLinkingCompleted(link) = reply else {
 
-            return link
+            continue
 
           }
 
+          // Another device linked while the modem was waiting, or the modem made a different
+          // kind of link than asked, so the caller has to know.
+          guard device == nil || link.address == device, link.mode == expectedMode else {
+
+            throw LinkingError.unexpectedLink(link)
+
+          }
+
+          return link
+
         }
 
-        // The stream ends without a link only when the modem closes, or this task is canceled
-        // because the timeout came first.
+        // The stream ends early only when this task is canceled or the modem closes.
+        try Task.checkCancellation()
+
         throw ModemError.connectionClosed
 
       }

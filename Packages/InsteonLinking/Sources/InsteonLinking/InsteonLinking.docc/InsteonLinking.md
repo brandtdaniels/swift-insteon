@@ -45,6 +45,11 @@ standard Enter Linking Mode, and an i2cs device the extended one with a checksum
 asks the device for its engine first; an i2cs device that isn't linked to the modem rejects
 that request, which marks it as i2cs. An i1 device can't be linked remotely.
 
+While the modem waits, any device whose SET button is pressed can link to it. So a wait that
+fails takes the modem out of linking mode, and the device too after a remote link, and the
+linker reports a link with a device other than the one asked for, or of another kind, as
+``LinkingError/unexpectedLink(_:)``.
+
 ### Which devices accept database writes
 
 Writing records needs Read/Write ALL-Link Database, which every device with an i2 or i2cs

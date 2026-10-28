@@ -133,8 +133,9 @@ public struct Linker: Sendable {
   ///     ``Linker/defaultRemoteLinkingTimeout``.
   /// - Returns: The link the modem reports.
   /// - Throws: ``LinkingError/remoteLinkingUnsupported(_:)`` for an i1 device,
-  ///   ``LinkingError/linkingTimedOut`` if the modem doesn't report the link in time, or the
-  ///   modem's errors.
+  ///   ``LinkingError/linkingTimedOut`` if the modem doesn't report the link in time,
+  ///   ``LinkingError/unexpectedLink(_:)`` if it reports a different link, or the modem's
+  ///   errors. When the link fails, the modem and the device are taken out of linking mode.
   @discardableResult
   public func linkRemotely(
     _ device: InsteonAddress,
@@ -144,27 +145,16 @@ public struct Linker: Sendable {
     timeout linkingTimeout: Duration = Linker.defaultRemoteLinkingTimeout
   ) async throws -> AllLinkingCompleted {
 
-    let session = LinkingSession(modem: modem, timeout: timeout, clock: clock)
-    let engine = try await session.engine(of: device)
-
-    guard engine >= .i2 else {
-
-      throw LinkingError.remoteLinkingUnsupported(device)
-
-    }
-
-    return try await session.awaitLink(with: device, within: linkingTimeout) {
-
-      switch modemRole {
-      case .controller:
-        try await modem.send(.startAllLinking(mode: .controller, group: modemGroup))
-        try await session.send(.enterLinkingMode(group: deviceGroup), to: device, engine: engine)
-      case .responder:
-        try await session.send(.enterLinkingMode(group: deviceGroup), to: device, engine: engine)
-        try await modem.send(.startAllLinking(mode: .responder, group: modemGroup))
-      }
-
-    }
+    try await LinkingSession(modem: modem, timeout: timeout, clock: clock).remote(
+      device,
+      deviceCommand: .enterLinkingMode(group: deviceGroup),
+      modemMode: modemRole.linkingMode,
+      modemGroup: modemGroup,
+      // The controller enters linking mode first and the responder joins it.
+      deviceFirst: modemRole == .responder,
+      expecting: modemRole.linkingMode,
+      within: linkingTimeout
+    )
 
   }
 
@@ -179,8 +169,9 @@ public struct Linker: Sendable {
   ///   - group: The modem's group.
   ///   - timeout: How long to wait. Defaults to ``Linker/defaultManualLinkingTimeout``.
   /// - Returns: The link the modem reports, including the device's address.
-  /// - Throws: ``LinkingError/linkingTimedOut`` if no device links in time, or the modem's
-  ///   errors.
+  /// - Throws: ``LinkingError/linkingTimedOut`` if no device links in time,
+  ///   ``LinkingError/unexpectedLink(_:)`` if the modem reports a different kind of link, or
+  ///   the modem's errors. When the link fails, the modem is taken out of linking mode.
   @discardableResult
   public func linkManually(
     modemRole: ModemRole,
@@ -188,13 +179,12 @@ public struct Linker: Sendable {
     timeout linkingTimeout: Duration = Linker.defaultManualLinkingTimeout
   ) async throws -> AllLinkingCompleted {
 
-    let session = LinkingSession(modem: modem, timeout: timeout, clock: clock)
-
-    return try await session.awaitLink(with: nil, within: linkingTimeout) {
-
-      try await modem.send(.startAllLinking(mode: modemRole.linkingMode, group: group))
-
-    }
+    try await LinkingSession(modem: modem, timeout: timeout, clock: clock).manual(
+      modemMode: modemRole.linkingMode,
+      group: group,
+      expecting: modemRole.linkingMode,
+      within: linkingTimeout
+    )
 
   }
 

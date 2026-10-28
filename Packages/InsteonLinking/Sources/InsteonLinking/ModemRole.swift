@@ -19,4 +19,16 @@ public enum ModemRole: Hashable, Sendable {
 
   }
 
+  /// The modem's mode for removing a link in the role: unlinking mode as the controller, and
+  /// linking mode as the responder, which joins a controller that's in unlinking mode, as with
+  /// SET buttons.
+  var unlinkingMode: AllLinkMode {
+
+    switch self {
+    case .controller: .delete
+    case .responder: .responder
+    }
+
+  }
+
 }

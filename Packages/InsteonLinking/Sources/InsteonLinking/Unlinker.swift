@@ -82,10 +82,14 @@ public struct Unlinker: Sendable {
   /// Unlinks a device from the modem without anyone pressing its SET button.
   ///
   /// The controller goes into unlinking mode and the responder into linking mode, as with
-  /// their SET buttons: when the modem is the controller, the modem enters unlinking mode and
-  /// the device follows as the responder; when the modem is the responder, the device enters
-  /// unlinking mode first and the modem follows. Each removes its record of the link, and the
-  /// modem reports it. i1 devices can't be unlinked remotely; use
+  /// their SET buttons, and each removes its record of the link. When the modem is the
+  /// controller, the modem enters unlinking mode and the device follows as the responder.
+  /// When the modem is the responder, the device enters unlinking mode first and the modem
+  /// follows.
+  ///
+  /// The modem reports the removed link. A modem that removes a responder record may not
+  /// report it, so when no report arrives in that role, the modem's own database is checked
+  /// for the record instead. i1 devices can't be unlinked remotely; use
   /// ``Unlinker/unlinkManually(modemRole:group:timeout:)``.
   ///
   /// - Parameters:
@@ -95,38 +99,46 @@ public struct Unlinker: Sendable {
   ///   - deviceGroup: The device's group or button. Devices with only one group ignore it.
   ///   - timeout: How long to wait for the modem to report the link removed. Defaults to
   ///     `Linker.defaultRemoteLinkingTimeout`.
-  /// - Returns: The removed link the modem reports.
   /// - Throws: ``LinkingError/remoteLinkingUnsupported(_:)`` for an i1 device,
-  ///   ``LinkingError/linkingTimedOut`` if the modem doesn't report it in time, or the
-  ///   modem's errors.
-  @discardableResult
+  ///   ``LinkingError/linkingTimedOut`` if the link isn't removed in time,
+  ///   ``LinkingError/unexpectedLink(_:)`` if the modem reports a different link, or the
+  ///   modem's errors. When the unlink fails, the modem and the device are taken out of their
+  ///   modes.
   public func unlinkRemotely(
     _ device: InsteonAddress,
     modemRole: ModemRole,
     modemGroup: AllLinkGroupNumber,
     deviceGroup: AllLinkGroupNumber,
     timeout linkingTimeout: Duration = Linker.defaultRemoteLinkingTimeout
-  ) async throws -> AllLinkingCompleted {
+  ) async throws {
 
     let session = LinkingSession(modem: modem, timeout: timeout, clock: clock)
-    let engine = try await session.engine(of: device)
 
-    guard engine >= .i2 else {
+    do {
 
-      throw LinkingError.remoteLinkingUnsupported(device)
+      _ = try await session.remote(
+        device,
+        deviceCommand: modemRole == .controller ? .enterLinkingMode(group: deviceGroup) : .enterUnlinkingMode(group: deviceGroup),
+        modemMode: modemRole.unlinkingMode,
+        modemGroup: modemGroup,
+        // The controller enters unlinking mode first and the responder joins it.
+        deviceFirst: modemRole == .responder,
+        expecting: .delete,
+        within: linkingTimeout
+      )
 
-    }
+    } catch LinkingError.linkingTimedOut where modemRole == .responder {
 
-    return try await session.awaitLink(with: device, within: linkingTimeout) {
+      // The modem's responder record links the device in the device's group.
+      let remaining = try await modem.allLinkRecords(group: deviceGroup, device: device)
 
-      switch modemRole {
-      case .controller:
-        try await modem.send(.startAllLinking(mode: .delete, group: modemGroup))
-        try await session.send(.enterLinkingMode(group: deviceGroup), to: device, engine: engine)
-      case .responder:
-        try await session.send(.enterUnlinkingMode(group: deviceGroup), to: device, engine: engine)
-        try await modem.send(.startAllLinking(mode: .responder, group: modemGroup))
+      guard remaining.contains(where: { !$0.flags.contains(.controller) }) else {
+
+        return
+
       }
+
+      throw LinkingError.linkingTimedOut
 
     }
 
@@ -143,8 +155,9 @@ public struct Unlinker: Sendable {
   ///   - group: The modem's group in the link.
   ///   - timeout: How long to wait. Defaults to `Linker.defaultManualLinkingTimeout`.
   /// - Returns: The removed link the modem reports, including the device's address.
-  /// - Throws: ``LinkingError/linkingTimedOut`` if no device unlinks in time, or the modem's
-  ///   errors.
+  /// - Throws: ``LinkingError/linkingTimedOut`` if no device unlinks in time,
+  ///   ``LinkingError/unexpectedLink(_:)`` if the modem reports a new link instead, or the
+  ///   modem's errors. When the unlink fails, the modem is taken out of its mode.
   @discardableResult
   public func unlinkManually(
     modemRole: ModemRole,
@@ -152,15 +165,12 @@ public struct Unlinker: Sendable {
     timeout linkingTimeout: Duration = Linker.defaultManualLinkingTimeout
   ) async throws -> AllLinkingCompleted {
 
-    let session = LinkingSession(modem: modem, timeout: timeout, clock: clock)
-
-    return try await session.awaitLink(with: nil, within: linkingTimeout) {
-
-      let mode: AllLinkMode = modemRole == .controller ? .delete : .responder
-
-      try await modem.send(.startAllLinking(mode: mode, group: group))
-
-    }
+    try await LinkingSession(modem: modem, timeout: timeout, clock: clock).manual(
+      modemMode: modemRole.unlinkingMode,
+      group: group,
+      expecting: .delete,
+      within: linkingTimeout
+    )
 
   }
 
