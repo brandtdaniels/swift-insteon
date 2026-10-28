@@ -14,6 +14,9 @@ public struct MessageField: Hashable, Sendable {
   /// What the field is.
   public var summary: String
 
+  /// How sure the catalog is of the field.
+  public var verification: Verification
+
   /// Where the field is.
   public var location: FieldLocation
 
@@ -37,12 +40,14 @@ public struct MessageField: Hashable, Sendable {
   ///   - mask: The bits of the byte that hold the field, if not all of them.
   ///   - kind: How to read the field.
   ///   - range: The values the field can take, in its unit.
-  public init(name: SettingName, summary: String, location: FieldLocation, mask: UInt8? = nil, kind: FieldKind = .number(), range: ClosedRange<Double>? = nil) {
+  ///   - verification: How sure the catalog is of the field. Defaults to ``Verification/documented``.
+  public init(name: SettingName, summary: String, location: FieldLocation, mask: UInt8? = nil, kind: FieldKind = .number(), range: ClosedRange<Double>? = nil, verification: Verification = .documented) {
 
     precondition(Self.isValid(location: location, mask: mask), "A field is one to four distinct bytes, and a masked field is one byte with contiguous bits.")
 
     self.name = name
     self.summary = summary
+    self.verification = verification
     self.location = location
     self.mask = mask
     self.kind = kind

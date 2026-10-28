@@ -30,6 +30,9 @@ public struct DeviceStandardCommand: Hashable, Sendable {
   /// What the command does.
   public var summary: String
 
+  /// How sure the catalog is of the command.
+  public var verification: Verification
+
   /// The command's cmd1.
   public var command1: UInt8
 
@@ -57,6 +60,7 @@ public struct DeviceStandardCommand: Hashable, Sendable {
   ///   - reply: The value the acknowledgement carries in cmd2.
   ///   - followUp: A value one more message with the same cmd1 may carry.
   ///   - extendedWhen: The operating flag that has the command sent as an extended message.
+  ///   - verification: How sure the catalog is of the command. Defaults to ``Verification/documented``.
   public init(
     name: SettingName,
     summary: String,
@@ -64,11 +68,13 @@ public struct DeviceStandardCommand: Hashable, Sendable {
     command2: Command2,
     reply: MessageField? = nil,
     followUp: MessageField? = nil,
-    extendedWhen: SettingName? = nil
+    extendedWhen: SettingName? = nil,
+    verification: Verification = .documented
   ) {
 
     self.name = name
     self.summary = summary
+    self.verification = verification
     self.command1 = command1
     self.command2 = command2
     self.reply = reply
@@ -257,6 +263,9 @@ public struct DeviceExtendedCommand: Hashable, Sendable {
   /// What the command does.
   public var summary: String
 
+  /// How sure the catalog is of the command.
+  public var verification: Verification
+
   /// The command's cmd1 and cmd2.
   public var command: Command
 
@@ -287,6 +296,7 @@ public struct DeviceExtendedCommand: Hashable, Sendable {
   ///   - parameters: The values the caller gives.
   ///   - integrity: How the command's user data is protected.
   ///   - reply: The extended reply that answers the command.
+  ///   - verification: How sure the catalog is of the command. Defaults to ``Verification/documented``.
   public init(
     name: SettingName,
     summary: String,
@@ -295,11 +305,13 @@ public struct DeviceExtendedCommand: Hashable, Sendable {
     fixedBytes: [FixedUserDataByte] = [],
     parameters: [MessageField] = [],
     integrity: MessageIntegrity = .unprotected,
-    reply: DeviceExtendedReply? = nil
+    reply: DeviceExtendedReply? = nil,
+    verification: Verification = .documented
   ) {
 
     self.name = name
     self.summary = summary
+    self.verification = verification
     self.command = command
     self.isPerButton = isPerButton
     self.fixedBytes = fixedBytes
@@ -438,6 +450,9 @@ public struct DeviceDirectMessage: Hashable, Sendable {
   /// What the message reports.
   public var summary: String
 
+  /// How sure the catalog is of the message.
+  public var verification: Verification
+
   /// The message's cmd1.
   public var command1: UInt8
 
@@ -451,10 +466,12 @@ public struct DeviceDirectMessage: Hashable, Sendable {
   ///   - summary: What the message reports.
   ///   - command1: The message's cmd1.
   ///   - value: The value it carries in cmd2.
-  public init(name: SettingName, summary: String, command1: UInt8, value: MessageField) {
+  ///   - verification: How sure the catalog is of the message. Defaults to ``Verification/documented``.
+  public init(name: SettingName, summary: String, command1: UInt8, value: MessageField, verification: Verification = .documented) {
 
     self.name = name
     self.summary = summary
+    self.verification = verification
     self.command1 = command1
     self.value = value
 

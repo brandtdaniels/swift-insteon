@@ -113,3 +113,7 @@ dimming for dimmable lighting control.
 - ``FieldBit``
 - ``FieldValue``
 - ``FieldError``
+
+### How sure a value is
+
+- ``Verification``

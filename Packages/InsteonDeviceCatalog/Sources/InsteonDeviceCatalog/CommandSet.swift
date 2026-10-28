@@ -249,6 +249,9 @@ public struct OperatingFlag: Hashable, Sendable {
   /// What the flag means when its bit is 1.
   public var summary: String
 
+  /// How sure the catalog is of the flag.
+  public var verification: Verification
+
   /// The Get Operating Flags request whose reply holds the bit.
   public var query: OperatingFlagsRequest
 
@@ -276,10 +279,12 @@ public struct OperatingFlag: Hashable, Sendable {
   ///   - off: The Set Operating Flags cmd2 that sets the bit to 0.
   ///   - extendedWhen: The operating flag that has the Set Operating Flags commands sent as
   ///     extended messages.
-  public init(name: SettingName, summary: String, query: OperatingFlagsRequest, bit: UInt8, on: UInt8? = nil, off: UInt8? = nil, extendedWhen: SettingName? = nil) {
+  ///   - verification: How sure the catalog is of the flag. Defaults to ``Verification/documented``.
+  public init(name: SettingName, summary: String, query: OperatingFlagsRequest, bit: UInt8, on: UInt8? = nil, off: UInt8? = nil, extendedWhen: SettingName? = nil, verification: Verification = .documented) {
 
     self.name = name
     self.summary = summary
+    self.verification = verification
     self.query = query
     self.bit = bit
     self.on = on
@@ -335,6 +340,9 @@ public struct OperatingReading: Hashable, Sendable {
   /// What the reading is.
   public var summary: String
 
+  /// How sure the catalog is of the reading.
+  public var verification: Verification
+
   /// The Get Operating Flags request.
   public var query: OperatingFlagsRequest
 
@@ -344,10 +352,12 @@ public struct OperatingReading: Hashable, Sendable {
   ///   - name: The reading's name.
   ///   - summary: What the reading is.
   ///   - query: The Get Operating Flags request.
-  public init(name: SettingName, summary: String, query: OperatingFlagsRequest) {
+  ///   - verification: How sure the catalog is of the reading. Defaults to ``Verification/documented``.
+  public init(name: SettingName, summary: String, query: OperatingFlagsRequest, verification: Verification = .documented) {
 
     self.name = name
     self.summary = summary
+    self.verification = verification
     self.query = query
 
   }
@@ -363,6 +373,9 @@ public struct OperatingFlagCommand: Hashable, Sendable {
   /// What the command does.
   public var summary: String
 
+  /// How sure the catalog is of the command.
+  public var verification: Verification
+
   /// The command: Set Operating Flags with its cmd2.
   public var command: StandardDirectCommand
 
@@ -377,10 +390,12 @@ public struct OperatingFlagCommand: Hashable, Sendable {
   ///   - summary: What the command does.
   ///   - command2: The Set Operating Flags cmd2.
   ///   - extendedWhen: The operating flag that has the command sent as an extended message.
-  public init(name: SettingName, summary: String, command2: UInt8, extendedWhen: SettingName? = nil) {
+  ///   - verification: How sure the catalog is of the command. Defaults to ``Verification/documented``.
+  public init(name: SettingName, summary: String, command2: UInt8, extendedWhen: SettingName? = nil, verification: Verification = .documented) {
 
     self.name = name
     self.summary = summary
+    self.verification = verification
     self.command = .setOperatingFlags(flag: command2)
     self.extendedWhen = extendedWhen
 

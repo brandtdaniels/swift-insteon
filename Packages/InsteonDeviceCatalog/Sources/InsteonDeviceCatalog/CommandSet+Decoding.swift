@@ -37,6 +37,8 @@ extension CommandSet: Decodable {
 
     let extendedWhen: String?
 
+    let verification: Verification?
+
   }
 
   private struct Reading: Decodable {
@@ -46,6 +48,8 @@ extension CommandSet: Decodable {
     let description: String
 
     let query: ProfileByte
+
+    let verification: Verification?
 
   }
 
@@ -58,6 +62,8 @@ extension CommandSet: Decodable {
     let command2: ProfileByte
 
     let extendedWhen: String?
+
+    let verification: Verification?
 
   }
 
@@ -91,6 +97,8 @@ extension CommandSet: Decodable {
 
     let range: Range?
 
+    let verification: Verification?
+
   }
 
   private struct Write: Decodable {
@@ -112,6 +120,8 @@ extension CommandSet: Decodable {
     let perButton: Bool
 
     let bytes: [Byte]
+
+    let verification: Verification?
 
   }
 
@@ -173,6 +183,8 @@ extension CommandSet: Decodable {
 
     let range: FieldRange?
 
+    let verification: Verification?
+
   }
 
   private struct FixedByte: Decodable {
@@ -200,6 +212,8 @@ extension CommandSet: Decodable {
     let followUp: Field?
 
     let extendedWhen: String?
+
+    let verification: Verification?
 
   }
 
@@ -237,6 +251,8 @@ extension CommandSet: Decodable {
 
     let reply: ExtendedReply?
 
+    let verification: Verification?
+
   }
 
   private struct DirectMessage: Decodable {
@@ -248,6 +264,8 @@ extension CommandSet: Decodable {
     let command1: ProfileByte
 
     let value: Field
+
+    let verification: Verification?
 
   }
 
@@ -287,13 +305,19 @@ extension CommandSet: Decodable {
           bit: flag.bit.value,
           on: flag.on?.value,
           off: flag.off?.value,
-          extendedWhen: flag.extendedWhen.map(SettingName.init(rawValue:))
+          extendedWhen: flag.extendedWhen.map(SettingName.init(rawValue:)),
+          verification: flag.verification ?? .documented
         )
 
       },
       readings: try (container.decodeIfPresent([Reading].self, forKey: .readings) ?? []).map { reading in
 
-        OperatingReading(name: SettingName(rawValue: reading.name), summary: reading.description, query: OperatingFlagsRequest(rawValue: reading.query.value))
+        OperatingReading(
+          name: SettingName(rawValue: reading.name),
+          summary: reading.description,
+          query: OperatingFlagsRequest(rawValue: reading.query.value),
+          verification: reading.verification ?? .documented
+        )
 
       },
       flagCommands: try (container.decodeIfPresent([FlagCommand].self, forKey: .flagCommands) ?? []).map { command in
@@ -302,7 +326,8 @@ extension CommandSet: Decodable {
           name: SettingName(rawValue: command.name),
           summary: command.description,
           command2: command.command2.value,
-          extendedWhen: command.extendedWhen.map(SettingName.init(rawValue:))
+          extendedWhen: command.extendedWhen.map(SettingName.init(rawValue:)),
+          verification: command.verification ?? .documented
         )
 
       },
@@ -394,7 +419,8 @@ extension CommandSet: Decodable {
         location: location,
         mask: field.mask?.value,
         kind: kind,
-        range: range
+        range: range,
+        verification: field.verification ?? .documented
       )
 
     }
@@ -444,7 +470,8 @@ extension CommandSet: Decodable {
           ?? .fixed(command.command2?.value ?? 0x00),
         reply: try command.reply.map { try field($0, in: .standardCommands, extended: false) },
         followUp: try command.followUp.map { try field($0, in: .standardCommands, extended: false) },
-        extendedWhen: command.extendedWhen.map(SettingName.init(rawValue:))
+        extendedWhen: command.extendedWhen.map(SettingName.init(rawValue:)),
+        verification: command.verification ?? .documented
       )
 
     }
@@ -484,7 +511,8 @@ extension CommandSet: Decodable {
         fixedBytes: try fixedBytes(command.fixed, in: .extendedCommands),
         parameters: try (command.parameters ?? []).map { try field($0, in: .extendedCommands, extended: true) },
         integrity: commandIntegrity,
-        reply: reply
+        reply: reply,
+        verification: command.verification ?? .documented
       )
 
     }
@@ -495,7 +523,8 @@ extension CommandSet: Decodable {
         name: SettingName(rawValue: message.name),
         summary: message.description,
         command1: message.command1.value,
-        value: try field(message.value, in: .directMessages, extended: false)
+        value: try field(message.value, in: .directMessages, extended: false),
+        verification: message.verification ?? .documented
       )
 
     }
@@ -541,7 +570,8 @@ extension CommandSet: Decodable {
         summary: value.description,
         position: value.byte,
         kind: value.kind.flatMap(SettingValue.Kind.init(rawValue:)) ?? .number,
-        range: range
+        range: range,
+        verification: value.verification ?? .documented
       )
 
     }
@@ -559,7 +589,8 @@ extension CommandSet: Decodable {
         summary: write.description,
         selector: write.selector.value,
         isPerButton: write.perButton,
-        bytes: write.bytes.map { SettingWrite.Byte(position: $0.position, value: SettingName(rawValue: $0.value)) }
+        bytes: write.bytes.map { SettingWrite.Byte(position: $0.position, value: SettingName(rawValue: $0.value)) },
+        verification: write.verification ?? .documented
       )
 
     }

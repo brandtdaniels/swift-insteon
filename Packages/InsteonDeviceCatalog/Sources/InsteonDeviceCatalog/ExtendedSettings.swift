@@ -114,6 +114,9 @@ public struct SettingValue: Hashable, Sendable {
   /// What the value is.
   public var summary: String
 
+  /// How sure the catalog is of the value.
+  public var verification: Verification
+
   /// The user data byte that holds the value, from 3 through 14 for D3 through D14.
   public var position: Int
 
@@ -131,12 +134,14 @@ public struct SettingValue: Hashable, Sendable {
   ///   - position: The user data byte that holds the value, from 3 through 14.
   ///   - kind: How to read the byte. Defaults to ``SettingValue/Kind/number``.
   ///   - range: The values the byte can take.
-  public init(name: SettingName, summary: String, position: Int, kind: Kind = .number, range: ClosedRange<UInt8>? = nil) {
+  ///   - verification: How sure the catalog is of the value. Defaults to ``Verification/documented``.
+  public init(name: SettingName, summary: String, position: Int, kind: Kind = .number, range: ClosedRange<UInt8>? = nil, verification: Verification = .documented) {
 
     precondition((3...14).contains(position), "A setting's value is in D3 through D14.")
 
     self.name = name
     self.summary = summary
+    self.verification = verification
     self.position = position
     self.kind = kind
     self.range = range
@@ -179,6 +184,9 @@ public struct SettingWrite: Hashable, Sendable {
   /// What the write sets.
   public var summary: String
 
+  /// How sure the catalog is of the write.
+  public var verification: Verification
+
   /// The selector, which goes in D2.
   public var selector: UInt8
 
@@ -196,10 +204,12 @@ public struct SettingWrite: Hashable, Sendable {
   ///   - selector: The selector, which goes in D2.
   ///   - isPerButton: Whether D1 chooses the button or group.
   ///   - bytes: The bytes the write fills from D3.
-  public init(name: SettingName, summary: String, selector: UInt8, isPerButton: Bool, bytes: [Byte]) {
+  ///   - verification: How sure the catalog is of the write. Defaults to ``Verification/documented``.
+  public init(name: SettingName, summary: String, selector: UInt8, isPerButton: Bool, bytes: [Byte], verification: Verification = .documented) {
 
     self.name = name
     self.summary = summary
+    self.verification = verification
     self.selector = selector
     self.isPerButton = isPerButton
     self.bytes = bytes
