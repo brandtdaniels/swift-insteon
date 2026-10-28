@@ -161,6 +161,67 @@ struct ModemTests {
 
   }
 
+  @Test func readsTheConfiguration() async throws {
+
+    let connection = ScriptedConnection { _, _ in [0x02, 0x73, 0x40, 0x05, 0x00, 0x06] }
+    let modem = makeModem(connection)
+    var report: ModemConfigurationReport?
+
+    try await run(modem) { report = try await modem.configuration() }
+
+    #expect(connection.written == [[0x02, 0x73]])
+    #expect(report?.configuration == .monitorMode)
+    #expect(report?.applicationRetries == 0x05)
+
+  }
+
+  @Test func updatesOneFlagAndKeepsTheOthers() async throws {
+
+    let connection = ScriptedConnection { written, _ in
+
+      written == [0x02, 0x73] ? [0x02, 0x73, 0x40, 0x05, 0x00, 0x06] : written + [0x06]
+
+    }
+    let modem = makeModem(connection)
+    var configuration: ModemConfiguration?
+
+    try await run(modem) { configuration = try await modem.updateConfiguration { $0.insert(.disableDeadman) } }
+
+    #expect(connection.written == [[0x02, 0x73], [0x02, 0x6B, 0x50]])
+    #expect(configuration == [.monitorMode, .disableDeadman])
+
+  }
+
+  @Test func doesntWriteAnUnchangedConfiguration() async throws {
+
+    let connection = ScriptedConnection { written, _ in
+
+      written == [0x02, 0x73] ? [0x02, 0x73, 0x40, 0x05, 0x00, 0x06] : written + [0x06]
+
+    }
+    let modem = makeModem(connection)
+
+    try await run(modem) { try await modem.updateConfiguration { $0.insert(.monitorMode) } }
+
+    #expect(connection.written == [[0x02, 0x73]])
+
+  }
+
+  @Test func keepsBitsItDoesntName() async throws {
+
+    let connection = ScriptedConnection { written, _ in
+
+      written == [0x02, 0x73] ? [0x02, 0x73, 0x03, 0x00, 0x00, 0x06] : written + [0x06]
+
+    }
+    let modem = makeModem(connection)
+
+    try await run(modem) { try await modem.updateConfiguration { $0.insert(.monitorMode) } }
+
+    #expect(connection.written == [[0x02, 0x73], [0x02, 0x6B, 0x43]])
+
+  }
+
   @Test func sendRetriesAfterANak() async throws {
 
     let connection = ScriptedConnection { written, index in written + [index == 0 ? 0x15 : 0x06] }

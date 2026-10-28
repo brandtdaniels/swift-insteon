@@ -161,6 +161,64 @@ public actor Modem: SerialCommandSender {
 
   }
 
+  /// Reads the modem's configuration with Get IM Configuration (`0x73`).
+  ///
+  /// - Returns: The modem's configuration flags, and the two bytes that follow them.
+  /// - Throws: The errors of ``Modem/send(_:)``.
+  public func configuration() async throws -> ModemConfigurationReport {
+
+    guard case let .modemConfiguration(report) = try await pacer.send([Self.exchange(for: .getModemConfiguration)])[0] else {
+
+      preconditionFailure("Get IM Configuration is answered only by the modem's configuration.")
+
+    }
+
+    return report
+
+  }
+
+  /// Changes some of the modem's configuration flags and keeps the rest.
+  ///
+  /// Set IM Configuration (`0x6B`) replaces every flag at once, so this reads the flags with Get IM
+  /// Configuration (`0x73`), applies `change` and writes the result, all in one turn so that no
+  /// other command comes between. It doesn't write when `change` leaves the flags as they were.
+  ///
+  /// ```swift
+  /// // Report messages from linked devices to other devices, and keep every other flag.
+  /// try await modem.updateConfiguration { $0.insert(.monitorMode) }
+  /// ```
+  ///
+  /// - Parameter change: Changes the flags the modem reported.
+  /// - Returns: The flags as the modem reported them, or as it accepted them if they changed.
+  /// - Throws: The errors of ``Modem/send(_:)``.
+  @discardableResult
+  public func updateConfiguration(
+    _ change: @Sendable (inout ModemConfiguration) -> Void
+  ) async throws -> ModemConfiguration {
+
+    try await pacer.withTurn { turn in
+
+      guard case let .modemConfiguration(report) = try await turn.send(Self.exchange(for: .getModemConfiguration)) else {
+
+        preconditionFailure("Get IM Configuration is answered only by the modem's configuration.")
+
+      }
+
+      var configuration = report.configuration
+      change(&configuration)
+
+      if configuration != report.configuration {
+
+        _ = try await turn.send(Self.exchange(for: .setModemConfiguration(configuration)))
+
+      }
+
+      return configuration
+
+    }
+
+  }
+
   /// How long ``Modem/sendAllLinkCommand(group:command:timeout:)`` waits for the cleanups by
   /// default: 10 seconds.
   ///
