@@ -15,6 +15,10 @@ public struct Invocation: Hashable, Sendable {
   /// The path of the serial port given with `--serial`, if any.
   public var serialPath: String?
 
+  /// The environment file given with `--env-file`, if any, read in place of the per-user
+  /// ``EnvironmentFile``.
+  public var envFilePath: String?
+
   /// Whether `--json` asked for JSON output.
   public var printsJSON: Bool
 
@@ -26,12 +30,20 @@ public struct Invocation: Hashable, Sendable {
   /// - Parameters:
   ///   - hub: The Hub given with `--hub`, if any. Defaults to `nil`.
   ///   - serialPath: The path given with `--serial`, if any. Defaults to `nil`.
+  ///   - envFilePath: The path given with `--env-file`, if any. Defaults to `nil`.
   ///   - printsJSON: Whether to print JSON. Defaults to `false`.
   ///   - subcommand: The subcommand to run.
-  public init(hub: String? = nil, serialPath: String? = nil, printsJSON: Bool = false, subcommand: Subcommand) {
+  public init(
+    hub: String? = nil,
+    serialPath: String? = nil,
+    envFilePath: String? = nil,
+    printsJSON: Bool = false,
+    subcommand: Subcommand
+  ) {
 
     self.hub = hub
     self.serialPath = serialPath
+    self.envFilePath = envFilePath
     self.printsJSON = printsJSON
     self.subcommand = subcommand
 
@@ -46,6 +58,7 @@ public enum Subcommand: Hashable, Sendable {
   case help(topic: String?)
 
   /// Finds Hubs on the local network, by asking the network itself, Insteon Connect, or both.
+  /// By default, only the local network is asked.
   case discover(DiscoverOptions)
 
   /// Asks the modem about itself with Get IM Info.
@@ -85,8 +98,9 @@ public struct DiscoverOptions: Hashable, Sendable {
   ///
   /// - Parameters:
   ///   - searchesLocalNetwork: Whether to search the local network. Defaults to `true`.
-  ///   - asksInsteonConnect: Whether to ask Insteon Connect. Defaults to `true`.
-  public init(searchesLocalNetwork: Bool = true, asksInsteonConnect: Bool = true) {
+  ///   - asksInsteonConnect: Whether to ask Insteon Connect. Defaults to `false`, so the
+  ///     network's public IP address is shared only when asked.
+  public init(searchesLocalNetwork: Bool = true, asksInsteonConnect: Bool = false) {
 
     self.searchesLocalNetwork = searchesLocalNetwork
     self.asksInsteonConnect = asksInsteonConnect

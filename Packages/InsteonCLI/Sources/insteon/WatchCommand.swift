@@ -12,6 +12,7 @@ enum WatchCommand {
     var interpreter = DeviceEventInterpreter<ContinuousClock.Instant>(catalog: names.catalog ?? DeviceCatalog(profiles: []))
     let replies = await modem.replies()
     let timeFormatter = DateFormatter()
+    timeFormatter.locale = Locale(identifier: "en_US_POSIX")
     timeFormatter.dateFormat = "HH:mm:ss"
 
     Output.note("Watching the modem. Press Control-C to stop.")

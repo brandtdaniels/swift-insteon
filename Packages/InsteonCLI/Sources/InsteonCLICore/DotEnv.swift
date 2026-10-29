@@ -1,9 +1,11 @@
-/// Reads a `.env` file of environment variables, such as the Hub's credentials.
+/// Reads a file of environment variables in `.env` form, such as the Hub's credentials.
 ///
-/// Each line is `KEY=VALUE`, optionally after `export `. Blank lines and lines starting with
-/// `#` are ignored. A value may be wrapped in matching single or double quotes, which are
-/// removed; nothing else in it is interpreted, so `$`, `\` and `#` are kept as they are, and
-/// there are no comments after a value.
+/// The `insteon` command reads this form from its ``EnvironmentFile``. Each line is
+/// `KEY=VALUE`, optionally after `export` and a space or tab. A UTF-8 byte order mark at the
+/// start of the file is skipped. Blank lines and lines starting with `#` are ignored. A value
+/// may be wrapped in matching single or double quotes, which are removed, keeping any spaces
+/// inside them; nothing else in it is interpreted, so `$`, `\` and `#` are kept as they are,
+/// and there are no comments after a value.
 ///
 /// ```swift
 /// let variables = try DotEnv.parse("""
@@ -14,10 +16,7 @@
 /// ```
 public enum DotEnv {
 
-  /// The name of the file the `insteon` command reads from the current directory: `.env`.
-  public static let fileName = ".env"
-
-  /// Reads the variables in a `.env` file's contents.
+  /// Reads the variables in a file's contents.
   ///
   /// - Parameter contents: The file's contents.
   /// - Returns: The variables. A key given twice takes its last value.
@@ -28,8 +27,17 @@ public enum DotEnv {
 
     var variables: [String: String] = [:]
 
+    var text = Substring(contents)
+
+    // A byte order mark, which some Windows editors write, isn't part of the first key.
+    if text.unicodeScalars.first == "\u{FEFF}" {
+
+      text = Substring(text.unicodeScalars.dropFirst())
+
+    }
+
     // "\r\n" is one Character, and a newline, so Windows line endings split the same way.
-    let lines = contents.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+    let lines = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
 
     for (offset, rawLine) in lines.enumerated() {
 
@@ -42,9 +50,11 @@ public enum DotEnv {
 
       }
 
-      if line.hasPrefix("export ") {
+      let afterExport = line.dropFirst("export".count)
 
-        line = trimmed(line.dropFirst("export ".count))
+      if line.hasPrefix("export"), let separator = afterExport.first, separator == " " || separator == "\t" {
+
+        line = trimmed(afterExport)
 
       }
 
@@ -76,7 +86,7 @@ public enum DotEnv {
 
   }
 
-  /// Merges a `.env` file's variables into the process's environment. A variable set in the
+  /// Merges a file's variables into the process's environment. A variable set in the
   /// environment wins over the file, so the file holds defaults that can be overridden.
   ///
   /// - Parameters:
@@ -138,7 +148,7 @@ public enum DotEnv {
 
 }
 
-/// A `.env` file the `insteon` command can't read.
+/// An environment file the `insteon` command can't read.
 ///
 /// The error names only the line, never its text, which may hold a password.
 public enum DotEnvError: Error, Hashable, Sendable {
@@ -155,7 +165,7 @@ extension DotEnvError: CustomStringConvertible {
 
     switch self {
     case let .malformedLine(line):
-      "Line \(line) of \(DotEnv.fileName) isn't KEY=VALUE."
+      "Line \(line) of the environment file isn't KEY=VALUE."
     }
 
   }

@@ -72,6 +72,40 @@ struct ArgumentParserTests {
 
   }
 
+  // A value that might be a password isn't repeated in the error.
+  @Test func doesntRepeatAnOptionsValue() {
+
+    #expect(throws: ArgumentError.unknownOption("--password", subcommand: "device")) {
+
+      try Invocation.parse(["device", "1A.2B.3C", "on", "--password=example-password"])
+
+    }
+
+    #expect(throws: ArgumentError.unknownOption("--x", subcommand: nil)) {
+
+      try Invocation.parse(["help", "--x=example-secret"])
+
+    }
+
+    #expect(throws: ArgumentError.credentialsInHub) {
+
+      try Invocation.parse(["--hub", "example-user:example-password@192.168.1.20", "info"])
+
+    }
+
+    #expect(!ArgumentError.credentialsInHub.description.contains("example-password"))
+
+  }
+
+  @Test func readsTheEnvironmentFile() throws {
+
+    let invocation = try Invocation.parse(["--env-file", "/tmp/example/env", "info"])
+
+    #expect(invocation == Invocation(envFilePath: "/tmp/example/env", subcommand: .info))
+    #expect(try Invocation.parse(["info", "--env-file=/tmp/example/env"]) == invocation)
+
+  }
+
   @Test func rejectsAnUnknownCommand() {
 
     #expect(throws: ArgumentError.unknownCommand("dance")) {
@@ -118,9 +152,11 @@ struct ArgumentParserTests {
 
   // MARK: - discover
 
-  @Test func discoversBothWaysByDefault() throws {
+  // Insteon Connect sees the network's public IP address, so it's asked only when asked for.
+  @Test func discoversOnTheLocalNetworkByDefault() throws {
 
     #expect(try Invocation.parse(["discover"]).subcommand == .discover(DiscoverOptions()))
+    #expect(DiscoverOptions() == DiscoverOptions(searchesLocalNetwork: true, asksInsteonConnect: false))
     #expect(
       try Invocation.parse(["discover", "--local", "--insteon-connect"]).subcommand
         == .discover(DiscoverOptions(searchesLocalNetwork: true, asksInsteonConnect: true))
@@ -170,11 +206,30 @@ struct ArgumentParserTests {
 
   @Test func rejectsAGroupOutsideAByte() {
 
-    #expect(throws: ArgumentError.invalidValue(option: "--group", value: "256", expected: "a group number from 0 to 255")) {
+    #expect(throws: ArgumentError.invalidValue(option: "--group", value: "256", expected: "a group number from 0 to 254")) {
 
       try Invocation.parse(["link", "--group", "256"])
 
     }
+
+  }
+
+  // Group 255 means every group.
+  @Test func rejectsGroup255() {
+
+    #expect(throws: ArgumentError.invalidValue(option: "--group", value: "255", expected: "a group number from 0 to 254")) {
+
+      try Invocation.parse(["link", "--group", "255"])
+
+    }
+
+    #expect(throws: ArgumentError.invalidValue(option: "--group", value: "255", expected: "a group number from 0 to 254")) {
+
+      try Invocation.parse(["unlink", "--group=255"])
+
+    }
+
+    #expect(try Invocation.parse(["link", "--group", "254"]).subcommand == .link(LinkOptions(group: 254)))
 
   }
 
@@ -199,6 +254,12 @@ struct ArgumentParserTests {
     #expect(throws: ArgumentError.conflictingOptions("--cancel", "--group")) {
 
       try Invocation.parse(["link", "--group", "2", "--cancel"])
+
+    }
+
+    #expect(throws: ArgumentError.conflictingOptions("--cancel", "--responder")) {
+
+      try Invocation.parse(["link", "--cancel", "--responder"])
 
     }
 
@@ -237,6 +298,7 @@ struct ArgumentParserTests {
     #expect(try Invocation.parse(["device", "1A.2B.3C", "on"]).subcommand == .device(lamp, .on(levelPercent: nil)))
     #expect(try Invocation.parse(["device", "1A.2B.3C", "on", "50%"]).subcommand == .device(lamp, .on(levelPercent: 50)))
     #expect(try Invocation.parse(["device", "1A.2B.3C", "on", "100"]).subcommand == .device(lamp, .on(levelPercent: 100)))
+    #expect(try Invocation.parse(["device", "1A.2B.3C", "on", "0"]).subcommand == .device(lamp, .on(levelPercent: 0)))
 
   }
 
@@ -245,6 +307,12 @@ struct ArgumentParserTests {
     #expect(throws: ArgumentError.invalidValue(option: "on", value: "101%", expected: "a level from 0 to 100, such as 50%")) {
 
       try Invocation.parse(["device", "1A.2B.3C", "on", "101%"])
+
+    }
+
+    #expect(throws: ArgumentError.unknownOption("-5", subcommand: "device")) {
+
+      try Invocation.parse(["device", "1A.2B.3C", "on", "-5"])
 
     }
 
@@ -303,7 +371,8 @@ struct ArgumentParserTests {
       .missingValue(option: "--hub"),
       .conflictingOptions("--controller", "--responder"),
       .invalidAddress("1A.2B"),
-      .missingDeviceAction
+      .missingDeviceAction,
+      .credentialsInHub
     ]
 
     for error in errors {

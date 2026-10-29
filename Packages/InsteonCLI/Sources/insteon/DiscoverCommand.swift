@@ -2,7 +2,7 @@ import InsteonCLICore
 import InsteonHubClient
 import InsteonHubDiscovery
 
-/// `insteon discover`: finds Hubs on the local network and with Insteon Connect.
+/// `insteon discover`: finds Hubs on the local network, and with Insteon Connect when asked.
 enum DiscoverCommand {
 
   /// A Hub as `--json` prints it.
@@ -60,6 +60,16 @@ enum DiscoverCommand {
         for hub in found {
 
           merge(hub, foundBy: "local", into: &hubs)
+
+        }
+
+        // Insteon Connect sees the network's public IP address, so it's only suggested.
+        if found.isEmpty, !options.asksInsteonConnect {
+
+          Output.note(
+            "No Hub answered on the local network. 'insteon discover --insteon-connect' asks Insteon Connect "
+              + "for the Hubs that reported from this network, which shares the network's public IP address with Insteon."
+          )
 
         }
 

@@ -35,7 +35,7 @@ public enum ModemTarget: Hashable, Sendable {
   /// - Parameters:
   ///   - hub: The value of `--hub`, `HOST` or `HOST:PORT`, if given.
   ///   - serialPath: The value of `--serial`, if given.
-  ///   - environment: The environment, with any `.env` file merged in.
+  ///   - environment: The environment, with any environment file merged in.
   /// - Returns: The modem to talk to.
   /// - Throws: ``ConfigurationError`` if no modem was given, both kinds were, or the host or
   ///   port isn't valid.
@@ -165,7 +165,7 @@ public struct HubCredentials: Hashable, Sendable {
 
   /// Reads the credentials from `INSTEON_HUB_USERNAME` and `INSTEON_HUB_PASSWORD`.
   ///
-  /// - Parameter environment: The environment, with any `.env` file merged in.
+  /// - Parameter environment: The environment, with any environment file merged in.
   /// - Throws: ``ConfigurationError/missingCredentials`` if either is missing or empty.
   public init(environment: [String: String]) throws(ConfigurationError) {
 
@@ -247,7 +247,7 @@ extension ConfigurationError: CustomStringConvertible {
     case let .invalidPort(text):
       "'\(text)' isn't a valid port: expected a number from 1 to 65535."
     case .missingCredentials:
-      "The Hub's user name and password are missing: set INSTEON_HUB_USERNAME and INSTEON_HUB_PASSWORD in the environment or in a .env file in the current directory."
+      "The Hub's user name and password are missing: set INSTEON_HUB_USERNAME and INSTEON_HUB_PASSWORD in the environment or in ~/.config/insteon/env."
     case .serialUnavailable:
       "Serial ports are available only on macOS and Linux."
     }

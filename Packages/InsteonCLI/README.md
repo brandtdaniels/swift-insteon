@@ -10,17 +10,22 @@ swift run insteon --hub 192.168.1.20 info
 
 - `--hub HOST[:PORT]`: a Hub 2245 or Hub 2242 on the local network. Without `--hub`, the host comes from `INSTEON_HUB_HOST`, and a host without a port takes it from `INSTEON_HUB_PORT`, or else uses the Hub's port, 25105.
 - `--serial PATH`: a PowerLinc Modem or USB Adapter on a serial or USB port, such as `/dev/ttyUSB0`, on macOS and Linux.
+- `--env-file PATH`: the environment file to read in place of the default one, described below.
 
-The Hub's user name and password, printed on it, come only from the environment variables `INSTEON_HUB_USERNAME` and `INSTEON_HUB_PASSWORD`, never from the command line, where they'd end up in shell history and process lists. The command never prints them. You can keep them in a `.env` file in the directory you run the command from:
+The Hub's user name and password, printed on it, come only from the environment variables `INSTEON_HUB_USERNAME` and `INSTEON_HUB_PASSWORD`, never from the command line, where they'd end up in shell history and process lists. The command never prints them. You can keep them in an environment file in your configuration directory, `$XDG_CONFIG_HOME/insteon/env`, or `~/.config/insteon/env` when `XDG_CONFIG_HOME` isn't set:
 
 ```sh
-# .env
+# ~/.config/insteon/env
 INSTEON_HUB_USERNAME=your-hub-user-name
 INSTEON_HUB_PASSWORD=your-hub-password
 INSTEON_HUB_HOST=192.168.1.20
 ```
 
-Each line is `KEY=VALUE`, optionally after `export `; lines starting with `#` are comments. A value can be wrapped in single or double quotes, and nothing in it is expanded. A variable set in the environment wins over the file. Add `.env` to your `.gitignore` so the password isn't committed, and keep the file readable only by you (`chmod 600 .env`).
+Make it readable only by you with `chmod 600 ~/.config/insteon/env`. The command reads the file only if you own it and no one else can write to it, and warns if others can read it. It never reads a file from the current directory, so a project you clone can't point the command, and your password, at another Hub. `--env-file PATH` reads another file, with the same checks.
+
+Each line is `KEY=VALUE`, optionally after `export`; lines starting with `#` are comments. A value can be wrapped in single or double quotes, and nothing in it is expanded. A variable set in the environment wins over the file.
+
+Before it connects, the command prints the Hub's address to standard error, as `Connecting to the Hub at HOST:PORT`, so you can see where the password is going.
 
 The Hub's interface is plain HTTP, so the password is readable on the network: use it only on a network you trust.
 
@@ -28,7 +33,7 @@ The Hub's interface is plain HTTP, so the password is readable on the network: u
 
 | Command | What it does |
 | --- | --- |
-| `discover [--local] [--insteon-connect]` | Finds Hubs by asking every address on the local network, and Insteon Connect, which lists the Hubs that reported from your network with their Insteon IDs. Both by default. |
+| `discover [--local] [--insteon-connect]` | Finds Hubs by asking every address on the local network. `--insteon-connect` asks Insteon Connect instead, which lists the Hubs that reported from your network with their Insteon IDs, and shares your network's public IP address with Insteon; give both options for both ways. |
 | `info` | The modem's Get IM Info: its Insteon ID, category, subcategory and firmware version, and the product the Insteon device catalog has for them. |
 | `links` | Reads the modem's whole ALL-Link database and lists each record, with the product a controller record names. |
 | `link [--group N] [--controller \| --responder \| --either] [--timeout SECONDS]` | Puts the modem into linking mode with Start ALL-Linking and waits, 4 minutes by default, for someone to press and hold a device's SET button, then prints the device. |
@@ -52,6 +57,7 @@ The command exits with status 0 on success, 1 when something fails, such as a de
 
 ```text
 $ swift run insteon --hub 192.168.1.20 info
+Connecting to the Hub at 192.168.1.20:25105
 Insteon ID:   1A.2B.3C
 Category:     0x03 (Network Bridges)
 Subcategory:  0x33
@@ -59,6 +65,7 @@ Firmware:     0x45
 Product:      Hub 2245 (Hub 2)
 
 $ swift run insteon --hub 192.168.1.20 link
+Connecting to the Hub at 192.168.1.20:25105
 The modem is in linking mode for group 1. Press and hold the device's SET button until it beeps or its light blinks. Waiting up to 240 seconds; Control-C stops.
 Linked 4D.5E.6F in group 1.
 Device:       4D.5E.6F
@@ -69,10 +76,11 @@ Firmware:     0x41
 Product:      Dimmer Switch 2477D (SwitchLinc Dimmer)
 
 $ swift run insteon --hub 192.168.1.20 device 4D.5E.6F on 50%
+Connecting to the Hub at 192.168.1.20:25105
 Turned 4D.5E.6F on at 50%.
 ```
 
 ## Layout
 
 - `Sources/insteon`: the command, which runs what the command line asks for
-- `Sources/InsteonCLICore`: reading the command line and `.env` files, and choosing the modem, as plain functions the tests in `Tests/InsteonCLICoreTests` cover
+- `Sources/InsteonCLICore`: reading the command line, finding and checking the environment file and reading its variables, and choosing the modem, as plain functions the tests in `Tests/InsteonCLICoreTests` cover

@@ -163,6 +163,10 @@ enum Names {
       return error.description
     case let error as DotEnvError:
       return error.description
+    case let error as EnvironmentFileError:
+      return error.description
+    case is CancellationError:
+      return "Interrupted."
     case let error as ModemError:
       return describe(error)
     case let error as HubError:

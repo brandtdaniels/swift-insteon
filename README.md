@@ -107,7 +107,7 @@ Commands the typed catalogs don't cover can be sent as raw bytes with `Command(c
 
 ### From the terminal
 
-Put the Hub's user name and password in a `.env` file in the directory you run the command from, and add `.env` to your `.gitignore`:
+Put the Hub's user name and password in `~/.config/insteon/env` (or `$XDG_CONFIG_HOME/insteon/env`), and make it readable only by you with `chmod 600 ~/.config/insteon/env`:
 
 ```sh
 INSTEON_HUB_USERNAME=your-hub-user-name
@@ -123,7 +123,7 @@ swift run insteon --hub 192.168.1.20 device 1A.2B.3C on 50%
 swift run insteon --help
 ```
 
-The command reads the credentials only from the environment or `.env`, never from its arguments. See [InsteonCLI](Packages/InsteonCLI) for every command.
+The command reads the credentials only from the environment or that file, never from its arguments or from a file in the current directory. See [InsteonCLI](Packages/InsteonCLI) for every command.
 
 ## Documentation
 

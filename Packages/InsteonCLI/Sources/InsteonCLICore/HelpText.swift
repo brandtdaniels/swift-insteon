@@ -30,7 +30,7 @@ public enum HelpText {
   public static let overview = """
     Drive an Insteon Hub or modem, and its devices, from the terminal.
 
-    Usage: insteon [--hub HOST[:PORT] | --serial PATH] [--json] COMMAND [OPTIONS]
+    Usage: insteon [--hub HOST[:PORT] | --serial PATH] [--env-file PATH] [--json] COMMAND [OPTIONS]
 
     Commands:
       discover            Find Hubs on the local network
@@ -44,16 +44,24 @@ public enum HelpText {
     Options:
       --hub HOST[:PORT]   The Hub to use. Defaults to INSTEON_HUB_HOST and INSTEON_HUB_PORT.
       --serial PATH       A modem on a serial or USB port, such as /dev/ttyUSB0 (macOS and Linux).
+      --env-file PATH     Read environment variables from PATH instead of the default file.
       --json              Print JSON, where the command supports it.
       -h, --help          Show help. 'insteon COMMAND --help' shows a command's help.
 
     Environment:
       INSTEON_HUB_USERNAME, INSTEON_HUB_PASSWORD
                           The user name and password printed on the Hub. They're read only
-                          from the environment, or from a .env file in the current directory,
-                          never from the command line.
+                          from the environment or the environment file, never from the
+                          command line.
       INSTEON_HUB_HOST, INSTEON_HUB_PORT
                           The Hub to use when --hub isn't given.
+
+    Environment file:
+      $XDG_CONFIG_HOME/insteon/env, or ~/.config/insteon/env, or the file --env-file names,
+      holds KEY=VALUE lines, such as INSTEON_HUB_PASSWORD=..., for the variables above. A
+      variable set in the environment wins over the file. The file must belong to you and be
+      writable only by you; make it readable only by you with 'chmod 600'. It's never read
+      from the current directory.
 
     Example:
       insteon --hub 192.168.1.20 info
@@ -63,13 +71,14 @@ public enum HelpText {
   public static let discover = """
     Usage: insteon discover [--local] [--insteon-connect] [--json]
 
-    Finds Hubs in two ways, both by default:
+    Finds Hubs in two ways. Only the local network is searched unless --insteon-connect is
+    given; give both options for both ways.
       --local             Ask every address on the local private subnets for a Hub's page,
                           without credentials. Results are candidates: check the address
-                          before sending a password there.
+                          before sending a password there. The default.
       --insteon-connect   Ask Insteon Connect, which lists the Hubs that reported from this
-                          network in the past 24 hours, with their Insteon IDs. Insteon sees
-                          this network's public IP address.
+                          network in the past 24 hours, with their Insteon IDs. This shares
+                          the network's public IP address with Insteon.
     """
 
   /// The help for `insteon info`.
@@ -99,7 +108,7 @@ public enum HelpText {
     Puts the modem into linking mode with Start ALL-Linking, then waits for someone to press
     and hold a device's SET button, and prints the linked device.
 
-      --group N           The modem's ALL-Link group, from 0 to 255. Defaults to 1.
+      --group N           The modem's ALL-Link group, from 0 to 254. Defaults to 1.
       --controller        The modem controls the device. The default.
       --responder         The modem responds to the device. Put the device into linking mode
                           with its SET button first.
@@ -119,7 +128,7 @@ public enum HelpText {
     Puts the modem into unlinking mode with Start ALL-Linking, then waits for someone to
     press and hold a device's SET button, and prints the unlinked device.
 
-      --group N           The modem's ALL-Link group in the link, from 0 to 255. Defaults to 1.
+      --group N           The modem's ALL-Link group in the link, from 0 to 254. Defaults to 1.
       --controller        The modem controls the device. The default.
       --responder         The modem responds to the device. Put the device into unlinking
                           mode with its SET button first.

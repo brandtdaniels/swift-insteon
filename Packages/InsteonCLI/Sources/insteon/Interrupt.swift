@@ -28,11 +28,26 @@ enum Interrupt {
     #endif
 
     let source = DispatchSource.makeSignalSource(signal: SIGINT, queue: DispatchQueue(label: "insteon.interrupt"))
+    let count = InterruptCount()
 
     source.setEventHandler {
 
+      count.value += 1
+
+      guard count.value == 1 else {
+
+        // Dispatch on Linux keeps its own handler for the signal, so restoring the default
+        // action alone may not end the process. End it here, with the status of SIGINT.
+        _exit(130)
+
+      }
+
       task.cancel()
+
+      #if canImport(Darwin)
+      // The next Control-C ends the process before it reaches the source.
       signal(SIGINT, SIG_DFL)
+      #endif
 
     }
 
@@ -56,5 +71,15 @@ enum Interrupt {
     }
 
   }
+
+}
+
+/// How many times Control-C was pressed while a command ran.
+///
+/// It's read and changed only by the signal source's handler, on the source's serial queue,
+/// so it needs no lock.
+private final class InterruptCount: @unchecked Sendable {
+
+  var value = 0
 
 }

@@ -7,13 +7,15 @@ extension Invocation {
 
   /// Reads a command line, without the program's name.
   ///
-  /// The command's own options, `--hub`, `--serial`, `--json` and `--help`, can come before
-  /// or after the subcommand. An option's value can follow it as the next argument or after
+  /// The command's own options, `--hub`, `--serial`, `--env-file`, `--json` and `--help`, can
+  /// come before or after the subcommand. An option's value can follow it as the next argument or after
   /// `=`, as in `--hub=192.168.1.20`. With no arguments, or with `--help`, the invocation
   /// prints help.
   ///
   /// The command takes no credentials: the Hub's user name and password come only from the
-  /// environment, so they stay out of shell history and process lists.
+  /// environment or the ``EnvironmentFile``, so they stay out of shell history and process
+  /// lists. A `--hub` with `@` in it, as in a URL with a user name and password, is refused
+  /// without repeating it.
   ///
   /// - Parameter arguments: The arguments, such as `CommandLine.arguments.dropFirst()`.
   /// - Returns: The invocation.
@@ -22,6 +24,7 @@ extension Invocation {
 
     var hub: String?
     var serialPath: String?
+    var envFilePath: String?
     var printsJSON = false
     var asksForHelp = false
     var rest: [String] = []
@@ -35,9 +38,19 @@ extension Invocation {
 
       switch name {
       case "--hub":
-        hub = try value(of: name, inline: inlineValue, in: arguments, at: &index)
+        let text = try value(of: name, inline: inlineValue, in: arguments, at: &index)
+
+        guard !text.contains("@") else {
+
+          throw ArgumentError.credentialsInHub
+
+        }
+
+        hub = text
       case "--serial":
         serialPath = try value(of: name, inline: inlineValue, in: arguments, at: &index)
+      case "--env-file":
+        envFilePath = try value(of: name, inline: inlineValue, in: arguments, at: &index)
       case "--json":
         try expectNoValue(name, inlineValue)
         printsJSON = true
@@ -55,7 +68,7 @@ extension Invocation {
 
     let subcommand = try parseSubcommand(rest, asksForHelp: asksForHelp)
 
-    return Invocation(hub: hub, serialPath: serialPath, printsJSON: printsJSON, subcommand: subcommand)
+    return Invocation(hub: hub, serialPath: serialPath, envFilePath: envFilePath, printsJSON: printsJSON, subcommand: subcommand)
 
   }
 
@@ -79,6 +92,13 @@ extension Invocation {
 
       }
 
+      // An option's value isn't repeated, in case it's something private.
+      if topic.hasPrefix("-") {
+
+        throw ArgumentError.unknownOption(split(topic).name, subcommand: nil)
+
+      }
+
       guard subcommandNames.contains(topic) else {
 
         throw ArgumentError.unknownHelpTopic(topic)
@@ -87,7 +107,7 @@ extension Invocation {
 
       if rest.count > 1 {
 
-        throw ArgumentError.unexpectedArgument(rest[1], subcommand: "help")
+        throw unexpected(rest[1], subcommand: "help")
 
       }
 
@@ -156,7 +176,8 @@ extension Invocation {
 
     }
 
-    // Neither option asks for both ways.
+    // Neither option searches only the local network, so Insteon Connect is asked only when
+    // someone asks for it.
     guard searchesLocalNetwork || asksInsteonConnect else {
 
       return DiscoverOptions()
@@ -307,6 +328,13 @@ extension Invocation {
 
       try expectNoArguments(Array(rest.dropFirst()), subcommand: "device")
 
+      // An option's value isn't repeated, in case it's something private.
+      if level.hasPrefix("-") {
+
+        throw unexpected(level, subcommand: "device")
+
+      }
+
       return try .device(address, .on(levelPercent: percent(level)))
     case "off":
       try expectNoArguments(rest, subcommand: "device")
@@ -425,12 +453,13 @@ extension Invocation {
 
   }
 
-  /// A group number in decimal, from 0 to 255.
+  /// A group number in decimal, from 0 to 254. Group 255 means every group, so a link can't be
+  /// made in it.
   private static func group(_ text: String, option: String) throws(ArgumentError) -> AllLinkGroupNumber {
 
-    guard let number = UInt8(text) else {
+    guard let number = UInt8(text), number != 255 else {
 
-      throw ArgumentError.invalidValue(option: option, value: text, expected: "a group number from 0 to 255")
+      throw ArgumentError.invalidValue(option: option, value: text, expected: "a group number from 0 to 254")
 
     }
 

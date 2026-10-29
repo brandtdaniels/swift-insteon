@@ -80,6 +80,42 @@ struct DotEnvTests {
 
   }
 
+  @Test func skipsAByteOrderMark() throws {
+
+    #expect(try DotEnv.parse("\u{FEFF}KEY=value\nOTHER=1") == ["KEY": "value", "OTHER": "1"])
+
+  }
+
+  @Test func readsExportFollowedByATab() throws {
+
+    #expect(try DotEnv.parse("export\tKEY=value") == ["KEY": "value"])
+    #expect(try DotEnv.parse("exported=value") == ["exported": "value"])
+
+  }
+
+  @Test func rejectsMismatchedQuotes() {
+
+    #expect(throws: DotEnvError.malformedLine(1)) {
+
+      try DotEnv.parse(#"KEY="value'"#)
+
+    }
+
+    #expect(throws: DotEnvError.malformedLine(1)) {
+
+      try DotEnv.parse(#"KEY='"#)
+
+    }
+
+  }
+
+  @Test func keepsWhitespaceInsideQuotes() throws {
+
+    #expect(try DotEnv.parse(#"KEY="  two  words  ""#) == ["KEY": "  two  words  "])
+    #expect(try DotEnv.parse("KEY='\tvalue '") == ["KEY": "\tvalue "])
+
+  }
+
   @Test func letsTheEnvironmentWinOverTheFile() {
 
     let merged = DotEnv.merging(

@@ -222,7 +222,8 @@ enum ModemCommands {
   /// Links with the modem as controller or responder, whichever the device asks for.
   ///
   /// `Linker` links in one role, so this sends Start ALL-Linking with code `0x03` itself and
-  /// waits for the modem's report, taking the modem out of linking mode if none comes.
+  /// waits for the modem's report, taking the modem out of linking mode if none comes, or if
+  /// the report is of a deleted link rather than a new one.
   private static func linkEither(_ modem: Modem, group: AllLinkGroupNumber, timeout: Duration) async throws -> AllLinkingCompleted {
 
     // Listening starts before the modem enters linking mode, so the report can't be missed.
@@ -258,6 +259,15 @@ enum ModemCommands {
       await cancelAllLinking(modem)
 
       throw LinkingError.linkingTimedOut
+
+    }
+
+    // A deleted link means the device removed one, which linking mode didn't ask for.
+    guard link.mode != .delete else {
+
+      await cancelAllLinking(modem)
+
+      throw LinkingError.unexpectedLink(link)
 
     }
 

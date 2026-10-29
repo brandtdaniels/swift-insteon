@@ -37,6 +37,9 @@ public enum ArgumentError: Error, Hashable, Sendable {
   /// `help` was asked about something that isn't a subcommand.
   case unknownHelpTopic(String)
 
+  /// `--hub` was given a user name or password, as in `user:password@host`.
+  case credentialsInHub
+
 }
 
 extension ArgumentError: CustomStringConvertible {
@@ -71,6 +74,8 @@ extension ArgumentError: CustomStringConvertible {
       "Unknown device action '\(action)': expected id, ping, on, off, status or links."
     case let .unknownHelpTopic(topic):
       "There's no help for '\(topic)'. Run 'insteon --help' for the list of commands."
+    case .credentialsInHub:
+      "The option '--hub' takes only HOST[:PORT]. Set the Hub's user name and password in the environment or the environment file instead."
     }
 
   }
