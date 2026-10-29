@@ -390,6 +390,42 @@ struct ModemTests {
 
   }
 
+  @Test func sendReportsARejectionThatAnUnansweredRetryFollows() async throws {
+
+    // The modem NAKs the first attempt and doesn't answer the retry, like a Hub 2245 with
+    // firmware 0xA5 does for Beep.
+    let connection = ScriptedConnection { (written: [UInt8], index: Int) -> [UInt8] in
+
+      index == 0 ? written + [0x15] : []
+
+    }
+    let modem = Modem(
+      connection: connection,
+      retryPolicy: RetryPolicy(attempts: 3, delay: .milliseconds(500), answerTimeout: .seconds(2)),
+      clock: clock
+    )
+
+    try await run(modem) {
+
+      await #expect(throws: ModemError.rejected(.beep)) {
+
+        async let sent: Void = modem.send(.beep)
+
+        // The retry delay, then the retry's timeout, which starts once the delay has passed.
+        await clock.waitForSleeper(until: .milliseconds(500))
+        clock.advance(by: .milliseconds(500))
+        await clock.waitForSleeper(until: .milliseconds(2500))
+        clock.advance(by: .seconds(2))
+        try await sent
+
+      }
+
+    }
+
+    #expect(connection.written == [[0x02, 0x77], [0x02, 0x77]])
+
+  }
+
   // The Insteon Developer's Guide: the modem answers once it has erased its memory, which takes
   // about 20 seconds on a model with external EEPROM.
   @Test func waitsForTheModemToEraseItsMemoryWhenItResets() async throws {
