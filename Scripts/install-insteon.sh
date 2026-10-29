@@ -58,9 +58,14 @@ fi
 echo "Installed $destination/insteon${installed:+ and $destination/$installed}"
 
 # Best effort: the command works with the bundled catalog, so a failed update, such as when
-# offline, doesn't fail the install.
-if ! "$destination/insteon" catalog update; then
-  echo "install-insteon: the latest Insteon device catalog couldn't be fetched, so the bundled copy is used; run 'insteon catalog update' later to fetch it."
+# offline, doesn't fail the install. The update writes to the user's own cache, so it's
+# skipped when installing as root, which would leave that cache owned by root.
+if [ -z "$installed" ]; then
+  :
+elif [ "$(id -u)" -eq 0 ]; then
+  echo "install-insteon: run 'insteon catalog update' as yourself, not as root, to fetch the latest Insteon device catalog." >&2
+elif ! "$destination/insteon" catalog update; then
+  echo "install-insteon: the latest Insteon device catalog couldn't be fetched; run 'insteon catalog update' later to fetch it." >&2
 fi
 
 case ":$PATH:" in

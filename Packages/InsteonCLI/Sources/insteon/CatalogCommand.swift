@@ -278,6 +278,9 @@ enum CatalogCommand {
     // An ephemeral session keeps no cookies, credentials or cache between requests.
     let configuration: URLSessionConfiguration = URLSessionConfiguration.ephemeral
     configuration.timeoutIntervalForRequest = requestTimeout
+    // A limit on the whole download too, so a slow server can't hold the command, or the
+    // install script, for long.
+    configuration.timeoutIntervalForResource = 120
     let session: URLSession = URLSession(configuration: configuration)
 
     defer {
@@ -302,6 +305,10 @@ enum CatalogCommand {
       try report(error, bundled: bundled, current: currentVersion)
 
       return
+
+    } catch HTTPClientError.insecureRedirect {
+
+      throw CommandFailure(description: "The Insteon device catalog's site redirected to an address that isn't HTTPS, so nothing was used and the current copy, \(currentVersion), stays.")
 
     } catch is DecodingError {
 

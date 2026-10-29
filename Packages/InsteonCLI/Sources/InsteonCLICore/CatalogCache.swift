@@ -197,7 +197,7 @@ public enum CatalogText {
   /// - Returns: The message.
   public static func bundledIsNewer(published: DeviceCatalogVersion, bundled: DeviceCatalogVersion) -> String {
 
-    "The bundled Insteon device catalog, \(bundled), is newer than the published one, \(published), so the bundled copy stays in use."
+    "The bundled Insteon device catalog, \(bundled), is newer than the published one, \(published), so the published one isn't saved."
 
   }
 
