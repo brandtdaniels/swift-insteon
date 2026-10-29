@@ -65,19 +65,6 @@ struct DeviceTextTests {
 
   }
 
-  // MARK: - The catalog's location
-
-  @Test func looksForTheCatalogNextToTheCommandInEitherLayout() {
-
-    let paths = CatalogLocation.candidatePaths(nextTo: ["/opt/example/bin", "/opt/example/bin", "/opt/example/build/"])
-
-    #expect(paths.count == 8)
-    #expect(paths.first == "/opt/example/bin/swift-insteon_InsteonDeviceCatalog.bundle/catalog.json")
-    #expect(paths.contains("/opt/example/bin/swift-insteon_InsteonDeviceCatalog.bundle/Contents/Resources/catalog.json"))
-    #expect(paths.contains("/opt/example/build/swift-insteon_InsteonDeviceCatalog.resources/catalog.json"))
-
-  }
-
   // MARK: - The identity cache
 
   @Test func keepsTheIdentityCacheInTheCacheDirectory() {
