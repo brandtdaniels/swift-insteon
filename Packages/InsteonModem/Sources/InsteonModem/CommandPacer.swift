@@ -107,7 +107,8 @@ private enum Outcome<Reply: Sendable>: Sendable {
   case rejected(any Error)
 
   /// A step wasn't completed in time, so the attempt ended with the step's `timedOut` error.
-  case timedOut(any Error)
+  /// `isUnanswered` is `true` if no step was completed, so nothing answered the command.
+  case timedOut(any Error, isUnanswered: Bool)
 
 }
 
@@ -250,7 +251,7 @@ actor CommandPacer<Parser: ReplyParser> {
   /// - Throws: The error of a reply that rejected or failed a command, the `timedOut` error of
   ///   a step that wasn't completed in time, `closedError` if the device is closed, `CancellationError` if the
   ///   task is canceled, or the connection's error. A command that was rejected and then not
-  ///   answered in time throws the rejection, not the `timedOut` error.
+  ///   answered at all throws the rejection, not the `timedOut` error.
   @discardableResult
   func send(_ exchanges: [Exchange<Reply>]) async throws -> [Reply] {
 
@@ -338,7 +339,7 @@ actor CommandPacer<Parser: ReplyParser> {
     try await waitForUnansweredCommand()
     try Task.checkCancellation()
 
-    if case let .timedOut(error) = try await transmit(exchange) {
+    if case let .timedOut(error, _) = try await transmit(exchange) {
 
       throw error
 
@@ -371,15 +372,17 @@ actor CommandPacer<Parser: ReplyParser> {
   /// Sends an exchange until the device accepts it, as many times as the retry policy allows.
   ///
   /// An attempt that isn't answered in time ends the exchange. If an earlier attempt was
-  /// rejected, the rejection is thrown, since it says more about why the command failed than
-  /// the silence that followed it.
+  /// rejected and nothing answered the retry at all, the rejection is thrown, since it says
+  /// more about why the command failed than the silence that followed it. A later step that
+  /// times out, such as a device's acknowledgment after the modem's echo, throws its own
+  /// `timedOut` error, as does the previous exchange.
   ///
   /// - Parameter previous: The exchange to send again before each attempt after the first.
   ///   An attempt counts as rejected if the device rejects either one.
   /// - Returns: The reply that answered the exchange.
-  /// - Throws: The error of the last rejection if every attempt is rejected, or if an attempt
-  ///   after a rejected one isn't answered in time; the `timedOut` error of a step if the
-  ///   first attempt isn't answered in time; or the errors of ``CommandPacer/send(_:)``.
+  /// - Throws: The error of the last rejection if every attempt is rejected, or if nothing
+  ///   answers an attempt after a rejected one; otherwise the `timedOut` error of the step
+  ///   that wasn't completed in time; or the errors of ``CommandPacer/send(_:)``.
   private func perform(_ exchange: Exchange<Reply>, repeating previous: Exchange<Reply>? = nil) async throws -> Reply {
 
     try Task.checkCancellation()
@@ -391,7 +394,7 @@ actor CommandPacer<Parser: ReplyParser> {
       return reply
     case let .rejected(error):
       rejection = error
-    case let .timedOut(error):
+    case let .timedOut(error, _):
       throw error
     }
 
@@ -408,8 +411,8 @@ actor CommandPacer<Parser: ReplyParser> {
         case .rejected:
           // A previous exchange that's rejected counts as this one being rejected again.
           continue
-        case .timedOut:
-          throw rejection
+        case let .timedOut(error, _):
+          throw error
         }
 
       }
@@ -419,8 +422,10 @@ actor CommandPacer<Parser: ReplyParser> {
         return reply
       case let .rejected(error):
         rejection = error
-      case .timedOut:
-        throw rejection
+      case let .timedOut(error, isUnanswered):
+        // A device that doesn't answer once the modem has taken the command says more than
+        // the modem's earlier rejection.
+        throw isUnanswered ? rejection : error
       }
 
     }
@@ -556,7 +561,9 @@ actor CommandPacer<Parser: ReplyParser> {
 
     }
 
-    completePendingAnswer(.success(.timedOut(timedOut)))
+    let isUnanswered: Bool = pending.step == 0
+
+    completePendingAnswer(.success(.timedOut(timedOut, isUnanswered: isUnanswered)))
 
   }
 

@@ -205,6 +205,40 @@ struct RequestTests {
 
   }
 
+  @Test func reportsADeviceThatDoesntAnswerAfterTheModemRejectedTheFirstAttempt() async throws {
+
+    // The modem NAKs the first attempt and echoes the retry, but the device never answers.
+    let connection = ScriptedConnection { (written: [UInt8], index: Int) -> [UInt8] in
+
+      index == 0 ? written + [0x15] : written + [0x06]
+
+    }
+    let modem = Modem(
+      connection: connection,
+      retryPolicy: RetryPolicy(attempts: 3, delay: .milliseconds(500), answerTimeout: .seconds(2)),
+      clock: clock
+    )
+
+    try await run(modem) {
+
+      await #expect(throws: ModemError.deviceTimedOut(device)) {
+
+        async let answer = modem.request(engineVersionRequest, timeout: .seconds(5))
+        // The retry delay, then the retry's timeout, which starts once the delay has passed.
+        await clock.waitForSleeper(until: .milliseconds(500))
+        clock.advance(by: .milliseconds(500))
+        await clock.waitForSleeper(until: .milliseconds(5_500))
+        clock.advance(by: .seconds(5))
+        _ = try await answer
+
+      }
+
+    }
+
+    #expect(connection.written.count == 2)
+
+  }
+
   // The Insteon Developer's Guide's time for five retries of an extended message, 3.17 seconds,
   // plus a second for the modem's echo.
   @Test func waitsLongerForAnExtendedMessage() async throws {
