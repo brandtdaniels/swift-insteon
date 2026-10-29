@@ -14,7 +14,7 @@ enum ExampleCatalog {
     label: "Load",
     kind: .relay,
     linkData: GroupType.LinkData(responder: [
-      LinkDataByte(position: 1, name: "onLevel", label: "On-level", summary: "The on-level.", table: "onOff"),
+      LinkDataByte(position: 1, name: "onLevel", label: "On-level", summary: "The on-level.", value: 0xFF, table: "onOff"),
       LinkDataByte(position: 2, name: "rampRate", label: "Ramp rate", summary: "The ramp rate."),
     ])
   )
@@ -203,6 +203,63 @@ struct DeviceTextTests {
 
   }
 
+  @Test func saysWhenARecordsByteDiffersFromTheDocuments() throws {
+
+    let identity = ExampleCatalog.identity
+    let device: DeviceDescription = ExampleCatalog.catalog.describe(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion)
+    let record = AllLinkRecord(flags: [.inUse], group: 0, address: plug, data1: 0x00, data2: 0x1F, data3: 0x01)
+    let explanation: RecordDataExplanation = try #require(device.explain(record, isController: false))
+
+    #expect(explanation.bytes[0].documentedValue == 0xFF)
+    #expect(explanation.bytes[1].documentedValue == nil)
+    #expect(LinkDataText.meaning(of: explanation) == "On-level 0x00 (Off; the documents give 0xFF), Ramp rate 0x1F")
+
+    // A byte without a table gives the documented value alone.
+    let untabled = RecordDataExplanation(
+      groupType: ExampleCatalog.load,
+      bytes: [RecordDataExplanation.DataByte(position: 1, name: "onLevel", label: "On-level", value: 0x00, documentedValue: 0xFE)]
+    )
+
+    #expect(LinkDataText.meaning(of: untabled) == "On-level 0x00 (the documents give 0xFE)")
+
+  }
+
+  @Test func saysAControllerRecordIsNotDocumented() {
+
+    #expect(LinkDataText.column(meaning: "Ramp rate 0x1F", isController: false, isDeviceInCatalog: true) == "Ramp rate 0x1F")
+    #expect(LinkDataText.column(meaning: nil, isController: true, isDeviceInCatalog: true) == "not documented")
+    #expect(LinkDataText.column(meaning: nil, isController: true, isDeviceInCatalog: false) == "")
+    #expect(LinkDataText.column(meaning: nil, isController: false, isDeviceInCatalog: true) == "")
+
+  }
+
+  // MARK: - scene
+
+  @Test func trustsTheModemsCleanupReportWithoutAcknowledgments() {
+
+    let other = InsteonAddress(0x4D, 0x5E, 0x6F)
+
+    #expect(SceneText.cleanup(acknowledged: [], unacknowledged: [], isComplete: true) == [
+      "The modem reports every responder answered its cleanup.",
+    ])
+    #expect(SceneText.cleanup(acknowledged: [plug, other], unacknowledged: [], isComplete: true) == [
+      "2 devices acknowledged the cleanup.",
+    ])
+    #expect(SceneText.cleanup(acknowledged: [], unacknowledged: [other], isComplete: true) == [
+      "The modem reports every other responder answered its cleanup.",
+      "Didn't acknowledge: 4D.5E.6F.",
+    ])
+    #expect(SceneText.cleanup(acknowledged: [plug], unacknowledged: [other], isComplete: false) == [
+      "1 device acknowledged the cleanup.",
+      "Didn't acknowledge: 4D.5E.6F.",
+      "The modem says it didn't reach every responder.",
+    ])
+    #expect(SceneText.cleanup(acknowledged: [], unacknowledged: [], isComplete: false) == [
+      "The modem says it didn't reach every responder.",
+    ])
+
+  }
+
   // MARK: - Linking instructions
 
   @Test func givesTheDevicesOwnStepsOnly() throws {
@@ -239,6 +296,23 @@ struct DeviceTextTests {
     #expect(generic.count == 2)
     #expect(generic[0].hasPrefix("First put the device into linking mode"))
     #expect(generic.filter { $0.contains("SET button") }.count == 1)
+
+  }
+
+  @Test func namesADeviceByItsProductsNameAndModel() {
+
+    #expect(LinkingInstructions.deviceLabel(plug, profile: ExampleCatalog.plug) == "1A.2B.3C (Example Plug 9001)")
+    #expect(LinkingInstructions.deviceLabel(plug, profile: nil) == "1A.2B.3C")
+
+    let lines: [String] = LinkingInstructions.modemFirst(
+      .unlinking,
+      group: 1,
+      seconds: 240,
+      device: LinkingInstructions.deviceLabel(plug, profile: ExampleCatalog.plug),
+      steps: ["Hold the SET button until it beeps."]
+    )
+
+    #expect(lines[1] == "Now, on 1A.2B.3C (Example Plug 9001):")
 
   }
 

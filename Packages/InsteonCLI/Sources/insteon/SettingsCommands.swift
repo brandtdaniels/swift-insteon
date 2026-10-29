@@ -345,8 +345,7 @@ enum SettingsCommands {
     guard let settings = commands.extendedSettings, let change = commands.change(for: value) else {
 
       throw CommandFailure(
-        description: "The Insteon device catalog gives no way to write \(item.label): "
-          + "no extended Set or extended command sets it, so it can't be changed here."
+        description: "\(item.label) is read-only for this device: the Insteon device catalog gives no command that writes it."
       )
 
     }

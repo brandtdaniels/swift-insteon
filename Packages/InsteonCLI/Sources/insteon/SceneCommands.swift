@@ -40,17 +40,16 @@ enum SceneCommands {
     }
 
     Output.line("Sent \(commandName) to group \(group). The modem's ALL-Link database lists \(Wording.count(responders.count, "responder")) for it.")
-    Output.line("\(Wording.count(report.acknowledged.count, "device")) acknowledged the cleanup.")
 
-    if !report.unacknowledged.isEmpty {
+    let lines: [String] = SceneText.cleanup(
+      acknowledged: report.acknowledged,
+      unacknowledged: report.unacknowledged,
+      isComplete: report.isComplete
+    )
 
-      Output.line("Didn't acknowledge: \(report.unacknowledged.map { "\($0)" }.joined(separator: ", ")).")
+    for line in lines {
 
-    }
-
-    if !report.isComplete {
-
-      Output.line("The modem says it didn't reach every responder.")
+      Output.line(line)
 
     }
 

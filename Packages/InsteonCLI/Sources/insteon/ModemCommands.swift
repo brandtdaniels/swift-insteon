@@ -283,7 +283,8 @@ enum ModemCommands {
 
         if !printsJSON {
 
-          report(back, known: known, names: names)
+          // The first leg printed the device's identity already.
+          report(back, known: nil, names: names)
 
         }
 
@@ -474,7 +475,8 @@ enum ModemCommands {
     try check(link, mode: .unlinking, device: options.device)
 
     // A deletion carries no identity, so the device is named only if it was known before.
-    let product = IdentityStore.load()[link.address].map(names.device)?.displayName
+    let removed: DeviceDescription? = IdentityStore.load()[link.address].map(names.device)
+    let product: String? = removed?.displayName
 
     if printsJSON {
 
@@ -482,7 +484,7 @@ enum ModemCommands {
 
     } else {
 
-      Output.line("Unlinked \(link.address)\(product.map { ", \($0)," } ?? "") from group \(link.group).")
+      Output.line("Unlinked \(LinkingInstructions.deviceLabel(link.address, profile: removed?.profile)) from group \(link.group).")
 
     }
 
@@ -639,14 +641,15 @@ enum ModemCommands {
 
   }
 
-  /// A device's address, with its product when it's known.
+  /// A device's address, with its product's name and model when it's known.
   private static func deviceLabel(_ device: InsteonAddress, known: DeviceDescription?) -> String {
 
-    known?.displayName.map { "\(device), \($0)," } ?? "\(device)"
+    LinkingInstructions.deviceLabel(device, profile: known?.profile)
 
   }
 
-  /// Prints a new link, with the device's identity when it's known.
+  /// Prints a new link, with the device's identity when it's known. Pass `nil` for `known` to
+  /// print the link alone.
   private static func report(_ link: AllLinkingCompleted, known: DeviceDescription?, names: ProductNames) {
 
     Output.line("Linked \(link.address) in group \(link.group), modem as \(Names.mode(link.mode)).")

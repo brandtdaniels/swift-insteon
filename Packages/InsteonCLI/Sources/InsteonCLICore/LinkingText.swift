@@ -36,13 +36,34 @@ public enum LinkingInstructions {
 
   }
 
+  /// A device's address, then its product's name and model in parentheses when the catalog
+  /// has its profile, such as `"1A.2B.3C (Dimmer Switch 2477D)"`, to name it in a sentence.
+  ///
+  /// The product's alias is left out, so the parentheses don't nest.
+  ///
+  /// - Parameters:
+  ///   - device: The device's address.
+  ///   - profile: The catalog's profile for the device, or `nil` if it isn't known.
+  /// - Returns: The label.
+  public static func deviceLabel(_ device: InsteonAddress, profile: DeviceProfile?) -> String {
+
+    guard let profile else {
+
+      return "\(device)"
+
+    }
+
+    return "\(device) (\(profile.name) \(profile.model))"
+
+  }
+
   /// What to tell the person before the modem joins a device as its responder: put the
   /// device into its mode first, then press Return.
   ///
   /// - Parameters:
   ///   - mode: Whether the device is to link or unlink.
-  ///   - device: The device, such as `"1A.2B.3C, Dimmer Switch 2477D"`, or `nil` for any
-  ///     device.
+  ///   - device: The device, as ``deviceLabel(_:profile:)`` writes it, such as
+  ///     `"1A.2B.3C (Dimmer Switch 2477D)"`, or `nil` for any device.
   ///   - steps: The device's own steps for the mode, from ``steps(of:)``, or empty if the
   ///     catalog doesn't have them.
   ///   - waitsForReturn: Whether the command waits for Return before starting the modem,
