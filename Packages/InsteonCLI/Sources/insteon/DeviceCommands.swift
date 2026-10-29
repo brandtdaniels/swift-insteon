@@ -68,7 +68,7 @@ enum DeviceCommands {
 
   /// Refuses a command the device's command set doesn't list. A device the catalog doesn't
   /// describe is sent it anyway, with a note.
-  private static func checkListed(_ name: SettingName, named label: String, for known: KnownDevice?) throws {
+  private static func checkListed(_ name: SettingName, named label: String, for known: DeviceDescription?) throws {
 
     guard let commands = known?.commandSet else {
 
@@ -80,7 +80,7 @@ enum DeviceCommands {
 
     guard commands.standardCommand(named: name) != nil else {
 
-      throw CommandFailure(description: "The Insteon device catalog doesn't list \(label) for \(known?.productName ?? "this device").")
+      throw CommandFailure(description: "The Insteon device catalog doesn't list \(label) for \(known?.displayName ?? "this device").")
 
     }
 

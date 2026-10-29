@@ -74,9 +74,9 @@ enum SettingsCommands {
 
   }
 
-  private static func printLines(_ lines: [SettingLine], device: InsteonAddress, known: KnownDevice) {
+  private static func printLines(_ lines: [SettingLine], device: InsteonAddress, known: DeviceDescription) {
 
-    let product: String = known.productName.map { ", " + $0 } ?? ""
+    let product: String = known.displayName.map { ", " + $0 } ?? ""
 
     Output.line("Settings of \(device)\(product):")
 
@@ -145,7 +145,7 @@ enum SettingsCommands {
   }
 
   /// Button 1, then, when some of the items are per button, the device's other groups.
-  private static func buttons(for items: [SettingItem], in commands: CommandSet, known: KnownDevice) -> [UInt8] {
+  private static func buttons(for items: [SettingItem], in commands: CommandSet, known: DeviceDescription) -> [UInt8] {
 
     guard
       let settings = commands.extendedSettings,
@@ -192,7 +192,7 @@ enum SettingsCommands {
     item: SettingItem,
     to request: SettingRequest,
     device: InsteonAddress,
-    known: KnownDevice,
+    known: DeviceDescription,
     commands: CommandSet,
     modem: Modem
   ) async throws {
@@ -262,7 +262,7 @@ enum SettingsCommands {
     _ command2: UInt8,
     flag: OperatingFlag,
     device: InsteonAddress,
-    known: KnownDevice,
+    known: DeviceDescription,
     commands: CommandSet,
     modem: Modem
   ) async throws {
@@ -300,11 +300,9 @@ enum SettingsCommands {
   }
 
   /// The device's engine, from the catalog or else from Get Insteon Engine Version.
-  private static func engine(of device: InsteonAddress, known: KnownDevice, modem: Modem) async throws -> InsteonEngine? {
+  private static func engine(of device: InsteonAddress, known: DeviceDescription, modem: Modem) async throws -> InsteonEngine? {
 
-    let identity = known.identity
-
-    if let engine = known.profile?.engine(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion) {
+    if let engine = known.engine {
 
       return engine
 
@@ -435,7 +433,7 @@ enum SettingsCommands {
   // MARK: - Reading
 
   /// The device's identity and command set, or a failure that says why there's none.
-  private static func describedDevice(_ device: InsteonAddress, modem: Modem, names: ProductNames) async throws -> (KnownDevice, CommandSet) {
+  private static func describedDevice(_ device: InsteonAddress, modem: Modem, names: ProductNames) async throws -> (DeviceDescription, CommandSet) {
 
     guard let known = try await Identities.known(device, modem: modem, names: names, asking: true) else {
 
@@ -453,9 +451,9 @@ enum SettingsCommands {
 
   }
 
-  private static func product(_ known: KnownDevice) -> String {
+  private static func product(_ known: DeviceDescription) -> String {
 
-    known.productName ?? "category \(known.identity.category), subcategory \(known.identity.subcategory)"
+    known.displayName ?? "category \(known.category), subcategory \(known.subcategory)"
 
   }
 
