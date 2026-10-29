@@ -197,6 +197,8 @@ enum IdentityStore {
 
   }
 
+}
+
 /// Finds out what devices are, from the identity cache or by asking them.
 enum Identities {
 
