@@ -215,7 +215,7 @@ struct ArgumentParserTests {
   }
 
   // Group 255 means every group.
-  @Test func rejectsGroup255() {
+  @Test func rejectsGroup255() throws {
 
     #expect(throws: ArgumentError.invalidValue(option: "--group", value: "255", expected: "a group number from 0 to 254")) {
 
