@@ -7,7 +7,7 @@ import InsteonProtocol
 /// A made-up catalog with one on/off plug, whose model and identity no real product has.
 enum ExampleCatalog {
 
-  static let identity = KnownIdentity(category: 0x02, subcategory: 0x7A, firmwareVersion: 0x41)
+  static let identity = ReportedIdentity(category: 0x02, subcategory: 0x7A, firmwareVersion: 0x41)
 
   static let load = GroupType(
     name: "load",
@@ -84,7 +84,7 @@ struct DeviceTextTests {
 
     var cache = IdentityCache()
     cache[plug] = ExampleCatalog.identity
-    cache[InsteonAddress(0x4D, 0x5E, 0x6F)] = KnownIdentity(category: 0x01, subcategory: 0x20, firmwareVersion: nil)
+    cache[InsteonAddress(0x4D, 0x5E, 0x6F)] = ReportedIdentity(category: 0x01, subcategory: 0x20, firmwareVersion: nil)
 
     let json = try cache.json()
 
@@ -113,13 +113,35 @@ struct DeviceTextTests {
 
   }
 
-  @Test func readsAnIdentityFromALinkOnlyWhenTheModemReportedOne() {
+  @Test func keepsReadableCacheEntriesBesideOnesOfTheWrongShape() throws {
 
-    let controller = AllLinkingCompleted(linkCode: 0x01, group: 0, address: plug, category: 0x02, subcategory: 0x7A, firmwareVersion: 0x41)
-    let responder = AllLinkingCompleted(linkCode: 0x00, group: 1, address: plug, category: nil, subcategory: nil, firmwareVersion: nil)
+    // Each of these entries failed the whole file before; now only the entry is left out.
+    let json = Data("""
+      {"devices": {
+        "1A.2B.3C": {"category": "0x02", "subcategory": "0x7A", "firmwareVersion": "0x41"},
+        "4D.5E.6F": {"category": 2, "subcategory": "0x7A"},
+        "7A.8B.9C": {"category": "0x02"},
+        "2C.3D.4E": "0x02 0x7A",
+        "5F.6A.7B": ["0x02", "0x7A"]
+      }}
+      """.utf8)
 
-    #expect(KnownIdentity(controller) == ExampleCatalog.identity)
-    #expect(KnownIdentity(responder) == nil)
+    #expect(try IdentityCache(json: json) == IdentityCache(identities: [plug: ExampleCatalog.identity]))
+
+  }
+
+  @Test func keepsACacheEntryWhoseFirmwareVersionItCantRead() throws {
+
+    let json = Data("""
+      {"devices": {
+        "4D.5E.6F": {"category": "0x02", "subcategory": "0x7A", "firmwareVersion": "zz"}
+      }}
+      """.utf8)
+    let device = InsteonAddress(0x4D, 0x5E, 0x6F)
+    let cache: IdentityCache = try IdentityCache(json: json)
+
+    #expect(cache[device] == ReportedIdentity(category: 0x02, subcategory: 0x7A, firmwareVersion: nil))
+    #expect(cache.identities.count == 1)
 
   }
 
@@ -286,7 +308,6 @@ struct DeviceTextTests {
     extended.flags = MessageFlags(rawValue: 0x1F)
     extended.userData = try UserData([UInt8](repeating: 0x00, count: 13) + [0xD2])
 
-    #expect(RawFrame.bytes(of: extended).count == 25)
     #expect(RawFrame.text(of: extended).hasPrefix("0251 1A2B3C 027A41 1F 01 00 0000"))
     #expect(RawFrame.text(of: extended).hasSuffix("D2"))
 

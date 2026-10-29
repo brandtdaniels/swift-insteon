@@ -98,6 +98,45 @@ public enum SerialCommandNumber: UInt8, CaseIterable, Hashable, Sendable {
 
 extension SerialCommandNumber {
 
+  /// The command's name, as the Insteon Modem Developer's Guide gives it, such as
+  /// `"Get IM Info"` or `"Start ALL-Linking"`.
+  public var name: String {
+
+    switch self {
+    case .getModemInfo: "Get IM Info"
+    case .sendAllLinkCommand: "Send ALL-Link Command"
+    case .sendMessage: "Send Insteon Standard or Extended Message"
+    case .sendX10: "Send X10"
+    case .startAllLinking: "Start ALL-Linking"
+    case .cancelAllLinking: "Cancel ALL-Linking"
+    case .setHostDeviceCategory: "Set Host Device Category"
+    case .resetModem: "Reset the IM"
+    case .setAcknowledgmentByte: "Set Insteon ACK Message Byte"
+    case .getFirstAllLinkRecord: "Get First ALL-Link Record"
+    case .getNextAllLinkRecord: "Get Next ALL-Link Record"
+    case .setModemConfiguration: "Set IM Configuration"
+    case .getAllLinkRecordForSender: "Get ALL-Link Record for Sender"
+    case .ledOn: "LED On"
+    case .ledOff: "LED Off"
+    case .manageAllLinkRecord: "Manage ALL-Link Record"
+    case .setNegativeAcknowledgmentByte: "Set Insteon NAK Message Byte"
+    case .setAcknowledgmentBytes: "Set Insteon ACK Message Two Bytes"
+    case .rfSleep: "RF Sleep"
+    case .getModemConfiguration: "Get IM Configuration"
+    case .cancelCleanup: "Cancel Cleanup"
+    case .readDatabase: "Read 8 Bytes from Database"
+    case .writeDatabase: "Write 8 Bytes to Database"
+    case .beep: "Beep"
+    case .setResponderLinkData: "Set Responder Link Data"
+    case .setApplicationRetries: "Set Application Retries"
+    case .setRadio: "Set RF Disable Flag"
+    case .readRadioStatus: "Read RF Frequency"
+    case .readDiagnostics: "Diagnostics"
+    case .manageDeviceRecord: "Database Commands"
+    }
+
+  }
+
   /// How many bytes a host command with this number has, counting the start byte (`0x02`) and
   /// the number, or `nil` for a command whose length depends on its parameters.
   ///

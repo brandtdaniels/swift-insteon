@@ -62,6 +62,47 @@ extension ReceivedMessage {
 
 extension ReceivedMessage {
 
+  /// The frame a modem sends for the message: `0x02`, then `0x50` for a standard message or
+  /// `0x51` for an extended one, the sender, the destination, the flags, cmd1, cmd2 and, for an
+  /// extended message, D1 through D14.
+  ///
+  /// The message's `userData` decides between `0x50` and `0x51`, not its flags: a message with
+  /// user data gets `0x51`, and one without gets `0x50`.
+  ///
+  /// A standard message's frame is 11 bytes, and an extended message's 25:
+  ///
+  /// ```swift
+  /// let message = ReceivedMessage(
+  ///   sender: InsteonAddress(0x1A, 0x2B, 0x3C),
+  ///   destination: InsteonAddress(0x02, 0x2A, 0x41),
+  ///   flags: MessageFlags(rawValue: 0x8F),
+  ///   command: Command(command1: 0x01, command2: 0x00)
+  /// )
+  ///
+  /// message.modemFrame   // 02 50 1A 2B 3C 02 2A 41 8F 01 00
+  /// ```
+  public var modemFrame: [UInt8] {
+
+    let start: UInt8 = userData == nil ? 0x50 : 0x51
+    var frame: [UInt8] = [SerialCommand.startOfText, start]
+    frame += sender.bytes
+    frame += destination.bytes
+    frame += [flags.rawValue, command.command1, command.command2]
+
+    if let userData {
+
+      frame += userData.bytes
+
+    }
+
+    return frame
+
+  }
+
+}
+
+extension ReceivedMessage {
+
   /// Decodes a message as modems and IBIOS report it: the sender, the destination, the flags,
   /// the two command bytes and, for an extended message, its 14 bytes of user data.
   ///

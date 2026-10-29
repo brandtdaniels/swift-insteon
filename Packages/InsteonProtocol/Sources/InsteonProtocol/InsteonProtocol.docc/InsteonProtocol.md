@@ -56,6 +56,7 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``ManualChangeDirection``
 - ``OperatingFlagsRequest``
 - ``SetButtonTapCount``
+- ``LightLevel``
 - ``AllLinkCommandAlias``
 
 ### Extended user data
@@ -74,6 +75,7 @@ Every type is `Sendable` and has no dependencies beyond the Swift standard libra
 - ``DeviceSubcategory``
 - ``FirmwareVersion``
 - ``ProductKey``
+- ``ReportedIdentity``
 - ``SetButtonPressed``
 - ``ProductData``
 

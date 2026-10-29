@@ -55,7 +55,7 @@ public struct DeviceIdentification: Hashable, Sendable {
 ///
 /// if let identity = identification.identity,
 ///    let profile = catalog.profile(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion) {
-///   print(profile.name, identification.engine.map { "\($0)" } ?? "an engine this package doesn't know")
+///   print(profile.name, identification.engine?.name ?? "an engine this package doesn't know")
 /// }
 /// ```
 public struct DeviceIdentifier: Sendable {

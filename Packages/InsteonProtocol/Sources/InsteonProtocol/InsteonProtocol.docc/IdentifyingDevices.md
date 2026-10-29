@@ -24,6 +24,10 @@ When the modem becomes a device's controller by linking, it reports the device's
 subcategory in ``AllLinkingCompleted``. Only devices that don't answer the Product Data Request
 report a firmware version there; the others send `0xFF`, which reads as `nil`.
 
+``ReportedIdentity`` holds the category, subcategory and firmware version from any of these
+reports, and from a ``Heartbeat``, a ``DeviceStatusChanged`` broadcast or a modem's
+``ModemInfo``. It encodes to JSON, so an app can remember what each device reported.
+
 ### Looking a device up
 
 Together, a device's category, subcategory and firmware version identify its product and the

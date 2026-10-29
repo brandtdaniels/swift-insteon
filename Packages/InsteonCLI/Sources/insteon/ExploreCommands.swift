@@ -34,7 +34,7 @@ enum ExploreCommands {
 
     } catch ModemError.deviceRejected(_, let reason) {
 
-      Output.line("NAK: \(Names.nakReason(reason)) (cmd2 \(Hex.byte(reason.rawValue)))")
+      Output.line("NAK: \(reason.summary) (cmd2 \(Hex.byte(reason.rawValue)))")
 
       throw CommandFailure(description: "\(device) rejected the message.")
 

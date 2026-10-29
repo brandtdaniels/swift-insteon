@@ -115,7 +115,7 @@ enum WatchCommand {
     case let .groupCommand(command, eventName?):
       return "\(command.controller) group \(command.group): \(eventName)"
     case let .groupCommand(command, nil):
-      let name = Names.command1(command.command1).map { " (\($0))" } ?? ""
+      let name = StandardDirectCommand.name(command1: command.command1).map { " (\($0))" } ?? ""
 
       return "\(command.controller) group \(command.group): cmd1 \(Hex.byte(command.command1))\(name)"
     case let .heartbeat(command):
@@ -131,8 +131,8 @@ enum WatchCommand {
   /// A message from a device in words, such as its type and command.
   static func describe(_ message: ReceivedMessage) -> String {
 
-    let name = Names.command1(message.command.command1).map { " (\($0))" } ?? ""
-    let type = Names.messageType(message.flags.messageType)
+    let name = StandardDirectCommand.name(command1: message.command.command1).map { " (\($0))" } ?? ""
+    let type: String = message.flags.messageType.name
     let extended = message.userData == nil ? "" : " extended"
 
     return "\(message.sender) to \(message.destination): \(type)\(extended), "

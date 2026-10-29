@@ -173,7 +173,7 @@ enum ModemCommands {
   ///
   /// - Throws: `CancellationError` after Control-C; other errors are reported and passed
   ///   over, so one device that doesn't answer doesn't stop the list.
-  private static func identify(_ device: InsteonAddress, modem: Modem) async throws -> KnownIdentity? {
+  private static func identify(_ device: InsteonAddress, modem: Modem) async throws -> ReportedIdentity? {
 
     Output.note("Asking \(device) for its identity with ID Request...")
 
@@ -193,7 +193,7 @@ enum ModemCommands {
 
       }
 
-      let identity = KnownIdentity(pressed)
+      let identity = ReportedIdentity(pressed)
 
       IdentityStore.remember(identity, for: device)
 

@@ -69,7 +69,7 @@ struct ProductNames: Sendable {
   }
 
   /// What the catalog says about a device with a known identity.
-  func device(_ identity: KnownIdentity) -> DeviceDescription {
+  func device(_ identity: ReportedIdentity) -> DeviceDescription {
 
     DeviceDescription(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion, catalog: catalog)
 
@@ -95,83 +95,17 @@ enum Names {
 
   }
 
-  /// An engine as the docs name it: i1, i2 or i2CS.
+  /// An engine as Insteon's documents name it, or "unknown".
   static func engine(_ engine: InsteonEngine?) -> String {
 
-    switch engine {
-    case .i1: "i1"
-    case .i2: "i2"
-    case .i2cs: "i2CS"
-    case nil: "unknown"
-    }
+    engine?.name ?? "unknown"
 
   }
 
-  /// The modem's role in a link it reported.
+  /// The modem's role in a link it reported, or "unknown".
   static func mode(_ mode: AllLinkMode?) -> String {
 
-    switch mode {
-    case .controller: "controller"
-    case .responder: "responder"
-    case .controllerOrResponder: "controller or responder"
-    case .delete: "deleted"
-    case nil: "unknown"
-    }
-
-  }
-
-  /// The common commands in cmd1, as the Insteon Developer's Guide names them.
-  static func command1(_ command1: UInt8) -> String? {
-
-    switch command1 {
-    case 0x03: "Product Data Request"
-    case 0x0D: "Get Insteon Engine Version"
-    case 0x0F: "Ping"
-    case 0x10: "ID Request"
-    case 0x11: "Light On"
-    case 0x12: "Light On Fast"
-    case 0x13: "Light Off"
-    case 0x14: "Light Off Fast"
-    case 0x15: "Light Brighten One Step"
-    case 0x16: "Light Dim One Step"
-    case 0x17: "Light Start Manual Change"
-    case 0x18: "Light Stop Manual Change"
-    case 0x19: "Light Status Request"
-    default: nil
-    }
-
-  }
-
-  /// A message's type, in words.
-  static func messageType(_ type: MessageFlags.MessageType) -> String {
-
-    switch type {
-    case .direct: "direct"
-    case .directAcknowledgment: "ACK"
-    case .directNegativeAcknowledgment: "NAK"
-    case .broadcast: "broadcast"
-    case .allLinkBroadcast: "ALL-Link broadcast"
-    case .allLinkCleanup: "ALL-Link cleanup"
-    case .allLinkCleanupAcknowledgment: "ALL-Link cleanup ACK"
-    case .allLinkCleanupNegativeAcknowledgment: "ALL-Link cleanup NAK"
-    }
-
-  }
-
-  /// Why a device rejected a message, in words.
-  static func nakReason(_ reason: NAKReason) -> String {
-
-    switch reason {
-    case .notLinked: "it isn't linked to the modem"
-    case .noLoad: "it has no load connected"
-    case .invalidCommand: "it doesn't support the command"
-    case .databaseSearchPending: "it's still searching its ALL-Link database"
-    case .illegalValue: "a value is out of range"
-    case .groupZeroCommand: "the command isn't allowed for group 0"
-    case .databaseFull: "its ALL-Link database is full"
-    case .noHardware: "it lacks the hardware for the command"
-    default: "NAK reason \(Hex.byte(reason.rawValue))"
-    }
+    mode?.name ?? "unknown"
 
   }
 
@@ -194,23 +128,8 @@ enum Names {
     case .radioStatus: "radio status"
     case .modemInfo: "Get IM Info reply"
     case .modemConfiguration: "configuration"
-    case let .echo(echo): "echo of \(serialCommand(echo.number))\(echo.isAccepted ? "" : ", NAK")"
+    case let .echo(echo): "echo of \(echo.number.name)\(echo.isAccepted ? "" : ", NAK")"
     case .negativeAcknowledgment: "NAK"
-    }
-
-  }
-
-  /// A serial command, as the Insteon Modem Developer's Guide names it.
-  static func serialCommand(_ number: SerialCommandNumber) -> String {
-
-    switch number {
-    case .getModemInfo: "Get IM Info"
-    case .sendMessage: "Send Insteon Standard or Extended Message"
-    case .startAllLinking: "Start ALL-Linking"
-    case .cancelAllLinking: "Cancel ALL-Linking"
-    case .getFirstAllLinkRecord: "Get First ALL-Link Record"
-    case .getNextAllLinkRecord: "Get Next ALL-Link Record"
-    default: "serial command \(Hex.byte(number.rawValue))"
     }
 
   }
@@ -261,13 +180,13 @@ enum Names {
 
     switch error {
     case let .rejected(number):
-      "The modem rejected \(serialCommand(number)) every time it was sent."
+      "The modem rejected \(number.name) every time it was sent."
     case let .timedOut(number):
-      "The modem didn't answer \(serialCommand(number)). Check that it's connected and powered."
+      "The modem didn't answer \(number.name). Check that it's connected and powered."
     case .connectionClosed:
       "The connection to the modem closed."
     case let .deviceRejected(device, reason):
-      "Device \(device) rejected the command: \(nakReason(reason))."
+      "Device \(device) rejected the command: \(reason.summary)."
     case let .deviceTimedOut(device):
       "Device \(device) didn't answer. Check its address, and that it's powered and in range."
     }

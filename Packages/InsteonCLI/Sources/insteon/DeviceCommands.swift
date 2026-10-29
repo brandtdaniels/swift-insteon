@@ -129,7 +129,7 @@ enum DeviceCommands {
 
     } catch ModemError.deviceRejected(_, let reason) {
 
-      throw CommandFailure(description: "\(device) rejected Beep (NAK): \(Names.nakReason(reason)).")
+      throw CommandFailure(description: "\(device) rejected Beep (NAK): \(reason.summary).")
 
     } catch ModemError.deviceTimedOut {
 
@@ -190,7 +190,7 @@ enum DeviceCommands {
 
     if let identity {
 
-      IdentityStore.remember(KnownIdentity(identity), for: device)
+      IdentityStore.remember(ReportedIdentity(identity), for: device)
 
     }
 

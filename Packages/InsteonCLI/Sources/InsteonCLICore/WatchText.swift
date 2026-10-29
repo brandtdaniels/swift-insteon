@@ -21,7 +21,7 @@ public enum WatchText {
   /// - Returns: The line.
   public static func setButtonPressed(_ pressed: SetButtonPressed, productName: String?) -> String {
 
-    let role = pressed.role == .responder ? "responder" : "controller"
+    let role: String = pressed.role.name
     let identity = productName
       ?? "category \(pressed.category), subcategory \(pressed.subcategory)"
         + (pressed.firmwareVersion.map { ", firmware \($0)" } ?? "")
@@ -35,32 +35,13 @@ public enum WatchText {
 /// The bytes a modem sent for a message, as `insteon watch --raw` prints them.
 public enum RawFrame {
 
-  /// The frame a modem sends for a received message: `0x02`, then `0x50` for a standard
-  /// message or `0x51` for an extended one, the sender, the destination, the flags, cmd1,
-  /// cmd2, and an extended message's user data.
-  ///
-  /// - Parameter message: The message.
-  /// - Returns: The bytes.
-  public static func bytes(of message: ReceivedMessage) -> [UInt8] {
-
-    let start: UInt8 = message.userData == nil ? 0x50 : 0x51
-    var bytes: [UInt8] = [0x02, start]
-    bytes += message.sender.bytes
-    bytes += message.destination.bytes
-    bytes += [message.flags.rawValue, message.command.command1, message.command.command2]
-    bytes += message.userData?.bytes ?? []
-
-    return bytes
-
-  }
-
   /// The frame in hexadecimal, grouped by field, such as `"0250 1A2B3C 012041 8F 01 00"`.
   ///
   /// - Parameter message: The message.
   /// - Returns: The text.
   public static func text(of message: ReceivedMessage) -> String {
 
-    let frame = bytes(of: message)
+    let frame: [UInt8] = message.modemFrame
     let fields = [frame[0..<2], frame[2..<5], frame[5..<8], frame[8..<9], frame[9..<10], frame[10..<11], frame[11...]]
 
     return fields.filter { !$0.isEmpty }.map { $0.map(Self.digits).joined() }.joined(separator: " ")
