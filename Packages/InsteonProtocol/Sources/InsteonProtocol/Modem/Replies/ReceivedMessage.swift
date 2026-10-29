@@ -66,6 +66,9 @@ extension ReceivedMessage {
   /// `0x51` for an extended one, the sender, the destination, the flags, cmd1, cmd2 and, for an
   /// extended message, D1 through D14.
   ///
+  /// The message's `userData` decides between `0x50` and `0x51`, not its flags: a message with
+  /// user data gets `0x51`, and one without gets `0x50`.
+  ///
   /// A standard message's frame is 11 bytes, and an extended message's 25:
   ///
   /// ```swift

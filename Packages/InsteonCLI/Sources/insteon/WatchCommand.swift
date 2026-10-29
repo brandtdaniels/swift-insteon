@@ -131,7 +131,7 @@ enum WatchCommand {
   private static func describe(_ message: ReceivedMessage) -> String {
 
     let name = StandardDirectCommand.name(command1: message.command.command1).map { " (\($0))" } ?? ""
-    let type: String = message.flags.messageType.description
+    let type: String = message.flags.messageType.name
     let extended = message.userData == nil ? "" : " extended"
 
     return "\(message.sender) to \(message.destination): \(type)\(extended), "

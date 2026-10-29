@@ -116,9 +116,13 @@ extension ReportedIdentity: Codable {
 
   /// Decodes an identity whose bytes are written as `0x` and two hexadecimal digits.
   ///
+  /// The category and subcategory must be written that way. A firmware version that's missing,
+  /// or present but not written that way, decodes as `nil`, so an identity whose firmware
+  /// version is unreadable still names its device.
+  ///
   /// - Parameter decoder: The decoder.
-  /// - Throws: `DecodingError` if the category or subcategory is missing, or a byte isn't
-  ///   written as `0x` and two hexadecimal digits.
+  /// - Throws: `DecodingError` if the category or subcategory is missing or isn't written as
+  ///   `0x` and two hexadecimal digits.
   public init(from decoder: any Decoder) throws {
 
     let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -126,11 +130,11 @@ extension ReportedIdentity: Codable {
     let subcategoryText: String = try container.decode(String.self, forKey: .subcategory)
     let category: UInt8 = try Self.byte(categoryText, key: .category, in: container)
     let subcategory: UInt8 = try Self.byte(subcategoryText, key: .subcategory, in: container)
-    var firmwareVersion: FirmwareVersion?
+    let firmwareText: String? = try? container.decodeIfPresent(String.self, forKey: .firmwareVersion)
+    var firmwareVersion: FirmwareVersion? = nil
 
-    if let text = try container.decodeIfPresent(String.self, forKey: .firmwareVersion) {
+    if let firmwareText, let version = Self.parseByte(firmwareText) {
 
-      let version: UInt8 = try Self.byte(text, key: .firmwareVersion, in: container)
       firmwareVersion = FirmwareVersion(rawValue: version)
 
     }

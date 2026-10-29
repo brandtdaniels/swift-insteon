@@ -131,14 +131,14 @@ enum Names {
   /// An engine as Insteon's documents name it, or "unknown".
   static func engine(_ engine: InsteonEngine?) -> String {
 
-    engine?.description ?? "unknown"
+    engine?.name ?? "unknown"
 
   }
 
   /// The modem's role in a link it reported, or "unknown".
   static func mode(_ mode: AllLinkMode?) -> String {
 
-    mode?.description ?? "unknown"
+    mode?.name ?? "unknown"
 
   }
 

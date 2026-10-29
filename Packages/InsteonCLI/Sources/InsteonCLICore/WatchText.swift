@@ -21,7 +21,7 @@ public enum WatchText {
   /// - Returns: The line.
   public static func setButtonPressed(_ pressed: SetButtonPressed, productName: String?) -> String {
 
-    let role: String = pressed.role.description
+    let role: String = pressed.role.name
     let identity = productName
       ?? "category \(pressed.category), subcategory \(pressed.subcategory)"
         + (pressed.firmwareVersion.map { ", firmware \($0)" } ?? "")

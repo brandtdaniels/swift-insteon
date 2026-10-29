@@ -315,10 +315,10 @@ extension StandardDirectCommand {
   /// The name the Insteon Developer's Guide gives a common direct command, by its cmd1, such
   /// as `"Light On"` for `0x11`.
   ///
-  /// Only the commands every device reads the same way are named: Product Data Request, Get
-  /// Insteon Engine Version, Ping, ID Request, and the lighting commands from Light On
-  /// (`0x11`) through Light Status Request (`0x19`). What other cmd1 values mean depends on
-  /// the device's category, the message's type or its length, so they have no name here.
+  /// It names the common standard direct commands, several of them lighting commands: Product
+  /// Data Request, Get Insteon Engine Version, Ping, ID Request, and Light On (`0x11`) through
+  /// Light Status Request (`0x19`). What other cmd1 values mean depends on the device's
+  /// category, the message's type or its length, so they have no name here.
   ///
   /// ```swift
   /// StandardDirectCommand.name(command1: 0x19)   // "Light Status Request"

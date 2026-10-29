@@ -78,15 +78,29 @@ struct ReportedIdentityTests {
     #"{"category":"0x002","subcategory":"0x7A"}"#,
     #"{"category":"0xZZ","subcategory":"0x7A"}"#,
     #"{"subcategory":"0x7A"}"#,
-    #"{"category":"0x02","subcategory":"0x7A","firmwareVersion":"41"}"#
+    #"{"category":"0x02","subcategory":"7A","firmwareVersion":"0x41"}"#,
+    #"{"category":2,"subcategory":"0x7A"}"#
   ])
-  func rejectsBytesThatArentWrittenAsHexadecimal(_ json: String) {
+  func rejectsCategoriesThatArentWrittenAsHexadecimal(_ json: String) {
 
     #expect(throws: DecodingError.self) {
 
       try JSONDecoder().decode(ReportedIdentity.self, from: Data(json.utf8))
 
     }
+
+  }
+
+  @Test(arguments: [
+    #"{"category":"0x02","subcategory":"0x7A","firmwareVersion":"41"}"#,
+    #"{"category":"0x02","subcategory":"0x7A","firmwareVersion":"0xZZ"}"#,
+    #"{"category":"0x02","subcategory":"0x7A","firmwareVersion":65}"#
+  ])
+  func readsAMalformedFirmwareVersionAsNil(_ json: String) throws {
+
+    let decoded: ReportedIdentity = try JSONDecoder().decode(ReportedIdentity.self, from: Data(json.utf8))
+
+    #expect(decoded == ReportedIdentity(category: 0x02, subcategory: 0x7A, firmwareVersion: nil))
 
   }
 

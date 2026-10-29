@@ -15,11 +15,11 @@ public enum AllLinkMode: UInt8, CaseIterable, Hashable, Sendable {
 
 }
 
-extension AllLinkMode: CustomStringConvertible {
+extension AllLinkMode {
 
-  /// The modem's role in words, as a report of a link gives it: `"responder"`,
+  /// The modem's role by name, as a report of a link gives it: `"responder"`,
   /// `"controller"`, `"controller or responder"`, or `"deleted"` for a link that was deleted.
-  public var description: String {
+  public var name: String {
 
     switch self {
     case .responder: "responder"

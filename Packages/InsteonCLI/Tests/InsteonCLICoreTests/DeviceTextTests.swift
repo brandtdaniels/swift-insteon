@@ -126,6 +126,38 @@ struct DeviceTextTests {
 
   }
 
+  @Test func keepsReadableCacheEntriesBesideOnesOfTheWrongShape() throws {
+
+    // Each of these entries failed the whole file before; now only the entry is left out.
+    let json = Data("""
+      {"devices": {
+        "1A.2B.3C": {"category": "0x02", "subcategory": "0x7A", "firmwareVersion": "0x41"},
+        "4D.5E.6F": {"category": 2, "subcategory": "0x7A"},
+        "7A.8B.9C": {"category": "0x02"},
+        "2C.3D.4E": "0x02 0x7A",
+        "5F.6A.7B": ["0x02", "0x7A"]
+      }}
+      """.utf8)
+
+    #expect(try IdentityCache(json: json) == IdentityCache(identities: [plug: ExampleCatalog.identity]))
+
+  }
+
+  @Test func keepsACacheEntryWhoseFirmwareVersionItCantRead() throws {
+
+    let json = Data("""
+      {"devices": {
+        "4D.5E.6F": {"category": "0x02", "subcategory": "0x7A", "firmwareVersion": "zz"}
+      }}
+      """.utf8)
+    let device = InsteonAddress(0x4D, 0x5E, 0x6F)
+    let cache: IdentityCache = try IdentityCache(json: json)
+
+    #expect(cache[device] == ReportedIdentity(category: 0x02, subcategory: 0x7A, firmwareVersion: nil))
+    #expect(cache.identities.count == 1)
+
+  }
+
   // MARK: - Known devices
 
   @Test func looksADeviceUpInTheCatalog() {

@@ -44,10 +44,10 @@ extension InsteonEngine: Comparable {
 
 }
 
-extension InsteonEngine: CustomStringConvertible {
+extension InsteonEngine {
 
-  /// The engine as Insteon's documents name it: `"i1"`, `"i2"` or `"i2CS"`.
-  public var description: String {
+  /// The engine's name, as Insteon's documents give it: `"i1"`, `"i2"` or `"i2CS"`.
+  public var name: String {
 
     switch self {
     case .i1: "i1"

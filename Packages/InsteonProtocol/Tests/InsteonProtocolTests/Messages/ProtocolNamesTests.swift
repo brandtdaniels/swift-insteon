@@ -55,13 +55,13 @@ struct ProtocolNamesTests {
   @Test(arguments: messageTypeNames)
   func namesMessageTypes(_ type: MessageFlags.MessageType, _ name: String) {
 
-    #expect(type.description == name)
+    #expect(type.name == name)
 
   }
 
   @Test func namesEveryMessageType() {
 
-    let names: Set<String> = Set(MessageFlags.MessageType.allCases.map(\.description))
+    let names: Set<String> = Set(MessageFlags.MessageType.allCases.map(\.name))
 
     #expect(names.count == MessageFlags.MessageType.allCases.count)
 
@@ -121,26 +121,25 @@ struct ProtocolNamesTests {
 
   @Test func namesEnginesAsTheDocumentsDo() {
 
-    #expect(InsteonEngine.i1.description == "i1")
-    #expect(InsteonEngine.i2.description == "i2")
-    #expect(InsteonEngine.i2cs.description == "i2CS")
-    #expect("\(InsteonEngine.i2cs)" == "i2CS")
+    #expect(InsteonEngine.i1.name == "i1")
+    #expect(InsteonEngine.i2.name == "i2")
+    #expect(InsteonEngine.i2cs.name == "i2CS")
 
   }
 
   @Test func namesTheModemsRoleInALink() {
 
-    #expect(AllLinkMode.responder.description == "responder")
-    #expect(AllLinkMode.controller.description == "controller")
-    #expect(AllLinkMode.controllerOrResponder.description == "controller or responder")
-    #expect(AllLinkMode.delete.description == "deleted")
+    #expect(AllLinkMode.responder.name == "responder")
+    #expect(AllLinkMode.controller.name == "controller")
+    #expect(AllLinkMode.controllerOrResponder.name == "controller or responder")
+    #expect(AllLinkMode.delete.name == "deleted")
 
   }
 
   @Test func namesTheRoleASETButtonPressedBroadcastOffers() {
 
-    #expect(SetButtonPressed.Role.responder.description == "responder")
-    #expect(SetButtonPressed.Role.controller.description == "controller")
+    #expect(SetButtonPressed.Role.responder.name == "responder")
+    #expect(SetButtonPressed.Role.controller.name == "controller")
 
   }
 

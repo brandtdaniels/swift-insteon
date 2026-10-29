@@ -155,12 +155,12 @@ extension MessageFlags {
 
 }
 
-extension MessageFlags.MessageType: CustomStringConvertible {
+extension MessageFlags.MessageType {
 
-  /// The message type in words: `"direct"`, `"ACK"`, `"NAK"`, `"broadcast"`,
+  /// The message type's name: `"direct"`, `"ACK"`, `"NAK"`, `"broadcast"`,
   /// `"ALL-Link broadcast"`, `"ALL-Link cleanup"`, `"ALL-Link cleanup ACK"` or
   /// `"ALL-Link cleanup NAK"`.
-  public var description: String {
+  public var name: String {
 
     switch self {
     case .direct: "direct"
