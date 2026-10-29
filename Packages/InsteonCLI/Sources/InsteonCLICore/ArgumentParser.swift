@@ -3,7 +3,10 @@ import InsteonProtocol
 extension Invocation {
 
   /// The subcommands, in the order the help lists them.
-  public static let subcommandNames = ["discover", "info", "links", "link", "unlink", "device", "watch"]
+  public static let subcommandNames = ["discover", "info", "links", "link", "unlink", "device", "scene", "beep", "modem", "watch"]
+
+  /// Other names for subcommands: `group` for `scene`.
+  public static let subcommandAliases = ["group": "scene"]
 
   /// Reads a command line, without the program's name.
   ///
@@ -76,7 +79,7 @@ extension Invocation {
 
   private static func parseSubcommand(_ arguments: [String], asksForHelp: Bool) throws(ArgumentError) -> Subcommand {
 
-    guard let name = arguments.first else {
+    guard arguments.first != nil else {
 
       return .help(topic: nil)
 
@@ -84,7 +87,7 @@ extension Invocation {
 
     let rest = Array(arguments.dropFirst())
 
-    if name == "help" {
+    if arguments[0] == "help" {
 
       guard let topic = rest.first else {
 
@@ -99,7 +102,9 @@ extension Invocation {
 
       }
 
-      guard subcommandNames.contains(topic) else {
+      let resolvedTopic: String = subcommandAliases[topic] ?? topic
+
+      guard subcommandNames.contains(resolvedTopic) else {
 
         throw ArgumentError.unknownHelpTopic(topic)
 
@@ -111,19 +116,21 @@ extension Invocation {
 
       }
 
-      return .help(topic: topic)
+      return .help(topic: resolvedTopic)
 
     }
 
-    if name.hasPrefix("-") {
+    if arguments.first?.hasPrefix("-") == true {
 
-      throw ArgumentError.unknownOption(split(name).name, subcommand: nil)
+      throw ArgumentError.unknownOption(split(arguments[0]).name, subcommand: nil)
 
     }
+
+    let name: String = subcommandAliases[arguments[0]] ?? arguments[0]
 
     guard subcommandNames.contains(name) else {
 
-      throw ArgumentError.unknownCommand(name)
+      throw ArgumentError.unknownCommand(arguments[0])
 
     }
 
@@ -147,6 +154,12 @@ extension Invocation {
       return try .unlink(parseUnlink(rest))
     case "device":
       return try parseDevice(rest)
+    case "scene":
+      return try parseScene(rest)
+    case "beep":
+      return try parseBeep(rest)
+    case "modem":
+      return try parseModem(rest)
     default:
       return try .watch(parseWatch(rest))
     }
@@ -403,13 +416,16 @@ extension Invocation {
       try expectNoArguments(rest, subcommand: "device")
       return .device(address, .ping)
     case "on":
-      guard let level = rest.first else {
+      let isFast: Bool = rest.contains("--fast")
+      let others: [String] = rest.filter { $0 != "--fast" }
 
-        return .device(address, .on(levelPercent: nil))
+      guard let level = others.first else {
+
+        return .device(address, isFast ? .onFast(levelPercent: nil) : .on(levelPercent: nil))
 
       }
 
-      try expectNoArguments(Array(rest.dropFirst()), subcommand: "device")
+      try expectNoArguments(Array(others.dropFirst()), subcommand: "device")
 
       // An option's value isn't repeated, in case it's something private.
       if level.hasPrefix("-") {
@@ -418,10 +434,38 @@ extension Invocation {
 
       }
 
-      return try .device(address, .on(levelPercent: percent(level)))
+      let levelPercent: Int = try percent(level, action: "on")
+
+      return .device(address, isFast ? .onFast(levelPercent: levelPercent) : .on(levelPercent: levelPercent))
     case "off":
+      let isFast: Bool = rest.contains("--fast")
+
+      try expectNoArguments(rest.filter { $0 != "--fast" }, subcommand: "device")
+      return .device(address, isFast ? .offFast : .off)
+    case "instant":
+      guard let level = rest.first, !level.hasPrefix("-") else {
+
+        if let option = rest.first {
+
+          throw unexpected(option, subcommand: "device")
+
+        }
+
+        throw ArgumentError.missingArgument("a level, such as 50%", subcommand: "device ADDRESS instant")
+
+      }
+
+      try expectNoArguments(Array(rest.dropFirst()), subcommand: "device")
+      return try .device(address, .instant(levelPercent: percent(level, action: "instant")))
+    case "beep":
       try expectNoArguments(rest, subcommand: "device")
-      return .device(address, .off)
+      return .device(address, .beep)
+    case "settings":
+      return try .device(address, .settings(showsAdvanced: parseSettings(rest)))
+    case "set":
+      return try .device(address, .set(parseSet(rest)))
+    case "send":
+      return try .device(address, .send(parseSend(rest)))
     case "status":
       try expectNoArguments(rest, subcommand: "device")
       return .device(address, .status)
@@ -437,6 +481,294 @@ extension Invocation {
 
       throw ArgumentError.unknownDeviceAction(action)
     }
+
+  }
+
+  private static func parseSettings(_ arguments: [String]) throws(ArgumentError) -> Bool {
+
+    var showsAdvanced = false
+
+    for argument in arguments {
+
+      let (name, inlineValue) = split(argument)
+
+      guard name == "--advanced" else {
+
+        throw unexpected(argument, subcommand: "device")
+
+      }
+
+      try expectNoValue(name, inlineValue)
+      showsAdvanced = true
+
+    }
+
+    return showsAdvanced
+
+  }
+
+  private static func parseSet(_ arguments: [String]) throws(ArgumentError) -> SettingRequest {
+
+    var positional: [String] = []
+    var button: UInt8?
+    var index = 0
+
+    while index < arguments.count {
+
+      let argument = arguments[index]
+      let (name, inlineValue) = split(argument)
+      index += 1
+
+      // A negative number isn't an option.
+      if !argument.hasPrefix("--") {
+
+        positional.append(argument)
+        continue
+
+      }
+
+      guard name == "--button" else {
+
+        throw unexpected(argument, subcommand: "device")
+
+      }
+
+      let text = try value(of: name, inline: inlineValue, in: arguments, at: &index)
+
+      guard let number = UInt8(text), (1...254).contains(number) else {
+
+        throw ArgumentError.invalidValue(option: name, value: text, expected: "a button or group from 1 to 254")
+
+      }
+
+      button = number
+
+    }
+
+    guard positional.count >= 1 else {
+
+      throw ArgumentError.missingArgument("a setting's NAME and VALUE, such as rampRate 0.5s", subcommand: "device ADDRESS set")
+
+    }
+
+    guard positional.count >= 2 else {
+
+      throw ArgumentError.missingArgument("a VALUE for \(positional[0])", subcommand: "device ADDRESS set")
+
+    }
+
+    // A value with spaces, such as 0.5 s, can be given as two arguments.
+    let value: String = positional.dropFirst().joined(separator: " ")
+
+    return SettingRequest(name: positional[0], value: value, button: button)
+
+  }
+
+  private static func parseSend(_ arguments: [String]) throws(ArgumentError) -> DirectMessageRequest {
+
+    var bytes: [UInt8] = []
+    var userData: [UInt8]?
+    var hasChecksum = true
+    var waitSeconds = 3
+    var index = 0
+
+    while index < arguments.count {
+
+      let argument = arguments[index]
+      let (name, inlineValue) = split(argument)
+      index += 1
+
+      if !argument.hasPrefix("-") {
+
+        guard bytes.count < 2 else {
+
+          throw unexpected(argument, subcommand: "device")
+
+        }
+
+        guard let byte = HexInput.byte(argument) else {
+
+          throw ArgumentError.invalidValue(option: bytes.isEmpty ? "CMD1" : "CMD2", value: argument, expected: "a byte in hexadecimal, such as 0x2E")
+
+        }
+
+        bytes.append(byte)
+        continue
+
+      }
+
+      switch name {
+      case "--extended":
+        try expectNoValue(name, inlineValue)
+
+        var data: [UInt8] = []
+
+        // The data bytes follow, up to the next option.
+        while index < arguments.count, !arguments[index].hasPrefix("-") {
+
+          guard let byte = HexInput.byte(arguments[index]), data.count < 14 else {
+
+            throw ArgumentError.invalidValue(option: name, value: arguments[index], expected: "up to 14 bytes in hexadecimal, D1 through D14")
+
+          }
+
+          data.append(byte)
+          index += 1
+
+        }
+
+        userData = data
+      case "--no-checksum":
+        try expectNoValue(name, inlineValue)
+        hasChecksum = false
+      case "--wait":
+        waitSeconds = try seconds(value(of: name, inline: inlineValue, in: arguments, at: &index), option: name)
+      default:
+        throw unexpected(argument, subcommand: "device")
+      }
+
+    }
+
+    guard bytes.count == 2 else {
+
+      throw ArgumentError.missingArgument("CMD1 and CMD2, such as 0x19 0x00", subcommand: "device ADDRESS send")
+
+    }
+
+    // All 14 bytes given are sent as they are.
+    let checksums: Bool = hasChecksum && (userData?.count ?? 0) < 14
+
+    return DirectMessageRequest(command1: bytes[0], command2: bytes[1], userData: userData, hasChecksum: checksums, waitSeconds: waitSeconds)
+
+  }
+
+  private static func parseScene(_ arguments: [String]) throws(ArgumentError) -> Subcommand {
+
+    if let option = arguments.first(where: { $0.hasPrefix("-") }) {
+
+      throw unexpected(option, subcommand: "scene")
+
+    }
+
+    guard arguments.count == 2 else {
+
+      if arguments.count > 2 {
+
+        throw unexpected(arguments[2], subcommand: "scene")
+
+      }
+
+      throw ArgumentError.missingArgument("a GROUP and on or off, such as 3 on", subcommand: "scene")
+
+    }
+
+    let group: AllLinkGroupNumber = try Self.group(arguments[0], option: "GROUP")
+
+    switch arguments[1] {
+    case "on":
+      return .scene(group: group, isOn: true)
+    case "off":
+      return .scene(group: group, isOn: false)
+    default:
+      throw ArgumentError.invalidValue(option: "scene", value: arguments[1], expected: "on or off")
+    }
+
+  }
+
+  private static func parseBeep(_ arguments: [String]) throws(ArgumentError) -> Subcommand {
+
+    var isDouble = false
+
+    for argument in arguments {
+
+      let (name, inlineValue) = split(argument)
+
+      guard name == "--double" else {
+
+        throw unexpected(argument, subcommand: "beep")
+
+      }
+
+      try expectNoValue(name, inlineValue)
+      isDouble = true
+
+    }
+
+    return .beep(isDouble: isDouble)
+
+  }
+
+  private static func parseModem(_ arguments: [String]) throws(ArgumentError) -> Subcommand {
+
+    guard let action = arguments.first else {
+
+      throw ArgumentError.missingArgument("an action: send", subcommand: "modem")
+
+    }
+
+    guard action == "send" else {
+
+      throw unexpected(action, subcommand: "modem")
+
+    }
+
+    var text: [String] = []
+    var forces = false
+    var waitSeconds = 3
+    var index = 1
+
+    while index < arguments.count {
+
+      let argument = arguments[index]
+      let (name, inlineValue) = split(argument)
+      index += 1
+
+      if !argument.hasPrefix("-") {
+
+        text.append(argument)
+        continue
+
+      }
+
+      switch name {
+      case "--force":
+        try expectNoValue(name, inlineValue)
+        forces = true
+      case "--wait":
+        waitSeconds = try seconds(value(of: name, inline: inlineValue, in: arguments, at: &index), option: name)
+      default:
+        throw unexpected(argument, subcommand: "modem")
+      }
+
+    }
+
+    guard !text.isEmpty else {
+
+      throw ArgumentError.missingArgument("the command's bytes in hexadecimal, such as 0277", subcommand: "modem send")
+
+    }
+
+    let joined: String = text.joined(separator: " ")
+
+    guard let bytes = HexInput.bytes(joined), bytes.count <= 32 else {
+
+      throw ArgumentError.invalidValue(option: "send", value: joined, expected: "up to 32 bytes in hexadecimal, such as 0277 or 02 77 01")
+
+    }
+
+    guard bytes[0] == 0x02 else {
+
+      throw ArgumentError.invalidValue(option: "send", value: joined, expected: "a serial command, which starts with 02")
+
+    }
+
+    if !forces, let reason = SerialCommandPolicy.refusal(for: bytes) {
+
+      throw ArgumentError.refusedSerialCommand(reason)
+
+    }
+
+    return .modemSend(RawSerialRequest(bytes: bytes, waitSeconds: waitSeconds))
 
   }
 
@@ -612,13 +944,13 @@ extension Invocation {
   }
 
   /// A level from 0 to 100 percent, with or without a percent sign.
-  private static func percent(_ text: String) throws(ArgumentError) -> Int {
+  private static func percent(_ text: String, action: String) throws(ArgumentError) -> Int {
 
     let digits = text.hasSuffix("%") ? String(text.dropLast()) : text
 
     guard let percent = Int(digits), (0...100).contains(percent) else {
 
-      throw ArgumentError.invalidValue(option: "on", value: text, expected: "a level from 0 to 100, such as 50%")
+      throw ArgumentError.invalidValue(option: action, value: text, expected: "a level from 0 to 100, such as 50%")
 
     }
 

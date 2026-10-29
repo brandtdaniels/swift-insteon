@@ -20,6 +20,9 @@ public enum HelpText {
     case "link": link
     case "unlink": unlink
     case "device": device
+    case "scene", "group": scene
+    case "beep": beep
+    case "modem": modem
     case "watch": watch
     default: nil
     }
@@ -38,7 +41,11 @@ public enum HelpText {
       links               List the modem's ALL-Link database
       link [ADDRESS]      Link a device to the modem, by its address or its SET button
       unlink [ADDRESS]    Unlink a device from the modem with its SET button
-      device ADDRESS ...  Control a device or read its ALL-Link database
+      device ADDRESS ...  Control a device, read and change its settings, or read its
+                          ALL-Link database
+      scene GROUP on|off  Turn the devices in one of the modem's groups on or off
+      beep [--double]     Make the modem beep
+      modem send HEX      Send the modem a serial command as given, for exploring
       watch               Print what the modem hears until Control-C
 
     Options:
@@ -184,16 +191,78 @@ public enum HelpText {
                           category and subcategory (ID Request) and its product data (Product
                           Data Request), and show the product the Insteon device catalog has.
       ping                Check that the device answers (Ping).
-      on [LEVEL]          Turn the device on (Light On), fully or to LEVEL percent, such as 50%.
+      on [LEVEL] [--fast] Turn the device on (Light On), fully or to LEVEL percent, such as 50%.
                           A device the Insteon device catalog says is on/off only turns on.
-      off                 Turn the device off (Light Off).
+                          --fast ignores the ramp rate (Light On Fast).
+      off [--fast]        Turn the device off (Light Off, or Light Off Fast).
+      instant LEVEL       Change the device to LEVEL percent at once (Light Instant Change).
+                          An on/off device turns on, or off for 0%.
       status              Ask for the device's level (Light Status Request); on or off for a
                           device that's on/off only.
+      beep                Make the device beep (Beep).
       links               Read the device's ALL-Link database, with what each record's data
                           means when the device is known.
+      settings [--advanced]
+                          Read the settings the Insteon device catalog describes for the
+                          device: its operating flags (Get Operating Flags), its values
+                          (extended Get, for each button where they're per button) and its
+                          readings, grouped by section, with defaults and which can be
+                          changed. --advanced also shows settings such as the powerline's
+                          timing and X10.
+      set NAME VALUE [--button N]
+                          Change a setting, named as 'settings' shows it or by its catalog
+                          name, such as rampRate. VALUE is on or off for a flag, a label such
+                          as 0.5s, a number in the setting's unit such as 50%, or a byte such
+                          as 0x1C. --button picks the button or group of a per-button
+                          setting; it defaults to 1. The setting is read back afterward.
+      send CMD1 CMD2 [--extended [D1 ... D14]] [--no-checksum] [--wait SECONDS]
+                          Send the device a direct message as given, for exploring, and print
+                          its ACK or NAK and the messages it sends in the next SECONDS,
+                          3 by default. Bytes are hexadecimal, such as 0x2E or 2E. With
+                          --extended, the message is extended, with the data bytes given and
+                          0x00 after; unless all 14 are given or --no-checksum is, D14 holds
+                          the checksum i2CS devices require.
 
-    'on LEVEL', 'status' and 'links' use the device's identity, from the identity cache or
-    an ID Request, to look it up in the Insteon device catalog.
+    'on LEVEL', 'instant', 'status', 'beep', 'links', 'settings' and 'set' use the device's
+    identity, from the identity cache or an ID Request, to look it up in the Insteon device
+    catalog. What 'send' finds is worth adding to the catalog, marked as observed.
+    """
+
+  /// The help for `insteon scene`.
+  public static let scene = """
+    Usage: insteon [--hub HOST[:PORT] | --serial PATH] scene GROUP on|off
+           insteon [--hub HOST[:PORT] | --serial PATH] group GROUP on|off
+
+    Sends Light On or Light Off to one of the modem's ALL-Link groups, from 0 to 254, with
+    Send ALL-Link Command: the modem broadcasts it, then sends each device that responds to
+    the group a cleanup message. Says how many responders the modem's ALL-Link database
+    lists for the group, and which didn't acknowledge their cleanup.
+    """
+
+  /// The help for `insteon beep`.
+  public static let beep = """
+    Usage: insteon [--hub HOST[:PORT] | --serial PATH] beep [--double]
+
+    Makes the modem beep (Beep). --double beeps twice, which only later modem firmware does.
+    """
+
+  /// The help for `insteon modem`.
+  public static let modem = """
+    Usage: insteon [--hub HOST[:PORT] | --serial PATH] modem send HEX [--force] [--wait SECONDS]
+
+    Writes a serial command to the modem as given, for exploring, then prints everything the
+    modem sends in the next SECONDS, 3 by default, in hexadecimal and as the package reads it.
+    HEX is the command's bytes, starting with 02, such as 0277 or 02 77 01.
+
+    Without --force, a command is refused when the package doesn't know its number, since the
+    modem's answer can't be read, or when it changes or erases what the modem keeps or stops
+    it answering, such as Reset the IM (0x67), Manage ALL-Link Record (0x6F) and Write
+    Database (0x76).
+
+    What you find is worth adding to the Insteon device catalog, marked as observed.
+
+      --force             Send the command even so.
+      --wait SECONDS      How long to print the modem's replies. Defaults to 3.
     """
 
   /// The help for `insteon watch`.

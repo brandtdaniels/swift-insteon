@@ -316,6 +316,29 @@ actor CommandPacer<Parser: ReplyParser> {
 
   }
 
+  /// Writes bytes in a turn of their own, without waiting for an answer, for a command whose
+  /// answer the caller reads from ``CommandPacer/replies()`` itself.
+  ///
+  /// - Parameter bytes: The bytes to write.
+  /// - Throws: `closedError` if the device is closed, `CancellationError` if the task is
+  ///   canceled while waiting for the turn, or the connection's error.
+  func write(_ bytes: [UInt8]) async throws {
+
+    try await waitForTurn()
+    defer { turns.release() }
+
+    try await waitForUnansweredCommand()
+
+    guard !isClosed else {
+
+      throw closedError
+
+    }
+
+    try await connection.write(bytes)
+
+  }
+
   /// Returns a stream of everything the device sends after this call, which finishes when the
   /// device closes.
   func replies() -> AsyncStream<Reply> {

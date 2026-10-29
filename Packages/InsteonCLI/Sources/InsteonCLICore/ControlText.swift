@@ -27,6 +27,51 @@ public enum ControlText {
 
   }
 
+  /// The level to send with Light Instant Change.
+  ///
+  /// - Parameters:
+  ///   - percent: The level asked for, from 0 to 100.
+  ///   - kind: The kind of the device's main group, if known.
+  /// - Returns: For a relay, `0x00` for 0% and otherwise `0xFF`, since it's on/off only; and
+  ///   otherwise the level for the percentage.
+  public static func instantLevel(percent: Int, kind: GroupType.Kind?) -> UInt8 {
+
+    guard kind == .relay else {
+
+      return LightLevel.level(percent: percent)
+
+    }
+
+    return percent == 0 ? 0x00 : 0xFF
+
+  }
+
+  /// What to print after Light Instant Change.
+  ///
+  /// - Parameters:
+  ///   - device: The device.
+  ///   - percent: The level asked for.
+  ///   - kind: The kind of the device's main group, if known.
+  /// - Returns: A line such as "Changed 1A.2B.3C to 50% at once.", or for a relay,
+  ///   "1A.2B.3C is on/off only; turned it on."
+  public static func changedInstantly(_ device: InsteonAddress, percent: Int, kind: GroupType.Kind?) -> String {
+
+    guard kind == .relay else {
+
+      return "Changed \(device) to \(percent)% at once."
+
+    }
+
+    if percent == 0 {
+
+      return "Turned \(device) off."
+
+    }
+
+    return percent == 100 ? "Turned \(device) on." : "\(device) is on/off only; turned it on."
+
+  }
+
   /// What to print after Light On.
   ///
   /// - Parameters:

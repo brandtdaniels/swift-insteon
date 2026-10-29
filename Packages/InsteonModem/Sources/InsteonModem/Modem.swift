@@ -125,6 +125,29 @@ public actor Modem: SerialCommandSender {
 
   }
 
+  /// Writes bytes to the modem as they are, without waiting for its answer, for exploring
+  /// commands the package doesn't model.
+  ///
+  /// The bytes wait for their turn like any command, but they aren't retried and nothing
+  /// checks them: listen with ``Modem/replies()`` before writing to read the modem's echo and
+  /// anything that follows it. The modem's replies are read as ``ModemReply`` values, so a
+  /// reply to a command number the package doesn't know isn't reported. Prefer
+  /// ``Modem/send(_:)`` for anything a `SerialCommand` describes.
+  ///
+  /// ```swift
+  /// let replies = await modem.replies()
+  /// try await modem.write(rawCommand: [0x02, 0x77, 0x01])
+  /// ```
+  ///
+  /// - Parameter bytes: The bytes to write, starting with `0x02`.
+  /// - Throws: ``ModemError/connectionClosed`` if the modem is closed, `CancellationError` if
+  ///   the task is canceled while waiting for its turn, or the connection's error.
+  public func write(rawCommand bytes: [UInt8]) async throws {
+
+    try await pacer.write(bytes)
+
+  }
+
   /// Asks the modem about itself with Get IM Info (`0x60`).
   ///
   /// - Returns: The modem's address, device category, subcategory and firmware version. Every

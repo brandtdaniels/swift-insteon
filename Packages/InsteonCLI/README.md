@@ -51,15 +51,49 @@ The Hub's interface is plain HTTP, so the password is readable on the network: u
 | `unlink [ADDRESS] [--group N] [--controller \| --responder] [--timeout SECONDS]` | Removes a link with the device's SET button. With `--responder`, the device goes into unlinking mode first, with its own steps when its identity is known; with `ADDRESS`, only that device's unlink is accepted, and without `--group` the group is the one the modem's records for the device show. Afterward, it says which groups still link the device. |
 | `device ADDRESS id` | Get Insteon Engine Version, ID Request and Product Data Request, with the catalog's product. |
 | `device ADDRESS ping` | Ping, with the time the device took to answer. |
-| `device ADDRESS on [LEVEL%]` | Light On, fully or to a level. A device the catalog says is on/off only turns on. |
-| `device ADDRESS off` | Light Off. |
+| `device ADDRESS on [LEVEL%] [--fast]` | Light On, fully or to a level. A device the catalog says is on/off only turns on. `--fast` sends Light On Fast, which ignores the ramp rate, when the catalog lists it for the device. |
+| `device ADDRESS off [--fast]` | Light Off, or Light Off Fast. |
+| `device ADDRESS instant LEVEL%` | Light Instant Change, when the catalog lists it. An on/off device turns on, or off at 0%. |
 | `device ADDRESS status` | Light Status Request: the device's level, or on or off for an on/off device. |
+| `device ADDRESS beep` | Beep. A device whose command set doesn't list it is sent it anyway, with a note. |
 | `device ADDRESS links` | Reads the device's ALL-Link database, with what each record's data means when the catalog describes the device. |
+| `device ADDRESS settings [--advanced]` | Reads the settings the catalog describes for the device, grouped by section, as described below. |
+| `device ADDRESS set NAME VALUE [--button N]` | Changes a setting, then reads it back and prints the old and new values. |
+| `device ADDRESS send CMD1 CMD2 [--extended [D1 ... D14]] [--no-checksum] [--wait SECONDS]` | Sends a direct message as given and prints the ACK or NAK and what the device sends in the next 3 seconds, for exploring. |
+| `scene GROUP on\|off`, `group GROUP on\|off` | Send ALL-Link Command with Light On or Light Off to one of the modem's groups, saying how many responders the modem's ALL-Link database lists for it and which didn't acknowledge their cleanup. |
+| `beep [--double]` | The modem's Beep; `--double` beeps twice on later firmware. |
+| `modem send HEX [--force] [--wait SECONDS]` | Writes a serial command as given, such as `0277`, and prints what the modem sends back, for exploring. |
 | `watch [--raw]` | Prints what the modem hears until Control-C, with devices' group commands read as the catalog's named events and SET Button Pressed named. `--raw` adds each message's bytes. |
 
-The modem's group is 0 unless `--group` is given, as Insteon's Hub app links devices. Links made by earlier versions of the command are in group 1: `insteon unlink ADDRESS` finds them from the modem's records, and `insteon unlink --group 1` removes one without an address. `--json` prints JSON for `discover`, `info`, `links`, `link`, `unlink` and `device ... id`, `status` and `links`; `link --two-way` prints an array of both links. `insteon --help` and `insteon COMMAND --help` print help.
+The modem's group is 0 unless `--group` is given, as Insteon's Hub app links devices. Links made by earlier versions of the command are in group 1: `insteon unlink ADDRESS` finds them from the modem's records, and `insteon unlink --group 1` removes one without an address. `--json` prints JSON for `discover`, `info`, `links`, `link`, `unlink` and `device ... id`, `status`, `links` and `settings`; `link --two-way` prints an array of both links. `insteon --help` and `insteon COMMAND --help` print help.
 
 Control-C stops a command cleanly: `link` and `unlink` take the modem out of linking mode first. Press it again to stop at once.
+
+### Settings
+
+`insteon device ADDRESS settings` reads what the Insteon device catalog describes for the device's command set: each Get Operating Flags query its flags and readings need, and extended Get for button 1, and for each of the device's other groups when some values are per button. It prints them under the catalog's sections, in the catalog's order, with each value shown through its value table, unit and scale, its default when the catalog gives one, and whether it's writable:
+
+```text
+$ insteon device 4D.5E.6F settings
+Settings of 4D.5E.6F, Dimmer Switch 2477D (SwitchLinc Dimmer):
+
+Load
+  Resume dim:              off    writable
+  Ramp rate:               0.5 s  writable
+  On-level:                100%   writable
+
+LEDs
+  Blink LED when sending:  on     writable
+  LED brightness:          64     writable
+```
+
+A setting the device didn't report reads "not reported". Settings the catalog marks advanced, such as the powerline's timing and X10, are shown only with `--advanced`. `--json` prints each setting with its section, name, label, button, value, byte, default and whether it's writable.
+
+`insteon device ADDRESS set NAME VALUE` takes the catalog's name, such as `rampRate`, or its label in any case, such as `"ramp rate"`. A flag takes `on` or `off`; a value takes a label of its value table, such as `0.5s`, a number in its unit, such as `50%`, buttons such as `1,3`, or a byte such as `0x1C`. `--button N` picks the button or group of a per-button value. The command refuses a setting the catalog gives no way to write, and says why. Set Operating Flags goes to an i2CS device as an extended message with a checksum.
+
+### Exploring
+
+`device ADDRESS send` and `modem send` send what you give them, to learn what a device or modem does that the catalog doesn't describe yet. `modem send` refuses, without `--force`, a command number the package doesn't know and commands that change or erase what the modem keeps or stop it answering, such as Reset the IM (`0x67`), Manage ALL-Link Record (`0x6F`) and Write Database (`0x76`). What you learn belongs in the catalog, marked as observed.
 
 ### Naming devices
 

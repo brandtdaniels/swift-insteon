@@ -41,6 +41,18 @@ extension CommandSet: Decodable {
 
     let verification: Verification?
 
+    let label: String?
+
+    let section: String?
+
+    let advanced: Bool?
+
+    let `default`: Bool?
+
+    let onCommand: String?
+
+    let offCommand: String?
+
   }
 
   private struct Reading: Decodable {
@@ -52,6 +64,12 @@ extension CommandSet: Decodable {
     let query: ProfileByte
 
     let verification: Verification?
+
+    let label: String?
+
+    let section: String?
+
+    let advanced: Bool?
 
   }
 
@@ -100,6 +118,22 @@ extension CommandSet: Decodable {
     let range: Range?
 
     let verification: Verification?
+
+    let label: String?
+
+    let section: String?
+
+    let advanced: Bool?
+
+    let `default`: ProfileByte?
+
+    let unit: String?
+
+    let scale: Double?
+
+    let table: String?
+
+    let write: String?
 
   }
 
@@ -281,15 +315,15 @@ extension CommandSet: Decodable {
   ///
   /// A value of a kind from a later version of the catalog reads as
   /// ``SettingValue/Kind/number``, and a field's as a ``FieldKind/number(isSigned:scale:unit:)``.
-  /// A unit from a later version reads as none, and an extended command whose integrity scheme
-  /// is from a later version is left out.
+  /// A unit or settings section from a later version reads as none, and an extended command
+  /// whose integrity scheme is from a later version is left out.
   ///
   /// - Parameter decoder: The decoder to read from.
   /// - Throws: `DecodingError` if the JSON isn't a command set, a byte isn't written as `0x`
   ///   and two hexadecimal digits, a position is outside its message's user data, a field's bytes
   ///   or mask can't be read, a range ends before it starts, a standard command has both a
-  ///   fixed cmd2 and a parameter, or a field names an enumeration the command set doesn't
-  ///   have.
+  ///   fixed cmd2 and a parameter, a field names an enumeration the command set doesn't
+  ///   have, or a value's scale isn't above zero.
   public init(from decoder: any Decoder) throws {
 
     let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -308,7 +342,13 @@ extension CommandSet: Decodable {
           on: flag.on?.value,
           off: flag.off?.value,
           extendedWhen: flag.extendedWhen.map(SettingName.init(rawValue:)),
-          verification: flag.verification ?? .documented
+          verification: flag.verification ?? .documented,
+          label: flag.label,
+          section: flag.section.flatMap(SettingSection.init(rawValue:)),
+          isAdvanced: flag.advanced ?? false,
+          defaultValue: flag.default,
+          onCommand: flag.onCommand.map(SettingName.init(rawValue:)),
+          offCommand: flag.offCommand.map(SettingName.init(rawValue:))
         )
 
       },
@@ -318,7 +358,10 @@ extension CommandSet: Decodable {
           name: SettingName(rawValue: reading.name),
           summary: reading.description,
           query: OperatingFlagsRequest(rawValue: reading.query.value),
-          verification: reading.verification ?? .documented
+          verification: reading.verification ?? .documented,
+          label: reading.label,
+          section: reading.section.flatMap(SettingSection.init(rawValue:)),
+          isAdvanced: reading.advanced ?? false
         )
 
       },
@@ -569,13 +612,27 @@ extension CommandSet: Decodable {
 
       }
 
+      if let scale = value.scale, !(scale > 0) {
+
+        throw corrupted("The \(value.name) value's scale isn't above zero.")
+
+      }
+
       return SettingValue(
         name: SettingName(rawValue: value.name),
         summary: value.description,
         position: value.byte,
         kind: value.kind.flatMap(SettingValue.Kind.init(rawValue:)) ?? .number,
         range: range,
-        verification: value.verification ?? .documented
+        verification: value.verification ?? .documented,
+        label: value.label,
+        section: value.section.flatMap(SettingSection.init(rawValue:)),
+        isAdvanced: value.advanced ?? false,
+        defaultValue: value.default?.value,
+        unit: value.unit.flatMap(FieldUnit.init(rawValue:)),
+        scale: value.scale ?? 1,
+        table: value.table.map(SettingName.init(rawValue:)),
+        write: value.write.map(SettingName.init(rawValue:))
       )
 
     }

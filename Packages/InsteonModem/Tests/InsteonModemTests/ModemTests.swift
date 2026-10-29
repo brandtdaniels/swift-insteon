@@ -52,6 +52,35 @@ struct ModemTests {
 
   }
 
+  @Test func writesARawCommandWithoutWaitingForItsEcho() async throws {
+
+    // The modem doesn't answer, and the write doesn't wait for it.
+    let connection = ScriptedConnection { _, _ in [] }
+
+    let written = try await Modem.withConnection(connection, retryPolicy: policy, clock: clock) { modem in
+
+      try await modem.write(rawCommand: [0x02, 0x77, 0x01])
+
+      return connection.written
+
+    }
+
+    #expect(written == [[0x02, 0x77, 0x01]])
+
+  }
+
+  @Test func refusesARawCommandOnceClosed() async throws {
+
+    let modem = try await Modem.withConnection(ScriptedConnection(), retryPolicy: policy, clock: clock) { $0 }
+
+    await #expect(throws: ModemError.connectionClosed) {
+
+      try await modem.write(rawCommand: [0x02, 0x60])
+
+    }
+
+  }
+
   @Test func withConnectionClosesTheModemWhenItsBodyReturns() async throws {
 
     let modem = try await Modem.withConnection(ScriptedConnection(), retryPolicy: policy, clock: clock) { $0 }
