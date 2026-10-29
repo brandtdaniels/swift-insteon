@@ -508,7 +508,7 @@ extension CommandSet {
 
     if value.kind == .buttons {
 
-      return try Self.buttonMask(compact, value: value)
+      return try Self.buttonMask(compact, value: value, text: text)
 
     }
 
@@ -600,22 +600,28 @@ extension CommandSet {
 
   }
 
-  /// The mask for buttons such as `1,3`, or `none`.
-  private static func buttonMask(_ compact: String, value: SettingValue) throws(SettingInputError) -> UInt8 {
+  /// The mask for buttons such as `1,3`, or `none`, if it's in the value's range.
+  ///
+  /// - Parameters:
+  ///   - compact: The text, lowercased and without spaces.
+  ///   - value: The value.
+  ///   - text: The text as it was given, for the error.
+  private static func buttonMask(_ compact: String, value: SettingValue, text: String) throws(SettingInputError) -> UInt8 {
 
     if compact == "none" {
 
-      return 0
+      return try Self.checked(0, in: value)
 
     }
 
     var mask: UInt8 = 0
 
-    for part in compact.split(separator: ",") {
+    // Empty parts, as in "1,,3" or "1,", are refused rather than skipped.
+    for part in compact.split(separator: ",", omittingEmptySubsequences: false) {
 
       guard let button = Int(part) else {
 
-        throw .unreadable(value.name, compact)
+        throw .unreadable(value.name, text)
 
       }
 
@@ -629,7 +635,7 @@ extension CommandSet {
 
     }
 
-    return mask
+    return try Self.checked(mask, in: value)
 
   }
 

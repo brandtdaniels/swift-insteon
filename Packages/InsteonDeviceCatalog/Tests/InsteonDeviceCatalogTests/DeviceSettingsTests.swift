@@ -231,6 +231,21 @@ struct DeviceSettingsTests {
 
   }
 
+  @Test func sealsAnExtendedSetWithAChecksumInD14() throws {
+
+    let commands = try commands()
+    let change = try #require(commands.change(for: try value("x10HouseCode")))
+    let message = try change.message(to: dimmer, button: 0x03, setting: "x10HouseCode", to: 0x06, current: ["x10HouseCode": 0x20, "x10UnitCode": 0x02])
+
+    // The checksum makes cmd1, cmd2 and D1 through D14 add up to a multiple of 0x100.
+    let summed: [UInt8] = [message.command.command1, message.command.command2] + Array(message.userData.bytes[0..<13])
+    let sum: Int = summed.reduce(0) { (total: Int, byte: UInt8) -> Int in total + Int(byte) }
+    let checksum: UInt8 = UInt8((0x100 - sum % 0x100) % 0x100)
+
+    #expect(message.userData[14] == checksum)
+
+  }
+
   @Test func refusesAnExtendedSetWithoutTheOtherBytes() throws {
 
     let change = try #require(try commands().change(for: try value("x10HouseCode")))
@@ -331,6 +346,25 @@ struct DeviceSettingsTests {
     #expect(throws: SettingInputError.outOfRange("offMask")) {
 
       try commands.raw(for: offMask, parsing: "9")
+
+    }
+
+    // An empty entry is refused, and the error repeats the text as it was given.
+    #expect(throws: SettingInputError.unreadable("offMask", "1,,3")) {
+
+      try commands.raw(for: offMask, parsing: "1,,3")
+
+    }
+
+    #expect(throws: SettingInputError.unreadable("offMask", "1, ,3")) {
+
+      try commands.raw(for: offMask, parsing: "1, ,3")
+
+    }
+
+    #expect(throws: SettingInputError.unreadable("offMask", "1,3,")) {
+
+      try commands.raw(for: offMask, parsing: "1,3,")
 
     }
 

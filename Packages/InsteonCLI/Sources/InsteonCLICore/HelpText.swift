@@ -257,7 +257,12 @@ public enum HelpText {
     Without --force, a command is refused when the package doesn't know its number, since the
     modem's answer can't be read, or when it changes or erases what the modem keeps or stops
     it answering, such as Reset the IM (0x67), Manage ALL-Link Record (0x6F) and Write
-    Database (0x76).
+    Database (0x76). So is Start ALL-Linking (0x64) with link code FF, which deletes links,
+    and a message (0x62) that writes to a device: Read/Write ALL-Link Database (0x2F), Set
+    Operating Flags (0x20) or Extended Set/Get (0x2E) with D2 other than 00. Use 'insteon
+    device ADDRESS set' or 'insteon device ADDRESS send' for those. A command must also have
+    the length its number calls for, counting 02: 8 bytes for a standard message and 22 for
+    an extended one, and 2 or 3 for Beep (0x77).
 
     What you find is worth adding to the Insteon device catalog, marked as observed.
 

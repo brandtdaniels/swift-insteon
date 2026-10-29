@@ -52,10 +52,9 @@ struct ModemTests {
 
   }
 
-  @Test func writesARawCommandWithoutWaitingForItsEcho() async throws {
+  @Test func writesARawCommandAndWaitsForItsEcho() async throws {
 
-    // The modem doesn't answer, and the write doesn't wait for it.
-    let connection = ScriptedConnection { _, _ in [] }
+    let connection = ScriptedConnection()
 
     let written = try await Modem.withConnection(connection, retryPolicy: policy, clock: clock) { modem in
 
@@ -66,6 +65,62 @@ struct ModemTests {
     }
 
     #expect(written == [[0x02, 0x77, 0x01]])
+
+  }
+
+  @Test func stopsWaitingForARawCommandsAnswerAfterTheTimeout() async throws {
+
+    // The modem doesn't answer, which isn't an error for a raw command.
+    let connection = ScriptedConnection { _, _ in [] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      async let written: Void = modem.write(rawCommand: [0x02, 0x77, 0x01])
+      await clock.waitForSleeper(until: .seconds(2))
+      clock.advance(by: .seconds(2))
+      try await written
+
+    }
+
+    #expect(connection.written == [[0x02, 0x77, 0x01]])
+
+  }
+
+  @Test func doesNotWriteARawCommandAgainAfterANak() async throws {
+
+    // A NAK ends the raw command's turn, and the next command is written after it.
+    let connection = ScriptedConnection { written, index in index == 0 ? [0x15] : written + [0x06] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      try await modem.write(rawCommand: [0x02, 0x6D])
+      try await modem.send(.beep)
+
+    }
+
+    #expect(connection.written == [[0x02, 0x6D], [0x02, 0x77]])
+
+  }
+
+  @Test func doesNotSendADoubleBeepAgainAfterANak() async throws {
+
+    // Firmware without Beep's parameter rejects it every time, so it isn't retried.
+    let connection = ScriptedConnection { _, _ in [0x15] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      await #expect(throws: ModemError.rejected(.beep)) {
+
+        try await modem.send(.doubleBeep)
+
+      }
+
+    }
+
+    #expect(connection.written == [[0x02, 0x77, 0x01]])
 
   }
 

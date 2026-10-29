@@ -229,8 +229,23 @@ enum SettingsCommands {
     }
 
     let after: UInt8? = try await answer(to: read, modem: modem)?.command.command2
+    let asked: String = SettingsText.flag(state)
 
-    Output.line("\(item.label): \(flagText(before, flag: flag)) → \(flagText(after, flag: flag))")
+    guard let reported: UInt8 = after else {
+
+      Output.line("\(item.label): \(flagText(before, flag: flag)) → \(asked), not confirmed: the device didn't report the flag afterward.")
+
+      return
+
+    }
+
+    guard (reported & flag.bit != 0) == state else {
+
+      throw CommandFailure(description: "\(item.label) wasn't changed to \(asked): the device reports \(flagText(reported, flag: flag)).")
+
+    }
+
+    Output.line("\(item.label): \(flagText(before, flag: flag)) → \(flagText(reported, flag: flag))")
 
   }
 
@@ -254,6 +269,8 @@ enum SettingsCommands {
 
     let command = StandardDirectCommand.setOperatingFlags(flag: command2)
 
+    // An i2CS device gets the extended form with a checksum even when the flag names an
+    // extendedWhen flag: i2CS is checked first, so the guarding flag isn't read for it.
     if try await engine(of: device, known: known, modem: modem) == .i2cs {
 
       try await modem.request(ExtendedMessage(to: device, command: command))
@@ -293,7 +310,26 @@ enum SettingsCommands {
 
     }
 
-    let acknowledgment = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.getEngineVersion))
+    let acknowledgment: ReceivedMessage
+
+    do {
+
+      acknowledgment = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.getEngineVersion))
+
+    } catch let error as ModemError {
+
+      guard case .deviceRejected = error else {
+
+        throw error
+
+      }
+
+      throw CommandFailure(
+        description: "\(device) rejected Get Insteon Engine Version, as an i2CS device does when it isn't linked to the modem, "
+          + "so its settings can't be written. Link it first with 'insteon link \(device)'."
+      )
+
+    }
 
     return InsteonEngine(rawValue: acknowledgment.command.command2)
 
@@ -349,6 +385,10 @@ enum SettingsCommands {
 
       throw CommandFailure(description: "Writing \(item.label) also writes \(other), which the device didn't report, so nothing was changed.")
 
+    } catch let error as FieldError {
+
+      throw CommandFailure(description: "The Insteon device catalog's command for \(item.label) can't take \(commands.text(for: value, raw: raw)): \(fieldProblem(error)), so nothing was changed.")
+
     }
 
     try await modem.request(message)
@@ -356,9 +396,39 @@ enum SettingsCommands {
     let after: [SettingName: UInt8]? = try await readValues(of: device, settings: settings, button: button, modem: modem)
     let title: String = isPerButton ? "\(item.label) (button \(button))" : item.label
     let old: String = before?[value.name].map { commands.text(for: value, raw: $0) } ?? "not reported"
-    let new: String = after?[value.name].map { commands.text(for: value, raw: $0) } ?? "not reported"
+    let asked: String = commands.text(for: value, raw: raw)
 
-    Output.line("\(title): \(old) → \(new)")
+    guard let reported: UInt8 = after?[value.name] else {
+
+      Output.line("\(title): \(old) → \(asked), not confirmed: the device didn't report the value afterward.")
+
+      return
+
+    }
+
+    guard reported == raw else {
+
+      throw CommandFailure(description: "\(title) wasn't changed to \(asked): the device reports \(commands.text(for: value, raw: reported)).")
+
+    }
+
+    Output.line("\(title): \(old) → \(asked)")
+
+  }
+
+  /// Why a catalog's extended command couldn't take a value, as a clause.
+  private static func fieldProblem(_ error: FieldError) -> String {
+
+    switch error {
+    case let .mismatchedKind(name):
+      "its parameter \(name) is a different kind of value"
+    case let .outOfRange(name):
+      "it's outside what its parameter \(name) takes"
+    case let .unknownName(name):
+      "its parameter \(name) has no such name"
+    case let .missingValue(name):
+      "it has no parameter for \(name)"
+    }
 
   }
 

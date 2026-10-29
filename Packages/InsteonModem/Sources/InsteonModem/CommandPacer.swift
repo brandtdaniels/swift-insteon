@@ -316,26 +316,25 @@ actor CommandPacer<Parser: ReplyParser> {
 
   }
 
-  /// Writes bytes in a turn of their own, without waiting for an answer, for a command whose
-  /// answer the caller reads from ``CommandPacer/replies()`` itself.
+  /// Writes a command once in a turn of its own and holds the turn until a step of its answer
+  /// fails or the last step is accepted, without writing it again, for a command whose answer
+  /// the caller reads from ``CommandPacer/replies()`` itself.
   ///
-  /// - Parameter bytes: The bytes to write.
-  /// - Throws: `closedError` if the device is closed, `CancellationError` if the task is
-  ///   canceled while waiting for the turn, or the connection's error.
-  func write(_ bytes: [UInt8]) async throws {
+  /// A step's verdict of `.rejected` ends the wait like `.accepted` does; nothing is retried.
+  ///
+  /// - Parameter exchange: The command to write, and the replies that end the wait.
+  /// - Throws: The `timedOut` error of a step that wasn't completed in time, the error of a
+  ///   step that failed, `closedError` if the device is closed, `CancellationError` if the task
+  ///   is canceled, or the connection's error.
+  func sendOnce(_ exchange: Exchange<Reply>) async throws {
 
     try await waitForTurn()
     defer { turns.release() }
 
     try await waitForUnansweredCommand()
+    try Task.checkCancellation()
 
-    guard !isClosed else {
-
-      throw closedError
-
-    }
-
-    try await connection.write(bytes)
+    _ = try await transmit(exchange)
 
   }
 

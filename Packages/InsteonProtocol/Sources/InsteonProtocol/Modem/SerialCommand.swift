@@ -150,8 +150,9 @@ public enum SerialCommand: Hashable, Sendable {
 
   /// Makes the modem beep twice: Beep with the parameter byte `0x01`.
   ///
-  /// Only later firmware takes the parameter; a modem whose firmware doesn't echoes Beep
-  /// without it, so the send isn't accepted.
+  /// Only later firmware takes the parameter; older modem firmware may not accept it, and
+  /// NAKs the command or echoes Beep without the parameter, so the send isn't accepted. Since
+  /// that happens every time, `Modem.send(_:)` doesn't write it again after a NAK.
   case doubleBeep
 
   /// Sets the data the modem stores in the responder record its next ALL-Link creates.

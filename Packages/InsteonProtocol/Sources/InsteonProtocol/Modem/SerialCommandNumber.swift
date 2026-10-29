@@ -95,3 +95,45 @@ public enum SerialCommandNumber: UInt8, CaseIterable, Hashable, Sendable {
   case manageDeviceRecord = 0x82
 
 }
+
+extension SerialCommandNumber {
+
+  /// How many bytes a host command with this number has, counting the start byte (`0x02`) and
+  /// the number, or `nil` for a command whose length depends on its parameters.
+  ///
+  /// Two commands have more than one length. Send Insteon Standard or Extended Message
+  /// (`0x62`) has 8 bytes for a standard message and 22 for an extended one, as bit 4 of its
+  /// message flags says. Beep (`0x77`) has 2 bytes, or 3 on later firmware, which takes a
+  /// parameter byte.
+  ///
+  /// ```swift
+  /// SerialCommandNumber.startAllLinking.commandLength  // 4
+  /// SerialCommandNumber.sendMessage.commandLength      // nil
+  /// ```
+  public var commandLength: Int? {
+
+    switch self {
+    case .sendMessage, .beep:
+      return nil
+    case .getModemInfo, .cancelAllLinking, .resetModem, .getFirstAllLinkRecord, .getNextAllLinkRecord,
+         .getAllLinkRecordForSender, .ledOn, .ledOff, .rfSleep, .getModemConfiguration, .cancelCleanup,
+         .readRadioStatus:
+      return 2
+    case .setAcknowledgmentByte, .setModemConfiguration, .setNegativeAcknowledgmentByte,
+         .setApplicationRetries, .setRadio, .readDiagnostics:
+      return 3
+    case .sendX10, .startAllLinking, .setAcknowledgmentBytes, .readDatabase:
+      return 4
+    case .sendAllLinkCommand, .setHostDeviceCategory, .setResponderLinkData:
+      return 5
+    case .manageAllLinkRecord:
+      return 11
+    case .writeDatabase:
+      return 12
+    case .manageDeviceRecord:
+      return 13
+    }
+
+  }
+
+}

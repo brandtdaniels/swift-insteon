@@ -125,14 +125,20 @@ public actor Modem: SerialCommandSender {
 
   }
 
-  /// Writes bytes to the modem as they are, without waiting for its answer, for exploring
-  /// commands the package doesn't model.
+  /// Writes bytes to the modem as they are, for exploring commands the package doesn't model.
   ///
-  /// The bytes wait for their turn like any command, but they aren't retried and nothing
-  /// checks them: listen with ``Modem/replies()`` before writing to read the modem's echo and
+  /// The bytes wait for their turn like any command and hold it until the modem echoes a
+  /// command with the same number, answers with a NAK (`0x15`), or the retry policy's answer
+  /// timeout passes, so no other command is written while the modem may still be busy with
+  /// them. They're written once, never again, and nothing checks them; a timeout isn't an
+  /// error. Listen with ``Modem/replies()`` before writing to read the modem's echo and
   /// anything that follows it. The modem's replies are read as `ModemReply` values, so a
-  /// reply to a command number the package doesn't know isn't reported. Prefer
-  /// ``Modem/send(_:)`` for anything a `SerialCommand` describes.
+  /// reply to a command number the package doesn't know isn't reported, and the turn is held
+  /// for the whole timeout. Prefer ``Modem/send(_:)`` for anything a `SerialCommand`
+  /// describes.
+  ///
+  /// The echo is read by ``Modem/run()``, so a write made while it isn't running holds the
+  /// turn for the whole timeout.
   ///
   /// ```swift
   /// let replies = await modem.replies()
@@ -141,10 +147,50 @@ public actor Modem: SerialCommandSender {
   ///
   /// - Parameter bytes: The bytes to write, starting with `0x02`.
   /// - Throws: ``ModemError/connectionClosed`` if the modem is closed, `CancellationError` if
-  ///   the task is canceled while waiting for its turn, or the connection's error.
+  ///   the task is canceled, or the connection's error.
   public func write(rawCommand bytes: [UInt8]) async throws {
 
-    try await pacer.write(bytes)
+    let number: UInt8? = bytes.count >= 2 ? bytes[1] : nil
+
+    let step = AnswerStep<ModemReply>(
+      verdict: { (reply: ModemReply) -> Verdict? in
+
+        Self.endsRawCommand(reply, number: number) ? .accepted : nil
+
+      },
+      timedOut: RawCommandUnanswered()
+    )
+
+    do {
+
+      try await pacer.sendOnce(Exchange(bytes: bytes, steps: [step]))
+
+    } catch is RawCommandUnanswered {
+
+      // The modem didn't answer in time, which a raw command may not; what it did send is in
+      // the caller's replies.
+
+    }
+
+  }
+
+  /// Whether a reply ends the wait for a raw command with a command number.
+  private static func endsRawCommand(_ reply: ModemReply, number: UInt8?) -> Bool {
+
+    switch reply {
+    case let .echo(echo):
+      return echo.number.rawValue == number
+    case .negativeAcknowledgment:
+      return true
+    case .modemInfo:
+      return number == SerialCommandNumber.getModemInfo.rawValue
+    case .modemConfiguration:
+      return number == SerialCommandNumber.getModemConfiguration.rawValue
+    case .radioStatus:
+      return number == SerialCommandNumber.readRadioStatus.rawValue
+    default:
+      return false
+    }
 
   }
 
@@ -886,6 +932,12 @@ public actor Modem: SerialCommandSender {
 
   private static func exchange(for command: SerialCommand) -> Exchange<ModemReply> {
 
+    if command == .doubleBeep {
+
+      return doubleBeepExchange()
+
+    }
+
     let number = command.number
     let parameters = command.parameters
 
@@ -916,6 +968,33 @@ public actor Modem: SerialCommandSender {
 
   }
 
+  /// Beep with its parameter byte, which isn't written again after a NAK: a modem whose
+  /// firmware doesn't take the parameter NAKs it, or echoes Beep without it, every time.
+  private static func doubleBeepExchange() -> Exchange<ModemReply> {
+
+    let command: SerialCommand = .doubleBeep
+    let rejected: ModemError = .rejected(.beep)
+
+    let step = AnswerStep<ModemReply>(
+      verdict: { (reply: ModemReply) -> Verdict? in
+
+        switch reply {
+        case let .echo(echo) where echo.number == .beep:
+          return isAcceptedEcho(echo, of: command) ? .accepted : .failed(rejected)
+        case .negativeAcknowledgment:
+          return .failed(rejected)
+        default:
+          return nil
+        }
+
+      },
+      timedOut: ModemError.timedOut(.beep)
+    )
+
+    return Exchange(bytes: command.bytes, steps: [step])
+
+  }
+
   /// How much longer than the answer timeout a command may take. The Insteon Developer's Guide says
   /// the modem answers Reset the IM once it has erased its memory, which takes about 20
   /// seconds on a model with external EEPROM.
@@ -926,3 +1005,7 @@ public actor Modem: SerialCommandSender {
   }
 
 }
+
+/// The modem didn't answer a raw command in time, which `Modem.write(rawCommand:)` doesn't
+/// treat as an error.
+private struct RawCommandUnanswered: Error {}

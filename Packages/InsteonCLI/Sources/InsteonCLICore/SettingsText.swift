@@ -204,7 +204,8 @@ public enum SettingsText {
   }
 
   /// What values a setting takes, for an error, such as
-  /// `"a label such as 0.5 s, or a byte such as 0x1C"`.
+  /// `"a label such as 0.5 s, or a byte such as 0x1C"`. A value table whose entries stand
+  /// for durations also takes a duration, such as `2s`.
   ///
   /// - Parameters:
   ///   - value: The setting.
@@ -219,6 +220,12 @@ public enum SettingsText {
       let labels: [String] = table.entries.prefix(3).map(\.label)
 
       kinds.append("a label such as " + labels.joined(separator: ", "))
+
+      if let example: String = durationExample(in: table) {
+
+        kinds.append("a duration such as " + example)
+
+      }
 
     } else if value.kind == .buttons {
 
@@ -240,6 +247,32 @@ public enum SettingsText {
     kinds.append("a byte from \(Hex.byte(lowest)) to \(Hex.byte(highest))")
 
     return kinds.joined(separator: ", or ")
+
+  }
+
+  /// The first duration a value table has, written as someone could type it, such as `2s`.
+  private static func durationExample(in table: ValueTable) -> String? {
+
+    let durations: [Duration] = table.entries.compactMap { (entry: ValueTable.Entry) -> Duration? in entry.duration }
+
+    guard let duration: Duration = durations.first else {
+
+      return nil
+
+    }
+
+    let components = duration.components
+    let milliseconds: Int64 = components.seconds * 1_000 + components.attoseconds / 1_000_000_000_000_000
+
+    if milliseconds % 1_000 == 0 {
+
+      return String(milliseconds / 1_000) + "s"
+
+    }
+
+    let seconds: Double = Double(milliseconds) / 1_000
+
+    return String(seconds) + "s"
 
   }
 

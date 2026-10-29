@@ -61,7 +61,7 @@ enum ExampleSettings {
         SettingWrite(name: "onLevel", summary: "On-level.", selector: 0x06, isPerButton: false, bytes: [.init(position: 3, value: "onLevel")])
       ]
     ),
-    valueTables: [ValueTable(name: "rampRate", entries: [.init(value: 0x1C, label: "0.5 s"), .init(value: 0x1F, label: "0.1 s")])]
+    valueTables: [ValueTable(name: "rampRate", entries: [.init(value: 0x1C, label: "0.5 s", duration: .milliseconds(500)), .init(value: 0x1F, label: "0.1 s", duration: .milliseconds(100))])]
   )
 
 }
@@ -115,7 +115,7 @@ struct DeviceSettingsTextTests {
 
     let commands = ExampleSettings.commands
 
-    #expect(SettingsText.expectedInput(for: ExampleSettings.rampRate, in: commands) == "a label such as 0.5 s, 0.1 s, or a byte from 0x00 to 0x1F")
+    #expect(SettingsText.expectedInput(for: ExampleSettings.rampRate, in: commands) == "a label such as 0.5 s, 0.1 s, or a duration such as 0.5s, or a byte from 0x00 to 0x1F")
     #expect(SettingsText.expectedInput(for: ExampleSettings.onLevel, in: commands) == "a number in percent such as 50%, or a byte from 0x00 to 0xFF")
 
     let problem = SettingsText.inputProblem(SettingInputError.unreadable("onLevel", "bright"), value: ExampleSettings.onLevel, label: "On-level", in: commands)
@@ -338,7 +338,7 @@ struct ExploringArgumentTests {
 
   }
 
-  @Test func refusesAModemCommandThatCouldDoHarmWithoutForce() {
+  @Test func refusesAModemCommandThatCouldDoHarmWithoutForce() throws {
 
     #expect(throws: ArgumentError.refusedSerialCommand("Reset the IM (0x67) erases the modem's ALL-Link database and configuration.")) {
 
@@ -357,6 +357,63 @@ struct ExploringArgumentTests {
       try Invocation.parse(["modem"])
 
     }
+
+    // Start ALL-Linking in delete mode, and messages that write to a device.
+    let deleteLinking: [UInt8] = [0x02, 0x64, 0xFF, 0x00]
+    let databaseWrite: [UInt8] = [0x02, 0x62, 0x1A, 0x2B, 0x3C, 0x1F, 0x2F, 0x00] + [UInt8](repeating: 0x00, count: 14)
+    let databaseRead: [UInt8] = [0x02, 0x62, 0x1A, 0x2B, 0x3C, 0x0F, 0x2F, 0x00]
+    let operatingFlags: [UInt8] = [0x02, 0x62, 0x1A, 0x2B, 0x3C, 0x0F, 0x20, 0x04]
+    var extendedSet: [UInt8] = [0x02, 0x62, 0x1A, 0x2B, 0x3C, 0x1F, 0x2E, 0x00] + [UInt8](repeating: 0x00, count: 14)
+    extendedSet[9] = 0x06
+
+    #expect(SerialCommandPolicy.refusal(for: deleteLinking) != nil)
+    #expect(SerialCommandPolicy.refusal(for: databaseWrite) != nil)
+    #expect(SerialCommandPolicy.refusal(for: databaseRead) != nil)
+    #expect(SerialCommandPolicy.refusal(for: operatingFlags) != nil)
+    #expect(SerialCommandPolicy.refusal(for: extendedSet) != nil)
+
+    #expect(throws: ArgumentError.self) {
+
+      try Invocation.parse(["modem", "send", "0264FF00"])
+
+    }
+
+    // Commands with the wrong length.
+    let wrongLength: [[UInt8]] = [
+      [0x02, 0x64, 0x01],
+      [0x02, 0x62, 0x1A, 0x2B, 0x3C, 0x0F, 0x11],
+      [0x02, 0x62, 0x1A, 0x2B, 0x3C, 0x1F, 0x2E, 0x00],
+      [0x02, 0x77, 0x01, 0x00],
+      [0x02, 0x60, 0x00],
+      [0x02, 0x62, 0x1A]
+    ]
+
+    for bytes in wrongLength {
+
+      #expect(SerialCommandPolicy.refusal(for: bytes) != nil, "\(bytes)")
+
+    }
+
+    // Commands with the right length, which are sent.
+    let extendedGet: [UInt8] = [0x02, 0x62, 0x1A, 0x2B, 0x3C, 0x1F, 0x2E, 0x00] + [UInt8](repeating: 0x00, count: 14)
+    let rightLength: [[UInt8]] = [
+      [0x02, 0x60],
+      [0x02, 0x64, 0x01, 0x00],
+      [0x02, 0x62, 0x1A, 0x2B, 0x3C, 0x0F, 0x11, 0xFF],
+      [0x02, 0x77],
+      [0x02, 0x77, 0x01],
+      [0x02, 0x73],
+      [0x02, 0x7A, 0x03],
+      extendedGet
+    ]
+
+    for bytes in rightLength {
+
+      #expect(SerialCommandPolicy.refusal(for: bytes) == nil, "\(bytes)")
+
+    }
+
+    #expect(try Invocation.parse(["modem", "send", "0264FF00", "--force"]).subcommand == .modemSend(RawSerialRequest(bytes: deleteLinking)))
 
   }
 

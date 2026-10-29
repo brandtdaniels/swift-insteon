@@ -93,7 +93,7 @@ A setting the device didn't report reads "not reported". Settings the catalog ma
 
 ### Exploring
 
-`device ADDRESS send` and `modem send` send what you give them, to learn what a device or modem does that the catalog doesn't describe yet. `modem send` refuses, without `--force`, a command number the package doesn't know and commands that change or erase what the modem keeps or stop it answering, such as Reset the IM (`0x67`), Manage ALL-Link Record (`0x6F`) and Write Database (`0x76`). What you learn belongs in the catalog, marked as observed.
+`device ADDRESS send` and `modem send` send what you give them, to learn what a device or modem does that the catalog doesn't describe yet. `modem send` refuses, without `--force`, a command number the package doesn't know and commands that change or erase what the modem keeps or stop it answering, such as Reset the IM (`0x67`), Manage ALL-Link Record (`0x6F`) and Write Database (`0x76`). It also refuses Start ALL-Linking (`0x64`) with link code `0xFF`, which deletes links, and a message (`0x62`) that writes to a device, which `device ADDRESS set` and `device ADDRESS send` are for: Read/Write ALL-Link Database (`0x2F`), Set Operating Flags (`0x20`) and Extended Set/Get (`0x2E`) with D2 other than `0x00`. A command must have the length its number calls for, counting `0x02`: 8 bytes for a standard message and 22 for an extended one, and 2 or 3 for Beep (`0x77`). What you learn belongs in the catalog, marked as observed.
 
 ### Naming devices
 
