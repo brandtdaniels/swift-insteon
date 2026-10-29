@@ -18,6 +18,8 @@ Swift packages for working with [Insteon](https://www.insteon.com) home automati
 | [InsteonNotifications](Packages/InsteonNotifications) | Let people know when their devices do something they care about, such as a leak sensor turning wet, a door opening or a sensor going quiet |
 | [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the Insteon clients send requests through |
 
+The package also has a command, [`insteon`](Packages/InsteonCLI), for driving a Hub or modem, and its devices, from a terminal: finding Hubs, reading ALL-Link databases, linking devices with their SET buttons, sending commands and watching events.
+
 The [Supported Modems](Packages/InsteonModem/Sources/InsteonModem/InsteonModem.docc/SupportedModems.md) article lists every modem, Hub and controller, and how well each is supported.
 
 ## Requirements
@@ -102,6 +104,26 @@ getConfiguration.hexString  // ends in "D1", the checksum i2CS devices require
 ```
 
 Commands the typed catalogs don't cover can be sent as raw bytes with `Command(command1:command2:)`, or added by conforming your own type to `CommandConvertible`.
+
+### From the terminal
+
+Put the Hub's user name and password in `~/.config/insteon/env` (or `$XDG_CONFIG_HOME/insteon/env`), and make it readable only by you with `chmod 600 ~/.config/insteon/env`:
+
+```sh
+INSTEON_HUB_USERNAME=your-hub-user-name
+INSTEON_HUB_PASSWORD=your-hub-password
+```
+
+Then:
+
+```sh
+swift run insteon --hub 192.168.1.20 info
+swift run insteon --hub 192.168.1.20 link
+swift run insteon --hub 192.168.1.20 device 1A.2B.3C on 50%
+swift run insteon --help
+```
+
+The command reads the credentials only from the environment or that file, never from its arguments or from a file in the current directory. See [InsteonCLI](Packages/InsteonCLI) for every command.
 
 ## Documentation
 

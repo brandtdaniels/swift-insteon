@@ -21,7 +21,8 @@ let package = Package(
     .library(name: "InsteonLinking", targets: ["InsteonLinking"]),
     .library(name: "InsteonScheduling", targets: ["InsteonScheduling"]),
     .library(name: "InsteonDeviceCatalog", targets: ["InsteonDeviceCatalog"]),
-    .library(name: "InsteonNotifications", targets: ["InsteonNotifications"])
+    .library(name: "InsteonNotifications", targets: ["InsteonNotifications"]),
+    .executable(name: "insteon", targets: ["insteon"])
   ],
   dependencies: [
     // SHA-256 for DeviceCatalogUpdater: CryptoKit on Apple platforms, BoringSSL elsewhere.
@@ -143,6 +144,31 @@ let package = Package(
       name: "InsteonNotificationsTests",
       dependencies: ["InsteonNotifications", "InsteonDeviceCatalog", "InsteonProtocol"],
       path: "Packages/InsteonNotifications/Tests/InsteonNotificationsTests"
+    ),
+
+    // The `insteon` command. Its command-line parsing is in InsteonCLICore, so it can be tested.
+    .executableTarget(
+      name: "insteon",
+      dependencies: [
+        "InsteonCLICore",
+        "InsteonDeviceCatalog",
+        "InsteonHubClient",
+        "InsteonHubDiscovery",
+        "InsteonLinking",
+        "InsteonModem",
+        "InsteonProtocol"
+      ],
+      path: "Packages/InsteonCLI/Sources/insteon"
+    ),
+    .target(
+      name: "InsteonCLICore",
+      dependencies: ["InsteonProtocol"],
+      path: "Packages/InsteonCLI/Sources/InsteonCLICore"
+    ),
+    .testTarget(
+      name: "InsteonCLICoreTests",
+      dependencies: ["InsteonCLICore", "InsteonProtocol"],
+      path: "Packages/InsteonCLI/Tests/InsteonCLICoreTests"
     ),
 
     // Test doubles shared by the test targets. Not a product.
