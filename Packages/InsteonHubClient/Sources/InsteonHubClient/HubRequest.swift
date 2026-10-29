@@ -69,6 +69,16 @@ package enum HubRequest {
 
   }
 
+  /// A duration in seconds, as `URLRequest` takes it.
+  private static func timeInterval(_ duration: Duration) -> TimeInterval {
+
+    let seconds: TimeInterval = TimeInterval(duration.components.seconds)
+    let fraction: TimeInterval = TimeInterval(duration.components.attoseconds) / 1e18
+
+    return seconds + fraction
+
+  }
+
   /// Uppercase hex, two digits per byte.
   private static func hex(_ bytes: [UInt8]) -> String {
 
@@ -78,7 +88,14 @@ package enum HubRequest {
 
   /// The request, a GET for every action. It always goes to the Hub rather than a cache, since
   /// the buffer changes between reads.
-  package func urlRequest(for endpoint: HubEndpoint) throws(HubError) -> URLRequest {
+  ///
+  /// - Parameters:
+  ///   - endpoint: Where the Hub can be reached.
+  ///   - timeout: How long the request waits for the Hub before it fails. Defaults to
+  ///     ``Hub/defaultRequestTimeout``.
+  /// - Returns: The request.
+  /// - Throws: ``HubError/invalidEndpoint(_:)`` if the endpoint can't make a URL.
+  package func urlRequest(for endpoint: HubEndpoint, timeout: Duration = Hub.defaultRequestTimeout) throws(HubError) -> URLRequest {
 
     // URLComponents traps on a negative port, so an out-of-range port is rejected first.
     guard (0...65_535).contains(endpoint.port) else {
@@ -104,6 +121,7 @@ package enum HubRequest {
     var request = URLRequest(url: url)
     request.httpMethod = "GET"
     request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+    request.timeoutInterval = Self.timeInterval(timeout)
 
     return request
 

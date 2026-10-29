@@ -26,7 +26,9 @@ import InsteonProtocol
 ///
 /// A poll that fails, for example because a request timed out, is tried again at the next
 /// interval. The stream fails after ``HubConnection/defaultFailureLimit`` failed polls in a
-/// row by default, or at once if the Hub answers with an error status.
+/// row by default, or at once if the Hub answers with an error status. Each request waits
+/// ``Hub/requestTimeout``, so with the defaults a Hub that stops answering fails the stream in
+/// about 16 seconds: three requests of 5 seconds and the intervals between them.
 public actor HubConnection: ModemConnection {
 
   /// How often the Hub's buffer is read by default: every half second.

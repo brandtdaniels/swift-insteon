@@ -9,11 +9,24 @@ import InsteonNetworking
 /// runs timers, which ``Hub/setTimer(_:for:)`` and the methods beside it write.
 ///
 /// The Hub requires HTTP basic authentication with the user name and password printed on it.
-/// ``Hub/init(endpoint:user:password:httpClient:)`` adds it for you; to authenticate another
-/// way, pass an already-authenticated client to ``Hub/init(endpoint:httpClient:)``. The Hub's
-/// interface is plain HTTP, so the credentials are readable on the network: keep the Hub on a
-/// network you trust.
+/// ``Hub/init(endpoint:user:password:httpClient:requestTimeout:)`` adds it for you; to
+/// authenticate another way, pass an already-authenticated client to
+/// ``Hub/init(endpoint:httpClient:requestTimeout:)``. The Hub's interface is plain HTTP, so the
+/// credentials are readable on the network: keep the Hub on a network you trust.
+///
+/// Each request gives up after ``Hub/requestTimeout``, so a Hub that doesn't answer fails in
+/// seconds rather than after `URLRequest`'s default of a minute.
 public struct Hub: Sendable {
+
+  /// How long each request waits for the Hub by default: 5 seconds.
+  ///
+  /// A Hub on the local network answers in well under a second, since every request is a short
+  /// GET that returns a small page, such as the buffer, and no request waits for an Insteon
+  /// device: the modem's replies arrive in the buffer later.
+  public static let defaultRequestTimeout: Duration = .seconds(5)
+
+  /// How long each request waits for the Hub before it fails.
+  public let requestTimeout: Duration
 
   private let endpoint: HubEndpoint
 
@@ -24,10 +37,13 @@ public struct Hub: Sendable {
   /// - Parameters:
   ///   - endpoint: Where the Hub can be reached.
   ///   - httpClient: The client to send requests with. It must authenticate them.
-  public init(endpoint: HubEndpoint, httpClient: any HTTPClient) {
+  ///   - requestTimeout: How long each request waits for the Hub before it fails. Defaults to
+  ///     ``Hub/defaultRequestTimeout``.
+  public init(endpoint: HubEndpoint, httpClient: any HTTPClient, requestTimeout: Duration = Hub.defaultRequestTimeout) {
 
     self.endpoint = endpoint
     self.httpClient = httpClient
+    self.requestTimeout = requestTimeout
 
   }
 
@@ -38,16 +54,20 @@ public struct Hub: Sendable {
   ///   - user: The Hub's user name.
   ///   - password: The Hub's password.
   ///   - httpClient: The client to send requests with. Defaults to `URLSessionHTTPClient`.
+  ///   - requestTimeout: How long each request waits for the Hub before it fails. Defaults to
+  ///     ``Hub/defaultRequestTimeout``.
   public init(
     endpoint: HubEndpoint,
     user: String,
     password: String,
-    httpClient: any HTTPClient = URLSessionHTTPClient()
+    httpClient: any HTTPClient = URLSessionHTTPClient(),
+    requestTimeout: Duration = Hub.defaultRequestTimeout
   ) {
 
     self.init(
       endpoint: endpoint,
-      httpClient: BasicAuthenticationHTTPClient(httpClient, user: user, password: password)
+      httpClient: BasicAuthenticationHTTPClient(httpClient, user: user, password: password),
+      requestTimeout: requestTimeout
     )
 
   }
@@ -104,7 +124,7 @@ public struct Hub: Sendable {
 
   func perform(_ request: HubRequest) async throws -> HTTPResponse {
 
-    let response = try await httpClient.send(request.urlRequest(for: endpoint))
+    let response = try await httpClient.send(request.urlRequest(for: endpoint, timeout: requestTimeout))
 
     guard response.isSuccess else {
 
