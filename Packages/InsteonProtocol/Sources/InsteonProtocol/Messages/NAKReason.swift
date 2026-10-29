@@ -57,3 +57,29 @@ public struct NAKReason: RawRepresentable, Hashable, Sendable {
   public static let noHardware = NAKReason(rawValue: 0xF8)
 
 }
+
+extension NAKReason {
+
+  /// The reason in words, as a clause about the device that sent the NAK, such as
+  /// `"it isn't linked to the modem"`; a reserved code reads as `"NAK reason 0xF0"`.
+  ///
+  /// ```swift
+  /// print("The device rejected the command: \(reason.summary).")
+  /// ```
+  public var summary: String {
+
+    switch self {
+    case .notLinked: "it isn't linked to the modem"
+    case .noLoad: "it has no load connected"
+    case .invalidCommand: "it doesn't support the command"
+    case .databaseSearchPending: "it's still searching its ALL-Link database"
+    case .illegalValue: "a value is out of range"
+    case .groupZeroCommand: "the command isn't allowed for group 0"
+    case .databaseFull: "its ALL-Link database is full"
+    case .noHardware: "it lacks the hardware for the command"
+    default: "NAK reason 0x" + rawValue.hexDigits
+    }
+
+  }
+
+}

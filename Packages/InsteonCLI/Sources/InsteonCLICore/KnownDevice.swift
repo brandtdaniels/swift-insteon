@@ -4,14 +4,14 @@ import InsteonProtocol
 /// A device whose identity is known, with what the Insteon device catalog says about it.
 ///
 /// ```swift
-/// let plug = KnownDevice(identity: KnownIdentity(category: 0x02, subcategory: 0x2A, firmwareVersion: 0x41), catalog: catalog)
+/// let plug = KnownDevice(identity: ReportedIdentity(category: 0x02, subcategory: 0x2A, firmwareVersion: 0x41), catalog: catalog)
 /// plug.productName              // the catalog's name and model, if it has the identity
 /// plug.mainGroupType?.kind      // GroupType.Kind.relay for a device switched on and off
 /// ```
 public struct KnownDevice: Hashable, Sendable {
 
   /// What the device said it is.
-  public var identity: KnownIdentity
+  public var identity: ReportedIdentity
 
   /// The catalog's profile for the identity, or `nil` if the catalog doesn't have it or wasn't
   /// loaded.
@@ -25,7 +25,7 @@ public struct KnownDevice: Hashable, Sendable {
   /// - Parameters:
   ///   - identity: What the device said it is.
   ///   - catalog: The catalog, or `nil` if it couldn't be loaded.
-  public init(identity: KnownIdentity, catalog: DeviceCatalog?) {
+  public init(identity: ReportedIdentity, catalog: DeviceCatalog?) {
 
     self.identity = identity
     profile = catalog?.profile(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion)

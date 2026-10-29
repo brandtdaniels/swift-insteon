@@ -43,3 +43,18 @@ extension InsteonEngine: Comparable {
   }
 
 }
+
+extension InsteonEngine: CustomStringConvertible {
+
+  /// The engine as Insteon's documents name it: `"i1"`, `"i2"` or `"i2CS"`.
+  public var description: String {
+
+    switch self {
+    case .i1: "i1"
+    case .i2: "i2"
+    case .i2cs: "i2CS"
+    }
+
+  }
+
+}

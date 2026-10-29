@@ -307,3 +307,45 @@ extension StandardDirectCommand {
   }
 
 }
+
+// MARK: - Names
+
+extension StandardDirectCommand {
+
+  /// The name the Insteon Developer's Guide gives a common direct command, by its cmd1, such
+  /// as `"Light On"` for `0x11`.
+  ///
+  /// Only the commands every device reads the same way are named: Product Data Request, Get
+  /// Insteon Engine Version, Ping, ID Request, and the lighting commands from Light On
+  /// (`0x11`) through Light Status Request (`0x19`). What other cmd1 values mean depends on
+  /// the device's category, the message's type or its length, so they have no name here.
+  ///
+  /// ```swift
+  /// StandardDirectCommand.name(command1: 0x19)   // "Light Status Request"
+  /// StandardDirectCommand.name(command1: 0x2E)   // nil
+  /// ```
+  ///
+  /// - Parameter command1: The cmd1 byte.
+  /// - Returns: The command's name, or `nil` if it has none here.
+  public static func name(command1: UInt8) -> String? {
+
+    switch command1 {
+    case 0x03: "Product Data Request"
+    case 0x0D: "Get Insteon Engine Version"
+    case 0x0F: "Ping"
+    case 0x10: "ID Request"
+    case 0x11: "Light On"
+    case 0x12: "Light On Fast"
+    case 0x13: "Light Off"
+    case 0x14: "Light Off Fast"
+    case 0x15: "Light Brighten One Step"
+    case 0x16: "Light Dim One Step"
+    case 0x17: "Light Start Manual Change"
+    case 0x18: "Light Stop Manual Change"
+    case 0x19: "Light Status Request"
+    default: nil
+    }
+
+  }
+
+}

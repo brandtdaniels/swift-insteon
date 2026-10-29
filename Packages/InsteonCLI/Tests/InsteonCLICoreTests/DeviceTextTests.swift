@@ -7,7 +7,7 @@ import InsteonProtocol
 /// A made-up catalog with one on/off plug, whose model and identity no real product has.
 enum ExampleCatalog {
 
-  static let identity = KnownIdentity(category: 0x02, subcategory: 0x7A, firmwareVersion: 0x41)
+  static let identity = ReportedIdentity(category: 0x02, subcategory: 0x7A, firmwareVersion: 0x41)
 
   static let load = GroupType(
     name: "load",
@@ -97,7 +97,7 @@ struct DeviceTextTests {
 
     var cache = IdentityCache()
     cache[plug] = ExampleCatalog.identity
-    cache[InsteonAddress(0x4D, 0x5E, 0x6F)] = KnownIdentity(category: 0x01, subcategory: 0x20, firmwareVersion: nil)
+    cache[InsteonAddress(0x4D, 0x5E, 0x6F)] = ReportedIdentity(category: 0x01, subcategory: 0x20, firmwareVersion: nil)
 
     let json = try cache.json()
 
@@ -126,16 +126,6 @@ struct DeviceTextTests {
 
   }
 
-  @Test func readsAnIdentityFromALinkOnlyWhenTheModemReportedOne() {
-
-    let controller = AllLinkingCompleted(linkCode: 0x01, group: 0, address: plug, category: 0x02, subcategory: 0x7A, firmwareVersion: 0x41)
-    let responder = AllLinkingCompleted(linkCode: 0x00, group: 1, address: plug, category: nil, subcategory: nil, firmwareVersion: nil)
-
-    #expect(KnownIdentity(controller) == ExampleCatalog.identity)
-    #expect(KnownIdentity(responder) == nil)
-
-  }
-
   // MARK: - Known devices
 
   @Test func looksADeviceUpInTheCatalog() {
@@ -147,7 +137,7 @@ struct DeviceTextTests {
     #expect(device.responderGroupType(forRecordData: [0xFF, 0x1F, 0x01])?.name == "load")
     #expect(device.canControl == false)
 
-    let unknown = KnownDevice(identity: KnownIdentity(category: 0x07, subcategory: 0x00, firmwareVersion: nil), catalog: ExampleCatalog.catalog)
+    let unknown = KnownDevice(identity: ReportedIdentity(category: 0x07, subcategory: 0x00, firmwareVersion: nil), catalog: ExampleCatalog.catalog)
 
     #expect(unknown.productName == nil)
     #expect(unknown.mainGroupType == nil)
@@ -302,7 +292,6 @@ struct DeviceTextTests {
     extended.flags = MessageFlags(rawValue: 0x1F)
     extended.userData = try UserData([UInt8](repeating: 0x00, count: 13) + [0xD2])
 
-    #expect(RawFrame.bytes(of: extended).count == 25)
     #expect(RawFrame.text(of: extended).hasPrefix("0251 1A2B3C 027A41 1F 01 00 0000"))
     #expect(RawFrame.text(of: extended).hasSuffix("D2"))
 

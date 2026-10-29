@@ -95,3 +95,17 @@ public struct SetButtonPressed: Hashable, Sendable {
   }
 
 }
+
+extension SetButtonPressed.Role: CustomStringConvertible {
+
+  /// The role in words: `"responder"` or `"controller"`.
+  public var description: String {
+
+    switch self {
+    case .responder: "responder"
+    case .controller: "controller"
+    }
+
+  }
+
+}

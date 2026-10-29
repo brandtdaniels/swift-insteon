@@ -37,7 +37,7 @@ enum IdentityStore {
   }
 
   /// Remembers the identity a device reported, if it isn't already remembered.
-  static func remember(_ identity: KnownIdentity, for device: InsteonAddress) {
+  static func remember(_ identity: ReportedIdentity, for device: InsteonAddress) {
 
     var cache = load()
 
@@ -249,7 +249,7 @@ enum Identities {
 
     }
 
-    let identity = KnownIdentity(pressed)
+    let identity = ReportedIdentity(pressed)
 
     IdentityStore.remember(identity, for: device)
 
@@ -263,7 +263,7 @@ enum Identities {
   /// - Throws: `CancellationError` if the task was canceled while asking.
   static func learn(from link: AllLinkingCompleted, modem: Modem, names: ProductNames) async throws -> KnownDevice? {
 
-    if let identity = KnownIdentity(link) {
+    if let identity = ReportedIdentity(link) {
 
       IdentityStore.remember(identity, for: link.address)
 

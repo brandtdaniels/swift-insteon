@@ -154,3 +154,25 @@ extension MessageFlags {
   }
 
 }
+
+extension MessageFlags.MessageType: CustomStringConvertible {
+
+  /// The message type in words: `"direct"`, `"ACK"`, `"NAK"`, `"broadcast"`,
+  /// `"ALL-Link broadcast"`, `"ALL-Link cleanup"`, `"ALL-Link cleanup ACK"` or
+  /// `"ALL-Link cleanup NAK"`.
+  public var description: String {
+
+    switch self {
+    case .direct: "direct"
+    case .directAcknowledgment: "ACK"
+    case .directNegativeAcknowledgment: "NAK"
+    case .broadcast: "broadcast"
+    case .allLinkBroadcast: "ALL-Link broadcast"
+    case .allLinkCleanup: "ALL-Link cleanup"
+    case .allLinkCleanupAcknowledgment: "ALL-Link cleanup ACK"
+    case .allLinkCleanupNegativeAcknowledgment: "ALL-Link cleanup NAK"
+    }
+
+  }
+
+}

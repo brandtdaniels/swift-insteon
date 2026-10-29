@@ -14,3 +14,20 @@ public enum AllLinkMode: UInt8, CaseIterable, Hashable, Sendable {
   case delete = 0xFF
 
 }
+
+extension AllLinkMode: CustomStringConvertible {
+
+  /// The modem's role in words, as a report of a link gives it: `"responder"`,
+  /// `"controller"`, `"controller or responder"`, or `"deleted"` for a link that was deleted.
+  public var description: String {
+
+    switch self {
+    case .responder: "responder"
+    case .controller: "controller"
+    case .controllerOrResponder: "controller or responder"
+    case .delete: "deleted"
+    }
+
+  }
+
+}

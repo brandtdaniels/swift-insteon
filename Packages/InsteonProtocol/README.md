@@ -18,7 +18,8 @@ The message format is fixed by the protocol.
 
 `Sources/InsteonProtocol/DeviceCommands` is the catalog of commands devices understand, open to additional device types:
 
-- `StandardDirectCommand` and `ExtendedDirectCommand`: common commands for any device
+- `StandardDirectCommand` and `ExtendedDirectCommand`: common commands for any device, with the names of the common ones by cmd1
+- `LightLevel`: converts between percentages and the levels from `0x00` to `0xFF` devices use
 
 Additional commands conform to `CommandConvertible`, so they never touch the message layer.
 
@@ -28,6 +29,7 @@ Additional commands conform to `CommandConvertible`, so they never touch the mes
 
 - `DeviceCategory`, `DeviceSubcategory` and `FirmwareVersion`: a device's category (DevCat), subcategory (SubCat) and firmware version, with the Insteon Developer's Guide's named categories, such as `.dimmableLightingControl`
 - `SetButtonPressed` and `ProductData`: read the identity a device reports in reply to an ID request or a product data request
+- `ReportedIdentity`: the category, subcategory and firmware version a device or modem reported, encodable as JSON
 
 No device data is built in, so every app can look devices up in the [Insteon device catalog](https://github.com/brandtdaniels/insteon-device-catalog), which InsteonDeviceCatalog reads, instead of keeping its own list.
 
