@@ -140,7 +140,22 @@ enum ModemSession {
       // The address can come from the environment file, so say where the password is going.
       Output.note("Connecting to the Hub at \(endpoint.host):\(endpoint.port)")
 
-      try await withModem(HubConnection(hub: hub), body)
+      do {
+
+        try await withModem(HubConnection(hub: hub), body)
+
+      } catch {
+
+        // URLSession's own message, such as "The request timed out.", doesn't say it was the Hub.
+        if let message = Names.hubUnanswered(error, endpoint: endpoint) {
+
+          throw CommandFailure(description: message)
+
+        }
+
+        throw error
+
+      }
     case let .serial(path):
       #if os(macOS) || os(Linux)
       let port = try SerialPort(path: path)

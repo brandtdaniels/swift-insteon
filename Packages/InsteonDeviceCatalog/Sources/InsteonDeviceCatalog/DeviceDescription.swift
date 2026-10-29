@@ -212,7 +212,8 @@ public struct DeviceDescription: Hashable, Sendable {
         value: value,
         tableEntry: table?.entry(for: value),
         isPerGroup: byte.isPerGroup,
-        verification: byte.verification
+        verification: byte.verification,
+        documentedValue: documentedValue(of: byte, isController: isController)
       ))
 
     }
@@ -224,6 +225,39 @@ public struct DeviceDescription: Hashable, Sendable {
     }
 
     return RecordDataExplanation(groupType: type, bytes: bytes)
+
+  }
+
+  /// A byte's fixed value, unless another group type in the command set fixes a different
+  /// value at the same position, as when the value tells the types apart rather than being
+  /// one a record should hold.
+  private func documentedValue(of byte: LinkDataByte, isController: Bool) -> UInt8? {
+
+    guard let value = byte.value else {
+
+      return nil
+
+    }
+
+    let types: [GroupType] = commandSet?.groupTypes ?? []
+
+    for type in types {
+
+      let others: [LinkDataByte] = isController ? type.linkData.controller : type.linkData.responder
+
+      for other in others where other.position == byte.position {
+
+        if let otherValue = other.value, otherValue != value {
+
+          return nil
+
+        }
+
+      }
+
+    }
+
+    return value
 
   }
 
@@ -283,6 +317,12 @@ public struct RecordDataExplanation: Hashable, Sendable {
     /// How sure the catalog is of the byte.
     public var verification: Verification
 
+    /// The value the catalog gives for the byte when it's fixed, as ``LinkDataByte/value``
+    /// says, such as an on-level of `0xFE`, or `nil` if the byte can take any value or the
+    /// value only tells the command set's group types apart. A record whose
+    /// ``RecordDataExplanation/DataByte/value`` differs isn't as the catalog gives it.
+    public var documentedValue: UInt8?
+
     /// Creates an explained data byte.
     ///
     /// - Parameters:
@@ -293,6 +333,8 @@ public struct RecordDataExplanation: Hashable, Sendable {
     ///   - tableEntry: The value's entry in the byte's value table.
     ///   - isPerGroup: Whether the byte is the responder's own group. Defaults to `false`.
     ///   - verification: How sure the catalog is of the byte. Defaults to ``Verification/documented``.
+    ///   - documentedValue: The value the catalog gives for the byte when it's fixed. Defaults
+    ///     to `nil`.
     public init(
       position: Int,
       name: SettingName,
@@ -300,7 +342,8 @@ public struct RecordDataExplanation: Hashable, Sendable {
       value: UInt8,
       tableEntry: ValueTable.Entry? = nil,
       isPerGroup: Bool = false,
-      verification: Verification = .documented
+      verification: Verification = .documented,
+      documentedValue: UInt8? = nil
     ) {
 
       self.position = position
@@ -310,6 +353,7 @@ public struct RecordDataExplanation: Hashable, Sendable {
       self.tableEntry = tableEntry
       self.isPerGroup = isPerGroup
       self.verification = verification
+      self.documentedValue = documentedValue
 
     }
 

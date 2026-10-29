@@ -409,10 +409,17 @@ enum DeviceCommands {
     }
 
     let explains = records.contains { $0.meaning != nil }
-    let rows: [[String]] = records.map { record in
+    let isDeviceInCatalog: Bool = known?.profile != nil
+    let rows: [[String]] = records.map { (record: Record) -> [String] in
 
-      [record.memoryAddress, record.role, "\(record.group)", record.address, record.data.joined(separator: " ")]
-        + (explains ? [record.meaning ?? ""] : [])
+      let meaning: String = LinkDataText.column(
+        meaning: record.meaning,
+        isController: record.role == "controller",
+        isDeviceInCatalog: isDeviceInCatalog
+      )
+
+      return [record.memoryAddress, record.role, "\(record.group)", record.address, record.data.joined(separator: " ")]
+        + (explains ? [meaning] : [])
 
     }
 

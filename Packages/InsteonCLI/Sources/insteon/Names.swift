@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)
@@ -173,6 +176,55 @@ enum Names {
     #endif
 
     return error.localizedDescription
+
+  }
+
+  /// What to say when a request to the Hub got no answer, such as when it timed out or the
+  /// host couldn't be reached, or `nil` for any other error.
+  ///
+  /// - Parameters:
+  ///   - error: The error a request to the Hub threw.
+  ///   - endpoint: The Hub's host and port. Its credentials aren't part of it.
+  /// - Returns: A message that names the Hub's address and how to find it again.
+  static func hubUnanswered(_ error: any Error, endpoint: HubEndpoint) -> String? {
+
+    let code: URLError.Code
+
+    if let urlError = error as? URLError {
+
+      code = urlError.code
+
+    } else {
+
+      // swift-corelibs-foundation reports a failed request as an NSError in the URL error
+      // domain, which doesn't cast to URLError on Linux.
+      let nsError: NSError = error as NSError
+
+      guard nsError.domain == NSURLErrorDomain else {
+
+        return nil
+
+      }
+
+      // The initializer is failable on Linux but not on Apple platforms.
+      let parsed: URLError.Code? = URLError.Code(rawValue: nsError.code)
+
+      guard let parsed else {
+
+        return nil
+
+      }
+
+      code = parsed
+
+    }
+
+    switch code {
+    case .timedOut, .cannotConnectToHost, .notConnectedToInternet, .networkConnectionLost, .cannotFindHost:
+      return "The Hub at \(endpoint.host):\(endpoint.port) didn't answer. If its address changed, 'insteon discover' finds it."
+    default:
+      return nil
+    }
 
   }
 
