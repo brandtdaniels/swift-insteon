@@ -121,10 +121,10 @@ enum ModemCommands {
         group: Int(record.group.rawValue),
         address: "\(record.address)",
         data: [record.data1, record.data2, record.data3].map(Hex.byte),
-        category: known.map { "\($0.identity.category)" },
-        subcategory: known.map { "\($0.identity.subcategory)" },
-        firmwareVersion: known?.identity.firmwareVersion.map { "\($0)" },
-        product: known?.productName
+        category: known.map { "\($0.category)" },
+        subcategory: known.map { "\($0.subcategory)" },
+        firmwareVersion: known?.firmwareVersion.map { "\($0)" },
+        product: known?.displayName
       )
 
     }
@@ -260,7 +260,7 @@ enum ModemCommands {
     }
 
     // A device that can control is linked back, so the modem hears its buttons.
-    let linksBack = first.mode == .controller && (options.isTwoWay || (options.device != nil && known?.canControl == true))
+    let linksBack = first.mode == .controller && (options.isTwoWay || (options.device != nil && canControl(known)))
     var failure: (any Error)?
 
     if linksBack {
@@ -474,7 +474,7 @@ enum ModemCommands {
     try check(link, mode: .unlinking, device: options.device)
 
     // A deletion carries no identity, so the device is named only if it was known before.
-    let product = IdentityStore.load()[link.address].map(names.device)?.productName
+    let product = IdentityStore.load()[link.address].map(names.device)?.displayName
 
     if printsJSON {
 
@@ -623,15 +623,31 @@ enum ModemCommands {
 
   }
 
-  /// A device's address, with its product when it's known.
-  private static func deviceLabel(_ device: InsteonAddress, known: KnownDevice?) -> String {
+  /// Whether the catalog says a device can be a controller, as the product or in one of its
+  /// groups, so the modem can respond to it. `false` when the catalog doesn't have the device.
+  private static func canControl(_ known: DeviceDescription?) -> Bool {
 
-    known?.productName.map { "\(device), \($0)," } ?? "\(device)"
+    guard let known else {
+
+      return false
+
+    }
+
+    let productControls: Bool = known.profile?.role?.includesController ?? false
+
+    return productControls || !known.controllerGroups.isEmpty
+
+  }
+
+  /// A device's address, with its product when it's known.
+  private static func deviceLabel(_ device: InsteonAddress, known: DeviceDescription?) -> String {
+
+    known?.displayName.map { "\(device), \($0)," } ?? "\(device)"
 
   }
 
   /// Prints a new link, with the device's identity when it's known.
-  private static func report(_ link: AllLinkingCompleted, known: KnownDevice?, names: ProductNames) {
+  private static func report(_ link: AllLinkingCompleted, known: DeviceDescription?, names: ProductNames) {
 
     Output.line("Linked \(link.address) in group \(link.group), modem as \(Names.mode(link.mode)).")
 
@@ -642,14 +658,14 @@ enum ModemCommands {
     }
 
     var rows = [
-      ["Category:", Names.category(known.identity.category)],
-      ["Subcategory:", "\(known.identity.subcategory)"],
-      ["Firmware:", known.identity.firmwareVersion.map { "\($0)" } ?? "not reported"]
+      ["Category:", Names.category(known.category)],
+      ["Subcategory:", "\(known.subcategory)"],
+      ["Firmware:", known.firmwareVersion.map { "\($0)" } ?? "not reported"]
     ]
 
     if names.catalog != nil {
 
-      rows.append(["Product:", known.productName ?? "not in the Insteon device catalog"])
+      rows.append(["Product:", known.displayName ?? "not in the Insteon device catalog"])
 
     }
 
@@ -657,16 +673,16 @@ enum ModemCommands {
 
   }
 
-  private static func json(for link: AllLinkingCompleted, known: KnownDevice?) -> Link {
+  private static func json(for link: AllLinkingCompleted, known: DeviceDescription?) -> Link {
 
     Link(
       address: "\(link.address)",
       group: Int(link.group.rawValue),
       modemRole: Names.mode(link.mode),
-      category: known.map { "\($0.identity.category)" },
-      subcategory: known.map { "\($0.identity.subcategory)" },
-      firmwareVersion: known?.identity.firmwareVersion.map { "\($0)" },
-      product: known?.productName
+      category: known.map { "\($0.category)" },
+      subcategory: known.map { "\($0.subcategory)" },
+      firmwareVersion: known?.firmwareVersion.map { "\($0)" },
+      product: known?.displayName
     )
 
   }

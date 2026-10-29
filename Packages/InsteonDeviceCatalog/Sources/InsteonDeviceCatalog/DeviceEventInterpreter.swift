@@ -4,10 +4,16 @@ import InsteonProtocol
 ///
 /// The interpreter learns a device's profile when the device reports an identity the catalog
 /// knows, such as when its SET button is held to link it, or from
-/// ``DeviceEventInterpreter/remember(_:for:)`` for devices an app already knows. From then on,
-/// the device's group commands carry what its profile says they mean, so a product is
-/// supported by its profile alone. An identity the catalog doesn't know leaves the device's
-/// profile as it was.
+/// ``DeviceEventInterpreter/remember(category:subcategory:firmwareVersion:for:)`` for devices
+/// an app already knows. From then on, the device's group commands carry what its profile says
+/// they mean, so a product is supported by its profile alone. An identity the catalog doesn't
+/// know leaves the device's profile as it was.
+///
+/// The interpreter keeps each device's identity, so setting
+/// ``DeviceEventInterpreter/catalog`` to a newer catalog finds the device's profile in it. A
+/// device remembered by its profile alone, with ``DeviceEventInterpreter/remember(_:for:)``,
+/// keeps that profile when the catalog changes, even if the newer catalog describes the product
+/// differently, so an app that saves devices should save their identities instead.
 ///
 /// Group commands pass through a `GroupCommandFilter` first, so each command a device sends
 /// is reported once however many times it's repeated or cleaned up. A broadcast that reports
@@ -53,8 +59,9 @@ public struct DeviceEventInterpreter<Instant: InstantProtocol>: Sendable where I
   }
 
   /// The catalog profiles are found in. Setting it finds each device's profile again from the
-  /// identity it last reported, so a newer catalog takes effect without losing what the
-  /// interpreter has heard.
+  /// identity it last reported or was remembered with, so a newer catalog takes effect without
+  /// losing what the interpreter has heard. A device the newer catalog doesn't know, or one
+  /// remembered by its profile alone, keeps the profile it had.
   public var catalog: DeviceCatalog {
 
     didSet {
@@ -107,6 +114,10 @@ public struct DeviceEventInterpreter<Instant: InstantProtocol>: Sendable where I
 
   /// Records a device's profile, such as one an app saved from an earlier session.
   ///
+  /// The interpreter keeps the profile as given: setting ``catalog`` doesn't replace it unless
+  /// the device has reported an identity or been remembered with one. To have a newer catalog's
+  /// profile take its place, use ``remember(category:subcategory:firmwareVersion:for:)``.
+  ///
   /// - Parameters:
   ///   - profile: The profile, or `nil` to forget the device.
   ///   - device: The device's address.
@@ -119,6 +130,31 @@ public struct DeviceEventInterpreter<Instant: InstantProtocol>: Sendable where I
       identities[device] = nil
 
     }
+
+  }
+
+  /// Records the identity a device reported, such as one an app saved from an earlier session,
+  /// and finds its profile in the catalog.
+  ///
+  /// The interpreter keeps the identity, so setting ``catalog`` finds the device's profile again
+  /// in the newer catalog. An identity the catalog doesn't know leaves the device's profile as it
+  /// was, as when the device reports one itself.
+  ///
+  /// ```swift
+  /// interpreter.remember(category: 0x10, subcategory: 0x08, firmwareVersion: 0x41, for: sensor)
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - category: The category the device reported.
+  ///   - subcategory: The subcategory the device reported.
+  ///   - firmwareVersion: The firmware version the device reported, or `nil` if it didn't
+  ///     report one.
+  ///   - device: The device's address.
+  public mutating func remember(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?, for device: InsteonAddress) {
+
+    let identity = Identity(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion)
+
+    _ = identify(device, identity)
 
   }
 

@@ -83,6 +83,106 @@ public enum Subcommand: Hashable, Sendable {
   /// Prints what the modem hears until interrupted.
   case watch(WatchOptions)
 
+  /// Makes the modem beep with Beep, twice when `isDouble`.
+  case beep(isDouble: Bool)
+
+  /// Sends a command to one of the modem's ALL-Link groups with Send ALL-Link Command.
+  case scene(group: AllLinkGroupNumber, isOn: Bool)
+
+  /// Writes a serial command to the modem as given and prints what it sends back, for
+  /// exploring.
+  case modemSend(RawSerialRequest)
+
+}
+
+/// A serial command for `insteon modem send` to write as given.
+public struct RawSerialRequest: Hashable, Sendable {
+
+  /// The command's bytes, starting with `0x02`.
+  public var bytes: [UInt8]
+
+  /// How many seconds to print what the modem sends back.
+  public var waitSeconds: Int
+
+  /// Creates a request.
+  ///
+  /// - Parameters:
+  ///   - bytes: The command's bytes, starting with `0x02`.
+  ///   - waitSeconds: How many seconds to print what the modem sends back. Defaults to 3.
+  public init(bytes: [UInt8], waitSeconds: Int = 3) {
+
+    self.bytes = bytes
+    self.waitSeconds = waitSeconds
+
+  }
+
+}
+
+/// A direct message for `insteon device ADDRESS send` to send as given.
+public struct DirectMessageRequest: Hashable, Sendable {
+
+  /// The message's cmd1.
+  public var command1: UInt8
+
+  /// The message's cmd2.
+  public var command2: UInt8
+
+  /// D1 onward for an extended message, the rest `0x00`, or `nil` for a standard message.
+  public var userData: [UInt8]?
+
+  /// Whether to put a checksum in D14, as i2CS devices require.
+  public var hasChecksum: Bool
+
+  /// How many seconds to print the device's messages after its acknowledgment.
+  public var waitSeconds: Int
+
+  /// Creates a request.
+  ///
+  /// - Parameters:
+  ///   - command1: The message's cmd1.
+  ///   - command2: The message's cmd2.
+  ///   - userData: D1 onward for an extended message, or `nil` for a standard one. Defaults
+  ///     to `nil`.
+  ///   - hasChecksum: Whether to put a checksum in D14. Defaults to `true`.
+  ///   - waitSeconds: How many seconds to print the device's messages. Defaults to 3.
+  public init(command1: UInt8, command2: UInt8, userData: [UInt8]? = nil, hasChecksum: Bool = true, waitSeconds: Int = 3) {
+
+    self.command1 = command1
+    self.command2 = command2
+    self.userData = userData
+    self.hasChecksum = hasChecksum
+    self.waitSeconds = waitSeconds
+
+  }
+
+}
+
+/// A setting for `insteon device ADDRESS set` to change.
+public struct SettingRequest: Hashable, Sendable {
+
+  /// The setting's name or label in the Insteon device catalog, such as `rampRate`.
+  public var name: String
+
+  /// The value as given, such as `0.5 s`, `50%`, `on` or `0x1C`.
+  public var value: String
+
+  /// The button or group, for a setting that's per button, or `nil` for button 1.
+  public var button: UInt8?
+
+  /// Creates a request.
+  ///
+  /// - Parameters:
+  ///   - name: The setting's name or label.
+  ///   - value: The value as given.
+  ///   - button: The button or group, or `nil` for button 1. Defaults to `nil`.
+  public init(name: String, value: String, button: UInt8? = nil) {
+
+    self.name = name
+    self.value = value
+    self.button = button
+
+  }
+
 }
 
 /// How `insteon discover` looks for Hubs.
@@ -304,8 +404,31 @@ public enum DeviceAction: Hashable, Sendable {
   /// `nil`.
   case on(levelPercent: Int?)
 
+  /// Turns the device on with Light On Fast, ignoring its ramp rate, at a level from 0 to 100
+  /// percent, or fully on when `nil`.
+  case onFast(levelPercent: Int?)
+
   /// Turns the device off with Light Off.
   case off
+
+  /// Turns the device off with Light Off Fast, ignoring its ramp rate.
+  case offFast
+
+  /// Changes the device to a level from 0 to 100 percent at once, with Light Instant Change.
+  case instant(levelPercent: Int)
+
+  /// Makes the device beep with Beep.
+  case beep
+
+  /// Reads the device's settings the Insteon device catalog describes; advanced ones only when
+  /// `showsAdvanced`.
+  case settings(showsAdvanced: Bool)
+
+  /// Changes one of the device's settings.
+  case set(SettingRequest)
+
+  /// Sends the device a message as given, for exploring.
+  case send(DirectMessageRequest)
 
   /// Asks for the device's level with Light Status Request.
   case status

@@ -21,6 +21,16 @@ public enum Hex {
 
   }
 
+  /// Bytes as space-separated pairs of digits, such as `"02 77 06"`.
+  ///
+  /// - Parameter values: The bytes.
+  /// - Returns: The bytes in hexadecimal.
+  public static func pairs(_ values: [UInt8]) -> String {
+
+    values.map { digits(UInt64($0), count: 2) }.joined(separator: " ")
+
+  }
+
   private static func digits(_ value: UInt64, count: Int) -> String {
 
     let digits = String(value, radix: 16, uppercase: true)

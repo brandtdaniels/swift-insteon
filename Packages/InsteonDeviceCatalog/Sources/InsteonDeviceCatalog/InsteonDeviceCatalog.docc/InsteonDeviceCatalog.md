@@ -15,6 +15,13 @@ So a product is supported by adding its profile to the catalog, rather than by w
 for it. The catalog is a set of static JSON files published on GitHub Pages; this package
 ships a copy, so lookups work offline.
 
+The copy is in the package's resource bundle, one of ``DeviceCatalog/bundleNames``, which a
+command has to be installed beside. ``DeviceCatalog/bundled()`` looks for the bundle where the
+Swift Package Manager and Xcode put it, and throws ``DeviceCatalogError/missingBundledCatalog``
+if it isn't there, rather than stopping the process. ``DeviceCatalog/bundled(nextTo:)`` looks in
+directories of an app's own, and ``DeviceCatalog/load(contentsOf:)`` reads a catalog from any
+file.
+
 ```swift
 let catalog = try DeviceCatalog.bundled()
 
@@ -43,7 +50,9 @@ waits for an update of the package. Updating is optional.
 ``DeviceEventInterpreter`` reads the messages a modem receives as ``DeviceEvent``s. It learns
 each device's profile when the device reports its identity, such as when its SET button is
 held to link it, and from then on reports what the device's group commands mean and when it
-sends a heartbeat.
+sends a heartbeat. An app seeds it with the identities it saved, using
+``DeviceEventInterpreter/remember(category:subcategory:firmwareVersion:for:)``, so an updated
+catalog finds each device's profile again.
 
 ``DeviceCatalog/commandSet(category:subcategory:firmwareVersion:)`` finds the ``CommandSet`` a
 device uses: its operating flags, read with Get Operating Flags and changed with Set Operating
@@ -51,6 +60,14 @@ Flags, the values it reads and writes with extended Get and Set, such as a dimme
 rate or a keypad's button masks, its other standard and extended direct commands, such as a
 thermostat's setpoints, and the direct messages it sends on its own, such as a thermostat's
 reports. Many products share a command set, so the catalog describes each once.
+
+A command set's ``CommandSet/settingItems`` are what a settings page shows, each a
+``SettingItem`` with its label, ``SettingSection`` and whether it's advanced, in the catalog's
+order of sections. ``CommandSet/text(for:raw:)`` shows a value with its value table, unit and
+scale, such as "0.5 s" or "50%", and ``CommandSet/raw(for:parsing:)`` reads what someone types
+back into the byte to write. ``CommandSet/change(for:setting:)`` and
+``CommandSet/change(for:)`` say how to change a flag or value, as a ``FlagChange`` or
+``ValueChange``, or that the catalog gives no way.
 
 A command set's group types, each a ``GroupType`` that a profile's groups name, say what the
 groups are: how to read a group's state, what it can be told to do, and what Data 1 through
@@ -61,8 +78,14 @@ an app to guide people through or do itself.
 ``DeviceCatalog/profiles(matching:)`` searches the catalog by model, name, alias or identity,
 such as for an app's list of supported products.
 
+``DeviceCatalog/describe(category:subcategory:firmwareVersion:)`` gathers what the catalog
+says about one device into a ``DeviceDescription``: its profile, command set, name, engine,
+main group and the groups it controls. Its ``DeviceDescription/explain(_:isController:)``
+reads the data bytes of a record in the device's ALL-Link database as a
+``RecordDataExplanation``, such as a responder record's on-level and ramp rate.
+
 A device with no profile can still be handled by what its `DeviceCategory` implies, such as
-dimming for dimmable lighting control.
+dimming for dimmable lighting control, as ``GroupType/Kind/fallback(for:)`` gives it.
 
 ## Topics
 
@@ -70,6 +93,11 @@ dimming for dimmable lighting control.
 
 - ``DeviceCatalog``
 - ``DeviceCatalogError``
+
+### Describing a device
+
+- ``DeviceDescription``
+- ``RecordDataExplanation``
 
 ### Updating
 
@@ -108,6 +136,11 @@ dimming for dimmable lighting control.
 - ``SettingWrite``
 - ``SettingWriteError``
 - ``ValueTable``
+- ``SettingItem``
+- ``SettingSection``
+- ``FlagChange``
+- ``ValueChange``
+- ``SettingInputError``
 
 ### Groups
 

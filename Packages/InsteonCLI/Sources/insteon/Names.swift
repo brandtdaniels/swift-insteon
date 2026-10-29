@@ -22,48 +22,24 @@ struct ProductNames: Sendable {
   /// there.
   init() {
 
-    catalog = CatalogLoader.load()
+    catalog = Self.loadCatalog()
 
   }
 
-  /// The product a device's identity names, such as "Dimmer Switch 2477D (SwitchLinc Dimmer)".
-  func name(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> String? {
+  /// The catalog the package ships with, or `nil` after a one-line warning if it isn't beside
+  /// the command, as when only the executable was copied, or can't be read.
+  private static func loadCatalog() -> DeviceCatalog? {
 
-    catalog?.profile(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion).map(ProductName.of)
+    let url: URL
 
-  }
+    do {
 
-  /// What the catalog says about a device with a known identity.
-  func device(_ identity: ReportedIdentity) -> KnownDevice {
+      url = try DeviceCatalog.bundledCatalogURL()
 
-    KnownDevice(identity: identity, catalog: catalog)
-
-  }
-
-  /// A profile's name and model, then its first alias, as the docs name products.
-  static func name(of profile: DeviceProfile) -> String {
-
-    ProductName.of(profile)
-
-  }
-
-}
-
-/// Loads the Insteon device catalog from the bundle beside the command, without
-/// `DeviceCatalog.bundled()`, which stops the process when the bundle is missing, as it is when
-/// only the executable was copied.
-enum CatalogLoader {
-
-  /// The catalog, or `nil` after a one-line warning if it isn't beside the command or can't
-  /// be read.
-  static func load() -> DeviceCatalog? {
-
-    let paths = CatalogLocation.candidatePaths(nextTo: executableDirectories())
-
-    guard let path = paths.first(where: { FileManager.default.isReadableFile(atPath: $0) }) else {
+    } catch {
 
       Output.note(
-        "insteon: warning: the Insteon device catalog (\(CatalogLocation.bundleNames[0])) isn't next to the command, "
+        "insteon: warning: the Insteon device catalog (\(DeviceCatalog.bundleNames[0])) isn't next to the command, "
           + "so products aren't named. Scripts/install-insteon.sh installs the command with it."
       )
 
@@ -73,11 +49,11 @@ enum CatalogLoader {
 
     do {
 
-      return try DeviceCatalog(json: Data(contentsOf: URL(fileURLWithPath: path)))
+      return try DeviceCatalog.load(contentsOf: url)
 
     } catch {
 
-      Output.note("insteon: warning: the Insteon device catalog at \(path) couldn't be read, so products aren't named.")
+      Output.note("insteon: warning: the Insteon device catalog at \(url.path) couldn't be read, so products aren't named.")
 
       return nil
 
@@ -85,26 +61,17 @@ enum CatalogLoader {
 
   }
 
-  /// The directories the Swift Package Manager's resource accessor looks in for a command:
-  /// the main bundle's, which is the executable's directory, and the executable's directory
-  /// with symbolic links resolved, for a command linked into a directory on `PATH`.
-  private static func executableDirectories() -> [String] {
+  /// The product a device's identity names, such as "Dimmer Switch 2477D (SwitchLinc Dimmer)".
+  func name(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> String? {
 
-    var directories = [Bundle.main.bundlePath]
+    catalog?.profile(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion)?.displayName
 
-    if let executable = Bundle.main.executablePath {
+  }
 
-      directories.append(Paths.directory(of: executable))
+  /// What the catalog says about a device with a known identity.
+  func device(_ identity: ReportedIdentity) -> DeviceDescription {
 
-      if let resolved = Paths.resolved(executable) {
-
-        directories.append(Paths.directory(of: resolved))
-
-      }
-
-    }
-
-    return directories
+    DeviceDescription(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion, catalog: catalog)
 
   }
 

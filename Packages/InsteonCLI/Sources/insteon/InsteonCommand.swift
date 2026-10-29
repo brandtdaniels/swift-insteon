@@ -95,6 +95,24 @@ struct InsteonCommand {
         try await DeviceCommands.run(action, device: device, modem: modem, names: names, printsJSON: printsJSON)
 
       }
+    case let .scene(group, isOn):
+      try await withModem(invocation) { modem, _ in
+
+        try await SceneCommands.scene(group, isOn: isOn, modem: modem)
+
+      }
+    case let .beep(isDouble):
+      try await withModem(invocation) { modem, _ in
+
+        try await SceneCommands.beep(isDouble: isDouble, modem: modem)
+
+      }
+    case let .modemSend(request):
+      try await withModem(invocation) { modem, _ in
+
+        try await ExploreCommands.send(request, modem: modem)
+
+      }
     case let .watch(options):
       try await withModem(invocation) { modem, names in
 

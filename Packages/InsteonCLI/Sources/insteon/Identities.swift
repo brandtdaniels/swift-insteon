@@ -5,6 +5,7 @@ import Darwin
 import Glibc
 #endif
 import InsteonCLICore
+import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonModem
 import InsteonProtocol
@@ -211,7 +212,7 @@ enum Identities {
   /// - Returns: The device and what the catalog says about it, or `nil` if its identity isn't
   ///   known and it didn't report one.
   /// - Throws: `CancellationError` if the task was canceled.
-  static func known(_ device: InsteonAddress, modem: Modem, names: ProductNames, asking: Bool) async throws -> KnownDevice? {
+  static func known(_ device: InsteonAddress, modem: Modem, names: ProductNames, asking: Bool) async throws -> DeviceDescription? {
 
     if let identity = IdentityStore.load()[device] {
 
@@ -261,7 +262,7 @@ enum Identities {
   /// ID Request. Either is remembered.
   ///
   /// - Throws: `CancellationError` if the task was canceled while asking.
-  static func learn(from link: AllLinkingCompleted, modem: Modem, names: ProductNames) async throws -> KnownDevice? {
+  static func learn(from link: AllLinkingCompleted, modem: Modem, names: ProductNames) async throws -> DeviceDescription? {
 
     if let identity = ReportedIdentity(link) {
 
@@ -297,21 +298,6 @@ enum Paths {
     }
 
     return slash == path.startIndex ? "/" : String(path[..<slash])
-
-  }
-
-  /// The path with every symbolic link in it resolved, or `nil` if it can't be.
-  static func resolved(_ path: String) -> String? {
-
-    guard let resolved = realpath(path, nil) else {
-
-      return nil
-
-    }
-
-    defer { free(resolved) }
-
-    return String(cString: resolved)
 
   }
 

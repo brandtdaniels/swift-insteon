@@ -316,6 +316,28 @@ actor CommandPacer<Parser: ReplyParser> {
 
   }
 
+  /// Writes a command once in a turn of its own and holds the turn until a step of its answer
+  /// fails or the last step is accepted, without writing it again, for a command whose answer
+  /// the caller reads from ``CommandPacer/replies()`` itself.
+  ///
+  /// A step's verdict of `.rejected` ends the wait like `.accepted` does; nothing is retried.
+  ///
+  /// - Parameter exchange: The command to write, and the replies that end the wait.
+  /// - Throws: The `timedOut` error of a step that wasn't completed in time, the error of a
+  ///   step that failed, `closedError` if the device is closed, `CancellationError` if the task
+  ///   is canceled, or the connection's error.
+  func sendOnce(_ exchange: Exchange<Reply>) async throws {
+
+    try await waitForTurn()
+    defer { turns.release() }
+
+    try await waitForUnansweredCommand()
+    try Task.checkCancellation()
+
+    _ = try await transmit(exchange)
+
+  }
+
   /// Returns a stream of everything the device sends after this call, which finishes when the
   /// device closes.
   func replies() -> AsyncStream<Reply> {

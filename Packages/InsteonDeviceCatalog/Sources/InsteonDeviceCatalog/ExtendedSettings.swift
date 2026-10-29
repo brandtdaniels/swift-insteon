@@ -92,6 +92,26 @@ public struct ExtendedSettings: Hashable, Sendable {
 
   }
 
+  /// The value with a name.
+  ///
+  /// - Parameter name: The value's name, such as `"onLevel"`.
+  /// - Returns: The value, or `nil` if there's none by that name.
+  public func value(named name: SettingName) -> SettingValue? {
+
+    values.first { $0.name == name }
+
+  }
+
+  /// The write that sets a value.
+  ///
+  /// - Parameter name: The value's name, such as `"onLevel"`.
+  /// - Returns: The first write with a byte for the value, or `nil` if no write sets it.
+  public func write(setting name: SettingName) -> SettingWrite? {
+
+    writes.first { write in write.bytes.contains { $0.value == name } }
+
+  }
+
 }
 
 /// A value in a Get's reply.
@@ -126,6 +146,34 @@ public struct SettingValue: Hashable, Sendable {
   /// The values the byte can take, if the command set gives them.
   public var range: ClosedRange<UInt8>?
 
+  /// What a settings page calls the value, such as `"Ramp rate"`, if the command set says.
+  public var label: String?
+
+  /// The heading a settings page shows the value under, if the command set says.
+  public var section: SettingSection?
+
+  /// Whether a settings page keeps the value out of sight unless asked.
+  public var isAdvanced: Bool
+
+  /// The byte as the device leaves the factory, if a document gives it. The catalog's JSON
+  /// calls it `default`.
+  public var defaultValue: UInt8?
+
+  /// The value's unit once scaled, for a value shown as a number.
+  public var unit: FieldUnit?
+
+  /// What one count is worth in ``SettingValue/unit``, such as 100/255 for a level shown as a
+  /// percentage.
+  public var scale: Double
+
+  /// The value table, in the command set's ``CommandSet/valueTables``, that names each value,
+  /// such as the ramp rate's.
+  public var table: SettingName?
+
+  /// The extended command, in the command set's ``CommandSet/extendedCommands``, that sets
+  /// the value, for a value no extended Set write sets.
+  public var write: SettingName?
+
   /// Creates a value.
   ///
   /// - Parameters:
@@ -135,7 +183,31 @@ public struct SettingValue: Hashable, Sendable {
   ///   - kind: How to read the byte. Defaults to ``SettingValue/Kind/number``.
   ///   - range: The values the byte can take.
   ///   - verification: How sure the catalog is of the value. Defaults to ``Verification/documented``.
-  public init(name: SettingName, summary: String, position: Int, kind: Kind = .number, range: ClosedRange<UInt8>? = nil, verification: Verification = .documented) {
+  ///   - label: What a settings page calls the value. Defaults to `nil`.
+  ///   - section: The heading a settings page shows the value under. Defaults to `nil`.
+  ///   - isAdvanced: Whether a settings page keeps the value out of sight unless asked.
+  ///     Defaults to `false`.
+  ///   - defaultValue: The byte as the device leaves the factory. Defaults to `nil`.
+  ///   - unit: The value's unit once scaled. Defaults to `nil`.
+  ///   - scale: What one count is worth in the unit. Defaults to 1.
+  ///   - table: The value table that names each value. Defaults to `nil`.
+  ///   - write: The extended command that sets the value. Defaults to `nil`.
+  public init(
+    name: SettingName,
+    summary: String,
+    position: Int,
+    kind: Kind = .number,
+    range: ClosedRange<UInt8>? = nil,
+    verification: Verification = .documented,
+    label: String? = nil,
+    section: SettingSection? = nil,
+    isAdvanced: Bool = false,
+    defaultValue: UInt8? = nil,
+    unit: FieldUnit? = nil,
+    scale: Double = 1,
+    table: SettingName? = nil,
+    write: SettingName? = nil
+  ) {
 
     precondition((3...14).contains(position), "A setting's value is in D3 through D14.")
 
@@ -145,6 +217,14 @@ public struct SettingValue: Hashable, Sendable {
     self.position = position
     self.kind = kind
     self.range = range
+    self.label = label
+    self.section = section
+    self.isAdvanced = isAdvanced
+    self.defaultValue = defaultValue
+    self.unit = unit
+    self.scale = scale
+    self.table = table
+    self.write = write
 
   }
 

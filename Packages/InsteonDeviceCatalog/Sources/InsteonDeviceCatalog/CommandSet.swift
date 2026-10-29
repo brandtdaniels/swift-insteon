@@ -304,6 +304,28 @@ public struct OperatingFlag: Hashable, Sendable {
   /// messages, with ``DeviceStandardCommand/protectedUserData(for:)``.
   public var extendedWhen: SettingName?
 
+  /// What a settings page calls the flag, such as `"Beep on button press"`, if the command set
+  /// says.
+  public var label: String?
+
+  /// The heading a settings page shows the flag under, if the command set says.
+  public var section: SettingSection?
+
+  /// Whether a settings page keeps the flag out of sight unless asked.
+  public var isAdvanced: Bool
+
+  /// Whether the bit is 1 as the device leaves the factory, if a document gives it. The
+  /// catalog's JSON calls it `default`.
+  public var defaultValue: Bool?
+
+  /// The standard command, in the command set's ``CommandSet/standardCommands``, that sets the
+  /// bit, for a flag Set Operating Flags doesn't set.
+  public var onCommand: SettingName?
+
+  /// The standard command, in the command set's ``CommandSet/standardCommands``, that clears
+  /// the bit.
+  public var offCommand: SettingName?
+
   /// Creates an operating flag.
   ///
   /// - Parameters:
@@ -316,7 +338,29 @@ public struct OperatingFlag: Hashable, Sendable {
   ///   - extendedWhen: The operating flag that has the Set Operating Flags commands sent as
   ///     extended messages.
   ///   - verification: How sure the catalog is of the flag. Defaults to ``Verification/documented``.
-  public init(name: SettingName, summary: String, query: OperatingFlagsRequest, bit: UInt8, on: UInt8? = nil, off: UInt8? = nil, extendedWhen: SettingName? = nil, verification: Verification = .documented) {
+  ///   - label: What a settings page calls the flag. Defaults to `nil`.
+  ///   - section: The heading a settings page shows the flag under. Defaults to `nil`.
+  ///   - isAdvanced: Whether a settings page keeps the flag out of sight unless asked.
+  ///     Defaults to `false`.
+  ///   - defaultValue: Whether the bit is 1 as the device leaves the factory. Defaults to `nil`.
+  ///   - onCommand: The standard command that sets the bit. Defaults to `nil`.
+  ///   - offCommand: The standard command that clears the bit. Defaults to `nil`.
+  public init(
+    name: SettingName,
+    summary: String,
+    query: OperatingFlagsRequest,
+    bit: UInt8,
+    on: UInt8? = nil,
+    off: UInt8? = nil,
+    extendedWhen: SettingName? = nil,
+    verification: Verification = .documented,
+    label: String? = nil,
+    section: SettingSection? = nil,
+    isAdvanced: Bool = false,
+    defaultValue: Bool? = nil,
+    onCommand: SettingName? = nil,
+    offCommand: SettingName? = nil
+  ) {
 
     self.name = name
     self.summary = summary
@@ -326,6 +370,12 @@ public struct OperatingFlag: Hashable, Sendable {
     self.on = on
     self.off = off
     self.extendedWhen = extendedWhen
+    self.label = label
+    self.section = section
+    self.isAdvanced = isAdvanced
+    self.defaultValue = defaultValue
+    self.onCommand = onCommand
+    self.offCommand = offCommand
 
   }
 
@@ -382,6 +432,15 @@ public struct OperatingReading: Hashable, Sendable {
   /// The Get Operating Flags request.
   public var query: OperatingFlagsRequest
 
+  /// What a settings page calls the reading, such as `"CRC errors"`, if the command set says.
+  public var label: String?
+
+  /// The heading a settings page shows the reading under, if the command set says.
+  public var section: SettingSection?
+
+  /// Whether a settings page keeps the reading out of sight unless asked.
+  public var isAdvanced: Bool
+
   /// Creates a reading.
   ///
   /// - Parameters:
@@ -389,12 +448,27 @@ public struct OperatingReading: Hashable, Sendable {
   ///   - summary: What the reading is.
   ///   - query: The Get Operating Flags request.
   ///   - verification: How sure the catalog is of the reading. Defaults to ``Verification/documented``.
-  public init(name: SettingName, summary: String, query: OperatingFlagsRequest, verification: Verification = .documented) {
+  ///   - label: What a settings page calls the reading. Defaults to `nil`.
+  ///   - section: The heading a settings page shows the reading under. Defaults to `nil`.
+  ///   - isAdvanced: Whether a settings page keeps the reading out of sight unless asked.
+  ///     Defaults to `false`.
+  public init(
+    name: SettingName,
+    summary: String,
+    query: OperatingFlagsRequest,
+    verification: Verification = .documented,
+    label: String? = nil,
+    section: SettingSection? = nil,
+    isAdvanced: Bool = false
+  ) {
 
     self.name = name
     self.summary = summary
     self.verification = verification
     self.query = query
+    self.label = label
+    self.section = section
+    self.isAdvanced = isAdvanced
 
   }
 

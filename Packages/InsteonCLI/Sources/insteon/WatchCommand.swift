@@ -65,7 +65,7 @@ enum WatchCommand {
 
           let profile = names.catalog?.profile(category: pressed.category, subcategory: pressed.subcategory, firmwareVersion: pressed.firmwareVersion)
 
-          Output.line("\(time)  \(WatchText.setButtonPressed(pressed, productName: profile.map(ProductName.of)))")
+          Output.line("\(time)  \(WatchText.setButtonPressed(pressed, productName: profile?.displayName))")
 
         }
 
@@ -109,7 +109,7 @@ enum WatchCommand {
 
     switch event {
     case let .identified(device, profile?):
-      return "\(device) identified as \(ProductNames.name(of: profile))"
+      return "\(device) identified as \(profile.displayName)"
     case let .identified(device, nil):
       return "\(device) reported an identity the Insteon device catalog doesn't have"
     case let .groupCommand(command, eventName?):
@@ -128,7 +128,8 @@ enum WatchCommand {
 
   }
 
-  private static func describe(_ message: ReceivedMessage) -> String {
+  /// A message from a device in words, such as its type and command.
+  static func describe(_ message: ReceivedMessage) -> String {
 
     let name = StandardDirectCommand.name(command1: message.command.command1).map { " (\($0))" } ?? ""
     let type: String = message.flags.messageType.name
