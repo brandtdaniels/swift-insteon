@@ -159,10 +159,14 @@ extension Invocation {
     var asksInsteonConnect = false
     var searchesAllAddresses = false
     var identifiesHubs = false
+    var identifyTarget: HubAddress?
+    var index = 0
 
-    for argument in arguments {
+    while index < arguments.count {
 
+      let argument = arguments[index]
       let (name, inlineValue) = split(argument)
+      index += 1
 
       switch name {
       case "--local":
@@ -175,8 +179,21 @@ extension Invocation {
         try expectNoValue(name, inlineValue)
         searchesAllAddresses = true
       case "--identify":
-        try expectNoValue(name, inlineValue)
         identifiesHubs = true
+
+        // The Hub to identify is optional: after `=`, or as the next argument when it isn't
+        // an option.
+        let hasNextValue = index < arguments.count && !arguments[index].hasPrefix("-")
+
+        guard inlineValue != nil || hasNextValue else {
+
+          continue
+
+        }
+
+        let text = try value(of: name, inline: inlineValue, in: arguments, at: &index)
+
+        identifyTarget = try hubAddress(text, option: name)
       default:
         throw unexpected(argument, subcommand: "discover")
       }
@@ -189,7 +206,8 @@ extension Invocation {
       searchesLocalNetwork: searchesLocalNetwork || !asksInsteonConnect,
       asksInsteonConnect: asksInsteonConnect,
       searchesAllAddresses: searchesAllAddresses,
-      identifiesHubs: identifiesHubs
+      identifiesHubs: identifiesHubs,
+      identifyTarget: identifyTarget
     )
 
   }
@@ -553,6 +571,30 @@ extension Invocation {
     }
 
     return AllLinkGroupNumber(rawValue: number)
+
+  }
+
+  /// A Hub's `HOST` or `HOST:PORT`. A value with `@` in it, as in a URL with a user name and
+  /// password, is refused without repeating it.
+  private static func hubAddress(_ text: String, option: String) throws(ArgumentError) -> HubAddress {
+
+    guard !text.contains("@") else {
+
+      throw ArgumentError.credentialsInOption(option)
+
+    }
+
+    do {
+
+      let parts = try ModemTarget.hostAndPort(text)
+
+      return HubAddress(host: parts.host, port: parts.port)
+
+    } catch {
+
+      throw ArgumentError.invalidValue(option: option, value: text, expected: "HOST or HOST:PORT, such as 192.168.1.20")
+
+    }
 
   }
 

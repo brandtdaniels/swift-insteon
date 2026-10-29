@@ -250,7 +250,7 @@ enum ModemCommands {
 
     }
 
-    let known = await Identities.learn(from: first, modem: modem, names: names)
+    let known = try await Identities.learn(from: first, modem: modem, names: names)
     var made = [first]
 
     if !printsJSON {
@@ -363,7 +363,7 @@ enum ModemCommands {
 
     }
 
-    let known = await Identities.known(device, modem: modem, names: names, asking: false)
+    let known = try await Identities.known(device, modem: modem, names: names, asking: false)
     let steps = known?.profile?.lifecycle?.linking.map(LinkingInstructions.steps(of:)) ?? []
     let label = deviceLabel(device, known: known)
     let link: AllLinkingCompleted
@@ -442,6 +442,7 @@ enum ModemCommands {
     let timeout = options.timeoutSeconds.map { Duration.seconds($0) } ?? Linker.defaultManualLinkingTimeout
     let known = options.device.flatMap { IdentityStore.load()[$0] }.map(names.device)
     let label = options.device.map { deviceLabel($0, known: known) }
+    let group: AllLinkGroupNumber = try await unlinkGroup(modem, options: options)
     let link: AllLinkingCompleted
 
     if options.role == .responder {
@@ -450,7 +451,7 @@ enum ModemCommands {
       // joins in linking mode as its responder.
       try await deviceGoesFirst(.unlinking, device: label, steps: known?.profile?.lifecycle?.unlinking.map(LinkingInstructions.steps(of:)) ?? [])
       Output.note("The modem is joining as responder. Waiting up to \(seconds(timeout)) seconds; Control-C stops.")
-      link = try await ManualLinking.wait(modem, mode: .responder, group: options.group, timeout: timeout)
+      link = try await ManualLinking.wait(modem, mode: .responder, group: group, timeout: timeout)
 
     } else {
 
@@ -458,9 +459,9 @@ enum ModemCommands {
       // linking steps apply.
       let steps = known?.profile?.lifecycle?.linking.map(LinkingInstructions.steps(of:)) ?? []
 
-      link = try await ManualLinking.wait(modem, mode: .delete, group: options.group, timeout: timeout) {
+      link = try await ManualLinking.wait(modem, mode: .delete, group: group, timeout: timeout) {
 
-        for line in LinkingInstructions.modemFirst(.unlinking, group: options.group, seconds: seconds(timeout), device: label, steps: steps) {
+        for line in LinkingInstructions.modemFirst(.unlinking, group: group, seconds: seconds(timeout), device: label, steps: steps) {
 
           Output.note(line)
 
@@ -479,11 +480,105 @@ enum ModemCommands {
 
       try Output.json(Unlink(address: "\(link.address)", group: Int(link.group.rawValue), product: product))
 
+    } else {
+
+      Output.line("Unlinked \(link.address)\(product.map { ", \($0)," } ?? "") from group \(link.group).")
+
+    }
+
+    try await noteRemainingLinks(of: link.address, modem: modem)
+
+  }
+
+  /// The modem's group to unlink in: the one given, or else the group of the modem's
+  /// records for the device in the modem's role, or group 0.
+  ///
+  /// Links made before group 0 was the default are in group 1, so the device's own records
+  /// say which group its link is in.
+  private static func unlinkGroup(_ modem: Modem, options: UnlinkOptions) async throws -> AllLinkGroupNumber {
+
+    if let group = options.group {
+
+      return group
+
+    }
+
+    guard let device = options.device else {
+
+      return LinkOptions.defaultGroup
+
+    }
+
+    Output.note("Reading the modem's ALL-Link database for \(device)'s groups...")
+
+    let records: [AllLinkRecord] = try await modem.allLinkRecords()
+    let isController: Bool = options.role != .responder
+    let matching: [AllLinkRecord] = records.filter { (record: AllLinkRecord) -> Bool in
+
+      let controls: Bool = record.flags.contains(.controller)
+      let inUse: Bool = record.flags.contains(.inUse)
+
+      return record.address == device && inUse && controls == isController
+
+    }
+
+    let groups: [UInt8] = Array(Set(matching.map(\.group.rawValue))).sorted()
+
+    guard let first = groups.first else {
+
+      Output.note("The modem has no record for \(device) in that role, so the unlink uses group \(LinkOptions.defaultGroup).")
+
+      return LinkOptions.defaultGroup
+
+    }
+
+    let group = AllLinkGroupNumber(rawValue: first)
+
+    Output.note("The modem's records link \(device) in group \(group), so the unlink uses it.")
+
+    return group
+
+  }
+
+  /// Says which of the modem's groups still link a device, with the command that unlinks
+  /// each.
+  ///
+  /// The modem's database is read again for this, so a failure to read it is only noted.
+  private static func noteRemainingLinks(of device: InsteonAddress, modem: Modem) async throws {
+
+    let records: [AllLinkRecord]
+
+    do {
+
+      records = try await modem.allLinkRecords()
+
+    } catch let error as CancellationError {
+
+      throw error
+
+    } catch {
+
+      Output.note("Couldn't check the modem for \(device)'s other links: \(Names.message(for: error))")
+
       return
 
     }
 
-    Output.line("Unlinked \(link.address)\(product.map { ", \($0)," } ?? "") from group \(link.group).")
+    var noted: Set<String> = []
+
+    for record in records where record.address == device && record.flags.contains(.inUse) {
+
+      let roleOption: String = record.flags.contains(.controller) ? "" : " --responder"
+      let line: String =
+        "\(device) still has links in group \(record.group); run 'insteon unlink \(device) --group \(record.group)\(roleOption)'."
+
+      if noted.insert(line).inserted {
+
+        Output.note(line)
+
+      }
+
+    }
 
   }
 
@@ -599,8 +694,10 @@ enum ManualLinking {
   ///   - timeout: How long to wait.
   ///   - started: Called once the modem is in its mode, to tell the person what to do.
   /// - Returns: The link the modem reported.
-  /// - Throws: `LinkingError.linkingTimedOut` if no link is reported in time, or the modem's
-  ///   errors, such as `CancellationError` after Control-C.
+  /// - Throws: `LinkingError.linkingTimedOut` if no link is reported in time,
+  ///   `LinkingError.unexpectedLink(_:)` if the modem controls the link reported, or removed
+  ///   it, in another group than asked, or the modem's errors, such as `CancellationError`
+  ///   after Control-C.
   static func wait(
     _ modem: Modem,
     mode: AllLinkMode,
@@ -644,6 +741,17 @@ enum ManualLinking {
       await cancelAllLinking(modem)
 
       throw LinkingError.linkingTimedOut
+
+    }
+
+    // The Insteon Developer's Guide says Start ALL-Linking assigns the group the modem reports.
+    // That's the modem's own group only when it doesn't respond in the link, so a responder's
+    // isn't checked.
+    let checksGroup: Bool = mode != .responder && link.mode != .responder
+
+    if checksGroup, link.group != group {
+
+      throw LinkingError.unexpectedLink(link)
 
     }
 

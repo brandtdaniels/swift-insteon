@@ -51,6 +51,42 @@ enum Terminal {
 
   }
 
+  /// Asks the person a yes-or-no question on standard error, and waits for the answer.
+  ///
+  /// Only `y` or `yes`, in either case, is yes; anything else, an empty line or the end of
+  /// input is no.
+  ///
+  /// - Parameter question: The question, ending with its choices, such as `[y/N]`.
+  /// - Returns: Whether the person answered yes.
+  /// - Throws: `CancellationError` if the task was canceled while waiting.
+  static func confirm(_ question: String) async throws -> Bool {
+
+    Output.prompt(question)
+
+    let answer = OneShot<String?>()
+
+    let line: String? = try await withTaskCancellationHandler {
+
+      DispatchQueue.global().async {
+
+        answer.finish(.success(readLine()))
+
+      }
+
+      return try await answer.value()
+
+    } onCancel: {
+
+      answer.finish(.failure(CancellationError()))
+
+    }
+
+    let text: String = (line ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+
+    return text == "y" || text == "yes"
+
+  }
+
 }
 
 /// Resumes a continuation once, from whichever of Return and cancellation comes first.

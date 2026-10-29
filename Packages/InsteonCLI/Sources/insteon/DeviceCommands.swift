@@ -20,7 +20,7 @@ enum DeviceCommands {
 
       if levelPercent != nil {
 
-        kind = await Identities.known(device, modem: modem, names: names, asking: true)?.mainGroupType?.kind
+        kind = try await Identities.known(device, modem: modem, names: names, asking: true)?.mainGroupType?.kind
 
       }
 
@@ -117,7 +117,10 @@ enum DeviceCommands {
     let categoryText: String = category.map(Names.category) ?? "not reported"
     let subcategoryText: String = subcategory.map { "\($0)" } ?? "not reported"
     let firmwareText: String = identity?.firmwareVersion.map { "\($0)" } ?? "not reported"
-    let productKeyText: String = productKey.map { "\($0)" } ?? "none; newer devices don't report one"
+    // A device that answered Product Data Request without a key is a newer one; a device that
+    // didn't answer said nothing about its key.
+    let missingKeyText: String = productData == nil ? "not reported" : "none; newer devices don't report one"
+    let productKeyText: String = productKey.map { "\($0)" } ?? missingKeyText
     var rows: [[String]] = [
       ["Device:", "\(device)"],
       ["Engine:", Names.engine(identification.engine)],
@@ -216,7 +219,7 @@ enum DeviceCommands {
 
   private static func status(_ device: InsteonAddress, modem: Modem, names: ProductNames, printsJSON: Bool) async throws {
 
-    let kind = await Identities.known(device, modem: modem, names: names, asking: true)?.mainGroupType?.kind
+    let kind = try await Identities.known(device, modem: modem, names: names, asking: true)?.mainGroupType?.kind
 
     // The acknowledgment carries the level in cmd2 and the ALL-Link database delta in cmd1.
     let acknowledgment = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.statusRequest()))
@@ -262,7 +265,7 @@ enum DeviceCommands {
 
   private static func links(_ device: InsteonAddress, modem: Modem, names: ProductNames, printsJSON: Bool) async throws {
 
-    let known = await Identities.known(device, modem: modem, names: names, asking: true)
+    let known = try await Identities.known(device, modem: modem, names: names, asking: true)
 
     Output.note("Reading the ALL-Link database of \(device), one record at a time...")
 

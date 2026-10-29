@@ -43,6 +43,18 @@ enum DiscoverCommand {
     let credentials = try options.identifiesHubs
       ? HubCredentials(environment: ModemSession.loadEnvironment(explicitPath: envFilePath))
       : nil
+
+    // Without a person to ask before each Hub is sent the password, it's sent only to the one
+    // Hub named.
+    if options.identifiesHubs, options.identifyTarget == nil, !Terminal.readsFromTerminal {
+
+      throw CommandFailure(
+        description: "'--identify' sends the Hub's password, and there's no terminal to ask before sending it to each Hub found. "
+          + "Name the one Hub to send it to with '--identify HOST[:PORT]'."
+      )
+
+    }
+
     let names = ProductNames()
     var hubs: [FoundHub] = []
     var failures: [any Error] = []
@@ -112,18 +124,9 @@ enum DiscoverCommand {
 
     }
 
-    if let credentials, !hubs.isEmpty {
+    if let credentials {
 
-      Output.note(
-        "Asking each Hub found at a private address for Get IM Info. This sends the Hub's user name and password, "
-          + "unencrypted, to each of them."
-      )
-
-      for index in hubs.indices {
-
-        await identify(&hubs[index], credentials: credentials, names: names)
-
-      }
+      try await identifyHubs(&hubs, target: options.identifyTarget, credentials: credentials, names: names)
 
     }
 
@@ -243,68 +246,213 @@ enum DiscoverCommand {
 
   }
 
-  /// Asks a Hub at a private address for Get IM Info, and keeps its Insteon ID and identity.
-  private static func identify(_ hub: inout FoundHub, credentials: HubCredentials, names: ProductNames) async {
+  /// Asks the Hubs found for Get IM Info, with the Hub's user name and password: only the Hub
+  /// named, or else each Hub on the Hub's port that the person agrees to send them to.
+  ///
+  /// Asking stops at the first Hub that rejects the credentials, so they aren't tried on the
+  /// rest.
+  private static func identifyHubs(
+    _ hubs: inout [FoundHub],
+    target: HubAddress?,
+    credentials: HubCredentials,
+    names: ProductNames
+  ) async throws {
 
-    // The password goes only to a private address, where a Hub on the local network is.
-    guard IPv4Subnet(address: hub.host, prefixLength: 32)?.isPrivate == true else {
+    if let target {
 
-      Output.note("\(hub.host) isn't a private address, so it wasn't sent the password.")
+      let port: Int = target.port ?? HubEndpoint.defaultPort
+      let index: Int? = hubs.firstIndex { $0.host == target.host && $0.port == port }
 
-      return
+      guard let index else {
 
-    }
-
-    let endpoint = HubEndpoint(host: hub.host, port: hub.port)
-    let timeout = identifyTimeout
-    let connection = HubConnection(hub: Hub(endpoint: endpoint, user: credentials.user, password: credentials.password))
-
-    do {
-
-      let info = try await withThrowingTaskGroup(of: ModemInfo?.self) { group in
-
-        group.addTask {
-
-          try await Modem.withConnection(connection) { modem in
-
-            try await modem.modemInfo()
-
-          }
-
-        }
-
-        group.addTask {
-
-          try await Task.sleep(for: timeout)
-
-          return nil
-
-        }
-
-        defer { group.cancelAll() }
-
-        return try await group.next() ?? nil
-
-      }
-
-      guard let info else {
-
-        Output.note("\(hub.host):\(hub.port) didn't answer Get IM Info in time.")
+        Output.note("\(target.host):\(port) wasn't among the Hubs found, so it wasn't sent the password.")
 
         return
 
       }
 
-      hub.insteonID = "\(info.address)"
-      hub.category = "\(info.category)"
-      hub.subcategory = "\(info.subcategory)"
-      hub.firmwareVersion = "\(info.firmwareVersion)"
-      hub.product = names.name(category: info.category, subcategory: info.subcategory, firmwareVersion: info.firmwareVersion)
+      _ = try await identify(&hubs[index], credentials: credentials, names: names)
+
+      return
+
+    }
+
+    if !hubs.isEmpty {
+
+      Output.note("Identifying a Hub sends it the Hub's user name and password, unencrypted. Answer y only for a Hub you trust.")
+
+    }
+
+    for index in hubs.indices {
+
+      let address = "\(hubs[index].host):\(hubs[index].port)"
+
+      // Hubs answer on their own port. Another port is sent the password only when named.
+      guard hubs[index].port == HubEndpoint.defaultPort else {
+
+        Output.note(
+          "\(address) isn't on the Hub's port, \(HubEndpoint.defaultPort), so it wasn't sent the password. "
+            + "'insteon discover --identify \(address)' sends it."
+        )
+
+        continue
+
+      }
+
+      guard isPrivate(hubs[index].host) else {
+
+        Output.note("\(hubs[index].host) isn't a private address, so it wasn't sent the password.")
+
+        continue
+
+      }
+
+      let question = "Send the Hub's credentials to \(address) to identify it? [y/N]"
+
+      guard try await Terminal.confirm(question) else {
+
+        continue
+
+      }
+
+      let rejected: Bool = try await identify(&hubs[index], credentials: credentials, names: names)
+
+      if rejected {
+
+        Output.note("Stopped identifying Hubs, so the rejected credentials aren't sent to any more of them.")
+
+        return
+
+      }
+
+    }
+
+  }
+
+  /// Asks a Hub at a private address for Get IM Info, and keeps its Insteon ID and identity.
+  ///
+  /// - Returns: Whether the Hub rejected the credentials.
+  /// - Throws: `CancellationError` if the task was canceled.
+  private static func identify(_ hub: inout FoundHub, credentials: HubCredentials, names: ProductNames) async throws -> Bool {
+
+    // The password goes only to a private address, where a Hub on the local network is.
+    guard isPrivate(hub.host) else {
+
+      Output.note("\(hub.host) isn't a private address, so it wasn't sent the password.")
+
+      return false
+
+    }
+
+    let endpoint = HubEndpoint(host: hub.host, port: hub.port)
+    let connection = HubConnection(hub: Hub(endpoint: endpoint, user: credentials.user, password: credentials.password))
+    let info: ModemInfo?
+
+    do {
+
+      info = try await modemInfo(over: connection, timeout: identifyTimeout)
+
+    } catch let error as CancellationError {
+
+      throw error
 
     } catch {
 
       Output.note("\(hub.host):\(hub.port): \(Names.message(for: error))")
 
+      return isRejection(error)
+
+    }
+
+    guard let info else {
+
+      Output.note("\(hub.host):\(hub.port) didn't answer Get IM Info in time.")
+
+      return false
+
+    }
+
+    hub.insteonID = "\(info.address)"
+    hub.category = "\(info.category)"
+    hub.subcategory = "\(info.subcategory)"
+    hub.firmwareVersion = "\(info.firmwareVersion)"
+    hub.product = names.name(category: info.category, subcategory: info.subcategory, firmwareVersion: info.firmwareVersion)
+
+    return false
+
+  }
+
+  /// Asks a Hub for Get IM Info, giving up after a timeout.
+  ///
+  /// The request runs in a task of its own that isn't waited for once the time is up, so a
+  /// request that doesn't stop when canceled can't hold up the command.
+  ///
+  /// - Returns: The modem's information, or `nil` if the Hub didn't answer in time.
+  private static func modemInfo(over connection: HubConnection, timeout: Duration) async throws -> ModemInfo? {
+
+    let result = OneShot<ModemInfo?>()
+
+    let request = Task {
+
+      do {
+
+        let info: ModemInfo = try await Modem.withConnection(connection) { modem in
+
+          try await modem.modemInfo()
+
+        }
+
+        result.finish(.success(info))
+
+      } catch {
+
+        result.finish(.failure(error))
+
+      }
+
+    }
+
+    let timer = Task {
+
+      try? await Task.sleep(for: timeout)
+      result.finish(.success(nil))
+
+    }
+
+    defer {
+
+      request.cancel()
+      timer.cancel()
+
+    }
+
+    return try await withTaskCancellationHandler {
+
+      try await result.value()
+
+    } onCancel: {
+
+      result.finish(.failure(CancellationError()))
+
+    }
+
+  }
+
+  /// Whether a host is a private IPv4 address, where a Hub on the local network is.
+  private static func isPrivate(_ host: String) -> Bool {
+
+    IPv4Subnet(address: host, prefixLength: 32)?.isPrivate == true
+
+  }
+
+  /// Whether an error is the Hub rejecting the user name and password.
+  private static func isRejection(_ error: any Error) -> Bool {
+
+    switch error {
+    case HubError.unexpectedStatus(401), HubError.unexpectedStatus(403):
+      true
+    default:
+      false
     }
 
   }

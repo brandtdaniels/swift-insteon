@@ -51,11 +51,23 @@ enum WatchCommand {
       var events = interpreter.events(from: message, at: .now)
 
       // A SET Button Pressed broadcast says why it came, along with the identity it reports.
+      // The interpreter reports its identity only the first time, so a repeat of the
+      // broadcast isn't printed again.
       if let pressed = SetButtonPressed(message) {
 
-        let profile = names.catalog?.profile(category: pressed.category, subcategory: pressed.subcategory, firmwareVersion: pressed.firmwareVersion)
+        let isNew: Bool = events.contains { event in
 
-        Output.line("\(time)  \(WatchText.setButtonPressed(pressed, productName: profile.map(ProductName.of)))")
+          if case .identified = event { true } else { false }
+
+        }
+
+        if isNew {
+
+          let profile = names.catalog?.profile(category: pressed.category, subcategory: pressed.subcategory, firmwareVersion: pressed.firmwareVersion)
+
+          Output.line("\(time)  \(WatchText.setButtonPressed(pressed, productName: profile.map(ProductName.of)))")
+
+        }
 
         events.removeAll { event in
 

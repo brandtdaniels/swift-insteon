@@ -7,20 +7,34 @@
 #   Make sure PREFIX/bin is on your PATH.
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
-
 prefix="${1:-$HOME/.local}"
+
+# A relative PREFIX is relative to where the script was run, not to the package.
+case "$prefix" in
+  /*) ;;
+  *) prefix="$PWD/$prefix" ;;
+esac
+
 destination="$prefix/bin"
+
+# The nearest directory that's already there has to be writable, to make the rest in it.
+existing="$destination"
+
+while [ ! -e "$existing" ]; do
+  existing="$(dirname "$existing")"
+done
+
+if [ ! -d "$existing" ] || [ ! -w "$existing" ]; then
+  echo "install-insteon: $existing isn't a directory you can write to, so $destination can't be made there; give a PREFIX you can write to, such as ~/.local." >&2
+  exit 1
+fi
+
+cd "$(dirname "$0")/.."
 
 swift build -c release --product insteon
 build="$(swift build -c release --show-bin-path)"
 
 mkdir -p "$destination"
-
-if [ ! -w "$destination" ]; then
-  echo "install-insteon: $destination isn't writable; give a PREFIX you can write to, such as ~/.local." >&2
-  exit 1
-fi
 
 install -m 755 "$build/insteon" "$destination/insteon"
 

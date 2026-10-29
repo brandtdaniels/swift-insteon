@@ -198,6 +198,77 @@ struct ArgumentParserTests {
 
   }
 
+  @Test func identifiesOneHubByItsAddress() throws {
+
+    let withPort = try Invocation.parse(["discover", "--identify", "192.168.1.20:25105"])
+    let target = HubAddress(host: "192.168.1.20", port: 25105)
+    let expected = DiscoverOptions(identifiesHubs: true, identifyTarget: target)
+
+    #expect(withPort.subcommand == .discover(expected))
+
+    let inline = try Invocation.parse(["discover", "--identify=192.168.1.20:25105"])
+
+    #expect(inline.subcommand == .discover(expected))
+
+    let hostOnly = try Invocation.parse(["discover", "--identify", "192.168.1.20", "--all"])
+    let hostOnlyOptions = DiscoverOptions(searchesAllAddresses: true, identifiesHubs: true, identifyTarget: HubAddress(host: "192.168.1.20"))
+
+    #expect(hostOnly.subcommand == .discover(hostOnlyOptions))
+
+  }
+
+  @Test func identifiesWithoutATargetBeforeAnotherOption() throws {
+
+    let invocation = try Invocation.parse(["discover", "--identify", "--all"])
+    let expected = DiscoverOptions(searchesAllAddresses: true, identifiesHubs: true)
+
+    #expect(invocation.subcommand == .discover(expected))
+
+  }
+
+  @Test func rejectsAMalformedIdentifyTarget() {
+
+    #expect(throws: ArgumentError.missingValue(option: "--identify")) {
+
+      try Invocation.parse(["discover", "--identify="])
+
+    }
+
+    let expected = "HOST or HOST:PORT, such as 192.168.1.20"
+
+    #expect(throws: ArgumentError.invalidValue(option: "--identify", value: "192.168.1.20:0", expected: expected)) {
+
+      try Invocation.parse(["discover", "--identify", "192.168.1.20:0"])
+
+    }
+
+    #expect(throws: ArgumentError.invalidValue(option: "--identify", value: ":25105", expected: expected)) {
+
+      try Invocation.parse(["discover", "--identify=:25105"])
+
+    }
+
+    #expect(throws: ArgumentError.unexpectedArgument("192.168.1.21", subcommand: "discover")) {
+
+      try Invocation.parse(["discover", "--identify", "192.168.1.20", "192.168.1.21"])
+
+    }
+
+  }
+
+  // The password isn't repeated in the error.
+  @Test func refusesCredentialsInTheIdentifyTarget() {
+
+    #expect(throws: ArgumentError.credentialsInOption("--identify")) {
+
+      try Invocation.parse(["discover", "--identify", "example-user:example-password@192.168.1.20"])
+
+    }
+
+    #expect(!ArgumentError.credentialsInOption("--identify").description.contains("example-password"))
+
+  }
+
   // MARK: - links
 
   @Test func identifiesLinkedDevicesOnlyWhenAsked() throws {
@@ -219,7 +290,16 @@ struct ArgumentParserTests {
   @Test func linksAsTheControllerOfGroup0ByDefault() throws {
 
     #expect(try Invocation.parse(["link"]).subcommand == .link(LinkOptions(group: 0, role: .controller, timeoutSeconds: nil)))
-    #expect(try Invocation.parse(["unlink"]).subcommand == .unlink(UnlinkOptions(group: 0, role: .controller)))
+
+  }
+
+  // Without --group, unlink reads the modem's records for the device's group, since links
+  // made before group 0 was the default are in group 1.
+  @Test func unlinksTheRecordedGroupUnlessOneIsGiven() throws {
+
+    #expect(UnlinkOptions().group == nil)
+    #expect(try Invocation.parse(["unlink", "1A.2B.3C"]).subcommand == .unlink(UnlinkOptions(device: lamp, group: nil)))
+    #expect(try Invocation.parse(["unlink", "1A.2B.3C", "--group", "0"]).subcommand == .unlink(UnlinkOptions(device: lamp, group: 0)))
 
   }
 

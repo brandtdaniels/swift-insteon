@@ -74,7 +74,8 @@ public enum HelpText {
 
   /// The help for `insteon discover`.
   public static let discover = """
-    Usage: insteon discover [--local] [--insteon-connect] [--all] [--identify] [--json]
+    Usage: insteon discover [--local] [--insteon-connect] [--all]
+                            [--identify [HOST[:PORT]]] [--json]
 
     Finds Hubs in two ways. Only the local network is searched unless --insteon-connect is
     given; give both options for both ways.
@@ -87,10 +88,15 @@ public enum HelpText {
       --insteon-connect   Ask Insteon Connect, which lists the Hubs that reported from this
                           network in the past 24 hours, with their Insteon IDs and models.
                           This shares the network's public IP address with Insteon.
-      --identify          Ask each Hub found at a private address for Get IM Info, with the
+      --identify          Ask Hubs found at a private address for Get IM Info, with the
                           configured INSTEON_HUB_USERNAME and INSTEON_HUB_PASSWORD, to show
-                          its Insteon ID and model. This sends the password to each Hub
-                          found, so use it only on a network you trust.
+                          their Insteon IDs and models. This sends the password, unencrypted,
+                          so the command asks before sending it to each Hub found on port
+                          25105, and stops at the first Hub that rejects it. Without a
+                          terminal to ask at, name the one Hub instead.
+      --identify HOST[:PORT]
+                          Ask only the Hub found at HOST, on PORT or port 25105, without
+                          asking first.
     """
 
   /// The help for `insteon info`.
@@ -153,9 +159,12 @@ public enum HelpText {
 
     Removes a link with a device's SET button and prints the unlinked device. With ADDRESS,
     only that device's unlink is accepted, and its own steps are shown when its identity is
-    known.
+    known. Afterward, it says which groups still link the device.
 
-      --group N           The modem's ALL-Link group in the link, from 0 to 254. Defaults to 0.
+      --group N           The modem's ALL-Link group in the link, from 0 to 254. With
+                          ADDRESS, defaults to the group the modem's records for the device
+                          show; links made before group 0 became the default are in group
+                          1. Otherwise defaults to 0.
       --controller        The modem controls the device: the modem enters unlinking mode,
                           then the device's SET button is pressed. The default.
       --responder         The modem responds to the device, which is the controller, so it

@@ -97,9 +97,13 @@ public struct DiscoverOptions: Hashable, Sendable {
   /// Whether the local search asks every address, rather than stopping at the first Hub.
   public var searchesAllAddresses: Bool
 
-  /// Whether to ask each Hub found at a private address for Get IM Info, which sends the
-  /// Hub's user name and password to each one.
+  /// Whether to ask Hubs found at a private address for Get IM Info, which sends the Hub's
+  /// user name and password to each one asked.
   public var identifiesHubs: Bool
+
+  /// The one Hub to ask for Get IM Info, from `--identify HOST[:PORT]`, or `nil` to ask about
+  /// each Hub found.
+  public var identifyTarget: HubAddress?
 
   /// Creates discovery options.
   ///
@@ -109,19 +113,46 @@ public struct DiscoverOptions: Hashable, Sendable {
   ///     network's public IP address is shared only when asked.
   ///   - searchesAllAddresses: Whether the local search goes on after the first Hub.
   ///     Defaults to `false`.
-  ///   - identifiesHubs: Whether to ask each Hub found for Get IM Info with the configured
+  ///   - identifiesHubs: Whether to ask Hubs found for Get IM Info with the configured
   ///     credentials. Defaults to `false`, so the password is sent only when asked.
+  ///   - identifyTarget: The one Hub to ask, or `nil` to ask about each Hub found. Defaults
+  ///     to `nil`.
   public init(
     searchesLocalNetwork: Bool = true,
     asksInsteonConnect: Bool = false,
     searchesAllAddresses: Bool = false,
-    identifiesHubs: Bool = false
+    identifiesHubs: Bool = false,
+    identifyTarget: HubAddress? = nil
   ) {
 
     self.searchesLocalNetwork = searchesLocalNetwork
     self.asksInsteonConnect = asksInsteonConnect
     self.searchesAllAddresses = searchesAllAddresses
     self.identifiesHubs = identifiesHubs
+    self.identifyTarget = identifyTarget
+
+  }
+
+}
+
+/// A Hub named on the command line by its host and, optionally, its port.
+public struct HubAddress: Hashable, Sendable {
+
+  /// The Hub's host name or IP address.
+  public var host: String
+
+  /// The port of the Hub's HTTP interface, or `nil` for the Hub's default port.
+  public var port: Int?
+
+  /// Creates a Hub's address.
+  ///
+  /// - Parameters:
+  ///   - host: The Hub's host name or IP address.
+  ///   - port: The port of the Hub's HTTP interface, or `nil` for the Hub's default port.
+  public init(host: String, port: Int? = nil) {
+
+    self.host = host
+    self.port = port
 
   }
 
@@ -205,8 +236,9 @@ public struct UnlinkOptions: Hashable, Sendable {
   /// device, only its unlink is accepted, and its own steps are shown when they're known.
   public var device: InsteonAddress?
 
-  /// The modem's ALL-Link group in the link.
-  public var group: AllLinkGroupNumber
+  /// The modem's ALL-Link group in the link, or `nil` when `--group` isn't given: then the
+  /// group the modem's records for the device show, or group 0 without a device.
+  public var group: AllLinkGroupNumber?
 
   /// The modem's role in the link: ``LinkingRole/controller`` or ``LinkingRole/responder``.
   public var role: LinkingRole
@@ -218,13 +250,14 @@ public struct UnlinkOptions: Hashable, Sendable {
   ///
   /// - Parameters:
   ///   - device: The device to unlink, or `nil` for any device. Defaults to `nil`.
-  ///   - group: The modem's ALL-Link group. Defaults to ``LinkOptions/defaultGroup``, group 0.
+  ///   - group: The modem's ALL-Link group, or `nil` for the group the modem's records for
+  ///     the device show, or else ``LinkOptions/defaultGroup``, group 0. Defaults to `nil`.
   ///   - role: The modem's role. Defaults to ``LinkingRole/controller``.
   ///   - timeoutSeconds: How many seconds to wait, or `nil` for the library's default.
   ///     Defaults to `nil`.
   public init(
     device: InsteonAddress? = nil,
-    group: AllLinkGroupNumber = LinkOptions.defaultGroup,
+    group: AllLinkGroupNumber? = nil,
     role: LinkingRole = .controller,
     timeoutSeconds: Int? = nil
   ) {
