@@ -206,7 +206,16 @@ enum Names {
 
       }
 
-      code = URLError.Code(rawValue: nsError.code)
+      // The initializer is failable on Linux but not on Apple platforms.
+      let parsed: URLError.Code? = URLError.Code(rawValue: nsError.code)
+
+      guard let parsed else {
+
+        return nil
+
+      }
+
+      code = parsed
 
     }
 
