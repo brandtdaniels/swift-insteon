@@ -106,6 +106,9 @@ private enum Outcome<Reply: Sendable>: Sendable {
   /// A reply rejected the command with this error.
   case rejected(any Error)
 
+  /// A step wasn't completed in time, so the attempt ended with the step's `timedOut` error.
+  case timedOut(any Error)
+
 }
 
 /// Paces commands to a device that answers each one before it takes the next, such as a
@@ -246,7 +249,8 @@ actor CommandPacer<Parser: ReplyParser> {
   /// - Returns: The reply that answered each command, in order.
   /// - Throws: The error of a reply that rejected or failed a command, the `timedOut` error of
   ///   a step that wasn't completed in time, `closedError` if the device is closed, `CancellationError` if the
-  ///   task is canceled, or the connection's error.
+  ///   task is canceled, or the connection's error. A command that was rejected and then not
+  ///   answered in time throws the rejection, not the `timedOut` error.
   @discardableResult
   func send(_ exchanges: [Exchange<Reply>]) async throws -> [Reply] {
 
@@ -334,7 +338,11 @@ actor CommandPacer<Parser: ReplyParser> {
     try await waitForUnansweredCommand()
     try Task.checkCancellation()
 
-    _ = try await transmit(exchange)
+    if case let .timedOut(error) = try await transmit(exchange) {
+
+      throw error
+
+    }
 
   }
 
@@ -362,9 +370,16 @@ actor CommandPacer<Parser: ReplyParser> {
 
   /// Sends an exchange until the device accepts it, as many times as the retry policy allows.
   ///
+  /// An attempt that isn't answered in time ends the exchange. If an earlier attempt was
+  /// rejected, the rejection is thrown, since it says more about why the command failed than
+  /// the silence that followed it.
+  ///
   /// - Parameter previous: The exchange to send again before each attempt after the first.
   ///   An attempt counts as rejected if the device rejects either one.
   /// - Returns: The reply that answered the exchange.
+  /// - Throws: The error of the last rejection if every attempt is rejected, or if an attempt
+  ///   after a rejected one isn't answered in time; the `timedOut` error of a step if the
+  ///   first attempt isn't answered in time; or the errors of ``CommandPacer/send(_:)``.
   private func perform(_ exchange: Exchange<Reply>, repeating previous: Exchange<Reply>? = nil) async throws -> Reply {
 
     try Task.checkCancellation()
@@ -376,6 +391,8 @@ actor CommandPacer<Parser: ReplyParser> {
       return reply
     case let .rejected(error):
       rejection = error
+    case let .timedOut(error):
+      throw error
     }
 
     for _ in 1..<retryPolicy.attempts {
@@ -383,10 +400,17 @@ actor CommandPacer<Parser: ReplyParser> {
       try await clock.sleep(for: retryPolicy.delay)
       try Task.checkCancellation()
 
-      // A previous exchange that's rejected counts as this one being rejected again.
-      if let previous, case .rejected = try await transmit(previous) {
+      if let previous {
 
-        continue
+        switch try await transmit(previous) {
+        case .accepted:
+          break
+        case .rejected:
+          // A previous exchange that's rejected counts as this one being rejected again.
+          continue
+        case .timedOut:
+          throw rejection
+        }
 
       }
 
@@ -395,6 +419,8 @@ actor CommandPacer<Parser: ReplyParser> {
         return reply
       case let .rejected(error):
         rejection = error
+      case .timedOut:
+        throw rejection
       }
 
     }
@@ -405,7 +431,7 @@ actor CommandPacer<Parser: ReplyParser> {
 
   /// Writes a command and waits for its answer, the timeout or cancellation.
   ///
-  /// - Returns: How the attempt ended.
+  /// - Returns: How the attempt ended, including a step that wasn't completed in time.
   private func transmit(_ exchange: Exchange<Reply>) async throws -> Outcome<Reply> {
 
     guard !isClosed else {
@@ -519,8 +545,18 @@ actor CommandPacer<Parser: ReplyParser> {
 
     }
 
+    let timedOut: any Error = pending.steps[pending.step].timedOut
+
     deliver(parser.finishPendingReply())
-    failAnswer(id, with: pending.steps[pending.step].timedOut)
+
+    // A NAK the parser was holding back may have answered the command.
+    guard pendingAnswer?.id == id else {
+
+      return
+
+    }
+
+    completePendingAnswer(.success(.timedOut(timedOut)))
 
   }
 

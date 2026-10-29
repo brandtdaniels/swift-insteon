@@ -115,10 +115,10 @@ public actor Modem: SerialCommandSender {
   /// 20 seconds longer than the retry policy's answer timeout.
   ///
   /// - Parameter command: The command to send.
-  /// - Throws: ``ModemError/rejected(_:)`` if the modem NAKs every attempt,
-  ///   ``ModemError/timedOut(_:)`` if it doesn't echo the command,
-  ///   ``ModemError/connectionClosed`` if the modem is closed, `CancellationError` if the
-  ///   task is canceled, or the connection's error.
+  /// - Throws: ``ModemError/rejected(_:)`` if the modem NAKs every attempt, or NAKs the
+  ///   command and then doesn't echo it when it's sent again; ``ModemError/timedOut(_:)`` if
+  ///   it doesn't echo the command at all; ``ModemError/connectionClosed`` if the modem is
+  ///   closed; `CancellationError` if the task is canceled; or the connection's error.
   public func send(_ command: SerialCommand) async throws {
 
     try await pacer.send([Self.exchange(for: command)])
