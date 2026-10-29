@@ -48,7 +48,11 @@ public struct DeviceCatalogVersion: Hashable, Sendable, LosslessStringConvertibl
 
     let parts = description.split(separator: ".", omittingEmptySubsequences: false)
 
-    guard parts.count == 3, parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy { $0.isASCII && $0.isNumber } }) else {
+    // A leading zero would read back written another way, so it isn't allowed.
+    guard
+      parts.count == 3,
+      parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy { $0.isASCII && $0.isNumber } && !($0.count > 1 && $0.first == "0") })
+    else {
 
       return nil
 

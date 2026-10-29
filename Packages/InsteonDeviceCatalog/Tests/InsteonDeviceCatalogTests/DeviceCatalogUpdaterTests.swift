@@ -184,7 +184,7 @@ struct DeviceCatalogUpdaterTests {
 
   }
 
-  @Test(arguments: ["0.5", "0.5.1.2", "v0.5.1", "0.5.x", "0..1", "0.5.-1", "0.5.\u{0661}", "", "99999999999999999999.0.0"])
+  @Test(arguments: ["0.5", "0.5.1.2", "v0.5.1", "0.5.x", "0..1", "0.5.-1", "0.5.\u{0661}", "0.05.1", "", "99999999999999999999.0.0"])
   func refusesAManifestWithAMalformedVersion(_ version: String) async {
 
     let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published), version: version))

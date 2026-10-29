@@ -23360,7 +23360,14 @@
         {
           "category": "0x03",
           "region": "US and Canada",
-          "subcategory": "0x33"
+          "subcategory": "0x33",
+          "verification": {
+            "firmware": [
+              "0xA5"
+            ],
+            "note": "Seen on a device: a Hub 2245 reported 0x03/0x33, with modem (PLM) firmware 0xA5 in its Get IM Info reply. Its Hub firmware was 1019, as the Get Info page of Insteon Connect shows it under Firmware, and its Hub software Hub2-V04-20140904.",
+            "status": "observed"
+          }
         },
         {
           "category": "0x03",
@@ -23457,6 +23464,9 @@
       },
       "model": "2245",
       "name": "Hub",
+      "notes": [
+        "Seen on a device running Hub firmware 1019: the local interface on port 25105 answers the command pages, such as /3?…=I=3, /buffstatus.xml and /1?XB=M=1, but the settings pages /network.htm and /config.htm don't load, so that device offered no local page for its settings."
+      ],
       "radio": "dual",
       "role": "both",
       "sources": [
@@ -55825,15 +55835,221 @@
           }
         }
       ],
+      "lifecycle": {
+        "installation": {
+          "notes": [
+            "Each zone drives one valve, 500 mA at most.",
+            "Make the power connections indoors or in weatherproof enclosures."
+          ],
+          "steps": [
+            {
+              "action": "wire",
+              "control": "Zone and Comm terminals",
+              "text": "Connect one wire of each valve to a Zone 1 to 8 terminal and the other to a Comm terminal. For more than one valve, connect all the common wires together and run one lead from them back to a Comm terminal."
+            },
+            {
+              "action": "wire",
+              "control": "AC Xmr terminals",
+              "text": "Connect a 24 V AC power supply to the two AC Xmr terminals."
+            },
+            {
+              "action": "plugIn",
+              "text": "Plug in the EZFlora."
+            },
+            {
+              "action": "plugIn",
+              "control": "24 V AC transformer",
+              "text": "Plug the 24 V AC transformer into a 120 V AC outlet."
+            }
+          ]
+        },
+        "linking": {
+          "alternatives": [
+            {
+              "description": "From a Hub",
+              "notes": [
+                "This links the Hub's group 0 to the device as a responder, for zone 1; the device makes no link back to the Hub, since this profile lists no group it controls."
+              ],
+              "steps": [
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "text": "Have the Hub start ALL-Linking as the controller, for group 0."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "expect": "LED goes out",
+                  "seconds": 4,
+                  "text": "Press and hold the SET button for about 4 seconds."
+                },
+                {
+                  "action": "tap",
+                  "control": "SET button",
+                  "count": 1,
+                  "text": "Tap the SET button once, for zone 1."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 4,
+                  "text": "Press and hold the SET button for about 4 seconds."
+                },
+                {
+                  "action": "wait",
+                  "device": "other",
+                  "expect": "The Hub reports ALL-Linking Completed with the device's Insteon ID",
+                  "text": "Wait for the Hub to report the new link."
+                },
+                {
+                  "action": "send",
+                  "command": "ID Request",
+                  "expect": "The device answers with its category, subcategory and firmware version",
+                  "text": "Have the Hub send ID Request."
+                },
+                {
+                  "action": "send",
+                  "command": "Ping",
+                  "expect": "The device acknowledges the Ping",
+                  "text": "Have the Hub send Ping to confirm the link."
+                }
+              ],
+              "verification": {
+                "note": "Assembled from this profile's linking steps and the standard Insteon commands Start ALL-Linking, ID Request and Ping; no document describes adding this product to a Hub. The EZFlora Insteon and X10 Messages/Commands list ID Request and Ping.",
+                "status": "inferred"
+              }
+            }
+          ],
+          "notes": [
+            "The EZFlora links as a responder; repeat the steps for each zone, with its own controller button.",
+            "To control the zones with X10 instead, the unit code picks the zone (A1 for zone 1, A8 for zone 8): press and hold the SET button for about 4 seconds (the LED blinks steadily), then send the X10 command, such as A1 On, 3 times within 30 seconds. Sending Off in its place disables X10. The EZFlora Insteon and X10 Messages/Commands add that the house code is chosen on the X10 controller and that any unit code enables it."
+          ],
+          "steps": [
+            {
+              "action": "hold",
+              "control": "controller button",
+              "device": "other",
+              "expect": "Controller button blinks",
+              "text": "Press and hold the controller's button, such as a KeypadLinc button, until it begins to blink."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "expect": "LED goes out; the controller stops blinking",
+              "seconds": 4,
+              "text": "Press and hold the SET button for about 4 seconds."
+            },
+            {
+              "action": "tap",
+              "control": "SET button",
+              "text": "Tap the SET button once for zone 1, twice for zone 2, and so on."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 4,
+              "text": "Press and hold the SET button for about 4 seconds."
+            }
+          ]
+        },
+        "removal": {
+          "alternatives": [
+            {
+              "description": "From a Hub",
+              "steps": [
+                {
+                  "action": "other",
+                  "device": "other",
+                  "text": "Remove the device from its scenes first, so no other device keeps links to it."
+                },
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "text": "Have the Hub start unlinking for group 0 (Start ALL-Linking with link code 0xFF)."
+                },
+                {
+                  "action": "send",
+                  "command": "Enter Linking Mode",
+                  "text": "Have the Hub send Enter Linking Mode (cmd1 0x09) with cmd2 0x01, for group 1, as an extended message if the device is i2CS."
+                },
+                {
+                  "action": "wait",
+                  "device": "other",
+                  "expect": "The Hub reports the device's Insteon ID",
+                  "text": "Wait for the Hub to report that the link is gone."
+                }
+              ],
+              "verification": {
+                "note": "Assembled from the standard Insteon commands Start ALL-Linking and Enter Linking Mode; no document describes removing this product from a Hub.",
+                "status": "inferred"
+              }
+            }
+          ],
+          "steps": [
+            {
+              "action": "other",
+              "text": "Unlink the device from every controller it is linked to."
+            }
+          ],
+          "verification": {
+            "note": "Read from how Insteon links work: a device left in a scene keeps links to it in other devices' ALL-Link databases. No document describes removing this product.",
+            "status": "inferred"
+          }
+        },
+        "reset": {
+          "steps": [
+            {
+              "action": "unplug",
+              "text": "Unplug the EZFlora."
+            },
+            {
+              "action": "wait",
+              "seconds": 5,
+              "text": "Wait at least 5 seconds."
+            },
+            {
+              "action": "plugIn",
+              "control": "SET button",
+              "text": "Press and hold the SET button while plugging it back in."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 5,
+              "text": "Keep holding the SET button for 5 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "text": "Release the SET button."
+            }
+          ]
+        },
+        "unlinking": {
+          "notes": [
+            "The documents don't say whether the controller goes into unlinking mode first, how a zone is chosen, or what the LED shows."
+          ],
+          "steps": [
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 10,
+              "text": "Press and hold the SET button for 10 seconds."
+            }
+          ],
+          "verification": {
+            "note": "Read from the EZFlora Insteon and X10 Messages/Commands, which give Enter Unlinking Mode (cmd1 0x0A) as the same as holding the SET button for 10 seconds; the Quick Start Guide - EZFlora Model #5010A gives no unlinking steps.",
+            "status": "inferred"
+          }
+        }
+      },
       "model": "5010A",
       "name": "EZFlora",
       "notes": [
-        "Each valve wires to a Zone 1 to 8 terminal and to Comm; a 24 V AC transformer connects to the two AC Xmr terminals. Each zone drives one valve, 500 mA at most.",
         "Each zone has a maximum run of 30 minutes, so a missed Off doesn't leave it running. Zone 8 can be set up as a pump zone that turns on with any other zone. Timers and programs need a gateway or software to set up.",
-        "The RJ-45 accessory port isn't for data or Ethernet. For a rain sensor, connect a 4.7 kΩ resistor between pins 2 and 6 and the sensor between pins 6 and 7; for a water meter, connect it between pins 4 and 5. Both must be enabled in the configuration register.",
-        "To link a zone as a responder: hold the controller's button until it blinks; hold the EZFlora's SET button about 4 seconds (its LED goes out); tap the SET button once per zone number; then hold it about 4 seconds.",
-        "X10: the unit code picks the zone (A1 for zone 1). Hold the SET button about 4 seconds (the LED blinks steadily), then send the X10 On command 3 times within 30 seconds; an Off disables X10.",
-        "Factory reset: unplug it for at least 5 seconds, then hold the SET button while plugging it back in, for 5 seconds."
+        "The RJ-45 accessory port isn't for data or Ethernet. For a rain sensor, connect a 4.7 kΩ resistor between pins 2 and 6 and the sensor between pins 6 and 7; for a water meter, connect it between pins 4 and 5. Both must be enabled in the configuration register."
       ],
       "role": "responder",
       "sources": [
@@ -55958,19 +56174,427 @@
           }
         }
       ],
+      "lifecycle": {
+        "installation": {
+          "steps": [
+            {
+              "action": "other",
+              "text": "Choose a power outlet close to the loads and sensors to be connected, away from moisture. Outdoors, use an approved weatherproof enclosure."
+            },
+            {
+              "action": "wire",
+              "control": "relay terminals",
+              "text": "Connect each load between its relay's terminals: load 1 between R1_A and R1_B, and load 2 between R2_A and R2_B."
+            },
+            {
+              "action": "wire",
+              "control": "input terminals",
+              "text": "Connect the sensors or signals to the input terminals."
+            },
+            {
+              "action": "plugIn",
+              "expect": "LED may flash rapidly a few times, turns on and off for about 1 second, then glows steadily",
+              "text": "Plug the EZIO2X4 into an AC outlet."
+            }
+          ]
+        },
+        "linking": {
+          "alternatives": [
+            {
+              "description": "Relays as a responder",
+              "notes": [
+                "To link a snapshot of both relays as they are, for the controller to recall, skip the taps: the Quick-Start Guide EZIO2X4—Model #5010D—2-Relay/4-Input Controller gives this first, and linking one relay as the other way."
+              ],
+              "steps": [
+                {
+                  "action": "hold",
+                  "control": "controller button",
+                  "device": "other",
+                  "expect": "Controller LED blinks or a light connected to it flashes",
+                  "text": "Put the controller in linking mode by holding the button that will control the EZIO2X4 until it shows linking mode, 4 to 10 seconds depending on the controller."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 3.5,
+                  "text": "Press and hold the SET button for 3 to 4 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED turns off; the controller's LED or a light connected to it flashes",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "tap",
+                  "control": "SET button",
+                  "text": "Tap the SET button once for relay 1 or twice for relay 2."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 3.5,
+                  "text": "Press and hold the SET button for 3 to 4 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED turns on solidly",
+                  "text": "Release the SET button."
+                }
+              ]
+            },
+            {
+              "description": "Input triggered by another controller",
+              "steps": [
+                {
+                  "action": "hold",
+                  "control": "controller button",
+                  "device": "other",
+                  "expect": "Controller LED blinks or a light connected to it flashes",
+                  "text": "Put the controller in linking mode by holding the button that will control the EZIO2X4 until it shows linking mode, 4 to 10 seconds depending on the controller."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 3.5,
+                  "text": "Press and hold the SET button for 3 to 4 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED turns off; the controller's LED or a light connected to it flashes",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "tap",
+                  "control": "SET button",
+                  "text": "Tap the SET button once for input 1, twice for input 2, and so on."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 11,
+                  "text": "Press and hold the SET button for 10 to 12 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED turns on solidly",
+                  "text": "Release the SET button."
+                }
+              ]
+            },
+            {
+              "description": "From a Hub",
+              "notes": [
+                "This links the Hub's group 0 to the device as a responder, for relay 1, and the device's group 1, input 1, to the Hub as a controller, so the Hub receives the input's reports. Link inputs 2 to 4 the same way, with cmd2 0x02 to 0x04."
+              ],
+              "steps": [
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "text": "Have the Hub start ALL-Linking as the controller, for group 0."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 3.5,
+                  "text": "Press and hold the SET button for 3 to 4 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED turns off",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "tap",
+                  "control": "SET button",
+                  "count": 1,
+                  "text": "Tap the SET button once, for relay 1."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 3.5,
+                  "text": "Press and hold the SET button for 3 to 4 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED turns on solidly",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "wait",
+                  "device": "other",
+                  "expect": "The Hub reports ALL-Linking Completed with the device's Insteon ID",
+                  "text": "Wait for the Hub to report the new link."
+                },
+                {
+                  "action": "send",
+                  "command": "ID Request",
+                  "expect": "The device answers with its category, subcategory and firmware version",
+                  "text": "Have the Hub send ID Request."
+                },
+                {
+                  "action": "send",
+                  "command": "Enter Linking Mode",
+                  "text": "Have the Hub send Enter Linking Mode (cmd1 0x09) with cmd2 0x01, for group 1: as an extended message if Get Insteon Engine Version (cmd1 0x0D) says the device is i2CS, and as a standard message otherwise."
+                },
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "expect": "The Hub reports ALL-Linking Completed with the device's Insteon ID",
+                  "text": "Have the Hub start ALL-Linking as the responder."
+                },
+                {
+                  "action": "send",
+                  "command": "Ping",
+                  "expect": "The device acknowledges the Ping",
+                  "text": "Have the Hub send Ping to confirm the link."
+                }
+              ],
+              "verification": {
+                "note": "Assembled from this profile's linking steps and the standard Insteon commands Start ALL-Linking, ID Request, Enter Linking Mode and Ping; no document describes adding this product to a Hub. The EZIOxx Advanced Details give Enter Linking Mode (cmd1 0x09) with the group number in cmd2, but don't say whether it links an input as a controller.",
+                "status": "inferred"
+              }
+            }
+          ],
+          "notes": [
+            "This links an input as a controller. Repeat the step on the device to be controlled for each further device before ending the session.",
+            "X10: relays 1 and 2 answer X10 units 1 and 2, and the device takes all 16 units of its house code. To enable X10, press and hold the SET button for about 4 seconds (the LED blinks slowly) and send an On from an X10 controller; the LED stops blinking. An Off disables it. The Quick-Start Guide EZIO2X4—Model #5010D—2-Relay/4-Input Controller sends one On; the EZIOxx Advanced Details choose the house code on the X10 controller first and send 3 On commands in succession. This note follows the Quick-Start Guide EZIO2X4—Model #5010D—2-Relay/4-Input Controller."
+          ],
+          "steps": [
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 11,
+              "text": "Press and hold the SET button for 10 to 12 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "expect": "LED turns off",
+              "text": "Release the SET button."
+            },
+            {
+              "action": "tap",
+              "control": "SET button",
+              "text": "Tap the SET button once for input 1, twice for input 2, and so on."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 3.5,
+              "text": "Press and hold the SET button for 3 to 4 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "expect": "LED flashes about once a second",
+              "text": "Release the SET button."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "device": "other",
+              "expect": "The device's LED flashes; the EZIO2X4's LED flashes, then keeps blinking about once a second",
+              "seconds": 3.5,
+              "text": "On the device to be controlled, press and hold its SET button for 3 to 4 seconds, or use that device's own method."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 3.5,
+              "text": "Press and hold the SET button for 3 to 4 seconds to end the linking session."
+            }
+          ]
+        },
+        "removal": {
+          "alternatives": [
+            {
+              "description": "From a Hub",
+              "steps": [
+                {
+                  "action": "other",
+                  "device": "other",
+                  "text": "Remove the device from its scenes first, so no other device keeps links to it."
+                },
+                {
+                  "action": "send",
+                  "command": "Enter Unlinking Mode",
+                  "text": "Have the Hub send Enter Unlinking Mode (cmd1 0x0A) with cmd2 0x01, for group 1, as an extended message if the device is i2CS."
+                },
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "expect": "The device deletes its group 1 link to the Hub, and the Hub reports the device's Insteon ID",
+                  "text": "Have the Hub start ALL-Linking with link code 0xFF (delete), so the device deletes its group 1 link to the Hub."
+                },
+                {
+                  "action": "other",
+                  "text": "Repeat the last two steps for each other input linked to the Hub, groups 2 to 4, with cmd2 set to the group (0x02 to 0x04)."
+                },
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "text": "Have the Hub start unlinking for group 0 (Start ALL-Linking with link code 0xFF)."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 3.5,
+                  "text": "Press and hold the SET button for 3 to 4 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED flashes briefly, then turns on solidly",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "wait",
+                  "device": "other",
+                  "expect": "The Hub reports the device's Insteon ID",
+                  "text": "Wait for the Hub to report that the link is gone."
+                }
+              ],
+              "verification": {
+                "note": "Assembled from this profile's unlinking steps for the relays and the standard Insteon commands Enter Unlinking Mode and Start ALL-Linking; no document describes removing this product from a Hub. The EZIOxx Advanced Details give Enter Unlinking Mode (cmd1 0x0A) with the group number in cmd2.",
+                "status": "inferred"
+              }
+            }
+          ],
+          "steps": [
+            {
+              "action": "other",
+              "text": "Remove the device from every scene, as a controller and as a responder."
+            }
+          ],
+          "verification": {
+            "note": "Read from how Insteon links work: a device left in a scene keeps links to it in other devices' ALL-Link databases. No document describes removing this product.",
+            "status": "inferred"
+          }
+        },
+        "reset": {
+          "notes": [
+            "The Quick-Start Guide EZIO2X4—Model #5010D—2-Relay/4-Input Controller names the EZIO8T in this step.",
+            "Restores all settings to their factory values."
+          ],
+          "steps": [
+            {
+              "action": "unplug",
+              "text": "Unplug the EZIO2X4."
+            },
+            {
+              "action": "wait",
+              "seconds": 10,
+              "text": "Wait about 10 seconds."
+            },
+            {
+              "action": "plugIn",
+              "control": "SET button",
+              "text": "Press and hold the SET button while plugging it back in."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 10,
+              "text": "Keep holding the SET button for about 10 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "expect": "Unit goes through its normal power-on sequence",
+              "text": "Release the SET button."
+            }
+          ]
+        },
+        "resetErases": [
+          "settings"
+        ],
+        "unlinking": {
+          "alternatives": [
+            {
+              "description": "Relays from a controller",
+              "steps": [
+                {
+                  "action": "other",
+                  "device": "other",
+                  "text": "Put the controller in unlinking mode, as its own instructions say."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 3.5,
+                  "text": "Press and hold the SET button for 3 to 4 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED flashes briefly, then turns on solidly; the controller's LED turns on solidly",
+                  "text": "Release the SET button."
+                }
+              ]
+            }
+          ],
+          "notes": [
+            "This stops a responder from being controlled by an input."
+          ],
+          "steps": [
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 11,
+              "text": "Press and hold the SET button for 10 to 12 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "expect": "LED turns off",
+              "text": "Release the SET button."
+            },
+            {
+              "action": "tap",
+              "control": "SET button",
+              "text": "Tap the SET button once for input 1, twice for input 2, and so on."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 19,
+              "text": "Press and hold the SET button for 18 to 20 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "expect": "LED flashes about once a second",
+              "text": "Release the SET button."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "device": "other",
+              "expect": "The device's LED flashes; the EZIO2X4's LED turns on solidly",
+              "seconds": 3.5,
+              "text": "On the device to be unlinked, press and hold its SET button for 3 to 4 seconds, or use that device's own method."
+            }
+          ]
+        }
+      },
       "model": "5010D",
       "name": "EZIO2X4",
       "notes": [
         "Each relay is a switch rated 0.5 A at 30 V DC or 120 V AC, between terminals Rx_A and Rx_B. Timers can pulse a relay from 1 second to 255 minutes.",
         "Inputs I1 and I2 are opto-isolated and need 3 to 30 V DC between their + and - terminals; for a dry contact, wire + to the +5 V terminal and the contact between - and GND. I3 and I4 are digital by default, on at 0 to 1 V DC and off at 3 to 5 V DC, and need a voltage, not a dry contact (a pull-up resistor to +5 V will do); software can set them to measure 0 to 5 V DC as a count from 0 to 1023 and alarm at set levels. The +5 V terminal supplies at most 20 mA.",
         "Its ALL-Link database holds up to 30 links.",
-        "To link an input as a controller: hold the SET button 10 to 12 seconds and release it (the LED turns off); tap it once per input number, then hold it 3 to 4 seconds (the LED flashes about once a second); hold the SET button of each responder 3 to 4 seconds; end by holding the EZIO2X4's SET button 3 to 4 seconds.",
-        "To unlink a responder from an input: hold the SET button 10 to 12 seconds, tap it once per input number, then hold it 18 to 20 seconds; hold the responder's SET button 3 to 4 seconds. The LED turns on solidly when it's done.",
-        "To link the relays as a responder: put the controller in linking mode, then hold the EZIO2X4's SET button 3 to 4 seconds (the LED turns off); hold it 3 to 4 seconds again to link a snapshot of both relays, or tap it once per relay number and then hold it 3 to 4 seconds to link one relay. To unlink, put the controller in unlinking mode and hold the EZIO2X4's SET button 3 to 4 seconds.",
-        "To trigger an input from another controller: put the controller in linking mode, hold the EZIO2X4's SET button 3 to 4 seconds, tap it once per input number, then hold it 10 to 12 seconds.",
         "As a responder, a record whose Data 2 is 0x01 triggers the input in Data 3 (0x00 for input 1) as if it had turned on, so the input sends its own group command. Groups 1 and 2 are also relays 1 and 2, whose responder records the catalog gives for those groups; inputs 1 and 2 can be triggered the same way, with Data 3 0x00 or 0x01.",
-        "Factory reset: unplug it for about 10 seconds, then plug it back in while holding the SET button for about 10 seconds. The Quick-Start Guide EZIO2X4—Model #5010D—2-Relay/4-Input Controller names the EZIO8T in this step.",
-        "X10: relays 1 and 2 answer X10 units 1 and 2, and the device takes all 16 units of its house code. To enable X10, hold the SET button about 4 seconds (the LED blinks slowly) and send an On from an X10 controller; an Off disables it.",
         "The Quick-Start Guide EZIO2X4—Model #5010D—2-Relay/4-Input Controller applies to firmware 2.2 and above. Insteon Device Categories and Product Keys (October 2008) records that 0x07/0x03 was first assigned to an EZIO3R I/O Module.",
         "The Product Guide EZEye Ambient Light Sensor —Model #1011A notes that the EZIO2X4 can't supply the 8 V DC an EZEye needs."
       ],
@@ -56204,13 +56828,241 @@
           "subcategory": "0x05"
         }
       ],
+      "lifecycle": {
+        "installation": {
+          "steps": [
+            {
+              "action": "other",
+              "text": "Choose a power outlet anywhere on the Insteon powerline network, away from moisture, where the receiver can stand vertically clear of metal obstructions. Outdoors, use an approved weatherproof enclosure."
+            },
+            {
+              "action": "plugIn",
+              "expect": "Status LED flashes a number of times, then glows steadily after a few seconds",
+              "text": "Plug the EZSnsRF into the outlet."
+            },
+            {
+              "action": "other",
+              "control": "DIP switches",
+              "text": "Set each wireless transmitter's 10 DIP switches, on (up) or off (down), to give it a code of its own."
+            }
+          ]
+        },
+        "linking": {
+          "alternatives": [
+            {
+              "description": "From a Hub",
+              "notes": [
+                "This links the EZSnsRF's group for the transmitter's code to the Hub as a controller, with the Hub as the responder, so the Hub receives the group command for the learned code; the Hub makes no link to the device, since this profile lists no group it responds to."
+              ],
+              "steps": [
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 4,
+                  "text": "Press and hold the SET button for about 4 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED flashes about once a second",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "other",
+                  "control": "wireless transmitter",
+                  "expect": "LED flashes faster",
+                  "text": "Activate the wireless transmitter to be learned, such as by passing in front of a motion sensor or pressing its transmit button."
+                },
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "expect": "The Hub reports ALL-Linking Completed with the device's Insteon ID",
+                  "text": "Have the Hub start ALL-Linking as the responder."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 4,
+                  "text": "Press and hold the SET button for 4 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED turns off",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "tap",
+                  "control": "SET button",
+                  "text": "To add an Off delay, tap the SET button 1 to 31 times; each tap adds half a minute, from 0.5 to 15.5 minutes."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "expect": "LED glows steadily",
+                  "seconds": 4,
+                  "text": "Press and hold the SET button for 4 seconds to end the linking session."
+                },
+                {
+                  "action": "send",
+                  "command": "ID Request",
+                  "expect": "The device answers with its category, subcategory and firmware version",
+                  "text": "Have the Hub send ID Request."
+                },
+                {
+                  "action": "send",
+                  "command": "Ping",
+                  "expect": "The device acknowledges the Ping",
+                  "text": "Have the Hub send Ping to confirm the link."
+                }
+              ],
+              "verification": {
+                "note": "Assembled from this profile's linking steps, with the Hub in place of the device to be controlled, and the standard Insteon commands Start ALL-Linking, ID Request and Ping; no document describes adding this product to a Hub.",
+                "status": "inferred"
+              }
+            }
+          ],
+          "notes": [
+            "This learns a transmitter's code and links responders to it as the code's scene. Repeat the step on the device to be controlled for each further device before ending the session.",
+            "Without an Off delay, skip the taps. The Quick-Start Guide EZSnsRF Wireless Sensor Receiver Model #5010E conflicts with itself on how to finish then: its step 5 ends the linking session with a 4-second hold of the SET button, and its note says to tap the SET button once more to finish. The steps follow the 4-second hold.",
+            "Pressing and holding the SET button for 4 seconds cancels the process at any step."
+          ],
+          "steps": [
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 4,
+              "text": "Press and hold the SET button for about 4 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "expect": "LED flashes about once a second",
+              "text": "Release the SET button."
+            },
+            {
+              "action": "other",
+              "control": "wireless transmitter",
+              "expect": "LED flashes faster",
+              "text": "Activate the wireless transmitter to be learned, such as by passing in front of a motion sensor or pressing its transmit button."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "device": "other",
+              "expect": "The device's LED blinks; the EZSnsRF's LED may flash briefly, then keeps blinking about twice a second",
+              "seconds": 4,
+              "text": "Press and hold the SET button of the device to be controlled until its LED blinks, about 4 seconds."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 4,
+              "text": "Press and hold the SET button for 4 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "expect": "LED turns off",
+              "text": "Release the SET button."
+            },
+            {
+              "action": "tap",
+              "control": "SET button",
+              "text": "To add an Off delay, tap the SET button 1 to 31 times; each tap adds half a minute, from 0.5 to 15.5 minutes."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "expect": "LED glows steadily",
+              "seconds": 4,
+              "text": "Press and hold the SET button for 4 seconds to end the linking session."
+            }
+          ]
+        },
+        "removal": {
+          "alternatives": [
+            {
+              "description": "From a Hub",
+              "steps": [
+                {
+                  "action": "other",
+                  "device": "other",
+                  "text": "Remove the device from its scenes first, so no other device keeps links to it."
+                },
+                {
+                  "action": "send",
+                  "command": "Enter Unlinking Mode",
+                  "text": "Have the Hub send Enter Unlinking Mode (cmd1 0x0A) with cmd2 set to the group linked to the Hub, such as 0x01 for group 1."
+                },
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "expect": "The device deletes its link to the Hub, and the Hub reports the device's Insteon ID",
+                  "text": "Have the Hub start ALL-Linking with link code 0xFF (delete), so the device deletes its link to the Hub."
+                }
+              ],
+              "verification": {
+                "note": "Assembled from the standard Insteon commands Enter Unlinking Mode and Start ALL-Linking; no document describes removing this product from a Hub. The EZSnsRF Insteon Messages/Commands give Enter Unlinking Mode (cmd1 0x0A) with the group number in cmd2.",
+                "status": "inferred"
+              }
+            }
+          ],
+          "steps": [
+            {
+              "action": "other",
+              "text": "Remove the device as a controller from each of its responders."
+            }
+          ],
+          "verification": {
+            "note": "Read from how Insteon links work: a device left in a scene keeps links to it in other devices' ALL-Link databases. No document describes removing this product.",
+            "status": "inferred"
+          }
+        },
+        "reset": {
+          "notes": [
+            "Erases all programming and restores the factory defaults."
+          ],
+          "steps": [
+            {
+              "action": "unplug",
+              "text": "Unplug the EZSnsRF."
+            },
+            {
+              "action": "wait",
+              "seconds": 5,
+              "text": "Wait at least 5 seconds."
+            },
+            {
+              "action": "plugIn",
+              "control": "SET button",
+              "text": "Press and hold the SET button while plugging it back in."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 5,
+              "text": "Keep holding the SET button for 5 seconds more."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "text": "Release the SET button."
+            }
+          ]
+        },
+        "resetErases": [
+          "links",
+          "settings"
+        ]
+      },
       "model": "5010E",
       "name": "EZSnsRF",
       "notes": [
-        "Each transmitter has 10 DIP switches that give it a code; Dakota Alert 3000-series transmitters reach up to 600 feet. It has a pass-through outlet, which shouldn't power anything that emits radio signals.",
+        "Dakota Alert 3000-series transmitters reach up to 600 feet. The EZSnsRF has a pass-through outlet, which shouldn't power anything that emits radio signals.",
         "The commands each code sends when its signal turns on and off are programmable, so no document gives them.",
-        "To learn a transmitter and link responders: hold the SET button about 4 seconds (the LED flashes about once a second); trigger the transmitter (the LED flashes faster); hold the SET button of each responder about 4 seconds; end by holding the EZSnsRF's SET button 4 seconds. Then tap it 1 to 31 times to add an Off delay of half a minute per tap, from 0.5 to 15.5 minutes, and hold it 4 seconds; with no delay, tap it once more to finish. Holding the SET button 4 seconds cancels at any step.",
-        "Factory reset: unplug it for at least 5 seconds, then hold the SET button while plugging it back in, for 5 seconds more.",
         "The Quick-Start Guide EZSnsRF Wireless Sensor Receiver Model #5010E (Rev 1.5) applies to firmware 1.6 and above."
       ],
       "radio": "powerline",
@@ -56443,13 +57295,297 @@
           "subcategory": "0x0D"
         }
       ],
+      "lifecycle": {
+        "installation": {
+          "notes": [
+            "Don't plug anything into the same outlet that emits radio signals and could interfere with the EZX10RF."
+          ],
+          "steps": [
+            {
+              "action": "other",
+              "text": "Choose a power outlet anywhere on the Insteon powerline network, away from moisture and clear of metal obstructions. Outdoors, use an approved weatherproof enclosure."
+            },
+            {
+              "action": "turn",
+              "control": "antenna",
+              "text": "Turn the antenna on the left side of the enclosure to point up, fully extended."
+            },
+            {
+              "action": "plugIn",
+              "expect": "LED may flash a number of times, then glows steadily after a few seconds",
+              "text": "Plug the EZX10RF into the outlet."
+            }
+          ]
+        },
+        "linking": {
+          "alternatives": [
+            {
+              "description": "From a Hub",
+              "notes": [
+                "This links the EZX10RF's group for the X10 address to the Hub as a controller, with the Hub as the responder, so the Hub receives the group command for the learned code; the Hub makes no link to the device, since this profile lists no group it responds to."
+              ],
+              "steps": [
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 11,
+                  "text": "Press and hold the SET button for 10 to 12 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED flashes about once a second",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "press",
+                  "control": "X10 transmitter button",
+                  "count": 1,
+                  "expect": "LED flashes faster",
+                  "text": "Send the X10 address: on a wireless X10 transmitter, press the On button for the scene; on a plug-in controller, send the X10 address followed by On."
+                },
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "expect": "The Hub reports ALL-Linking Completed with the device's Insteon ID",
+                  "text": "Have the Hub start ALL-Linking as the responder."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 5,
+                  "text": "Press and hold the SET button for about 5 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED turns off",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "tap",
+                  "control": "SET button",
+                  "text": "To add an Off delay, tap the SET button 1 to 31 times; each tap adds half a minute, from 0.5 to 15.5 minutes."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "expect": "LED glows steadily",
+                  "seconds": 5,
+                  "text": "Press and hold the SET button for about 5 seconds to end the linking session."
+                },
+                {
+                  "action": "send",
+                  "command": "ID Request",
+                  "expect": "The device answers with its category, subcategory and firmware version",
+                  "text": "Have the Hub send ID Request."
+                },
+                {
+                  "action": "send",
+                  "command": "Ping",
+                  "expect": "The device acknowledges the Ping",
+                  "text": "Have the Hub send Ping to confirm the link."
+                }
+              ],
+              "verification": {
+                "note": "Assembled from this profile's linking steps, with the Hub in place of the device to be controlled, and the standard Insteon commands Start ALL-Linking, ID Request and Ping; no document describes adding this product to a Hub.",
+                "status": "inferred"
+              }
+            }
+          ],
+          "notes": [
+            "This learns an X10 address and links responders to it as the address's scene. Repeat the step on the device to be controlled for each further device before ending the session.",
+            "Without an Off delay, skip the taps. The Quick-Start Guide EZX10RF Wireless Sensor Receiver Insteon EZX10RF—Model #5010G adds that if the LED keeps blinking, pressing the SET button once more finishes."
+          ],
+          "steps": [
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 11,
+              "text": "Press and hold the SET button for 10 to 12 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "expect": "LED flashes about once a second",
+              "text": "Release the SET button."
+            },
+            {
+              "action": "press",
+              "control": "X10 transmitter button",
+              "count": 1,
+              "expect": "LED flashes faster",
+              "text": "Send the X10 address: on a wireless X10 transmitter, press the On button for the scene; on a plug-in controller, send the X10 address followed by On."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "device": "other",
+              "expect": "The device's LED blinks or it beeps; the EZX10RF's LED may flash briefly, then keeps blinking about twice a second",
+              "seconds": 5,
+              "text": "Set the device to be controlled to the state wanted (on, off or a brightness level), then press and hold its SET button until its LED blinks or it beeps, about 5 seconds."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 5,
+              "text": "Press and hold the SET button for about 5 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "expect": "LED turns off",
+              "text": "Release the SET button."
+            },
+            {
+              "action": "tap",
+              "control": "SET button",
+              "text": "To add an Off delay, tap the SET button 1 to 31 times; each tap adds half a minute, from 0.5 to 15.5 minutes."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "expect": "LED glows steadily",
+              "seconds": 5,
+              "text": "Press and hold the SET button for about 5 seconds to end the linking session."
+            }
+          ]
+        },
+        "removal": {
+          "alternatives": [
+            {
+              "description": "From a Hub",
+              "steps": [
+                {
+                  "action": "other",
+                  "device": "other",
+                  "text": "Remove the device from its scenes first, so no other device keeps links to it."
+                },
+                {
+                  "action": "send",
+                  "command": "Enter Unlinking Mode",
+                  "text": "Have the Hub send Enter Unlinking Mode (cmd1 0x0A) with cmd2 set to the group linked to the Hub, such as 0x01 for group 1."
+                },
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "expect": "The device deletes its link to the Hub, and the Hub reports the device's Insteon ID",
+                  "text": "Have the Hub start ALL-Linking with link code 0xFF (delete), so the device deletes its link to the Hub."
+                }
+              ],
+              "verification": {
+                "note": "Assembled from the standard Insteon commands Enter Unlinking Mode and Start ALL-Linking; no document describes removing this product from a Hub. The EZX10RF Insteon Messages/Commands give Enter Unlinking Mode (cmd1 0x0A) with the group number in cmd2.",
+                "status": "inferred"
+              }
+            }
+          ],
+          "steps": [
+            {
+              "action": "other",
+              "text": "Remove the device as a controller from each of its responders."
+            }
+          ],
+          "verification": {
+            "note": "Read from how Insteon links work: a device left in a scene keeps links to it in other devices' ALL-Link databases. No document describes removing this product.",
+            "status": "inferred"
+          }
+        },
+        "reset": {
+          "notes": [
+            "Erases all programming and restores the factory defaults."
+          ],
+          "steps": [
+            {
+              "action": "unplug",
+              "text": "Unplug the EZX10RF."
+            },
+            {
+              "action": "wait",
+              "seconds": 10,
+              "text": "Wait at least 10 seconds."
+            },
+            {
+              "action": "plugIn",
+              "control": "SET button",
+              "text": "Press and hold the SET button while plugging it back in."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 5,
+              "text": "Keep holding the SET button for about 5 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "text": "Release the SET button."
+            }
+          ]
+        },
+        "resetErases": [
+          "links",
+          "settings"
+        ],
+        "unlinking": {
+          "notes": [
+            "The Quick-Start Guide EZX10RF Wireless Sensor Receiver Insteon EZX10RF—Model #5010G unlinks with its linking steps, sending the X10 Off command in place of On: if A1 On triggers a scene, A1 Off stops it."
+          ],
+          "steps": [
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 11,
+              "text": "Press and hold the SET button for 10 to 12 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "expect": "LED flashes about once a second",
+              "text": "Release the SET button."
+            },
+            {
+              "action": "press",
+              "control": "X10 transmitter button",
+              "count": 1,
+              "expect": "LED flashes faster",
+              "text": "Send the X10 address: on a wireless X10 transmitter, press the Off button for the scene; on a plug-in controller, send the X10 address followed by Off."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "device": "other",
+              "expect": "The device's LED blinks or it beeps",
+              "seconds": 5,
+              "text": "Press and hold the SET button of the device to be unlinked until its LED blinks or it beeps, about 5 seconds."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 5,
+              "text": "Press and hold the SET button for about 5 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "expect": "LED turns off",
+              "text": "Release the SET button."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "expect": "LED glows steadily",
+              "seconds": 5,
+              "text": "Press and hold the SET button for about 5 seconds to end the session."
+            }
+          ]
+        }
+      },
       "model": "5010G",
       "name": "EZX10RF",
       "notes": [
-        "Its X10 RF range is up to 200 feet, from a built-in antenna that should point up. It can be set to ignore stray X10 signals from neighbors.",
-        "To learn an X10 address and link responders: hold the SET button 10 to 12 seconds (the LED flashes about once a second); send the X10 address and On (the LED flashes faster); set each responder to the state wanted and hold its SET button about 5 seconds; end by holding the EZX10RF's SET button about 5 seconds. Then tap it 1 to 31 times to add an Off delay of half a minute per tap, from 0.5 to 15.5 minutes, and hold it about 5 seconds; if the LED keeps blinking, press it once more.",
-        "To unlink, follow the linking steps with the X10 Off command in place of On.",
-        "Factory reset: unplug it for at least 10 seconds, then hold the SET button while plugging it back in, for about 5 seconds.",
+        "Its X10 RF range is up to 200 feet. It can be set to ignore stray X10 signals from neighbors.",
         "The Quick-Start Guide EZX10RF Wireless Sensor Receiver Insteon EZX10RF—Model #5010G applies to firmware 1.5 and above."
       ],
       "radio": "powerline",
@@ -56530,12 +57666,216 @@
           }
         }
       ],
+      "lifecycle": {
+        "installation": {
+          "steps": [
+            {
+              "action": "other",
+              "text": "Choose a power outlet close to the loads to be controlled, away from moisture. Outdoors, use an approved weatherproof enclosure."
+            },
+            {
+              "action": "wire",
+              "control": "relay terminals",
+              "text": "Connect the loads to the relay terminals: Rx_NO (normally open), RxCM (common) and Rx_NC (normally closed) for relays 1 to 4."
+            },
+            {
+              "action": "plugIn",
+              "expect": "LED may flash rapidly a few times, turns on and off for about 1 second, then glows steadily",
+              "text": "Plug the EZIO4O into an AC outlet."
+            }
+          ]
+        },
+        "linking": {
+          "alternatives": [
+            {
+              "description": "From a Hub",
+              "notes": [
+                "This links the Hub's group 0 to the device as a responder, for relay 1; the device makes no link back to the Hub, since this profile lists no group it controls."
+              ],
+              "steps": [
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "text": "Have the Hub start ALL-Linking as the controller, for group 0."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 3.5,
+                  "text": "Press and hold the SET button for 3 to 4 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED turns off",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "tap",
+                  "control": "SET button",
+                  "count": 1,
+                  "text": "Tap the SET button once, for relay 1."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 3.5,
+                  "text": "Press and hold the SET button for 3 to 4 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED turns on solidly",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "wait",
+                  "device": "other",
+                  "expect": "The Hub reports ALL-Linking Completed with the device's Insteon ID",
+                  "text": "Wait for the Hub to report the new link."
+                },
+                {
+                  "action": "send",
+                  "command": "ID Request",
+                  "expect": "The device answers with its category, subcategory and firmware version",
+                  "text": "Have the Hub send ID Request."
+                },
+                {
+                  "action": "send",
+                  "command": "Ping",
+                  "expect": "The device acknowledges the Ping",
+                  "text": "Have the Hub send Ping to confirm the link."
+                }
+              ],
+              "verification": {
+                "note": "Assembled from this profile's linking steps and the standard Insteon commands Start ALL-Linking, ID Request and Ping; no document describes adding this product to a Hub.",
+                "status": "inferred"
+              }
+            }
+          ],
+          "notes": [
+            "The EZIO4O links as a responder.",
+            "To link a snapshot of all the relays as they are, for the controller to recall, skip the taps: the Quick-Start Guide EZIO4O—Model #5010J—4-Relay Load Controller gives this first, and linking one relay as the other way.",
+            "X10: relays 1 to 4 answer X10 units 1 to 4, and the device takes a whole house code. To enable X10, press and hold the SET button for about 4 seconds (the LED blinks slowly) and send an On from an X10 controller; the LED stops blinking. An Off disables it. The Quick-Start Guide EZIO4O—Model #5010J—4-Relay Load Controller sends one On; the EZIOxx Advanced Details choose the house code on the X10 controller first and send 3 On commands in succession. This note follows the Quick-Start Guide EZIO4O—Model #5010J—4-Relay Load Controller."
+          ],
+          "steps": [
+            {
+              "action": "hold",
+              "control": "controller button",
+              "device": "other",
+              "expect": "Controller LED blinks or a light connected to it flashes",
+              "text": "Put the controller in linking mode by holding the button that will control the relays until it shows linking mode, 4 to 10 seconds depending on the controller."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 3.5,
+              "text": "Press and hold the SET button for 3 to 4 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "expect": "LED turns off; the controller's LED or a light connected to it flashes",
+              "text": "Release the SET button."
+            },
+            {
+              "action": "tap",
+              "control": "SET button",
+              "text": "Tap the SET button once for relay 1, twice for relay 2, and so on."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 3.5,
+              "text": "Press and hold the SET button for 3 to 4 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "expect": "LED turns on solidly",
+              "text": "Release the SET button."
+            }
+          ]
+        },
+        "removal": {
+          "alternatives": [
+            {
+              "description": "From a Hub",
+              "steps": [
+                {
+                  "action": "other",
+                  "device": "other",
+                  "text": "Remove the device from its scenes first, so no other device keeps links to it."
+                },
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "text": "Have the Hub start unlinking for group 0 (Start ALL-Linking with link code 0xFF)."
+                },
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "seconds": 3.5,
+                  "text": "Press and hold the SET button for 3 to 4 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "SET button",
+                  "expect": "LED flashes briefly, then turns on solidly",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "wait",
+                  "device": "other",
+                  "expect": "The Hub reports the device's Insteon ID",
+                  "text": "Wait for the Hub to report that the link is gone."
+                }
+              ],
+              "verification": {
+                "note": "Assembled from this profile's unlinking steps and the standard Insteon command Start ALL-Linking; no document describes removing this product from a Hub.",
+                "status": "inferred"
+              }
+            }
+          ],
+          "steps": [
+            {
+              "action": "other",
+              "text": "Unlink the device from every controller it is linked to."
+            }
+          ],
+          "verification": {
+            "note": "Read from how Insteon links work: a device left in a scene keeps links to it in other devices' ALL-Link databases. No document describes removing this product.",
+            "status": "inferred"
+          }
+        },
+        "unlinking": {
+          "steps": [
+            {
+              "action": "other",
+              "device": "other",
+              "text": "Put the controller in unlinking mode, as its own instructions say."
+            },
+            {
+              "action": "hold",
+              "control": "SET button",
+              "seconds": 3.5,
+              "text": "Press and hold the SET button for 3 to 4 seconds."
+            },
+            {
+              "action": "release",
+              "control": "SET button",
+              "expect": "LED flashes briefly, then turns on solidly; the controller's LED turns on solidly",
+              "text": "Release the SET button."
+            }
+          ]
+        }
+      },
       "model": "5010J",
       "name": "EZIO4O",
       "notes": [
         "Each relay is a switch rated 0.5 A at 30 V DC or 120 V AC, with normally open, common and normally closed terminals (Rx_NO, RxCM, Rx_NC). Timers can pulse a relay from 1 second to 255 minutes; setting them takes software.",
-        "To link the relays as a responder: put the controller in linking mode, then hold the EZIO4O's SET button 3 to 4 seconds (the LED turns off); hold it 3 to 4 seconds again to link a snapshot of all the relays, or tap it once per relay number and then hold it 3 to 4 seconds to link one relay. To unlink, put the controller in unlinking mode and hold the EZIO4O's SET button 3 to 4 seconds.",
-        "X10: relays 1 to 4 answer X10 units 1 to 4, and the device takes a whole house code. To enable X10, hold the SET button about 4 seconds (the LED blinks slowly) and send an On from an X10 controller; an Off disables it.",
         "The Quick-Start Guide EZIO4O—Model #5010J—4-Relay Load Controller applies to firmware 2.0 and above."
       ],
       "radio": "powerline",
@@ -57166,19 +58506,320 @@
           }
         }
       ],
+      "lifecycle": {
+        "installation": {
+          "notes": [
+            "The EZIO8SA needs an Insteon PowerLinc Modem (PLM), dual-band recommended, which the Quick Start Guide - EZIO8SA says isn't included. The EZIO8SA & PLM Combo comes with the modem and a 12 V DC adapter."
+          ],
+          "steps": [
+            {
+              "action": "wire",
+              "control": "PLM RJ-45 connector",
+              "text": "Connect one end of a straight-through CAT5 patch cable to the RJ-45 connector on the bottom of the PLM."
+            },
+            {
+              "action": "wire",
+              "control": "PLM port",
+              "text": "Plug the other end of the patch cable into the PLM port on the EZIO8SA."
+            },
+            {
+              "action": "plugIn",
+              "control": "PLM",
+              "text": "Plug the PLM directly into an AC outlet, away from low-voltage transformers, surge protectors and other devices that cause line noise."
+            },
+            {
+              "action": "wire",
+              "control": "9-18VDC port",
+              "text": "Connect a 9 to 18 V DC adapter, center positive, to the EZIO8SA's 9-18VDC port."
+            },
+            {
+              "action": "plugIn",
+              "control": "DC adapter",
+              "text": "Plug the adapter into an AC outlet."
+            }
+          ]
+        },
+        "linking": {
+          "alternatives": [
+            {
+              "description": "Outputs as a responder",
+              "notes": [
+                "To link a snapshot of all the relays, set them to the positions wanted first, then skip the taps. The controller's command then puts every relay back in the position it had when linked.",
+                "A controller's button can be linked to only one output; a later link from it to an output replaces the earlier one."
+              ],
+              "steps": [
+                {
+                  "action": "hold",
+                  "control": "SET button",
+                  "device": "other",
+                  "seconds": 4,
+                  "text": "Put the controller in linking mode, usually by pressing and holding its SET button for 3 to 5 seconds."
+                },
+                {
+                  "action": "hold",
+                  "control": "PLM SET button",
+                  "seconds": 4,
+                  "text": "Press and hold the SET button on the EZIO8SA's PLM for 3 to 5 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "PLM SET button",
+                  "expect": "Status LED goes out",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "tap",
+                  "control": "PLM SET button",
+                  "text": "Tap the SET button once for output 1, twice for output 2, and so on."
+                },
+                {
+                  "action": "hold",
+                  "control": "PLM SET button",
+                  "seconds": 4,
+                  "text": "Press and hold the SET button for 3 to 5 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "PLM SET button",
+                  "text": "Release the SET button."
+                }
+              ]
+            },
+            {
+              "description": "From a Hub",
+              "notes": [
+                "This links the Hub's group 0 to the device as a responder, for output 1, and the device's group 1, input 1, to the Hub as a controller, so the Hub receives the input's reports. Link inputs 2 to 7 the same way, with cmd2 0x02 to 0x07."
+              ],
+              "steps": [
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "text": "Have the Hub start ALL-Linking as the controller, for group 0."
+                },
+                {
+                  "action": "hold",
+                  "control": "PLM SET button",
+                  "seconds": 4,
+                  "text": "Press and hold the SET button on the EZIO8SA's PLM for 3 to 5 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "PLM SET button",
+                  "expect": "Status LED goes out",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "tap",
+                  "control": "PLM SET button",
+                  "count": 1,
+                  "text": "Tap the SET button once, for output 1."
+                },
+                {
+                  "action": "hold",
+                  "control": "PLM SET button",
+                  "seconds": 4,
+                  "text": "Press and hold the SET button for 3 to 5 seconds."
+                },
+                {
+                  "action": "release",
+                  "control": "PLM SET button",
+                  "text": "Release the SET button."
+                },
+                {
+                  "action": "wait",
+                  "device": "other",
+                  "expect": "The Hub reports ALL-Linking Completed with the device's Insteon ID",
+                  "text": "Wait for the Hub to report the new link."
+                },
+                {
+                  "action": "send",
+                  "command": "ID Request",
+                  "expect": "The device answers with its category, subcategory and firmware version",
+                  "text": "Have the Hub send ID Request."
+                },
+                {
+                  "action": "send",
+                  "command": "Enter Linking Mode",
+                  "text": "Have the Hub send Enter Linking Mode (cmd1 0x09) with cmd2 0x01, for group 1: as an extended message if Get Insteon Engine Version (cmd1 0x0D) says the device is i2CS, and as a standard message otherwise."
+                },
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "expect": "The Hub reports ALL-Linking Completed with the device's Insteon ID",
+                  "text": "Have the Hub start ALL-Linking as the responder."
+                },
+                {
+                  "action": "send",
+                  "command": "Ping",
+                  "expect": "The device acknowledges the Ping",
+                  "text": "Have the Hub send Ping to confirm the link."
+                }
+              ],
+              "verification": {
+                "note": "Assembled from this profile's linking steps and the standard Insteon commands Start ALL-Linking, ID Request, Enter Linking Mode and Ping; no document describes adding this product to a Hub. The EZIOxx Advanced Details give Enter Linking Mode (cmd1 0x09) with the group number in cmd2, but don't say whether it links an input as a controller, and neither the Quick Start Guide - EZIO8SA nor the Quick Start Guide - EZIO8SA & PLM Combo says how the EZIO8SA answers messages sent to its PLM.",
+                "status": "inferred"
+              }
+            }
+          ],
+          "notes": [
+            "This links an input as a controller. The Quick Start Guide - EZIO8SA and the Quick Start Guide - EZIO8SA & PLM Combo give the same steps, on the SET button of the PowerLinc Modem (PLM) connected to the EZIO8SA.",
+            "Linking mode lasts 4 minutes, for adding several responders, unless the last step ends it first.",
+            "X10: relays 1 to 8 answer units 1 to 8 of any house code. To enable X10, press and hold the SET button on the PLM for 3 to 5 seconds and release it (the status LED blinks), then send an X10 On 3 times, such as A1, A On, A1, A On, A1 On; the status LED stops blinking. An Off disables it. The Quick Start Guide - EZIO8SA holds the SET button for 3 to 5 seconds, has the relays answer any house code and disables X10 with one Off; the EZIOxx Advanced Details choose the house code on the X10 controller first, hold the SET button for at least 4 seconds, and send 3 Off commands to disable X10. This note follows the Quick Start Guide - EZIO8SA."
+          ],
+          "steps": [
+            {
+              "action": "hold",
+              "control": "PLM SET button",
+              "seconds": 11,
+              "text": "Press and hold the SET button on the EZIO8SA's PLM for 10 to 12 seconds."
+            },
+            {
+              "action": "release",
+              "control": "PLM SET button",
+              "expect": "Status LED goes out",
+              "text": "Release the SET button."
+            },
+            {
+              "action": "tap",
+              "control": "PLM SET button",
+              "text": "Tap the SET button once for input 1, twice for input 2, and so on."
+            },
+            {
+              "action": "hold",
+              "control": "PLM SET button",
+              "seconds": 4,
+              "text": "Press and hold the SET button for 3 to 5 seconds."
+            },
+            {
+              "action": "release",
+              "control": "PLM SET button",
+              "expect": "Status LED blinks",
+              "text": "Release the SET button."
+            },
+            {
+              "action": "press",
+              "control": "SET button",
+              "count": 1,
+              "device": "other",
+              "text": "Press the SET button on each device to be controlled."
+            },
+            {
+              "action": "hold",
+              "control": "PLM SET button",
+              "seconds": 4,
+              "text": "Press and hold the SET button on the EZIO8SA's PLM for 3 to 5 seconds to finish linking."
+            }
+          ]
+        },
+        "linkingTimeoutSeconds": 240,
+        "removal": {
+          "alternatives": [
+            {
+              "description": "From a Hub",
+              "steps": [
+                {
+                  "action": "other",
+                  "device": "other",
+                  "text": "Remove the device from its scenes first, so no other device keeps links to it."
+                },
+                {
+                  "action": "send",
+                  "command": "Enter Unlinking Mode",
+                  "text": "Have the Hub send Enter Unlinking Mode (cmd1 0x0A) with cmd2 0x01, for group 1, as an extended message if the device is i2CS."
+                },
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "expect": "The device deletes its group 1 link to the Hub, and the Hub reports the device's Insteon ID",
+                  "text": "Have the Hub start ALL-Linking with link code 0xFF (delete), so the device deletes its group 1 link to the Hub."
+                },
+                {
+                  "action": "other",
+                  "text": "Repeat the last two steps for each other input linked to the Hub, groups 2 to 7, with cmd2 set to the group (0x02 to 0x07)."
+                },
+                {
+                  "action": "send",
+                  "command": "Start ALL-Linking",
+                  "device": "other",
+                  "text": "Have the Hub start unlinking for group 0 (Start ALL-Linking with link code 0xFF)."
+                },
+                {
+                  "action": "send",
+                  "command": "Enter Linking Mode",
+                  "text": "Have the Hub send Enter Linking Mode (cmd1 0x09) with cmd2 0x01, for group 1, as an extended message if the device is i2CS."
+                },
+                {
+                  "action": "wait",
+                  "device": "other",
+                  "expect": "The Hub reports the device's Insteon ID",
+                  "text": "Wait for the Hub to report that the link is gone."
+                }
+              ],
+              "verification": {
+                "note": "Assembled from the standard Insteon commands Enter Unlinking Mode, Start ALL-Linking and Enter Linking Mode; no document describes removing this product from a Hub. The EZIOxx Advanced Details give Enter Unlinking Mode (cmd1 0x0A) and Enter Linking Mode (cmd1 0x09) with the group number in cmd2.",
+                "status": "inferred"
+              }
+            }
+          ],
+          "steps": [
+            {
+              "action": "other",
+              "text": "Remove the device from every scene, as a controller and as a responder."
+            }
+          ],
+          "verification": {
+            "note": "Read from how Insteon links work: a device left in a scene keeps links to it in other devices' ALL-Link databases. No document describes removing this product.",
+            "status": "inferred"
+          }
+        },
+        "reset": {
+          "notes": [
+            "The Quick Start Guide - EZIO8SA and the Quick Start Guide - EZIO8SA & PLM Combo give these steps, on the PLM connected to the EZIO8SA, as the EZIO8SA's factory reset; they don't say what it erases."
+          ],
+          "steps": [
+            {
+              "action": "unplug",
+              "control": "PLM",
+              "text": "Unplug the PLM."
+            },
+            {
+              "action": "wait",
+              "seconds": 10,
+              "text": "Wait at least 10 seconds."
+            },
+            {
+              "action": "plugIn",
+              "control": "PLM SET button",
+              "text": "Press the SET button while plugging the PLM back in."
+            },
+            {
+              "action": "hold",
+              "control": "PLM SET button",
+              "expect": "Buzzer stops",
+              "seconds": 4,
+              "text": "Keep holding the SET button for 3 to 5 seconds, until the buzzer stops."
+            },
+            {
+              "action": "release",
+              "control": "PLM SET button",
+              "expect": "LED goes out for a second and comes back on when the reset is done",
+              "text": "Release the SET button."
+            }
+          ]
+        }
+      },
       "model": "EZIO8SA",
       "name": "EZIO8SA",
       "notes": [
         "Neither the Quick Start Guide - EZIO8SA nor the Quick Start Guide - EZIO8SA & PLM Combo gives a model number; the profile is named for the product.",
         "Outputs 7 and 8 are swapped: to control output 8, address output 7, and the other way around.",
         "As a responder, a record whose Data 2 is 0x01 triggers the input in Data 3 (0x00 for input 1) as if it had turned on, so the input sends its own group command. The EZIOxx Advanced Details allow it for inputs 1 to 7, but neither the Quick Start Guide - EZIO8SA nor the Quick Start Guide - EZIO8SA & PLM Combo gives a way to link one, and groups 1 to 7 are also outputs 1 to 7, whose responder records the catalog gives for those groups.",
-        "It needs an Insteon PowerLinc Modem, dual-band recommended, connected to its PLM port with a straight-through CAT5 patch cable, and a 9 to 18 V DC adapter, center positive. The EZIO8SA & PLM Combo comes with the modem and a 12 V DC adapter. An EZIComm 5010K connected this way doesn't power the EZIO8SA.",
+        "An EZIComm 5010K connected to the PLM port in place of the modem doesn't power the EZIO8SA, so the EZIO8SA still needs its own DC adapter.",
         "Each relay is Form C (SPDT), rated 3 A at 24 V DC or 120 V AC, with CM, NC and NO terminals. Output timers run from 1 to 255 seconds or minutes.",
         "Inputs 1 to 4 (DI1 to DI4) are opto-isolated and need 3 to 30 V DC; a dry contact can use the 12 V DC terminal. Inputs 5 and 6 (Anl1, Anl2) are digital by default, on at 0 to 1 V DC and off at 2 to 3 V DC, or analog for 0 to 3 V DC sensors with trip points from 0 to 1023; ground them if unused, or they send constant Insteon traffic. Input 7 is 1-Wire, for a DS18B20 temperature sensor.",
-        "To link an input as a controller: hold the SET button on the modem 10 to 12 seconds and release it (the LED goes out); tap it once per input number, then hold it 3 to 5 seconds (the LED blinks); press the SET button of each responder. Linking mode times out after 4 minutes; holding the SET button 3 to 5 seconds ends it.",
-        "To link an output as a responder: put the controller in linking mode, hold the SET button on the EZIO8SA's modem 3 to 5 seconds (the LED goes out), tap it once per output number, then hold it 3 to 5 seconds. Skip the taps to link a snapshot of all the relays as they are. A controller's button can be linked to only one output; a later link from it replaces the earlier one.",
-        "X10: relays 1 to 8 answer units 1 to 8 of any house code. To enable X10, hold the SET button on the modem 3 to 5 seconds (the LED blinks) and send an X10 On 3 times; an Off disables it.",
-        "Factory reset: unplug the modem for at least 10 seconds, then hold its SET button while plugging it back in, for 3 to 5 seconds, and release it when the buzzer stops. The LED goes out for a second and comes back on when the reset is done.",
         "An EZEye light sensor on an analog input reads 1023 counts at about 3 V."
       ],
       "role": "both",
