@@ -136,24 +136,15 @@ struct DeviceTextTests {
 
   }
 
-  // MARK: - Known devices
+  // MARK: - Described devices
 
-  @Test func looksADeviceUpInTheCatalog() {
+  @Test func describesAKnownIdentityWithTheCatalog() {
 
-    let device = KnownDevice(identity: ExampleCatalog.identity, catalog: ExampleCatalog.catalog)
+    let identity = ExampleCatalog.identity
+    let device = DeviceDescription(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion, catalog: ExampleCatalog.catalog)
 
-    #expect(device.productName == "Example Plug 9001 (ExampleLinc)")
+    #expect(device.displayName == "Example Plug 9001 (ExampleLinc)")
     #expect(device.mainGroupType?.kind == .relay)
-    #expect(device.responderGroupType(forRecordData: [0xFF, 0x1F, 0x01])?.name == "load")
-    #expect(device.canControl == false)
-
-    let unknown = KnownDevice(identity: KnownIdentity(category: 0x07, subcategory: 0x00, firmwareVersion: nil), catalog: ExampleCatalog.catalog)
-
-    #expect(unknown.productName == nil)
-    #expect(unknown.mainGroupType == nil)
-
-    // Without the catalog, nothing is known about the product.
-    #expect(KnownDevice(identity: ExampleCatalog.identity, catalog: nil).productName == nil)
 
   }
 
@@ -184,16 +175,22 @@ struct DeviceTextTests {
 
   // MARK: - Record data
 
-  @Test func explainsARecordsDataWithTheGroupType() {
+  @Test func writesARecordsMeaning() throws {
 
-    let text = LinkDataText.explanation(
-      data: [0xFF, 0x1F, 0x01],
-      bytes: ExampleCatalog.load.linkData.responder,
-      tables: ExampleCatalog.commands.valueTables
+    let identity = ExampleCatalog.identity
+    let device: DeviceDescription = ExampleCatalog.catalog.describe(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion)
+    let record = AllLinkRecord(flags: [.inUse], group: 0, address: plug, data1: 0xFF, data2: 0x1F, data3: 0x01)
+    let explanation = try #require(device.explain(record, isController: false))
+
+    #expect(LinkDataText.meaning(of: explanation) == "On-level 0xFF (On), Ramp rate 0x1F")
+
+    // A byte without a label goes by its name, and the responder's own group says so.
+    let perGroup = RecordDataExplanation(
+      groupType: ExampleCatalog.load,
+      bytes: [RecordDataExplanation.DataByte(position: 3, name: "button", value: 0x03, isPerGroup: true)]
     )
 
-    #expect(text == "On-level 0xFF (On), Ramp rate 0x1F")
-    #expect(LinkDataText.explanation(data: [0xFF, 0x1F, 0x01], bytes: [], tables: []) == nil)
+    #expect(LinkDataText.meaning(of: perGroup) == "button 0x03 (its group 3)")
 
   }
 

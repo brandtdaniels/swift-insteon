@@ -65,7 +65,7 @@ enum WatchCommand {
 
           let profile = names.catalog?.profile(category: pressed.category, subcategory: pressed.subcategory, firmwareVersion: pressed.firmwareVersion)
 
-          Output.line("\(time)  \(WatchText.setButtonPressed(pressed, productName: profile.map(ProductName.of)))")
+          Output.line("\(time)  \(WatchText.setButtonPressed(pressed, productName: profile?.displayName))")
 
         }
 
@@ -109,7 +109,7 @@ enum WatchCommand {
 
     switch event {
     case let .identified(device, profile?):
-      return "\(device) identified as \(ProductNames.name(of: profile))"
+      return "\(device) identified as \(profile.displayName)"
     case let .identified(device, nil):
       return "\(device) reported an identity the Insteon device catalog doesn't have"
     case let .groupCommand(command, eventName?):

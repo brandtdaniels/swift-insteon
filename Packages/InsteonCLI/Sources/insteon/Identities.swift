@@ -211,7 +211,7 @@ enum Identities {
   /// - Returns: The device and what the catalog says about it, or `nil` if its identity isn't
   ///   known and it didn't report one.
   /// - Throws: `CancellationError` if the task was canceled.
-  static func known(_ device: InsteonAddress, modem: Modem, names: ProductNames, asking: Bool) async throws -> KnownDevice? {
+  static func known(_ device: InsteonAddress, modem: Modem, names: ProductNames, asking: Bool) async throws -> DeviceDescription? {
 
     if let identity = IdentityStore.load()[device] {
 
@@ -261,7 +261,7 @@ enum Identities {
   /// ID Request. Either is remembered.
   ///
   /// - Throws: `CancellationError` if the task was canceled while asking.
-  static func learn(from link: AllLinkingCompleted, modem: Modem, names: ProductNames) async throws -> KnownDevice? {
+  static func learn(from link: AllLinkingCompleted, modem: Modem, names: ProductNames) async throws -> DeviceDescription? {
 
     if let identity = KnownIdentity(link) {
 
