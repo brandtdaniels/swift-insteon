@@ -13,7 +13,7 @@ Scripts/install-insteon.sh            # into ~/.local/bin
 Scripts/install-insteon.sh /opt/local # into /opt/local/bin
 ```
 
-The script, run from the package's root, builds the command for release and copies it into `PREFIX/bin`, `~/.local/bin` by default, together with `swift-insteon_InsteonDeviceCatalog.bundle` (`.resources` on Linux), the Insteon device catalog the command names products from. The bundle has to stay next to the command. Without it, the command still runs, prints a one-line warning, and leaves product names out. The script needs no `sudo`; put `PREFIX/bin` on your `PATH`.
+The script, run from the package's root, builds the command for release and copies it into `PREFIX/bin`, `~/.local/bin` by default, together with `swift-insteon_InsteonDeviceCatalog.bundle` (`.resources` on Linux), the Insteon device catalog the command names products from. The bundle has to stay next to the command. Without it, the command still runs, prints a one-line warning, and leaves product names out. The script needs no `sudo`; put `PREFIX/bin` on your `PATH`. It then runs `insteon catalog update`, so installing also fetches the latest compatible catalog; offline, it says so and the bundled copy is used.
 
 ## Connecting
 
@@ -64,6 +64,8 @@ The Hub's interface is plain HTTP, so the password is readable on the network: u
 | `beep [--double]` | The modem's Beep; `--double` beeps twice on later firmware. |
 | `modem send HEX [--force] [--wait SECONDS]` | Writes a serial command as given, such as `0277`, and prints what the modem sends back, for exploring. |
 | `watch [--raw]` | Prints what the modem hears until Control-C, with devices' group commands read as the catalog's named events and SET Button Pressed named. `--raw` adds each message's bytes. |
+| `catalog` | Prints the version of the bundled Insteon device catalog, the version of the cached copy or `none`, and which copy is in use. Needs no Hub or modem. |
+| `catalog update` | Downloads the latest published Insteon device catalog into the cache directory when it's in the format the command reads and differs from the copy in use, as described below. Needs no Hub or modem. |
 
 The modem's group is 0 unless `--group` is given, as Insteon's Hub app links devices. Links made by earlier versions of the command are in group 1: `insteon unlink ADDRESS` finds them from the modem's records, and `insteon unlink --group 1` removes one without an address. `--json` prints JSON for `discover`, `info`, `links`, `link`, `unlink` and `device ... id`, `status`, `links` and `settings`; `link --two-way` prints an array of both links. `insteon --help` and `insteon COMMAND --help` print help.
 
@@ -98,6 +100,27 @@ A setting the device didn't report reads "not reported". Settings the catalog ma
 ### Naming devices
 
 The command names a device only from the identity it reported: its category, subcategory and firmware version, from an ID Request or from the modem's ALL-Linking Completed report. It never reads them from the data bytes of the modem's ALL-Link records, which don't hold them reliably. Identities that `link`, `links --identify` and `device ADDRESS id` learn are kept in `$XDG_CACHE_HOME/insteon/identities.json`, or `~/.cache/insteon/identities.json`, readable only by you. The file holds only Insteon addresses and identities; delete it to forget them.
+
+### Updating the catalog
+
+The command names products and events from the Insteon device catalog. A copy ships in the bundle next to the command; `insteon catalog update` brings newer catalog data without a new release of the package:
+
+```text
+$ insteon catalog update
+Checking https://brandtdaniels.github.io/insteon-device-catalog/v0/ for a newer Insteon device catalog...
+Updated the Insteon device catalog to 0.5.26.
+
+$ insteon catalog
+Bundled:  0.5.25
+Cached:   0.5.26
+In use:   cached
+```
+
+It reads the catalog's published manifest over HTTPS, and downloads the catalog only when its version has the same MAJOR.MINOR as the bundled copy, the format the command reads, and its SHA-256 differs from the copy in use. A download is used only if it matches the manifest's SHA-256 and reads as a catalog. It's kept in `$XDG_CACHE_HOME/insteon/catalog.json`, or `~/.cache/insteon/catalog.json`, with its version in `catalog-version.json` beside it, both readable only by you. They hold only the public catalog; delete them to go back to the bundled copy.
+
+Other commands use the cached copy when it has the bundled copy's MAJOR.MINOR and a PATCH at least as high, and the bundled copy otherwise, such as after installing a newer release of the package. A cached copy that can't be read gets a one-line warning, and the bundled copy is used. A catalog published in a newer format needs a newer swift-insteon; `catalog update` says so and keeps the current copy.
+
+`catalog update` asks only the catalog's site. It needs no Hub or modem, doesn't read the environment file or the Hub's settings, and sends no credentials. It exits with status 1 when the catalog can't be downloaded.
 
 ### Which messages reach the modem
 
@@ -135,4 +158,4 @@ Turned 4D.5E.6F on at 50%.
 ## Layout
 
 - `Sources/insteon`: the command, which runs what the command line asks for
-- `Sources/InsteonCLICore`: reading the command line, finding and checking the environment file and reading its variables, choosing the modem, the identity cache's format, and the text the command prints from the catalog, as plain functions the tests in `Tests/InsteonCLICoreTests` cover
+- `Sources/InsteonCLICore`: reading the command line, finding and checking the environment file and reading its variables, choosing the modem, the identity cache's format, choosing between the bundled and cached catalogs, and the text the command prints from the catalog, as plain functions the tests in `Tests/InsteonCLICoreTests` cover

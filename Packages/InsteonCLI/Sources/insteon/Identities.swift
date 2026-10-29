@@ -21,13 +21,7 @@ enum IdentityStore {
   /// The cache, or an empty one if there's none or it can't be read.
   static func load() -> IdentityCache {
 
-    guard
-      let path = path(),
-      let type = try? FileManager.default.attributesOfItem(atPath: path)[.type] as? FileAttributeType,
-      // Only a regular file is read, so a named pipe can't block the command.
-      type == .typeRegular,
-      let data = FileManager.default.contents(atPath: path)
-    else {
+    guard let path = path(), let data = PrivateFiles.read(path) else {
 
       return IdentityCache()
 
@@ -59,12 +53,8 @@ enum IdentityStore {
 
   }
 
-  /// Writes the cache to a new file of its own, readable only by the current user, then moves
-  /// it into place, so a reader never sees half a file.
-  ///
-  /// The new file has a name no other process can guess, and is created only if nothing,
-  /// such as a symbolic link, is already there. The cache's directory is created readable only
-  /// by the current user, but a directory that's already there is left as it is.
+  /// Writes the cache readable only by the current user, replacing the file whole, as
+  /// `PrivateFiles.replace(_:with:)` does.
   ///
   /// Two commands that save at the same time each write the cache as they read it, so the
   /// entry one of them added can be lost. The device's identity is then learned again the next
@@ -77,124 +67,13 @@ enum IdentityStore {
 
     }
 
-    let suffix = String(UInt64.random(in: UInt64.min...UInt64.max), radix: 16)
-    let temporary = "\(path).\(suffix).tmp"
-
-    guard makeDirectory(Paths.directory(of: path)), createFile(temporary, containing: data) else {
+    guard PrivateFiles.replace(path, with: data) else {
 
       Output.note("insteon: warning: the identity cache \(path) couldn't be written, so this device's identity won't be remembered.")
 
       return
 
     }
-
-    guard rename(temporary, path) == 0 else {
-
-      _ = unlink(temporary)
-      Output.note("insteon: warning: the identity cache \(path) couldn't be written, so this device's identity won't be remembered.")
-
-      return
-
-    }
-
-  }
-
-  /// Makes the cache's directory, readable only by the current user, if it isn't there.
-  ///
-  /// - Returns: Whether the directory is there.
-  private static func makeDirectory(_ directory: String) -> Bool {
-
-    let parent = Paths.directory(of: directory)
-
-    if !FileManager.default.fileExists(atPath: parent) {
-
-      guard (try? FileManager.default.createDirectory(atPath: parent, withIntermediateDirectories: true)) != nil else {
-
-        return false
-
-      }
-
-    }
-
-    // A directory that's already there keeps its permissions.
-    if mkdir(directory, 0o700) == 0 {
-
-      return true
-
-    }
-
-    return errno == EEXIST
-
-  }
-
-  /// Writes data to a file that doesn't exist yet, readable only by the current user, and
-  /// flushes it to storage. A file that can't be written in full is removed.
-  ///
-  /// - Returns: Whether the file was written.
-  private static func createFile(_ path: String, containing data: Data) -> Bool {
-
-    let flags: Int32 = O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW
-    let descriptor: Int32 = open(path, flags, 0o600)
-
-    guard descriptor >= 0 else {
-
-      return false
-
-    }
-
-    let written: Bool = data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> Bool in
-
-      writeAll(buffer, to: descriptor)
-
-    }
-
-    let synced: Bool = written && fsync(descriptor) == 0
-    let closed: Bool = close(descriptor) == 0
-
-    guard synced, closed else {
-
-      _ = unlink(path)
-
-      return false
-
-    }
-
-    return true
-
-  }
-
-  /// Writes every byte of a buffer to a file descriptor, trying again after an interruption.
-  private static func writeAll(_ buffer: UnsafeRawBufferPointer, to descriptor: Int32) -> Bool {
-
-    guard let base = buffer.baseAddress else {
-
-      return true
-
-    }
-
-    var offset = 0
-
-    while offset < buffer.count {
-
-      let count: Int = write(descriptor, base + offset, buffer.count - offset)
-
-      if count < 0 {
-
-        guard errno == EINTR else {
-
-          return false
-
-        }
-
-        continue
-
-      }
-
-      offset += count
-
-    }
-
-    return true
 
   }
 

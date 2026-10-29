@@ -119,6 +119,11 @@ struct InsteonCommand {
         await WatchCommand.run(options, modem: modem, names: names)
 
       }
+    case .catalog:
+      // Needs no modem, and reads neither the environment file nor the Hub's settings.
+      CatalogCommand.status()
+    case .catalogUpdate:
+      try await CatalogCommand.update()
     }
 
   }

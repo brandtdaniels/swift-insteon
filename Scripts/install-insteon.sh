@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Builds the insteon command for release and installs it into PREFIX/bin, with the bundle of
-# the Insteon device catalog it names products from, which has to sit next to it.
+# the Insteon device catalog it names products from, which has to sit next to it. Installing
+# then fetches the latest compatible catalog with 'insteon catalog update', which asks only the
+# catalog's site; offline, the bundled copy is used.
 #
 # Usage: Scripts/install-insteon.sh [PREFIX]
 #   PREFIX defaults to ~/.local, so the command goes in ~/.local/bin, which needs no sudo.
@@ -54,6 +56,12 @@ if [ -z "$installed" ]; then
 fi
 
 echo "Installed $destination/insteon${installed:+ and $destination/$installed}"
+
+# Best effort: the command works with the bundled catalog, so a failed update, such as when
+# offline, doesn't fail the install.
+if ! "$destination/insteon" catalog update; then
+  echo "install-insteon: the latest Insteon device catalog couldn't be fetched, so the bundled copy is used; run 'insteon catalog update' later to fetch it."
+fi
 
 case ":$PATH:" in
   *":$destination:"*) ;;
