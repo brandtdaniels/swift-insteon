@@ -529,6 +529,49 @@ struct ArgumentParserTests {
 
   }
 
+  // MARK: - catalog
+
+  @Test func readsCatalog() throws {
+
+    #expect(try Invocation.parse(["catalog"]).subcommand == .catalog)
+    #expect(try Invocation.parse(["catalog", "update"]).subcommand == .catalogUpdate)
+
+    // The command's own options are still read, though the catalog commands use none of them.
+    #expect(try Invocation.parse(["--hub", "192.168.1.20", "catalog", "update"]) == Invocation(hub: "192.168.1.20", subcommand: .catalogUpdate))
+
+  }
+
+  @Test func printsCatalogsHelp() throws {
+
+    #expect(try Invocation.parse(["catalog", "--help"]).subcommand == .help(topic: "catalog"))
+    #expect(try Invocation.parse(["catalog", "update", "--help"]).subcommand == .help(topic: "catalog"))
+    #expect(try Invocation.parse(["help", "catalog"]).subcommand == .help(topic: "catalog"))
+    #expect(HelpText.text(for: "catalog") == HelpText.catalog)
+
+  }
+
+  @Test func rejectsOtherCatalogArguments() {
+
+    #expect(throws: ArgumentError.unexpectedArgument("download", subcommand: "catalog")) {
+
+      try Invocation.parse(["catalog", "download"])
+
+    }
+
+    #expect(throws: ArgumentError.unexpectedArgument("now", subcommand: "catalog")) {
+
+      try Invocation.parse(["catalog", "update", "now"])
+
+    }
+
+    #expect(throws: ArgumentError.unknownOption("--force", subcommand: "catalog")) {
+
+      try Invocation.parse(["catalog", "update", "--force"])
+
+    }
+
+  }
+
   // MARK: - Messages
 
   @Test func explainsErrorsInOneLine() {

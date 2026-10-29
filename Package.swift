@@ -156,6 +156,7 @@ let package = Package(
         "InsteonHubDiscovery",
         "InsteonLinking",
         "InsteonModem",
+        "InsteonNetworking",
         "InsteonProtocol"
       ],
       path: "Packages/InsteonCLI/Sources/insteon"

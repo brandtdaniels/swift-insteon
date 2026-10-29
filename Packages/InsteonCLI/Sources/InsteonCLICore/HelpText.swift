@@ -24,6 +24,7 @@ public enum HelpText {
     case "beep": beep
     case "modem": modem
     case "watch": watch
+    case "catalog": catalog
     default: nil
     }
 
@@ -47,6 +48,8 @@ public enum HelpText {
       beep [--double]     Make the modem beep
       modem send HEX      Send the modem a serial command as given, for exploring
       watch               Print what the modem hears until Control-C
+      catalog [update]    Show the Insteon device catalog's version, or download the latest
+                          compatible one
 
     Options:
       --hub HOST[:PORT]   The Hub to use. Defaults to INSTEON_HUB_HOST and INSTEON_HUB_PORT.
@@ -74,6 +77,9 @@ public enum HelpText {
       $XDG_CACHE_HOME/insteon/identities.json, or ~/.cache/insteon/identities.json, keeps the
       identities devices reported to 'link', 'links --identify' and 'device ADDRESS id', so
       later commands can name them. It holds only Insteon addresses and identities.
+      $XDG_CACHE_HOME/insteon/catalog.json, or ~/.cache/insteon/catalog.json, with
+      catalog-version.json beside it, is the Insteon device catalog 'catalog update'
+      downloaded. It holds only the public catalog.
 
     Example:
       insteon --hub 192.168.1.20 info
@@ -285,6 +291,27 @@ public enum HelpText {
 
       --raw               Also print each message's bytes as the modem sent them, such as
                           0250 1A2B3C 012041 8F 01 00.
+    """
+
+  /// The help for `insteon catalog`.
+  public static let catalog = """
+    Usage: insteon catalog
+           insteon catalog update
+
+    The command names products and events from the Insteon device catalog. A copy ships
+    next to the command; 'catalog update' keeps a newer one in
+    $XDG_CACHE_HOME/insteon/catalog.json, or ~/.cache/insteon/catalog.json.
+
+    'insteon catalog' prints the bundled copy's version, the cached copy's, or none, and
+    which one is in use. The cached copy is used when it's in the format the command reads,
+    the same MAJOR.MINOR as the bundled copy, and at least as new.
+
+    'insteon catalog update' downloads the latest published catalog over HTTPS from
+    https://brandtdaniels.github.io/insteon-device-catalog/v0/, when it's in the format the
+    command reads and differs from the copy in use, and checks its SHA-256 before saving
+    it. It needs no Hub or modem, reads no Hub settings, and sends nothing but the requests
+    for the catalog. A catalog in a newer format needs a newer swift-insteon; the current
+    copy stays until then.
     """
 
 }

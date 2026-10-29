@@ -93,6 +93,14 @@ public enum Subcommand: Hashable, Sendable {
   /// exploring.
   case modemSend(RawSerialRequest)
 
+  /// Prints the versions of the bundled and cached copies of the Insteon device catalog, and
+  /// which one is in use. Needs no modem.
+  case catalog
+
+  /// Downloads the published Insteon device catalog into the cache directory when it's newer
+  /// than the copy in use. Needs no modem, and reads no Hub settings.
+  case catalogUpdate
+
 }
 
 /// A serial command for `insteon modem send` to write as given.

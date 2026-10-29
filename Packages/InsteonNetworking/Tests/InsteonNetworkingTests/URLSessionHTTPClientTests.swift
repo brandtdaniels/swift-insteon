@@ -57,6 +57,18 @@ struct URLSessionHTTPClientTests {
 
   }
 
+  @Test func rejectsAnHTTPSRequestAnsweredFromAnAddressThatIsntHTTPS() async {
+
+    StubURLProtocol.stub = .answeredFrom(URL(string: "http://example.com/manifest.json")!)
+
+    await #expect(throws: HTTPClientError.insecureRedirect) {
+
+      try await client.send(URLRequest(url: URL(string: "https://example.com/manifest.json")!))
+
+    }
+
+  }
+
 }
 
 final class StubURLProtocol: URLProtocol {
@@ -68,6 +80,9 @@ final class StubURLProtocol: URLProtocol {
     case failure(URLError)
 
     case nonHTTP
+
+    /// An HTTP response whose URL is another address, as after a redirect.
+    case answeredFrom(URL)
 
   }
 
@@ -99,6 +114,11 @@ final class StubURLProtocol: URLProtocol {
     case .nonHTTP?:
       let response = URLResponse(url: request.url!, mimeType: nil, expectedContentLength: 0, textEncodingName: nil)
       client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+      client?.urlProtocolDidFinishLoading(self)
+    case let .answeredFrom(url)?:
+      let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [:])!
+      client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+      client?.urlProtocol(self, didLoad: Data())
       client?.urlProtocolDidFinishLoading(self)
     case nil:
       client?.urlProtocol(self, didFailWithError: URLError(.unknown))

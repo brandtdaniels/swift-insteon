@@ -22,8 +22,10 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
   ///
   /// - Parameter request: The request to send.
   /// - Returns: The response's status, headers and body.
-  /// - Throws: The session's error if the request failed, or
-  ///   ``HTTPClientError/nonHTTPResponse`` if the response wasn't HTTP.
+  /// - Throws: The session's error if the request failed,
+  ///   ``HTTPClientError/nonHTTPResponse`` if the response wasn't HTTP, or
+  ///   ``HTTPClientError/insecureRedirect`` if an HTTPS request ended at an address that
+  ///   isn't HTTPS.
   public func send(_ request: URLRequest) async throws -> HTTPResponse {
 
     let (data, response) = try await data(for: request)
@@ -31,6 +33,13 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
     guard let httpResponse = response as? HTTPURLResponse else {
 
       throw HTTPClientError.nonHTTPResponse
+
+    }
+
+    // The session follows redirects on its own, so check where an HTTPS request ended up.
+    if request.url?.scheme == "https", httpResponse.url?.scheme != "https" {
+
+      throw HTTPClientError.insecureRedirect
 
     }
 

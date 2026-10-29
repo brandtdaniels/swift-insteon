@@ -15,52 +15,27 @@ import InsteonLinking
 import InsteonModem
 import InsteonProtocol
 
-/// Finds products in the Insteon device catalog that ships with the package.
+/// Finds products in the Insteon device catalog: the copy that ships with the package, or a
+/// newer one `insteon catalog update` downloaded.
 struct ProductNames: Sendable {
 
   /// The catalog, or `nil` if it couldn't be loaded, in which case no names are shown.
   let catalog: DeviceCatalog?
 
-  /// Loads the catalog from beside the command, warning once on standard error if it isn't
-  /// there.
+  /// Loads the catalog: the copy `insteon catalog update` downloaded, when it's in the format
+  /// the command reads and at least as new as the bundled copy, or else the bundled copy. A
+  /// copy that can't be read gets a one-line warning on standard error.
   init() {
 
     catalog = Self.loadCatalog()
 
   }
 
-  /// The catalog the package ships with, or `nil` after a one-line warning if it isn't beside
-  /// the command, as when only the executable was copied, or can't be read.
+  /// The catalog `CatalogStore.load()` chooses, or `nil` after a one-line warning if neither
+  /// copy can be read, as when only the executable was copied.
   private static func loadCatalog() -> DeviceCatalog? {
 
-    let url: URL
-
-    do {
-
-      url = try DeviceCatalog.bundledCatalogURL()
-
-    } catch {
-
-      Output.note(
-        "insteon: warning: the Insteon device catalog (\(DeviceCatalog.bundleNames[0])) isn't next to the command, "
-          + "so products aren't named. Scripts/install-insteon.sh installs the command with it."
-      )
-
-      return nil
-
-    }
-
-    do {
-
-      return try DeviceCatalog.load(contentsOf: url)
-
-    } catch {
-
-      Output.note("insteon: warning: the Insteon device catalog at \(url.path) couldn't be read, so products aren't named.")
-
-      return nil
-
-    }
+    CatalogStore.load()?.catalog
 
   }
 

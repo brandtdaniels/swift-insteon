@@ -3,7 +3,7 @@ import InsteonProtocol
 extension Invocation {
 
   /// The subcommands, in the order the help lists them.
-  public static let subcommandNames = ["discover", "info", "links", "link", "unlink", "device", "scene", "beep", "modem", "watch"]
+  public static let subcommandNames = ["discover", "info", "links", "link", "unlink", "device", "scene", "beep", "modem", "watch", "catalog"]
 
   /// Other names for subcommands: `group` for `scene`.
   public static let subcommandAliases = ["group": "scene"]
@@ -160,6 +160,8 @@ extension Invocation {
       return try parseBeep(rest)
     case "modem":
       return try parseModem(rest)
+    case "catalog":
+      return try parseCatalog(rest)
     default:
       return try .watch(parseWatch(rest))
     }
@@ -769,6 +771,26 @@ extension Invocation {
     }
 
     return .modemSend(RawSerialRequest(bytes: bytes, waitSeconds: waitSeconds))
+
+  }
+
+  private static func parseCatalog(_ arguments: [String]) throws(ArgumentError) -> Subcommand {
+
+    guard let action = arguments.first else {
+
+      return .catalog
+
+    }
+
+    guard action == "update" else {
+
+      throw unexpected(action, subcommand: "catalog")
+
+    }
+
+    try expectNoArguments(Array(arguments.dropFirst()), subcommand: "catalog")
+
+    return .catalogUpdate
 
   }
 
