@@ -18,7 +18,7 @@ Swift packages for working with [Insteon](https://www.insteon.com) home automati
 | [InsteonNotifications](Packages/InsteonNotifications) | Let people know when their devices do something they care about, such as a leak sensor turning wet, a door opening or a sensor going quiet |
 | [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the Insteon clients send requests through |
 
-The package also has a command, [`insteon`](Packages/InsteonCLI), for driving a Hub or modem, and its devices, from a terminal: finding Hubs, reading ALL-Link databases, linking devices with their SET buttons, sending commands and watching events.
+The package also has a command, [`insteon`](Packages/InsteonCLI), for driving a Hub or modem, and its devices, from a terminal: finding Hubs, reading ALL-Link databases, linking devices by their addresses or SET buttons, sending commands and watching events.
 
 The [Supported Modems](Packages/InsteonModem/Sources/InsteonModem/InsteonModem.docc/SupportedModems.md) article lists every modem, Hub and controller, and how well each is supported.
 
@@ -123,7 +123,7 @@ swift run insteon --hub 192.168.1.20 device 1A.2B.3C on 50%
 swift run insteon --help
 ```
 
-The command reads the credentials only from the environment or that file, never from its arguments or from a file in the current directory. See [InsteonCLI](Packages/InsteonCLI) for every command.
+The command reads the credentials only from the environment or that file, never from its arguments or from a file in the current directory. `Scripts/install-insteon.sh [PREFIX]` installs it, with the Insteon device catalog it names products from, into `PREFIX/bin`, `~/.local/bin` by default. See [InsteonCLI](Packages/InsteonCLI) for every command.
 
 ## Documentation
 

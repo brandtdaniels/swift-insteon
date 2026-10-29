@@ -28,7 +28,7 @@ struct ArgumentParserTests {
 
     let invocation = try Invocation.parse(["--serial", "/dev/ttyUSB0", "--json", "links"])
 
-    #expect(invocation == Invocation(serialPath: "/dev/ttyUSB0", printsJSON: true, subcommand: .links))
+    #expect(invocation == Invocation(serialPath: "/dev/ttyUSB0", printsJSON: true, subcommand: .links(LinksOptions())))
 
   }
 
@@ -177,11 +177,99 @@ struct ArgumentParserTests {
 
   }
 
+  @Test func stopsAtTheFirstHubUnlessAskedForAll() throws {
+
+    #expect(DiscoverOptions().searchesAllAddresses == false)
+    #expect(
+      try Invocation.parse(["discover", "--all"]).subcommand
+        == .discover(DiscoverOptions(searchesLocalNetwork: true, searchesAllAddresses: true))
+    )
+
+  }
+
+  // Sending the password to each Hub found is opt-in.
+  @Test func identifiesHubsOnlyWhenAsked() throws {
+
+    #expect(DiscoverOptions().identifiesHubs == false)
+    #expect(
+      try Invocation.parse(["discover", "--insteon-connect", "--identify"]).subcommand
+        == .discover(DiscoverOptions(searchesLocalNetwork: false, asksInsteonConnect: true, identifiesHubs: true))
+    )
+
+  }
+
+  // MARK: - links
+
+  @Test func identifiesLinkedDevicesOnlyWhenAsked() throws {
+
+    #expect(try Invocation.parse(["links"]).subcommand == .links(LinksOptions(identifiesDevices: false)))
+    #expect(try Invocation.parse(["links", "--identify"]).subcommand == .links(LinksOptions(identifiesDevices: true)))
+
+    #expect(throws: ArgumentError.unexpectedArgument("all", subcommand: "links")) {
+
+      try Invocation.parse(["links", "all"])
+
+    }
+
+  }
+
   // MARK: - link and unlink
 
-  @Test func linksAsTheControllerOfGroup1ByDefault() throws {
+  // Insteon's Hub app, and the catalog's From a Hub procedures, link devices in group 0.
+  @Test func linksAsTheControllerOfGroup0ByDefault() throws {
 
-    #expect(try Invocation.parse(["link"]).subcommand == .link(LinkOptions(group: 1, role: .controller, timeoutSeconds: nil)))
+    #expect(try Invocation.parse(["link"]).subcommand == .link(LinkOptions(group: 0, role: .controller, timeoutSeconds: nil)))
+    #expect(try Invocation.parse(["unlink"]).subcommand == .unlink(UnlinkOptions(group: 0, role: .controller)))
+
+  }
+
+  @Test func linksADeviceByItsAddress() throws {
+
+    #expect(try Invocation.parse(["link", "1A.2B.3C"]).subcommand == .link(LinkOptions(device: lamp)))
+    #expect(
+      try Invocation.parse(["link", "--two-way", "1a2b3c", "--group", "2"]).subcommand
+        == .link(LinkOptions(device: lamp, group: 2, isTwoWay: true))
+    )
+    #expect(try Invocation.parse(["link", "--two-way"]).subcommand == .link(LinkOptions(isTwoWay: true)))
+    #expect(try Invocation.parse(["unlink", "1A.2B.3C", "--responder"]).subcommand == .unlink(UnlinkOptions(device: lamp, role: .responder)))
+
+  }
+
+  @Test func rejectsAMalformedOrSecondAddress() {
+
+    #expect(throws: ArgumentError.invalidAddress("1A.2B")) {
+
+      try Invocation.parse(["link", "1A.2B"])
+
+    }
+
+    #expect(throws: ArgumentError.unexpectedArgument("4D.5E.6F", subcommand: "unlink")) {
+
+      try Invocation.parse(["unlink", "1A.2B.3C", "4D.5E.6F"])
+
+    }
+
+  }
+
+  @Test func rejectsTwoWayWithAnotherRole() {
+
+    #expect(throws: ArgumentError.conflictingOptions("--two-way", "--responder")) {
+
+      try Invocation.parse(["link", "--responder", "--two-way"])
+
+    }
+
+    #expect(throws: ArgumentError.conflictingOptions("--either", "1A.2B.3C")) {
+
+      try Invocation.parse(["link", "1A.2B.3C", "--either"])
+
+    }
+
+    #expect(throws: ArgumentError.conflictingOptions("--cancel", "1A.2B.3C")) {
+
+      try Invocation.parse(["link", "1A.2B.3C", "--cancel"])
+
+    }
 
   }
 

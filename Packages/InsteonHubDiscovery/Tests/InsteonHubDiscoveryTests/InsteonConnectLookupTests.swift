@@ -88,8 +88,8 @@ struct InsteonConnectLookupTests {
     let hubs = try await lookup.hubs()
 
     #expect(hubs == [
-      DiscoveredHub(endpoint: HubEndpoint(host: "10.0.1.10"), insteonID: InsteonAddress(0xA0, 0xB1, 0xC2)),
-      DiscoveredHub(endpoint: HubEndpoint(host: "10.0.1.11"), insteonID: InsteonAddress(0x1A, 0x2B, 0x3C)),
+      DiscoveredHub(endpoint: HubEndpoint(host: "10.0.1.10"), insteonID: InsteonAddress(0xA0, 0xB1, 0xC2), unitType: "HUB2"),
+      DiscoveredHub(endpoint: HubEndpoint(host: "10.0.1.11"), insteonID: InsteonAddress(0x1A, 0x2B, 0x3C), unitType: "HUB2"),
     ])
 
     let request = try #require(await client.requests.first)
@@ -105,9 +105,17 @@ struct InsteonConnectLookupTests {
       GetInfoPage.cardBlock(address: "192.168.4.20:25105", insteonID: "1A.2B.3C")
     ))
 
-    // The gateway, 192.168.4.1, is a private address too, but it isn't a Hub.
+    // The gateway, 192.168.4.1, is a private address too, but it isn't a Hub. The MAC address
+    // and public IP address aren't kept, nor the Hub's own firmware version.
     #expect(try await lookup.hubs() == [
-      DiscoveredHub(endpoint: HubEndpoint(host: "192.168.4.20"), insteonID: InsteonAddress(0x1A, 0x2B, 0x3C)),
+      DiscoveredHub(
+        endpoint: HubEndpoint(host: "192.168.4.20"),
+        insteonID: InsteonAddress(0x1A, 0x2B, 0x3C),
+        category: 0x03,
+        subcategory: 0x33,
+        modemFirmwareVersion: 0xA5,
+        unitType: "HUB2"
+      ),
     ])
 
   }
@@ -121,9 +129,25 @@ struct InsteonConnectLookupTests {
       GetInfoPage.cardBlock(address: "192.168.4.20:25105", insteonID: "1A.2B.3C")
     ))
 
-    #expect(try await lookup.hubs() == [
-      DiscoveredHub(endpoint: HubEndpoint(host: "192.168.4.20"), insteonID: InsteonAddress(0x1A, 0x2B, 0x3C)),
-    ])
+    #expect(try await lookup.hubs().map(\.endpoint) == [HubEndpoint(host: "192.168.4.20")])
+    #expect(try await lookup.hubs().map(\.insteonID) == [InsteonAddress(0x1A, 0x2B, 0x3C)])
+
+  }
+
+  // A value that isn't a byte, or a unit type that isn't a short word, is left out.
+  @Test func leavesOutAnIdentityItCantRead() async throws {
+
+    let block = GetInfoPage.cardBlock(address: "192.168.4.20:25105", insteonID: "1A.2B.3C")
+      .replacingOccurrences(of: "<td class=\"info\">33</td>", with: "<td class=\"info\">333</td>")
+      .replacingOccurrences(of: "<td class=\"info\">HUB2</td>", with: "<td class=\"info\">HUB 2</td>")
+    let (lookup, _) = makeLookup(answering: GetInfoPage.page(block))
+
+    let hub = try #require(try await lookup.hubs().first)
+
+    #expect(hub.category == 0x03)
+    #expect(hub.subcategory == nil)
+    #expect(hub.modemFirmwareVersion == 0xA5)
+    #expect(hub.unitType == nil)
 
   }
 

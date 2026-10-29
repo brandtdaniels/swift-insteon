@@ -15,18 +15,16 @@ enum WatchCommand {
     timeFormatter.locale = Locale(identifier: "en_US_POSIX")
     timeFormatter.dateFormat = "HH:mm:ss"
 
-    Output.note("Watching the modem. Press Control-C to stop.")
+    for line in WatchText.startHint {
+
+      Output.note(line)
+
+    }
 
     // The stream finishes when Control-C cancels this task, or when the modem closes.
     for await reply in replies {
 
       let time = timeFormatter.string(from: Date())
-
-      if options.printsRawReplies {
-
-        Output.line("\(time)  raw  \(reply)")
-
-      }
 
       guard case let .messageReceived(message) = reply else {
 
@@ -34,13 +32,38 @@ enum WatchCommand {
 
           Output.line("\(time)  \(text)")
 
+        } else if options.printsRawReplies {
+
+          Output.line("\(time)  raw  modem reply: \(Names.replyKind(reply))")
+
         }
 
         continue
 
       }
 
-      let events = interpreter.events(from: message, at: .now)
+      if options.printsRawReplies {
+
+        Output.line("\(time)  raw  \(RawFrame.text(of: message))")
+
+      }
+
+      var events = interpreter.events(from: message, at: .now)
+
+      // A SET Button Pressed broadcast says why it came, along with the identity it reports.
+      if let pressed = SetButtonPressed(message) {
+
+        let profile = names.catalog?.profile(category: pressed.category, subcategory: pressed.subcategory, firmwareVersion: pressed.firmwareVersion)
+
+        Output.line("\(time)  \(WatchText.setButtonPressed(pressed, productName: profile.map(ProductName.of)))")
+
+        events.removeAll { event in
+
+          if case .identified = event { true } else { false }
+
+        }
+
+      }
 
       for event in events {
 
@@ -49,12 +72,17 @@ enum WatchCommand {
       }
 
       // Broadcasts and cleanups are the interpreter's to report, and it leaves out repeats;
-      // other messages, such as acknowledgments, are printed as they are.
+      // other messages, such as acknowledgments, are printed as they are, and every message
+      // is when its bytes are.
       switch message.flags.messageType {
       case .broadcast, .allLinkBroadcast, .allLinkCleanup:
-        break
+        if options.printsRawReplies, events.isEmpty, SetButtonPressed(message) == nil {
+
+          Output.line("\(time)  \(describe(message))")
+
+        }
       default:
-        if events.isEmpty, !options.printsRawReplies {
+        if events.isEmpty {
 
           Output.line("\(time)  \(describe(message))")
 

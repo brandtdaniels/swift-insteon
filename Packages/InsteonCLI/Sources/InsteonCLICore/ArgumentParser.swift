@@ -140,8 +140,7 @@ extension Invocation {
       try expectNoArguments(rest, subcommand: name)
       return .info
     case "links":
-      try expectNoArguments(rest, subcommand: name)
-      return .links
+      return try .links(parseLinks(rest))
     case "link":
       return try parseLink(rest)
     case "unlink":
@@ -158,6 +157,8 @@ extension Invocation {
 
     var searchesLocalNetwork = false
     var asksInsteonConnect = false
+    var searchesAllAddresses = false
+    var identifiesHubs = false
 
     for argument in arguments {
 
@@ -170,21 +171,49 @@ extension Invocation {
       case "--insteon-connect":
         try expectNoValue(name, inlineValue)
         asksInsteonConnect = true
+      case "--all":
+        try expectNoValue(name, inlineValue)
+        searchesAllAddresses = true
+      case "--identify":
+        try expectNoValue(name, inlineValue)
+        identifiesHubs = true
       default:
         throw unexpected(argument, subcommand: "discover")
       }
 
     }
 
-    // Neither option searches only the local network, so Insteon Connect is asked only when
-    // someone asks for it.
-    guard searchesLocalNetwork || asksInsteonConnect else {
+    // Without --insteon-connect, only the local network is searched, so Insteon Connect is
+    // asked only when someone asks for it.
+    return DiscoverOptions(
+      searchesLocalNetwork: searchesLocalNetwork || !asksInsteonConnect,
+      asksInsteonConnect: asksInsteonConnect,
+      searchesAllAddresses: searchesAllAddresses,
+      identifiesHubs: identifiesHubs
+    )
 
-      return DiscoverOptions()
+  }
+
+  private static func parseLinks(_ arguments: [String]) throws(ArgumentError) -> LinksOptions {
+
+    var options = LinksOptions()
+
+    for argument in arguments {
+
+      let (name, inlineValue) = split(argument)
+
+      guard name == "--identify" else {
+
+        throw unexpected(argument, subcommand: "links")
+
+      }
+
+      try expectNoValue(name, inlineValue)
+      options.identifiesDevices = true
 
     }
 
-    return DiscoverOptions(searchesLocalNetwork: searchesLocalNetwork, asksInsteonConnect: asksInsteonConnect)
+    return options
 
   }
 
@@ -193,6 +222,7 @@ extension Invocation {
     var options = LinkOptions()
     var roleOption: String?
     var otherOption: String?
+    var deviceArgument: String?
     var cancels = false
     var index = 0
 
@@ -201,6 +231,14 @@ extension Invocation {
       let argument = arguments[index]
       let (name, inlineValue) = split(argument)
       index += 1
+
+      if !argument.hasPrefix("-") {
+
+        options.device = try address(argument, after: deviceArgument, subcommand: "link")
+        deviceArgument = argument
+        continue
+
+      }
 
       switch name {
       case "--group":
@@ -220,6 +258,10 @@ extension Invocation {
 
         roleOption = name
         options.role = LinkingRole(rawValue: String(name.dropFirst(2))) ?? .controller
+      case "--two-way":
+        try expectNoValue(name, inlineValue)
+        options.isTwoWay = true
+        otherOption = name
       case "--cancel":
         try expectNoValue(name, inlineValue)
         cancels = true
@@ -231,11 +273,25 @@ extension Invocation {
 
     guard cancels else {
 
+      // Two-way linking starts with the modem as the controller.
+      if options.isTwoWay, let roleOption, roleOption != "--controller" {
+
+        throw ArgumentError.conflictingOptions("--two-way", roleOption)
+
+      }
+
+      // A device linked by its address is told which role to take, so it can't choose.
+      if let deviceArgument, options.role == .either {
+
+        throw ArgumentError.conflictingOptions("--either", deviceArgument)
+
+      }
+
       return .link(options)
 
     }
 
-    if let other = roleOption ?? otherOption {
+    if let other = roleOption ?? otherOption ?? deviceArgument {
 
       throw ArgumentError.conflictingOptions("--cancel", other)
 
@@ -249,6 +305,7 @@ extension Invocation {
 
     var options = UnlinkOptions()
     var roleOption: String?
+    var deviceArgument: String?
     var index = 0
 
     while index < arguments.count {
@@ -256,6 +313,14 @@ extension Invocation {
       let argument = arguments[index]
       let (name, inlineValue) = split(argument)
       index += 1
+
+      if !argument.hasPrefix("-") {
+
+        options.device = try address(argument, after: deviceArgument, subcommand: "unlink")
+        deviceArgument = argument
+        continue
+
+      }
 
       switch name {
       case "--group":
@@ -381,6 +446,30 @@ extension Invocation {
   }
 
   // MARK: - Values
+
+  /// A device's address given as an argument, where only one can be given.
+  ///
+  /// - Parameters:
+  ///   - text: The argument.
+  ///   - earlier: The address argument given before, if any.
+  ///   - subcommand: The subcommand, for the error.
+  private static func address(_ text: String, after earlier: String?, subcommand: String) throws(ArgumentError) -> InsteonAddress {
+
+    if earlier != nil {
+
+      throw ArgumentError.unexpectedArgument(text, subcommand: subcommand)
+
+    }
+
+    guard let address = InsteonAddress(text) else {
+
+      throw ArgumentError.invalidAddress(text)
+
+    }
+
+    return address
+
+  }
 
   /// Splits `--name=value` into its name and value. Anything else is a name without a value.
   private static func split(_ argument: String) -> (name: String, value: String?) {

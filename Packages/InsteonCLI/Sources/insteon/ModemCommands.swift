@@ -1,4 +1,5 @@
 import InsteonCLICore
+import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonModem
 import InsteonProtocol
@@ -45,19 +46,29 @@ enum ModemCommands {
 
     }
 
-    Output.table([
+    var rows = [
       ["Insteon ID:", "\(info.address)"],
       ["Category:", Names.category(info.category)],
       ["Subcategory:", "\(info.subcategory)"],
-      ["Firmware:", "\(info.firmwareVersion)"],
-      ["Product:", product ?? "not in the Insteon device catalog"]
-    ])
+      ["Firmware:", "\(info.firmwareVersion)"]
+    ]
+
+    if names.catalog != nil {
+
+      rows.append(["Product:", product ?? "not in the Insteon device catalog"])
+
+    }
+
+    Output.table(rows)
 
   }
 
   // MARK: - links
 
   /// A record of the modem's ALL-Link database as `--json` prints it.
+  ///
+  /// The category, subcategory, firmware version and product come from the device's identity,
+  /// when it's known, never from the record's data bytes; they're left out otherwise.
   struct Record: Encodable {
 
     let role: String
@@ -68,31 +79,34 @@ enum ModemCommands {
 
     let data: [String]
 
+    let category: String?
+
+    let subcategory: String?
+
+    let firmwareVersion: String?
+
     let product: String?
 
   }
 
-  static func links(_ modem: Modem, names: ProductNames, printsJSON: Bool) async throws {
+  static func links(_ modem: Modem, options: LinksOptions, names: ProductNames, printsJSON: Bool) async throws {
 
     Output.note("Reading the modem's ALL-Link database...")
 
     let records = try await modem.allLinkRecords()
+    var identities = IdentityStore.load()
 
-    // A controller record holds the linked device's category, subcategory and firmware
-    // version, which names the device in its responder records too.
-    var products: [InsteonAddress: String] = [:]
+    if options.identifiesDevices {
 
-    for record in records where record.flags.contains(.controller) {
+      var asked: Set<InsteonAddress> = []
 
-      let product = names.name(
-        category: DeviceCategory(rawValue: record.data1),
-        subcategory: DeviceSubcategory(rawValue: record.data2),
-        firmwareVersion: FirmwareVersion(rawValue: record.data3)
-      )
+      for record in records where asked.insert(record.address).inserted {
 
-      if let product, products[record.address] == nil {
+        if let identity = try await identify(record.address, modem: modem) {
 
-        products[record.address] = product
+          identities[record.address] = identity
+
+        }
 
       }
 
@@ -100,12 +114,17 @@ enum ModemCommands {
 
     let rows = records.map { record in
 
-      Record(
+      let known = identities[record.address].map(names.device)
+
+      return Record(
         role: record.flags.contains(.controller) ? "controller" : "responder",
         group: Int(record.group.rawValue),
         address: "\(record.address)",
         data: [record.data1, record.data2, record.data3].map(Hex.byte),
-        product: products[record.address]
+        category: known.map { "\($0.identity.category)" },
+        subcategory: known.map { "\($0.identity.subcategory)" },
+        firmwareVersion: known?.identity.firmwareVersion.map { "\($0)" },
+        product: known?.productName
       )
 
     }
@@ -134,13 +153,70 @@ enum ModemCommands {
 
     Output.table([["ROLE", "GROUP", "DEVICE", "DATA", "PRODUCT"]] + table)
     Output.line()
-    Output.line("\(rows.count) records. The modem controls a device in a controller record, and responds to it in a responder record.")
+    Output.line(
+      "\(Wording.count(rows.count, "record")). The modem controls a device in a controller record, and responds to it in a responder record."
+    )
+
+    if !options.identifiesDevices, rows.contains(where: { $0.category == nil }) {
+
+      Output.note(
+        "Devices are named from the identities they reported to 'insteon link' and 'insteon device ADDRESS id'. "
+          + "'insteon links --identify' asks each device with ID Request."
+      )
+
+    }
 
   }
 
-  // MARK: - link and unlink
+  /// Asks a device for its identity and remembers it, saying on standard error if it didn't
+  /// answer.
+  ///
+  /// - Throws: `CancellationError` after Control-C; other errors are reported and passed
+  ///   over, so one device that doesn't answer doesn't stop the list.
+  private static func identify(_ device: InsteonAddress, modem: Modem) async throws -> KnownIdentity? {
 
-  /// A link the modem reported as `--json` prints it.
+    Output.note("Asking \(device) for its identity with ID Request...")
+
+    do {
+
+      let identification = try await DeviceIdentifier(modem: modem).identify(device)
+
+      guard let pressed = identification.identity else {
+
+        Output.note(
+          identification.acceptsModem
+            ? "\(device) didn't report its identity."
+            : "\(device) runs i2CS and has no link to the modem, so it won't say what it is."
+        )
+
+        return nil
+
+      }
+
+      let identity = KnownIdentity(pressed)
+
+      IdentityStore.remember(identity, for: device)
+
+      return identity
+
+    } catch let error as CancellationError {
+
+      throw error
+
+    } catch {
+
+      Output.note(Names.message(for: error))
+
+      return nil
+
+    }
+
+  }
+
+  // MARK: - link
+
+  /// A link the modem reported as `--json` prints it, with the device's identity when it's
+  /// known.
   struct Link: Encodable {
 
     let address: String
@@ -162,52 +238,252 @@ enum ModemCommands {
   static func link(_ modem: Modem, options: LinkOptions, names: ProductNames, printsJSON: Bool) async throws {
 
     let timeout = options.timeoutSeconds.map { Duration.seconds($0) } ?? Linker.defaultManualLinkingTimeout
+    let first: AllLinkingCompleted
 
-    if options.role == .responder {
+    if let device = options.device {
 
-      Output.note("First hold the device's SET button until it enters linking mode.")
+      first = try await linkByAddress(device, options: options, timeout: timeout, modem: modem, names: names)
+
+    } else {
+
+      first = try await linkBySETButton(options: options, timeout: timeout, modem: modem)
 
     }
 
+    let known = await Identities.learn(from: first, modem: modem, names: names)
+    var made = [first]
+
+    if !printsJSON {
+
+      report(first, known: known, names: names)
+
+    }
+
+    // A device that can control is linked back, so the modem hears its buttons.
+    let linksBack = first.mode == .controller && (options.isTwoWay || (options.device != nil && known?.canControl == true))
+    var failure: (any Error)?
+
+    if linksBack {
+
+      Output.note(
+        "Linking back: sending \(first.address) Enter Linking Mode for its group \(LinkOptions.deviceGroup), "
+          + "so the modem becomes its responder..."
+      )
+
+      do {
+
+        let back = try await Linker(modem: modem).linkRemotely(
+          first.address,
+          modemRole: .responder,
+          modemGroup: LinkOptions.deviceGroup,
+          deviceGroup: LinkOptions.deviceGroup
+        )
+
+        made.append(back)
+
+        if !printsJSON {
+
+          report(back, known: known, names: names)
+
+        }
+
+      } catch let error as CancellationError {
+
+        throw error
+
+      } catch {
+
+        failure = error
+
+      }
+
+    }
+
+    if printsJSON {
+
+      let reports = made.map { json(for: $0, known: known) }
+
+      if reports.count == 1 {
+
+        try Output.json(reports[0])
+
+      } else {
+
+        try Output.json(reports)
+
+      }
+
+    }
+
+    if let failure {
+
+      throw CommandFailure(
+        description: "\(first.address) is linked with the modem as controller, but it didn't link back: \(Names.message(for: failure)) "
+          + "To link back with its SET button, run 'insteon link \(first.address) --responder'."
+      )
+
+    }
+
+  }
+
+  /// Links a device by its address: the modem starts ALL-Linking and sends the device Enter
+  /// Linking Mode, extended for i2CS. A device that doesn't answer, such as an i2CS device that
+  /// isn't linked yet, is linked with its SET button instead, and only its link is accepted.
+  private static func linkByAddress(
+    _ device: InsteonAddress,
+    options: LinkOptions,
+    timeout: Duration,
+    modem: Modem,
+    names: ProductNames
+  ) async throws -> AllLinkingCompleted {
+
+    let role: ModemRole = options.role == .responder ? .responder : .controller
+    let modemGroup = role == .responder ? LinkOptions.deviceGroup : options.group
+
     Output.note(
-      "The modem is in linking mode for group \(options.group). Press and hold the device's SET button "
-        + "until it beeps or its light blinks. Waiting up to \(seconds(timeout)) seconds; Control-C stops."
+      "Linking \(device) without its SET button: the modem starts ALL-Linking as \(role == .controller ? "controller" : "responder") "
+        + "and sends the device Enter Linking Mode..."
     )
+
+    do {
+
+      return try await Linker(modem: modem).linkRemotely(device, modemRole: role, modemGroup: modemGroup, deviceGroup: LinkOptions.deviceGroup)
+
+    } catch let error as CancellationError {
+
+      throw error
+
+    } catch let LinkingError.unexpectedLink(link) {
+
+      throw CommandFailure(description: LinkOutcome.mismatch(link, mode: .linking, device: device) ?? Names.message(for: LinkingError.unexpectedLink(link)))
+
+    } catch {
+
+      Output.note("\(device) didn't link remotely: \(Names.message(for: error)) Link it with its SET button instead.")
+
+    }
+
+    let known = await Identities.known(device, modem: modem, names: names, asking: false)
+    let steps = known?.profile?.lifecycle?.linking.map(LinkingInstructions.steps(of:)) ?? []
+    let label = deviceLabel(device, known: known)
+    let link: AllLinkingCompleted
+
+    if role == .responder {
+
+      try await deviceGoesFirst(.linking, device: label, steps: steps)
+      Output.note("The modem is joining as responder. Waiting up to \(seconds(timeout)) seconds; Control-C stops.")
+      link = try await ManualLinking.wait(modem, mode: .responder, group: modemGroup, timeout: timeout)
+
+    } else {
+
+      link = try await ManualLinking.wait(modem, mode: .controller, group: modemGroup, timeout: timeout) {
+
+        for line in LinkingInstructions.modemFirst(.linking, group: modemGroup, seconds: seconds(timeout), device: label, steps: steps) {
+
+          Output.note(line)
+
+        }
+
+      }
+
+    }
+
+    try check(link, mode: .linking, device: device)
+
+    return link
+
+  }
+
+  /// Links whichever device's SET button is pressed.
+  private static func linkBySETButton(options: LinkOptions, timeout: Duration, modem: Modem) async throws -> AllLinkingCompleted {
 
     let link: AllLinkingCompleted
 
     switch options.role {
-    case .controller:
-      link = try await Linker(modem: modem).linkManually(modemRole: .controller, group: options.group, timeout: timeout)
     case .responder:
-      link = try await Linker(modem: modem).linkManually(modemRole: .responder, group: options.group, timeout: timeout)
-    case .either:
-      link = try await linkEither(modem, group: options.group, timeout: timeout)
+      try await deviceGoesFirst(.linking, device: nil, steps: [])
+      Output.note("The modem is joining as responder. Waiting up to \(seconds(timeout)) seconds; Control-C stops.")
+      link = try await ManualLinking.wait(modem, mode: .responder, group: options.group, timeout: timeout)
+    case .controller, .either:
+      let mode: AllLinkMode = options.role == .either ? .controllerOrResponder : .controller
+
+      link = try await ManualLinking.wait(modem, mode: mode, group: options.group, timeout: timeout) {
+
+        for line in LinkingInstructions.modemFirst(.linking, group: options.group, seconds: seconds(timeout), device: nil, steps: []) {
+
+          Output.note(line)
+
+        }
+
+      }
     }
 
-    try await report(link, verb: "Linked", modem: modem, names: names, printsJSON: printsJSON)
+    try check(link, mode: .linking, device: nil)
+
+    return link
+
+  }
+
+  // MARK: - unlink
+
+  /// A removed link as `--json` prints it.
+  struct Unlink: Encodable {
+
+    let address: String
+
+    let group: Int
+
+    let product: String?
 
   }
 
   static func unlink(_ modem: Modem, options: UnlinkOptions, names: ProductNames, printsJSON: Bool) async throws {
 
     let timeout = options.timeoutSeconds.map { Duration.seconds($0) } ?? Linker.defaultManualLinkingTimeout
-    let role: ModemRole = options.role == .responder ? .responder : .controller
+    let known = options.device.flatMap { IdentityStore.load()[$0] }.map(names.device)
+    let label = options.device.map { deviceLabel($0, known: known) }
+    let link: AllLinkingCompleted
 
-    if role == .responder {
+    if options.role == .responder {
 
-      Output.note("First put the device into unlinking mode with its SET button.")
+      // The device is the controller, so it goes into unlinking mode first, then the modem
+      // joins in linking mode as its responder.
+      try await deviceGoesFirst(.unlinking, device: label, steps: known?.profile?.lifecycle?.unlinking.map(LinkingInstructions.steps(of:)) ?? [])
+      Output.note("The modem is joining as responder. Waiting up to \(seconds(timeout)) seconds; Control-C stops.")
+      link = try await ManualLinking.wait(modem, mode: .responder, group: options.group, timeout: timeout)
+
+    } else {
+
+      // A responder leaves a controller's group the way it joins one, so the device's
+      // linking steps apply.
+      let steps = known?.profile?.lifecycle?.linking.map(LinkingInstructions.steps(of:)) ?? []
+
+      link = try await ManualLinking.wait(modem, mode: .delete, group: options.group, timeout: timeout) {
+
+        for line in LinkingInstructions.modemFirst(.unlinking, group: options.group, seconds: seconds(timeout), device: label, steps: steps) {
+
+          Output.note(line)
+
+        }
+
+      }
 
     }
 
-    Output.note(
-      "The modem is in unlinking mode for group \(options.group). Press and hold the device's SET button "
-        + "until it beeps or its light blinks. Waiting up to \(seconds(timeout)) seconds; Control-C stops."
-    )
+    try check(link, mode: .unlinking, device: options.device)
 
-    let link = try await Unlinker(modem: modem).unlinkManually(modemRole: role, group: options.group, timeout: timeout)
+    // A deletion carries no identity, so the device is named only if it was known before.
+    let product = IdentityStore.load()[link.address].map(names.device)?.productName
 
-    try await report(link, verb: "Unlinked", modem: modem, names: names, printsJSON: printsJSON)
+    if printsJSON {
+
+      try Output.json(Unlink(address: "\(link.address)", group: Int(link.group.rawValue), product: product))
+
+      return
+
+    }
+
+    Output.line("Unlinked \(link.address)\(product.map { ", \($0)," } ?? "") from group \(link.group).")
 
   }
 
@@ -219,20 +495,129 @@ enum ModemCommands {
 
   }
 
-  /// Links with the modem as controller or responder, whichever the device asks for.
-  ///
-  /// `Linker` links in one role, so this sends Start ALL-Linking with code `0x03` itself and
-  /// waits for the modem's report, taking the modem out of linking mode if none comes, or if
-  /// the report is of a deleted link rather than a new one.
-  private static func linkEither(_ modem: Modem, group: AllLinkGroupNumber, timeout: Duration) async throws -> AllLinkingCompleted {
+  // MARK: - Helpers
 
-    // Listening starts before the modem enters linking mode, so the report can't be missed.
+  /// Tells the person to put the device into a mode first, since it's the controller, and
+  /// waits for Return when standard input is a terminal, before the modem joins.
+  private static func deviceGoesFirst(_ mode: LinkingInstructions.Mode, device: String?, steps: [String]) async throws {
+
+    let waits = Terminal.readsFromTerminal
+
+    for line in LinkingInstructions.deviceFirst(mode, device: device, steps: steps, waitsForReturn: waits) {
+
+      Output.note(line)
+
+    }
+
+    if waits {
+
+      try await Terminal.waitForReturn()
+
+    }
+
+  }
+
+  /// Throws the explanation of a link that isn't the one asked for.
+  private static func check(_ link: AllLinkingCompleted, mode: LinkingInstructions.Mode, device: InsteonAddress?) throws {
+
+    if let mismatch = LinkOutcome.mismatch(link, mode: mode, device: device) {
+
+      throw CommandFailure(description: mismatch)
+
+    }
+
+  }
+
+  /// A device's address, with its product when it's known.
+  private static func deviceLabel(_ device: InsteonAddress, known: KnownDevice?) -> String {
+
+    known?.productName.map { "\(device), \($0)," } ?? "\(device)"
+
+  }
+
+  /// Prints a new link, with the device's identity when it's known.
+  private static func report(_ link: AllLinkingCompleted, known: KnownDevice?, names: ProductNames) {
+
+    Output.line("Linked \(link.address) in group \(link.group), modem as \(Names.mode(link.mode)).")
+
+    guard let known else {
+
+      return
+
+    }
+
+    var rows = [
+      ["Category:", Names.category(known.identity.category)],
+      ["Subcategory:", "\(known.identity.subcategory)"],
+      ["Firmware:", known.identity.firmwareVersion.map { "\($0)" } ?? "not reported"]
+    ]
+
+    if names.catalog != nil {
+
+      rows.append(["Product:", known.productName ?? "not in the Insteon device catalog"])
+
+    }
+
+    Output.table(rows)
+
+  }
+
+  private static func json(for link: AllLinkingCompleted, known: KnownDevice?) -> Link {
+
+    Link(
+      address: "\(link.address)",
+      group: Int(link.group.rawValue),
+      modemRole: Names.mode(link.mode),
+      category: known.map { "\($0.identity.category)" },
+      subcategory: known.map { "\($0.identity.subcategory)" },
+      firmwareVersion: known?.identity.firmwareVersion.map { "\($0)" },
+      product: known?.productName
+    )
+
+  }
+
+  /// A duration in whole seconds.
+  private static func seconds(_ duration: Duration) -> Int64 {
+
+    duration.components.seconds
+
+  }
+
+}
+
+/// Starts ALL-Linking, or unlinking, and waits for the modem to report a link with whichever
+/// device answers, for the caller to check.
+enum ManualLinking {
+
+  /// Puts the modem into a mode and waits for its report, taking it out of the mode if none
+  /// comes.
+  ///
+  /// - Parameters:
+  ///   - modem: The modem.
+  ///   - mode: The modem's mode: its role, either role, or `AllLinkMode.delete` to unlink.
+  ///   - group: The modem's group.
+  ///   - timeout: How long to wait.
+  ///   - started: Called once the modem is in its mode, to tell the person what to do.
+  /// - Returns: The link the modem reported.
+  /// - Throws: `LinkingError.linkingTimedOut` if no link is reported in time, or the modem's
+  ///   errors, such as `CancellationError` after Control-C.
+  static func wait(
+    _ modem: Modem,
+    mode: AllLinkMode,
+    group: AllLinkGroupNumber,
+    timeout: Duration,
+    started: () -> Void = {}
+  ) async throws -> AllLinkingCompleted {
+
+    // Listening starts before the modem enters its mode, so the report can't be missed.
     let replies = await modem.replies()
     let link: AllLinkingCompleted?
 
     do {
 
-      try await modem.send(.startAllLinking(mode: .controllerOrResponder, group: group))
+      try await modem.send(.startAllLinking(mode: mode, group: group))
+
+      started()
 
       link = try await Replies.first(in: replies, within: timeout) { (reply: ModemReply) -> AllLinkingCompleted? in
 
@@ -262,15 +647,6 @@ enum ModemCommands {
 
     }
 
-    // A deleted link means the device removed one, which linking mode didn't ask for.
-    guard link.mode != .delete else {
-
-      await cancelAllLinking(modem)
-
-      throw LinkingError.unexpectedLink(link)
-
-    }
-
     return link
 
   }
@@ -284,72 +660,6 @@ enum ModemCommands {
       _ = try? await modem.send(.cancelAllLinking)
 
     }.value
-
-  }
-
-  /// Prints the device a link was made or removed with, asking the device for its identity
-  /// when the modem didn't report it.
-  private static func report(_ link: AllLinkingCompleted, verb: String, modem: Modem, names: ProductNames, printsJSON: Bool) async throws {
-
-    var category = link.category
-    var subcategory = link.subcategory
-    var firmwareVersion = link.firmwareVersion
-
-    // The modem reports the device's identity only when it became the controller.
-    if category == nil, link.mode != .delete {
-
-      Output.note("Asking \(link.address) for its identity...")
-
-      if let identity = try? await DeviceIdentifier(modem: modem).identify(link.address).identity {
-
-        category = identity.category
-        subcategory = identity.subcategory
-        firmwareVersion = identity.firmwareVersion
-
-      }
-
-    }
-
-    var product: String?
-
-    if let category, let subcategory {
-
-      product = names.name(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion)
-
-    }
-
-    if printsJSON {
-
-      try Output.json(Link(
-        address: "\(link.address)",
-        group: Int(link.group.rawValue),
-        modemRole: Names.mode(link.mode),
-        category: category.map { "\($0)" },
-        subcategory: subcategory.map { "\($0)" },
-        firmwareVersion: firmwareVersion.map { "\($0)" },
-        product: product
-      ))
-
-      return
-
-    }
-
-    Output.line("\(verb) \(link.address) in group \(link.group).")
-    Output.table([
-      ["Device:", "\(link.address)"],
-      ["Modem role:", Names.mode(link.mode)],
-      ["Category:", category.map(Names.category) ?? "not reported"],
-      ["Subcategory:", subcategory.map { "\($0)" } ?? "not reported"],
-      ["Firmware:", firmwareVersion.map { "\($0)" } ?? "not reported"],
-      ["Product:", product ?? "not found in the Insteon device catalog"]
-    ])
-
-  }
-
-  /// A duration in whole seconds.
-  private static func seconds(_ duration: Duration) -> Int64 {
-
-    duration.components.seconds
 
   }
 
