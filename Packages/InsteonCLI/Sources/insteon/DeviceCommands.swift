@@ -113,13 +113,18 @@ enum DeviceCommands {
 
     }
 
-    var rows = [
+    // Each value is its own statement, which keeps the type checker quick.
+    let categoryText: String = category.map(Names.category) ?? "not reported"
+    let subcategoryText: String = subcategory.map { "\($0)" } ?? "not reported"
+    let firmwareText: String = identity?.firmwareVersion.map { "\($0)" } ?? "not reported"
+    let productKeyText: String = productKey.map { "\($0)" } ?? "none; newer devices don't report one"
+    var rows: [[String]] = [
       ["Device:", "\(device)"],
       ["Engine:", Names.engine(identification.engine)],
-      ["Category:", category.map(Names.category) ?? "not reported"],
-      ["Subcategory:", subcategory.map { "\($0)" } ?? "not reported"],
-      ["Firmware:", identity?.firmwareVersion.map { "\($0)" } ?? "not reported"],
-      ["Product key:", productKey.map { "\($0)" } ?? "none; newer devices don't report one"]
+      ["Category:", categoryText],
+      ["Subcategory:", subcategoryText],
+      ["Firmware:", firmwareText],
+      ["Product key:", productKeyText]
     ]
 
     // Without an identity, or without the catalog, nothing is said about the product.
