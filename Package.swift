@@ -162,12 +162,12 @@ let package = Package(
     ),
     .target(
       name: "InsteonCLICore",
-      dependencies: ["InsteonProtocol"],
+      dependencies: ["InsteonDeviceCatalog", "InsteonProtocol"],
       path: "Packages/InsteonCLI/Sources/InsteonCLICore"
     ),
     .testTarget(
       name: "InsteonCLICoreTests",
-      dependencies: ["InsteonCLICore", "InsteonProtocol"],
+      dependencies: ["InsteonCLICore", "InsteonDeviceCatalog", "InsteonProtocol"],
       path: "Packages/InsteonCLI/Tests/InsteonCLICoreTests"
     ),
 

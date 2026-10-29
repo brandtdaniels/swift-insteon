@@ -58,17 +58,17 @@ struct InsteonCommand {
     case let .help(topic):
       Output.line(HelpText.text(for: topic) ?? HelpText.overview)
     case let .discover(options):
-      try await DiscoverCommand.run(options, printsJSON: printsJSON)
+      try await DiscoverCommand.run(options, envFilePath: invocation.envFilePath, printsJSON: printsJSON)
     case .info:
       try await withModem(invocation) { modem, names in
 
         try await ModemCommands.info(modem, names: names, printsJSON: printsJSON)
 
       }
-    case .links:
+    case let .links(options):
       try await withModem(invocation) { modem, names in
 
-        try await ModemCommands.links(modem, names: names, printsJSON: printsJSON)
+        try await ModemCommands.links(modem, options: options, names: names, printsJSON: printsJSON)
 
       }
     case let .link(options):

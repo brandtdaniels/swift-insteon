@@ -65,9 +65,9 @@ public enum Subcommand: Hashable, Sendable {
   case info
 
   /// Reads and lists the modem's ALL-Link database.
-  case links
+  case links(LinksOptions)
 
-  /// Puts the modem into linking mode with Start ALL-Linking and waits for a device's SET
+  /// Links a device to the modem: by its address, with Enter Linking Mode, or with its SET
   /// button.
   case link(LinkOptions)
 
@@ -94,16 +94,65 @@ public struct DiscoverOptions: Hashable, Sendable {
   /// Whether to ask Insteon Connect, which sees the network's public IP address.
   public var asksInsteonConnect: Bool
 
+  /// Whether the local search asks every address, rather than stopping at the first Hub.
+  public var searchesAllAddresses: Bool
+
+  /// Whether to ask Hubs found at a private address for Get IM Info, which sends the Hub's
+  /// user name and password to each one asked.
+  public var identifiesHubs: Bool
+
+  /// The one Hub to ask for Get IM Info, from `--identify HOST[:PORT]`, or `nil` to ask about
+  /// each Hub found.
+  public var identifyTarget: HubAddress?
+
   /// Creates discovery options.
   ///
   /// - Parameters:
   ///   - searchesLocalNetwork: Whether to search the local network. Defaults to `true`.
   ///   - asksInsteonConnect: Whether to ask Insteon Connect. Defaults to `false`, so the
   ///     network's public IP address is shared only when asked.
-  public init(searchesLocalNetwork: Bool = true, asksInsteonConnect: Bool = false) {
+  ///   - searchesAllAddresses: Whether the local search goes on after the first Hub.
+  ///     Defaults to `false`.
+  ///   - identifiesHubs: Whether to ask Hubs found for Get IM Info with the configured
+  ///     credentials. Defaults to `false`, so the password is sent only when asked.
+  ///   - identifyTarget: The one Hub to ask, or `nil` to ask about each Hub found. Defaults
+  ///     to `nil`.
+  public init(
+    searchesLocalNetwork: Bool = true,
+    asksInsteonConnect: Bool = false,
+    searchesAllAddresses: Bool = false,
+    identifiesHubs: Bool = false,
+    identifyTarget: HubAddress? = nil
+  ) {
 
     self.searchesLocalNetwork = searchesLocalNetwork
     self.asksInsteonConnect = asksInsteonConnect
+    self.searchesAllAddresses = searchesAllAddresses
+    self.identifiesHubs = identifiesHubs
+    self.identifyTarget = identifyTarget
+
+  }
+
+}
+
+/// A Hub named on the command line by its host and, optionally, its port.
+public struct HubAddress: Hashable, Sendable {
+
+  /// The Hub's host name or IP address.
+  public var host: String
+
+  /// The port of the Hub's HTTP interface, or `nil` for the Hub's default port.
+  public var port: Int?
+
+  /// Creates a Hub's address.
+  ///
+  /// - Parameters:
+  ///   - host: The Hub's host name or IP address.
+  ///   - port: The port of the Hub's HTTP interface, or `nil` for the Hub's default port.
+  public init(host: String, port: Int? = nil) {
+
+    self.host = host
+    self.port = port
 
   }
 
@@ -127,11 +176,27 @@ public enum LinkingRole: String, Hashable, Sendable, CaseIterable {
 /// How `insteon link` links a device.
 public struct LinkOptions: Hashable, Sendable {
 
+  /// The modem's ALL-Link group when none is given: group 0, as Insteon's Hub app and the
+  /// catalog's From a Hub procedures link devices.
+  public static let defaultGroup: AllLinkGroupNumber = 0
+
+  /// The device's group sent with Enter Linking Mode, as its cmd2: group 1, a single-group
+  /// device's only group and a multi-group device's first.
+  public static let deviceGroup: AllLinkGroupNumber = 1
+
+  /// The device to link by its address, without its SET button, or `nil` to wait for any
+  /// device's SET button.
+  public var device: InsteonAddress?
+
   /// The modem's ALL-Link group.
   public var group: AllLinkGroupNumber
 
   /// The modem's role in the link.
   public var role: LinkingRole
+
+  /// Whether to link both ways: the modem as controller, then as the device's responder,
+  /// without a second SET button press.
+  public var isTwoWay: Bool
 
   /// How many seconds to wait for the SET button, or `nil` for the library's default.
   public var timeoutSeconds: Int?
@@ -139,14 +204,25 @@ public struct LinkOptions: Hashable, Sendable {
   /// Creates linking options.
   ///
   /// - Parameters:
-  ///   - group: The modem's ALL-Link group. Defaults to group 1.
+  ///   - device: The device to link by its address, or `nil` for any device's SET button.
+  ///     Defaults to `nil`.
+  ///   - group: The modem's ALL-Link group. Defaults to ``LinkOptions/defaultGroup``, group 0.
   ///   - role: The modem's role. Defaults to ``LinkingRole/controller``.
+  ///   - isTwoWay: Whether to link both ways. Defaults to `false`.
   ///   - timeoutSeconds: How many seconds to wait, or `nil` for the library's default.
   ///     Defaults to `nil`.
-  public init(group: AllLinkGroupNumber = 1, role: LinkingRole = .controller, timeoutSeconds: Int? = nil) {
+  public init(
+    device: InsteonAddress? = nil,
+    group: AllLinkGroupNumber = LinkOptions.defaultGroup,
+    role: LinkingRole = .controller,
+    isTwoWay: Bool = false,
+    timeoutSeconds: Int? = nil
+  ) {
 
+    self.device = device
     self.group = group
     self.role = role
+    self.isTwoWay = isTwoWay
     self.timeoutSeconds = timeoutSeconds
 
   }
@@ -156,8 +232,13 @@ public struct LinkOptions: Hashable, Sendable {
 /// How `insteon unlink` removes a link.
 public struct UnlinkOptions: Hashable, Sendable {
 
-  /// The modem's ALL-Link group in the link.
-  public var group: AllLinkGroupNumber
+  /// The device to unlink, or `nil` for whichever device's SET button is pressed. With a
+  /// device, only its unlink is accepted, and its own steps are shown when they're known.
+  public var device: InsteonAddress?
+
+  /// The modem's ALL-Link group in the link, or `nil` when `--group` isn't given: then the
+  /// group the modem's records for the device show, or group 0 without a device.
+  public var group: AllLinkGroupNumber?
 
   /// The modem's role in the link: ``LinkingRole/controller`` or ``LinkingRole/responder``.
   public var role: LinkingRole
@@ -168,15 +249,42 @@ public struct UnlinkOptions: Hashable, Sendable {
   /// Creates unlinking options.
   ///
   /// - Parameters:
-  ///   - group: The modem's ALL-Link group. Defaults to group 1.
+  ///   - device: The device to unlink, or `nil` for any device. Defaults to `nil`.
+  ///   - group: The modem's ALL-Link group, or `nil` for the group the modem's records for
+  ///     the device show, or else ``LinkOptions/defaultGroup``, group 0. Defaults to `nil`.
   ///   - role: The modem's role. Defaults to ``LinkingRole/controller``.
   ///   - timeoutSeconds: How many seconds to wait, or `nil` for the library's default.
   ///     Defaults to `nil`.
-  public init(group: AllLinkGroupNumber = 1, role: LinkingRole = .controller, timeoutSeconds: Int? = nil) {
+  public init(
+    device: InsteonAddress? = nil,
+    group: AllLinkGroupNumber? = nil,
+    role: LinkingRole = .controller,
+    timeoutSeconds: Int? = nil
+  ) {
 
+    self.device = device
     self.group = group
     self.role = role
     self.timeoutSeconds = timeoutSeconds
+
+  }
+
+}
+
+/// How `insteon links` lists the modem's ALL-Link database.
+public struct LinksOptions: Hashable, Sendable {
+
+  /// Whether to ask each linked device for its identity with ID Request, one request per
+  /// device, rather than naming only devices whose identity was learned before.
+  public var identifiesDevices: Bool
+
+  /// Creates options for listing links.
+  ///
+  /// - Parameter identifiesDevices: Whether to send each device ID Request. Defaults to
+  ///   `false`.
+  public init(identifiesDevices: Bool = false) {
+
+    self.identifiesDevices = identifiesDevices
 
   }
 
@@ -210,13 +318,13 @@ public enum DeviceAction: Hashable, Sendable {
 /// How `insteon watch` prints what the modem hears.
 public struct WatchOptions: Hashable, Sendable {
 
-  /// Whether to print every reply the modem sends as it is, as well as the events read from
-  /// it.
+  /// Whether to print each message's bytes, as the modem sent them, and the kind of every
+  /// other reply, as well as the events read from them.
   public var printsRawReplies: Bool
 
   /// Creates watch options.
   ///
-  /// - Parameter printsRawReplies: Whether to print every reply as it is. Defaults to `false`.
+  /// - Parameter printsRawReplies: Whether to print each message's bytes. Defaults to `false`.
   public init(printsRawReplies: Bool = false) {
 
     self.printsRawReplies = printsRawReplies

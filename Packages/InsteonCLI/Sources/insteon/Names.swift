@@ -18,33 +18,103 @@ struct ProductNames: Sendable {
   /// The catalog, or `nil` if it couldn't be loaded, in which case no names are shown.
   let catalog: DeviceCatalog?
 
+  /// Loads the catalog from beside the command, warning once on standard error if it isn't
+  /// there.
   init() {
 
-    catalog = try? DeviceCatalog.bundled()
+    catalog = CatalogLoader.load()
 
   }
 
   /// The product a device's identity names, such as "Dimmer Switch 2477D (SwitchLinc Dimmer)".
   func name(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> String? {
 
-    catalog?.profile(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion).map(Self.name(of:))
+    catalog?.profile(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion).map(ProductName.of)
+
+  }
+
+  /// What the catalog says about a device with a known identity.
+  func device(_ identity: KnownIdentity) -> KnownDevice {
+
+    KnownDevice(identity: identity, catalog: catalog)
 
   }
 
   /// A profile's name and model, then its first alias, as the docs name products.
   static func name(of profile: DeviceProfile) -> String {
 
-    let name = "\(profile.name) \(profile.model)"
+    ProductName.of(profile)
 
-    guard let alias = profile.aliases.first else {
+  }
 
-      return name
+}
+
+/// Loads the Insteon device catalog from the bundle beside the command, without
+/// `DeviceCatalog.bundled()`, which stops the process when the bundle is missing, as it is when
+/// only the executable was copied.
+enum CatalogLoader {
+
+  /// The catalog, or `nil` after a one-line warning if it isn't beside the command or can't
+  /// be read.
+  static func load() -> DeviceCatalog? {
+
+    let paths = CatalogLocation.candidatePaths(nextTo: executableDirectories())
+
+    guard let path = paths.first(where: { FileManager.default.isReadableFile(atPath: $0) }) else {
+
+      Output.note(
+        "insteon: warning: the Insteon device catalog (\(CatalogLocation.bundleNames[0])) isn't next to the command, "
+          + "so products aren't named. Scripts/install-insteon.sh installs the command with it."
+      )
+
+      return nil
 
     }
 
-    return "\(name) (\(alias))"
+    do {
+
+      return try DeviceCatalog(json: Data(contentsOf: URL(fileURLWithPath: path)))
+
+    } catch {
+
+      Output.note("insteon: warning: the Insteon device catalog at \(path) couldn't be read, so products aren't named.")
+
+      return nil
+
+    }
 
   }
+
+  /// The directories the Swift Package Manager's resource accessor looks in for a command:
+  /// the main bundle's, which is the executable's directory, and the executable's directory
+  /// with symbolic links resolved, for a command linked into a directory on `PATH`.
+  private static func executableDirectories() -> [String] {
+
+    var directories = [Bundle.main.bundlePath]
+
+    if let executable = Bundle.main.executablePath {
+
+      directories.append(Paths.directory(of: executable))
+
+      if let resolved = Paths.resolved(executable) {
+
+        directories.append(Paths.directory(of: resolved))
+
+      }
+
+    }
+
+    return directories
+
+  }
+
+}
+
+/// A command that couldn't do what was asked, with a message that says why and what to do.
+struct CommandFailure: Error, CustomStringConvertible {
+
+  /// The message for the person who typed the command.
+  let description: String
 
 }
 
@@ -138,6 +208,31 @@ enum Names {
 
   }
 
+  /// The kind of a reply the modem sent, as `insteon watch --raw` names a reply that isn't a
+  /// message from a device.
+  static func replyKind(_ reply: ModemReply) -> String {
+
+    switch reply {
+    case .messageReceived: "Insteon message"
+    case .x10Received: "X10 received"
+    case .allLinkingCompleted: "ALL-Linking Completed"
+    case .buttonEvent: "button event"
+    case .userReset: "user reset"
+    case .allLinkCleanupFailed: "ALL-Link cleanup failure"
+    case .allLinkRecord: "ALL-Link record"
+    case .allLinkCleanupStatus: "ALL-Link cleanup status"
+    case .databaseRecord: "database record"
+    case .diagnosticRecord: "diagnostic record"
+    case .deviceRecordFound: "device record"
+    case .radioStatus: "radio status"
+    case .modemInfo: "Get IM Info reply"
+    case .modemConfiguration: "configuration"
+    case let .echo(echo): "echo of \(serialCommand(echo.number))\(echo.isAccepted ? "" : ", NAK")"
+    case .negativeAcknowledgment: "NAK"
+    }
+
+  }
+
   /// A serial command, as the Insteon Modem Developer's Guide names it.
   static func serialCommand(_ number: SerialCommandNumber) -> String {
 
@@ -177,6 +272,8 @@ enum Names {
       return describe(error)
     case let error as LocalNetworkError:
       return describe(error)
+    case let error as CommandFailure:
+      return error.description
     default:
       break
     }

@@ -45,6 +45,7 @@ Each Hub also reports its local address to Insteon's servers, and Insteon Connec
 page lists the Hubs that reported from the same public IP address within the past 24 hours.
 ``InsteonConnectLookup`` reads that page, the way Insteon's own apps found Hubs. It doesn't
 probe the local network and it gives each Hub's Insteon ID, which tells several Hubs apart,
+and its modem's category and subcategory, which name its model,
 but it needs the internet, sends the network's public IP address to Insteon, and misses a
 Hub that hasn't reported recently. It's opt-in: nothing in this library calls it for you.
 

@@ -1,4 +1,5 @@
 import InsteonCLICore
+import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonModem
 import InsteonProtocol
@@ -14,19 +15,26 @@ enum DeviceCommands {
     case .ping:
       try await ping(device, modem: modem)
     case let .on(levelPercent):
-      let percent = levelPercent ?? 100
+      // A level means something only to a device that dims, so the device is looked up first.
+      var kind: GroupType.Kind?
 
-      try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.on(level: LightLevel.level(percent: percent))))
+      if levelPercent != nil {
 
-      Output.line("Turned \(device) on at \(percent)%.")
+        kind = try await Identities.known(device, modem: modem, names: names, asking: true)?.mainGroupType?.kind
+
+      }
+
+      try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.on(level: ControlText.level(percent: levelPercent, kind: kind))))
+
+      Output.line(ControlText.turnedOn(device, percent: levelPercent, kind: kind))
     case .off:
       try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.off))
 
       Output.line("Turned \(device) off.")
     case .status:
-      try await status(device, modem: modem, printsJSON: printsJSON)
+      try await status(device, modem: modem, names: names, printsJSON: printsJSON)
     case .links:
-      try await links(device, modem: modem, printsJSON: printsJSON)
+      try await links(device, modem: modem, names: names, printsJSON: printsJSON)
     }
 
   }
@@ -78,6 +86,15 @@ enum DeviceCommands {
 
     }
 
+    if let identity {
+
+      IdentityStore.remember(KnownIdentity(identity), for: device)
+
+    }
+
+    // Newer devices leave the product key out, or report zeros; that's expected, not a failure.
+    let productKey = productData.map(\.productKey).flatMap { $0 == ProductKey(0x00, 0x00, 0x00) ? nil : $0 }
+
     if printsJSON {
 
       try Output.json(Identity(
@@ -88,7 +105,7 @@ enum DeviceCommands {
         categoryName: category?.name,
         subcategory: subcategory.map { "\($0)" },
         firmwareVersion: identity?.firmwareVersion.map { "\($0)" },
-        productKey: productData.map { "\($0.productKey)" },
+        productKey: productKey.map { "\($0)" },
         product: product
       ))
 
@@ -96,19 +113,35 @@ enum DeviceCommands {
 
     }
 
-    Output.table([
+    // Each value is its own statement, which keeps the type checker quick.
+    let categoryText: String = category.map(Names.category) ?? "not reported"
+    let subcategoryText: String = subcategory.map { "\($0)" } ?? "not reported"
+    let firmwareText: String = identity?.firmwareVersion.map { "\($0)" } ?? "not reported"
+    // A device that answered Product Data Request without a key is a newer one; a device that
+    // didn't answer said nothing about its key.
+    let missingKeyText: String = productData == nil ? "not reported" : "none; newer devices don't report one"
+    let productKeyText: String = productKey.map { "\($0)" } ?? missingKeyText
+    var rows: [[String]] = [
       ["Device:", "\(device)"],
       ["Engine:", Names.engine(identification.engine)],
-      ["Category:", category.map(Names.category) ?? "not reported"],
-      ["Subcategory:", subcategory.map { "\($0)" } ?? "not reported"],
-      ["Firmware:", identity?.firmwareVersion.map { "\($0)" } ?? "not reported"],
-      ["Product key:", productData.map { "\($0.productKey)" } ?? "not reported"],
-      ["Product:", product ?? "not found in the Insteon device catalog"]
-    ])
+      ["Category:", categoryText],
+      ["Subcategory:", subcategoryText],
+      ["Firmware:", firmwareText],
+      ["Product key:", productKeyText]
+    ]
+
+    // Without an identity, or without the catalog, nothing is said about the product.
+    if category != nil, names.catalog != nil {
+
+      rows.append(["Product:", product ?? "not in the Insteon device catalog"])
+
+    }
+
+    Output.table(rows)
 
     if !identification.acceptsModem {
 
-      Output.note("The device runs i2CS and isn't linked to the modem, so it won't say more. Link it first with 'insteon link'.")
+      Output.note("The device runs i2CS and isn't linked to the modem, so it won't say more. Link it first with 'insteon link \(device)'.")
 
     }
 
@@ -169,32 +202,36 @@ enum DeviceCommands {
 
   // MARK: - status
 
-  /// A device's status as `--json` prints it.
+  /// A device's status as `--json` prints it. A device that's on/off only has no `percent`.
   struct Status: Encodable {
 
     let address: String
 
     let level: String
 
-    let percent: Int
+    let isOn: Bool
+
+    let percent: Int?
 
     let allLinkDatabaseDelta: String
 
   }
 
-  private static func status(_ device: InsteonAddress, modem: Modem, printsJSON: Bool) async throws {
+  private static func status(_ device: InsteonAddress, modem: Modem, names: ProductNames, printsJSON: Bool) async throws {
+
+    let kind = try await Identities.known(device, modem: modem, names: names, asking: true)?.mainGroupType?.kind
 
     // The acknowledgment carries the level in cmd2 and the ALL-Link database delta in cmd1.
     let acknowledgment = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.statusRequest()))
     let level = acknowledgment.command.command2
-    let percent = LightLevel.percent(level: level)
 
     if printsJSON {
 
       try Output.json(Status(
         address: "\(device)",
         level: Hex.byte(level),
-        percent: percent,
+        isOn: level != 0,
+        percent: kind == .relay ? nil : LightLevel.percent(level: level),
         allLinkDatabaseDelta: Hex.byte(acknowledgment.command.command1)
       ))
 
@@ -202,13 +239,14 @@ enum DeviceCommands {
 
     }
 
-    Output.line("\(device) is \(percent == 0 ? "off" : "on at \(percent)%") (level \(Hex.byte(level))).")
+    Output.line(ControlText.status(device, level: level, kind: kind))
 
   }
 
   // MARK: - links
 
-  /// A record of a device's ALL-Link database as `--json` prints it.
+  /// A record of a device's ALL-Link database as `--json` prints it, with what its data
+  /// means when the catalog says.
   struct Record: Encodable {
 
     let memoryAddress: String
@@ -221,9 +259,13 @@ enum DeviceCommands {
 
     let data: [String]
 
+    let meaning: String?
+
   }
 
-  private static func links(_ device: InsteonAddress, modem: Modem, printsJSON: Bool) async throws {
+  private static func links(_ device: InsteonAddress, modem: Modem, names: ProductNames, printsJSON: Bool) async throws {
+
+    let known = try await Identities.known(device, modem: modem, names: names, asking: true)
 
     Output.note("Reading the ALL-Link database of \(device), one record at a time...")
 
@@ -232,12 +274,17 @@ enum DeviceCommands {
       .filter { $0.record.flags.contains(.inUse) }
       .map { response in
 
-        Record(
+        let record = response.record
+        let data = [record.data1, record.data2, record.data3]
+        let isController = record.flags.contains(.controller)
+
+        return Record(
           memoryAddress: Hex.address(response.address),
-          role: response.record.flags.contains(.controller) ? "controller" : "responder",
-          group: Int(response.record.group.rawValue),
-          address: "\(response.record.address)",
-          data: [response.record.data1, response.record.data2, response.record.data3].map(Hex.byte)
+          role: isController ? "controller" : "responder",
+          group: Int(record.group.rawValue),
+          address: "\(record.address)",
+          data: data.map(Hex.byte),
+          meaning: known.flatMap { meaning(of: data, isController: isController, group: record.group, in: $0) }
         )
 
       }
@@ -258,15 +305,50 @@ enum DeviceCommands {
 
     }
 
+    let explains = records.contains { $0.meaning != nil }
     let rows: [[String]] = records.map { record in
 
       [record.memoryAddress, record.role, "\(record.group)", record.address, record.data.joined(separator: " ")]
+        + (explains ? [record.meaning ?? ""] : [])
 
     }
 
-    Output.table([["MEMORY", "ROLE", "GROUP", "DEVICE", "DATA"]] + rows)
+    Output.table([["MEMORY", "ROLE", "GROUP", "DEVICE", "DATA"] + (explains ? ["MEANING"] : [])] + rows)
     Output.line()
-    Output.line("\(records.count) records. A responder record's data is usually its on-level, ramp rate and button.")
+
+    if explains, let product = known?.productName {
+
+      Output.line("\(Wording.count(records.count, "record")) in use. The data is read as the Insteon device catalog gives it for \(product).")
+
+    } else {
+
+      Output.line(
+        "\(Wording.count(records.count, "record")) in use. What the data means depends on the device, "
+          + "which the Insteon device catalog doesn't describe here."
+      )
+
+    }
+
+  }
+
+  /// What a record's data bytes hold, from the device's group type.
+  private static func meaning(of data: [UInt8], isController: Bool, group: AllLinkGroupNumber, in device: KnownDevice) -> String? {
+
+    // A controller record's group is the device's own; a responder record's is its
+    // controller's, so the device's group comes from the data, or is its main one.
+    let type = isController ? device.groupType(forGroup: group) ?? device.mainGroupType : device.responderGroupType(forRecordData: data)
+
+    guard let type else {
+
+      return nil
+
+    }
+
+    return LinkDataText.explanation(
+      data: data,
+      bytes: isController ? type.linkData.controller : type.linkData.responder,
+      tables: device.commandSet?.valueTables ?? []
+    )
 
   }
 

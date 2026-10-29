@@ -21,6 +21,14 @@ enum Output {
 
   }
 
+  /// Writes a question to standard error, without ending the line, so the answer is typed
+  /// after it.
+  static func prompt(_ text: String) {
+
+    write(text + " ", to: .standardError)
+
+  }
+
   /// Writes a value to standard output as pretty-printed JSON.
   static func json(_ value: some Encodable) throws {
 

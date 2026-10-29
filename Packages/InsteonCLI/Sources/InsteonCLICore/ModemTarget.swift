@@ -85,7 +85,7 @@ public enum ModemTarget: Hashable, Sendable {
 
   /// Splits `HOST:PORT` into its host and port. A host with more than one colon is an IPv6
   /// address without a port.
-  private static func hostAndPort(_ text: String) throws(ConfigurationError) -> (host: String, port: Int?) {
+  static func hostAndPort(_ text: String) throws(ConfigurationError) -> (host: String, port: Int?) {
 
     let parts = text.split(separator: ":", omittingEmptySubsequences: false)
 

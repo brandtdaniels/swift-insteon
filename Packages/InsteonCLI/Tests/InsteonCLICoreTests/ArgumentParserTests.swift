@@ -28,7 +28,7 @@ struct ArgumentParserTests {
 
     let invocation = try Invocation.parse(["--serial", "/dev/ttyUSB0", "--json", "links"])
 
-    #expect(invocation == Invocation(serialPath: "/dev/ttyUSB0", printsJSON: true, subcommand: .links))
+    #expect(invocation == Invocation(serialPath: "/dev/ttyUSB0", printsJSON: true, subcommand: .links(LinksOptions())))
 
   }
 
@@ -177,11 +177,179 @@ struct ArgumentParserTests {
 
   }
 
+  @Test func stopsAtTheFirstHubUnlessAskedForAll() throws {
+
+    #expect(DiscoverOptions().searchesAllAddresses == false)
+    #expect(
+      try Invocation.parse(["discover", "--all"]).subcommand
+        == .discover(DiscoverOptions(searchesLocalNetwork: true, searchesAllAddresses: true))
+    )
+
+  }
+
+  // Sending the password to each Hub found is opt-in.
+  @Test func identifiesHubsOnlyWhenAsked() throws {
+
+    #expect(DiscoverOptions().identifiesHubs == false)
+    #expect(
+      try Invocation.parse(["discover", "--insteon-connect", "--identify"]).subcommand
+        == .discover(DiscoverOptions(searchesLocalNetwork: false, asksInsteonConnect: true, identifiesHubs: true))
+    )
+
+  }
+
+  @Test func identifiesOneHubByItsAddress() throws {
+
+    let withPort = try Invocation.parse(["discover", "--identify", "192.168.1.20:25105"])
+    let target = HubAddress(host: "192.168.1.20", port: 25105)
+    let expected = DiscoverOptions(identifiesHubs: true, identifyTarget: target)
+
+    #expect(withPort.subcommand == .discover(expected))
+
+    let inline = try Invocation.parse(["discover", "--identify=192.168.1.20:25105"])
+
+    #expect(inline.subcommand == .discover(expected))
+
+    let hostOnly = try Invocation.parse(["discover", "--identify", "192.168.1.20", "--all"])
+    let hostOnlyOptions = DiscoverOptions(searchesAllAddresses: true, identifiesHubs: true, identifyTarget: HubAddress(host: "192.168.1.20"))
+
+    #expect(hostOnly.subcommand == .discover(hostOnlyOptions))
+
+  }
+
+  @Test func identifiesWithoutATargetBeforeAnotherOption() throws {
+
+    let invocation = try Invocation.parse(["discover", "--identify", "--all"])
+    let expected = DiscoverOptions(searchesAllAddresses: true, identifiesHubs: true)
+
+    #expect(invocation.subcommand == .discover(expected))
+
+  }
+
+  @Test func rejectsAMalformedIdentifyTarget() {
+
+    #expect(throws: ArgumentError.missingValue(option: "--identify")) {
+
+      try Invocation.parse(["discover", "--identify="])
+
+    }
+
+    let expected = "HOST or HOST:PORT, such as 192.168.1.20"
+
+    #expect(throws: ArgumentError.invalidValue(option: "--identify", value: "192.168.1.20:0", expected: expected)) {
+
+      try Invocation.parse(["discover", "--identify", "192.168.1.20:0"])
+
+    }
+
+    #expect(throws: ArgumentError.invalidValue(option: "--identify", value: ":25105", expected: expected)) {
+
+      try Invocation.parse(["discover", "--identify=:25105"])
+
+    }
+
+    #expect(throws: ArgumentError.unexpectedArgument("192.168.1.21", subcommand: "discover")) {
+
+      try Invocation.parse(["discover", "--identify", "192.168.1.20", "192.168.1.21"])
+
+    }
+
+  }
+
+  // The password isn't repeated in the error.
+  @Test func refusesCredentialsInTheIdentifyTarget() {
+
+    #expect(throws: ArgumentError.credentialsInOption("--identify")) {
+
+      try Invocation.parse(["discover", "--identify", "example-user:example-password@192.168.1.20"])
+
+    }
+
+    #expect(!ArgumentError.credentialsInOption("--identify").description.contains("example-password"))
+
+  }
+
+  // MARK: - links
+
+  @Test func identifiesLinkedDevicesOnlyWhenAsked() throws {
+
+    #expect(try Invocation.parse(["links"]).subcommand == .links(LinksOptions(identifiesDevices: false)))
+    #expect(try Invocation.parse(["links", "--identify"]).subcommand == .links(LinksOptions(identifiesDevices: true)))
+
+    #expect(throws: ArgumentError.unexpectedArgument("all", subcommand: "links")) {
+
+      try Invocation.parse(["links", "all"])
+
+    }
+
+  }
+
   // MARK: - link and unlink
 
-  @Test func linksAsTheControllerOfGroup1ByDefault() throws {
+  // Insteon's Hub app, and the catalog's From a Hub procedures, link devices in group 0.
+  @Test func linksAsTheControllerOfGroup0ByDefault() throws {
 
-    #expect(try Invocation.parse(["link"]).subcommand == .link(LinkOptions(group: 1, role: .controller, timeoutSeconds: nil)))
+    #expect(try Invocation.parse(["link"]).subcommand == .link(LinkOptions(group: 0, role: .controller, timeoutSeconds: nil)))
+
+  }
+
+  // Without --group, unlink reads the modem's records for the device's group, since links
+  // made before group 0 was the default are in group 1.
+  @Test func unlinksTheRecordedGroupUnlessOneIsGiven() throws {
+
+    #expect(UnlinkOptions().group == nil)
+    #expect(try Invocation.parse(["unlink", "1A.2B.3C"]).subcommand == .unlink(UnlinkOptions(device: lamp, group: nil)))
+    #expect(try Invocation.parse(["unlink", "1A.2B.3C", "--group", "0"]).subcommand == .unlink(UnlinkOptions(device: lamp, group: 0)))
+
+  }
+
+  @Test func linksADeviceByItsAddress() throws {
+
+    #expect(try Invocation.parse(["link", "1A.2B.3C"]).subcommand == .link(LinkOptions(device: lamp)))
+    #expect(
+      try Invocation.parse(["link", "--two-way", "1a2b3c", "--group", "2"]).subcommand
+        == .link(LinkOptions(device: lamp, group: 2, isTwoWay: true))
+    )
+    #expect(try Invocation.parse(["link", "--two-way"]).subcommand == .link(LinkOptions(isTwoWay: true)))
+    #expect(try Invocation.parse(["unlink", "1A.2B.3C", "--responder"]).subcommand == .unlink(UnlinkOptions(device: lamp, role: .responder)))
+
+  }
+
+  @Test func rejectsAMalformedOrSecondAddress() {
+
+    #expect(throws: ArgumentError.invalidAddress("1A.2B")) {
+
+      try Invocation.parse(["link", "1A.2B"])
+
+    }
+
+    #expect(throws: ArgumentError.unexpectedArgument("4D.5E.6F", subcommand: "unlink")) {
+
+      try Invocation.parse(["unlink", "1A.2B.3C", "4D.5E.6F"])
+
+    }
+
+  }
+
+  @Test func rejectsTwoWayWithAnotherRole() {
+
+    #expect(throws: ArgumentError.conflictingOptions("--two-way", "--responder")) {
+
+      try Invocation.parse(["link", "--responder", "--two-way"])
+
+    }
+
+    #expect(throws: ArgumentError.conflictingOptions("--either", "1A.2B.3C")) {
+
+      try Invocation.parse(["link", "1A.2B.3C", "--either"])
+
+    }
+
+    #expect(throws: ArgumentError.conflictingOptions("--cancel", "1A.2B.3C")) {
+
+      try Invocation.parse(["link", "1A.2B.3C", "--cancel"])
+
+    }
 
   }
 

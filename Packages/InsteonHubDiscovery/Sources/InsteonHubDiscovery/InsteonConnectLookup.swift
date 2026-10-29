@@ -31,8 +31,9 @@ public enum InsteonConnectError: Error, Hashable, Sendable {
 /// ```
 ///
 /// The lookup sends Insteon no credentials, but Insteon sees the network's public IP address,
-/// as it does for any request. The page also lists each Hub's MAC address, network settings
-/// and firmware versions; only the Hub's local address and Insteon ID are kept. A Hub that
+/// as it does for any request. The page also lists each Hub's MAC address, public IP address
+/// and network settings; only the Hub's local address, Insteon ID, modem category, subcategory
+/// and firmware version, and unit type are kept. A Hub that
 /// hasn't reported recently, or can't reach the internet, isn't listed; power-cycling it
 /// makes it report again.
 ///
@@ -109,6 +110,10 @@ public struct InsteonConnectLookup: Sendable {
   /// The table also lists the gateway and subnet mask, so an address given as text starts a
   /// block only when it carries a port or follows the "found" line.
   ///
+  /// The table's Device Category, Sub Category and PLM Firmware, in hexadecimal, and its Unit
+  /// Type, such as `HUB2`, are kept with the Hub; its Firmware, the Hub's own version in
+  /// decimal, isn't.
+  ///
   /// Only Hubs at a private address (`10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16`) are
   /// kept, since the address is where the Hub's password will be sent, and each address is
   /// kept once. An address without a port is at the Hub's default port.
@@ -147,9 +152,24 @@ public struct InsteonConnectLookup: Sendable {
 
         }
 
-      } else if ["insteon id", "your insteon id"].contains(label(line)), let current, index + 1 < lines.count {
+      } else if let current, index + 1 < lines.count {
 
-        hubs[current].insteonID = InsteonAddress(lines[index + 1])
+        let value = lines[index + 1]
+
+        switch label(line) {
+        case "insteon id", "your insteon id":
+          hubs[current].insteonID = InsteonAddress(value)
+        case "device category", "your device category":
+          hubs[current].category = byte(value).map(DeviceCategory.init(rawValue:))
+        case "sub category", "your sub category":
+          hubs[current].subcategory = byte(value).map(DeviceSubcategory.init(rawValue:))
+        case "plm firmware", "your plm firmware":
+          hubs[current].modemFirmwareVersion = byte(value).map(FirmwareVersion.init(rawValue:))
+        case "unit type", "your device's unit type":
+          hubs[current].unitType = unitType(value)
+        default:
+          break
+        }
 
       }
 
@@ -259,6 +279,32 @@ public struct InsteonConnectLookup: Sendable {
     let line = line.lowercased()
 
     return line.contains("was found on your network") && !line.contains("not found")
+
+  }
+
+  /// A byte written as one or two hexadecimal digits, such as `03` or `A5`.
+  private static func byte(_ text: String) -> UInt8? {
+
+    guard (1...2).contains(text.count), text.allSatisfy(\.isHexDigit) else {
+
+      return nil
+
+    }
+
+    return UInt8(text, radix: 16)
+
+  }
+
+  /// A unit type such as `HUB2`: a few letters and digits, or `nil` for anything else.
+  private static func unitType(_ text: String) -> String? {
+
+    guard (1...16).contains(text.count), text.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else {
+
+      return nil
+
+    }
+
+    return text
 
   }
 
