@@ -11,9 +11,13 @@ public enum DeviceCatalogUpdate: Hashable, Sendable {
   /// The published catalog is the copy the app already has.
   case unchanged
 
-  /// A different catalog is published: its JSON, to save in place of the app's copy, and the
-  /// catalog read from it.
-  case updated(json: Data, catalog: DeviceCatalog)
+  /// A different catalog is published: its JSON, to save in place of the app's copy, the
+  /// catalog read from it, and its version, to save beside it.
+  ///
+  /// The version has the same MAJOR.MINOR as ``DeviceCatalog/bundledVersion()``. An app that
+  /// saves it can tell, after updating this package, whether its saved copy is still in a
+  /// format the package reads, and fall back on the bundled copy if it isn't.
+  case updated(json: Data, catalog: DeviceCatalog, version: DeviceCatalogVersion)
 
 }
 
@@ -24,9 +28,15 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
   /// 2xx, with that status.
   case unexpectedStatus(Int)
 
-  /// The manifest isn't the JSON the Insteon device catalog publishes, or names its
-  /// catalog by anything but a plain file name.
+  /// The manifest isn't the JSON the Insteon device catalog publishes, gives a version not
+  /// written `MAJOR.MINOR.PATCH`, or names its catalog by anything but a plain file name.
   case malformedManifest
+
+  /// The published catalog is a version whose MAJOR.MINOR differs from
+  /// ``DeviceCatalog/bundledVersion()``'s, with that version. Its format may have changed in
+  /// ways this package doesn't read, so the app should keep its copy until it updates the
+  /// package.
+  case incompatibleVersion(DeviceCatalogVersion)
 
   /// The downloaded catalog's SHA-256 doesn't match the manifest's.
   case checksumMismatch
@@ -35,12 +45,14 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
 
 /// Downloads the published device catalog when it differs from the app's copy.
 ///
-/// The catalog publishes a manifest with the catalog's SHA-256. The updater fetches the
-/// manifest, compares its SHA-256 with the app's copy, and downloads the catalog only when
-/// they differ. A downloaded catalog is used only if its bytes hash to the manifest's SHA-256
-/// and it reads as a catalog in the format this package reads, so a download cut short, or a
-/// catalog from a different version than the manifest, is never used. The hash shows that the
-/// two files agree; HTTPS is what shows they came from the catalog's host.
+/// The catalog publishes a manifest with the catalog's version and SHA-256. The updater
+/// fetches the manifest and goes on only if the version has the same MAJOR.MINOR as the copy
+/// the package ships with, ``DeviceCatalog/bundledVersion()``, since below 1.0 the catalog's
+/// format can change in any MINOR. It then compares the manifest's SHA-256 with the app's
+/// copy, and downloads the catalog only when they differ. A downloaded catalog is used only if
+/// its bytes hash to the manifest's SHA-256 and it reads as a catalog, so a download cut
+/// short, or a catalog from a different version than the manifest, is never used. The hash
+/// shows that the two files agree; HTTPS is what shows they came from the catalog's host.
 ///
 /// ```swift
 /// let saved: Data? = try? Data(contentsOf: savedURL)
@@ -48,8 +60,9 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
 /// switch try await DeviceCatalogUpdater().update(replacing: saved) {
 /// case .unchanged:
 ///   break
-/// case let .updated(json, catalog):
+/// case let .updated(json, catalog, version):
 ///   try json.write(to: savedURL, options: .atomic)
+///   try JSONEncoder().encode(version).write(to: savedVersionURL, options: .atomic)
 ///   use(catalog)
 /// }
 /// ```
@@ -58,8 +71,8 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
 /// Hashes are worked out with swift-crypto, which uses CryptoKit on Apple platforms.
 public struct DeviceCatalogUpdater: Sendable {
 
-  /// Where the Insteon device catalog publishes the format version this package reads.
-  public static let defaultLocation = URL(string: "https://brandtdaniels.github.io/insteon-device-catalog/v\(DeviceCatalog.schemaVersion)/")!
+  /// Where the Insteon device catalog publishes the MAJOR version this package reads, `v0`.
+  public static let defaultLocation = URL(string: "https://brandtdaniels.github.io/insteon-device-catalog/v0/")!
 
   /// The client requests are sent through.
   public let client: any HTTPClient
@@ -84,20 +97,21 @@ public struct DeviceCatalogUpdater: Sendable {
   ///
   /// - Parameter current: The JSON of the app's copy, such as one saved from an earlier
   ///   update, or `nil` for the copy the package ships with.
-  /// - Returns: ``DeviceCatalogUpdate/unchanged``, or the new catalog and its JSON.
-  /// - Throws: `DeviceCatalogError.unsupportedSchemaVersion(_:)` if the published catalog
-  ///   is in another format version, so the app should keep its copy;
+  /// - Returns: ``DeviceCatalogUpdate/unchanged``, or the new catalog, its JSON and its version.
+  /// - Throws: ``DeviceCatalogUpdateError/incompatibleVersion(_:)`` if the published catalog
+  ///   is in another format, so the app should keep its copy; another
   ///   ``DeviceCatalogUpdateError`` if a download fails its checks; `DecodingError` if a
   ///   catalog that matches its SHA-256 doesn't read as a catalog;
-  ///   `DeviceCatalogError.missingBundledCatalog` if `current` is `nil` and the shipped copy
-  ///   is missing; or the client's error if a request gets no response.
+  ///   `DeviceCatalogError.missingBundledCatalog` if the shipped copy or its manifest is
+  ///   missing; or the client's error if a request gets no response.
   public func update(replacing current: Data?) async throws -> DeviceCatalogUpdate {
 
     let manifest = try await manifest()
+    let bundledVersion = try DeviceCatalog.bundledVersion()
 
-    guard manifest.schemaVersion == DeviceCatalog.schemaVersion else {
+    guard manifest.version.isCompatible(with: bundledVersion) else {
 
-      throw DeviceCatalogError.unsupportedSchemaVersion(manifest.schemaVersion)
+      throw DeviceCatalogUpdateError.incompatibleVersion(manifest.version)
 
     }
 
@@ -119,27 +133,16 @@ public struct DeviceCatalogUpdater: Sendable {
 
     }
 
-    return .updated(json: json, catalog: try DeviceCatalog(json: json))
-
-  }
-
-  /// The manifest's fields this package reads.
-  private struct Manifest: Decodable {
-
-    let schemaVersion: Int
-
-    let catalog: String
-
-    let sha256: String
+    return .updated(json: json, catalog: try DeviceCatalog(json: json), version: manifest.version)
 
   }
 
   /// Fetches and checks the manifest.
-  private func manifest() async throws -> Manifest {
+  private func manifest() async throws -> CatalogManifest {
 
     let json = try await download("manifest.json")
 
-    guard let manifest = try? JSONDecoder().decode(Manifest.self, from: json) else {
+    guard let manifest = try? JSONDecoder().decode(CatalogManifest.self, from: json) else {
 
       throw DeviceCatalogUpdateError.malformedManifest
 

@@ -21,9 +21,6 @@ import InsteonProtocol
 /// dimming for `DeviceCategory.dimmableLightingControl`.
 public struct DeviceCatalog: Hashable, Sendable {
 
-  /// The version of the catalog's format this package reads: `1`.
-  public static let schemaVersion = 1
-
   /// Every profile, in the order they were given.
   public let profiles: [DeviceProfile]
 
@@ -69,10 +66,13 @@ public struct DeviceCatalog: Hashable, Sendable {
 
   /// Reads a catalog from the JSON the Insteon device catalog publishes as `catalog.json`.
   ///
+  /// The catalog doesn't carry its version; its manifest does. Read only a catalog whose
+  /// version has the same MAJOR.MINOR as ``DeviceCatalog/bundledVersion()``, as
+  /// ``DeviceCatalogUpdater`` makes sure of, since a catalog in another format may not read, or
+  /// may read differently.
+  ///
   /// - Parameter json: The catalog's JSON.
-  /// - Throws: ``DeviceCatalogError/unsupportedSchemaVersion(_:)`` if the catalog is in a
-  ///   format other than ``DeviceCatalog/schemaVersion``, or `DecodingError` if the JSON
-  ///   isn't a catalog.
+  /// - Throws: `DecodingError` if the JSON isn't a catalog.
   public init(json: Data) throws {
 
     let contents = try JSONDecoder().decode(Contents.self, from: json)
@@ -98,6 +98,34 @@ public struct DeviceCatalog: Hashable, Sendable {
   private static let bundledCopy = Result<DeviceCatalog, any Error> {
 
     try DeviceCatalog(json: bundledJSON())
+
+  }
+
+  /// The version of the copy the package ships with, from the manifest shipped beside it.
+  ///
+  /// The package reads catalogs in this version's format: ones with the same MAJOR.MINOR.
+  /// ``DeviceCatalogUpdater`` uses a downloaded catalog only if its version is compatible with
+  /// this one.
+  ///
+  /// - Returns: The version, such as 0.5.11.
+  /// - Throws: ``DeviceCatalogError/missingBundledCatalog`` if the manifest isn't in the
+  ///   package's resources, or the error reading it.
+  public static func bundledVersion() throws -> DeviceCatalogVersion {
+
+    try bundledManifest.get().version
+
+  }
+
+  /// The manifest of the copy the package ships with, or the error reading it.
+  private static let bundledManifest = Result<CatalogManifest, any Error> {
+
+    guard let url = Bundle.module.url(forResource: "manifest", withExtension: "json") else {
+
+      throw DeviceCatalogError.missingBundledCatalog
+
+    }
+
+    return try JSONDecoder().decode(CatalogManifest.self, from: Data(contentsOf: url))
 
   }
 
@@ -213,12 +241,11 @@ public struct DeviceCatalog: Hashable, Sendable {
 
   }
 
-  /// The catalog's contents, with its format version checked before its profiles are read.
+  /// The catalog's contents.
   private struct Contents: Decodable {
 
     private enum CodingKeys: String, CodingKey {
 
-      case schemaVersion
       case devices
       case commandSets
 
@@ -231,13 +258,6 @@ public struct DeviceCatalog: Hashable, Sendable {
     init(from decoder: any Decoder) throws {
 
       let container = try decoder.container(keyedBy: CodingKeys.self)
-      let version = try container.decode(Int.self, forKey: .schemaVersion)
-
-      guard version == DeviceCatalog.schemaVersion else {
-
-        throw DeviceCatalogError.unsupportedSchemaVersion(version)
-
-      }
 
       devices = try container.decode([DeviceProfile].self, forKey: .devices)
       commandSets = try container.decodeIfPresent([CommandSet].self, forKey: .commandSets) ?? []
@@ -251,10 +271,7 @@ public struct DeviceCatalog: Hashable, Sendable {
 /// Errors reading a ``DeviceCatalog``.
 public enum DeviceCatalogError: Error, Hashable, Sendable {
 
-  /// The catalog is in a format version this package doesn't read, with that version.
-  case unsupportedSchemaVersion(Int)
-
-  /// The copy of the catalog the package ships with isn't in its resources.
+  /// The copy of the catalog the package ships with, or its manifest, isn't in its resources.
   case missingBundledCatalog
 
 }

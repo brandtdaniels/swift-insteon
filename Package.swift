@@ -121,7 +121,7 @@ let package = Package(
         .product(name: "Crypto", package: "swift-crypto")
       ],
       path: "Packages/InsteonDeviceCatalog/Sources/InsteonDeviceCatalog",
-      resources: [.copy("Resources/catalog.json")]
+      resources: [.copy("Resources/catalog.json"), .copy("Resources/manifest.json")]
     ),
     .testTarget(
       name: "InsteonDeviceCatalogTests",
