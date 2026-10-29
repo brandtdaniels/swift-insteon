@@ -17533,8 +17533,11 @@
             ]
           },
           "verification": {
-            "note": "No document says that every nonzero level means on; the ranges are read from the status reply's level byte.",
-            "status": "inferred"
+            "firmware": [
+              "0x42"
+            ],
+            "note": "Seen on a device running firmware 0x42: Light On (cmd1 0x11) with cmd2 0x01 and with cmd2 0x7F turned the load on, and with cmd2 0x00 turned it off; Instant Change (cmd1 0x21) with cmd2 0x01 turned it on, and with cmd2 0x00 turned it off. Light Status Request answered with cmd2 0xFF while the load was on and 0x00 while it was off. No document says that every nonzero level means on; the ranges are read from the status reply's level byte, which read only 0x00 and 0xFF.",
+            "status": "observed"
           }
         }
       ],
@@ -17545,10 +17548,11 @@
         "Seen on a device running firmware 0x42: bits 2 to 5 and bit 7 of the flags always read 0.",
         "Seen on a device running firmware 0x42: before any change, the flags read 0x42: programming lock off, LED on transmit on and key beep off. The device was secondhand, so these may not be its factory settings, and the catalog gives no defaults.",
         "It sends Set Operating Flags as extended messages with a checksum in D14. Seen on a device running firmware 0x42: X10 (0x12, 0x13), error blink (0x14, 0x15) and cleanup report (0x16, 0x17) were acknowledged, but no Get Operating Flags reply and no byte of the extended Get reply changed with them, so they stay flag commands with no bit.",
-        "Seen on a device running firmware 0x42: the extended Get reply's data read 0x01 0x01 0x0F 0xEF 0x00 0x00 0x1C 0xFE 0x20 0x00 0x00 0x01 0x26 0xD1, and no flag change altered it. D12 and D13 varied between reads with no flag change: a later read gave 0x02 0x4B. D3 and D4 (0x0F 0xEF), D9 (0x20) and D12 and D13 aren't explained by any document.",
+        "Seen on a device running firmware 0x42: the extended Get reply's data read 0x01 0x01 0x0F 0xEF 0x00 0x00 0x1C 0xFE 0x20 0x00 0x00 0x01 0x26 0xD1, and no flag change altered it. D12 and D13 changed between some reads with no flag change: later reads gave 0x02 0x4B, then 0x02 0x65, then 0x02 0x6F. They stayed the same across reads while the device was idle and only went up, and one on/off cycle of the load raised them by 10, so they look like they count the device's activity. D3 and D4 (0x0F 0xEF), D9 (0x20) and D12 and D13 aren't explained by any document.",
         "The Outdoor ApplianceLinc with RF Developer Notes give no extended Set for the settings its Get reports.",
-        "The Outdoor ApplianceLinc with RF Developer Notes say the device sends its Assign to ALL-Link Group broadcast on power-up and supports only responder links, whose on-level should be 0xFE and ramp rate 0x1F. Seen on a device running firmware 0x42: holding its SET button made it the controller of group 1, but tapping the button sent no group commands over that link.",
-        "Seen on a device running firmware 0x42: the device writes its own responder record when it's linked remotely, with Start ALL-Linking on the modem and Enter Linking Mode sent to the device, and doesn't use the 0xFE and 0x1F above. After one such link, as responder to a Hub 2245's group 0, its record held Data 1 to 3 as 0xFF 0x00 0x00; after a later one, 0x00 0x00 0x00, and with on-level 0x00 an On to group 0 from the modem left the load off. Read/Write ALL-Link Database (cmd1 0x2F) with D2 0x02, writing that record with Data 0xFE 0x1F 0x00, was acknowledged and read back as written; then an On to group 0 from the modem turned the load on and an Off turned it off.",
+        "The Outdoor ApplianceLinc with RF Developer Notes say the device sends its Assign to ALL-Link Group broadcast on power-up and supports only responder links, whose on-level should be 0xFE and ramp rate 0x1F. Seen on a device running firmware 0x42: holding its SET button made it the controller of group 1, but tapping the button sent no group commands over that link. After 10 seconds without power, the load, which had been on, came back on, and no message from the device reached the modem in the 15 seconds after it was plugged back in.",
+        "Seen on a device running firmware 0x42: with both of its ALL-Link database records removed and the modem's ALL-Link database empty, the device acknowledged Light Status Request, with cmd1 0x05 and cmd2 0xFF while the load was on. It answered Get Insteon Engine Version (cmd1 0x0D), Get Operating Flags (cmd1 0x1F, cmd2 0x00) and Ping with a NAK carrying cmd2 0xFF, and didn't answer ID Request. The operating flags (0x42), ramp rate (0x1C) and on-level (0xFE) read the same after it was unlinked and linked again.",
+        "Seen on a device running firmware 0x42: the device writes its own responder record when it's linked remotely, with Start ALL-Linking on the modem and Enter Linking Mode sent to the device, and picks Data 1 itself: none of these links gave the 0xFE above. After one such link, as responder to a Hub 2245's group 0, its record held Data 1 to 3 as 0xFF 0x00 0x00; after a later one, made over its existing record, 0x00 0x00 0x00, and with on-level 0x00 an On to group 0 from the modem left the load off. A fresh link, made after the device had been unlinked, gave 0xFF in Data 1 and 0x1F, the ramp rate, in Data 2. Read/Write ALL-Link Database (cmd1 0x2F) with D2 0x02, writing that record with Data 0xFE 0x1F 0x00, was acknowledged and read back as written; then an On to group 0 from the modem turned the load on and an Off turned it off.",
         "The Outdoor ApplianceLinc with RF Developer Notes give the device's identity as category 0x01 and subcategory 0x3A, which the catalog gives to the 2672 LED bulb; the catalog keeps 0x02 and 0x38 for the 2634-222."
       ],
       "operatingFlags": [
@@ -17616,7 +17620,7 @@
             "firmware": [
               "0x42"
             ],
-            "note": "Seen on a device running firmware 0x42: Get Operating Flags with an odd cmd2 (0x01, 0x03, 0x05, 0x07 or 0xFF) always answered with the ALL-Link database delta, 0x07. The device looks only at bit 0 of cmd2: an even cmd2 answers with the operating flags ORed with cmd2.",
+            "note": "Seen on a device running firmware 0x42: Get Operating Flags with an odd cmd2 (0x01, 0x03, 0x05, 0x07 or 0xFF) answered with the ALL-Link database delta, the same value each time, which the cmd1 of the Light Status Request acknowledgment also carried. The device looks only at bit 0 of cmd2: an even cmd2 answers with the operating flags ORed with cmd2. The delta read 0x07 at first; 0x08 after one Read/Write ALL-Link Database write; 0x05 while the device was unlinked, after both of its ALL-Link database records were removed; and 0x08 again after it was linked again and one record rewritten. So it didn't only go up, as the description's count would.",
             "status": "observed"
           }
         }
@@ -17684,7 +17688,7 @@
             "firmware": [
               "0x42"
             ],
-            "note": "Seen on a device running firmware 0x42: the device acknowledged Beep (cmd1 0x30) and beeped, even when it had no link to the modem that sent it. The Outdoor ApplianceLinc with RF Developer Notes don't list it.",
+            "note": "Seen on a device running firmware 0x42: the device acknowledged Beep (cmd1 0x30) and beeped, even when it had no link to the modem that sent it, and also with both of its ALL-Link database records removed and the modem's ALL-Link database empty. The Outdoor ApplianceLinc with RF Developer Notes don't list it.",
             "status": "observed"
           }
         }
@@ -48140,7 +48144,7 @@
           "notes": [
             "As a controller: then press and hold the responder's SET button until it double-beeps; the module double-beeps and its LED stops blinking.",
             "As a responder: put the controller in unlinking mode first, then press and hold the module's SET button until it double-beeps.",
-            "Seen on a device running firmware 0x42: these steps, with a modem or a Hub 2245 in unlinking mode, removed the module's controller link to it.",
+            "Seen on a device running firmware 0x42: these steps, with a modem or a Hub 2245 in unlinking mode, removed the module's controller link to it, for group 1. The module needed both holds, until its LED blinked green and then until it blinked red, and the modem or Hub had to be already waiting in Start ALL-Linking with link code 0xFF while the module was in unlinking mode.",
             "Seen on a device running firmware 0x42: with a Hub 2245 in unlinking mode, one hold of the SET button, which put the module in linking mode, removed the Hub's controller link to the module."
           ],
           "steps": [
@@ -48165,7 +48169,7 @@
         "Has no X10.",
         "The Outdoor ApplianceLinc with RF Developer Notes give its identity as category 0x01 and subcategory 0x3A, which the catalog gives to the 2672.",
         "Its owner's manual lists it as an Insteon controller; its Developer Notes list it as a responder only. Seen on a device running firmware 0x42: holding its SET button, with a modem in Start ALL-Linking as responder, linked it as the controller of group 1, but tapping its one button, which is also its SET button, switched the load and sent no group commands. The only message seen from it was SET Button Pressed (cmd1 0x01), when the button was held into linking mode. So a controller link can be made, but taps aren't reported, and an app learns its state only with Light Status Request. The catalog gives it the role responder, its practical behavior.",
-        "Seen on a device running firmware 0x42: when a Hub 2245 linked it remotely, as the responder to the Hub's group 0, the module itself wrote its responder record for that link with Data 1 to 3 as 0xFF 0x00 0x00; after a later remote link, the record, at ALL-Link database address 0x0FFF, read flags 0xA2 and Data 1 to 3 as 0x00 0x00 0x00, and an On to group 0 from the modem left the load off. The Outdoor ApplianceLinc with RF Developer Notes say to set the on-level to 0xFE and the ramp rate to 0x1F. Read/Write ALL-Link Database (cmd1 0x2F) with D2 0x02, writing that record with Data 0xFE 0x1F 0x00, was acknowledged and read back as written, with only Data 1 to 3 changed; then an On to group 0 from the modem turned the load on and an Off turned it off. Its controller record for group 1, to the Hub, held 0x03 0x00 0x00."
+        "Seen on a device running firmware 0x42: when a Hub 2245 linked it remotely, as the responder to the Hub's group 0, the module itself wrote its responder record for that link with Data 1 to 3 as 0xFF 0x00 0x00; after a later remote link, made over its existing record, the record, at ALL-Link database address 0x0FFF, read flags 0xA2 and Data 1 to 3 as 0x00 0x00 0x00, and an On to group 0 from the modem left the load off. A fresh remote link, made after the module had been unlinked, gave Data 1 0xFF and Data 2 0x1F. So the module picks Data 1 itself, and none of these links gave 0xFE. The Outdoor ApplianceLinc with RF Developer Notes say to set the on-level to 0xFE and the ramp rate to 0x1F. Read/Write ALL-Link Database (cmd1 0x2F) with D2 0x02, writing that record with Data 0xFE 0x1F 0x00, was acknowledged and read back as written, with only Data 1 to 3 changed; then an On to group 0 from the modem turned the load on and an Off turned it off. Its controller record for group 1, to the Hub, held 0x03 0x00 0x00."
       ],
       "radio": "dual",
       "role": "responder",
