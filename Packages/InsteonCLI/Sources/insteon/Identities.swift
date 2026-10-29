@@ -5,6 +5,7 @@ import Darwin
 import Glibc
 #endif
 import InsteonCLICore
+import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonModem
 import InsteonProtocol
