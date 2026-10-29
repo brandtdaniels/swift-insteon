@@ -15,6 +15,13 @@ So a product is supported by adding its profile to the catalog, rather than by w
 for it. The catalog is a set of static JSON files published on GitHub Pages; this package
 ships a copy, so lookups work offline.
 
+The copy is in the package's resource bundle, one of ``DeviceCatalog/bundleNames``, which a
+command has to be installed beside. ``DeviceCatalog/bundled()`` looks for the bundle where the
+Swift Package Manager and Xcode put it, and throws ``DeviceCatalogError/missingBundledCatalog``
+if it isn't there, rather than stopping the process. ``DeviceCatalog/bundled(nextTo:)`` looks in
+directories of an app's own, and ``DeviceCatalog/load(contentsOf:)`` reads a catalog from any
+file.
+
 ```swift
 let catalog = try DeviceCatalog.bundled()
 

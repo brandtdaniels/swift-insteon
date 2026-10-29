@@ -300,19 +300,4 @@ enum Paths {
 
   }
 
-  /// The path with every symbolic link in it resolved, or `nil` if it can't be.
-  static func resolved(_ path: String) -> String? {
-
-    guard let resolved = realpath(path, nil) else {
-
-      return nil
-
-    }
-
-    defer { free(resolved) }
-
-    return String(cString: resolved)
-
-  }
-
 }

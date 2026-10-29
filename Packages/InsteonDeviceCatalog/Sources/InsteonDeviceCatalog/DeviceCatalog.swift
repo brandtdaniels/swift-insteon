@@ -5,8 +5,9 @@ import InsteonProtocol
 /// reports.
 ///
 /// The package ships a copy of the Insteon device catalog, which ``DeviceCatalog/bundled()``
-/// loads. An app can keep a newer copy with ``DeviceCatalogUpdater``, or load one it
-/// downloaded itself with ``DeviceCatalog/init(json:)``.
+/// loads, throwing ``DeviceCatalogError/missingBundledCatalog`` if the copy's bundle is
+/// missing. An app can keep a newer copy with ``DeviceCatalogUpdater``, or load one it
+/// downloaded itself with ``DeviceCatalog/init(json:)`` or ``DeviceCatalog/load(contentsOf:)``.
 ///
 /// ```swift
 /// let catalog = try DeviceCatalog.bundled()
@@ -78,71 +79,6 @@ public struct DeviceCatalog: Hashable, Sendable {
     let contents = try JSONDecoder().decode(Contents.self, from: json)
 
     self.init(profiles: contents.devices, commandSets: contents.commandSets)
-
-  }
-
-  /// Loads the copy of the catalog the package ships with.
-  ///
-  /// The copy is read once, the first time it's asked for.
-  ///
-  /// - Returns: The catalog.
-  /// - Throws: ``DeviceCatalogError/missingBundledCatalog`` if the copy isn't in the
-  ///   package's resources, or the error reading it.
-  public static func bundled() throws -> DeviceCatalog {
-
-    try bundledCopy.get()
-
-  }
-
-  /// The copy the package ships with, or the error reading it.
-  private static let bundledCopy = Result<DeviceCatalog, any Error> {
-
-    try DeviceCatalog(json: bundledJSON())
-
-  }
-
-  /// The version of the copy the package ships with, from the manifest shipped beside it.
-  ///
-  /// The package reads catalogs in this version's format: ones with the same MAJOR.MINOR.
-  /// ``DeviceCatalogUpdater`` uses a downloaded catalog only if its version is compatible with
-  /// this one.
-  ///
-  /// - Returns: The version, such as 0.5.11.
-  /// - Throws: ``DeviceCatalogError/missingBundledCatalog`` if the manifest isn't in the
-  ///   package's resources, or the error reading it.
-  public static func bundledVersion() throws -> DeviceCatalogVersion {
-
-    try bundledManifest.get().version
-
-  }
-
-  /// The manifest of the copy the package ships with, or the error reading it.
-  private static let bundledManifest = Result<CatalogManifest, any Error> {
-
-    guard let url = Bundle.module.url(forResource: "manifest", withExtension: "json") else {
-
-      throw DeviceCatalogError.missingBundledCatalog
-
-    }
-
-    return try JSONDecoder().decode(CatalogManifest.self, from: Data(contentsOf: url))
-
-  }
-
-  /// The JSON of the copy the package ships with, such as to save as an app's own copy.
-  ///
-  /// - Returns: The JSON.
-  /// - Throws: ``DeviceCatalogError/missingBundledCatalog`` if the copy isn't in the
-  ///   package's resources, or the error reading it.
-  public static func bundledJSON() throws -> Data {
-
-    guard let url = Bundle.module.url(forResource: "catalog", withExtension: "json") else {
-
-      throw DeviceCatalogError.missingBundledCatalog
-
-    }
-
-    return try Data(contentsOf: url)
 
   }
 
@@ -271,7 +207,9 @@ public struct DeviceCatalog: Hashable, Sendable {
 /// Errors reading a ``DeviceCatalog``.
 public enum DeviceCatalogError: Error, Hashable, Sendable {
 
-  /// The copy of the catalog the package ships with, or its manifest, isn't in its resources.
+  /// The copy of the catalog the package ships with, or its manifest, isn't found: its bundle,
+  /// one of ``DeviceCatalog/bundleNames``, isn't in any of the places it's looked for, such as
+  /// when a command was copied without the bundle beside it.
   case missingBundledCatalog
 
 }

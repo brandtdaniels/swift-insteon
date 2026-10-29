@@ -22,7 +22,42 @@ struct ProductNames: Sendable {
   /// there.
   init() {
 
-    catalog = CatalogLoader.load()
+    catalog = Self.loadCatalog()
+
+  }
+
+  /// The catalog the package ships with, or `nil` after a one-line warning if it isn't beside
+  /// the command, as when only the executable was copied, or can't be read.
+  private static func loadCatalog() -> DeviceCatalog? {
+
+    let url: URL
+
+    do {
+
+      url = try DeviceCatalog.bundledCatalogURL()
+
+    } catch {
+
+      Output.note(
+        "insteon: warning: the Insteon device catalog (\(DeviceCatalog.bundleNames[0])) isn't next to the command, "
+          + "so products aren't named. Scripts/install-insteon.sh installs the command with it."
+      )
+
+      return nil
+
+    }
+
+    do {
+
+      return try DeviceCatalog.load(contentsOf: url)
+
+    } catch {
+
+      Output.note("insteon: warning: the Insteon device catalog at \(url.path) couldn't be read, so products aren't named.")
+
+      return nil
+
+    }
 
   }
 
@@ -44,67 +79,6 @@ struct ProductNames: Sendable {
   static func name(of profile: DeviceProfile) -> String {
 
     ProductName.of(profile)
-
-  }
-
-}
-
-/// Loads the Insteon device catalog from the bundle beside the command, without
-/// `DeviceCatalog.bundled()`, which stops the process when the bundle is missing, as it is when
-/// only the executable was copied.
-enum CatalogLoader {
-
-  /// The catalog, or `nil` after a one-line warning if it isn't beside the command or can't
-  /// be read.
-  static func load() -> DeviceCatalog? {
-
-    let paths = CatalogLocation.candidatePaths(nextTo: executableDirectories())
-
-    guard let path = paths.first(where: { FileManager.default.isReadableFile(atPath: $0) }) else {
-
-      Output.note(
-        "insteon: warning: the Insteon device catalog (\(CatalogLocation.bundleNames[0])) isn't next to the command, "
-          + "so products aren't named. Scripts/install-insteon.sh installs the command with it."
-      )
-
-      return nil
-
-    }
-
-    do {
-
-      return try DeviceCatalog(json: Data(contentsOf: URL(fileURLWithPath: path)))
-
-    } catch {
-
-      Output.note("insteon: warning: the Insteon device catalog at \(path) couldn't be read, so products aren't named.")
-
-      return nil
-
-    }
-
-  }
-
-  /// The directories the Swift Package Manager's resource accessor looks in for a command:
-  /// the main bundle's, which is the executable's directory, and the executable's directory
-  /// with symbolic links resolved, for a command linked into a directory on `PATH`.
-  private static func executableDirectories() -> [String] {
-
-    var directories = [Bundle.main.bundlePath]
-
-    if let executable = Bundle.main.executablePath {
-
-      directories.append(Paths.directory(of: executable))
-
-      if let resolved = Paths.resolved(executable) {
-
-        directories.append(Paths.directory(of: resolved))
-
-      }
-
-    }
-
-    return directories
 
   }
 
