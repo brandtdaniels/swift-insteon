@@ -59,14 +59,36 @@ On iOS, iPadOS, tvOS and visionOS, an app that reaches devices on the local netw
 why with `NSLocalNetworkUsageDescription` in its `Info.plist`. The user is asked to allow it
 the first time discovery runs, and until they do, every probe fails as if no Hub were there.
 
+### Confirming a found Hub
+
+A found Hub is a candidate until it answers Get IM Info with the user name and password printed
+on it. ``HubIdentifier`` asks for that, but sends the credentials only where a Hub on the local
+network is: to a candidate at a private address on the Hub's port, stopping at the first
+candidate that rejects them. The per-candidate decision to send them stays with the caller, so a
+command-line tool can ask in a terminal and an app can show a prompt.
+
+```swift
+let results = try await HubIdentifier().identify(result.hubs) { candidate in
+  await userAllows(candidate) ? credentials : nil
+} onResult: { candidate, outcome in
+  report(candidate, outcome)
+}
+```
+
 ## Topics
 
 ### Discovering Hubs
 
+- ``HubFinder``
 - ``HubDiscovery``
 - ``InsteonConnectLookup``
 - ``DiscoveredHub``
+- ``DiscoverySource``
 - ``InsteonConnectError``
+
+### Confirming a Hub
+
+- ``HubIdentifier``
 
 ### The local network
 

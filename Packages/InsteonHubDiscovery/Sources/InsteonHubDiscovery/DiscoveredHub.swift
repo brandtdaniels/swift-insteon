@@ -42,6 +42,13 @@ public struct DiscoveredHub: Hashable, Sendable {
   /// it; ``HubDiscovery`` doesn't.
   public var unitType: String?
 
+  /// The ways this Hub was found, such as both the local network and Insteon Connect when both
+  /// report it.
+  ///
+  /// ``HubDiscovery`` and ``InsteonConnectLookup`` leave this empty; ``HubFinder`` fills it as
+  /// it runs each way and unions the sources when it merges the same Hub found both ways.
+  public var foundBy: Set<DiscoverySource>
+
   /// Creates a discovered Hub.
   ///
   /// - Parameters:
@@ -52,13 +59,15 @@ public struct DiscoveredHub: Hashable, Sendable {
   ///   - modemFirmwareVersion: The firmware version of the Hub's modem, if known. Defaults to
   ///     `nil`.
   ///   - unitType: The kind of Hub as Insteon's servers name it, if known. Defaults to `nil`.
+  ///   - foundBy: The ways this Hub was found. Defaults to none.
   public init(
     endpoint: HubEndpoint,
     insteonID: InsteonAddress? = nil,
     category: DeviceCategory? = nil,
     subcategory: DeviceSubcategory? = nil,
     modemFirmwareVersion: FirmwareVersion? = nil,
-    unitType: String? = nil
+    unitType: String? = nil,
+    foundBy: Set<DiscoverySource> = []
   ) {
 
     self.endpoint = endpoint
@@ -67,6 +76,25 @@ public struct DiscoveredHub: Hashable, Sendable {
     self.subcategory = subcategory
     self.modemFirmwareVersion = modemFirmwareVersion
     self.unitType = unitType
+    self.foundBy = foundBy
+
+  }
+
+  /// Merges another record of the same Hub into this one, keeping what either way knows.
+  ///
+  /// Each field this record doesn't know is taken from `other`, and the two records'
+  /// ``DiscoveredHub/foundBy`` sets are combined. This record's known fields are kept, so merge
+  /// the later way's record into the earlier one to prefer the earlier way's values.
+  ///
+  /// - Parameter other: Another record of the same Hub, usually found a different way.
+  public mutating func merge(with other: DiscoveredHub) {
+
+    insteonID = insteonID ?? other.insteonID
+    category = category ?? other.category
+    subcategory = subcategory ?? other.subcategory
+    modemFirmwareVersion = modemFirmwareVersion ?? other.modemFirmwareVersion
+    unitType = unitType ?? other.unitType
+    foundBy.formUnion(other.foundBy)
 
   }
 
