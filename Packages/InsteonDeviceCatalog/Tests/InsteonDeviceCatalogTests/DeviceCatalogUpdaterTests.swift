@@ -52,9 +52,24 @@ struct DeviceCatalogUpdaterTests {
 
   }
 
-  static func manifest(sha256: String, catalog: String = "catalog.json", schemaVersion: Int = 1) -> HTTPResponse {
+  /// A version in the bundled copy's format, with a made-up PATCH.
+  static func compatibleVersion() throws -> String {
 
-    HTTPResponse(statusCode: 200, body: Data(#"{ "schemaVersion": \#(schemaVersion), "devices": 1, "catalog": "\#(catalog)", "sha256": "\#(sha256)" }"#.utf8))
+    let bundled = try DeviceCatalog.bundledVersion()
+
+    return "\(bundled.major).\(bundled.minor).987"
+
+  }
+
+  static func manifest(sha256: String, catalog: String = "catalog.json", version: String) -> HTTPResponse {
+
+    HTTPResponse(statusCode: 200, body: Data(#"{ "built": "2001-02-03T04:05:06Z", "catalog": "\#(catalog)", "devices": 1, "sha256": "\#(sha256)", "version": "\#(version)" }"#.utf8))
+
+  }
+
+  static func manifest(sha256: String, catalog: String = "catalog.json") throws -> HTTPResponse {
+
+    manifest(sha256: sha256, catalog: catalog, version: try compatibleVersion())
 
   }
 
@@ -66,19 +81,20 @@ struct DeviceCatalogUpdaterTests {
 
   @Test func downloadsADifferentCatalog() async throws {
 
-    let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published)))
+    let files = Self.files(manifest: try Self.manifest(sha256: Self.sha256(of: Self.published)))
 
     let update = try await DeviceCatalogUpdater(client: files).update(replacing: Data("{}".utf8))
     let expected = try DeviceCatalog(json: Self.published)
+    let version = try #require(DeviceCatalogVersion(try Self.compatibleVersion()))
 
-    #expect(update == .updated(json: Self.published, catalog: expected))
+    #expect(update == .updated(json: Self.published, catalog: expected, version: version))
     #expect(await files.requested == ["manifest.json", "catalog.json"])
 
   }
 
   @Test func stopsAtTheManifestWhenNothingChanged() async throws {
 
-    let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published)))
+    let files = Self.files(manifest: try Self.manifest(sha256: Self.sha256(of: Self.published)))
 
     let update = try await DeviceCatalogUpdater(client: files).update(replacing: Self.published)
 
@@ -89,7 +105,7 @@ struct DeviceCatalogUpdaterTests {
 
   @Test func comparesWithTheBundledCopyByDefault() async throws {
 
-    let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: try DeviceCatalog.bundledJSON())))
+    let files = Self.files(manifest: try Self.manifest(sha256: Self.sha256(of: try DeviceCatalog.bundledJSON())))
 
     let update = try await DeviceCatalogUpdater(client: files).update(replacing: nil)
 
@@ -102,7 +118,7 @@ struct DeviceCatalogUpdaterTests {
   @Test func namesTheExpectedHashInTheCatalogRequest() async throws {
 
     let digest = Self.sha256(of: Self.published)
-    let files = Self.files(manifest: Self.manifest(sha256: digest))
+    let files = Self.files(manifest: try Self.manifest(sha256: digest))
 
     _ = try await DeviceCatalogUpdater(client: files).update(replacing: nil)
 
@@ -110,9 +126,9 @@ struct DeviceCatalogUpdaterTests {
 
   }
 
-  @Test func refusesACatalogThatDoesntMatchTheManifest() async {
+  @Test func refusesACatalogThatDoesntMatchTheManifest() async throws {
 
-    let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Data("older".utf8))))
+    let files = Self.files(manifest: try Self.manifest(sha256: Self.sha256(of: Data("older".utf8))))
 
     await #expect(throws: DeviceCatalogUpdateError.checksumMismatch) {
 
@@ -122,11 +138,58 @@ struct DeviceCatalogUpdaterTests {
 
   }
 
-  @Test func keepsTheCopyForAnotherFormatVersion() async {
+  // Below 1.0, any MINOR can change the format, so only the bundled copy's MAJOR.MINOR is read.
+  @Test func keepsTheCopyForAnotherFormat() async throws {
 
-    let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published), schemaVersion: 2))
+    let bundled = try DeviceCatalog.bundledVersion()
+    let others = [
+      DeviceCatalogVersion(major: bundled.major, minor: bundled.minor + 1, patch: 0),
+      DeviceCatalogVersion(major: bundled.major + 1, minor: bundled.minor, patch: bundled.patch),
+      DeviceCatalogVersion(major: bundled.major, minor: bundled.minor + 1, patch: bundled.patch),
+    ]
 
-    await #expect(throws: DeviceCatalogError.unsupportedSchemaVersion(2)) {
+    if bundled.minor > 0 {
+
+      #expect(DeviceCatalogVersion(major: bundled.major, minor: bundled.minor - 1, patch: 99).isCompatible(with: bundled) == false)
+
+    }
+
+    for other in others {
+
+      let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published), version: other.description))
+
+      await #expect(throws: DeviceCatalogUpdateError.incompatibleVersion(other)) {
+
+        try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+
+      }
+
+      #expect(await files.requested == ["manifest.json"])
+
+    }
+
+  }
+
+  // Another PATCH of the same MAJOR.MINOR is in the same format.
+  @Test func takesAnotherPatch() async throws {
+
+    let bundled = try DeviceCatalog.bundledVersion()
+    let version = DeviceCatalogVersion(major: bundled.major, minor: bundled.minor, patch: 0)
+    let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published), version: version.description))
+
+    let update = try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+    let expected = try DeviceCatalog(json: Self.published)
+
+    #expect(update == .updated(json: Self.published, catalog: expected, version: version))
+
+  }
+
+  @Test(arguments: ["0.5", "0.5.1.2", "v0.5.1", "0.5.x", "0..1", "0.5.-1", "0.5.\u{0661}", "0.05.1", "", "99999999999999999999.0.0"])
+  func refusesAManifestWithAMalformedVersion(_ version: String) async {
+
+    let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published), version: version))
+
+    await #expect(throws: DeviceCatalogUpdateError.malformedManifest) {
 
       try await DeviceCatalogUpdater(client: files).update(replacing: nil)
 
@@ -136,10 +199,10 @@ struct DeviceCatalogUpdaterTests {
 
   }
 
-  @Test(arguments: ["../catalog.json", "https:", "", ".hidden", "databáse.json"])
-  func refusesAManifestNamingAnotherPlace(_ catalog: String) async {
+  @Test func refusesAManifestWithoutAVersion() async {
 
-    let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published), catalog: catalog))
+    let body = Data(#"{ "catalog": "catalog.json", "sha256": "\#(Self.sha256(of: Self.published))" }"#.utf8)
+    let files = Self.files(manifest: HTTPResponse(statusCode: 200, body: body))
 
     await #expect(throws: DeviceCatalogUpdateError.malformedManifest) {
 
@@ -149,9 +212,39 @@ struct DeviceCatalogUpdaterTests {
 
   }
 
-  @Test func refusesADigestThatIsntASCIIHexadecimal() async {
+  @Test func readsAndWritesAVersion() throws {
 
-    let files = Self.files(manifest: Self.manifest(sha256: String(repeating: "\u{FF41}", count: 64)))
+    let version = try #require(DeviceCatalogVersion("1.12.0"))
+
+    #expect(version == DeviceCatalogVersion(major: 1, minor: 12, patch: 0))
+    #expect(version.description == "1.12.0")
+    #expect(version.isCompatible(with: DeviceCatalogVersion(major: 1, minor: 12, patch: 7)))
+    #expect(!version.isCompatible(with: DeviceCatalogVersion(major: 1, minor: 11, patch: 0)))
+
+    let encoded = try JSONEncoder().encode([version])
+    let decoded = try JSONDecoder().decode([DeviceCatalogVersion].self, from: Data(#"["0.5.3"]"#.utf8))
+
+    #expect(String(decoding: encoded, as: UTF8.self) == #"["1.12.0"]"#)
+    #expect(decoded == [DeviceCatalogVersion(major: 0, minor: 5, patch: 3)])
+
+  }
+
+  @Test(arguments: ["../catalog.json", "https:", "", ".hidden", "databáse.json"])
+  func refusesAManifestNamingAnotherPlace(_ catalog: String) async throws {
+
+    let files = Self.files(manifest: try Self.manifest(sha256: Self.sha256(of: Self.published), catalog: catalog))
+
+    await #expect(throws: DeviceCatalogUpdateError.malformedManifest) {
+
+      try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+
+    }
+
+  }
+
+  @Test func refusesADigestThatIsntASCIIHexadecimal() async throws {
+
+    let files = Self.files(manifest: try Self.manifest(sha256: String(repeating: "\u{FF41}", count: 64)))
 
     await #expect(throws: DeviceCatalogUpdateError.malformedManifest) {
 
@@ -177,13 +270,21 @@ struct DeviceCatalogUpdaterTests {
 
   @Test func asksForTheFilesInItsLocation() async throws {
 
-    let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published)))
-    let location = try #require(URL(string: "https://example.com/mirror/v1/"))
+    let files = Self.files(manifest: try Self.manifest(sha256: Self.sha256(of: Self.published)))
+    let location = try #require(URL(string: "https://example.com/mirror/v0/"))
 
     _ = try await DeviceCatalogUpdater(client: files, location: location).update(replacing: Self.published)
 
-    #expect(await files.urls.map(\.absoluteString) == ["https://example.com/mirror/v1/manifest.json"])
-    #expect(DeviceCatalogUpdater.defaultLocation.absoluteString == "https://brandtdaniels.github.io/insteon-device-catalog/v1/")
+    #expect(await files.urls.map(\.absoluteString) == ["https://example.com/mirror/v0/manifest.json"])
+
+  }
+
+  // The published path names the MAJOR version.
+  @Test func defaultsToThePathOfTheBundledMajorVersion() throws {
+
+    let major = try DeviceCatalog.bundledVersion().major
+
+    #expect(DeviceCatalogUpdater.defaultLocation.absoluteString == "https://brandtdaniels.github.io/insteon-device-catalog/v\(major)/")
 
   }
 

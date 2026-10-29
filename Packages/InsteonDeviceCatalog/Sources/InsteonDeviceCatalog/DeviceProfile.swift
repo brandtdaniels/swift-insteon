@@ -50,6 +50,29 @@ public struct DeviceProfile: Hashable, Sendable {
 
     }
 
+    /// An operating flag state a group is in use under.
+    public struct Condition: Hashable, Sendable {
+
+      /// The operating flag, in the command set the profile's identity uses.
+      public var flag: SettingName
+
+      /// Whether the flag is set while the group is in use.
+      public var isSet: Bool
+
+      /// Creates a condition.
+      ///
+      /// - Parameters:
+      ///   - flag: The operating flag.
+      ///   - isSet: Whether the flag is set while the group is in use.
+      public init(flag: SettingName, isSet: Bool) {
+
+        self.flag = flag
+        self.isSet = isSet
+
+      }
+
+    }
+
     /// The group number.
     public var number: AllLinkGroupNumber
 
@@ -62,6 +85,15 @@ public struct DeviceProfile: Hashable, Sendable {
     /// How the group can be linked.
     public var linking: Linking
 
+    /// The name of the group's ``GroupType``, in every command set the profile's identities
+    /// use, or `nil` if the catalog doesn't say what the group is.
+    /// ``CommandSet/groupType(named:)`` finds it.
+    public var type: SettingName?
+
+    /// The operating flag state the group is in use under, such as a keypad's detached load,
+    /// or `nil` if it's always in use.
+    public var activeWhen: Condition?
+
     /// How sure the catalog is of the group.
     public var verification: Verification
 
@@ -72,13 +104,25 @@ public struct DeviceProfile: Hashable, Sendable {
     ///   - name: The group's name.
     ///   - role: The role the product takes in the group.
     ///   - linking: How the group can be linked. Defaults to ``DeviceProfile/Group/Linking/device``.
+    ///   - type: The name of the group's type.
+    ///   - activeWhen: The operating flag state the group is in use under.
     ///   - verification: How sure the catalog is of the group. Defaults to ``Verification/documented``.
-    public init(number: AllLinkGroupNumber, name: String, role: LinkRole, linking: Linking = .device, verification: Verification = .documented) {
+    public init(
+      number: AllLinkGroupNumber,
+      name: String,
+      role: LinkRole,
+      linking: Linking = .device,
+      type: SettingName? = nil,
+      activeWhen: Condition? = nil,
+      verification: Verification = .documented
+    ) {
 
       self.number = number
       self.name = name
       self.role = role
       self.linking = linking
+      self.type = type
+      self.activeWhen = activeWhen
       self.verification = verification
 
     }
@@ -128,6 +172,10 @@ public struct DeviceProfile: Hashable, Sendable {
   /// What the product can do.
   public var capabilities: [DeviceCapability]
 
+  /// How to install the product, link it, wake it, reset it and take it out of service, or
+  /// `nil` if the catalog doesn't say.
+  public var lifecycle: DeviceLifecycle?
+
   /// Behavior worth knowing that no capability describes.
   public var notes: [String]
 
@@ -153,6 +201,7 @@ public struct DeviceProfile: Hashable, Sendable {
   ///   - isBatteryPowered: Whether the product runs on batteries.
   ///   - groups: The product's ALL-Link groups.
   ///   - capabilities: What the product can do.
+  ///   - lifecycle: How to install, link, wake, reset and remove the product.
   ///   - notes: Behavior worth knowing.
   ///   - sources: The documents the values come from.
   ///   - verification: How sure the catalog is of the profile itself. Defaults to ``Verification/documented``.
@@ -169,6 +218,7 @@ public struct DeviceProfile: Hashable, Sendable {
     isBatteryPowered: Bool = false,
     groups: [Group] = [],
     capabilities: [DeviceCapability] = [],
+    lifecycle: DeviceLifecycle? = nil,
     notes: [String] = [],
     sources: [String] = [],
     verification: Verification = .documented
@@ -186,6 +236,7 @@ public struct DeviceProfile: Hashable, Sendable {
     self.isBatteryPowered = isBatteryPowered
     self.groups = groups
     self.capabilities = capabilities
+    self.lifecycle = lifecycle
     self.notes = notes
     self.sources = sources
     self.verification = verification
@@ -304,6 +355,7 @@ extension DeviceProfile: Decodable {
     case batteryPowered
     case groups
     case capabilities
+    case lifecycle
     case notes
     case sources
     case verification
@@ -320,7 +372,48 @@ extension DeviceProfile: Decodable {
 
     let linkable: String?
 
+    let type: String?
+
+    let activeWhen: ActiveWhen?
+
     let verification: Verification?
+
+    /// The group, or `nil` for one with a role this package doesn't read.
+    var group: Group? {
+
+      guard let linkRole = LinkRole(rawValue: self.role) else {
+
+        return nil
+
+      }
+
+      var activeWhenCondition: Group.Condition?
+
+      if let activeWhen {
+
+        activeWhenCondition = Group.Condition(flag: SettingName(rawValue: activeWhen.flag), isSet: activeWhen.set)
+
+      }
+
+      return Group(
+        number: AllLinkGroupNumber(rawValue: number.value),
+        name: name,
+        role: linkRole,
+        linking: linkable.map { Group.Linking(rawValue: $0) ?? .software } ?? .device,
+        type: self.type.map(SettingName.init(rawValue:)),
+        activeWhen: activeWhenCondition,
+        verification: verification ?? .documented
+      )
+
+    }
+
+  }
+
+  private struct ActiveWhen: Decodable {
+
+    let flag: String
+
+    let set: Bool
 
   }
 
@@ -374,22 +467,9 @@ extension DeviceProfile: Decodable {
       radio: try container.decodeIfPresent(String.self, forKey: .radio).flatMap(Radio.init(rawValue:)),
       role: try container.decodeIfPresent(String.self, forKey: .role).flatMap(LinkRole.init(rawValue:)),
       isBatteryPowered: try container.decodeIfPresent(Bool.self, forKey: .batteryPowered) ?? false,
-      groups: try (container.decodeIfPresent([GroupEntry].self, forKey: .groups) ?? []).compactMap { entry in
-
-        LinkRole(rawValue: entry.role).map { role in
-
-          Group(
-            number: AllLinkGroupNumber(rawValue: entry.number.value),
-            name: entry.name,
-            role: role,
-            linking: entry.linkable.map { Group.Linking(rawValue: $0) ?? .software } ?? .device,
-            verification: entry.verification ?? .documented
-          )
-
-        }
-
-      },
+      groups: try (container.decodeIfPresent([GroupEntry].self, forKey: .groups) ?? []).compactMap(\.group),
       capabilities: try container.decode([CapabilityEntry].self, forKey: .capabilities).compactMap(\.capability),
+      lifecycle: try container.decodeIfPresent(DeviceLifecycle.self, forKey: .lifecycle),
       notes: try container.decodeIfPresent([String].self, forKey: .notes) ?? [],
       sources: try container.decode([String].self, forKey: .sources),
       verification: try container.decodeIfPresent(Verification.self, forKey: .verification) ?? .documented

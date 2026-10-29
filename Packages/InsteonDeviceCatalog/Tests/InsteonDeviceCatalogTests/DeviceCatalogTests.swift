@@ -6,9 +6,9 @@ import InsteonProtocol
 struct DeviceCatalogTests {
 
   /// A catalog in the published format, with `profiles` as its devices.
-  static func json(_ profiles: String, schemaVersion: Int = 1) -> Data {
+  static func json(_ profiles: String) -> Data {
 
-    Data(#"{ "schemaVersion": \#(schemaVersion), "devices": [\#(profiles)] }"#.utf8)
+    Data(#"{ "devices": [\#(profiles)] }"#.utf8)
 
   }
 
@@ -262,13 +262,26 @@ struct DeviceCatalogTests {
 
   }
 
-  @Test func refusesAnotherFormatVersion() {
+  // The version is in the manifest, not the catalog, so a key the catalog no longer has, or
+  // one from a later version, is passed over.
+  @Test func passesOverKeysItDoesntRead() throws {
 
-    #expect(throws: DeviceCatalogError.unsupportedSchemaVersion(2)) {
+    let json = Data(#"{ "schemaVersion": 1, "somethingNewer": {}, "devices": [\#(Self.leakSensor)] }"#.utf8)
 
-      try DeviceCatalog(json: Self.json(Self.leakSensor, schemaVersion: 2))
+    let read = try DeviceCatalog(json: json)
+    let expected = try DeviceCatalog(json: Self.json(Self.leakSensor))
 
-    }
+    #expect(read == expected)
+
+  }
+
+  // A new MAJOR.MINOR is a new format: check that the package reads it before changing these.
+  @Test func readsTheBundledVersion() throws {
+
+    let version = try DeviceCatalog.bundledVersion()
+
+    #expect(version.major == 0)
+    #expect(version.minor == 5)
 
   }
 

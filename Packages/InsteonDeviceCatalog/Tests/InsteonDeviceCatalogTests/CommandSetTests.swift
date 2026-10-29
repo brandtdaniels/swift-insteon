@@ -50,7 +50,7 @@ struct CommandSetTests {
 
   func catalog() throws -> DeviceCatalog {
 
-    try DeviceCatalog(json: Data(#"{ "schemaVersion": 1, "devices": [\#(Self.profile)], "commandSets": [\#(Self.keypadSet)] }"#.utf8))
+    try DeviceCatalog(json: Data(#"{ "devices": [\#(Self.profile)], "commandSets": [\#(Self.keypadSet)] }"#.utf8))
 
   }
 
@@ -140,7 +140,7 @@ struct CommandSetTests {
 
     #expect(throws: DecodingError.self) {
 
-      try DeviceCatalog(json: Data(#"{ "schemaVersion": 1, "devices": [], "commandSets": [\#(commandSet)] }"#.utf8))
+      try DeviceCatalog(json: Data(#"{ "devices": [], "commandSets": [\#(commandSet)] }"#.utf8))
 
     }
 
@@ -172,7 +172,7 @@ struct CommandSetTests {
         "sources": ["A"]
       }
       """#
-    let catalog = try DeviceCatalog(json: Data(#"{ "schemaVersion": 1, "devices": [], "commandSets": [\#(commandSet)] }"#.utf8))
+    let catalog = try DeviceCatalog(json: Data(#"{ "devices": [], "commandSets": [\#(commandSet)] }"#.utf8))
     let decoded = try #require(catalog.commandSet(id: "a"))
     let beep = try #require(decoded.standardCommand(named: "beep"))
 
@@ -191,7 +191,7 @@ struct CommandSetTests {
 
   @Test func readsACatalogWithoutCommandSets() throws {
 
-    let catalog = try DeviceCatalog(json: Data(#"{ "schemaVersion": 1, "devices": [] }"#.utf8))
+    let catalog = try DeviceCatalog(json: Data(#"{ "devices": [] }"#.utf8))
 
     #expect(catalog.commandSets.isEmpty)
 
