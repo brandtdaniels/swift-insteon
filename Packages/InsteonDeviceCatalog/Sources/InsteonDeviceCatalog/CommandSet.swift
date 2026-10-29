@@ -75,6 +75,14 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
   /// ``FieldUnit/displayDegrees``, or `nil` if the command set doesn't say how to tell.
   public var celsiusIndicator: SettingName?
 
+  /// What the products' ALL-Link groups are, which profiles' groups name in
+  /// ``DeviceProfile/Group/type``.
+  public var groupTypes: [GroupType]
+
+  /// Names for the values of settings whose raw values mean something else, such as ramp
+  /// rates, which ``LinkDataByte/table`` names.
+  public var valueTables: [ValueTable]
+
   /// Where Insteon's documents disagree, and which one the command set follows.
   public var notes: [String]
 
@@ -95,6 +103,8 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
   ///   - extendedCommands: Extended direct commands beyond extended Get and Set.
   ///   - directMessages: Standard direct messages the products send on their own.
   ///   - celsiusIndicator: The flag, value or bit that's true when the device displays Celsius.
+  ///   - groupTypes: What the products' ALL-Link groups are.
+  ///   - valueTables: Names for the values of settings.
   ///   - notes: Where Insteon's documents disagree.
   ///   - sources: The documents the command set comes from.
   public init(
@@ -109,6 +119,8 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
     extendedCommands: [DeviceExtendedCommand] = [],
     directMessages: [DeviceDirectMessage] = [],
     celsiusIndicator: SettingName? = nil,
+    groupTypes: [GroupType] = [],
+    valueTables: [ValueTable] = [],
     notes: [String] = [],
     sources: [String] = []
   ) {
@@ -124,6 +136,8 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
     self.extendedCommands = extendedCommands
     self.directMessages = directMessages
     self.celsiusIndicator = celsiusIndicator
+    self.groupTypes = groupTypes
+    self.valueTables = valueTables
     self.notes = notes
     self.sources = sources
 
@@ -156,6 +170,27 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
   public func extendedCommand(named name: SettingName) -> DeviceExtendedCommand? {
 
     extendedCommands.first { $0.name == name }
+
+  }
+
+  /// The group type with a name.
+  ///
+  /// - Parameter name: The group type's name, such as a profile group's
+  ///   ``DeviceProfile/Group/type``.
+  /// - Returns: The group type, or `nil` if the command set has none by that name.
+  public func groupType(named name: SettingName) -> GroupType? {
+
+    groupTypes.first { $0.name == name }
+
+  }
+
+  /// The value table with a name.
+  ///
+  /// - Parameter name: The table's name, such as `"rampRate"`.
+  /// - Returns: The table, or `nil` if the command set has none by that name.
+  public func valueTable(named name: SettingName) -> ValueTable? {
+
+    valueTables.first { $0.name == name }
 
   }
 
@@ -211,7 +246,8 @@ public struct CommandSetID: RawRepresentable, Hashable, Sendable, ExpressibleByS
 
 }
 
-/// The name of a flag, reading or value in a command set, such as `"rampRate"`.
+/// The name of a flag, reading, value, group type or value table in a command set, such as
+/// `"rampRate"`.
 public struct SettingName: RawRepresentable, Hashable, Sendable, ExpressibleByStringLiteral, CustomStringConvertible {
 
   /// The name.

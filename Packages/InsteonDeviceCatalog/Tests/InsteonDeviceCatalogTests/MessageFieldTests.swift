@@ -238,7 +238,7 @@ struct MessageFieldTests {
   @Test func leavesOutACommandWithALaterIntegrityScheme() throws {
 
     let json = #"""
-      { "schemaVersion": 1, "devices": [], "commandSets": [{
+      { "devices": [], "commandSets": [{
         "id": "a", "name": "A", "description": "A.", "sources": ["A"],
         "extendedCommands": [
           { "name": "later", "description": "Later.", "command1": "0x2E", "command2": "0x05", "integrity": "somethingNewer" },
@@ -263,7 +263,7 @@ struct MessageFieldTests {
   func refusesAFieldItCantRead(_ field: String) {
 
     let json = #"""
-      { "schemaVersion": 1, "devices": [], "commandSets": [{
+      { "devices": [], "commandSets": [{
         "id": "a", "name": "A", "description": "A.", "sources": ["A"],
         "extendedCommands": [{ "name": "c", "description": "C.", "command1": "0x2E", "command2": "0x05", "parameters": [\#(field)] }]
       }] }
@@ -280,7 +280,7 @@ struct MessageFieldTests {
   @Test func refusesAFieldWithAnEnumerationItDoesntHave() {
 
     let json = #"""
-      { "schemaVersion": 1, "devices": [], "commandSets": [{
+      { "devices": [], "commandSets": [{
         "id": "a", "name": "A", "description": "A.", "sources": ["A"],
         "directMessages": [{ "name": "modeReport", "description": "Mode.", "command1": "0x70",
           "value": { "name": "mode", "description": "Mode.", "kind": "enumeration", "enumeration": "missing" } }]

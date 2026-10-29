@@ -16,6 +16,8 @@ extension CommandSet: Decodable {
     case directMessages
     case enumerations
     case displayScale
+    case groupTypes
+    case valueTables
     case notes
     case sources
 
@@ -336,6 +338,8 @@ extension CommandSet: Decodable {
         try Self.extendedSettings(settings, in: container)
 
       },
+      groupTypes: try container.decodeIfPresent([GroupType].self, forKey: .groupTypes) ?? [],
+      valueTables: try container.decodeIfPresent([ValueTable].self, forKey: .valueTables) ?? [],
       notes: try container.decodeIfPresent([String].self, forKey: .notes) ?? [],
       sources: try container.decode([String].self, forKey: .sources)
     )
