@@ -1,7 +1,7 @@
 import InsteonProtocol
 
 /// The heading a settings page shows a flag, reading or value under. Pages show the sections
-/// in the order of ``SettingSection/allCases``, which is the catalog's.
+/// in the order of `allCases`, which is the catalog's.
 public enum SettingSection: String, Hashable, Sendable, CaseIterable, Comparable {
 
   /// The load the device switches or dims.
