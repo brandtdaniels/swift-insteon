@@ -171,6 +171,83 @@ struct DeviceEventInterpreterTests {
 
   }
 
+  /// A newer description of the Leak Sensor 2852, which names its group 2 on `leak`.
+  static let newerLeakSensor = #"""
+    {
+      "model": "2852",
+      "name": "Leak Sensor",
+      "identities": [{ "category": "0x10", "subcategory": "0x08" }],
+      "capabilities": [{ "kind": "groupEvents", "events": [{ "group": "0x02", "command1": "0x11", "event": "leak" }] }],
+      "sources": ["A"]
+    }
+    """#
+
+  func groupTwoOn() -> GroupCommand {
+
+    GroupCommand(controller: sensor, group: 0x02, command1: 0x11, command2: 0x00, source: .broadcast)
+
+  }
+
+  @Test func usesARememberedIdentity() throws {
+
+    var interpreter = try interpreter()
+    interpreter.remember(category: 0x10, subcategory: 0x08, firmwareVersion: 0x41, for: sensor)
+
+    #expect(interpreter.profile(of: sensor)?.model == "2852")
+    #expect(interpreter.events(from: groupBroadcast(group: 0x02, command1: 0x11), at: start) == [.groupCommand(groupTwoOn(), event: "wet")])
+
+  }
+
+  @Test func findsARememberedIdentitysProfileInANewCatalog() throws {
+
+    var interpreter = try interpreter()
+    interpreter.remember(category: 0x10, subcategory: 0x08, firmwareVersion: 0x41, for: sensor)
+
+    interpreter.catalog = try DeviceCatalog(json: DeviceCatalogTests.json(Self.newerLeakSensor))
+
+    #expect(interpreter.events(from: groupBroadcast(group: 0x02, command1: 0x11), at: start) == [.groupCommand(groupTwoOn(), event: "leak")])
+
+  }
+
+  @Test func findsAProfileForARememberedIdentityTheCatalogLearnsLater() throws {
+
+    var interpreter = try interpreter()
+    interpreter.remember(category: 0x01, subcategory: 0x20, firmwareVersion: nil, for: sensor)
+    #expect(interpreter.profile(of: sensor) == nil)
+
+    let dimmer = #"{ "model": "2477D", "name": "SwitchLinc Dimmer", "identities": [{ "category": "0x01", "subcategory": "0x20" }], "capabilities": [{ "kind": "dimmable" }], "sources": ["A"] }"#
+    interpreter.catalog = try DeviceCatalog(json: DeviceCatalogTests.json(dimmer))
+
+    #expect(interpreter.profile(of: sensor)?.model == "2477D")
+
+  }
+
+  // A profile remembered without an identity can't be found again, so it's kept as given.
+  @Test func keepsAProfileRememberedWithoutAnIdentityInANewCatalog() throws {
+
+    var interpreter = try interpreter()
+    let profile = try #require(interpreter.catalog.profile(model: "2852"))
+    interpreter.remember(profile, for: sensor)
+
+    interpreter.catalog = try DeviceCatalog(json: DeviceCatalogTests.json(Self.newerLeakSensor))
+
+    #expect(interpreter.profile(of: sensor) == profile)
+    #expect(interpreter.events(from: groupBroadcast(group: 0x02, command1: 0x11), at: start) == [.groupCommand(groupTwoOn(), event: "wet")])
+
+  }
+
+  @Test func forgetsARememberedIdentity() throws {
+
+    var interpreter = try interpreter()
+    interpreter.remember(category: 0x10, subcategory: 0x08, firmwareVersion: 0x41, for: sensor)
+    interpreter.remember(nil, for: sensor)
+
+    interpreter.catalog = try DeviceCatalog(json: DeviceCatalogTests.json(Self.newerLeakSensor))
+
+    #expect(interpreter.profile(of: sensor) == nil)
+
+  }
+
   @Test func ignoresADirectMessage() throws {
 
     var interpreter = try interpreter()

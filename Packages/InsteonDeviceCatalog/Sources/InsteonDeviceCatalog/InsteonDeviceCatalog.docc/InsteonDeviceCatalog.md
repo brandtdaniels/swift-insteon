@@ -43,7 +43,9 @@ waits for an update of the package. Updating is optional.
 ``DeviceEventInterpreter`` reads the messages a modem receives as ``DeviceEvent``s. It learns
 each device's profile when the device reports its identity, such as when its SET button is
 held to link it, and from then on reports what the device's group commands mean and when it
-sends a heartbeat.
+sends a heartbeat. An app seeds it with the identities it saved, using
+``DeviceEventInterpreter/remember(category:subcategory:firmwareVersion:for:)``, so an updated
+catalog finds each device's profile again.
 
 ``DeviceCatalog/commandSet(category:subcategory:firmwareVersion:)`` finds the ``CommandSet`` a
 device uses: its operating flags, read with Get Operating Flags and changed with Set Operating
