@@ -130,7 +130,7 @@ public actor Modem: SerialCommandSender {
   ///
   /// The bytes wait for their turn like any command, but they aren't retried and nothing
   /// checks them: listen with ``Modem/replies()`` before writing to read the modem's echo and
-  /// anything that follows it. The modem's replies are read as ``ModemReply`` values, so a
+  /// anything that follows it. The modem's replies are read as `ModemReply` values, so a
   /// reply to a command number the package doesn't know isn't reported. Prefer
   /// ``Modem/send(_:)`` for anything a `SerialCommand` describes.
   ///
