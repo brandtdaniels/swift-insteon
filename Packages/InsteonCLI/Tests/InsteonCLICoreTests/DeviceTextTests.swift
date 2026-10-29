@@ -212,7 +212,7 @@ struct DeviceTextTests {
 
     #expect(explanation.bytes[0].documentedValue == 0xFF)
     #expect(explanation.bytes[1].documentedValue == nil)
-    #expect(LinkDataText.meaning(of: explanation) == "On-level 0x00 (Off; the documents give 0xFF), Ramp rate 0x1F")
+    #expect(LinkDataText.meaning(of: explanation) == "On-level 0x00 (Off; the catalog gives 0xFF), Ramp rate 0x1F")
 
     // A byte without a table gives the documented value alone.
     let untabled = RecordDataExplanation(
@@ -220,7 +220,7 @@ struct DeviceTextTests {
       bytes: [RecordDataExplanation.DataByte(position: 1, name: "onLevel", label: "On-level", value: 0x00, documentedValue: 0xFE)]
     )
 
-    #expect(LinkDataText.meaning(of: untabled) == "On-level 0x00 (the documents give 0xFE)")
+    #expect(LinkDataText.meaning(of: untabled) == "On-level 0x00 (the catalog gives 0xFE)")
 
   }
 
@@ -254,6 +254,8 @@ struct DeviceTextTests {
       "Didn't acknowledge: 4D.5E.6F.",
       "The modem says it didn't reach every responder.",
     ])
+    // With no responders listed, the modem's report says nothing about them.
+    #expect(SceneText.cleanup(acknowledged: [], unacknowledged: [], isComplete: true, responderCount: 0) == [])
     #expect(SceneText.cleanup(acknowledged: [], unacknowledged: [], isComplete: false) == [
       "The modem says it didn't reach every responder.",
     ])

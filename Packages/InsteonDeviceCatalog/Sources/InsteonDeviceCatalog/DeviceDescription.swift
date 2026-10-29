@@ -213,7 +213,7 @@ public struct DeviceDescription: Hashable, Sendable {
         tableEntry: table?.entry(for: value),
         isPerGroup: byte.isPerGroup,
         verification: byte.verification,
-        documentedValue: byte.value
+        documentedValue: documentedValue(of: byte, isController: isController)
       ))
 
     }
@@ -225,6 +225,39 @@ public struct DeviceDescription: Hashable, Sendable {
     }
 
     return RecordDataExplanation(groupType: type, bytes: bytes)
+
+  }
+
+  /// A byte's fixed value, unless another group type in the command set fixes a different
+  /// value at the same position, as when the value tells the types apart rather than being
+  /// one a record should hold.
+  private func documentedValue(of byte: LinkDataByte, isController: Bool) -> UInt8? {
+
+    guard let value = byte.value else {
+
+      return nil
+
+    }
+
+    let types: [GroupType] = commandSet?.groupTypes ?? []
+
+    for type in types {
+
+      let others: [LinkDataByte] = isController ? type.linkData.controller : type.linkData.responder
+
+      for other in others where other.position == byte.position {
+
+        if let otherValue = other.value, otherValue != value {
+
+          return nil
+
+        }
+
+      }
+
+    }
+
+    return value
 
   }
 
@@ -285,9 +318,9 @@ public struct RecordDataExplanation: Hashable, Sendable {
     public var verification: Verification
 
     /// The value the catalog gives for the byte when it's fixed, as ``LinkDataByte/value``
-    /// says, such as an on-level of `0xFE`, or `nil` if the byte can take any value. A record
-    /// whose ``RecordDataExplanation/DataByte/value`` differs isn't as Insteon's documents
-    /// write it.
+    /// says, such as an on-level of `0xFE`, or `nil` if the byte can take any value or the
+    /// value only tells the command set's group types apart. A record whose
+    /// ``RecordDataExplanation/DataByte/value`` differs isn't as the catalog gives it.
     public var documentedValue: UInt8?
 
     /// Creates an explained data byte.

@@ -44,7 +44,8 @@ enum SceneCommands {
     let lines: [String] = SceneText.cleanup(
       acknowledged: report.acknowledged,
       unacknowledged: report.unacknowledged,
-      isComplete: report.isComplete
+      isComplete: report.isComplete,
+      responderCount: responders.count
     )
 
     for line in lines {

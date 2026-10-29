@@ -132,7 +132,7 @@ public enum LinkDataText {
   /// A byte is named by its label, or else its name, then its value, then the value's name
   /// from its table, or for the responder's own group, "its group" and the number. A byte
   /// whose value differs from the one the catalog gives for it says so, such as
-  /// `"On-level 0x00 (the documents give 0xFE)"`.
+  /// `"On-level 0x00 (the catalog gives 0xFE)"`.
   ///
   /// - Parameter explanation: What the catalog says the record's bytes hold.
   /// - Returns: The text.
@@ -154,7 +154,7 @@ public enum LinkDataText {
 
       if let documented = byte.documentedValue, documented != byte.value {
 
-        notes.append("the documents give \(Hex.byte(documented))")
+        notes.append("the catalog gives \(Hex.byte(documented))")
 
       }
 
@@ -206,9 +206,16 @@ public enum SceneText {
   ///   - unacknowledged: The responders the modem reported didn't.
   ///   - isComplete: Whether the modem's ALL-Link Cleanup Status Report says it sent every
   ///     responder its cleanup.
+  ///   - responderCount: How many responders the modem's ALL-Link database lists for the
+  ///     group, if known. With none, the modem's report says nothing about responders.
   /// - Returns: The lines, in order: how many acknowledged, or what the modem reported when
   ///   none were seen; then those that didn't; then whether the modem stopped partway.
-  public static func cleanup(acknowledged: [InsteonAddress], unacknowledged: [InsteonAddress], isComplete: Bool) -> [String] {
+  public static func cleanup(
+    acknowledged: [InsteonAddress],
+    unacknowledged: [InsteonAddress],
+    isComplete: Bool,
+    responderCount: Int? = nil
+  ) -> [String] {
 
     var lines: [String] = []
 
@@ -216,7 +223,7 @@ public enum SceneText {
 
       lines.append("\(Wording.count(acknowledged.count, "device")) acknowledged the cleanup.")
 
-    } else if isComplete {
+    } else if isComplete && responderCount != 0 {
 
       let others: String = unacknowledged.isEmpty ? "every responder" : "every other responder"
 

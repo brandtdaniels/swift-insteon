@@ -212,8 +212,8 @@ enum SettingsCommands {
     guard let change = commands.change(for: flag, setting: state) else {
 
       throw CommandFailure(
-        description: "The Insteon device catalog gives no way to turn \(item.label) \(SettingsText.flag(state)): "
-          + "no Set Operating Flags cmd2 or standard command for it, so it can't be changed here."
+        description: "\(item.label) can't be turned \(SettingsText.flag(state)) on this device: "
+          + "the Insteon device catalog gives no command that does it."
       )
 
     }
