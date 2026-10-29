@@ -1,7 +1,7 @@
 {
-  "built": "2026-10-29T00:15:31Z",
+  "built": "2026-10-29T17:22:49Z",
   "catalog": "catalog.json",
   "devices": 151,
-  "sha256": "5f059fe6b3670d566556ce17e8de9271753c3e6c79cddcce5a8c987b9b62a790",
-  "version": "0.5.17"
+  "sha256": "f01d2461dcb948f1a4f95e12e1f05157e57c3c0a07f42613f7768025c808cb66",
+  "version": "0.5.24"
 }

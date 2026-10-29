@@ -103,7 +103,23 @@
           },
           "name": "load",
           "state": {
-            "command": "readStatus"
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
+            "status": "inferred"
           }
         }
       ],
@@ -410,7 +426,23 @@
           },
           "name": "load",
           "state": {
-            "command": "readStatus"
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document says that every nonzero level means on; the ranges are read from the status reply's level byte.",
+            "status": "inferred"
           }
         }
       ],
@@ -5333,7 +5365,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The light's level, from 0x00 (off) to 0xFF (full).",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         },
         {
@@ -5810,7 +5844,23 @@
           },
           "name": "load",
           "state": {
-            "command": "readStatus"
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
+            "status": "inferred"
           }
         }
       ],
@@ -6113,7 +6163,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The load's level, from 0x00 (off) to 0xFF (full).",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         },
         {
@@ -7615,7 +7667,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The load's level, from 0x00 (off) to 0xFF (full).",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         },
         {
@@ -9063,7 +9117,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The load's level, from 0x00 (off) to 0xFF (full).",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         },
         {
@@ -10371,7 +10427,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The load's level, from 0x00 (off) to 0xFF (full).",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         },
         {
@@ -10981,7 +11039,23 @@
           },
           "name": "load",
           "state": {
-            "command": "readStatus"
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
+            "status": "inferred"
           }
         }
       ],
@@ -11185,7 +11259,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The load's level, from 0x00 (off) to 0xFF (full); an on/off model gives only 0x00 or 0xFF.",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         }
       ],
@@ -11859,7 +11935,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The load's level, from 0x00 (off) to 0xFF (full).",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         },
         {
@@ -12390,7 +12468,23 @@
           },
           "name": "load",
           "state": {
-            "command": "readStatus"
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
+            "status": "inferred"
           }
         }
       ],
@@ -13641,7 +13735,23 @@
           },
           "name": "load",
           "state": {
-            "command": "readStatus"
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
+            "status": "inferred"
           }
         },
         {
@@ -13973,7 +14083,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The load's level, from 0x00 (off) to 0xFF (full).",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         },
         {
@@ -14602,7 +14714,23 @@
           },
           "name": "load",
           "state": {
-            "command": "readStatus"
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
+            "status": "inferred"
           }
         }
       ],
@@ -14682,7 +14810,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The load's level, from 0x00 (off) to 0xFF (full); an on/off model gives only 0x00 or 0xFF.",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         }
       ],
@@ -15364,7 +15494,23 @@
           },
           "name": "load",
           "state": {
-            "command": "readStatus"
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
+            "status": "inferred"
           }
         }
       ],
@@ -15457,7 +15603,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The load's level, from 0x00 (off) to 0xFF (full); an on/off model gives only 0x00 or 0xFF.",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         }
       ],
@@ -15958,7 +16106,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The load's level, from 0x00 (off) to 0xFF (full).",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         }
       ],
@@ -16480,7 +16630,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The bulb's level, from 0x00 (off) to 0xFF (full).",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         },
         {
@@ -17095,7 +17247,23 @@
           },
           "name": "load",
           "state": {
-            "command": "readStatus"
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document says that every nonzero level means on; the ranges are read from the status reply's level byte.",
+            "status": "inferred"
           }
         }
       ],
@@ -17170,6 +17338,340 @@
               "from": 0,
               "through": 255
             }
+          }
+        }
+      ]
+    },
+    {
+      "description": "The outdoor on/off module with RF, as firmware 0x42 behaves: its Get Operating Flags reply holds the programming lock, LED on transmit and key beep bits, and it answers Beep. Otherwise it is the Outdoor ApplianceLinc command set.",
+      "extendedSettings": {
+        "perButton": false,
+        "values": [
+          {
+            "byte": 7,
+            "description": "The ramp rate.",
+            "label": "Ramp rate",
+            "name": "rampRate",
+            "section": "Load",
+            "verification": {
+              "firmware": [
+                "0x42"
+              ],
+              "note": "Seen on a device running firmware 0x42: the extended Get reply held 0x1C in D7.",
+              "status": "observed"
+            }
+          },
+          {
+            "byte": 8,
+            "description": "The on-level.",
+            "label": "On-level",
+            "name": "onLevel",
+            "section": "Load",
+            "verification": {
+              "firmware": [
+                "0x42"
+              ],
+              "note": "Seen on a device running firmware 0x42: the extended Get reply held 0xFE in D8.",
+              "status": "observed"
+            }
+          }
+        ]
+      },
+      "flagCommands": [
+        {
+          "command2": "0x0C",
+          "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
+          "name": "radioOff"
+        },
+        {
+          "command2": "0x0D",
+          "description": "The device originates RF messages.",
+          "name": "radioOn"
+        },
+        {
+          "command2": "0x0E",
+          "description": "Turns Insteon communication over the powerline off. The device turns it back on whenever it powers up.",
+          "name": "powerLineOff"
+        },
+        {
+          "command2": "0x0F",
+          "description": "Turns Insteon communication over the powerline on.",
+          "name": "powerLineOn"
+        },
+        {
+          "command2": "0x12",
+          "description": "Turns X10 sending and receiving off.",
+          "name": "x10Off"
+        },
+        {
+          "command2": "0x13",
+          "description": "Turns X10 sending and receiving on.",
+          "name": "x10On"
+        },
+        {
+          "command2": "0x14",
+          "description": "The LED doesn't blink when a communication error occurs.",
+          "name": "errorBlinkOff",
+          "verification": {
+            "firmware": [
+              "0x42"
+            ],
+            "note": "Seen on a device running firmware 0x42: the device acknowledged Set Operating Flags with this cmd2, but no Get Operating Flags reply, with any cmd2, and no byte of the extended Get reply changed, so the setting can't be read back.",
+            "status": "observed"
+          }
+        },
+        {
+          "command2": "0x15",
+          "description": "The LED blinks when a communication error occurs.",
+          "name": "errorBlinkOn",
+          "verification": {
+            "firmware": [
+              "0x42"
+            ],
+            "note": "Seen on a device running firmware 0x42: the device acknowledged Set Operating Flags with this cmd2, but no Get Operating Flags reply, with any cmd2, and no byte of the extended Get reply changed, so the setting can't be read back.",
+            "status": "observed"
+          }
+        },
+        {
+          "command2": "0x16",
+          "description": "Turns cleanup success reports off.",
+          "name": "cleanupReportOff",
+          "verification": {
+            "firmware": [
+              "0x42"
+            ],
+            "note": "Seen on a device running firmware 0x42: the device acknowledged Set Operating Flags with this cmd2, but no Get Operating Flags reply, with any cmd2, and no byte of the extended Get reply changed, so the setting can't be read back.",
+            "status": "observed"
+          }
+        },
+        {
+          "command2": "0x17",
+          "description": "Turns cleanup success reports on.",
+          "name": "cleanupReportOn",
+          "verification": {
+            "firmware": [
+              "0x42"
+            ],
+            "note": "Seen on a device running firmware 0x42: the device acknowledged Set Operating Flags with this cmd2, but no Get Operating Flags reply, with any cmd2, and no byte of the extended Get reply changed, so the setting can't be read back.",
+            "status": "observed"
+          }
+        },
+        {
+          "command2": "0x18",
+          "description": "Extended Set and ALL-Link database write messages needn't carry a checksum in D14.",
+          "name": "checksumOff"
+        },
+        {
+          "command2": "0x19",
+          "description": "Extended Set and ALL-Link database write messages must carry a checksum in D14.",
+          "name": "checksumOn"
+        }
+      ],
+      "groupTypes": [
+        {
+          "actions": [
+            {
+              "command": "lightOn",
+              "label": "On",
+              "name": "on",
+              "value": "0xFF"
+            },
+            {
+              "command": "lightOff",
+              "label": "Off",
+              "name": "off"
+            }
+          ],
+          "kind": "relay",
+          "label": "Load",
+          "linkData": {
+            "responder": [
+              {
+                "byte": 1,
+                "description": "The on-level; the Outdoor ApplianceLinc with RF Developer Notes say to set it to 0xFE.",
+                "label": "On-level",
+                "name": "onLevel",
+                "value": "0xFE"
+              },
+              {
+                "byte": 2,
+                "description": "The ramp rate; the Outdoor ApplianceLinc with RF Developer Notes say to set it to 0x1F.",
+                "label": "Ramp rate",
+                "name": "rampRate",
+                "value": "0x1F"
+              }
+            ]
+          },
+          "name": "load",
+          "state": {
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document says that every nonzero level means on; the ranges are read from the status reply's level byte.",
+            "status": "inferred"
+          }
+        }
+      ],
+      "id": "outdoorApplianceLincFirmware42",
+      "name": "Outdoor ApplianceLinc, firmware 0x42",
+      "notes": [
+        "The Outdoor ApplianceLinc with RF Developer Notes mark the Get Operating Flags 0x00 reply N/A. Seen on a device running firmware 0x42: it answered, and the device looks only at bit 0 of cmd2. An odd cmd2 answers with the ALL-Link database delta. An even cmd2 answers with the operating flags ORed with cmd2: with the flags at 0x42, cmd2 0x00 and 0x02 read 0x42, 0x04 read 0x46, 0x08 read 0x4A, 0x10 read 0x52, 0x20 read 0x62 and 0x80 read 0xC2. So query with cmd2 0x00 for the flags and 0x01 for the delta.",
+        "Seen on a device running firmware 0x42: bits 2 to 5 and bit 7 of the flags always read 0.",
+        "Seen on a device running firmware 0x42: before any change, the flags read 0x42: programming lock off, LED on transmit on and key beep off. The device was secondhand, so these may not be its factory settings, and the catalog gives no defaults.",
+        "It sends Set Operating Flags as extended messages with a checksum in D14. Seen on a device running firmware 0x42: error blink (0x14, 0x15) and cleanup report (0x16, 0x17) were acknowledged, but no Get Operating Flags reply and no byte of the extended Get reply changed, so they stay flag commands with no bit.",
+        "Seen on a device running firmware 0x42: the extended Get reply's data stayed 0x01 0x01 0x0F 0xEF 0x00 0x00 0x1C 0xFE 0x20 0x00 0x00 0x01 0x26 0xD1 through every flag change. D3 and D4 (0x0F 0xEF), D9 (0x20) and D12 and D13 (0x01 0x26) aren't explained by any document.",
+        "The Outdoor ApplianceLinc with RF Developer Notes give no extended Set for the settings its Get reports.",
+        "The Outdoor ApplianceLinc with RF Developer Notes say the device sends its Assign to ALL-Link Group broadcast on power-up and supports only responder links, whose on-level should be 0xFE and ramp rate 0x1F. Seen on a device running firmware 0x42: holding its SET button made it the controller of group 1, but tapping the button sent no group commands over that link.",
+        "Seen on a device running firmware 0x42: the device writes its own responder record when it's linked remotely, with Start ALL-Linking on the modem and Enter Linking Mode sent to the device, and doesn't use the 0xFE and 0x1F above. After one such link, as responder to a Hub 2245's group 0, its record held Data 1 to 3 as 0xFF 0x00 0x00; after a later one, 0x00 0x00 0x00, and with on-level 0x00 an On to group 0 from the modem left the load off.",
+        "The Outdoor ApplianceLinc with RF Developer Notes give the device's identity as category 0x01 and subcategory 0x3A, which the catalog gives to the 2672 LED bulb; the catalog keeps 0x02 and 0x38 for the 2634-222."
+      ],
+      "operatingFlags": [
+        {
+          "bit": "0x01",
+          "description": "Linking and programming from the device itself are locked out.",
+          "label": "Programming lock",
+          "name": "programmingLock",
+          "off": "0x01",
+          "on": "0x00",
+          "query": "0x00",
+          "section": "Linking",
+          "verification": {
+            "firmware": [
+              "0x42"
+            ],
+            "note": "Seen on a device running firmware 0x42: after Set Operating Flags with cmd2 0x00, Get Operating Flags (cmd2 0x00) read 0x43; after cmd2 0x01, it read 0x42.",
+            "status": "observed"
+          }
+        },
+        {
+          "bit": "0x02",
+          "description": "The status LED blinks when the device sends an Insteon message.",
+          "label": "Blink LED when sending",
+          "name": "ledOnTransmit",
+          "off": "0x03",
+          "on": "0x02",
+          "query": "0x00",
+          "section": "LEDs",
+          "verification": {
+            "firmware": [
+              "0x42"
+            ],
+            "note": "Seen on a device running firmware 0x42: after Set Operating Flags with cmd2 0x03, Get Operating Flags (cmd2 0x00) read 0x40; after cmd2 0x02, it read 0x42.",
+            "status": "observed"
+          }
+        },
+        {
+          "bit": "0x40",
+          "description": "The device doesn't beep when a button is pressed.",
+          "label": "No beep on button press",
+          "name": "keyBeepOff",
+          "off": "0x0A",
+          "on": "0x0B",
+          "query": "0x00",
+          "section": "Buttons",
+          "verification": {
+            "firmware": [
+              "0x42"
+            ],
+            "note": "Seen on a device running firmware 0x42: after Set Operating Flags with cmd2 0x0A, Get Operating Flags (cmd2 0x00) read 0x02; after cmd2 0x0B, it read 0x42. So the bit is set by 0x0B, which the Outdoor ApplianceLinc with RF Developer Notes give as key beep off, and is 1 when key beep is off.",
+            "status": "observed"
+          }
+        }
+      ],
+      "readings": [
+        {
+          "advanced": true,
+          "description": "A count that goes up whenever the ALL-Link database changes.",
+          "label": "ALL-Link database changes",
+          "name": "databaseDelta",
+          "query": "0x01",
+          "section": "Diagnostics",
+          "verification": {
+            "firmware": [
+              "0x42"
+            ],
+            "note": "Seen on a device running firmware 0x42: Get Operating Flags with an odd cmd2 (0x01, 0x03, 0x05, 0x07 or 0xFF) always answered with the ALL-Link database delta, 0x07. The device looks only at bit 0 of cmd2: an even cmd2 answers with the operating flags ORed with cmd2.",
+            "status": "observed"
+          }
+        }
+      ],
+      "sources": [
+        "Outdoor ApplianceLinc with RF Developer Notes"
+      ],
+      "standardCommands": [
+        {
+          "command1": "0x11",
+          "description": "Turns the load on to the level in cmd2 at the saved ramp rate.",
+          "name": "lightOn",
+          "parameter": {
+            "description": "The level to go to, from 0x00 (off) to 0xFF (full).",
+            "name": "onLevel",
+            "range": {
+              "from": 0,
+              "through": 255
+            }
+          }
+        },
+        {
+          "command1": "0x12",
+          "description": "Turns the load on instantly. The device ignores cmd2.",
+          "name": "lightOnFast"
+        },
+        {
+          "command1": "0x13",
+          "description": "Turns the load off at the saved ramp rate. The device ignores cmd2.",
+          "name": "lightOff"
+        },
+        {
+          "command1": "0x14",
+          "description": "Turns the load off instantly. The device ignores cmd2.",
+          "name": "lightOffFast"
+        },
+        {
+          "command1": "0x19",
+          "command2": "0x00",
+          "description": "Reads the load's level. The acknowledgment's cmd1 carries the ALL-Link database delta.",
+          "name": "readStatus",
+          "reply": {
+            "description": "The load's on-level.",
+            "name": "onLevel"
+          }
+        },
+        {
+          "command1": "0x21",
+          "description": "Sets the load to the level in cmd2 instantly.",
+          "name": "instantChange",
+          "parameter": {
+            "description": "The level to go to, from 0x00 (off) to 0xFF (full).",
+            "name": "onLevel",
+            "range": {
+              "from": 0,
+              "through": 255
+            }
+          }
+        },
+        {
+          "command1": "0x30",
+          "description": "Beeps once.",
+          "name": "beep",
+          "verification": {
+            "firmware": [
+              "0x42"
+            ],
+            "note": "Seen on a device running firmware 0x42: the device acknowledged Beep (cmd1 0x30) and beeped, even when it had no link to the modem that sent it. The Outdoor ApplianceLinc with RF Developer Notes don't list it.",
+            "status": "observed"
           }
         }
       ]
@@ -17753,7 +18255,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The load's level, from 0x00 (off) to 0xFF (full).",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         },
         {
@@ -18112,7 +18616,23 @@
           },
           "name": "load",
           "state": {
-            "command": "readStatus"
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
+            "status": "inferred"
           }
         }
       ],
@@ -19511,7 +20031,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The load's level, from 0x00 (off) to 0xFF (full).",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         },
         {
@@ -20075,7 +20597,9 @@
           "name": "readStatus",
           "reply": {
             "description": "The load's level, from 0x00 (off) to 0xFF (full).",
-            "name": "onLevel"
+            "name": "onLevel",
+            "scale": 0.392157,
+            "unit": "percent"
           }
         }
       ],
@@ -20542,7 +21066,23 @@
           },
           "name": "load",
           "state": {
-            "command": "readStatus"
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
+            "status": "inferred"
           }
         }
       ],
@@ -21143,7 +21683,23 @@
           },
           "name": "load",
           "state": {
-            "command": "readStatus"
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
+            "status": "inferred"
           }
         }
       ],
@@ -21402,7 +21958,23 @@
           },
           "name": "load",
           "state": {
-            "command": "readStatus"
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
+            "status": "inferred"
           }
         }
       ],
@@ -23465,7 +24037,9 @@
       "model": "2245",
       "name": "Hub",
       "notes": [
-        "Seen on a device running Hub firmware 1019: the local interface on port 25105 answers the command pages, such as /3?…=I=3, /buffstatus.xml and /1?XB=M=1, but the settings pages /network.htm and /config.htm don't load, so that device offered no local page for its settings."
+        "Seen on a device running Hub firmware 1019: the local interface on port 25105 answers the command pages, such as /3?…=I=3, /buffstatus.xml and /1?XB=M=1, but the settings pages /network.htm and /config.htm don't load, so that device offered no local page for its settings.",
+        "Seen on a device running Hub firmware 1019: after an Outdoor On/Off Plug 2634-222 running firmware 0x42 was linked with the Hub as controller, the Hub's controller record for it held Data 1 to 3 as 0x01 0x38 0x42, while the plug had reported 0x02 0x38 0x42 (its category, subcategory and firmware version) in ALL-Linking Completed. Data 2 and 3 matched its subcategory and firmware version, but Data 1 wasn't its category. It was seen again for a controller record of group 0, still with one product only.",
+        "Seen on a device running Hub firmware 1019, with modem firmware 0xA5: the modem answered Beep (0x77), sent without its parameter byte, with a NAK, 0x02 0x77 0x15."
       ],
       "radio": "dual",
       "role": "both",
@@ -47312,7 +47886,29 @@
         {
           "category": "0x02",
           "commandSet": "outdoorApplianceLinc",
+          "firmware": {
+            "except": [
+              "0x42"
+            ]
+          },
           "subcategory": "0x38"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "outdoorApplianceLincFirmware42",
+          "firmware": {
+            "only": [
+              "0x42"
+            ]
+          },
+          "subcategory": "0x38",
+          "verification": {
+            "firmware": [
+              "0x42"
+            ],
+            "note": "Seen on a device running firmware 0x42: Get Operating Flags answered with the programming lock, LED on transmit and key beep bits, and Beep was acknowledged, where the Outdoor ApplianceLinc with RF Developer Notes mark the flags reply N/A and don't list Beep.",
+            "status": "observed"
+          }
         }
       ],
       "description": "A weather-resistant plug-in relay module for switching outdoor lights and appliances on and off remotely. It is rated NEMA 3R and works from -4 to 122 degrees Fahrenheit.",
@@ -47334,7 +47930,14 @@
       "identities": [
         {
           "category": "0x02",
-          "subcategory": "0x38"
+          "subcategory": "0x38",
+          "verification": {
+            "firmware": [
+              "0x42"
+            ],
+            "note": "Seen on a device: an Outdoor On/Off Plug 2634-222 reported 0x02/0x38 with firmware 0x42 and no product key, didn't answer Product Data Request, even when linked to a Hub 2245, and answered Get Insteon Engine Version with i2CS, as the catalog's engine entry gives. ALL-Linking Completed carried 0x02 0x38 0x42 as well; a Hub 2245 kept 0x01 0x38 0x42 as Data 1 to 3 of its controller record for the device, so Data 1 there isn't the category. The Outdoor ApplianceLinc with RF Developer Notes give 0x01/0x3A. The catalog uses 0x02/0x38, from ID Request.",
+            "status": "observed"
+          }
         }
       ],
       "lifecycle": {
@@ -47370,7 +47973,9 @@
               "description": "From a Hub",
               "notes": [
                 "This links the Hub's group 0 to the device as a responder; the device makes no link back to the Hub, since this profile lists no group it controls.",
-                "To add the device without its SET button, have the Hub send it Enter Linking Mode (cmd1 0x09, cmd2 0x01; extended for an i2CS device) right after it starts ALL-Linking, in place of the SET button step."
+                "To add the device without its SET button, have the Hub send it Enter Linking Mode (cmd1 0x09, cmd2 0x01; extended for an i2CS device) right after it starts ALL-Linking, in place of the SET button step.",
+                "Seen on a device running firmware 0x42: this worked on a module that had no link to the Hub yet. With the Hub in Start ALL-Linking as controller, the extended Enter Linking Mode linked the Hub as its controller; then Enter Linking Mode for group 1, with the Hub in Start ALL-Linking as responder, linked the module as the Hub's controller of group 1.",
+                "Seen on a device running firmware 0x42: with the Hub in Start ALL-Linking as controller, holding the module's SET button linked the Hub as its controller."
               ],
               "steps": [
                 {
@@ -47414,7 +48019,8 @@
           "notes": [
             "As a controller: put the module in linking mode first, adjust the responder to the desired state, then press and hold the responder's SET button until it double-beeps; the module's LED stops blinking.",
             "As a responder: press and hold the controller's SET button until it beeps, use the module's SET button to set the load on or off, then press and hold the module's SET button until it double-beeps; the controller double-beeps and its LED stops blinking.",
-            "With the Hub, follow the app's instructions and, with the connected fixture on, press and hold the module's SET button when prompted."
+            "With the Hub, follow the app's instructions and, with the connected fixture on, press and hold the module's SET button when prompted.",
+            "Seen on a device running firmware 0x42: holding the SET button, with a modem in Start ALL-Linking as responder, linked the module as the controller of group 1; tapping its button afterward switched the load but sent no group commands over that link."
           ],
           "steps": [
             {
@@ -47519,7 +48125,9 @@
         "unlinking": {
           "notes": [
             "As a controller: then press and hold the responder's SET button until it double-beeps; the module double-beeps and its LED stops blinking.",
-            "As a responder: put the controller in unlinking mode first, then press and hold the module's SET button until it double-beeps."
+            "As a responder: put the controller in unlinking mode first, then press and hold the module's SET button until it double-beeps.",
+            "Seen on a device running firmware 0x42: these steps, with a modem or a Hub 2245 in unlinking mode, removed the module's controller link to it.",
+            "Seen on a device running firmware 0x42: with a Hub 2245 in unlinking mode, one hold of the SET button, which put the module in linking mode, removed the Hub's controller link to the module."
           ],
           "steps": [
             {
@@ -47542,7 +48150,8 @@
       "notes": [
         "Has no X10.",
         "The Outdoor ApplianceLinc with RF Developer Notes give its identity as category 0x01 and subcategory 0x3A, which the catalog gives to the 2672.",
-        "Its owner's manual lists it as an Insteon controller; its Developer Notes list it as a responder only, as the catalog does."
+        "Its owner's manual lists it as an Insteon controller; its Developer Notes list it as a responder only. Seen on a device running firmware 0x42: holding its SET button, with a modem in Start ALL-Linking as responder, linked it as the controller of group 1, but tapping its one button, which is also its SET button, switched the load and sent no group commands. The only message seen from it was SET Button Pressed (cmd1 0x01), when the button was held into linking mode. So a controller link can be made, but taps aren't reported, and an app learns its state only with Light Status Request. The catalog gives it the role responder, its practical behavior.",
+        "Seen on a device running firmware 0x42: when a Hub 2245 linked it remotely, as the responder to the Hub's group 0, the module itself wrote its responder record for that link with Data 1 to 3 as 0xFF 0x00 0x00; after a later remote link, the record held 0x00 0x00 0x00, and an On to group 0 from the modem left the load off. The Outdoor ApplianceLinc with RF Developer Notes say to set the on-level to 0xFE and the ramp rate to 0x1F. Its controller record for group 1, to the Hub, held 0x03 0x00 0x00."
       ],
       "radio": "dual",
       "role": "responder",
