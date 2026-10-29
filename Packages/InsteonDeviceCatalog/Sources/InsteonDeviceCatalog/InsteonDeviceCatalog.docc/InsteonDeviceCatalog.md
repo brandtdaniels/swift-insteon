@@ -61,6 +61,14 @@ rate or a keypad's button masks, its other standard and extended direct commands
 thermostat's setpoints, and the direct messages it sends on its own, such as a thermostat's
 reports. Many products share a command set, so the catalog describes each once.
 
+A command set's ``CommandSet/settingItems`` are what a settings page shows, each a
+``SettingItem`` with its label, ``SettingSection`` and whether it's advanced, in the catalog's
+order of sections. ``CommandSet/text(for:raw:)`` shows a value with its value table, unit and
+scale, such as "0.5 s" or "50%", and ``CommandSet/raw(for:parsing:)`` reads what someone types
+back into the byte to write. ``CommandSet/change(for:setting:)`` and
+``CommandSet/change(for:)`` say how to change a flag or value, as a ``FlagChange`` or
+``ValueChange``, or that the catalog gives no way.
+
 A command set's group types, each a ``GroupType`` that a profile's groups name, say what the
 groups are: how to read a group's state, what it can be told to do, and what Data 1 through
 Data 3 of an ALL-Link database record hold for it, each a ``LinkDataByte``. A profile's
@@ -117,6 +125,11 @@ dimming for dimmable lighting control.
 - ``SettingWrite``
 - ``SettingWriteError``
 - ``ValueTable``
+- ``SettingItem``
+- ``SettingSection``
+- ``FlagChange``
+- ``ValueChange``
+- ``SettingInputError``
 
 ### Groups
 

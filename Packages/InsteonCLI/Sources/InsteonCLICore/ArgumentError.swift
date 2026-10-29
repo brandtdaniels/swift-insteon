@@ -43,6 +43,12 @@ public enum ArgumentError: Error, Hashable, Sendable {
   /// An option that takes a Hub's address, named here, was given a user name or password.
   case credentialsInOption(String)
 
+  /// The subcommand, named second, needs an argument, named first, such as `VALUE`.
+  case missingArgument(String, subcommand: String)
+
+  /// `insteon modem send` refuses a serial command without `--force`; the value says why.
+  case refusedSerialCommand(String)
+
 }
 
 extension ArgumentError: CustomStringConvertible {
@@ -72,17 +78,24 @@ extension ArgumentError: CustomStringConvertible {
     case let .invalidAddress(text):
       "'\(text)' isn't an Insteon address: expected six hexadecimal digits, such as 1A.2B.3C."
     case .missingDeviceAction:
-      "'insteon device ADDRESS' needs an action: id, ping, on, off, status or links."
+      "'insteon device ADDRESS' needs an action: \(Self.deviceActions)."
     case let .unknownDeviceAction(action):
-      "Unknown device action '\(action)': expected id, ping, on, off, status or links."
+      "Unknown device action '\(action)': expected \(Self.deviceActions)."
     case let .unknownHelpTopic(topic):
       "There's no help for '\(topic)'. Run 'insteon --help' for the list of commands."
     case .credentialsInHub:
       "The option '--hub' takes only HOST[:PORT]. Set the Hub's user name and password in the environment or the environment file instead."
     case let .credentialsInOption(option):
       "The option '\(option)' takes only HOST[:PORT]. Set the Hub's user name and password in the environment or the environment file instead."
+    case let .missingArgument(argument, subcommand):
+      "'insteon \(subcommand)' needs \(argument). Run 'insteon \(subcommand) --help' for its usage."
+    case let .refusedSerialCommand(reason):
+      "\(reason) Pass --force to send it anyway."
     }
 
   }
+
+  /// The actions of `insteon device ADDRESS`, as the errors list them.
+  private static let deviceActions = "id, ping, on, off, instant, status, beep, links, settings, set or send"
 
 }

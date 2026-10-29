@@ -128,7 +128,8 @@ enum WatchCommand {
 
   }
 
-  private static func describe(_ message: ReceivedMessage) -> String {
+  /// A message from a device in words, such as its type and command.
+  static func describe(_ message: ReceivedMessage) -> String {
 
     let name = Names.command1(message.command.command1).map { " (\($0))" } ?? ""
     let type = Names.messageType(message.flags.messageType)

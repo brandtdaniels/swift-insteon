@@ -148,6 +148,13 @@ public enum SerialCommand: Hashable, Sendable {
   /// sends the form without one, which every firmware with Beep accepts.
   case beep
 
+  /// Makes the modem beep twice: Beep with the parameter byte `0x01`.
+  ///
+  /// Only later firmware takes the parameter; older modem firmware may not accept it, and
+  /// NAKs the command or echoes Beep without the parameter, so the send isn't accepted. Since
+  /// that happens every time, `Modem.send(_:)` doesn't write it again after a NAK.
+  case doubleBeep
+
   /// Sets the data the modem stores in the responder record its next ALL-Link creates.
   ///
   /// The three bytes become ``AllLinkRecord/data1``, ``AllLinkRecord/data2`` and
@@ -219,7 +226,7 @@ public enum SerialCommand: Hashable, Sendable {
     case .cancelCleanup: .cancelCleanup
     case .readDatabase: .readDatabase
     case .writeDatabase: .writeDatabase
-    case .beep: .beep
+    case .beep, .doubleBeep: .beep
     case .setResponderLinkData: .setResponderLinkData
     case .setApplicationRetries: .setApplicationRetries
     case .setRadio: .setRadio
@@ -268,6 +275,8 @@ public enum SerialCommand: Hashable, Sendable {
       address.bigEndianBytes + record.bytes
     case let .manageDeviceRecord(request):
       request.bytes
+    case .doubleBeep:
+      [0x01]
     case .getModemInfo, .cancelAllLinking, .resetModem, .getFirstAllLinkRecord,
       .getNextAllLinkRecord, .getAllLinkRecordForSender, .ledOn, .ledOff, .rfSleep,
       .getModemConfiguration, .cancelCleanup, .beep, .readRadioStatus:

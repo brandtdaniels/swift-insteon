@@ -163,22 +163,10 @@ private enum ModemFraming: Framing {
       }
 
       return .complete(ControlByte.isAnswer(bytes[2]) ? 3 : 4)
-    case .cancelAllLinking, .resetModem, .getFirstAllLinkRecord, .getNextAllLinkRecord,
-         .getAllLinkRecordForSender, .ledOn, .ledOff, .rfSleep, .cancelCleanup:
-      return .complete(3)
-    case .setAcknowledgmentByte, .setModemConfiguration, .setNegativeAcknowledgmentByte,
-         .setApplicationRetries, .setRadio, .readDiagnostics:
-      return .complete(4)
-    case .sendX10, .startAllLinking, .setAcknowledgmentBytes, .readDatabase:
-      return .complete(5)
-    case .sendAllLinkCommand, .setHostDeviceCategory, .setResponderLinkData:
-      return .complete(6)
-    case .manageAllLinkRecord:
-      return .complete(12)
-    case .writeDatabase:
-      return .complete(13)
-    case .manageDeviceRecord:
-      return .complete(14)
+    default:
+      // The rest are answered with their echo: the command as written, then an ACK or NAK.
+      // Only 0x62 and 0x77 have no single length, and both are handled above.
+      return .complete((number.commandLength ?? 2) + 1)
     }
 
   }

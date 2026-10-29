@@ -27,15 +27,117 @@ enum DeviceCommands {
       try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.on(level: ControlText.level(percent: levelPercent, kind: kind))))
 
       Output.line(ControlText.turnedOn(device, percent: levelPercent, kind: kind))
+    case let .onFast(levelPercent):
+      let known = try await Identities.known(device, modem: modem, names: names, asking: true)
+      let kind: GroupType.Kind? = known?.mainGroupType?.kind
+
+      try checkListed("lightOnFast", named: "Light On Fast", for: known)
+      try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.fastOn(level: ControlText.level(percent: levelPercent, kind: kind))))
+
+      Output.line(ControlText.turnedOn(device, percent: levelPercent, kind: kind))
     case .off:
       try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.off))
 
       Output.line("Turned \(device) off.")
+    case .offFast:
+      let known = try await Identities.known(device, modem: modem, names: names, asking: true)
+
+      try checkListed("lightOffFast", named: "Light Off Fast", for: known)
+      try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.fastOff))
+
+      Output.line("Turned \(device) off.")
+    case let .instant(levelPercent):
+      try await instant(device, percent: levelPercent, modem: modem, names: names)
+    case .beep:
+      try await beep(device, modem: modem, names: names)
+    case let .settings(showsAdvanced):
+      try await SettingsCommands.show(device, showsAdvanced: showsAdvanced, modem: modem, names: names, printsJSON: printsJSON)
+    case let .set(request):
+      try await SettingsCommands.set(request, device: device, modem: modem, names: names)
+    case let .send(request):
+      try await ExploreCommands.send(request, to: device, modem: modem)
     case .status:
       try await status(device, modem: modem, names: names, printsJSON: printsJSON)
     case .links:
       try await links(device, modem: modem, names: names, printsJSON: printsJSON)
     }
+
+  }
+
+  // MARK: - Commands the catalog lists
+
+  /// Refuses a command the device's command set doesn't list. A device the catalog doesn't
+  /// describe is sent it anyway, with a note.
+  private static func checkListed(_ name: SettingName, named label: String, for known: KnownDevice?) throws {
+
+    guard let commands = known?.commandSet else {
+
+      Output.note("The Insteon device catalog doesn't describe this device's commands; sending \(label) anyway.")
+
+      return
+
+    }
+
+    guard commands.standardCommand(named: name) != nil else {
+
+      throw CommandFailure(description: "The Insteon device catalog doesn't list \(label) for \(known?.productName ?? "this device").")
+
+    }
+
+  }
+
+  /// Light Instant Change, or Light On or Light Off for a relay whose command set doesn't list
+  /// it.
+  private static func instant(_ device: InsteonAddress, percent: Int, modem: Modem, names: ProductNames) async throws {
+
+    let known = try await Identities.known(device, modem: modem, names: names, asking: true)
+    let kind: GroupType.Kind? = known?.mainGroupType?.kind
+    let level: UInt8 = ControlText.instantLevel(percent: percent, kind: kind)
+    let isListed: Bool = known?.commandSet?.standardCommand(named: "instantChange") != nil
+
+    if kind == .relay, !isListed {
+
+      let command: StandardDirectCommand = level == 0 ? .off : .on(level: 0xFF)
+
+      try await modem.request(StandardMessage(to: device, command: command))
+
+    } else {
+
+      try checkListed("instantChange", named: "Light Instant Change", for: known)
+      try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.instantChange(level: level)))
+
+    }
+
+    Output.line(ControlText.changedInstantly(device, percent: percent, kind: kind))
+
+  }
+
+  /// Beep, which the device is sent even when its command set doesn't list it.
+  private static func beep(_ device: InsteonAddress, modem: Modem, names: ProductNames) async throws {
+
+    let known = try await Identities.known(device, modem: modem, names: names, asking: true)
+
+    if known?.commandSet?.standardCommand(named: "beep") == nil {
+
+      Output.note("The Insteon device catalog doesn't list Beep for this device; sending anyway.")
+
+    }
+
+    do {
+
+      try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.beep))
+
+    } catch ModemError.deviceRejected(_, let reason) {
+
+      throw CommandFailure(description: "\(device) rejected Beep (NAK): \(Names.nakReason(reason)).")
+
+    } catch ModemError.deviceTimedOut {
+
+      throw CommandFailure(description: "\(device) didn't answer Beep. Check that it's powered and in range.")
+
+    }
+
+    Output.line("\(device) beeped.")
 
   }
 
