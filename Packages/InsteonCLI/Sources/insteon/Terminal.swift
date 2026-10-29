@@ -18,11 +18,17 @@ enum Terminal {
   /// Waits for the person to press Return, or for the task to be canceled, such as by
   /// Control-C.
   ///
+  /// What was typed before the wait, such as a Return pressed while the command connected to
+  /// the modem or read its ALL-Link database, is discarded first, so only a Return pressed
+  /// after the instructions ends the wait.
+  ///
   /// The line is read on a thread of its own, so the wait doesn't hold up the tasks that keep
   /// the modem running.
   ///
   /// - Throws: `CancellationError` if the task was canceled while waiting.
   static func waitForReturn() async throws {
+
+    discardTypedAhead()
 
     let resumption = Resumption()
 
@@ -48,6 +54,17 @@ enum Terminal {
     }
 
     try Task.checkCancellation()
+
+  }
+
+  /// Discards what the terminal has received but the command hasn't read yet.
+  private static func discardTypedAhead() {
+
+    if readsFromTerminal {
+
+      _ = tcflush(STDIN_FILENO, TCIFLUSH)
+
+    }
 
   }
 

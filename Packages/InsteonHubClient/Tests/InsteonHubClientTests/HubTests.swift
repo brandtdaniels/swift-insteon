@@ -114,6 +114,24 @@ struct HubTests {
 
   }
 
+  // A Hub that doesn't answer fails in seconds, not after URLRequest's default of a minute.
+  @Test func givesEachRequestTheRequestTimeout() async throws {
+
+    let stub = StubHTTPClient()
+
+    try await Hub(endpoint: endpoint, httpClient: stub).clearBuffer()
+    _ = try? await Hub(endpoint: endpoint, user: "user", password: "password", httpClient: stub, requestTimeout: .milliseconds(2_500)).readBuffer()
+
+    let requests: [URLRequest] = await stub.requests
+    try #require(requests.count == 2)
+
+    #expect(Hub.defaultRequestTimeout == .seconds(5))
+    #expect(requests[0].timeoutInterval == 5)
+    #expect(requests[1].timeoutInterval == 2.5)
+    #expect(requests[1].url?.absoluteString == "http://hub.local:25105/buffstatus.xml")
+
+  }
+
   @Test func usesCustomPort() async throws {
 
     let stub = StubHTTPClient()
