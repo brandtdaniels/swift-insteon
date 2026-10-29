@@ -38,7 +38,7 @@ struct BundledCatalogTests {
 
   }
 
-  @Test(arguments: ["swift-insteon_InsteonDeviceCatalog.resources", "swift-insteon_InsteonDeviceCatalog.bundle/Contents/Resources"])
+  @Test(arguments: ["swift-insteon_InsteonDeviceCatalog.resources", "swift-insteon_InsteonDeviceCatalog.bundle", "swift-insteon_InsteonDeviceCatalog.bundle/Contents/Resources"])
   func loadsTheCatalogFromABundleInADirectory(_ inside: String) throws {
 
     let directory: URL = Self.temporaryDirectory()

@@ -213,3 +213,20 @@ public enum DeviceCatalogError: Error, Hashable, Sendable {
   case missingBundledCatalog
 
 }
+
+extension DeviceCatalogError: LocalizedError {
+
+  /// A description of the error to show.
+  public var errorDescription: String? {
+
+    switch self {
+
+    case .missingBundledCatalog:
+      let names: String = DeviceCatalog.bundleNames.joined(separator: " or ")
+      return "The Insteon device catalog isn't found. Its bundle, \(names), must be beside the program or in its resources."
+
+    }
+
+  }
+
+}

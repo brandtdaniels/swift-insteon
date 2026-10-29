@@ -148,7 +148,16 @@ extension DeviceCatalog {
   /// The manifest of the copy the package ships with, or the error reading it.
   private static let bundledManifest = Result<CatalogManifest, any Error> {
 
-    let url: URL = try bundledResource(named: manifestFileName, nextTo: searchDirectories())
+    // The manifest beside the catalog read, so both come from the same bundle.
+    let catalog: URL = try bundledCatalogURL()
+    let url: URL = catalog.deletingLastPathComponent().appending(path: manifestFileName, directoryHint: .notDirectory)
+
+    guard FileManager.default.isReadableFile(atPath: url.path) else {
+
+      throw DeviceCatalogError.missingBundledCatalog
+
+    }
+
     let json: Data = try Data(contentsOf: url)
 
     return try JSONDecoder().decode(CatalogManifest.self, from: json)
@@ -197,13 +206,30 @@ extension DeviceCatalog {
   /// beside the main bundle, which is a command's own directory; the executable's directory,
   /// with symbolic links resolved too, for a command linked into a directory on `PATH`; where
   /// Xcode's accessor looks, in the main bundle's resources and the resources of the bundle
-  /// with the package's code; and beside that bundle, as with a test bundle.
+  /// with the package's code; and beside that bundle, as with a test bundle. A directory
+  /// Xcode names for previews, in `PACKAGE_RESOURCE_BUNDLE_PATH` or
+  /// `PACKAGE_RESOURCE_BUNDLE_URL`, comes first.
   private static func searchDirectories() -> [URL] {
 
     let main: Bundle = Bundle.main
     let code: Bundle = Bundle(for: BundleFinder.self)
+    let environment: [String: String] = ProcessInfo.processInfo.environment
 
-    var directories: [URL] = [main.bundleURL]
+    var directories: [URL] = []
+
+    if let path = environment["PACKAGE_RESOURCE_BUNDLE_PATH"] {
+
+      directories.append(URL(filePath: path, directoryHint: .isDirectory))
+
+    }
+
+    if let text = environment["PACKAGE_RESOURCE_BUNDLE_URL"], let url = URL(string: text) {
+
+      directories.append(url)
+
+    }
+
+    directories.append(main.bundleURL)
 
     if let executable = main.executableURL {
 
