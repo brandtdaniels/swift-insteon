@@ -78,8 +78,14 @@ an app to guide people through or do itself.
 ``DeviceCatalog/profiles(matching:)`` searches the catalog by model, name, alias or identity,
 such as for an app's list of supported products.
 
+``DeviceCatalog/describe(category:subcategory:firmwareVersion:)`` gathers what the catalog
+says about one device into a ``DeviceDescription``: its profile, command set, name, engine,
+main group and the groups it controls. Its ``DeviceDescription/explain(_:isController:)``
+reads the data bytes of a record in the device's ALL-Link database as a
+``RecordDataExplanation``, such as a responder record's on-level and ramp rate.
+
 A device with no profile can still be handled by what its `DeviceCategory` implies, such as
-dimming for dimmable lighting control.
+dimming for dimmable lighting control, as ``GroupType/Kind/fallback(for:)`` gives it.
 
 ## Topics
 
@@ -87,6 +93,11 @@ dimming for dimmable lighting control.
 
 - ``DeviceCatalog``
 - ``DeviceCatalogError``
+
+### Describing a device
+
+- ``DeviceDescription``
+- ``RecordDataExplanation``
 
 ### Updating
 

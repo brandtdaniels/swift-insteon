@@ -64,21 +64,14 @@ struct ProductNames: Sendable {
   /// The product a device's identity names, such as "Dimmer Switch 2477D (SwitchLinc Dimmer)".
   func name(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> String? {
 
-    catalog?.profile(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion).map(ProductName.of)
+    catalog?.profile(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion)?.displayName
 
   }
 
   /// What the catalog says about a device with a known identity.
-  func device(_ identity: KnownIdentity) -> KnownDevice {
+  func device(_ identity: KnownIdentity) -> DeviceDescription {
 
-    KnownDevice(identity: identity, catalog: catalog)
-
-  }
-
-  /// A profile's name and model, then its first alias, as the docs name products.
-  static func name(of profile: DeviceProfile) -> String {
-
-    ProductName.of(profile)
+    DeviceDescription(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion, catalog: catalog)
 
   }
 

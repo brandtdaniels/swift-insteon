@@ -122,39 +122,31 @@ public enum ControlText {
 
 }
 
-/// Explains the data bytes of an ALL-Link database record with what the catalog says they
-/// hold for the device's group type.
+/// Writes what the data bytes of an ALL-Link database record hold, as the MEANING column of
+/// `insteon device ADDRESS links` prints them.
 public enum LinkDataText {
 
-  /// The record's data bytes, each with what it holds, such as
+  /// The explained bytes, each with what it holds, such as
   /// `"On-level 0xFF (On), Ramp rate 0x1F"`.
   ///
-  /// - Parameters:
-  ///   - data: The record's Data 1 through Data 3.
-  ///   - bytes: What the group type says the bytes hold, for a responder's or a controller's
-  ///     record.
-  ///   - tables: The command set's value tables, which name values.
-  /// - Returns: The explanation, or `nil` if the group type doesn't describe the bytes.
-  public static func explanation(data: [UInt8], bytes: [LinkDataByte], tables: [ValueTable]) -> String? {
+  /// A byte is named by its label, or else its name, then its value, then the value's name
+  /// from its table, or for the responder's own group, "its group" and the number.
+  ///
+  /// - Parameter explanation: What the catalog says the record's bytes hold.
+  /// - Returns: The text.
+  public static func meaning(of explanation: RecordDataExplanation) -> String {
 
-    let parts = bytes.sorted { $0.position < $1.position }.compactMap { byte -> String? in
+    let parts: [String] = explanation.bytes.map { byte in
 
-      guard byte.position <= data.count else {
+      var text = "\(byte.label ?? byte.name.rawValue) \(Hex.byte(byte.value))"
 
-        return nil
-
-      }
-
-      let value = data[byte.position - 1]
-      var text = "\(byte.label ?? byte.name.rawValue) \(Hex.byte(value))"
-
-      if let name = byte.table, let entry = tables.first(where: { $0.name == name })?.entry(for: value) {
+      if let entry = byte.tableEntry {
 
         text += " (\(entry.label))"
 
       } else if byte.isPerGroup {
 
-        text += " (its group \(value))"
+        text += " (its group \(byte.value))"
 
       }
 
@@ -162,7 +154,7 @@ public enum LinkDataText {
 
     }
 
-    return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    return parts.joined(separator: ", ")
 
   }
 

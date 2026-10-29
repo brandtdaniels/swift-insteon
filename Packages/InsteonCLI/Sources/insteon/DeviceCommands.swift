@@ -379,6 +379,7 @@ enum DeviceCommands {
         let record = response.record
         let data = [record.data1, record.data2, record.data3]
         let isController = record.flags.contains(.controller)
+        let explanation: RecordDataExplanation? = known?.explain(record, isController: isController)
 
         return Record(
           memoryAddress: Hex.address(response.address),
@@ -386,7 +387,7 @@ enum DeviceCommands {
           group: Int(record.group.rawValue),
           address: "\(record.address)",
           data: data.map(Hex.byte),
-          meaning: known.flatMap { meaning(of: data, isController: isController, group: record.group, in: $0) }
+          meaning: explanation.map(LinkDataText.meaning(of:))
         )
 
       }
@@ -418,7 +419,7 @@ enum DeviceCommands {
     Output.table([["MEMORY", "ROLE", "GROUP", "DEVICE", "DATA"] + (explains ? ["MEANING"] : [])] + rows)
     Output.line()
 
-    if explains, let product = known?.productName {
+    if explains, let product = known?.displayName {
 
       Output.line("\(Wording.count(records.count, "record")) in use. The data is read as the Insteon device catalog gives it for \(product).")
 
@@ -430,27 +431,6 @@ enum DeviceCommands {
       )
 
     }
-
-  }
-
-  /// What a record's data bytes hold, from the device's group type.
-  private static func meaning(of data: [UInt8], isController: Bool, group: AllLinkGroupNumber, in device: KnownDevice) -> String? {
-
-    // A controller record's group is the device's own; a responder record's is its
-    // controller's, so the device's group comes from the data, or is its main one.
-    let type = isController ? device.groupType(forGroup: group) ?? device.mainGroupType : device.responderGroupType(forRecordData: data)
-
-    guard let type else {
-
-      return nil
-
-    }
-
-    return LinkDataText.explanation(
-      data: data,
-      bytes: isController ? type.linkData.controller : type.linkData.responder,
-      tables: device.commandSet?.valueTables ?? []
-    )
 
   }
 
