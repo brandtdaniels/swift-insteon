@@ -1,4 +1,5 @@
 import InsteonCLICore
+import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonModem
@@ -7,11 +8,15 @@ import InsteonProtocol
 /// `insteon device ADDRESS ACTION`: commands sent to one device.
 enum DeviceCommands {
 
-  static func run(_ action: DeviceAction, device: InsteonAddress, modem: Modem, names: ProductNames, printsJSON: Bool) async throws {
+  static func run(_ action: DeviceAction, device: InsteonAddress, modem: Modem, hub: HubLocation?, names: ProductNames, printsJSON: Bool) async throws {
 
     switch action {
     case .id:
-      try await identify(device, modem: modem, names: names, printsJSON: printsJSON)
+      try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (network: DeviceNetwork) async throws -> Void in
+
+        try await identify(device, network: network, modem: modem, names: names, printsJSON: printsJSON)
+
+      }
     case .ping:
       try await ping(device, modem: modem)
     case let .on(levelPercent):
@@ -59,7 +64,11 @@ enum DeviceCommands {
     case .status:
       try await status(device, modem: modem, names: names, printsJSON: printsJSON)
     case .links:
-      try await links(device, modem: modem, names: names, printsJSON: printsJSON)
+      try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (network: DeviceNetwork) async throws -> Void in
+
+        try await links(device, network: network, printsJSON: printsJSON)
+
+      }
     }
 
   }
@@ -166,9 +175,10 @@ enum DeviceCommands {
 
   }
 
-  private static func identify(_ device: InsteonAddress, modem: Modem, names: ProductNames, printsJSON: Bool) async throws {
+  private static func identify(_ device: InsteonAddress, network: DeviceNetwork, modem: Modem, names: ProductNames, printsJSON: Bool) async throws {
 
-    let identification = try await DeviceIdentifier(modem: modem).identify(device)
+    // The network records the identity the device reports.
+    let identification = try await network.identify(device)
     var productData: ProductData?
 
     if identification.acceptsModem {
@@ -185,12 +195,6 @@ enum DeviceCommands {
     if let category, let subcategory {
 
       product = names.name(category: category, subcategory: subcategory, firmwareVersion: identity?.firmwareVersion)
-
-    }
-
-    if let identity {
-
-      await IdentityStore.remember(ReportedIdentity(identity), for: device)
 
     }
 
@@ -380,14 +384,16 @@ enum DeviceCommands {
 
   }
 
-  private static func links(_ device: InsteonAddress, modem: Modem, names: ProductNames, printsJSON: Bool) async throws {
+  private static func links(_ device: InsteonAddress, network: DeviceNetwork, printsJSON: Bool) async throws {
 
-    let known = try await Identities.known(device, modem: modem, names: names, asking: true)
+    let known = try await Identities.known(device, network: network, asking: true)
 
     Output.note("Reading the ALL-Link database of \(device), one record at a time...")
 
-    // The last record marks the end of the database, and deleted records are no longer in use.
-    let records = try await modem.readAllLinkDatabase(of: device)
+    // The network reads the database only if the device's delta changed since the copy it
+    // holds. The last record marks the end of the database, and deleted records are no longer
+    // in use.
+    let records = try await network.allLinkDatabase(of: device).records
       .filter { $0.record.flags.contains(.inUse) }
       .map { response in
 

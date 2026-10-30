@@ -5,7 +5,9 @@ import Foundation
 ///
 /// The file is `$XDG_CACHE_HOME/insteon/identities.json`, or `~/.cache/insteon/identities.json`
 /// when `XDG_CACHE_HOME` isn't set. InsteonCore's `JSONFileDeviceRegistryStore` reads and
-/// writes it. It holds only Insteon addresses and identities, never credentials.
+/// writes it. It holds Insteon addresses and identities, and copies of the modem's and devices'
+/// ALL-Link databases, each device's engine, last level and last-seen time, and the Hub's host,
+/// port and Insteon ID, never credentials.
 public enum IdentityCache {
 
   /// The file's path inside the cache directory: `insteon/identities.json`.

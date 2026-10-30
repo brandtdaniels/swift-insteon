@@ -77,7 +77,10 @@ public enum HelpText {
     Files:
       $XDG_CACHE_HOME/insteon/identities.json, or ~/.cache/insteon/identities.json, keeps the
       identities devices reported to 'link', 'links --identify' and 'device ADDRESS id', so
-      later commands can name them. It holds only Insteon addresses and identities.
+      later commands can name them. 'links', 'device ADDRESS links' and 'device ADDRESS id'
+      also keep in it the modem's and devices' ALL-Link databases, each device's engine, last
+      level and the time it last answered, and the Hub's address, port and Insteon ID. It
+      never holds the Hub's user name or password.
       $XDG_CACHE_HOME/insteon/catalog.json, or ~/.cache/insteon/catalog.json, with
       catalog-version.json beside it, is the Insteon device catalog 'catalog update'
       downloaded. It holds only the public catalog.

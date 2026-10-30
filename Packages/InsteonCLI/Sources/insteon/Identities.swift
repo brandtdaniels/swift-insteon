@@ -12,10 +12,12 @@ import InsteonModem
 import InsteonProtocol
 
 /// Reads and writes the per-user cache of the identities devices reported, at the path
-/// `IdentityCache` gives, through InsteonCore's `DeviceRegistry` and
+/// `IdentityCache` gives, through InsteonCore's `DeviceRegistry`, `DeviceNetwork` and
 /// `JSONFileDeviceRegistryStore`.
 ///
-/// The cache holds only Insteon addresses and identities. It's written readable only by the
+/// The cache holds Insteon addresses and identities, and what a `DeviceNetwork` learned: copies
+/// of ALL-Link databases, engines, levels, last-seen times and the Hub's host, port and Insteon
+/// ID. It never holds credentials. It's written readable only by the
 /// current user, in a directory only they can open when the command creates it, and a cache
 /// that can't be read or written only means devices go unnamed. A warning that an identity
 /// can't be remembered is printed at most once a run.
@@ -84,6 +86,40 @@ enum IdentityStore {
 
   }
 
+  /// Runs `body` with a network that starts from what the cache holds, then saves what the
+  /// network learned, even when `body` throws, such as after Control-C.
+  ///
+  /// - Parameters:
+  ///   - modem: The modem the devices are reached through.
+  ///   - hub: The Hub's host and port, or `nil` for a serial modem.
+  ///   - names: The catalog's product names, which describe the devices.
+  ///   - body: The work to do with the network.
+  static func withNetwork(
+    modem: Modem,
+    hub: HubLocation?,
+    names: ProductNames,
+    _ body: (DeviceNetwork) async throws -> Void
+  ) async throws {
+
+    let start: NetworkSnapshot = loadNetwork()
+    let network = DeviceNetwork(modem: modem, catalog: names.catalog, snapshot: start, hub: hub)
+
+    do {
+
+      try await body(network)
+
+    } catch {
+
+      await save(network, startingFrom: start)
+
+      throw error
+
+    }
+
+    await save(network, startingFrom: start)
+
+  }
+
   private static func path() -> String? {
 
     IdentityCache.path(environment: ProcessInfo.processInfo.environment)
@@ -100,6 +136,95 @@ enum IdentityStore {
     }
 
     return snapshot
+
+  }
+
+  /// Everything in the cache, or nothing if there's no cache or it can't be read.
+  private static func loadNetwork() -> NetworkSnapshot {
+
+    guard let path = path(), let snapshot = try? JSONFileDeviceRegistryStore(fileURL: URL(fileURLWithPath: path)).loadNetwork() else {
+
+      return NetworkSnapshot()
+
+    }
+
+    return snapshot
+
+  }
+
+  /// Adds what a network learned to the cache, which is read again first, so what another
+  /// command added in the meantime is kept unless the network learned about the same device.
+  /// A cache that can't be read isn't replaced, so it isn't lost, and the warning about it is
+  /// printed only when a device reported an identity that would have been remembered.
+  private static func save(_ network: DeviceNetwork, startingFrom start: NetworkSnapshot) async {
+
+    guard let path = path() else {
+
+      return
+
+    }
+
+    let store = JSONFileDeviceRegistryStore(fileURL: URL(fileURLWithPath: path))
+    let learned: NetworkSnapshot = await network.snapshot()
+    let current: NetworkSnapshot
+
+    do {
+
+      current = try store.loadNetwork()
+
+    } catch {
+
+      if learned.registry != start.registry {
+
+        warn(about: error, path: path)
+
+      }
+
+      return
+
+    }
+
+    var merged: NetworkSnapshot = current
+
+    for (address, identity) in learned.registry.identities {
+
+      merged.registry.identities[address] = identity
+
+    }
+
+    for (address, state) in learned.devices {
+
+      merged.devices[address] = state
+
+    }
+
+    if let records = learned.modemDatabase {
+
+      merged.modemDatabase = records
+
+    }
+
+    if let hub = learned.hub {
+
+      merged.hub = hub
+
+    }
+
+    guard merged != current else {
+
+      return
+
+    }
+
+    do {
+
+      try store.saveNetwork(merged)
+
+    } catch {
+
+      warn(about: error, path: path)
+
+    }
 
   }
 
@@ -180,6 +305,49 @@ final class Latch: @unchecked Sendable {
 
 /// Finds out what devices are, from the identity cache or by asking them.
 enum Identities {
+
+  /// A device's description from the network's registry, or else, when `asking`, from an ID
+  /// Request through the network, which records the identity it reports.
+  ///
+  /// A device that doesn't answer is only left unnamed, but cancellation, such as by
+  /// Control-C, stops the command.
+  ///
+  /// - Returns: What the catalog says about the device, or `nil` if its identity isn't known
+  ///   and it didn't report one.
+  /// - Throws: `CancellationError` if the task was canceled.
+  static func known(_ device: InsteonAddress, network: DeviceNetwork, asking: Bool) async throws -> DeviceDescription? {
+
+    if let known = await network.registry.device(device) {
+
+      return known.deviceDescription
+
+    }
+
+    guard asking else {
+
+      return nil
+
+    }
+
+    Output.note("Asking \(device) for its identity with ID Request...")
+
+    do {
+
+      _ = try await network.identify(device)
+
+    } catch let error as CancellationError {
+
+      throw error
+
+    } catch {
+
+      return nil
+
+    }
+
+    return await network.registry.device(device)?.deviceDescription
+
+  }
 
   /// A device's identity from the cache, or else, when `asking`, from an ID Request, which is
   /// then remembered.
