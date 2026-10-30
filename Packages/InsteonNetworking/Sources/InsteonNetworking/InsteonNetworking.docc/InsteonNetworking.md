@@ -18,7 +18,20 @@ let client: any HTTPClient = BasicAuthenticationHTTPClient(
 )
 ```
 
-To use another HTTP stack, conform it to ``HTTPClient``:
+### Credentials and redirects
+
+A request with credentials is never sent on to another address. ``URLSessionHTTPClient``
+doesn't follow a redirect for a request with an `Authorization` header, such as one
+``BasicAuthenticationHTTPClient`` sends, and throws ``HTTPClientError/redirectRefused``
+instead. An Insteon Hub never redirects its own requests, so a redirect means the request
+reached something other than the Hub. Requests without credentials follow redirects, except
+that an HTTPS request that ends at an address that isn't HTTPS throws
+``HTTPClientError/insecureRedirect``.
+
+### Other HTTP stacks
+
+To use another HTTP stack, conform it to ``HTTPClient``. If it sends requests with
+credentials, it must refuse redirects for them the same way:
 
 ```swift
 import Foundation

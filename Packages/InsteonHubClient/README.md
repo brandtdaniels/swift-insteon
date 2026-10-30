@@ -7,6 +7,6 @@ Control Insteon devices through an Insteon Hub on your local network: the Hub 22
 - `HubEndpoint`: the Hub's host and port (25105 by default)
 - `HubBuffer` and `HubBufferCursor`: parse the reply buffer and pick out what's new since the last read
 
-The Hub requires the user name and password printed on it. Keep them out of source code; load them from the keychain or your app's configuration.
+The Hub requires the user name and password printed on it. Keep them out of source code; load them from the keychain or your app's configuration. A Hub never redirects its own requests, so the default `URLSessionHTTPClient` refuses any redirect for a request carrying them and throws `HTTPClientError.redirectRefused`, and the credentials reach only the Hub's address.
 
 See the DocC catalog in `Sources/InsteonHubClient/InsteonHubClient.docc` for the full documentation.

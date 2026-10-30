@@ -31,6 +31,21 @@ struct URLSessionHTTPClientTests {
 
   }
 
+  @Test func returnsTheResponseToARequestWithCredentials() async throws {
+
+    StubURLProtocol.stub = .success(statusCode: 200, headers: ["X-Test": "yes"], body: Data("<response/>".utf8))
+    // Made-up credentials for a Hub on a private network.
+    var request: URLRequest = URLRequest(url: URL(string: "http://10.0.0.20:25105/buffstatus.xml")!)
+    request.setValue("Basic ZXhhbXBsZS11c2VyOmV4YW1wbGUtcGFzc3dvcmQ=", forHTTPHeaderField: "Authorization")
+
+    let response: HTTPResponse = try await client.send(request)
+
+    #expect(response.statusCode == 200)
+    #expect(response.value(forHeader: "X-Test") == "yes")
+    #expect(response.body == Data("<response/>".utf8))
+
+  }
+
   @Test func throwsTransportErrors() async {
 
     StubURLProtocol.stub = .failure(URLError(.notConnectedToInternet))
