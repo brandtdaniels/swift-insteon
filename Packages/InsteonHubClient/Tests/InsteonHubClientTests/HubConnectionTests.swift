@@ -1,3 +1,7 @@
+import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import Testing
 import InsteonHubClient
 import InsteonModem
@@ -159,6 +163,122 @@ struct HubConnectionTests {
   static func drain(_ stream: AsyncThrowingStream<[UInt8], any Error>) async throws {
 
     for try await _ in stream {}
+
+  }
+
+  @Test func aHubThatNeverAnswersFailsWithTheClientsError() async {
+
+    let connection = makeConnection(FakeHub(isUnreachable: true))
+
+    let error = await #expect(throws: URLError.self) {
+
+      try await connection.write([0x02, 0x60])
+
+    }
+
+    #expect(error?.code == .timedOut)
+
+  }
+
+  @Test func aWriteTheHubDoesntAnswerAfterAnEarlierExchangeFailsWithHubStoppedAnswering() async throws {
+
+    let fake = FakeHub()
+    let connection = makeConnection(fake)
+
+    try await connection.write([0x02, 0x60])
+    await fake.failNextWrites(1)
+
+    let error = await #expect(throws: HubStoppedAnswering.self) {
+
+      try await connection.write([0x02, 0x62, 0x4D, 0x5E, 0x6F, 0x0F, 0x0D, 0x00])
+
+    }
+
+    #expect((error?.underlyingError as? URLError)?.code == .timedOut)
+
+  }
+
+  @Test func pollsTheHubDoesntAnswerAfterAnEarlierExchangeFailWithHubStoppedAnswering() async throws {
+
+    let fake = FakeHub()
+    let connection = makeConnection(fake)
+
+    try await connection.write([0x02, 0x60])
+    await fake.failNextReads(HubConnection.defaultFailureLimit)
+    let received = connection.receive()
+
+    let error = await #expect(throws: HubStoppedAnswering.self) {
+
+      async let drained: Void = Self.drain(received)
+
+      for poll in 1..<HubConnection.defaultFailureLimit {
+
+        await clock.waitForSleeper(until: HubConnection.defaultPollInterval * poll)
+        clock.advance(by: HubConnection.defaultPollInterval)
+
+      }
+
+      try await drained
+
+    }
+
+    #expect((error?.underlyingError as? URLError)?.code == .timedOut)
+
+  }
+
+  /// The Hub answers one exchange, then times out every poll while the modem waits for a
+  /// device's acknowledgment, so the request fails with the Hub's error before its own timeout.
+  @Test func aDeviceRequestTheHubStopsPollingForFailsWithHubStoppedAnswering() async throws {
+
+    let modemInfo: [UInt8] = [0x02, 0x60, 0x1A, 0x2B, 0x3C, 0x03, 0x37, 0x9C, 0x06]
+    let fake = FakeHub { (command: [UInt8]) -> [UInt8] in command == [0x02, 0x60] ? modemInfo : command + [0x06] }
+    let modem = Modem(connection: makeConnection(fake), clock: clock)
+    let device = InsteonAddress(0x4D, 0x5E, 0x6F)
+    let pollInterval: Duration = HubConnection.defaultPollInterval
+
+    try await withThrowingTaskGroup(of: Void.self) { group in
+
+      group.addTask { try await modem.run() }
+
+      var writes = fake.writes.makeAsyncIterator()
+
+      async let sent: Void = modem.send(.getModemInfo)
+      #expect(await writes.next() == [0x02, 0x60])
+      await pollAgain()
+      try await sent
+
+      // Once the stream waits for the poll after the one that read the reply, every read
+      // times out.
+      await clock.waitForSleeper(until: pollInterval * 2)
+      await fake.failNextReads(100)
+
+      let request = Task { () async throws -> ReceivedMessage in
+
+        try await modem.request(StandardMessage(to: device, command: Command(command1: 0x0D, command2: 0x00)))
+
+      }
+
+      #expect(await writes.next() == [0x02, 0x62, 0x4D, 0x5E, 0x6F, 0x0F, 0x0D, 0x00])
+
+      // The clock stops short of the request's 3-second timeout.
+      for poll in 0..<HubConnection.defaultFailureLimit {
+
+        await clock.waitForSleeper(until: pollInterval * (2 + poll))
+        clock.advance(by: pollInterval)
+
+      }
+
+      let error = await #expect(throws: HubStoppedAnswering.self) {
+
+        try await request.value
+
+      }
+
+      #expect((error?.underlyingError as? URLError)?.code == .timedOut)
+
+      group.cancelAll()
+
+    }
 
   }
 

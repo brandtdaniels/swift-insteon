@@ -44,6 +44,12 @@ if the Hub answers with an error status such as `401`. Each request waits up to
 ``Hub/requestTimeout``, ``Hub/defaultRequestTimeout`` unless you pass another, so a Hub that
 doesn't answer is reported in seconds.
 
+A request that gets no answer fails with the HTTP client's error, such as a `URLError` whose
+code is `timedOut`, while the Hub hasn't answered anything on the connection, as when its
+address changed. Once the Hub has answered, such a request fails with ``HubStoppedAnswering``
+instead: the Hub is reachable but busy, as when its modem is still sending a message to a
+device that doesn't answer, so trying again is more useful than looking for the Hub.
+
 ``Hub`` is the HTTP interface underneath: writing bytes, reading the buffer and clearing it,
 with no pacing or retries. Use it directly only to build something other than a
 `ModemConnection` on top of the Hub.
@@ -113,6 +119,7 @@ interface. The SmartLinc 2412N may accept the same requests.
 - ``HubConnection``
 - ``HubEndpoint``
 - ``HubError``
+- ``HubStoppedAnswering``
 
 ### The Hub's HTTP interface
 

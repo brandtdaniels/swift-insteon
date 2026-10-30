@@ -25,20 +25,47 @@ actor FakeHub: HTTPClient {
 
   private var failingReads: Int
 
+  private var failingWrites = 0
+
+  /// Whether every request times out, as for a Hub that isn't at the address.
+  private let isUnreachable: Bool
+
   /// - Parameters:
   ///   - status: The HTTP status for every request.
   ///   - failingReads: How many buffer reads time out before reads succeed.
+  ///   - isUnreachable: Whether every request times out, as for a Hub that isn't at the address.
   ///   - respond: Given each command written, returns what the modem puts in the buffer.
   init(
     status: Int = 200,
     failingReads: Int = 0,
+    isUnreachable: Bool = false,
     respond: @escaping @Sendable ([UInt8]) -> [UInt8] = { $0 + [0x06] }
   ) {
 
     (writes, writesContinuation) = AsyncStream.makeStream()
     self.status = status
     self.failingReads = failingReads
+    self.isUnreachable = isUnreachable
     self.respond = respond
+
+  }
+
+  /// Makes the next buffer reads time out, as when the Hub is busy.
+  ///
+  /// - Parameter count: How many reads time out before reads succeed again.
+  func failNextReads(_ count: Int) {
+
+    failingReads = count
+
+  }
+
+  /// Makes the next commands written time out without reaching the modem, as when the Hub is
+  /// busy.
+  ///
+  /// - Parameter count: How many writes time out before writes succeed again.
+  func failNextWrites(_ count: Int) {
+
+    failingWrites = count
 
   }
 
@@ -60,6 +87,12 @@ actor FakeHub: HTTPClient {
     let query = request.url?.query ?? ""
     requests.append("\(request.httpMethod ?? "") \(path)")
 
+    if isUnreachable {
+
+      throw URLError(.timedOut)
+
+    }
+
     guard status == 200 else {
 
       return HTTPResponse(statusCode: status)
@@ -68,6 +101,13 @@ actor FakeHub: HTTPClient {
 
     switch path {
     case "/3":
+      if failingWrites > 0 {
+
+        failingWrites -= 1
+        throw URLError(.timedOut)
+
+      }
+
       let command = Self.bytes(fromHex: String(query.prefix { $0 != "=" }))
       clear()
       deliver(respond(command))

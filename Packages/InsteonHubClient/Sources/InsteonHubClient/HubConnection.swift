@@ -29,6 +29,11 @@ import InsteonProtocol
 /// row by default, or at once if the Hub answers with an error status. Each request waits
 /// ``Hub/requestTimeout``, so with the defaults a Hub that stops answering fails the stream in
 /// about 16 seconds: three requests of 5 seconds and the intervals between them.
+///
+/// Once the Hub has answered a request, a later request that times out or can't reach it
+/// fails with ``HubStoppedAnswering``, which keeps the HTTP client's error, since a Hub that
+/// answered is busy rather than gone. Until then, such a request fails with the HTTP client's
+/// error itself.
 public actor HubConnection: ModemConnection {
 
   /// How often the Hub's buffer is read by default: every half second.
@@ -48,6 +53,9 @@ public actor HubConnection: ModemConnection {
   private var cursor = HubBufferCursor()
 
   private var hasClearedBuffer = false
+
+  /// Whether the Hub has answered a request on this connection.
+  private var hasAnswered = false
 
   /// Bytes read before a write that the stream hasn't delivered yet.
   private var unreadBytes: [UInt8] = []
@@ -89,31 +97,42 @@ public actor HubConnection: ModemConnection {
   /// Sends bytes to the Hub's modem.
   ///
   /// - Parameter bytes: The bytes to send.
-  /// - Throws: ``HubError`` if the Hub rejected the request, or the HTTP client's error.
+  /// - Throws: ``HubError`` if the Hub rejected the request, ``HubStoppedAnswering`` if the
+  ///   Hub answered an earlier request but not this one, or the HTTP client's error.
   public func write(_ bytes: [UInt8]) async throws {
 
     try await beginRequest()
     defer { requests.release() }
 
-    try await clearBufferIfNeeded()
+    do {
 
-    // The Hub starts its buffer over for each command, so keep what arrived since the last poll.
-    // If the buffer can't be read, the command still goes out.
-    if let buffer = try? await hub.readBuffer() {
+      try await clearBufferIfNeeded()
 
-      unreadBytes += Self.collapsingNAKRun(cursor.advance(to: buffer))
+      // The Hub starts its buffer over for each command, so keep what arrived since the last
+      // poll. If the buffer can't be read, the command still goes out.
+      if let buffer = try? await hub.readBuffer() {
+
+        hasAnswered = true
+        unreadBytes += Self.collapsingNAKRun(cursor.advance(to: buffer))
+
+      }
+
+      // Canceling the read above is swallowed with its other errors, so check before writing.
+      try Task.checkCancellation()
+
+      // Read the next reply from the start even if the request fails, since the Hub may have
+      // received the command anyway: a reply read twice parses, but one read from its middle
+      // doesn't.
+      cursor.reset()
+
+      try await hub.write(bytes)
+      hasAnswered = true
+
+    } catch {
+
+      throw classified(error)
 
     }
-
-    // Canceling the read above is swallowed with its other errors, so check before writing.
-    try Task.checkCancellation()
-
-    // Read the next reply from the start even if the request fails, since the Hub may have
-    // received the command anyway: a reply read twice parses, but one read from its middle
-    // doesn't.
-    cursor.reset()
-
-    try await hub.write(bytes)
 
   }
 
@@ -123,7 +142,8 @@ public actor HubConnection: ModemConnection {
   /// stream. Calling this again replaces the previous stream, which finishes at its next poll
   /// and leaves any bytes it was reading to the new one. The stream finishes when the
   /// reading task is canceled, or with an error if the Hub answers with an error status or too
-  /// many polls in a row fail.
+  /// many polls in a row fail. A poll that gets no answer after the Hub has answered an earlier
+  /// request fails with ``HubStoppedAnswering``.
   ///
   /// - Returns: A stream of received byte chunks.
   public nonisolated func receive() -> AsyncThrowingStream<[UInt8], any Error> {
@@ -226,12 +246,37 @@ public actor HubConnection: ModemConnection {
     try await beginRequest()
     defer { requests.release() }
 
-    try await clearBufferIfNeeded()
+    do {
 
-    let received = unreadBytes + Self.collapsingNAKRun(cursor.advance(to: try await hub.readBuffer()))
-    unreadBytes = []
+      try await clearBufferIfNeeded()
 
-    return received
+      let buffer: HubBuffer = try await hub.readBuffer()
+      hasAnswered = true
+
+      let received = unreadBytes + Self.collapsingNAKRun(cursor.advance(to: buffer))
+      unreadBytes = []
+
+      return received
+
+    } catch {
+
+      throw classified(error)
+
+    }
+
+  }
+
+  /// The error to throw for a failed request: ``HubStoppedAnswering`` if the Hub gave no answer
+  /// after answering an earlier request, or else the error itself.
+  private func classified(_ error: any Error) -> any Error {
+
+    guard hasAnswered, HubStoppedAnswering.isUnanswered(error) else {
+
+      return error
+
+    }
+
+    return HubStoppedAnswering(underlyingError: error)
 
   }
 
@@ -257,6 +302,7 @@ public actor HubConnection: ModemConnection {
     }
 
     try await hub.clearBuffer()
+    hasAnswered = true
     cursor.reset()
     hasClearedBuffer = true
 
