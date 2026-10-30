@@ -388,12 +388,15 @@ enum DeviceCommands {
 
     let known = try await Identities.known(device, network: network, asking: true)
 
-    Output.note("Reading the ALL-Link database of \(device), one record at a time...")
-
     // The network reads the database only if the device's delta changed since the copy it
-    // holds. The last record marks the end of the database, and deleted records are no longer
-    // in use.
-    let records = try await network.allLinkDatabase(of: device).records
+    // holds, and says so only then. The last record marks the end of the database, and
+    // deleted records are no longer in use.
+    let database: AllLinkDatabaseCopy = try await network.allLinkDatabase(of: device, beforeReading: { () -> Void in
+
+      Output.note("Reading the ALL-Link database of \(device), one record at a time...")
+
+    })
+    let records = database.records
       .filter { $0.record.flags.contains(.inUse) }
       .map { response in
 

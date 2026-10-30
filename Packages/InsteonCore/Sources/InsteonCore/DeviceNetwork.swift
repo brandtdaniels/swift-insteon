@@ -96,8 +96,10 @@ public actor DeviceNetwork {
   ///     port keeps its Insteon ID. Only a network created with a Hub learns the Hub's
   ///     Insteon ID from ``modemInfo()``. Defaults to `nil`.
   ///   - timeout: How long to wait for each request to a device that a standard message
-  ///     answers. Defaults to `Modem.defaultRequestTimeout`. ALL-Link databases are read with
-  ///     `Modem.defaultExtendedRequestTimeout`.
+  ///     answers, such as the status request that asks for a device's ALL-Link database
+  ///     delta. Defaults to `Modem.defaultRequestTimeout`. ALL-Link databases are read with
+  ///     `Modem.defaultExtendedRequestTimeout`, since each record arrives in an extended
+  ///     message.
   ///   - clock: The clock that times waits for a device's broadcast. Defaults to a
   ///     `ContinuousClock`; tests can pass a clock they control.
   ///   - now: The current time, for when a device last answered. Defaults to the system's
@@ -138,7 +140,7 @@ public actor DeviceNetwork {
 
     self.modem = modem
     self.registry = DeviceRegistry(catalog: catalog, snapshot: snapshot.registry)
-    self.cache = AllLinkDatabaseCache(modem: modem, copies: copies)
+    self.cache = AllLinkDatabaseCache(modem: modem, statusTimeout: timeout, copies: copies)
     self.identifier = DeviceIdentifier(modem: modem, timeout: timeout, clock: clock)
     self.now = now
     self.devices = snapshot.devices
@@ -180,7 +182,7 @@ public actor DeviceNetwork {
   /// - Parameter device: The device's address.
   /// - Returns: Its engine, last known level and when it last answered, or `nil` if nothing
   ///   is known. The copy of its ALL-Link database is the one the snapshot was created with or
-  ///   the network last read; ``allLinkDatabase(of:)`` checks it against the device.
+  ///   the network last read; ``allLinkDatabase(of:beforeReading:)`` checks it against the device.
   public func state(of device: InsteonAddress) async -> NetworkDeviceState? {
 
     var state: NetworkDeviceState = devices[device] ?? NetworkDeviceState()
@@ -234,14 +236,25 @@ public actor DeviceNetwork {
   /// The device is asked for its delta with a status request, whose acknowledgment also
   /// carries its level, so the device's level and when it last answered are updated too.
   ///
-  /// - Parameter device: The device whose database to return.
+  /// ```swift
+  /// let database = try await network.allLinkDatabase(of: lamp, beforeReading: { print("Reading...") })
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - device: The device whose database to return.
+  ///   - beforeReading: Called before the database is read, and not when the copy is handed
+  ///     back, so an app can say that a read that takes a request for every record has
+  ///     begun. Defaults to doing nothing.
   /// - Returns: The database and the delta it was read at. Its records are in the device's
   ///   order, ending with the record that marks the end of the database.
   /// - Throws: The modem's errors, such as `ModemError.deviceRejected` from an i2CS device
   ///   that isn't linked to the modem.
-  public func allLinkDatabase(of device: InsteonAddress) async throws -> AllLinkDatabaseCopy {
+  public func allLinkDatabase(
+    of device: InsteonAddress,
+    beforeReading: @Sendable () -> Void = {}
+  ) async throws -> AllLinkDatabaseCopy {
 
-    let reading: AllLinkDatabaseReading = try await cache.database(of: device)
+    let reading: AllLinkDatabaseReading = try await cache.database(of: device, beforeReading: beforeReading)
 
     devices[device, default: NetworkDeviceState()].level = reading.status
     markSeen(device)

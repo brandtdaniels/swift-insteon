@@ -36,6 +36,29 @@ final class FixedTimes: @unchecked Sendable {
 
 }
 
+/// A count a test's closures add to from any task.
+final class Count: @unchecked Sendable {
+
+  private let lock: NSLock = NSLock()
+
+  private var count: Int = 0
+
+  /// The count so far.
+  var value: Int {
+
+    lock.withLock { count }
+
+  }
+
+  /// Adds one.
+  func increment() {
+
+    lock.withLock { count += 1 }
+
+  }
+
+}
+
 /// A network on an in-memory modem, on a ``TestClock`` and fixed times.
 struct DeviceNetworkTests {
 
@@ -322,6 +345,30 @@ struct DeviceNetworkTests {
     _ = try await network.allLinkDatabase(of: Example.plug)
 
     #expect(await modem.databaseReads[Example.plug] == 1)
+
+  }
+
+  @Test func saysItReadsADatabaseOnlyWhenItDoes() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setDatabase([0x0FFF: link], of: Example.plug)
+    let network: DeviceNetwork = self.network(modem)
+    let reads = Count()
+
+    _ = try await network.allLinkDatabase(of: Example.plug, beforeReading: { () -> Void in reads.increment() })
+    _ = try await network.allLinkDatabase(of: Example.plug, beforeReading: { () -> Void in reads.increment() })
+
+    #expect(reads.value == 1)
+    #expect(await modem.databaseReads[Example.plug] == 1)
+
+  }
+
+  @Test func asksForADevicesDeltaWithTheStandardTimeout() async {
+
+    let network: DeviceNetwork = self.network(InMemoryModem())
+
+    #expect(await network.cache.statusTimeout == Modem.defaultRequestTimeout)
+    #expect(await network.cache.timeout == Modem.defaultExtendedRequestTimeout)
 
   }
 

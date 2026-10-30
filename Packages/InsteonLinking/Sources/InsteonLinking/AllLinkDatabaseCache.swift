@@ -42,8 +42,13 @@ public actor AllLinkDatabaseCache {
   /// The modem the databases are read through.
   public let modem: any LinkingModem
 
-  /// How long to wait for each request to a device.
+  /// How long to wait for each record of a device's database, which arrives in an extended
+  /// message.
   public let timeout: Duration
+
+  /// How long to wait for a device to acknowledge the status request that asks for its
+  /// ALL-Link database delta, which a standard message answers.
+  public let statusTimeout: Duration
 
   private var devices: [InsteonAddress: AllLinkDatabaseCopy] = [:]
 
@@ -53,13 +58,20 @@ public actor AllLinkDatabaseCache {
   ///
   /// - Parameters:
   ///   - modem: The modem the databases are read through.
-  ///   - timeout: How long to wait for each request to a device. Defaults to
+  ///   - timeout: How long to wait for each record of a device's database. Defaults to
   ///     `Modem.defaultExtendedRequestTimeout`, since a database is read with extended
   ///     messages.
-  public init(modem: any LinkingModem, timeout: Duration = Modem.defaultExtendedRequestTimeout) {
+  ///   - statusTimeout: How long to wait for a device to acknowledge a status request.
+  ///     Defaults to `Modem.defaultRequestTimeout`, since a standard message answers it.
+  public init(
+    modem: any LinkingModem,
+    timeout: Duration = Modem.defaultExtendedRequestTimeout,
+    statusTimeout: Duration = Modem.defaultRequestTimeout
+  ) {
 
     self.modem = modem
     self.timeout = timeout
+    self.statusTimeout = statusTimeout
 
   }
 
@@ -77,17 +89,21 @@ public actor AllLinkDatabaseCache {
   ///
   /// - Parameters:
   ///   - modem: The modem the databases are read through.
-  ///   - timeout: How long to wait for each request to a device. Defaults to
+  ///   - timeout: How long to wait for each record of a device's database. Defaults to
   ///     `Modem.defaultExtendedRequestTimeout`.
+  ///   - statusTimeout: How long to wait for a device to acknowledge a status request.
+  ///     Defaults to `Modem.defaultRequestTimeout`.
   ///   - copies: The copies to start with, by device.
   public init(
     modem: any LinkingModem,
     timeout: Duration = Modem.defaultExtendedRequestTimeout,
+    statusTimeout: Duration = Modem.defaultRequestTimeout,
     copies: [InsteonAddress: AllLinkDatabaseCopy]
   ) {
 
     self.modem = modem
     self.timeout = timeout
+    self.statusTimeout = statusTimeout
     self.devices = copies.filter { (entry: (key: InsteonAddress, value: AllLinkDatabaseCopy)) -> Bool in entry.value.hasIntactChecksums }
 
   }
@@ -126,16 +142,26 @@ public actor AllLinkDatabaseCache {
   /// device reported in the same acknowledgment, such as a light's level, and whether the
   /// database was read or the copy was handed back.
   ///
+  /// `beforeReading` is called once the delta shows the database must be read, before the
+  /// read starts, so an app can say that a read that takes a request for every record has
+  /// begun.
+  ///
   /// ```swift
-  /// let reading = try await cache.database(of: lamp)
+  /// let reading = try await cache.database(of: lamp, beforeReading: { print("Reading...") })
   /// print(reading.copy.delta, reading.status, reading.wasRead)
   /// ```
   ///
-  /// - Parameter device: The device whose database to return.
+  /// - Parameters:
+  ///   - device: The device whose database to return.
+  ///   - beforeReading: Called before the database is read, and not when the copy is handed
+  ///     back. Defaults to doing nothing.
   /// - Returns: The copy, its delta, the device's status and whether the database was read.
   /// - Throws: The modem's errors, such as `ModemError.deviceRejected` from an i2CS device
   ///   that isn't linked to the modem.
-  public func database(of device: InsteonAddress) async throws -> AllLinkDatabaseReading {
+  public func database(
+    of device: InsteonAddress,
+    beforeReading: @Sendable () -> Void = {}
+  ) async throws -> AllLinkDatabaseReading {
 
     let acknowledgment = try await statusAcknowledgment(of: device)
     let delta: UInt8 = acknowledgment.command.command1
@@ -147,6 +173,8 @@ public actor AllLinkDatabaseCache {
       return AllLinkDatabaseReading(copy: database, status: status, wasRead: false)
 
     }
+
+    beforeReading()
 
     let records = try await modem.readAllLinkDatabase(of: device, timeout: timeout)
     let copy = AllLinkDatabaseCopy(delta: delta, records: records)
@@ -228,7 +256,7 @@ public actor AllLinkDatabaseCache {
 
     try await modem.request(
       StandardMessage(to: device, command: StandardDirectCommand.statusRequest()),
-      timeout: timeout
+      timeout: statusTimeout
     )
 
   }
@@ -240,7 +268,7 @@ public actor AllLinkDatabaseCache {
 ///
 /// ``AllLinkDatabaseCache`` hands a copy back while the device reports the same delta. An app
 /// can keep copies between launches and give them to
-/// ``AllLinkDatabaseCache/init(modem:timeout:copies:)``.
+/// ``AllLinkDatabaseCache/init(modem:timeout:statusTimeout:copies:)``.
 public struct AllLinkDatabaseCopy: Hashable, Sendable {
 
   /// The device's ALL-Link database delta when the database was read. Only its equality with
@@ -273,7 +301,7 @@ public struct AllLinkDatabaseCopy: Hashable, Sendable {
 
 }
 
-/// What ``AllLinkDatabaseCache/database(of:)`` found: a device's database, the status the
+/// What ``AllLinkDatabaseCache/database(of:beforeReading:)`` found: a device's database, the status the
 /// device reported with its delta, and whether the database was read.
 public struct AllLinkDatabaseReading: Hashable, Sendable {
 
