@@ -5,8 +5,8 @@ import Darwin
 import Glibc
 #endif
 
-/// Reads and writes the command's per-user files in the cache directory, such as the identity
-/// cache and the cached Insteon device catalog, readable only by the current user.
+/// Reads and writes the command's per-user files in the cache directory, such as the cached
+/// Insteon device catalog, readable only by the current user.
 enum PrivateFiles {
 
   /// The contents of a regular file, or `nil` if there's none or it can't be read.

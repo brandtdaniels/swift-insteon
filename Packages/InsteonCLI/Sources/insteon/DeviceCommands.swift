@@ -190,7 +190,7 @@ enum DeviceCommands {
 
     if let identity {
 
-      IdentityStore.remember(ReportedIdentity(identity), for: device)
+      await IdentityStore.remember(ReportedIdentity(identity), for: device)
 
     }
 

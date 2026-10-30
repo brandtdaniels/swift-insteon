@@ -1,6 +1,6 @@
 # InsteonCLI
 
-`insteon`, a command for driving an Insteon Hub or modem, and its devices, from a terminal on your home network. It's built on the libraries in this package: InsteonHubClient and InsteonModem to talk to the modem, InsteonLinking to link devices, InsteonHubDiscovery to find Hubs, and InsteonDeviceCatalog to name products and events.
+`insteon`, a command for driving an Insteon Hub or modem, and its devices, from a terminal on your home network. It's built on the libraries in this package: InsteonCore to keep the devices it has identified, InsteonHubClient and InsteonModem to talk to the modem, InsteonLinking to link devices, InsteonHubDiscovery to find Hubs, and InsteonDeviceCatalog to name products and events.
 
 ```sh
 swift run insteon --hub 192.168.1.20 info
@@ -100,7 +100,7 @@ A setting the device didn't report reads "not reported". Settings the catalog ma
 
 ### Naming devices
 
-The command names a device only from the identity it reported: its category, subcategory and firmware version, from an ID Request or from the modem's ALL-Linking Completed report. It never reads them from the data bytes of the modem's ALL-Link records, which don't hold them reliably. Identities that `link`, `links --identify` and `device ADDRESS id` learn are kept in `$XDG_CACHE_HOME/insteon/identities.json`, or `~/.cache/insteon/identities.json`, readable only by you. The file holds only Insteon addresses and identities; delete it to forget them.
+The command names a device only from the identity it reported: its category, subcategory and firmware version, from an ID Request or from the modem's ALL-Linking Completed report. It never reads them from the data bytes of the modem's ALL-Link records, which don't hold them reliably. Identities that `link`, `links --identify` and `device ADDRESS id` learn are kept in `$XDG_CACHE_HOME/insteon/identities.json`, or `~/.cache/insteon/identities.json`, readable only by you. The file holds only Insteon addresses and identities; delete it to forget them. A file in a format the command doesn't read is left as it is, with one warning a run when an identity can't be remembered. A symbolic link at the file's path is left as it is too, with a warning, and is never replaced.
 
 ### Updating the catalog
 
@@ -159,4 +159,4 @@ Turned 4D.5E.6F on at 50%.
 ## Layout
 
 - `Sources/insteon`: the command, which runs what the command line asks for
-- `Sources/InsteonCLICore`: reading the command line, finding and checking the environment file and reading its variables, choosing the modem, the identity cache's format, choosing between the bundled and cached catalogs, and the text the command prints from the catalog, as plain functions the tests in `Tests/InsteonCLICoreTests` cover
+- `Sources/InsteonCLICore`: reading the command line, finding and checking the environment file and reading its variables, choosing the modem, where the identity cache is kept, choosing between the bundled and cached catalogs, and the text the command prints from the catalog, as plain functions the tests in `Tests/InsteonCLICoreTests` cover

@@ -1,4 +1,5 @@
 import InsteonCLICore
+import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonModem
@@ -94,7 +95,7 @@ enum ModemCommands {
     Output.note("Reading the modem's ALL-Link database...")
 
     let records = try await modem.allLinkRecords()
-    var identities = IdentityStore.load()
+    let registry: DeviceRegistry = IdentityStore.registry(names: names)
 
     if options.identifiesDevices {
 
@@ -104,7 +105,7 @@ enum ModemCommands {
 
         if let identity = try await identify(record.address, modem: modem) {
 
-          identities[record.address] = identity
+          await registry.record(identity, for: record.address)
 
         }
 
@@ -112,11 +113,13 @@ enum ModemCommands {
 
     }
 
-    let rows = records.map { record in
+    var rows: [Record] = []
 
-      let known = identities[record.address].map(names.device)
+    for record in records {
 
-      return Record(
+      let known: DeviceDescription? = await registry.device(record.address)?.deviceDescription
+
+      rows.append(Record(
         role: record.flags.contains(.controller) ? "controller" : "responder",
         group: Int(record.group.rawValue),
         address: "\(record.address)",
@@ -125,7 +128,7 @@ enum ModemCommands {
         subcategory: known.map { "\($0.subcategory)" },
         firmwareVersion: known?.firmwareVersion.map { "\($0)" },
         product: known?.displayName
-      )
+      ))
 
     }
 
@@ -195,7 +198,7 @@ enum ModemCommands {
 
       let identity = ReportedIdentity(pressed)
 
-      IdentityStore.remember(identity, for: device)
+      await IdentityStore.remember(identity, for: device)
 
       return identity
 
@@ -472,7 +475,14 @@ enum ModemCommands {
     }
 
     let timeout = options.timeoutSeconds.map { Duration.seconds($0) } ?? Linker.defaultManualLinkingTimeout
-    let known = options.device.flatMap { IdentityStore.load()[$0] }.map(names.device)
+    var known: DeviceDescription? = nil
+
+    if let device = options.device {
+
+      known = await IdentityStore.known(device, names: names)
+
+    }
+
     let label = options.device.map { deviceLabel($0, known: known) }
     let cache = AllLinkDatabaseCache(modem: modem)
     let unlinker = Unlinker(modem: modem, cache: cache)
@@ -499,7 +509,7 @@ enum ModemCommands {
     }
 
     // A deletion carries no identity, so the device is named only if it was known before.
-    let removed: DeviceDescription? = IdentityStore.load()[link.address].map(names.device)
+    let removed: DeviceDescription? = await IdentityStore.known(link.address, names: names)
     let product: String? = removed?.displayName
 
     if printsJSON {
@@ -534,7 +544,7 @@ enum ModemCommands {
   private static func unlinkAll(_ device: InsteonAddress, modem: Modem, options: UnlinkOptions, names: ProductNames, printsJSON: Bool) async throws {
 
     let timeout = options.timeoutSeconds.map { Duration.seconds($0) } ?? Linker.defaultRemoteLinkingTimeout
-    let known: DeviceDescription? = IdentityStore.load()[device].map(names.device)
+    let known: DeviceDescription? = await IdentityStore.known(device, names: names)
     let label: String = deviceLabel(device, known: known)
     let cache = AllLinkDatabaseCache(modem: modem)
     let unlinker = Unlinker(modem: modem, cache: cache)
