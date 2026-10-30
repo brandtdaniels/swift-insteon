@@ -60,6 +60,14 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
 
     }
 
+    // If the delegate wasn't consulted, the request still never counts as answered by a
+    // redirect: a redirect status, or a response from another origin, is refused.
+    if refusal != nil, Self.isRedirect(httpResponse, for: request) {
+
+      throw HTTPClientError.redirectRefused
+
+    }
+
     // The session follows redirects on its own, so check where an HTTPS request ended up.
     if request.url?.scheme == "https", httpResponse.url?.scheme != "https" {
 
@@ -108,6 +116,36 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
       (key.base as? String)?.lowercased() == "authorization"
 
     }
+
+  }
+
+  /// Whether a response shows that a request was answered by a redirect.
+  ///
+  /// The delegate refuses a redirect before it's followed. This check backs it up after the
+  /// response arrives, so a redirect the delegate wasn't asked about still fails the request.
+  ///
+  /// - Parameters:
+  ///   - response: The response the session returned.
+  ///   - request: The request that was sent.
+  /// - Returns: `true` if the status is a redirect (300–399), or the response came from a
+  ///   different scheme, host or port than the request was sent to.
+  static func isRedirect(_ response: HTTPURLResponse, for request: URLRequest) -> Bool {
+
+    if (300...399).contains(response.statusCode) {
+
+      return true
+
+    }
+
+    guard let sent: URL = request.url, let answered: URL = response.url else {
+
+      return false
+
+    }
+
+    return sent.scheme?.lowercased() != answered.scheme?.lowercased()
+      || sent.host?.lowercased() != answered.host?.lowercased()
+      || sent.port != answered.port
 
   }
 

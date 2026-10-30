@@ -122,6 +122,46 @@ struct RedirectRefusalTests {
 
   }
 
+  // MARK: The backstop after a response
+
+  @Test func aRedirectStatusCountsAsARedirect() throws {
+
+    let request: URLRequest = URLRequest(url: hubURL)
+    let response: HTTPURLResponse = try #require(HTTPURLResponse(url: hubURL, statusCode: 302, httpVersion: "HTTP/1.1", headerFields: ["Location": redirectTarget.absoluteString]))
+
+    #expect(URLSessionHTTPClient.isRedirect(response, for: request))
+
+  }
+
+  @Test func aResponseFromAnotherOriginCountsAsARedirect() throws {
+
+    let request: URLRequest = URLRequest(url: hubURL)
+    let response: HTTPURLResponse = try #require(HTTPURLResponse(url: redirectTarget, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [:]))
+
+    #expect(URLSessionHTTPClient.isRedirect(response, for: request))
+
+  }
+
+  @Test func aResponseFromTheSameOriginIsNotARedirect() throws {
+
+    let request: URLRequest = URLRequest(url: hubURL)
+    let answered: URL = try #require(URL(string: "http://10.0.0.20:25105/other.xml"))
+    let response: HTTPURLResponse = try #require(HTTPURLResponse(url: answered, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [:]))
+
+    #expect(!URLSessionHTTPClient.isRedirect(response, for: request))
+
+  }
+
+  @Test func anotherPortCountsAsARedirect() throws {
+
+    let request: URLRequest = URLRequest(url: hubURL)
+    let answered: URL = try #require(URL(string: "http://10.0.0.20:8080/buffstatus.xml"))
+    let response: HTTPURLResponse = try #require(HTTPURLResponse(url: answered, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [:]))
+
+    #expect(URLSessionHTTPClient.isRedirect(response, for: request))
+
+  }
+
   // MARK: The error
 
   @Test func theErrorLeavesOutTheCredentials() {
