@@ -7,7 +7,7 @@ import InsteonProtocol
 ///
 /// The reusable parts, running local and Insteon Connect discovery, stopping at the first Hub,
 /// merging duplicates, and the password policy for confirming a Hub, live in
-/// ``InsteonHubDiscovery``'s ``HubFinder`` and ``HubIdentifier``. This command is the argument
+/// `InsteonHubDiscovery`'s `HubFinder` and `HubIdentifier`. This command is the argument
 /// parsing, the progress and prompts, and the output around them.
 enum DiscoverCommand {
 
@@ -129,7 +129,7 @@ enum DiscoverCommand {
 
     if let credentials {
 
-      try await identifyHubs(&hubs, target: options.identifyTarget, credentials: credentials, names: names)
+      try await identifyHubs(&hubs, target: options.identifyTarget, credentials: credentials)
 
     }
 
@@ -221,13 +221,12 @@ enum DiscoverCommand {
   /// named, or else each Hub on the Hub's port that the person agrees to send them to.
   ///
   /// Asking stops at the first Hub that rejects the credentials, so they aren't tried on the
-  /// rest. The policy for where the credentials go lives in ``HubIdentifier``; this asks the
+  /// rest. The policy for where the credentials go lives in `HubIdentifier`; this asks the
   /// person and prints what came of each candidate.
   private static func identifyHubs(
     _ hubs: inout [DiscoveredHub],
     target: HubAddress?,
-    credentials: HubIdentifier.Credentials,
-    names: ProductNames
+    credentials: HubIdentifier.Credentials
   ) async throws {
 
     let identifier = HubIdentifier()

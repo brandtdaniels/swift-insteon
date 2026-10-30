@@ -87,8 +87,10 @@ struct HubFinderTests {
 
     let search = try await finder.searchLocalNetwork(stoppingAtFirstHub: true)
 
+    // The probes answer concurrently, so either Hub may be the first to answer.
     #expect(search.stoppedAtFirstHub)
-    #expect(search.hubs.map(\.endpoint.host) == ["10.0.0.5"])
+    #expect(search.hubs.count == 1)
+    #expect(search.hubs.allSatisfy { ["10.0.0.5", "10.0.0.9"].contains($0.endpoint.host) })
     #expect(search.hubs.allSatisfy { $0.foundBy == [.localNetwork] })
 
   }

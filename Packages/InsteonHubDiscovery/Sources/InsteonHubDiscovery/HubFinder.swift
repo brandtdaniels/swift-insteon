@@ -65,10 +65,7 @@ public struct HubFinder: Sendable {
   }
 
   /// What a combined search found, with the error of any way that failed.
-  ///
-  /// This carries each way's underlying error, which an arbitrary HTTP client may make anything,
-  /// so it isn't `Sendable`; handle it where it's returned rather than across an actor.
-  public struct Result {
+  public struct Result: Sendable {
 
     /// The Hubs found, merged across the ways that found them.
     public var hubs: [DiscoveredHub]
@@ -171,10 +168,11 @@ public struct HubFinder: Sendable {
   /// Runs the local-network search and the Insteon Connect lookup, as asked, and merges what
   /// they find.
   ///
-  /// Insteon Connect is asked first, then the local network, so a Hub found both ways keeps the
-  /// Insteon ID and model that only Insteon Connect reports. A way that fails doesn't fail the
-  /// search: its error is returned in ``HubFinder/Result`` so the caller can decide. Only a
-  /// `CancellationError` from the local search is thrown.
+  /// Insteon Connect is asked first, then the local network. A Hub found both ways keeps the
+  /// Insteon ID and model that Insteon Connect reports whichever way runs first: the local search
+  /// reports neither, and the merge fills each field one record lacks from the other. A way that
+  /// fails doesn't fail the search: its error is returned in ``HubFinder/Result`` so the caller
+  /// can decide. Only a `CancellationError` from the local search is thrown.
   ///
   /// - Parameters:
   ///   - searchesLocalNetwork: Whether to search the local network. Defaults to `true`.

@@ -7,6 +7,10 @@ import InsteonProtocol
 /// The same Hub found both ways compares unequal when only one knows its Insteon ID or
 /// identity, so merge results by ``DiscoveredHub/endpoint``.
 ///
+/// The synthesized equality includes ``DiscoveredHub/foundBy``, so the same Hub found by
+/// different sources compares unequal even when every other field matches; combine such records
+/// with ``DiscoveredHub/merge(with:)``.
+///
 /// Connect to it with the user name and password printed on the Hub:
 ///
 /// ```swift

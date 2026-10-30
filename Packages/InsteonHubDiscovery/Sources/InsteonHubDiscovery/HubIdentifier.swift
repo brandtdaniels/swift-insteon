@@ -69,10 +69,8 @@ public struct HubIdentifier: Sendable {
 
   /// What came of asking a candidate for Get IM Info.
   ///
-  /// This carries the underlying error of a failure, which an arbitrary HTTP client may make
-  /// anything, so it isn't `Sendable`; handle it where it's returned rather than across an actor.
-  /// The error never carries the credentials.
-  public enum Outcome {
+  /// A failure carries its underlying error, which never carries the credentials.
+  public enum Outcome: Sendable {
 
     /// The candidate answered Get IM Info, confirming it's a Hub, and reported this identity.
     case identified(ModemInfo)
@@ -168,8 +166,8 @@ public struct HubIdentifier: Sendable {
   @discardableResult
   public func identify(
     _ hubs: [DiscoveredHub],
-    provideCredentials: (DiscoveredHub) async throws -> Credentials?,
-    onResult: (DiscoveredHub, Outcome) -> Void = { _, _ in }
+    provideCredentials: @Sendable (DiscoveredHub) async throws -> Credentials?,
+    onResult: @Sendable (DiscoveredHub, Outcome) -> Void = { _, _ in }
   ) async throws -> [(hub: DiscoveredHub, outcome: Outcome)] {
 
     var results: [(hub: DiscoveredHub, outcome: Outcome)] = []

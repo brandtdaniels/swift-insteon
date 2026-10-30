@@ -52,6 +52,7 @@ struct HubIdentifierTests {
     let client = RecordingHTTPClient(status: 401)
     let identifier = HubIdentifier(httpClient: client, timeout: .seconds(5))
 
+    let credentials: HubIdentifier.Credentials = self.credentials
     let results = try await identifier.identify(
       [hub("10.0.0.5"), hub("10.0.0.9")],
       provideCredentials: { _ in credentials }
@@ -63,6 +64,7 @@ struct HubIdentifierTests {
 
     let hosts = await client.hosts
 
+    #expect(hosts.contains("10.0.0.5"))
     #expect(hosts.allSatisfy { $0 == "10.0.0.5" })
     #expect(!hosts.contains("10.0.0.9"))
 
@@ -85,6 +87,7 @@ struct HubIdentifierTests {
     let identifier = HubIdentifier(httpClient: client)
     let asked = AskedTracker()
 
+    let credentials: HubIdentifier.Credentials = self.credentials
     let results = try await identifier.identify(
       [hub("203.0.113.5")],
       provideCredentials: { _ in await asked.record(); return credentials }
@@ -111,6 +114,7 @@ struct HubIdentifierTests {
     let identifier = HubIdentifier(httpClient: client)
     let asked = AskedTracker()
 
+    let credentials: HubIdentifier.Credentials = self.credentials
     let results = try await identifier.identify(
       [hub("10.0.0.5", port: 8080)],
       provideCredentials: { _ in await asked.record(); return credentials }
@@ -182,6 +186,118 @@ struct HubIdentifierTests {
     }
 
     #expect(await client.hosts.isEmpty)
+
+  }
+
+  // A host name isn't a private address, so it's skipped before anyone is asked about it, and
+  // nothing is sent to it.
+  @Test func neverContactsAHostName() async throws {
+
+    let client = RecordingHTTPClient(status: 401)
+    let identifier = HubIdentifier(httpClient: client)
+    let asked = AskedTracker()
+    let reported = Recorded<String>()
+    let credentials: HubIdentifier.Credentials = self.credentials
+
+    let results = try await identifier.identify(
+      [hub("hub.local")],
+      provideCredentials: { _ in await asked.record(); return credentials },
+      onResult: { candidate, _ in reported.append(candidate.endpoint.host) }
+    )
+
+    #expect(results.count == 1)
+
+    if case .skippedNonPrivateAddress = results[0].outcome {
+
+    } else {
+
+      Issue.record("Expected a host name to be skipped")
+
+    }
+
+    #expect(reported.values == ["hub.local"])
+    #expect(await client.hosts.isEmpty)
+    #expect(await asked.count == 0)
+
+  }
+
+  // The client never answers, so the identifier gives up after its timeout, which is short
+  // here, and reports that the candidate didn't answer.
+  @Test func reportsACandidateThatNeverAnswers() async throws {
+
+    let identifier = HubIdentifier(httpClient: SilentHTTPClient(), timeout: .milliseconds(50))
+
+    let outcome = try await identifier.identify(hub("10.0.0.5"), credentials: credentials)
+
+    if case .didNotAnswer = outcome {
+
+    } else {
+
+      Issue.record("Expected a candidate that never answers to be reported as not answering")
+
+    }
+
+  }
+
+  @Test func credentialsRedactThemselves() {
+
+    let credentials = HubIdentifier.Credentials(user: "example-user", password: "example-password")
+
+    var dumped: String = ""
+    dump(credentials, to: &dumped)
+
+    let texts: [String] = [
+      String(describing: credentials),
+      "\(credentials)",
+      String(reflecting: credentials),
+      dumped
+    ]
+
+    for text in texts {
+
+      #expect(!text.contains("example-user"))
+      #expect(!text.contains("example-password"))
+
+    }
+
+    #expect(Mirror(reflecting: credentials).children.isEmpty)
+
+  }
+
+}
+
+/// Never answers a request, standing in for a candidate that doesn't respond. The wait ends when
+/// the request's task is canceled.
+struct SilentHTTPClient: HTTPClient {
+
+  func send(_ request: URLRequest) async throws -> HTTPResponse {
+
+    try await Task.sleep(for: .seconds(60))
+
+    throw URLError(.timedOut)
+
+  }
+
+}
+
+/// Values a `@Sendable` callback reports, kept behind a lock.
+final class Recorded<Value: Sendable>: @unchecked Sendable {
+
+  private let lock = NSLock()
+
+  private var recorded: [Value] = []
+
+  /// The values reported so far, oldest first.
+  var values: [Value] {
+
+    lock.withLock { recorded }
+
+  }
+
+  /// Records a value.
+  func append(_ value: Value) {
+
+    lock.withLock { recorded.append(value) }
 
   }
 
