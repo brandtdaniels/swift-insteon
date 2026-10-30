@@ -10,12 +10,18 @@ public enum HTTPClientError: Error, Hashable, Sendable {
 
   /// An HTTPS request was redirected to an address that isn't HTTPS, so its response isn't
   /// used.
+  ///
+  /// Under ``RedirectPolicy/sameOriginHTTPSOnly``, the redirect wasn't followed, so the request
+  /// wasn't sent to that address.
   case insecureRedirect
 
-  /// A request carrying credentials, such as an `Authorization` header, was answered with a
-  /// redirect, which wasn't followed.
+  /// A request was answered with a redirect its redirect policy doesn't follow, so the
+  /// redirect wasn't followed.
   ///
-  /// Neither the request nor its credentials were sent to the address the redirect named.
+  /// A request carrying credentials, such as an `Authorization` header, follows no redirects.
+  /// A request under ``RedirectPolicy/sameOriginHTTPSOnly`` follows none to another host or
+  /// port. Neither the request nor its credentials were sent to the address the redirect
+  /// named.
   case redirectRefused
 
 }
@@ -31,7 +37,7 @@ extension HTTPClientError: CustomStringConvertible, LocalizedError {
     case .insecureRedirect:
       "An HTTPS request was redirected to an address that isn't HTTPS, so its answer wasn't used."
     case .redirectRefused:
-      "A request carrying credentials was answered with a redirect, so it wasn't sent on to another address."
+      "A request was answered with a redirect that isn't followed, so it wasn't sent on to another address."
     }
 
   }

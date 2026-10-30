@@ -24,9 +24,28 @@ A request with credentials is never sent on to another address. ``URLSessionHTTP
 doesn't follow a redirect for a request with an `Authorization` header, such as one
 ``BasicAuthenticationHTTPClient`` sends, and throws ``HTTPClientError/redirectRefused``
 instead. An Insteon Hub never redirects its own requests, so a redirect means the request
-reached something other than the Hub. Requests without credentials follow redirects, except
-that an HTTPS request that ends at an address that isn't HTTPS throws
-``HTTPClientError/insecureRedirect``.
+reached something other than the Hub.
+
+### Redirect policies
+
+Requests without credentials follow the client's ``RedirectPolicy``:
+
+- ``RedirectPolicy/followAll``, the default, follows redirects as the session does. An HTTPS
+  request that ends at an address that isn't HTTPS throws ``HTTPClientError/insecureRedirect``,
+  but that's checked after the response arrives, when the session has already sent the request
+  to every address in between, so a chain from HTTPS through HTTP and back to HTTPS on another
+  host passes.
+- ``RedirectPolicy/sameOriginHTTPSOnly`` decides before following each redirect, and follows
+  it only to HTTPS at the request's own host and port. A downgrade throws
+  ``HTTPClientError/insecureRedirect`` and another host or port throws
+  ``HTTPClientError/redirectRefused``, without sending the request there. Use it for a download
+  whose integrity rests on HTTPS to the expected host, such as a file checked only against a
+  hash fetched from the same place.
+- ``RedirectPolicy/refuseAll`` follows none. Requests with credentials always get it.
+
+```swift
+let client: URLSessionHTTPClient = URLSessionHTTPClient(redirectPolicy: .sameOriginHTTPSOnly)
+```
 
 ### Other HTTP stacks
 
@@ -61,3 +80,4 @@ struct MyHTTPClient: HTTPClient {
 
 - ``URLSessionHTTPClient``
 - ``BasicAuthenticationHTTPClient``
+- ``RedirectPolicy``

@@ -14,19 +14,33 @@ import FoundationNetworking
 /// session's configuration adds one to every request, or when its URL includes a user name or
 /// password. A Hub never redirects its own requests, so refusing costs a Hub nothing.
 ///
-/// Other requests follow redirects as the session does, except that an HTTPS request that
-/// ends at an address that isn't HTTPS throws ``HTTPClientError/insecureRedirect``.
+/// Other requests follow redirects as ``URLSessionHTTPClient/redirectPolicy`` allows. With
+/// the default, ``RedirectPolicy/followAll``, they follow redirects as the session does,
+/// except that an HTTPS request that ends at an address that isn't HTTPS throws
+/// ``HTTPClientError/insecureRedirect``. That check runs after the response arrives, when the
+/// session has already sent the request to every address in between. With
+/// ``RedirectPolicy/sameOriginHTTPSOnly``, the client decides before following each redirect,
+/// and follows it only to HTTPS at the request's own host and port.
 public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
 
   // `URLSession` is thread-safe; it isn't marked `Sendable` on every platform.
   private let session: URLSession
 
+  /// Which redirects requests without credentials follow.
+  ///
+  /// Requests with credentials follow none, whatever the policy.
+  public let redirectPolicy: RedirectPolicy
+
   /// Creates a client that sends requests with a session.
   ///
-  /// - Parameter session: The session to send requests with. Defaults to the shared session.
-  public init(session: URLSession = .shared) {
+  /// - Parameters:
+  ///   - session: The session to send requests with. Defaults to the shared session.
+  ///   - redirectPolicy: Which redirects requests without credentials follow. Defaults to
+  ///     ``RedirectPolicy/followAll``.
+  public init(session: URLSession = .shared, redirectPolicy: RedirectPolicy = .followAll) {
 
     self.session = session
+    self.redirectPolicy = redirectPolicy
 
   }
 
@@ -36,21 +50,25 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
   /// - Returns: The response's status, headers and body.
   /// - Throws: The session's error if the request failed,
   ///   ``HTTPClientError/nonHTTPResponse`` if the response wasn't HTTP,
-  ///   ``HTTPClientError/redirectRefused`` if the request carried credentials and was
-  ///   answered with a redirect, or ``HTTPClientError/insecureRedirect`` if an HTTPS request
-  ///   ended at an address that isn't HTTPS.
+  ///   ``HTTPClientError/redirectRefused`` if the request was answered with a redirect its
+  ///   policy doesn't follow, or ``HTTPClientError/insecureRedirect`` if an HTTPS request was
+  ///   redirected to, or ended at, an address that isn't HTTPS.
   public func send(_ request: URLRequest) async throws -> HTTPResponse {
 
-    // A request with credentials gets a delegate that refuses every redirect, so the session
-    // never sends the credentials on to another address.
-    let refusal: RedirectRefusal? = Self.carriesCredentials(request, configuration: session.configuration) ? RedirectRefusal() : nil
+    // A request with credentials refuses every redirect, so the session never sends the
+    // credentials on to another address.
+    let policy: RedirectPolicy = Self.policy(for: request, configuration: session.configuration, clientPolicy: redirectPolicy)
+
+    // Any policy but following every redirect gets a delegate that decides before the session
+    // follows one.
+    let refusal: RedirectRefusal? = policy == .followAll ? nil : RedirectRefusal(policy: policy, original: request.url)
 
     let (data, response) = try await data(for: request, refusingRedirectsWith: refusal)
 
     // When a redirect is refused, the session returns the redirect itself as the response.
     if let refusal, refusal.refusedRedirect {
 
-      throw HTTPClientError.redirectRefused
+      throw Self.error(refusing: refusal.refusedTarget, of: request, policy: policy)
 
     }
 
@@ -60,9 +78,10 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
 
     }
 
-    // If the delegate wasn't consulted, the request still never counts as answered by a
-    // redirect: a redirect status, or a response from another origin, is refused.
-    if refusal != nil, Self.isRedirect(httpResponse, for: request) {
+    // If the delegate wasn't consulted, a request that refuses every redirect still never
+    // counts as answered by one: a redirect status, or a response from another origin, is
+    // refused.
+    if policy == .refuseAll, Self.isRedirect(httpResponse, for: request) {
 
       throw HTTPClientError.redirectRefused
 
@@ -72,6 +91,14 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
     if request.url?.scheme == "https", httpResponse.url?.scheme != "https" {
 
       throw HTTPClientError.insecureRedirect
+
+    }
+
+    // If the delegate wasn't consulted, a same-origin request still never counts as answered
+    // from another origin.
+    if policy == .sameOriginHTTPSOnly, Self.isFromAnotherOrigin(httpResponse, for: request) {
+
+      throw HTTPClientError.redirectRefused
 
     }
 
@@ -116,6 +143,56 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
       (key.base as? String)?.lowercased() == "authorization"
 
     }
+
+  }
+
+  /// The redirect policy a request is sent with.
+  ///
+  /// - Parameters:
+  ///   - request: The request to send.
+  ///   - configuration: The configuration of the session that sends it.
+  ///   - clientPolicy: The client's policy.
+  /// - Returns: ``RedirectPolicy/refuseAll`` if the request carries credentials, and the
+  ///   client's policy otherwise.
+  static func policy(for request: URLRequest, configuration: URLSessionConfiguration, clientPolicy: RedirectPolicy) -> RedirectPolicy {
+
+    carriesCredentials(request, configuration: configuration) ? .refuseAll : clientPolicy
+
+  }
+
+  /// The error for a redirect the delegate refused.
+  ///
+  /// - Parameters:
+  ///   - target: The address the refused redirect named, if known.
+  ///   - request: The request that was sent.
+  ///   - policy: The policy the request was sent with.
+  /// - Returns: ``HTTPClientError/insecureRedirect`` if a same-origin HTTPS request was
+  ///   redirected to an address that isn't HTTPS, and ``HTTPClientError/redirectRefused``
+  ///   otherwise.
+  static func error(refusing target: URL?, of request: URLRequest, policy: RedirectPolicy) -> HTTPClientError {
+
+    let isDowngrade: Bool = request.url?.scheme?.lowercased() == "https" && target?.scheme?.lowercased() != "https"
+
+    return policy == .sameOriginHTTPSOnly && isDowngrade ? .insecureRedirect : .redirectRefused
+
+  }
+
+  /// Whether a response came from a different scheme, host or port than the request was sent
+  /// to.
+  ///
+  /// - Parameters:
+  ///   - response: The response the session returned.
+  ///   - request: The request that was sent.
+  /// - Returns: `true` if both addresses are known and their origins differ.
+  static func isFromAnotherOrigin(_ response: HTTPURLResponse, for request: URLRequest) -> Bool {
+
+    guard let sent: URL = request.url, let answered: URL = response.url else {
+
+      return false
+
+    }
+
+    return Origin(sent) != Origin(answered)
 
   }
 
@@ -210,16 +287,48 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
 
 }
 
-/// A task delegate that refuses every redirect and records that it did.
+/// A task delegate that decides, by a redirect policy, whether to follow each redirect, and
+/// records a redirect it refuses.
 ///
-/// The session asks it before following a redirect; it answers `nil`, so the session returns
-/// the redirect itself as the response and never sends the request to the address it named.
+/// The session asks it before following a redirect. For a redirect the policy refuses, it
+/// answers `nil`, so the session returns the redirect itself as the response and never sends
+/// the request to the address it named. Every redirect is compared with the address the
+/// request was first sent to, not the one before it, so a chain can't leave and come back.
 final class RedirectRefusal: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
 
-  // `lock` guards `refused`.
+  /// The policy each redirect is decided by.
+  let policy: RedirectPolicy
+
+  /// The address the request was first sent to.
+  let original: URL?
+
+  // `lock` guards `refused` and `target`.
   private let lock = NSLock()
 
   private var refused = false
+
+  private var target: URL?
+
+  /// Creates a delegate that refuses every redirect.
+  override convenience init() {
+
+    self.init(policy: .refuseAll, original: nil)
+
+  }
+
+  /// Creates a delegate that decides by a policy.
+  ///
+  /// - Parameters:
+  ///   - policy: The policy each redirect is decided by.
+  ///   - original: The address the request is first sent to.
+  init(policy: RedirectPolicy, original: URL?) {
+
+    self.policy = policy
+    self.original = original
+
+    super.init()
+
+  }
 
   /// Whether a redirect was refused.
   var refusedRedirect: Bool {
@@ -228,20 +337,47 @@ final class RedirectRefusal: NSObject, URLSessionTaskDelegate, @unchecked Sendab
 
   }
 
-  /// Records a redirect and refuses it.
+  /// The address the first refused redirect named, or `nil` if none was refused or it named
+  /// none.
+  var refusedTarget: URL? {
+
+    lock.withLock { target }
+
+  }
+
+  /// Follows a redirect the policy allows, and records and refuses any other.
+  ///
+  /// After one redirect is refused, every later one is refused too.
   ///
   /// - Parameter request: The request the redirect would send.
-  /// - Returns: `nil`, so the redirect isn't followed.
-  func refuse(_ request: URLRequest) -> URLRequest? {
+  /// - Returns: The request if the redirect is followed, or `nil` if it isn't.
+  func decide(_ request: URLRequest) -> URLRequest? {
 
-    lock.withLock { refused = true }
+    let allowed: Bool = policy.allows(redirectTo: request.url, from: original)
 
-    return nil
+    return lock.withLock { () -> URLRequest? in
+
+      if allowed, !refused {
+
+        return request
+
+      }
+
+      if !refused {
+
+        refused = true
+        target = request.url
+
+      }
+
+      return nil
+
+    }
 
   }
 
   #if canImport(FoundationNetworking)
-  /// Refuses a redirect, so the session returns the redirect itself as the response.
+  /// Follows or refuses a redirect; a refused one is returned as the response.
   func urlSession(
     _ session: URLSession,
     task: URLSessionTask,
@@ -250,11 +386,11 @@ final class RedirectRefusal: NSObject, URLSessionTaskDelegate, @unchecked Sendab
     completionHandler: @Sendable @escaping (URLRequest?) -> Void
   ) {
 
-    completionHandler(refuse(request))
+    completionHandler(decide(request))
 
   }
   #else
-  /// Refuses a redirect, so the session returns the redirect itself as the response.
+  /// Follows or refuses a redirect; a refused one is returned as the response.
   func urlSession(
     _ session: URLSession,
     task: URLSessionTask,
@@ -262,7 +398,7 @@ final class RedirectRefusal: NSObject, URLSessionTaskDelegate, @unchecked Sendab
     newRequest request: URLRequest
   ) async -> URLRequest? {
 
-    return refuse(request)
+    return decide(request)
 
   }
   #endif

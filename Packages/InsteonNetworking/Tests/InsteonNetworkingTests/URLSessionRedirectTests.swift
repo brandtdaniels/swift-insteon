@@ -70,6 +70,58 @@ struct URLSessionRedirectTests {
 
   }
 
+  // MARK: Same-origin HTTPS
+
+  // A made-up catalog host, and a redirect target in a documentation range.
+  static let catalogManifest: URL = URL(string: "https://catalog.example/v0/manifest.json")!
+
+  @Test func sameOriginIsntSentToAnotherHTTPSHost() async throws {
+
+    let elsewhere: URL = try #require(URL(string: "https://192.0.2.80/v0/manifest.json"))
+    RedirectingURLProtocol.configure(redirecting: Self.catalogManifest, to: elsewhere)
+    let client: URLSessionHTTPClient = URLSessionHTTPClient(session: session, redirectPolicy: .sameOriginHTTPSOnly)
+
+    await #expect(throws: HTTPClientError.redirectRefused) {
+
+      try await client.send(URLRequest(url: Self.catalogManifest))
+
+    }
+
+    #expect(RedirectingURLProtocol.loadedURLs == [Self.catalogManifest])
+
+  }
+
+  @Test func sameOriginIsntSentOverHTTP() async throws {
+
+    let downgrade: URL = try #require(URL(string: "http://catalog.example/v0/manifest.json"))
+    RedirectingURLProtocol.configure(redirecting: Self.catalogManifest, to: downgrade)
+    let client: URLSessionHTTPClient = URLSessionHTTPClient(session: session, redirectPolicy: .sameOriginHTTPSOnly)
+
+    await #expect(throws: HTTPClientError.insecureRedirect) {
+
+      try await client.send(URLRequest(url: Self.catalogManifest))
+
+    }
+
+    #expect(RedirectingURLProtocol.loadedURLs == [Self.catalogManifest])
+
+  }
+
+  @Test func sameOriginFollowsATrailingSlash() async throws {
+
+    let directory: URL = try #require(URL(string: "https://catalog.example/v0"))
+    let withSlash: URL = try #require(URL(string: "https://catalog.example/v0/"))
+    RedirectingURLProtocol.configure(redirecting: directory, to: withSlash)
+    let client: URLSessionHTTPClient = URLSessionHTTPClient(session: session, redirectPolicy: .sameOriginHTTPSOnly)
+
+    let response: HTTPResponse = try await client.send(URLRequest(url: directory))
+
+    #expect(response.statusCode == 200)
+    #expect(response.body == RedirectingURLProtocol.targetBody)
+    #expect(RedirectingURLProtocol.loadedURLs == [directory, withSlash])
+
+  }
+
 }
 
 /// A `URLProtocol` that answers one address with a redirect and every other with 200, and
