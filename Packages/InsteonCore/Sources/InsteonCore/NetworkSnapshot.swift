@@ -64,6 +64,101 @@ public struct NetworkSnapshot: Hashable, Sendable {
 
 }
 
+extension NetworkSnapshot {
+
+  /// This snapshot with the changes from one snapshot to another applied to it, and
+  /// everything else left as this snapshot has it.
+  ///
+  /// It's how a process that started a ``DeviceNetwork`` from a store's snapshot saves what the
+  /// network learned without undoing what another process saved in the meantime: read the
+  /// store again, and save its snapshot merged with the changes from the snapshot the network
+  /// started from to the network's snapshot now.
+  ///
+  /// ```swift
+  /// let start = try store.loadNetwork()
+  /// let network = DeviceNetwork(modem: modem, catalog: catalog, snapshot: start)
+  ///
+  /// _ = try await network.allLinkDatabase(of: lamp)
+  ///
+  /// let learned = await network.snapshot()
+  /// try store.saveNetwork(try store.loadNetwork().merging(changesFrom: start, to: learned))
+  /// ```
+  ///
+  /// Each value is compared between `start` and `end` on its own. A value that differs is
+  /// taken from `end`, and one that `end` no longer has is removed; a value that's the same in
+  /// both is left as this snapshot has it, even when this snapshot's differs from both. The
+  /// values are:
+  ///
+  /// - Each device's identity in ``registry``.
+  /// - Each field of each device's state in ``devices``: its engine, the copy of its ALL-Link
+  ///   database, its level and when it last answered. A device left with no field is removed.
+  /// - The modem's ALL-Link database, ``modemDatabase``, as a whole.
+  /// - The Hub, ``hub``, as a whole: its host, port and Insteon ID together.
+  ///
+  /// So a device that only another process learned about keeps what that process saved, and a
+  /// field that both changed takes the value in `end`.
+  ///
+  /// - Parameters:
+  ///   - start: The snapshot the changes are from, such as the one a network started from.
+  ///   - end: The snapshot the changes are to, such as the network's snapshot now.
+  /// - Returns: This snapshot with the changes applied.
+  public func merging(changesFrom start: NetworkSnapshot, to end: NetworkSnapshot) -> NetworkSnapshot {
+
+    var merged: NetworkSnapshot = self
+
+    let identified: Set<InsteonAddress> = Set(start.registry.identities.keys).union(end.registry.identities.keys)
+
+    for address in identified {
+
+      let before: ReportedIdentity? = start.registry.identities[address]
+      let after: ReportedIdentity? = end.registry.identities[address]
+
+      if before != after {
+
+        merged.registry.identities[address] = after
+
+      }
+
+    }
+
+    let known: Set<InsteonAddress> = Set(start.devices.keys).union(end.devices.keys)
+
+    for address in known {
+
+      let before: NetworkDeviceState = start.devices[address] ?? NetworkDeviceState()
+      let after: NetworkDeviceState = end.devices[address] ?? NetworkDeviceState()
+
+      guard before != after else {
+
+        continue
+
+      }
+
+      let current: NetworkDeviceState = merged.devices[address] ?? NetworkDeviceState()
+      let state: NetworkDeviceState = current.merging(changesFrom: before, to: after)
+
+      merged.devices[address] = state.isEmpty ? nil : state
+
+    }
+
+    if start.modemDatabase != end.modemDatabase {
+
+      merged.modemDatabase = end.modemDatabase
+
+    }
+
+    if start.hub != end.hub {
+
+      merged.hub = end.hub
+
+    }
+
+    return merged
+
+  }
+
+}
+
 /// What a ``DeviceNetwork`` learned about one device besides its identity.
 ///
 /// ```swift
@@ -108,6 +203,40 @@ public struct NetworkDeviceState: Hashable, Sendable {
   public var isEmpty: Bool {
 
     engine == nil && allLinkDatabase == nil && level == nil && lastSeen == nil
+
+  }
+
+  /// This state with each field that differs between `start` and `end` taken from `end`, as
+  /// ``NetworkSnapshot/merging(changesFrom:to:)`` merges a device's state.
+  func merging(changesFrom start: NetworkDeviceState, to end: NetworkDeviceState) -> NetworkDeviceState {
+
+    var merged: NetworkDeviceState = self
+
+    if start.engine != end.engine {
+
+      merged.engine = end.engine
+
+    }
+
+    if start.allLinkDatabase != end.allLinkDatabase {
+
+      merged.allLinkDatabase = end.allLinkDatabase
+
+    }
+
+    if start.level != end.level {
+
+      merged.level = end.level
+
+    }
+
+    if start.lastSeen != end.lastSeen {
+
+      merged.lastSeen = end.lastSeen
+
+    }
+
+    return merged
 
   }
 

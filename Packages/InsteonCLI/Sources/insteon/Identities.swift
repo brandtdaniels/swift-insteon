@@ -152,20 +152,26 @@ enum IdentityStore {
 
   }
 
-  /// Adds what a network learned to the cache, which is read again first, so what another
-  /// command added in the meantime is kept unless the network learned about the same device.
-  /// A cache that can't be read isn't replaced, so it isn't lost, and the warning about it is
-  /// printed only when a device reported an identity that would have been remembered.
+  /// Writes to the cache only what a network changed since it started.
+  ///
+  /// The cache is read again first, and what the network changed from `start` is merged into
+  /// it with `NetworkSnapshot.merging(changesFrom:to:)`: each identity, each field of each
+  /// device's state, the modem's ALL-Link database and the Hub are written only when the
+  /// network changed them, so what another command saved in the meantime is kept unless this
+  /// one changed the same value. A cache that can't be read isn't replaced, so it isn't lost,
+  /// and the warning about it is printed only when a device reported an identity that would
+  /// have been remembered.
   private static func save(_ network: DeviceNetwork, startingFrom start: NetworkSnapshot) async {
 
-    guard let path = path() else {
+    let learned: NetworkSnapshot = await network.snapshot()
+
+    guard learned != start, let path = path() else {
 
       return
 
     }
 
     let store = JSONFileDeviceRegistryStore(fileURL: URL(fileURLWithPath: path))
-    let learned: NetworkSnapshot = await network.snapshot()
     let current: NetworkSnapshot
 
     do {
@@ -184,31 +190,7 @@ enum IdentityStore {
 
     }
 
-    var merged: NetworkSnapshot = current
-
-    for (address, identity) in learned.registry.identities {
-
-      merged.registry.identities[address] = identity
-
-    }
-
-    for (address, state) in learned.devices {
-
-      merged.devices[address] = state
-
-    }
-
-    if let records = learned.modemDatabase {
-
-      merged.modemDatabase = records
-
-    }
-
-    if let hub = learned.hub {
-
-      merged.hub = hub
-
-    }
+    let merged: NetworkSnapshot = current.merging(changesFrom: start, to: learned)
 
     guard merged != current else {
 
