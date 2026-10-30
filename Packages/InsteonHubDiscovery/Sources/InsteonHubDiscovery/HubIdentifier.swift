@@ -115,6 +115,11 @@ public struct HubIdentifier: Sendable {
   public let httpClient: any HTTPClient
 
   /// The Hub's port, which the many-candidate policy requires a candidate to be on.
+  ///
+  /// A Hub listens on `HubEndpoint.defaultPort`, 25105, unless its owner changed the port in
+  /// the Hub's settings. Set this to the Hub's configured port only: it decides which
+  /// candidates may be sent the credentials. Whatever the port, credentials go only to a
+  /// private address.
   public let port: Int
 
   /// How long a candidate has to answer Get IM Info.
@@ -127,7 +132,8 @@ public struct HubIdentifier: Sendable {
   ///     Defaults to a `URLSessionHTTPClient`.
   ///   - port: The Hub's port, which a candidate must be on for
   ///     ``HubIdentifier/identify(_:provideCredentials:onResult:)`` to send it credentials.
-  ///     Defaults to `HubEndpoint.defaultPort`.
+  ///     Defaults to `HubEndpoint.defaultPort`, 25105. Pass another port only when the Hub is
+  ///     configured to listen on it.
   ///   - timeout: How long a candidate has to answer Get IM Info. Defaults to
   ///     ``HubIdentifier/defaultTimeout``.
   public init(
