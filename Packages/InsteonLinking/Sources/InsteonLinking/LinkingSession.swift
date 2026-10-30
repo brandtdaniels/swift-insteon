@@ -30,6 +30,8 @@ struct LinkingSession: Sendable {
   ///   - deviceFirst: Whether the device enters its mode before the modem.
   ///   - expectedMode: The mode the modem reports for the link: its role, or `AllLinkMode.delete`.
   ///   - linkingTimeout: How long to wait for the modem's report.
+  ///   - extendsForI2cs: Whether an i2CS device is sent the command extended, with a
+  ///     checksum, rather than standard.
   func remote(
     _ device: InsteonAddress,
     deviceCommand: StandardDirectCommand,
@@ -37,7 +39,8 @@ struct LinkingSession: Sendable {
     modemGroup: AllLinkGroupNumber,
     deviceFirst: Bool,
     expecting expectedMode: AllLinkMode,
-    within linkingTimeout: Duration
+    within linkingTimeout: Duration,
+    extendsForI2cs: Bool = true
   ) async throws -> AllLinkingCompleted {
 
     let engine = try await engine(of: device)
@@ -51,6 +54,7 @@ struct LinkingSession: Sendable {
 
     let modem = modem
     let timeout = timeout
+    let commandEngine: InsteonEngine = extendsForI2cs ? engine : .i2
 
     return try await awaitLink(
       with: device,
@@ -69,13 +73,13 @@ struct LinkingSession: Sendable {
 
         if deviceFirst {
 
-          try await send(deviceCommand, to: device, engine: engine)
+          try await send(deviceCommand, to: device, engine: commandEngine)
           try await modem.send(.startAllLinking(mode: modemMode, group: modemGroup))
 
         } else {
 
           try await modem.send(.startAllLinking(mode: modemMode, group: modemGroup))
-          try await send(deviceCommand, to: device, engine: engine)
+          try await send(deviceCommand, to: device, engine: commandEngine)
 
         }
 
@@ -98,6 +102,97 @@ struct LinkingSession: Sendable {
       try await modem.send(.startAllLinking(mode: modemMode, group: group))
 
     }
+
+  }
+
+  /// Puts the modem into a mode, tells the caller it's ready, and waits for whichever link
+  /// the modem reports, then checks it.
+  ///
+  /// Unlike the manual link that expects a mode, any report ends the wait, and it's checked
+  /// afterwards: a link in another group than asked throws `LinkingError.unexpectedLink(_:)`,
+  /// and one with another device, or of the wrong direction, throws `LinkMismatch`. The modem leaves its mode on its own once it reports
+  /// a link, so it's taken out of the mode only when no report arrives.
+  ///
+  /// - Parameters:
+  ///   - modemMode: The modem's mode: its role, either role, or `AllLinkMode.delete`.
+  ///   - group: The modem's group.
+  ///   - direction: Whether a link is being made or removed.
+  ///   - device: The device asked for, or `nil` for any device.
+  ///   - linkingTimeout: How long to wait.
+  ///   - ready: Called once the modem is in its mode.
+  func manual(
+    modemMode: AllLinkMode,
+    group: AllLinkGroupNumber,
+    direction: LinkingDirection,
+    device: InsteonAddress?,
+    within linkingTimeout: Duration,
+    ready: @escaping @Sendable () async -> Void
+  ) async throws -> AllLinkingCompleted {
+
+    let modem = modem
+    let reported: AllLinkingCompleted?
+
+    do {
+
+      reported = try await modem.firstReply(
+        within: linkingTimeout,
+        clock: clock,
+        after: {
+
+          try await modem.send(.startAllLinking(mode: modemMode, group: group))
+          await ready()
+
+        },
+        matching: { (reply: ModemReply) -> AllLinkingCompleted? in
+
+          guard case let .allLinkingCompleted(link) = reply else {
+
+            return nil
+
+          }
+
+          return link
+
+        }
+      )
+
+    } catch {
+
+      await leaveLinkingMode(cleanUp: {})
+
+      throw error
+
+    }
+
+    guard let link = reported else {
+
+      await leaveLinkingMode(cleanUp: {})
+
+      throw LinkingError.linkingTimedOut
+
+    }
+
+    // The modem's database changed, whichever link it was.
+    await cache?.invalidateModem()
+
+    // The Insteon Developer's Guide says Start ALL-Linking assigns the group the modem reports.
+    // That's the modem's own group only when it doesn't respond in the link, so a responder's
+    // isn't checked.
+    let checksGroup: Bool = modemMode != .responder && link.mode != .responder
+
+    if checksGroup, link.group != group {
+
+      throw LinkingError.unexpectedLink(link)
+
+    }
+
+    if let mismatch = LinkMismatch(link, direction: direction, device: device) {
+
+      throw mismatch
+
+    }
+
+    return link
 
   }
 
@@ -162,79 +257,33 @@ struct LinkingSession: Sendable {
     starting start: () async throws -> Void
   ) async throws -> AllLinkingCompleted {
 
-    // Listening starts before the modem enters linking mode, so the report can't be missed.
-    let replies = await modem.replies()
-
     do {
-
-      try await start()
 
       // The Insteon Developer's Guide says Start ALL-Linking assigns the group the modem reports.
       // That's the modem's own group only when it controls the link, so a responder's isn't
       // checked.
-      let reportedGroup = modemMode == .responder ? nil : group
+      let reportedGroup: AllLinkGroupNumber? = modemMode == .responder ? nil : group
 
-      let link = try await firstLink(in: replies, with: device, group: reportedGroup, expecting: expectedMode, within: linkingTimeout)
-
-      // The modem's database changed. A device's copy is checked against its delta anyway.
-      await cache?.invalidateModem()
-
-      return link
-
-    } catch {
-
-      let modem = modem
-      let restore: @Sendable () async -> Void = {
-
-        _ = try? await modem.send(.cancelAllLinking)
-        await cleanUp()
-
-      }
-
-      if Task.isCancelled {
-
-        await Task { await restore() }.value
-
-      } else {
-
-        await restore()
-
-      }
-
-      // A link may have been made even so, such as one with another device.
-      await cache?.invalidateModem()
-
-      throw error
-
-    }
-
-  }
-
-  private func firstLink(
-    in replies: AsyncStream<ModemReply>,
-    with device: InsteonAddress?,
-    group expectedGroup: AllLinkGroupNumber?,
-    expecting expectedMode: AllLinkMode,
-    within linkingTimeout: Duration
-  ) async throws -> AllLinkingCompleted {
-
-    let clock = clock
-
-    return try await withThrowingTaskGroup(of: AllLinkingCompleted?.self) { group in
-
-      group.addTask {
-
-        for await reply in replies {
+      // Listening starts before the modem enters linking mode, so the report can't be missed.
+      let reported: AllLinkingCompleted? = try await modem.firstReply(
+        within: linkingTimeout,
+        clock: clock,
+        after: start,
+        matching: { (reply: ModemReply) -> AllLinkingCompleted? in
 
           guard case let .allLinkingCompleted(link) = reply else {
 
-            continue
+            return nil
 
           }
 
           // Another device linked while the modem was waiting, or the modem made a different
           // kind of link or a link in another group than asked, so the caller has to know.
-          guard device == nil || link.address == device, expectedGroup == nil || link.group == expectedGroup, link.mode == expectedMode else {
+          let isDevice: Bool = device == nil || link.address == device
+          let isGroup: Bool = reportedGroup == nil || link.group == reportedGroup
+          let isMode: Bool = link.mode == expectedMode
+
+          guard isDevice, isGroup, isMode else {
 
             throw LinkingError.unexpectedLink(link)
 
@@ -243,33 +292,55 @@ struct LinkingSession: Sendable {
           return link
 
         }
+      )
 
-        // The stream ends early only when this task is canceled or the modem closes.
-        try Task.checkCancellation()
-
-        throw ModemError.connectionClosed
-
-      }
-
-      group.addTask {
-
-        try await clock.sleep(for: linkingTimeout)
-
-        return nil
-
-      }
-
-      defer { group.cancelAll() }
-
-      guard let link = try await group.next() ?? nil else {
+      guard let link = reported else {
 
         throw LinkingError.linkingTimedOut
 
       }
 
+      // The modem's database changed. A device's copy is checked against its delta anyway.
+      await cache?.invalidateModem()
+
       return link
 
+    } catch {
+
+      await leaveLinkingMode(cleanUp: cleanUp)
+
+      throw error
+
     }
+
+  }
+
+  /// Takes the modem out of linking mode and runs `cleanUp`, then forgets the modem's
+  /// database, since a link may have been made even so, such as one with another device.
+  ///
+  /// A canceled task can't send anything, so then a task of its own does both while this one
+  /// waits, rather than leaving the modem open to any device that's linked for 4 minutes.
+  private func leaveLinkingMode(cleanUp: @escaping @Sendable () async -> Void) async {
+
+    let modem = modem
+    let restore: @Sendable () async -> Void = {
+
+      _ = try? await modem.send(.cancelAllLinking)
+      await cleanUp()
+
+    }
+
+    if Task.isCancelled {
+
+      await Task { await restore() }.value
+
+    } else {
+
+      await restore()
+
+    }
+
+    await cache?.invalidateModem()
 
   }
 

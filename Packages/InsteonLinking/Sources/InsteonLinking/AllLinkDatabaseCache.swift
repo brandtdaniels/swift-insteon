@@ -115,6 +115,34 @@ public actor AllLinkDatabaseCache {
 
   }
 
+  /// The modem's links with a device: the records in use in the modem's own ALL-Link
+  /// database that name it, in the modem's order.
+  ///
+  /// A controller record is a link in which the modem controls the device, in one of the
+  /// modem's groups; a responder record is one in which the modem responds to the device, in
+  /// one of the device's groups. The modem's database is read the first time it's needed, as
+  /// ``AllLinkDatabaseCache/modemRecords()`` reads it.
+  ///
+  /// ```swift
+  /// let links = try await cache.modemLinks(of: lamp)
+  /// let groups = links.filter { $0.flags.contains(.controller) }.map(\.group)
+  /// ```
+  ///
+  /// - Parameter device: The device.
+  /// - Returns: The modem's records in use for the device, or an empty array if it has none.
+  /// - Throws: The modem's errors.
+  public func modemLinks(of device: InsteonAddress) async throws -> [AllLinkRecord] {
+
+    let records: [AllLinkRecord] = try await modemRecords()
+
+    return records.filter { (record: AllLinkRecord) -> Bool in
+
+      record.address == device && record.flags.contains(.inUse)
+
+    }
+
+  }
+
   /// Forgets a device's database, so it's read again the next time it's needed.
   ///
   /// - Parameter device: The device whose copy to forget.

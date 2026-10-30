@@ -117,48 +117,30 @@ public struct DeviceIdentifier: Sendable {
   /// Sends an ID request and waits for the device's SET Button Pressed broadcast.
   private func identity(of device: InsteonAddress) async throws -> SetButtonPressed? {
 
-    // Listening starts before the request, so the broadcast can't be missed.
-    let replies = await modem.replies()
-
-    _ = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.idRequest), timeout: timeout)
-
-    let clock = clock
+    let modem = modem
     let timeout = timeout
 
-    return try await withThrowingTaskGroup(of: SetButtonPressed?.self) { group in
+    // Listening starts before the request, so the broadcast can't be missed.
+    return try await modem.firstReply(
+      within: timeout,
+      clock: clock,
+      after: {
 
-      group.addTask {
+        _ = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.idRequest), timeout: timeout)
 
-        for await reply in replies {
+      },
+      matching: { (reply: ModemReply) -> SetButtonPressed? in
 
-          if case let .messageReceived(message) = reply, let identity = SetButtonPressed(message), identity.sender == device {
+        guard case let .messageReceived(message) = reply, let identity = SetButtonPressed(message), identity.sender == device else {
 
-            return identity
-
-          }
+          return nil
 
         }
 
-        // The stream ends early only when this task is canceled or the modem closes.
-        try Task.checkCancellation()
-
-        throw ModemError.connectionClosed
+        return identity
 
       }
-
-      group.addTask {
-
-        try await clock.sleep(for: timeout)
-
-        return nil
-
-      }
-
-      defer { group.cancelAll() }
-
-      return try await group.next() ?? nil
-
-    }
+    )
 
   }
 
