@@ -47,13 +47,6 @@ struct ProductNames: Sendable {
 
   }
 
-  /// What the catalog says about a device with a known identity.
-  func device(_ identity: ReportedIdentity) -> DeviceDescription {
-
-    DeviceDescription(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion, catalog: catalog)
-
-  }
-
 }
 
 /// A command that couldn't do what was asked, with a message that says why and what to do.

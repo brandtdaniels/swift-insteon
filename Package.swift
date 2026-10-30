@@ -164,6 +164,7 @@ let package = Package(
       name: "insteon",
       dependencies: [
         "InsteonCLICore",
+        "InsteonCore",
         "InsteonDeviceCatalog",
         "InsteonHubClient",
         "InsteonHubDiscovery",
