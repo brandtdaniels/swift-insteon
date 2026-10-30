@@ -150,12 +150,12 @@ let package = Package(
     // The library a front end, such as an app or the `insteon` command, depends on.
     .target(
       name: "InsteonCore",
-      dependencies: ["InsteonDeviceCatalog", "InsteonProtocol"],
+      dependencies: ["InsteonDeviceCatalog", "InsteonLinking", "InsteonModem", "InsteonProtocol"],
       path: "Packages/InsteonCore/Sources/InsteonCore"
     ),
     .testTarget(
       name: "InsteonCoreTests",
-      dependencies: ["InsteonCore", "InsteonDeviceCatalog", "InsteonProtocol"],
+      dependencies: ["InsteonCore", "InsteonDeviceCatalog", "InsteonLinking", "InsteonModem", "InsteonProtocol", "InsteonTestSupport"],
       path: "Packages/InsteonCore/Tests/InsteonCoreTests"
     ),
 
@@ -189,7 +189,7 @@ let package = Package(
     // Test doubles shared by the test targets. Not a product.
     .target(
       name: "InsteonTestSupport",
-      dependencies: ["InsteonNetworking"],
+      dependencies: ["InsteonLinking", "InsteonModem", "InsteonNetworking", "InsteonProtocol"],
       path: "Packages/InsteonTestSupport/Sources/InsteonTestSupport"
     )
   ]

@@ -8,8 +8,9 @@ InsteonCore is the library a front end depends on, such as an app or the `insteo
 It keeps the devices an app knows and what the Insteon device catalog says about each.
 
 The API uses some types from the lower-level modules, such as `DeviceCatalog` from
-InsteonDeviceCatalog and `InsteonAddress` and `ReportedIdentity` from InsteonProtocol, so an
-app imports those modules too.
+InsteonDeviceCatalog, `InsteonAddress` and `ReportedIdentity` from InsteonProtocol, and
+`LinkingModem` and `AllLinkDatabaseCopy` from InsteonLinking, so an app imports those modules
+too.
 
 A ``DeviceRegistry`` holds each device's address and the identity it reported: its category,
 subcategory and firmware version. It describes every device with the catalog, and describes
@@ -45,10 +46,28 @@ await registry.record(identity, for: lamp)
 try store.save(await registry.snapshot)
 ```
 
-The file holds only device addresses and identities, never credentials, names or rooms. Its
-format has a version, so later versions can add to it, and each device's entry has the same
-keys as an entry in the `insteon` command's identity cache, so a reader of that cache reads the
-file too. The store never replaces a file it can't read, such as one in a newer format.
+The file never holds credentials, the Hub's MAC address, names or rooms. Its format has a
+version, so later versions can add to it, and each device's entry has the same keys as an
+entry in the `insteon` command's identity cache, so a reader of that cache reads the file too.
+The store never replaces a file it can't read, such as one in a newer format.
+
+### Reaching devices through a modem
+
+A ``DeviceNetwork`` owns a modem, a registry and the one cache of ALL-Link databases that
+reads through the modem. It lists the modem's ALL-Link database with each device described,
+hands back a device's ALL-Link database from its copy while the device reports the same
+delta, and identifies devices, sharing an identification already in progress for the same
+address. Its ``NetworkSnapshot`` adds to the registry's identities each device's engine, a
+copy of its ALL-Link database with the delta it was read at, its last known level and when it
+last answered, the modem's ALL-Link database, and the Hub's host, port and Insteon ID:
+
+```swift
+let store = JSONFileDeviceRegistryStore(fileURL: url)
+let network = DeviceNetwork(modem: modem, catalog: catalog, snapshot: try store.loadNetwork())
+
+let database = try await network.allLinkDatabase(of: lamp)
+try store.saveNetwork(await network.snapshot())
+```
 
 ## Topics
 
@@ -57,9 +76,18 @@ file too. The store never replaces a file it can't read, such as one in a newer 
 - ``DeviceRegistry``
 - ``RegisteredDevice``
 
+### Networks
+
+- ``DeviceNetwork``
+- ``ModemDatabaseEntry``
+- ``NetworkDeviceState``
+- ``HubLocation``
+
 ### Keeping devices
 
 - ``DeviceRegistrySnapshot``
 - ``DeviceRegistryStore``
+- ``NetworkSnapshot``
+- ``NetworkSnapshotStore``
 - ``JSONFileDeviceRegistryStore``
 - ``DeviceRegistryStoreError``

@@ -2,6 +2,7 @@ import Testing
 import InsteonLinking
 import InsteonModem
 import InsteonProtocol
+import InsteonTestSupport
 
 struct AllLinkDatabaseCacheTests {
 
@@ -124,6 +125,43 @@ struct AllLinkDatabaseCacheTests {
 
     #expect(records.map(\.address) == [lamp])
     #expect(await modem.modemDatabaseReads == 2)
+
+  }
+
+  @Test func reportsTheStatusAndWhetherItReadTheDatabase() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setDatabase([0x0FFF: link], of: lamp)
+    await modem.setLevel(0x80, of: lamp)
+    let cache = AllLinkDatabaseCache(modem: modem)
+
+    let first: AllLinkDatabaseReading = try await cache.database(of: lamp)
+    let second: AllLinkDatabaseReading = try await cache.database(of: lamp)
+
+    #expect(first.wasRead)
+    #expect(!second.wasRead)
+    #expect(first.status == 0x80)
+    #expect(second.copy == first.copy)
+    #expect(await cache.copies == [lamp: first.copy])
+
+  }
+
+  @Test func handsBackACopyItStartedWithWhileTheDeltaMatches() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setDatabase([0x0FFF: link], of: lamp)
+    let kept = AllLinkDatabaseCopy(delta: 0x00, records: [AllLinkRecordResponse(sender: lamp, address: 0x0FFF, record: link)])
+    let cache = AllLinkDatabaseCache(modem: modem, copies: [lamp: kept])
+
+    let records: [AllLinkRecordResponse] = try await cache.records(of: lamp)
+
+    #expect(records == kept.records)
+    #expect(await modem.databaseReads[lamp] == nil)
+
+    await modem.changeDatabase(of: lamp)
+    _ = try await cache.records(of: lamp)
+
+    #expect(await modem.databaseReads[lamp] == 1)
 
   }
 
