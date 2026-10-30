@@ -14,6 +14,11 @@ import InsteonNetworking
 /// ``Hub/init(endpoint:httpClient:requestTimeout:)``. The Hub's interface is plain HTTP, so the
 /// credentials are readable on the network: keep the Hub on a network you trust.
 ///
+/// A Hub never redirects its own requests. With the default `URLSessionHTTPClient`, a request
+/// carrying the credentials that's answered with a redirect isn't followed and throws
+/// `HTTPClientError.redirectRefused`, so the credentials reach only the Hub's address. A client
+/// of your own must refuse redirects for these requests too.
+///
 /// Each request gives up after ``Hub/requestTimeout``, so a Hub that doesn't answer fails in
 /// seconds rather than after `URLRequest`'s default of a minute.
 public struct Hub: Sendable {
@@ -36,7 +41,9 @@ public struct Hub: Sendable {
   ///
   /// - Parameters:
   ///   - endpoint: Where the Hub can be reached.
-  ///   - httpClient: The client to send requests with. It must authenticate them.
+  ///   - httpClient: The client to send requests with. It must authenticate them, and must
+  ///     not follow redirects for them, as `URLSessionHTTPClient` doesn't for a request with
+  ///     an `Authorization` header.
   ///   - requestTimeout: How long each request waits for the Hub before it fails. Defaults to
   ///     ``Hub/defaultRequestTimeout``.
   public init(endpoint: HubEndpoint, httpClient: any HTTPClient, requestTimeout: Duration = Hub.defaultRequestTimeout) {
@@ -53,7 +60,9 @@ public struct Hub: Sendable {
   ///   - endpoint: Where the Hub can be reached.
   ///   - user: The Hub's user name.
   ///   - password: The Hub's password.
-  ///   - httpClient: The client to send requests with. Defaults to `URLSessionHTTPClient`.
+  ///   - httpClient: The client to send requests with, before the credentials are added.
+  ///     Defaults to `URLSessionHTTPClient`, which refuses redirects for these requests and
+  ///     throws `HTTPClientError.redirectRefused`. Another client must refuse them too.
   ///   - requestTimeout: How long each request waits for the Hub before it fails. Defaults to
   ///     ``Hub/defaultRequestTimeout``.
   public init(

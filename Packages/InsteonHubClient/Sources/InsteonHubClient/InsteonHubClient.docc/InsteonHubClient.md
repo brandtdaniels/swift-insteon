@@ -54,6 +54,12 @@ The Hub requires the user name and password printed on it. Store them securely, 
 the keychain, rather than in source code. Requests go through `HTTPClient` from
 InsteonNetworking, so you can supply your own HTTP stack or a stub in tests.
 
+A Hub never redirects its own requests, so the default client, `URLSessionHTTPClient`,
+refuses any redirect for a request carrying the Hub's credentials and throws
+`HTTPClientError.redirectRefused`: the credentials reach only the Hub's address, never
+another host a redirect names. An HTTP stack of your own must refuse redirects for these
+requests too.
+
 ### Reaching a Hub away from home
 
 The Hub's interface is meant for the local network: it's plain HTTP, so its password and

@@ -13,6 +13,7 @@ import InsteonHubClient
 import InsteonHubDiscovery
 import InsteonLinking
 import InsteonModem
+import InsteonNetworking
 import InsteonProtocol
 
 /// Finds products in the Insteon device catalog: the copy that ships with the package, or a
@@ -139,6 +140,8 @@ enum Names {
     case let error as LocalNetworkError:
       return describe(error)
     case let error as CommandFailure:
+      return error.description
+    case let error as HTTPClientError:
       return error.description
     default:
       break

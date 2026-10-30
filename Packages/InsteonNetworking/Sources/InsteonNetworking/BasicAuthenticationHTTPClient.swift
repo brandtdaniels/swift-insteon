@@ -9,9 +9,12 @@ import FoundationNetworking
 /// local interface over plain HTTP, so anyone who can see the network traffic can read them;
 /// keep the Hub on a trusted network.
 ///
-/// The header is part of every request, so it also goes wherever the wrapped client sends the
-/// request, including to another host if a server redirects there. Use this client only with
-/// hosts you trust, such as a Hub on your own network. The client keeps the encoded
+/// The header is part of every request, so it goes wherever the wrapped client sends the
+/// request. A ``URLSessionHTTPClient`` never follows a redirect for a request with an
+/// `Authorization` header: it throws ``HTTPClientError/redirectRefused`` instead, so the
+/// credentials reach only the host the request named. A Hub never redirects its own requests.
+/// Another ``HTTPClient`` wrapped here must refuse redirects the same way. Use this client only
+/// with hosts you trust, such as a Hub on your own network. The client keeps the encoded
 /// credentials in memory for as long as it exists.
 ///
 /// ```swift
@@ -30,7 +33,8 @@ public struct BasicAuthenticationHTTPClient: HTTPClient {
   /// Creates a client that authenticates requests before passing them on.
   ///
   /// - Parameters:
-  ///   - httpClient: The client that sends the authenticated requests.
+  ///   - httpClient: The client that sends the authenticated requests. It must not follow
+  ///     redirects for them, as a ``URLSessionHTTPClient`` doesn't.
   ///   - user: The user name.
   ///   - password: The password.
   public init(_ httpClient: any HTTPClient, user: String, password: String) {
@@ -44,7 +48,8 @@ public struct BasicAuthenticationHTTPClient: HTTPClient {
   ///
   /// - Parameter request: The request to authenticate and send.
   /// - Returns: The wrapped client's response.
-  /// - Throws: The wrapped client's error.
+  /// - Throws: The wrapped client's error, such as ``HTTPClientError/redirectRefused`` from a
+  ///   ``URLSessionHTTPClient`` when the server answers with a redirect.
   public func send(_ request: URLRequest) async throws -> HTTPResponse {
 
     var request = request
