@@ -267,6 +267,19 @@ struct LinkingPrimitivesTests {
 
   }
 
+  // The modem's group 0 keeps the device reachable, so its link goes last.
+  @Test func takesTheDeviceOutOfTheModemsGroupZeroLast() {
+
+    let groupZero = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0x00, address: lamp)
+    let groupOne = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0x01, address: lamp)
+
+    #expect(ModemLink.links(in: [groupZero, groupOne]) == [
+      ModemLink(modemRole: .controller, group: 0x01),
+      ModemLink(modemRole: .controller, group: 0x00),
+    ])
+
+  }
+
   // MARK: - Responder state
 
   @Test func turnsAResponderOnSoItMemorizesFullOn() async throws {
@@ -287,6 +300,16 @@ struct LinkingPrimitivesTests {
     let modem = InMemoryModem()
 
     try await linker(modem).prepareResponder(lamp, state: .off)
+
+    #expect(await modem.linkingSteps == [.device(lamp, Command(command1: 0x13), isExtended: false)])
+
+  }
+
+  @Test func turnsAResponderOffForALevelOfZero() async throws {
+
+    let modem = InMemoryModem()
+
+    try await linker(modem).prepareResponder(lamp, state: .on(level: 0x00))
 
     #expect(await modem.linkingSteps == [.device(lamp, Command(command1: 0x13), isExtended: false)])
 
@@ -396,6 +419,110 @@ struct LinkingPrimitivesTests {
 
     #expect(try await removed == [ModemLink(modemRole: .responder, group: 0x01)])
     #expect(await modem.modemRecords.isEmpty)
+
+  }
+
+  @Test func throwsWhenAnUnreportedUnlinksRecordIsStillThere() async throws {
+
+    let modem = InMemoryModem()
+    let responds = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 0x01, address: lamp)
+    let unlinks: Unlinker = unlinker(modem)
+    await modem.setSilent(lamp)
+    await modem.setModemRecords([responds])
+
+    await #expect(throws: LinkingError.linkingTimedOut) {
+
+      async let removed: [ModemLink] = unlinks.unlinkAllRemotely(lamp)
+      await clock.waitForSleeper(until: Linker.defaultRemoteLinkingTimeout)
+      clock.advance(by: Linker.defaultRemoteLinkingTimeout)
+      _ = try await removed
+
+    }
+
+    #expect(await modem.modemRecords == [responds])
+
+  }
+
+  // A cache that still lists a record the modem no longer has can't make an unreported
+  // unlink count as removed: the modem itself is read before the unlink.
+  @Test func doesntCountAnUnreportedUnlinkFromAStaleCache() async throws {
+
+    let modem = InMemoryModem()
+    let cache = AllLinkDatabaseCache(modem: modem)
+    let unlinks = Unlinker(modem: modem, clock: clock, cache: cache)
+    await modem.setSilent(lamp)
+    await modem.setModemRecords([AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 0x01, address: lamp)])
+
+    let cached: [AllLinkRecord] = try await cache.modemLinks(of: lamp)
+
+    #expect(cached.count == 1)
+
+    await modem.setModemRecords([])
+
+    await #expect(throws: LinkingError.linkingTimedOut) {
+
+      async let removed: [ModemLink] = unlinks.unlinkAllRemotely(lamp)
+      await clock.waitForSleeper(until: Linker.defaultRemoteLinkingTimeout)
+      clock.advance(by: Linker.defaultRemoteLinkingTimeout)
+      _ = try await removed
+
+    }
+
+  }
+
+  @Test func takesTheModemAndDeviceOutOfTheirModesWhenUnlinkingIsCanceled() async throws {
+
+    let modem = InMemoryModem()
+    let unlinks: Unlinker = unlinker(modem)
+    await modem.setSilent(lamp)
+    await linkedBothWays(modem)
+
+    let device: InsteonAddress = lamp
+    let unlinking = Task { () async throws -> [ModemLink] in try await unlinks.unlinkAllRemotely(device) }
+    await clock.waitForSleeper(until: Linker.defaultRemoteLinkingTimeout)
+    unlinking.cancel()
+
+    await #expect(throws: CancellationError.self) { try await unlinking.value }
+
+    let steps = await modem.linkingSteps
+
+    #expect(steps.suffix(2) == [.cancel, .device(lamp, Command(command1: 0x08), isExtended: false)])
+    #expect(!steps.contains(.modem(.delete, 0x00)))
+
+  }
+
+  // The device's own link is removed, unreported; then the modem's link times out, so it
+  // stays, with the device still in the modem's group 0.
+  @Test func leavesTheRestWhenALinkFailsPartway() async throws {
+
+    let modem = InMemoryModem()
+    let recorder = Recorder<ModemLink>()
+    let unlinks: Unlinker = unlinker(modem)
+    let controls = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0x00, address: lamp)
+    let responds = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 0x01, address: lamp)
+    let timeout: Duration = Linker.defaultRemoteLinkingTimeout
+    await modem.setUnlinkUnreported(lamp)
+    await modem.setSilent(lamp)
+    await modem.setModemRecords([controls, responds])
+
+    await #expect(throws: LinkingError.linkingTimedOut) {
+
+      async let removed: [ModemLink] = unlinks.unlinkAllRemotely(lamp) { (link: ModemLink) async -> Void in
+
+        await recorder.record(link)
+
+      }
+
+      await clock.waitForSleeper(until: timeout)
+      clock.advance(by: timeout)
+      await clock.waitForSleeper(until: timeout * 2)
+      clock.advance(by: timeout)
+      _ = try await removed
+
+    }
+
+    #expect(await recorder.values == [ModemLink(modemRole: .responder, group: 0x01), ModemLink(modemRole: .controller, group: 0x00)])
+    #expect(await modem.modemRecords == [controls])
 
   }
 

@@ -66,6 +66,28 @@ public struct DeviceDescription: Hashable, Sendable {
 
   }
 
+  /// Whether the device is a light or a switched load that takes its state as its on-level
+  /// when it links as a responder, so turning it fully on with Light On first is safe and
+  /// makes the link turn it fully on.
+  ///
+  /// It's `true` only when the catalog has a profile for the identity and the category is
+  /// dimmable lighting control, `0x01`, or switched lighting control, `0x02`. Light On
+  /// switches any other device's load too, such as an I/O module's relay wired to a garage
+  /// door, a lock or a valve, so those are `false`, and so is a device the catalog doesn't
+  /// have. A group's kind doesn't tell them apart, since an I/O module's outputs are relays
+  /// too. A device that isn't turned on first links with whatever on-level it captures.
+  public var setsOnLevelFromLoadWhenLinked: Bool {
+
+    guard profile != nil else {
+
+      return false
+
+    }
+
+    return category == .dimmableLightingControl || category == .switchedLightingControl
+
+  }
+
   /// The type of one of the device's groups, or `nil` if the catalog doesn't say.
   ///
   /// - Parameter number: The device's group number, such as 1 for its load.

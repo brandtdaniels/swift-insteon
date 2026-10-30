@@ -29,7 +29,8 @@ public struct ModemLink: Hashable, Sendable {
   ///
   /// The links the device controls come first, in the modem's order, then those the modem
   /// controls, so a device is unlinked as a controller before it's taken out of the modem's
-  /// groups.
+  /// groups. Of those, the link in the modem's group 0 comes last, so the device stays
+  /// reachable until its other links are gone.
   ///
   /// - Parameter records: The modem's records for one device, such as
   ///   ``AllLinkDatabaseCache/modemLinks(of:)`` returns.
@@ -65,7 +66,11 @@ public struct ModemLink: Hashable, Sendable {
 
     }
 
-    return responderLinks + controllerLinks
+    // The modem's group 0 goes last, wherever the database keeps it.
+    let otherGroups: [ModemLink] = controllerLinks.filter { (link: ModemLink) -> Bool in link.group != 0x00 }
+    let groupZero: [ModemLink] = controllerLinks.filter { (link: ModemLink) -> Bool in link.group == 0x00 }
+
+    return responderLinks + otherGroups + groupZero
 
   }
 
@@ -94,15 +99,17 @@ extension Unlinker {
   /// pressing its SET button.
   ///
   /// The modem's database says which links there are, as ``ModemLink/links(in:)`` reads it.
-  /// Each is removed in turn, the links the device controls first:
+  /// Each is removed in turn, the links the device controls first and the link in the modem's
+  /// group 0 last:
   ///
   /// - **The device controls the modem.** The device is asked for its engine and sent Enter
   ///   Unlinking Mode for its group, then the modem starts ALL-Linking as the responder and
   ///   waits for the device's report. A modem that removes a responder record may not report
-  ///   it, so when no report arrives, the link counts as removed if the modem's record is gone.
-  /// - **The modem controls the device.** The modem starts ALL-Linking in unlinking mode for
-  ///   its group, then the device is asked for its engine and sent Enter Linking Mode for
-  ///   group 1, extended for i2CS, and the modem's report is awaited.
+  ///   it, so the modem's database is read for the record before and, when no report arrives,
+  ///   after: the link counts as removed if the record was there and is gone.
+  /// - **The modem controls the device.** The device is asked for its engine, then the modem
+  ///   starts ALL-Linking in unlinking mode for its group and the device is sent Enter Linking
+  ///   Mode for group 1, extended for i2CS, and the modem's report is awaited.
   ///
   /// Nothing is written to either database directly. Links removed before one fails stay
   /// removed; read the modem's links again to see which are left. i1 devices can't be unlinked
@@ -190,6 +197,10 @@ extension Unlinker {
         within: linkingTimeout
       )
     case .responder:
+      // The record is read from the modem itself, not a cache, so a stale copy can't make an
+      // unreported unlink count as removed.
+      let hadResponderRecord: Bool = try await hasResponderRecord(of: device, in: link.group)
+
       do {
 
         _ = try await session.remote(
@@ -203,12 +214,10 @@ extension Unlinker {
           extendsForI2cs: unlinkingMode == .extendedForI2cs
         )
 
-      } catch LinkingError.linkingTimedOut {
+      } catch LinkingError.linkingTimedOut where hadResponderRecord {
 
         // A modem that removes a responder record may not report it.
-        let left: [AllLinkRecord] = try await modem.allLinkRecords(group: link.group, device: device)
-
-        guard left.contains(where: { (record: AllLinkRecord) -> Bool in !record.flags.contains(.controller) }) else {
+        guard try await hasResponderRecord(of: device, in: link.group) else {
 
           return
 

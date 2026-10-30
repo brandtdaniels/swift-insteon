@@ -110,8 +110,9 @@ struct LinkingSession: Sendable {
   ///
   /// Unlike the manual link that expects a mode, any report ends the wait, and it's checked
   /// afterwards: a link in another group than asked throws `LinkingError.unexpectedLink(_:)`,
-  /// and one with another device, or of the wrong direction, throws `LinkMismatch`. The modem leaves its mode on its own once it reports
-  /// a link, so it's taken out of the mode only when no report arrives.
+  /// and one with another device, or of the wrong direction, throws `LinkMismatch`. The modem
+  /// leaves its mode on its own once it reports a link, so it's taken out of the mode only
+  /// when no report arrives.
   ///
   /// - Parameters:
   ///   - modemMode: The modem's mode: its role, either role, or `AllLinkMode.delete`.

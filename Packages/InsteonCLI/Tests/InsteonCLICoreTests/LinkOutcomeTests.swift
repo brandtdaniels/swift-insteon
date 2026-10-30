@@ -64,7 +64,6 @@ struct LinkOutcomeTests {
 
   }
 
-
   @Test func explainsAMismatchTheLibraryFound() {
 
     let mismatch = LinkMismatch(link: link(.delete, with: lamp), reason: .unlinkedInsteadOfLinking)

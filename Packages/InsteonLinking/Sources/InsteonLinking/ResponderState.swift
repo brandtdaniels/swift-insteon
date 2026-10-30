@@ -8,7 +8,8 @@ import InsteonProtocol
 /// `0x00`, so the controller's On then leaves it off. Turning it on first records `0xFF`.
 public enum ResponderState: Hashable, Sendable {
 
-  /// On, at a level from `0x01` to `0xFF`, sent with Light On.
+  /// On, at a level from `0x01` to `0xFF`, sent with Light On. A level of `0x00` is off, sent
+  /// with Light Off, as ``ResponderState/off`` is.
   case on(level: UInt8)
 
   /// Off, sent with Light Off.
@@ -47,10 +48,10 @@ extension Linker {
     let command: StandardDirectCommand
 
     switch state {
+    case .on(level: 0x00), .off:
+      command = .off
     case let .on(level):
       command = .on(level: level)
-    case .off:
-      command = .off
     }
 
     _ = try await modem.request(StandardMessage(to: device, command: command), timeout: timeout)

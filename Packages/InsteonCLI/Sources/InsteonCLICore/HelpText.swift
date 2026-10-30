@@ -143,10 +143,12 @@ public enum HelpText {
 
     With ADDRESS, the device's Insteon address from its label, links the device without its
     SET button: the modem starts ALL-Linking and sends the device Enter Linking Mode. When
-    the modem is the controller, the device is first turned fully on with Light On, so it
-    links with full on as its on-level. If the device doesn't answer, as an i2CS device may
-    not until it's linked, the command falls back to its SET button. A device the Insteon
-    device catalog says can control is then linked back, with the modem as its responder.
+    the modem is the controller and the Insteon device catalog says the device is a light or
+    switched load, it's first turned fully on with Light On, so it links with full on as its
+    on-level; any other device, such as an I/O module or a lock, links with whatever on-level
+    it captures. If the device doesn't answer, as an i2CS device may not until it's linked,
+    the command falls back to its SET button. A device the catalog says can control is then
+    linked back, with the modem as its responder.
 
     Without ADDRESS, puts the modem into linking mode with Start ALL-Linking, then waits for
     someone to press and hold a device's SET button, and prints the linked device.

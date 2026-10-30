@@ -155,7 +155,7 @@ public struct Unlinker: Sendable {
   }
 
   /// Whether the modem has a responder record of `device`, which is kept in the device's group.
-  private func hasResponderRecord(of device: InsteonAddress, in group: AllLinkGroupNumber) async throws -> Bool {
+  func hasResponderRecord(of device: InsteonAddress, in group: AllLinkGroupNumber) async throws -> Bool {
 
     try await modem.allLinkRecords(group: group, device: device).contains { !$0.flags.contains(.controller) }
 

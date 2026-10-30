@@ -85,7 +85,26 @@ private enum MadeUp {
     role: .controller
   )
 
-  static let catalog = DeviceCatalog(profiles: [plug, keypad, remote], commandSets: [plugCommands, keypadCommands])
+  // An I/O module whose output is a relay, like the plug's load, but whose category isn't
+  // lighting control.
+  static let ioModule = DeviceProfile(
+    model: "9004",
+    name: "Example I/O Module",
+    identities: [DeviceIdentity(category: 0x07, subcategory: 0x7D)],
+    commandSets: [CommandSetEntry(commandSet: "madeUpPlug", category: 0x07, subcategory: 0x7D)],
+    role: .both,
+    groups: [.init(number: 1, name: "Relay", role: .both, type: "load")]
+  )
+
+  // A lock, which responds but isn't a light.
+  static let lock = DeviceProfile(
+    model: "9005",
+    name: "Example Lock",
+    identities: [DeviceIdentity(category: 0x0F, subcategory: 0x7E)],
+    role: .responder
+  )
+
+  static let catalog = DeviceCatalog(profiles: [plug, keypad, remote, ioModule, lock], commandSets: [plugCommands, keypadCommands])
 
 }
 
@@ -206,6 +225,32 @@ struct DeviceDescriptionTests {
 
     #expect(controller.groupType.name == "button")
     #expect(controller.bytes.map(\.position) == [3])
+
+  }
+
+  @Test func setsTheOnLevelFromTheLoadOnlyForALightOrSwitchedLoad() {
+
+    let dimmer: DeviceDescription = MadeUp.catalog.describe(category: 0x01, subcategory: 0x7B, firmwareVersion: nil)
+    let relay: DeviceDescription = MadeUp.catalog.describe(category: 0x02, subcategory: 0x7A, firmwareVersion: 0x41)
+
+    #expect(dimmer.setsOnLevelFromLoadWhenLinked)
+    #expect(relay.setsOnLevelFromLoadWhenLinked)
+
+    // An I/O module's output is a relay too, but Light On would switch whatever it's wired to.
+    let ioModule: DeviceDescription = MadeUp.catalog.describe(category: 0x07, subcategory: 0x7D, firmwareVersion: nil)
+    let lock: DeviceDescription = MadeUp.catalog.describe(category: 0x0F, subcategory: 0x7E, firmwareVersion: nil)
+
+    #expect(ioModule.mainGroupType?.kind == .relay)
+    #expect(!ioModule.setsOnLevelFromLoadWhenLinked)
+    #expect(!lock.setsOnLevelFromLoadWhenLinked)
+
+    // A device the catalog doesn't have isn't turned on, whatever its category.
+    let unknown: DeviceDescription = MadeUp.catalog.describe(category: 0x02, subcategory: 0x00, firmwareVersion: nil)
+    let alone = DeviceDescription(category: 0x01, subcategory: 0x7B, firmwareVersion: nil, catalog: nil)
+
+    #expect(unknown.profile == nil)
+    #expect(!unknown.setsOnLevelFromLoadWhenLinked)
+    #expect(!alone.setsOnLevelFromLoadWhenLinked)
 
   }
 

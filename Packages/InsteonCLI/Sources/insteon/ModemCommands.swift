@@ -341,11 +341,24 @@ enum ModemCommands {
     let role: ModemRole = options.role == .responder ? .responder : .controller
     let modemGroup = role == .responder ? LinkOptions.deviceGroup : options.group
     let linker = Linker(modem: modem)
+    let known: DeviceDescription? = try await Identities.known(device, modem: modem, names: names, asking: false)
 
-    // The device responds, so it memorizes its state as its on-level for the group.
+    // The device responds, so it memorizes its state as its on-level for the group. Light On
+    // goes only to a device the catalog says is a light or switched load.
     if role == .controller {
 
-      try await turnOnBeforeLinking(device, linker: linker)
+      if known?.setsOnLevelFromLoadWhenLinked == true {
+
+        try await turnOnBeforeLinking(device, linker: linker)
+
+      } else {
+
+        Output.note(
+          "Not turning \(device) on first: the catalog doesn't identify it as a light or switched load, "
+            + "so it links with whatever on-level it captures."
+        )
+
+      }
 
     }
 
@@ -372,7 +385,6 @@ enum ModemCommands {
 
     }
 
-    let known = try await Identities.known(device, modem: modem, names: names, asking: false)
     let steps = known?.profile?.lifecycle?.linking.map(LinkingInstructions.steps(of:)) ?? []
     let label = deviceLabel(device, known: known)
 
@@ -391,9 +403,9 @@ enum ModemCommands {
 
   }
 
-  /// Turns a device fully on before it links as a responder, so it memorizes full on as its
-  /// on-level for the group, rather than off. A device that doesn't turn on, such as an i2CS
-  /// device that isn't linked to the modem yet, links in whatever state it's in.
+  /// Turns a light or switched load fully on before it links as a responder, so it memorizes
+  /// full on as its on-level for the group, rather than off. A device that doesn't turn on,
+  /// such as an i2CS device that isn't linked to the modem yet, links in whatever state it's in.
   ///
   /// - Throws: `CancellationError` after Control-C.
   private static func turnOnBeforeLinking(_ device: InsteonAddress, linker: Linker) async throws {

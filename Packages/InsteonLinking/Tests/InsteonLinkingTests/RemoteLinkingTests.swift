@@ -264,7 +264,6 @@ struct RemoteLinkingTests {
 
   }
 
-
   // MARK: - Pinned before the manual linking moves out of the command
 
   @Test func takesTheModemOutOfLinkingModeWhenNoDeviceLinksManually() async throws {
