@@ -207,16 +207,56 @@ struct NetworkSnapshotStoreTests {
 
   }
 
+  /// The keys of every object in a JSON value, but for the keys of the object under
+  /// `"devices"`, which are addresses; the keys inside each device's entry are collected.
+  static func keys(in value: Any, under parent: String? = nil) -> Set<String> {
+
+    var keys: Set<String> = []
+
+    if let object = value as? [String: Any] {
+
+      for (key, child) in object {
+
+        if parent != "devices" {
+
+          keys.insert(key)
+
+        }
+
+        keys.formUnion(Self.keys(in: child, under: key))
+
+      }
+
+    } else if let array = value as? [Any] {
+
+      for element in array {
+
+        keys.formUnion(Self.keys(in: element, under: parent))
+
+      }
+
+    }
+
+    return keys
+
+  }
+
+  /// The file holds only the keys its format documents, so nothing else, such as a
+  /// credential or the Hub's MAC address, can be in it.
   @Test func neverWritesCredentials() throws {
 
     let json: Data = try JSONFileDeviceRegistryStore.json(Self.snapshot)
-    let text: String = String(decoding: json, as: UTF8.self).lowercased()
+    let file: Any = try JSONSerialization.jsonObject(with: json)
+    let devices: [String: Any]? = (file as? [String: Any])?["devices"] as? [String: Any]
 
-    for word in ["password", "user", "credential", "secret", "token", "mac"] {
-
-      #expect(!text.contains(word), "The file has \(word).")
-
-    }
+    #expect(Self.keys(in: file) == [
+      "version", "devices", "modem", "hub",
+      "category", "subcategory", "firmwareVersion",
+      "engine", "allLinkDatabase", "level", "lastSeen",
+      "delta", "records", "address", "bytes", "checksumFailed",
+      "host", "port", "insteonID"
+    ])
+    #expect(devices.map { (entries: [String: Any]) -> Set<String> in Set(entries.keys) } == ["1A.2B.3C", "4D.5E.6F", "0A.0B.0C"])
 
   }
 

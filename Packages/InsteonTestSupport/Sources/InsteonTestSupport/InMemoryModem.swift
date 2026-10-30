@@ -6,6 +6,9 @@ import InsteonProtocol
 ///
 /// Each device's database is linear: its records count down by 8 from `0x0FFF`, and an
 /// address that was never written holds a record that marks the end of the database.
+///
+/// Each stream ``replies()`` returns stops being fed once its reader stops reading, and
+/// finishes when the modem is released.
 public actor InMemoryModem: LinkingModem {
 
   /// A write to a device's database.
@@ -117,10 +120,23 @@ public actor InMemoryModem: LinkingModem {
   /// Whether the modem was asked for its own address.
   public private(set) var wasAskedForItsAddress = false
 
-  private var subscribers: [AsyncStream<ModemReply>.Continuation] = []
+  /// The streams ``replies()`` returned that are still read, by the order they were made.
+  private var subscribers: [Int: AsyncStream<ModemReply>.Continuation] = [:]
+
+  private var nextSubscriber: Int = 0
 
   /// Creates a modem with no records, whose devices have empty databases.
   public init() {}
+
+  deinit {
+
+    for continuation in subscribers.values {
+
+      continuation.finish()
+
+    }
+
+  }
 
   /// Sets the level a device reports in its acknowledgment of a status request, as if it had
   /// been turned on or off at the device.
@@ -216,7 +232,7 @@ public actor InMemoryModem: LinkingModem {
       command: Command(command1: identity.role.rawValue, command2: 0x00)
     )
 
-    for subscriber in subscribers {
+    for subscriber in subscribers.values {
 
       subscriber.yield(.messageReceived(broadcast))
 
@@ -311,6 +327,8 @@ public actor InMemoryModem: LinkingModem {
 
   // MARK: - LinkingModem
 
+  /// Returns the modem's address, category, subcategory and firmware version, and records
+  /// that it was asked.
   public func modemInfo() async throws -> ModemInfo {
 
     wasAskedForItsAddress = true
@@ -319,6 +337,8 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Carries out a serial command: changes the modem's own records, or enters or leaves
+  /// linking mode. Other commands are accepted and do nothing.
   public func send(_ command: SerialCommand) async throws {
 
     switch command {
@@ -337,6 +357,13 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Answers a standard message as the device it's sent to would: a status request with the
+  /// device's delta and level, Get Insteon Engine Version with its engine, ID Request with an
+  /// acknowledgment and then its SET Button Pressed broadcast, Light On and Light Off by
+  /// setting its level, and a linking command by entering linking mode.
+  ///
+  /// - Throws: `ModemError.deviceTimedOut` for a device that acknowledges nothing, and
+  ///   `ModemError.deviceRejected` for a request an unlinked device rejects.
   public func request(_ message: StandardMessage, timeout: Duration) async throws -> ReceivedMessage {
 
     let device = message.destination
@@ -418,6 +445,11 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Answers an extended message as the device it's sent to would: a linking command enters
+  /// linking mode, and a write to its ALL-Link database stores the record, unless the device
+  /// forgets writes.
+  ///
+  /// - Throws: `ModemError.deviceRejected` for a message an unlinked device rejects.
   public func request(_ message: ExtendedMessage, timeout: Duration) async throws -> ReceivedMessage {
 
     let device = message.destination
@@ -474,6 +506,10 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Returns the record at an address in a device's database, where `0x0000` asks for the
+  /// first record, at `0x0FFF`.
+  ///
+  /// - Throws: `ModemError.deviceRejected` for an unlinked device.
   public func readAllLinkRecord(of device: InsteonAddress, at address: UInt16, timeout: Duration) async throws -> AllLinkRecordResponse {
 
     guard !unlinkedDevices.contains(device) else {
@@ -488,12 +524,14 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Returns the modem's own records for a group and device.
   public func allLinkRecords(group: AllLinkGroupNumber, device: InsteonAddress) async throws -> [AllLinkRecord] {
 
     modemRecords.filter { $0.group == group && $0.address == device }
 
   }
 
+  /// Returns the modem's own records, and counts the read.
   public func allLinkRecords() async throws -> [AllLinkRecord] {
 
     modemDatabaseReads += 1
@@ -502,6 +540,10 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Returns a device's records from `0x0FFF` down, ending with the record that marks the
+  /// end of its database, and counts the read.
+  ///
+  /// - Throws: `ModemError.deviceRejected` for an unlinked device.
   public func readAllLinkDatabase(of device: InsteonAddress, timeout: Duration) async throws -> [AllLinkRecordResponse] {
 
     guard !unlinkedDevices.contains(device) else {
@@ -533,13 +575,42 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Returns a stream of the broadcasts and link reports the modem sends after this call.
+  ///
+  /// The stream finishes when the modem is released, and stops being fed once its reader
+  /// stops reading.
   public func replies() -> AsyncStream<ModemReply> {
 
     let (stream, continuation) = AsyncStream<ModemReply>.makeStream()
+    let id: Int = nextSubscriber
 
-    subscribers.append(continuation)
+    nextSubscriber += 1
+    subscribers[id] = continuation
+
+    continuation.onTermination = { [weak self] (_: AsyncStream<ModemReply>.Continuation.Termination) -> Void in
+
+      guard let self else {
+
+        return
+
+      }
+
+      Task {
+
+        await self.removeSubscriber(id)
+
+      }
+
+    }
 
     return stream
+
+  }
+
+  /// Stops feeding a stream whose reader stopped reading.
+  private func removeSubscriber(_ id: Int) {
+
+    subscribers[id] = nil
 
   }
 
@@ -606,7 +677,7 @@ public actor InMemoryModem: LinkingModem {
 
     }
 
-    for subscriber in subscribers {
+    for subscriber in subscribers.values {
 
       subscriber.yield(.allLinkingCompleted(link))
 
