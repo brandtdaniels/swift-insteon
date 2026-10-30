@@ -54,6 +54,18 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
 /// short, or a catalog from a different version than the manifest, is never used. The hash
 /// shows that the two files agree; HTTPS is what shows they came from the catalog's host.
 ///
+/// ## Redirects
+///
+/// The catalog isn't signed. Its integrity rests on HTTPS to the expected host, plus the
+/// manifest's SHA-256, which only shows that the catalog matches a manifest fetched over the
+/// same connection. So the default client follows a redirect only to HTTPS at the same host
+/// and port as the request, using ``DeviceCatalogUpdater/redirectPolicy``, and decides before
+/// following it. A redirect that leaves HTTPS, even for one step, or goes to another host
+/// fails the update with `HTTPClientError.insecureRedirect` or
+/// `HTTPClientError.redirectRefused`, and nothing is downloaded from the address it named.
+/// A redirect on the catalog's own host, such as one that adds a trailing slash, is followed.
+/// A client passed in place of the default should refuse redirects the same way.
+///
 /// ```swift
 /// let saved: Data? = try? Data(contentsOf: savedURL)
 ///
@@ -71,6 +83,12 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
 /// Hashes are worked out with swift-crypto, which uses CryptoKit on Apple platforms.
 public struct DeviceCatalogUpdater: Sendable {
 
+  /// Which redirects the default client follows: only those to HTTPS at the same host and
+  /// port as the request.
+  ///
+  /// A client created for an updater, such as one with its own session, should use it too.
+  public static let redirectPolicy: RedirectPolicy = .sameOriginHTTPSOnly
+
   /// Where the Insteon device catalog publishes the MAJOR version this package reads, `v0`.
   public static let defaultLocation = URL(string: "https://brandtdaniels.github.io/insteon-device-catalog/v0/")!
 
@@ -83,10 +101,14 @@ public struct DeviceCatalogUpdater: Sendable {
   /// Creates an updater.
   ///
   /// - Parameters:
-  ///   - client: The client to send requests through. Defaults to a `URLSessionHTTPClient`.
+  ///   - client: The client to send requests through. Defaults to a `URLSessionHTTPClient` with
+  ///     ``DeviceCatalogUpdater/redirectPolicy``.
   ///   - location: The directory the manifest and catalog are published in. Defaults to
   ///     ``DeviceCatalogUpdater/defaultLocation``.
-  public init(client: any HTTPClient = URLSessionHTTPClient(), location: URL = DeviceCatalogUpdater.defaultLocation) {
+  public init(
+    client: any HTTPClient = URLSessionHTTPClient(redirectPolicy: DeviceCatalogUpdater.redirectPolicy),
+    location: URL = DeviceCatalogUpdater.defaultLocation
+  ) {
 
     self.client = client
     self.location = location
@@ -103,7 +125,8 @@ public struct DeviceCatalogUpdater: Sendable {
   ///   ``DeviceCatalogUpdateError`` if a download fails its checks; `DecodingError` if a
   ///   catalog that matches its SHA-256 doesn't read as a catalog;
   ///   `DeviceCatalogError.missingBundledCatalog` if the shipped copy or its manifest is
-  ///   missing; or the client's error if a request gets no response.
+  ///   missing; or the client's error if a request gets no response or is redirected somewhere
+  ///   its policy refuses, such as `HTTPClientError.redirectRefused`.
   public func update(replacing current: Data?) async throws -> DeviceCatalogUpdate {
 
     let manifest = try await manifest()

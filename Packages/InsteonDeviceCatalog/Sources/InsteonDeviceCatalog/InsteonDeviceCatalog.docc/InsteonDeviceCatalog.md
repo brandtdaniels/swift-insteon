@@ -47,6 +47,14 @@ SHA-256 differs from the app's copy, and uses the download only if it hashes to 
 Below 1.0 any MINOR can change the catalog's format, so a catalog with another MAJOR.MINOR
 waits for an update of the package. Updating is optional.
 
+The catalog isn't signed, so a download's integrity rests on HTTPS to the expected host plus
+the manifest's SHA-256. The SHA-256 only shows that the catalog matches a manifest fetched
+over the same connection, so the updater's default client follows a redirect only to HTTPS at
+the same host and port, deciding before each one, by
+``DeviceCatalogUpdater/redirectPolicy``. A redirect that leaves HTTPS, even for one step on
+the way back to HTTPS elsewhere, or goes to another host fails the update, and the app keeps
+its copy.
+
 ``DeviceEventInterpreter`` reads the messages a modem receives as ``DeviceEvent``s. It learns
 each device's profile when the device reports its identity, such as when its SET button is
 held to link it, and from then on reports what the device's group commands mean and when it
