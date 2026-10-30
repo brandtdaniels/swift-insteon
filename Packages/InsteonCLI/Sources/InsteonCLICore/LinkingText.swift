@@ -183,6 +183,25 @@ public enum LinkingInstructions {
 
   }
 
+  /// What to tell the person when a light or switched load doesn't turn on with Light On before
+  /// it links, as when an i2CS device rejects the command because it isn't linked to the modem.
+  ///
+  /// The device links in the state it's in, so its on-level matches that state. Once it's
+  /// linked, running `insteon link` for it again turns it on first and rewrites its on-level
+  /// to full on.
+  ///
+  /// - Parameters:
+  ///   - device: The device's address.
+  ///   - reason: Why the device didn't turn on, as a sentence that ends with a period.
+  /// - Returns: A message that names the device, gives the reason, and says how to give it
+  ///   full on as its on-level.
+  public static func didNotTurnOnBeforeLinking(_ device: InsteonAddress, reason: String) -> String {
+
+    "\(device) didn't turn on: \(reason) It links in the state it's in, so its on-level matches that state. "
+      + "To give it full on, run 'insteon link \(device)' again once it's linked, or turn it on at the device before linking."
+
+  }
+
 }
 
 /// Explains a link the modem reported that isn't the one asked for.

@@ -422,7 +422,7 @@ enum ModemCommands {
 
     } catch {
 
-      Output.note("\(device) didn't turn on: \(Names.message(for: error)) It links in the state it's in; if it's off, turn it on first.")
+      Output.note(LinkingInstructions.didNotTurnOnBeforeLinking(device, reason: Names.message(for: error)))
 
     }
 
