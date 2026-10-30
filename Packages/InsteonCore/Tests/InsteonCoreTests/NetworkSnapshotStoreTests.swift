@@ -56,7 +56,8 @@ struct NetworkSnapshotStoreTests {
 
   @Test func writesTheFormatItDocuments() throws {
 
-    let text = String(decoding: try JSONFileDeviceRegistryStore.json(Self.snapshot), as: UTF8.self)
+    let json: Data = try JSONFileDeviceRegistryStore.json(Self.snapshot)
+    let text = String(decoding: json, as: UTF8.self)
 
     #expect(text.contains("\"version\" : 1"))
     #expect(text.contains("\"engine\" : \"i2cs\""))
@@ -208,7 +209,8 @@ struct NetworkSnapshotStoreTests {
 
   @Test func neverWritesCredentials() throws {
 
-    let text: String = String(decoding: try JSONFileDeviceRegistryStore.json(Self.snapshot), as: UTF8.self).lowercased()
+    let json: Data = try JSONFileDeviceRegistryStore.json(Self.snapshot)
+    let text: String = String(decoding: json, as: UTF8.self).lowercased()
 
     for word in ["password", "user", "credential", "secret", "token", "mac"] {
 
