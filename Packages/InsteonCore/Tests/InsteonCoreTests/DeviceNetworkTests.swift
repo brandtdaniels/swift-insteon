@@ -320,6 +320,25 @@ struct DeviceNetworkTests {
 
   }
 
+  @Test func leavesTheSnapshotsHubAloneForAModemThatIsntAHubs() async throws {
+
+    let modem = InMemoryModem()
+    let known = HubLocation(host: "192.0.2.10", port: 25105, insteonID: InsteonAddress(0x44, 0x55, 0x66))
+    let unidentified = HubLocation(host: "192.0.2.10", port: 25105)
+
+    // A serial modem, with the Hub the snapshot names.
+    let network: DeviceNetwork = self.network(modem, snapshot: NetworkSnapshot(hub: known))
+    let other: DeviceNetwork = self.network(modem, snapshot: NetworkSnapshot(hub: unidentified))
+
+    _ = try await network.modemInfo()
+    _ = try await other.modemInfo()
+
+    #expect(await network.hubLocation == known)
+    #expect(await network.snapshot().hub == known)
+    #expect(await other.hubLocation == unidentified)
+
+  }
+
   @Test func leavesTheHubOutForAModemThatIsntAHubs() async throws {
 
     let modem = InMemoryModem()

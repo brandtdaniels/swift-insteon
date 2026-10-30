@@ -58,6 +58,10 @@ public actor DeviceNetwork {
 
   private var hub: HubLocation?
 
+  /// Whether the modem is the Hub's, because the network was created with a Hub, so the
+  /// modem's address is the Hub's Insteon ID.
+  private let isHubsModem: Bool
+
   /// An identification in progress, which every caller for its address waits on.
   private struct Identification {
 
@@ -84,8 +88,9 @@ public actor DeviceNetwork {
   ///   - snapshot: What the network knew before, such as a snapshot a ``NetworkSnapshotStore``
   ///     loaded. Defaults to nothing.
   ///   - hub: The Hub the modem is reached through, or `nil` for a modem that isn't a Hub's,
-  ///     which keeps the Hub the snapshot names. A Hub at the snapshot's host and port keeps
-  ///     its Insteon ID. Defaults to `nil`.
+  ///     which keeps the Hub the snapshot names as it is. A Hub at the snapshot's host and
+  ///     port keeps its Insteon ID. Only a network created with a Hub learns the Hub's
+  ///     Insteon ID from ``modemInfo()``. Defaults to `nil`.
   ///   - timeout: How long to wait for each request to a device that a standard message
   ///     answers. Defaults to `Modem.defaultRequestTimeout`. ALL-Link databases are read with
   ///     `Modem.defaultExtendedRequestTimeout`.
@@ -135,6 +140,7 @@ public actor DeviceNetwork {
     self.devices = snapshot.devices
     self.modemRecords = snapshot.modemDatabase
     self.hub = location
+    self.isHubsModem = hub != nil
 
   }
 
@@ -342,7 +348,10 @@ public actor DeviceNetwork {
   }
 
   /// Asks the modem about itself, and records its address as the Hub's Insteon ID when the
-  /// modem is a Hub's.
+  /// network was created with a Hub, so the modem is the Hub's.
+  ///
+  /// A network created without a Hub leaves the Hub the snapshot names as it is, since its
+  /// modem isn't that Hub's.
   ///
   /// - Returns: The modem's address, category, subcategory and firmware version.
   /// - Throws: The modem's errors.
@@ -350,7 +359,11 @@ public actor DeviceNetwork {
 
     let info: ModemInfo = try await modem.modemInfo()
 
-    hub?.insteonID = info.address
+    if isHubsModem {
+
+      hub?.insteonID = info.address
+
+    }
 
     return info
 
