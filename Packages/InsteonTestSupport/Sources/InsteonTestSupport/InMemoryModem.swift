@@ -277,7 +277,7 @@ public actor InMemoryModem: LinkingModem {
 
     } else {
 
-      damagedRecords[device]?.remove(address)
+      _ = damagedRecords[device]?.remove(address)
 
     }
 

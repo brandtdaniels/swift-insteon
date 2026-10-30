@@ -69,6 +69,10 @@ let database = try await network.allLinkDatabase(of: lamp)
 try store.saveNetwork(await network.snapshot())
 ```
 
+When another process can save to the same store while a network runs, read the store again
+and save it merged with only what the network changed since it started, with
+``NetworkSnapshot/merging(changesFrom:to:)``, so the other process's newer values are kept.
+
 ## Topics
 
 ### Devices
