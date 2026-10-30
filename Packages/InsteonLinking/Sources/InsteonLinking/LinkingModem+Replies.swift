@@ -3,10 +3,10 @@ import InsteonProtocol
 
 extension LinkingModem {
 
-  /// Starts listening to the modem, runs `send`, then waits for the first reply `match`
+  /// Starts listening to the modem, runs `start`, then waits for the first reply `match`
   /// reads a value from, or for `timeout` to pass.
   ///
-  /// Listening starts before `send` runs, so a reply to what it sends can't be missed. This
+  /// Listening starts before `start` runs, so a reply to what it sends can't be missed. This
   /// is how to wait for what a device or the modem sends after a request: a SET Button
   /// Pressed broadcast after ID Request, a Product Data Response after Product Data Request,
   /// or the modem's report of a link after Start ALL-Linking.
@@ -23,26 +23,26 @@ extension LinkingModem {
   /// ```
   ///
   /// - Parameters:
-  ///   - timeout: How long to wait for a reply once `send` has returned.
+  ///   - timeout: How long to wait for a reply once `start` has returned.
   ///   - clock: The clock that times the wait. Defaults to a `ContinuousClock`; tests can pass
   ///     a clock they control.
-  ///   - send: What to send. Its errors are thrown before any waiting.
+  ///   - start: Sends what the reply answers. Its errors are thrown before any waiting.
   ///   - match: Reads a value from a reply, or returns `nil` to keep waiting. An error it
   ///     throws ends the wait and is thrown.
   /// - Returns: The value read from the first matching reply, or `nil` if none arrived in
   ///   time.
-  /// - Throws: The errors of `send` and `match`, `ModemError.connectionClosed` if the modem
+  /// - Throws: The errors of `start` and `match`, `ModemError.connectionClosed` if the modem
   ///   closes first, or `CancellationError` if the task is canceled.
   public func firstReply<Value: Sendable>(
     within timeout: Duration,
     clock: any Clock<Duration> = ContinuousClock(),
-    after send: () async throws -> Void,
+    after start: () async throws -> Void,
     matching match: @escaping @Sendable (ModemReply) throws -> Value?
   ) async throws -> Value? {
 
     let stream: AsyncStream<ModemReply> = await self.replies()
 
-    try await send()
+    try await start()
 
     return try await withThrowingTaskGroup(of: Value?.self) { group in
 
