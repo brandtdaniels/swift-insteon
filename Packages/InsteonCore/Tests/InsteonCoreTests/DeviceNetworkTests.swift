@@ -66,6 +66,17 @@ struct DeviceNetworkTests {
 
   }
 
+  /// How many times the modem asked the plug for its engine.
+  func engineRequests(_ modem: InMemoryModem) async -> Int {
+
+    await modem.linkingSteps.filter { (step: InMemoryModem.LinkingStep) -> Bool in
+
+      step == .device(Example.plug, Command(command1: 0x0D), isExtended: false)
+
+    }.count
+
+  }
+
   // MARK: - Identifying
 
   @Test func identifiesADeviceAndRecordsItsIdentityEngineAndWhenItAnswered() async throws {
@@ -85,7 +96,7 @@ struct DeviceNetworkTests {
 
   }
 
-  @Test func sharesAnIdentificationInProgressForTheSameAddress() async throws {
+  @Test(.timeLimit(.minutes(1))) func sharesAnIdentificationInProgressForTheSameAddress() async throws {
 
     let modem = InMemoryModem()
     let network: DeviceNetwork = self.network(modem)
@@ -117,6 +128,100 @@ struct DeviceNetworkTests {
     #expect(engineRequests == 1)
     #expect(Set(results).count == 1)
     #expect(results.first?.engine == .i2)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func cancelingOneCallCancelsTheIdentificationItShares() async throws {
+
+    let modem = InMemoryModem()
+    let network: DeviceNetwork = self.network(modem)
+
+    // The device sends no broadcast, so the identification stays in progress.
+    let first = Task { () async throws -> DeviceIdentification in try await network.identify(Example.plug) }
+
+    await clock.waitForSleeper(until: Modem.defaultRequestTimeout)
+
+    let second = Task { () async throws -> DeviceIdentification in try await network.identify(Example.plug) }
+
+    while await network.joinedIdentifications < 1 {
+
+      await Task.yield()
+
+    }
+
+    second.cancel()
+
+    await #expect(throws: CancellationError.self) {
+
+      _ = try await first.value
+
+    }
+
+    await #expect(throws: CancellationError.self) {
+
+      _ = try await second.value
+
+    }
+
+    // The canceled identification is over, so the next call asks the device again.
+    await modem.setIdentity(plugPressed)
+
+    let identification: DeviceIdentification = try await network.identify(Example.plug)
+
+    #expect(identification.identity == plugPressed)
+    #expect(await engineRequests(modem) == 2)
+    #expect(await network.registry.device(Example.plug)?.identity == Example.plugIdentity)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func startsANewIdentificationForACallAfterOneIsCanceled() async throws {
+
+    let modem = InMemoryModem()
+    let network: DeviceNetwork = self.network(modem)
+
+    let first = Task { () async throws -> DeviceIdentification in try await network.identify(Example.plug) }
+
+    await clock.waitForSleeper(until: Modem.defaultRequestTimeout)
+
+    // Canceling the only call cancels the identification at once, whether or not it has
+    // finished yet; the next call doesn't wait on it.
+    await modem.setIdentity(plugPressed)
+    first.cancel()
+
+    let identification: DeviceIdentification = try await network.identify(Example.plug)
+
+    await #expect(throws: CancellationError.self) {
+
+      _ = try await first.value
+
+    }
+
+    #expect(identification.identity == plugPressed)
+    #expect(await engineRequests(modem) == 2)
+    #expect(await network.joinedIdentifications == 0)
+
+  }
+
+  @Test func asksAgainAfterAnIdentificationFails() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setUnanswering(Example.plug)
+    let network: DeviceNetwork = self.network(modem)
+
+    await #expect(throws: ModemError.self) {
+
+      _ = try await network.identify(Example.plug)
+
+    }
+
+    await modem.setUnanswering(Example.plug, false)
+    await modem.setIdentity(plugPressed)
+
+    let identification: DeviceIdentification = try await network.identify(Example.plug)
+
+    #expect(identification.identity == plugPressed)
+    #expect(await network.joinedIdentifications == 0)
+    #expect(await engineRequests(modem) == 1)
 
   }
 

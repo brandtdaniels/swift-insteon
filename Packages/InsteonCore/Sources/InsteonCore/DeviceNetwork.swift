@@ -32,6 +32,10 @@ import InsteonProtocol
 ///
 /// Identifying a device is shared: while one identification of an address is in progress,
 /// another call for the same address waits for its result instead of asking the device again.
+/// Canceling any call that waits on an identification cancels the identification, so every
+/// call waiting on it throws `CancellationError`. A call that arrives once an identification
+/// is canceled starts a new one rather than wait on it, and one that arrives after an
+/// identification ends, however it ended, asks the device again.
 ///
 /// Times, such as when a device last answered, come from the `now` function the network is
 /// created with, so a test can give fixed times.
@@ -250,7 +254,8 @@ public actor DeviceNetwork {
   /// The identity goes in the ``registry``, and the engine and when the device answered in
   /// the device's state. While an identification of the same address is in progress, the call
   /// waits for its result instead of asking the device again. Canceling a call cancels the
-  /// identification it waits on, so every call waiting on it throws `CancellationError`.
+  /// identification it waits on, so every call waiting on it throws `CancellationError`; a
+  /// call made after that starts a new identification instead of waiting on the canceled one.
   ///
   /// - Parameter device: The device to ask.
   /// - Returns: What the device said, as `DeviceIdentifier.identify(_:)` returns it.
@@ -273,9 +278,12 @@ public actor DeviceNetwork {
   }
 
   /// The identification of a device in progress, or one started for it.
+  ///
+  /// An identification that's canceled but hasn't finished yet isn't joined: a new one
+  /// replaces it, and the canceled one, when it finishes, leaves the new one in place.
   private func identification(of device: InsteonAddress) -> Task<DeviceIdentification, any Error> {
 
-    if let running = identifications[device] {
+    if let running = identifications[device], !running.task.isCancelled {
 
       joinedIdentifications += 1
 

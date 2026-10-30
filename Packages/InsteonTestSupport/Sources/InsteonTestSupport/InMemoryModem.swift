@@ -78,6 +78,10 @@ public actor InMemoryModem: LinkingModem {
   /// Devices that never complete a link.
   public var silentDevices: Set<InsteonAddress> = []
 
+  /// Devices that acknowledge no standard message, so each one sent to them throws
+  /// `ModemError.deviceTimedOut`.
+  public var unansweringDevices: Set<InsteonAddress> = []
+
   /// Devices whose unlinks the modem carries out without reporting them.
   public var unreportedUnlinks: Set<InsteonAddress> = []
 
@@ -142,6 +146,25 @@ public actor InMemoryModem: LinkingModem {
   public func setSilent(_ device: InsteonAddress) {
 
     silentDevices.insert(device)
+
+  }
+
+  /// Makes a device acknowledge no standard message, or acknowledge them again.
+  ///
+  /// - Parameters:
+  ///   - device: The device.
+  ///   - isUnanswering: Whether the device stops acknowledging. Defaults to `true`.
+  public func setUnanswering(_ device: InsteonAddress, _ isUnanswering: Bool = true) {
+
+    if isUnanswering {
+
+      unansweringDevices.insert(device)
+
+    } else {
+
+      unansweringDevices.remove(device)
+
+    }
 
   }
 
@@ -281,6 +304,12 @@ public actor InMemoryModem: LinkingModem {
 
     let device = message.destination
     var command2 = message.command.command2
+
+    guard !unansweringDevices.contains(device) else {
+
+      throw ModemError.deviceTimedOut(device)
+
+    }
 
     if message.command.command1 == 0x19 {
 
