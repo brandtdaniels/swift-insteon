@@ -92,6 +92,21 @@ public struct HubDiscovery: Sendable {
 
   }
 
+  /// How many addresses ``HubDiscovery/discover(_:)`` would ask, for a caller that wants to say
+  /// how large the search is before it starts.
+  ///
+  /// - Returns: The count of distinct addresses on the private subnets that are searched, each
+  ///   counted once even where subnets overlap.
+  /// - Throws: The network's error if its subnets can't be read.
+  public func searchableAddressCount() throws -> Int {
+
+    try network.subnets()
+      .filter { $0.isPrivate && $0.prefixLength >= Self.shortestPrefixLength }
+      .reduce(into: Set<UInt32>()) { $0.formUnion($1.hostAddresses) }
+      .count
+
+  }
+
   /// Asks every address on the local private subnets whether it's a Hub.
   ///
   /// - Parameter found: Called with each Hub as it's found, in the order the Hubs answer.

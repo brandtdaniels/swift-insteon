@@ -1,10 +1,14 @@
 import InsteonCLICore
 import InsteonHubClient
 import InsteonHubDiscovery
-import InsteonModem
 import InsteonProtocol
 
 /// `insteon discover`: finds Hubs on the local network, and with Insteon Connect when asked.
+///
+/// The reusable parts, running local and Insteon Connect discovery, stopping at the first Hub,
+/// merging duplicates, and the password policy for confirming a Hub, live in
+/// `InsteonHubDiscovery`'s `HubFinder` and `HubIdentifier`. This command is the argument
+/// parsing, the progress and prompts, and the output around them.
 enum DiscoverCommand {
 
   /// A Hub as `--json` prints it. The identity is left out when it isn't known.
@@ -34,14 +38,11 @@ enum DiscoverCommand {
   /// How often the local search says it's still going.
   private static let progressInterval: Duration = .seconds(5)
 
-  /// How long a Hub has to answer Get IM Info with `--identify`.
-  private static let identifyTimeout: Duration = .seconds(15)
-
   static func run(_ options: DiscoverOptions, envFilePath: String?, printsJSON: Bool) async throws {
 
     // Read before searching, so a missing user name or password stops the command at once.
-    let credentials = try options.identifiesHubs
-      ? HubCredentials(environment: ModemSession.loadEnvironment(explicitPath: envFilePath))
+    let credentials: HubIdentifier.Credentials? = try options.identifiesHubs
+      ? Self.credentials(envFilePath: envFilePath)
       : nil
 
     // Without a person to ask before each Hub is sent the password, it's sent only to the one
@@ -56,7 +57,8 @@ enum DiscoverCommand {
     }
 
     let names = ProductNames()
-    var hubs: [FoundHub] = []
+    let finder = HubFinder()
+    var hubs: [DiscoveredHub] = []
     var failures: [any Error] = []
 
     if options.asksInsteonConnect {
@@ -65,9 +67,10 @@ enum DiscoverCommand {
 
       do {
 
-        for hub in try await InsteonConnectLookup().hubs() {
+        for var hub in try await finder.lookup.hubs() {
 
-          merge(hub, foundBy: .insteonConnect, names: names, into: &hubs)
+          hub.foundBy = [.insteonConnect]
+          HubFinder.merge(hub, into: &hubs)
 
         }
 
@@ -84,11 +87,11 @@ enum DiscoverCommand {
 
       do {
 
-        let found = try await searchLocalNetwork(stoppingAtFirst: !options.searchesAllAddresses)
+        let found = try await searchLocalNetwork(finder, stoppingAtFirst: !options.searchesAllAddresses)
 
         for hub in found {
 
-          merge(hub, foundBy: .local, names: names, into: &hubs)
+          HubFinder.merge(hub, into: &hubs)
 
         }
 
@@ -126,19 +129,21 @@ enum DiscoverCommand {
 
     if let credentials {
 
-      try await identifyHubs(&hubs, target: options.identifyTarget, credentials: credentials, names: names)
+      try await identifyHubs(&hubs, target: options.identifyTarget, credentials: credentials)
 
     }
 
+    let found = hubs.map { foundHub($0, names: names) }
+
     if printsJSON {
 
-      try Output.json(hubs)
+      try Output.json(found)
 
       return
 
     }
 
-    guard !hubs.isEmpty else {
+    guard !found.isEmpty else {
 
       Output.line("No Hubs found.")
 
@@ -146,7 +151,7 @@ enum DiscoverCommand {
 
     }
 
-    let rows: [[String]] = hubs.map { hub in
+    let rows: [[String]] = found.map { hub in
 
       [
         "\(hub.host):\(hub.port)",
@@ -169,33 +174,14 @@ enum DiscoverCommand {
 
   /// Searches the local network, saying how it's going on standard error, and stops at the
   /// first Hub when asked to.
-  private static func searchLocalNetwork(stoppingAtFirst: Bool) async throws -> [DiscoveredHub] {
+  private static func searchLocalNetwork(_ finder: HubFinder, stoppingAtFirst: Bool) async throws -> [DiscoveredHub] {
 
-    let addressCount = (try? InterfaceNetwork().subnets())
-      .map { subnets in
-
-        Set(subnets.filter { $0.isPrivate && $0.prefixLength >= HubDiscovery.shortestPrefixLength }.flatMap(\.hosts)).count
-
-      }
+    let addressCount = try? finder.discovery.searchableAddressCount()
 
     Output.note(
       "Searching \(addressCount.map { Wording.count($0, "address", plural: "addresses") } ?? "the addresses") on the local network"
         + (stoppingAtFirst ? ", stopping at the first Hub..." : "; this can take a minute...")
     )
-
-    let (found, continuation) = AsyncStream<DiscoveredHub>.makeStream()
-
-    let search = Task {
-
-      defer { continuation.finish() }
-
-      return try await HubDiscovery().discover { hub in
-
-        continuation.yield(hub)
-
-      }
-
-    }
 
     let interval = progressInterval
     let progress = Task {
@@ -215,34 +201,19 @@ enum DiscoverCommand {
 
     defer { progress.cancel() }
 
-    return try await withTaskCancellationHandler {
+    let search = try await finder.searchLocalNetwork(stoppingAtFirstHub: stoppingAtFirst) { hub in
 
-      var hubs: [DiscoveredHub] = []
-
-      for await hub in found {
-
-        Output.note("Found a Hub at \(hub.endpoint.host):\(hub.endpoint.port)")
-        hubs.append(hub)
-
-        if stoppingAtFirst {
-
-          search.cancel()
-          Output.note("Stopped at the first Hub; 'insteon discover --all' searches every address.")
-
-          return hubs
-
-        }
-
-      }
-
-      // Every address was asked; the search's own list is in address order.
-      return try await search.value
-
-    } onCancel: {
-
-      search.cancel()
+      Output.note("Found a Hub at \(hub.endpoint.host):\(hub.endpoint.port)")
 
     }
+
+    if search.stoppedAtFirstHub {
+
+      Output.note("Stopped at the first Hub; 'insteon discover --all' searches every address.")
+
+    }
+
+    return search.hubs
 
   }
 
@@ -250,18 +221,20 @@ enum DiscoverCommand {
   /// named, or else each Hub on the Hub's port that the person agrees to send them to.
   ///
   /// Asking stops at the first Hub that rejects the credentials, so they aren't tried on the
-  /// rest.
+  /// rest. The policy for where the credentials go lives in `HubIdentifier`; this asks the
+  /// person and prints what came of each candidate.
   private static func identifyHubs(
-    _ hubs: inout [FoundHub],
+    _ hubs: inout [DiscoveredHub],
     target: HubAddress?,
-    credentials: HubCredentials,
-    names: ProductNames
+    credentials: HubIdentifier.Credentials
   ) async throws {
+
+    let identifier = HubIdentifier()
 
     if let target {
 
       let port: Int = target.port ?? HubEndpoint.defaultPort
-      let index: Int? = hubs.firstIndex { $0.host == target.host && $0.port == port }
+      let index: Int? = hubs.firstIndex { $0.endpoint.host == target.host && $0.endpoint.port == port }
 
       guard let index else {
 
@@ -271,7 +244,14 @@ enum DiscoverCommand {
 
       }
 
-      _ = try await identify(&hubs[index], credentials: credentials, names: names)
+      let outcome = try await identifier.identify(hubs[index], credentials: credentials)
+      report(outcome, for: hubs[index])
+
+      if case let .identified(info) = outcome {
+
+        apply(info, to: &hubs[index])
+
+      }
 
       return
 
@@ -283,183 +263,75 @@ enum DiscoverCommand {
 
     }
 
-    for index in hubs.indices {
+    let results = try await identifier.identify(
+      hubs,
+      provideCredentials: { hub in
 
-      let address = "\(hubs[index].host):\(hubs[index].port)"
+        let address = "\(hub.endpoint.host):\(hub.endpoint.port)"
 
-      // Hubs answer on their own port. Another port is sent the password only when named.
-      guard hubs[index].port == HubEndpoint.defaultPort else {
+        return try await Terminal.confirm("Send the Hub's credentials to \(address) to identify it? [y/N]") ? credentials : nil
 
-        Output.note(
-          "\(address) isn't on the Hub's port, \(HubEndpoint.defaultPort), so it wasn't sent the password. "
-            + "'insteon discover --identify \(address)' sends it."
-        )
+      },
+      onResult: { hub, outcome in
 
-        continue
-
-      }
-
-      guard isPrivate(hubs[index].host) else {
-
-        Output.note("\(hubs[index].host) isn't a private address, so it wasn't sent the password.")
-
-        continue
+        report(outcome, for: hub)
 
       }
+    )
 
-      let question = "Send the Hub's credentials to \(address) to identify it? [y/N]"
+    for (hub, outcome) in results {
 
-      guard try await Terminal.confirm(question) else {
+      if case let .identified(info) = outcome, let index = hubs.firstIndex(where: { $0.endpoint == hub.endpoint }) {
 
-        continue
-
-      }
-
-      let rejected: Bool = try await identify(&hubs[index], credentials: credentials, names: names)
-
-      if rejected {
-
-        Output.note("Stopped identifying Hubs, so the rejected credentials aren't sent to any more of them.")
-
-        return
+        apply(info, to: &hubs[index])
 
       }
 
     }
 
-  }
+    if results.contains(where: { $0.outcome.isAuthenticationFailure }) {
 
-  /// Asks a Hub at a private address for Get IM Info, and keeps its Insteon ID and identity.
-  ///
-  /// - Returns: Whether the Hub rejected the credentials.
-  /// - Throws: `CancellationError` if the task was canceled.
-  private static func identify(_ hub: inout FoundHub, credentials: HubCredentials, names: ProductNames) async throws -> Bool {
-
-    // The password goes only to a private address, where a Hub on the local network is.
-    guard isPrivate(hub.host) else {
-
-      Output.note("\(hub.host) isn't a private address, so it wasn't sent the password.")
-
-      return false
-
-    }
-
-    let endpoint = HubEndpoint(host: hub.host, port: hub.port)
-    let connection = HubConnection(hub: Hub(endpoint: endpoint, user: credentials.user, password: credentials.password))
-    let info: ModemInfo?
-
-    do {
-
-      info = try await modemInfo(over: connection, timeout: identifyTimeout)
-
-    } catch let error as CancellationError {
-
-      throw error
-
-    } catch {
-
-      Output.note("\(hub.host):\(hub.port): \(Names.message(for: error))")
-
-      return isRejection(error)
-
-    }
-
-    guard let info else {
-
-      Output.note("\(hub.host):\(hub.port) didn't answer Get IM Info in time.")
-
-      return false
-
-    }
-
-    hub.insteonID = "\(info.address)"
-    hub.category = "\(info.category)"
-    hub.subcategory = "\(info.subcategory)"
-    hub.firmwareVersion = "\(info.firmwareVersion)"
-    hub.product = names.name(category: info.category, subcategory: info.subcategory, firmwareVersion: info.firmwareVersion)
-
-    return false
-
-  }
-
-  /// Asks a Hub for Get IM Info, giving up after a timeout.
-  ///
-  /// The request runs in a task of its own that isn't waited for once the time is up, so a
-  /// request that doesn't stop when canceled can't hold up the command.
-  ///
-  /// - Returns: The modem's information, or `nil` if the Hub didn't answer in time.
-  private static func modemInfo(over connection: HubConnection, timeout: Duration) async throws -> ModemInfo? {
-
-    let result = OneShot<ModemInfo?>()
-
-    let request = Task {
-
-      do {
-
-        let info: ModemInfo = try await Modem.withConnection(connection) { modem in
-
-          try await modem.modemInfo()
-
-        }
-
-        result.finish(.success(info))
-
-      } catch {
-
-        result.finish(.failure(error))
-
-      }
-
-    }
-
-    let timer = Task {
-
-      try? await Task.sleep(for: timeout)
-      result.finish(.success(nil))
-
-    }
-
-    defer {
-
-      request.cancel()
-      timer.cancel()
-
-    }
-
-    return try await withTaskCancellationHandler {
-
-      try await result.value()
-
-    } onCancel: {
-
-      result.finish(.failure(CancellationError()))
+      Output.note("Stopped identifying Hubs, so the rejected credentials aren't sent to any more of them.")
 
     }
 
   }
 
-  /// Whether a host is a private IPv4 address, where a Hub on the local network is.
-  private static func isPrivate(_ host: String) -> Bool {
+  /// Prints what came of asking a candidate for Get IM Info, without its credentials.
+  private static func report(_ outcome: HubIdentifier.Outcome, for hub: DiscoveredHub) {
 
-    IPv4Subnet(address: host, prefixLength: 32)?.isPrivate == true
+    let address = "\(hub.endpoint.host):\(hub.endpoint.port)"
 
-  }
-
-  /// Whether an error is the Hub rejecting the user name and password.
-  private static func isRejection(_ error: any Error) -> Bool {
-
-    switch error {
-    case HubError.unexpectedStatus(401), HubError.unexpectedStatus(403):
-      true
-    default:
-      false
+    switch outcome {
+    case .identified, .declined:
+      break
+    case .skippedNonPrivateAddress:
+      Output.note("\(hub.endpoint.host) isn't a private address, so it wasn't sent the password.")
+    case .skippedNonHubPort:
+      Output.note(
+        "\(address) isn't on the Hub's port, \(HubEndpoint.defaultPort), so it wasn't sent the password. "
+          + "'insteon discover --identify \(address)' sends it."
+      )
+    case .didNotAnswer:
+      Output.note("\(address) didn't answer Get IM Info in time.")
+    case let .rejected(error), let .failed(error):
+      Output.note("\(address): \(Names.message(for: error))")
     }
 
   }
 
-  /// Adds a Hub, or merges it into the same Hub found another way, keeping what either way
-  /// knows about it.
-  private static func merge(_ hub: DiscoveredHub, foundBy way: DiscoveryMethod, names: ProductNames, into hubs: inout [FoundHub]) {
+  /// Keeps the identity a Hub reported for Get IM Info.
+  private static func apply(_ info: ModemInfo, to hub: inout DiscoveredHub) {
+
+    hub.insteonID = info.address
+    hub.category = info.category
+    hub.subcategory = info.subcategory
+    hub.modemFirmwareVersion = info.firmwareVersion
+
+  }
+
+  /// A found Hub as `--json` and the table show it, naming its product from the catalog.
+  private static func foundHub(_ hub: DiscoveredHub, names: ProductNames) -> FoundHub {
 
     var product: String?
 
@@ -469,11 +341,11 @@ enum DiscoverCommand {
 
     }
 
-    let found = FoundHub(
+    return FoundHub(
       host: hub.endpoint.host,
       port: hub.endpoint.port,
       insteonID: hub.insteonID.map { "\($0)" },
-      foundBy: [way.rawValue],
+      foundBy: foundByRawValues(hub.foundBy),
       category: hub.category.map { "\($0)" },
       subcategory: hub.subcategory.map { "\($0)" },
       firmwareVersion: hub.modemFirmwareVersion.map { "\($0)" },
@@ -481,25 +353,34 @@ enum DiscoverCommand {
       product: product
     )
 
-    guard let index = hubs.firstIndex(where: { $0.host == found.host && $0.port == found.port }) else {
+  }
 
-      hubs.append(found)
+  /// The ways a Hub was found, as the raw values the `--json` and table output use, with Insteon
+  /// Connect before the local network when both found it.
+  private static func foundByRawValues(_ sources: Set<DiscoverySource>) -> [String] {
 
-      return
+    [DiscoverySource.insteonConnect, .localNetwork]
+      .filter(sources.contains)
+      .map { method(for: $0).rawValue }
 
+  }
+
+  /// The command's name for a discovery source.
+  private static func method(for source: DiscoverySource) -> DiscoveryMethod {
+
+    switch source {
+    case .localNetwork: .local
+    case .insteonConnect: .insteonConnect
     }
 
-    var existing = hubs[index]
+  }
 
-    existing.insteonID = existing.insteonID ?? found.insteonID
-    existing.foundBy += found.foundBy
-    existing.category = existing.category ?? found.category
-    existing.subcategory = existing.subcategory ?? found.subcategory
-    existing.firmwareVersion = existing.firmwareVersion ?? found.firmwareVersion
-    existing.unitType = existing.unitType ?? found.unitType
-    existing.product = existing.product ?? found.product
+  /// Reads the Hub's user name and password from the environment, for identifying Hubs.
+  private static func credentials(envFilePath: String?) throws -> HubIdentifier.Credentials {
 
-    hubs[index] = existing
+    let credentials = try HubCredentials(environment: ModemSession.loadEnvironment(explicitPath: envFilePath))
+
+    return HubIdentifier.Credentials(user: credentials.user, password: credentials.password)
 
   }
 
