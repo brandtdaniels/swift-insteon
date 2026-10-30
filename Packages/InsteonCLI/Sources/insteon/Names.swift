@@ -143,6 +143,8 @@ enum Names {
       return error.description
     case let error as HTTPClientError:
       return error.description
+    case is HubStoppedAnswering:
+      return HubText.stoppedAnsweringInline
     default:
       break
     }

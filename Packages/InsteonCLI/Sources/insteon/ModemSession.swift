@@ -181,13 +181,16 @@ enum ModemSession {
   /// The device a command line's command is for, if it's for one.
   private static func device(of invocation: Invocation) -> InsteonAddress? {
 
-    guard case let .device(address, _) = invocation.subcommand else {
-
+    switch invocation.subcommand {
+    case let .device(address, _):
+      return address
+    case let .link(options):
+      return options.device
+    case let .unlink(options):
+      return options.device
+    default:
       return nil
-
     }
-
-    return address
 
   }
 
