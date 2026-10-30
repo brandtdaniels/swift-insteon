@@ -94,16 +94,17 @@ enum ModemCommands {
 
     Output.note("Reading the modem's ALL-Link database...")
 
-    try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (network: DeviceNetwork) async throws -> Void in
+    try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (cached: CachedNetwork) async throws -> Void in
 
-      try await links(network, options: options, printsJSON: printsJSON)
+      try await links(cached, options: options, printsJSON: printsJSON)
 
     }
 
   }
 
-  private static func links(_ network: DeviceNetwork, options: LinksOptions, printsJSON: Bool) async throws {
+  private static func links(_ cached: CachedNetwork, options: LinksOptions, printsJSON: Bool) async throws {
 
+    let network: DeviceNetwork = cached.network
     let entries: [ModemDatabaseEntry] = try await network.modemDatabase()
 
     if options.identifiesDevices {
@@ -113,6 +114,10 @@ enum ModemCommands {
       for entry in entries where asked.insert(entry.record.address).inserted {
 
         try await identify(entry.record.address, network: network)
+
+        // Each identity is saved as it's learned, so a second Control-C, which ends the
+        // command at once, loses at most the one being asked for.
+        await cached.save()
 
       }
 

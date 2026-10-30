@@ -87,7 +87,8 @@ enum IdentityStore {
   }
 
   /// Runs `body` with a network that starts from what the cache holds, then saves what the
-  /// network learned, even when `body` throws, such as after Control-C.
+  /// network learned, even when `body` throws, such as after Control-C. `body` can save
+  /// sooner with `CachedNetwork.save()`, such as after each device it identifies.
   ///
   /// - Parameters:
   ///   - modem: The modem the devices are reached through.
@@ -98,11 +99,14 @@ enum IdentityStore {
     modem: Modem,
     hub: HubLocation?,
     names: ProductNames,
-    _ body: (DeviceNetwork) async throws -> Void
+    _ body: (CachedNetwork) async throws -> Void
   ) async throws {
 
     let start: NetworkSnapshot = loadNetwork()
-    let network = DeviceNetwork(modem: modem, catalog: names.catalog, snapshot: start, hub: hub)
+    let network = CachedNetwork(
+      network: DeviceNetwork(modem: modem, catalog: names.catalog, snapshot: start, hub: hub),
+      start: start
+    )
 
     do {
 
@@ -110,13 +114,13 @@ enum IdentityStore {
 
     } catch {
 
-      await save(network, startingFrom: start)
+      await network.save()
 
       throw error
 
     }
 
-    await save(network, startingFrom: start)
+    await network.save()
 
   }
 
@@ -152,22 +156,24 @@ enum IdentityStore {
 
   }
 
-  /// Writes to the cache only what a network changed since it started.
+  /// Writes to the cache only what changed from `start` to `learned`, such as what a network
+  /// learned since it started or since it last saved.
   ///
-  /// The cache is read again first, and what the network changed from `start` is merged into
-  /// it with `NetworkSnapshot.merging(changesFrom:to:)`: each identity, each field of each
-  /// device's state, the modem's ALL-Link database and the Hub are written only when the
-  /// network changed them, so what another command saved in the meantime is kept unless this
-  /// one changed the same value. A cache that can't be read isn't replaced, so it isn't lost,
-  /// and the warning about it is printed only when a device reported an identity that would
-  /// have been remembered.
-  private static func save(_ network: DeviceNetwork, startingFrom start: NetworkSnapshot) async {
-
-    let learned: NetworkSnapshot = await network.snapshot()
+  /// The cache is read again first, and the changes are merged into it with
+  /// `NetworkSnapshot.merging(changesFrom:to:)`: each identity, each field of each device's
+  /// state, the modem's ALL-Link database and the Hub are written only when they changed, so
+  /// what another command saved in the meantime is kept unless this one changed the same
+  /// value. A cache that can't be read isn't replaced, so it isn't lost, and the warning about
+  /// it is printed only when a device reported an identity that would have been remembered.
+  ///
+  /// - Returns: `false` if the changes couldn't be written, so they're still to be saved, and
+  ///   `true` otherwise.
+  @discardableResult
+  static func save(_ learned: NetworkSnapshot, since start: NetworkSnapshot) -> Bool {
 
     guard learned != start, let path = path() else {
 
-      return
+      return true
 
     }
 
@@ -186,7 +192,7 @@ enum IdentityStore {
 
       }
 
-      return
+      return false
 
     }
 
@@ -194,7 +200,7 @@ enum IdentityStore {
 
     guard merged != current else {
 
-      return
+      return true
 
     }
 
@@ -202,9 +208,13 @@ enum IdentityStore {
 
       try store.saveNetwork(merged)
 
+      return true
+
     } catch {
 
       warn(about: error, path: path)
+
+      return false
 
     }
 
@@ -253,6 +263,45 @@ enum IdentityStore {
 
   /// Whether the warning has been printed in this run.
   private static let warning: Latch = Latch()
+
+}
+
+/// A network that starts from what the identity cache holds, and saves what it learns back
+/// to the cache, writing only what changed since it last saved.
+actor CachedNetwork {
+
+  /// The network.
+  nonisolated let network: DeviceNetwork
+
+  /// What the network knew when it last saved, or when it started: what the cache holds of
+  /// it.
+  private var saved: NetworkSnapshot
+
+  /// Creates a network to save.
+  ///
+  /// - Parameters:
+  ///   - network: The network, which started from `start`.
+  ///   - start: What the cache held when the network started.
+  init(network: DeviceNetwork, start: NetworkSnapshot) {
+
+    self.network = network
+    self.saved = start
+
+  }
+
+  /// Writes what the network learned since it last saved to the cache, merged with what the
+  /// cache holds now. What couldn't be written is tried again the next time.
+  func save() async {
+
+    let learned: NetworkSnapshot = await network.snapshot()
+
+    if IdentityStore.save(learned, since: saved) {
+
+      saved = learned
+
+    }
+
+  }
 
 }
 

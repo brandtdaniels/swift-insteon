@@ -12,9 +12,9 @@ enum DeviceCommands {
 
     switch action {
     case .id:
-      try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (network: DeviceNetwork) async throws -> Void in
+      try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (cached: CachedNetwork) async throws -> Void in
 
-        try await identify(device, network: network, modem: modem, names: names, printsJSON: printsJSON)
+        try await identify(device, network: cached.network, modem: modem, names: names, printsJSON: printsJSON)
 
       }
     case .ping:
@@ -64,9 +64,9 @@ enum DeviceCommands {
     case .status:
       try await status(device, modem: modem, names: names, printsJSON: printsJSON)
     case .links:
-      try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (network: DeviceNetwork) async throws -> Void in
+      try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (cached: CachedNetwork) async throws -> Void in
 
-        try await links(device, network: network, printsJSON: printsJSON)
+        try await links(device, network: cached.network, printsJSON: printsJSON)
 
       }
     }
