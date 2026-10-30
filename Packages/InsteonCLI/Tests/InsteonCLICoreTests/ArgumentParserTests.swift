@@ -449,6 +449,45 @@ struct ArgumentParserTests {
 
   }
 
+  @Test func unlinksEveryLinkWithADeviceWithAll() throws {
+
+    let all = UnlinkOptions(device: lamp, removesAllLinks: true)
+    let timed = UnlinkOptions(device: lamp, timeoutSeconds: 10, removesAllLinks: true)
+
+    #expect(UnlinkOptions().removesAllLinks == false)
+    #expect(try Invocation.parse(["unlink", "1A.2B.3C", "--all"]).subcommand == .unlink(all))
+    #expect(try Invocation.parse(["unlink", "--all", "1A.2B.3C", "--timeout", "10"]).subcommand == .unlink(timed))
+
+  }
+
+  @Test func needsADeviceAndNoGroupOrRoleWithAll() throws {
+
+    #expect(throws: ArgumentError.missingArgument("ADDRESS with --all", subcommand: "unlink")) {
+
+      try Invocation.parse(["unlink", "--all"])
+
+    }
+
+    #expect(throws: ArgumentError.conflictingOptions("--all", "--group")) {
+
+      try Invocation.parse(["unlink", "1A.2B.3C", "--all", "--group", "1"])
+
+    }
+
+    #expect(throws: ArgumentError.conflictingOptions("--all", "--responder")) {
+
+      try Invocation.parse(["unlink", "1A.2B.3C", "--responder", "--all"])
+
+    }
+
+    #expect(throws: ArgumentError.unexpectedValue(option: "--all")) {
+
+      try Invocation.parse(["unlink", "1A.2B.3C", "--all=yes"])
+
+    }
+
+  }
+
   // MARK: - device
 
   @Test func readsADevicesAddressAndAction() throws {

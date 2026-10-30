@@ -38,7 +38,24 @@ try await Modem.withConnection(SerialPort(path: "/dev/ttyUSB0")) { modem in
 
 Remote and manual linking work between the modem and one device, and the device memorizes
 its current state as its link data. Database linking works between any two devices, and sets
-the link data exactly. ``Unlinker`` has the same three ways.
+the link data exactly. ``Unlinker`` has the same three ways, and
+``Unlinker/unlinkAllRemotely(_:unlinkingMode:timeout:willUnlink:)`` removes every link
+between the modem and a device, in both directions, without its SET button.
+
+A responder memorizes its level as Data 1 of its record, its on-level for the group, so a
+device linked while it's off stays off when the controller turns the group on. Call
+``Linker/prepareResponder(_:state:)`` before a link in which the device responds; it turns
+the device fully on unless given another ``ResponderState``.
+
+``Linker/linkManually(as:group:device:timeout:ready:)`` calls back once the modem is in
+linking mode, which is when to tell a person to press the SET button, and can leave the
+modem's role to the device. It and
+``Unlinker/unlinkManually(as:group:device:timeout:ready:)`` throw ``LinkMismatch`` when
+another device links, or the device links where it was to unlink, or the reverse.
+
+To wait for what a device sends after a request, such as the broadcast that answers ID
+Request, use ``LinkingModem/firstReply(within:clock:after:matching:)``, which starts
+listening before it sends.
 
 A device's engine decides how it's put into linking mode remotely: an i2 device is sent the
 standard Enter Linking Mode, and an i2CS device the extended one with a checksum. The linker
@@ -99,6 +116,12 @@ changing the modem's records.
 - ``Linker``
 - ``Unlinker``
 - ``LinkingError``
+- ``LinkMismatch``
+- ``LinkingDirection``
+- ``ManualLinkingRole``
+- ``ResponderState``
+- ``ModemLink``
+- ``UnlinkingModeMessage``
 
 ### Databases
 

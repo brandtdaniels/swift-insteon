@@ -338,6 +338,7 @@ extension Invocation {
 
     var options = UnlinkOptions()
     var roleOption: String?
+    var groupOption: String?
     var deviceArgument: String?
     var index = 0
 
@@ -358,8 +359,12 @@ extension Invocation {
       switch name {
       case "--group":
         options.group = try group(value(of: name, inline: inlineValue, in: arguments, at: &index), option: name)
+        groupOption = name
       case "--timeout":
         options.timeoutSeconds = try seconds(value(of: name, inline: inlineValue, in: arguments, at: &index), option: name)
+      case "--all":
+        try expectNoValue(name, inlineValue)
+        options.removesAllLinks = true
       case "--controller", "--responder":
         try expectNoValue(name, inlineValue)
 
@@ -373,6 +378,23 @@ extension Invocation {
         options.role = name == "--responder" ? .responder : .controller
       default:
         throw unexpected(argument, subcommand: "unlink")
+      }
+
+    }
+
+    // --all removes every link with one device, in each of its groups and in both roles.
+    if options.removesAllLinks {
+
+      if let other = groupOption ?? roleOption {
+
+        throw ArgumentError.conflictingOptions("--all", other)
+
+      }
+
+      if deviceArgument == nil {
+
+        throw ArgumentError.missingArgument("ADDRESS with --all", subcommand: "unlink")
+
       }
 
     }

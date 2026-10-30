@@ -100,7 +100,9 @@ public struct Unlinker: Sendable {
   /// report it, so in that role the modem's own database is checked for the record before and,
   /// when no report arrives, after: the unlink succeeds if the record was there and is gone.
   /// i1 devices can't be unlinked remotely; use
-  /// ``Unlinker/unlinkManually(modemRole:group:timeout:)``.
+  /// ``Unlinker/unlinkManually(modemRole:group:timeout:)``. To remove every link between the
+  /// modem and a device, in both directions, use
+  /// ``Unlinker/unlinkAllRemotely(_:unlinkingMode:timeout:willUnlink:)``.
   ///
   /// - Parameters:
   ///   - device: The device to unlink.
@@ -153,7 +155,7 @@ public struct Unlinker: Sendable {
   }
 
   /// Whether the modem has a responder record of `device`, which is kept in the device's group.
-  private func hasResponderRecord(of device: InsteonAddress, in group: AllLinkGroupNumber) async throws -> Bool {
+  func hasResponderRecord(of device: InsteonAddress, in group: AllLinkGroupNumber) async throws -> Bool {
 
     try await modem.allLinkRecords(group: group, device: device).contains { !$0.flags.contains(.controller) }
 

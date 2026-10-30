@@ -141,7 +141,8 @@ enum ExploreCommands {
 
 }
 
-extension Replies {
+/// Collects replies from the modem.
+enum Replies {
 
   /// Everything that arrives within a time, in order. The time is waited out in full unless
   /// the modem closes first.

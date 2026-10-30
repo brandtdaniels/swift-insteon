@@ -354,6 +354,10 @@ public struct UnlinkOptions: Hashable, Sendable {
   /// How many seconds to wait for the SET button, or `nil` for the library's default.
   public var timeoutSeconds: Int?
 
+  /// Whether to remove every link between the modem and ``UnlinkOptions/device``, in both
+  /// directions, without its SET button, as `--all` asks.
+  public var removesAllLinks: Bool
+
   /// Creates unlinking options.
   ///
   /// - Parameters:
@@ -363,17 +367,21 @@ public struct UnlinkOptions: Hashable, Sendable {
   ///   - role: The modem's role. Defaults to ``LinkingRole/controller``.
   ///   - timeoutSeconds: How many seconds to wait, or `nil` for the library's default.
   ///     Defaults to `nil`.
+  ///   - removesAllLinks: Whether to remove every link with the device without its SET
+  ///     button. Defaults to `false`.
   public init(
     device: InsteonAddress? = nil,
     group: AllLinkGroupNumber? = nil,
     role: LinkingRole = .controller,
-    timeoutSeconds: Int? = nil
+    timeoutSeconds: Int? = nil,
+    removesAllLinks: Bool = false
   ) {
 
     self.device = device
     self.group = group
     self.role = role
     self.timeoutSeconds = timeoutSeconds
+    self.removesAllLinks = removesAllLinks
 
   }
 

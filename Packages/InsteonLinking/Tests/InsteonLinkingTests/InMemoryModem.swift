@@ -73,6 +73,10 @@ actor InMemoryModem: LinkingModem {
   /// The group the modem reports for each device's links, when it isn't the modem's group.
   var reportedGroups: [InsteonAddress: AllLinkGroupNumber] = [:]
 
+  /// Each device's level, from the Light On or Light Off it was last sent. Devices not listed
+  /// are off.
+  private(set) var levels: [InsteonAddress: UInt8] = [:]
+
   /// The mode the modem is in, if it's linking.
   private var linkingMode: (mode: AllLinkMode, group: AllLinkGroupNumber)?
 
@@ -287,6 +291,18 @@ actor InMemoryModem: LinkingModem {
       // The device acknowledges, then broadcasts its identity.
       broadcastIdentity(of: device)
 
+    } else if [0x11, 0x13].contains(message.command.command1) {
+
+      linkingSteps.append(.device(device, message.command, isExtended: false))
+
+      guard !unlinkedDevices.contains(device) else {
+
+        throw ModemError.deviceRejected(device, .notLinked)
+
+      }
+
+      levels[device] = message.command.command1 == 0x11 ? message.command.command2 : 0x00
+
     } else {
 
       enterLinking(device, message.command, isExtended: false)
@@ -483,11 +499,36 @@ actor InMemoryModem: LinkingModem {
     linkingMode = nil
     waitingDevice = nil
 
+    // A device that joins the modem's group memorizes its level as the link's data.
+    if linkCode == AllLinkMode.controller.rawValue {
+
+      memorizeResponderLink(of: waiting.address, group: link.group)
+
+    }
+
     for subscriber in subscribers {
 
       subscriber.yield(.allLinkingCompleted(link))
 
     }
+
+  }
+
+  /// Adds a responder record of the modem to a device's database, after its last record, with
+  /// the device's level as Data 1.
+  private func memorizeResponderLink(of device: InsteonAddress, group: AllLinkGroupNumber) {
+
+    let count: Int = databases[device]?.count ?? 0
+    let recordAddress: UInt16 = 0x0FFF - UInt16(count) * 8
+
+    databases[device, default: [:]][recordAddress] = AllLinkRecord(
+      flags: AllLinkRecordFlags(rawValue: 0xA2),
+      group: group,
+      address: address,
+      data1: levels[device, default: 0x00],
+      data2: 0x1C,
+      data3: 0x01
+    )
 
   }
 
