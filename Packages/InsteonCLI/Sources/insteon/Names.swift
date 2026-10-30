@@ -143,6 +143,8 @@ enum Names {
       return error.description
     case let error as HTTPClientError:
       return error.description
+    case is HubStoppedAnswering:
+      return HubText.stoppedAnsweringInline
     default:
       break
     }
@@ -168,43 +170,13 @@ enum Names {
   /// - Returns: A message that names the Hub's address and how to find it again.
   static func hubUnanswered(_ error: any Error, endpoint: HubEndpoint) -> String? {
 
-    let code: URLError.Code
+    guard HubStoppedAnswering.isUnanswered(error) else {
 
-    if let urlError = error as? URLError {
-
-      code = urlError.code
-
-    } else {
-
-      // swift-corelibs-foundation reports a failed request as an NSError in the URL error
-      // domain, which doesn't cast to URLError on Linux.
-      let nsError: NSError = error as NSError
-
-      guard nsError.domain == NSURLErrorDomain else {
-
-        return nil
-
-      }
-
-      // The initializer is failable on Linux but not on Apple platforms.
-      let parsed: URLError.Code? = URLError.Code(rawValue: nsError.code)
-
-      guard let parsed else {
-
-        return nil
-
-      }
-
-      code = parsed
-
-    }
-
-    switch code {
-    case .timedOut, .cannotConnectToHost, .notConnectedToInternet, .networkConnectionLost, .cannotFindHost:
-      return "The Hub at \(endpoint.host):\(endpoint.port) didn't answer. If its address changed, 'insteon discover' finds it."
-    default:
       return nil
+
     }
+
+    return HubText.unanswered(host: endpoint.host, port: endpoint.port)
 
   }
 

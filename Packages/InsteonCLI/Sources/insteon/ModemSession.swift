@@ -7,6 +7,7 @@ import Glibc
 import InsteonCLICore
 import InsteonHubClient
 import InsteonModem
+import InsteonProtocol
 
 /// Opens the modem a command line names, and runs a command with it.
 enum ModemSession {
@@ -144,6 +145,12 @@ enum ModemSession {
 
         try await withModem(HubConnection(hub: hub), body)
 
+      } catch is HubStoppedAnswering {
+
+        // The Hub answered earlier in the run, so it's busy rather than gone, most likely with
+        // a device that doesn't answer; 'insteon discover' wouldn't help.
+        throw CommandFailure(description: HubText.stoppedAnswering(host: endpoint.host, port: endpoint.port, device: device(of: invocation)))
+
       } catch {
 
         // URLSession's own message, such as "The request timed out.", doesn't say it was the Hub.
@@ -167,6 +174,22 @@ enum ModemSession {
 
       throw ConfigurationError.serialUnavailable
       #endif
+    }
+
+  }
+
+  /// The device a command line's command is for, if it's for one.
+  private static func device(of invocation: Invocation) -> InsteonAddress? {
+
+    switch invocation.subcommand {
+    case let .device(address, _):
+      return address
+    case let .link(options):
+      return options.device
+    case let .unlink(options):
+      return options.device
+    default:
+      return nil
     }
 
   }
