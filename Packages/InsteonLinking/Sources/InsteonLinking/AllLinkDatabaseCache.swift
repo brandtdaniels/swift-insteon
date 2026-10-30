@@ -13,6 +13,11 @@ import InsteonProtocol
 /// changed is read again. ``Linker`` and ``Unlinker`` forget a device's copy whenever they
 /// change its database, so it's read again rather than guessed.
 ///
+/// A copy with a record whose checksum failed, as ``AllLinkDatabaseCopy/hasIntactChecksums``
+/// says, is handed back but never kept, so the database is read again the next time it's
+/// needed. That covers copies the cache starts with too. Since a device older than i2CS may
+/// not put a checksum in its records at all, its database can be read every time.
+///
 /// The modem's own database has no delta every modem reports, so the cache reads it once
 /// and keeps it until ``AllLinkDatabaseCache/invalidateModem()``, which ``Linker`` and
 /// ``Unlinker`` call whenever they change the modem's records. Since something else, such as
@@ -62,7 +67,8 @@ public actor AllLinkDatabaseCache {
   /// from an earlier launch.
   ///
   /// A copy is handed back only while the device reports the delta it was read at, so a copy
-  /// kept from earlier is checked as any other is.
+  /// kept from earlier is checked as any other is. A copy with a record whose checksum failed
+  /// is left out, so that device's database is read.
   ///
   /// ```swift
   /// let cache = AllLinkDatabaseCache(modem: modem, copies: kept)
@@ -82,7 +88,7 @@ public actor AllLinkDatabaseCache {
 
     self.modem = modem
     self.timeout = timeout
-    self.devices = copies
+    self.devices = copies.filter { (entry: (key: InsteonAddress, value: AllLinkDatabaseCopy)) -> Bool in entry.value.hasIntactChecksums }
 
   }
 
@@ -98,7 +104,8 @@ public actor AllLinkDatabaseCache {
   /// The device is asked for its database delta first. If it matches the delta the copy was
   /// read at, the copy is returned; otherwise the database is read again. The delta is asked
   /// for before the read, so a change made while the database is being read shows up as a
-  /// changed delta next time.
+  /// changed delta next time. A database with a record whose checksum failed isn't kept, so
+  /// it's read again next time.
   ///
   /// - Parameter device: The device whose database to return.
   /// - Returns: The device's records in its order, ending with the record that marks the end
@@ -143,7 +150,10 @@ public actor AllLinkDatabaseCache {
 
     let records = try await modem.readAllLinkDatabase(of: device, timeout: timeout)
     let copy = AllLinkDatabaseCopy(delta: delta, records: records)
-    devices[device] = copy
+
+    // A record that failed its checksum may have been damaged on the way, so the copy is
+    // handed back but not kept, and the database is read again next time.
+    devices[device] = copy.hasIntactChecksums ? copy : nil
 
     return AllLinkDatabaseReading(copy: copy, status: status, wasRead: true)
 
@@ -240,6 +250,14 @@ public struct AllLinkDatabaseCopy: Hashable, Sendable {
   /// The device's records in its order, ending with the record that marks the end of the
   /// database.
   public var records: [AllLinkRecordResponse]
+
+  /// Whether every record passed its checksum check, as `AllLinkRecordResponse.hasIntactChecksum`
+  /// says. ``AllLinkDatabaseCache`` keeps only a copy whose records all did.
+  public var hasIntactChecksums: Bool {
+
+    records.allSatisfy { (response: AllLinkRecordResponse) -> Bool in response.hasIntactChecksum }
+
+  }
 
   /// Creates a copy.
   ///

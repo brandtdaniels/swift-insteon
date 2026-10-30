@@ -45,6 +45,10 @@ public actor InMemoryModem: LinkingModem {
   /// Devices that acknowledge writes without storing them.
   public var forgetfulDevices: Set<InsteonAddress> = []
 
+  /// The addresses of records in each device's database that arrive with a checksum that
+  /// fails, as a record damaged on the way does.
+  public var damagedRecords: [InsteonAddress: Set<UInt16>] = [:]
+
   /// Flags each device sets on its own in every record in use written to it.
   public var maintainedFlags: [InsteonAddress: AllLinkRecordFlags] = [:]
 
@@ -239,6 +243,39 @@ public actor InMemoryModem: LinkingModem {
   public func setUnlinked(_ device: InsteonAddress) {
 
     unlinkedDevices.insert(device)
+
+  }
+
+  /// Makes the record at an address in a device's database arrive with a checksum that fails,
+  /// or arrive whole again.
+  ///
+  /// - Parameters:
+  ///   - isDamaged: Whether the record arrives damaged.
+  ///   - address: The record's address in the device's database.
+  ///   - device: The device.
+  public func setDamaged(_ isDamaged: Bool, record address: UInt16, of device: InsteonAddress) {
+
+    if isDamaged {
+
+      damagedRecords[device, default: []].insert(address)
+
+    } else {
+
+      damagedRecords[device]?.remove(address)
+
+    }
+
+  }
+
+  /// The record at an address in a device's database as it arrives, with its checksum.
+  private func arrivingRecord(of device: InsteonAddress, at address: UInt16) -> AllLinkRecordResponse {
+
+    AllLinkRecordResponse(
+      sender: device,
+      address: address,
+      record: record(of: device, at: address),
+      hasIntactChecksum: !(damagedRecords[device]?.contains(address) ?? false)
+    )
 
   }
 
@@ -447,7 +484,7 @@ public actor InMemoryModem: LinkingModem {
 
     let recordAddress: UInt16 = address == 0x0000 ? 0x0FFF : address
 
-    return AllLinkRecordResponse(sender: device, address: recordAddress, record: record(of: device, at: recordAddress))
+    return arrivingRecord(of: device, at: recordAddress)
 
   }
 
@@ -480,7 +517,7 @@ public actor InMemoryModem: LinkingModem {
 
     while true {
 
-      let response = AllLinkRecordResponse(sender: device, address: recordAddress, record: record(of: device, at: recordAddress))
+      let response: AllLinkRecordResponse = arrivingRecord(of: device, at: recordAddress)
 
       responses.append(response)
 

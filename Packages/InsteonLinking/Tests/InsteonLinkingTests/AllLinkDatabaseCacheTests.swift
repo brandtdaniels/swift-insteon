@@ -165,4 +165,45 @@ struct AllLinkDatabaseCacheTests {
 
   }
 
+  @Test func doesntKeepACopyWithARecordWhoseChecksumFailed() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setDatabase([0x0FFF: link], of: lamp)
+    await modem.setDamaged(true, record: 0x0FFF, of: lamp)
+    let cache = AllLinkDatabaseCache(modem: modem)
+
+    let damaged: AllLinkDatabaseReading = try await cache.database(of: lamp)
+
+    #expect(damaged.wasRead)
+    #expect(!damaged.copy.hasIntactChecksums)
+    #expect(await cache.copies[lamp] == nil)
+
+    await modem.setDamaged(false, record: 0x0FFF, of: lamp)
+
+    let whole: AllLinkDatabaseReading = try await cache.database(of: lamp)
+    let again: AllLinkDatabaseReading = try await cache.database(of: lamp)
+
+    #expect(whole.wasRead)
+    #expect(whole.copy.hasIntactChecksums)
+    #expect(!again.wasRead)
+    #expect(await cache.copies[lamp] == whole.copy)
+    #expect(await modem.databaseReads[lamp] == 2)
+
+  }
+
+  @Test func leavesOutACopyItStartedWithThatHasARecordWhoseChecksumFailed() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setDatabase([0x0FFF: link], of: lamp)
+    let damaged = AllLinkDatabaseCopy(delta: 0x00, records: [AllLinkRecordResponse(sender: lamp, address: 0x0FFF, record: link, hasIntactChecksum: false)])
+    let cache = AllLinkDatabaseCache(modem: modem, copies: [lamp: damaged])
+
+    #expect(await cache.copies.isEmpty)
+
+    _ = try await cache.records(of: lamp)
+
+    #expect(await modem.databaseReads[lamp] == 1)
+
+  }
+
 }

@@ -490,6 +490,22 @@ struct DeviceNetworkTests {
 
   }
 
+  @Test func leavesOutADatabaseWithARecordWhoseChecksumFailed() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setDatabase([0x0FFF: link], of: Example.plug)
+    await modem.setDamaged(true, record: 0x0FFF, of: Example.plug)
+    let network: DeviceNetwork = self.network(modem)
+
+    let database: AllLinkDatabaseCopy = try await network.allLinkDatabase(of: Example.plug)
+    let snapshot: NetworkSnapshot = await network.snapshot()
+
+    #expect(database.records.first?.hasIntactChecksum == false)
+    #expect(snapshot.devices[Example.plug]?.allLinkDatabase == nil)
+    #expect(snapshot.devices[Example.plug]?.lastSeen != nil)
+
+  }
+
   @Test func leavesOutADatabaseTheCacheForgot() async throws {
 
     let modem = InMemoryModem()

@@ -154,7 +154,8 @@ public actor DeviceNetwork {
   /// ``init(modem:catalog:snapshot:hub:timeout:clock:now:)`` later.
   ///
   /// Each device's ALL-Link database is the copy the cache holds, so a database a linker
-  /// changed, and the cache forgot, isn't kept.
+  /// changed, and the cache forgot, isn't kept, nor is one with a record whose checksum
+  /// failed, which the cache doesn't keep.
   ///
   /// - Returns: The snapshot.
   public func snapshot() async -> NetworkSnapshot {
