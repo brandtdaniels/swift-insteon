@@ -11,6 +11,7 @@ import InsteonTestSupport
 /// A `URLProtocol` stub can't redirect a request on Linux, where swift-corelibs-foundation
 /// doesn't handle a protocol's redirect, so these tests ask the delegate the question the
 /// session asks before following a redirect, and check which requests get the delegate.
+/// On Apple platforms, `URLSessionRedirectTests` redirects a request through a session.
 struct RedirectRefusalTests {
 
   // Made-up credentials and addresses: a Hub on a private network, and a redirect target in a
@@ -81,7 +82,7 @@ struct RedirectRefusalTests {
 
   // MARK: The refusal
 
-  @Test func refusesARedirectSoItsTargetIsNeverAsked() async throws {
+  @Test func theDelegateDeclinesARedirectAndRecordsIt() async throws {
 
     let refusal: RedirectRefusal = RedirectRefusal()
     // The task is never resumed, so nothing is sent.

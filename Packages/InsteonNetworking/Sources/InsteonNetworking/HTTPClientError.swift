@@ -15,8 +15,7 @@ public enum HTTPClientError: Error, Hashable, Sendable {
   /// A request carrying credentials, such as an `Authorization` header, was answered with a
   /// redirect, which wasn't followed.
   ///
-  /// A Hub never redirects its own requests, so the redirect didn't come from a Hub, and the
-  /// request and its credentials weren't sent to the address it named.
+  /// Neither the request nor its credentials were sent to the address the redirect named.
   case redirectRefused
 
 }
@@ -32,7 +31,7 @@ extension HTTPClientError: CustomStringConvertible, LocalizedError {
     case .insecureRedirect:
       "An HTTPS request was redirected to an address that isn't HTTPS, so its answer wasn't used."
     case .redirectRefused:
-      "The Hub answered with a redirect, which Hubs don't send, so the request and its credentials weren't sent on to another address."
+      "A request carrying credentials was answered with a redirect, so it wasn't sent on to another address."
     }
 
   }
