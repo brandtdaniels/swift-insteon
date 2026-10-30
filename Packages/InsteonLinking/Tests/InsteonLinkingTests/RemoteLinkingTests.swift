@@ -264,4 +264,68 @@ struct RemoteLinkingTests {
 
   }
 
+
+  // MARK: - Pinned before the manual linking moves out of the command
+
+  @Test func takesTheModemOutOfLinkingModeWhenNoDeviceLinksManually() async throws {
+
+    let modem = InMemoryModem()
+
+    await #expect(throws: LinkingError.linkingTimedOut) {
+
+      async let link = linker(modem).linkManually(modemRole: .controller, group: 0x01)
+      await clock.waitForSleeper(until: Linker.defaultManualLinkingTimeout)
+      clock.advance(by: Linker.defaultManualLinkingTimeout)
+      _ = try await link
+
+    }
+
+    #expect(await modem.linkingSteps == [.modem(.controller, 0x01), .cancel])
+
+  }
+
+  @Test func refusesAManualLinkInAnotherGroupWhenTheModemControls() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setReportedGroup(0x05, of: lamp)
+
+    await #expect(throws: LinkingError.self) {
+
+      async let link = linker(modem).linkManually(modemRole: .controller, group: 0x01)
+      await modem.pressSetButton(of: lamp)
+      _ = try await link
+
+    }
+
+  }
+
+  // The modem reports the controller's group when it responds, so it isn't checked.
+  @Test func acceptsAManualLinkInTheDevicesGroupWhenTheModemResponds() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setReportedGroup(0x05, of: lamp)
+
+    async let link = linker(modem).linkManually(modemRole: .responder, group: 0x01)
+    await modem.pressSetButton(of: lamp)
+    let linked = try await link
+
+    #expect(linked.group == 0x05)
+    #expect(linked.mode == .responder)
+
+  }
+
+  @Test func unlinksWhicheverDeviceHasItsSetButtonPressed() async throws {
+
+    let modem = InMemoryModem()
+
+    async let unlink = unlinker(modem).unlinkManually(modemRole: .controller, group: 0x00)
+    await modem.pressSetButton(of: lamp)
+    let unlinked = try await unlink
+
+    #expect(unlinked.address == lamp)
+    #expect(unlinked.mode == .delete)
+    #expect(await modem.linkingSteps == [.modem(.delete, 0x00)])
+
+  }
+
 }
