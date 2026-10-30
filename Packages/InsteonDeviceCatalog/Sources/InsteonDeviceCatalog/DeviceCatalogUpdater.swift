@@ -54,18 +54,6 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
 /// short, or a catalog from a different version than the manifest, is never used. The hash
 /// shows that the two files agree; HTTPS is what shows they came from the catalog's host.
 ///
-/// ## Redirects
-///
-/// The catalog isn't signed. Its integrity rests on HTTPS to the expected host, plus the
-/// manifest's SHA-256, which only shows that the catalog matches a manifest fetched over the
-/// same connection. So the default client follows a redirect only to HTTPS at the same host
-/// and port as the request, using ``DeviceCatalogUpdater/redirectPolicy``, and decides before
-/// following it. A redirect that leaves HTTPS, even for one step, or goes to another host
-/// fails the update with `HTTPClientError.insecureRedirect` or
-/// `HTTPClientError.redirectRefused`, and nothing is downloaded from the address it named.
-/// A redirect on the catalog's own host, such as one that adds a trailing slash, is followed.
-/// A client passed in place of the default should refuse redirects the same way.
-///
 /// ```swift
 /// let saved: Data? = try? Data(contentsOf: savedURL)
 ///
@@ -78,6 +66,18 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
 ///   use(catalog)
 /// }
 /// ```
+///
+/// ## Redirects
+///
+/// The catalog isn't signed. Its integrity rests on HTTPS to the expected host, plus the
+/// manifest's SHA-256, which only shows that the catalog matches a manifest fetched from the
+/// same host. So the default client follows a redirect only to HTTPS at the same host
+/// and port as the request, using ``DeviceCatalogUpdater/redirectPolicy``, and decides before
+/// following it. A redirect that leaves HTTPS, even for one step, or goes to another host
+/// fails the update with `HTTPClientError.insecureRedirect` or
+/// `HTTPClientError.redirectRefused`, and nothing is downloaded from the address it named.
+/// A redirect on the catalog's own host, such as one that adds a trailing slash, is followed.
+/// A client passed in place of the default should refuse redirects the same way.
 ///
 /// Updating is optional: the package ships a copy, so an app works without ever updating.
 /// Hashes are worked out with swift-crypto, which uses CryptoKit on Apple platforms.

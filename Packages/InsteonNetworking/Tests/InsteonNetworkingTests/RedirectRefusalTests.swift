@@ -192,6 +192,8 @@ struct RedirectRefusalTests {
     "https://catalog.example:8443/v0/manifest.json",
     "http://catalog.example:443/v0/manifest.json",
     "ftp://catalog.example/v0/manifest.json",
+    "https://catalog.example./v0/manifest.json",
+    "https://catalog.example@192.0.2.80/v0/manifest.json",
   ])
   func sameOriginRefusesADowngradeAnotherHostOrAnotherPort(_ target: String) async throws {
 
@@ -199,6 +201,16 @@ struct RedirectRefusalTests {
     let followed: URLRequest? = try await Self.decide(.sameOriginHTTPSOnly, from: Self.catalogManifest, to: redirect)
 
     #expect(followed == nil)
+
+  }
+
+  @Test func sameOriginTreatsAnExplicitDefaultPortAsTheSameOrigin() async throws {
+
+    let original: URL = try #require(URL(string: "https://catalog.example:443/v0/manifest.json"))
+    let redirect: URL = try #require(URL(string: "https://catalog.example/v0/"))
+    let followed: URLRequest? = try await Self.decide(.sameOriginHTTPSOnly, from: original, to: redirect)
+
+    #expect(followed?.url == redirect)
 
   }
 
