@@ -12,6 +12,8 @@ Find what an Insteon device is and can do from the category, subcategory and fir
 - `MessageField` and `FieldValue`: where a value sits in a message and how to read and write it, as a scaled number, buttons, a named value, named bits or a boolean
 - `DeviceCapability`, `DeviceIdentity`, `ProductModel` and `DeviceEventName`: the parts of a profile
 
+The catalog isn't signed: a download's integrity rests on HTTPS to the expected host plus the manifest's SHA-256, which only shows that the catalog matches a manifest fetched from the same host. So `DeviceCatalogUpdater`'s default client follows a redirect only to HTTPS at the same host and port, deciding before each one (`DeviceCatalogUpdater.redirectPolicy`, `RedirectPolicy.sameOriginHTTPSOnly`). A redirect that leaves HTTPS, even for one step, or goes to another host fails the update, and the app keeps its copy. A client passed in its place should refuse redirects the same way.
+
 The shipped copy is `Sources/InsteonDeviceCatalog/Resources/catalog.json` and its `manifest.json`, the `v0/catalog.json` and `v0/manifest.json` the [Insteon device catalog](https://github.com/brandtdaniels/insteon-device-catalog) publishes. The manifest gives the catalog's version; the package reads catalogs with the shipped copy's MAJOR.MINOR, since below 1.0 any MINOR can change the format. Refresh both with `Scripts/update-device-catalog.sh`, which warns when the MAJOR.MINOR changes.
 
 See the DocC catalog in `Sources/InsteonDeviceCatalog/InsteonDeviceCatalog.docc` for the full documentation.

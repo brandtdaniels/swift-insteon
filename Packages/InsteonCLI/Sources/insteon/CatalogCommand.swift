@@ -225,7 +225,8 @@ enum CatalogCommand {
   /// from the copy in use, and saves it when it's at least as new as the bundled copy.
   ///
   /// Only the catalog's site is asked, over HTTPS, with a session that keeps no cookies or
-  /// credentials, so nothing about the Hub is ever sent.
+  /// credentials, so nothing about the Hub is ever sent. A redirect is followed only to HTTPS
+  /// on the same host and port.
   ///
   /// - Throws: `CommandFailure` if the catalog can't be downloaded, checked or saved.
   static func update() async throws {
@@ -289,7 +290,9 @@ enum CatalogCommand {
 
     }
 
-    let updater: DeviceCatalogUpdater = DeviceCatalogUpdater(client: URLSessionHTTPClient(session: session), location: location)
+    // Redirects are followed only to HTTPS on the catalog's own host, decided before each one.
+    let client: URLSessionHTTPClient = URLSessionHTTPClient(session: session, redirectPolicy: DeviceCatalogUpdater.redirectPolicy)
+    let updater: DeviceCatalogUpdater = DeviceCatalogUpdater(client: client, location: location)
     let result: DeviceCatalogUpdate
 
     do {
@@ -309,6 +312,12 @@ enum CatalogCommand {
     } catch HTTPClientError.insecureRedirect {
 
       throw CommandFailure(description: "The Insteon device catalog's site redirected to an address that isn't HTTPS, so nothing was used and the current copy, \(currentVersion), stays.")
+
+    } catch HTTPClientError.redirectRefused {
+
+      throw CommandFailure(
+        description: "The Insteon device catalog's site redirected to another host or port, so the redirect wasn't followed, nothing was used, and the current copy, \(currentVersion), stays."
+      )
 
     } catch is DecodingError {
 

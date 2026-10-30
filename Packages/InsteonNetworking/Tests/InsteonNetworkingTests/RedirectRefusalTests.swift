@@ -6,7 +6,8 @@ import Testing
 @testable import InsteonNetworking
 import InsteonTestSupport
 
-/// Requests with credentials refuse redirects, and requests without them don't.
+/// Requests with credentials refuse redirects, and requests without them follow the
+/// client's redirect policy.
 ///
 /// A `URLProtocol` stub can't redirect a request on Linux, where swift-corelibs-foundation
 /// doesn't handle a protocol's redirect, so these tests ask the delegate the question the
@@ -163,6 +164,172 @@ struct RedirectRefusalTests {
 
   }
 
+  // MARK: Same-origin HTTPS redirects
+
+  // A made-up catalog host. Other hosts are made up too, or in a documentation range.
+  static let catalogManifest: URL = URL(string: "https://catalog.example/v0/manifest.json")!
+
+  @Test(arguments: [
+    "https://catalog.example/v0/manifest.json?sha256=0",
+    "https://catalog.example/v0/",
+    "https://catalog.example/v1/manifest.json",
+    "https://CATALOG.example/v0/manifest.json",
+    "https://catalog.example:443/v0/manifest.json",
+  ])
+  func sameOriginFollowsHTTPSOnTheSameHostAndPort(_ target: String) async throws {
+
+    let redirect: URL = try #require(URL(string: target))
+    let followed: URLRequest? = try await Self.decide(.sameOriginHTTPSOnly, from: Self.catalogManifest, to: redirect)
+
+    #expect(followed?.url == redirect)
+
+  }
+
+  @Test(arguments: [
+    "http://catalog.example/v0/manifest.json",
+    "https://192.0.2.80/v0/manifest.json",
+    "https://catalog.example.evil.example/v0/manifest.json",
+    "https://catalog.example:8443/v0/manifest.json",
+    "http://catalog.example:443/v0/manifest.json",
+    "ftp://catalog.example/v0/manifest.json",
+    "https://catalog.example./v0/manifest.json",
+    "https://catalog.example@192.0.2.80/v0/manifest.json",
+  ])
+  func sameOriginRefusesADowngradeAnotherHostOrAnotherPort(_ target: String) async throws {
+
+    let redirect: URL = try #require(URL(string: target))
+    let followed: URLRequest? = try await Self.decide(.sameOriginHTTPSOnly, from: Self.catalogManifest, to: redirect)
+
+    #expect(followed == nil)
+
+  }
+
+  @Test func sameOriginTreatsAnExplicitDefaultPortAsTheSameOrigin() async throws {
+
+    let original: URL = try #require(URL(string: "https://catalog.example:443/v0/manifest.json"))
+    let redirect: URL = try #require(URL(string: "https://catalog.example/v0/"))
+    let followed: URLRequest? = try await Self.decide(.sameOriginHTTPSOnly, from: original, to: redirect)
+
+    #expect(followed?.url == redirect)
+
+  }
+
+  @Test func sameOriginRefusesAChainThroughHTTPAtItsFirstStep() async throws {
+
+    let session: URLSession = URLSession(configuration: .ephemeral)
+    let task: URLSessionDataTask = session.dataTask(with: URLRequest(url: Self.catalogManifest))
+    let refusal: RedirectRefusal = RedirectRefusal(policy: .sameOriginHTTPSOnly, original: Self.catalogManifest)
+    let downgrade: URL = try #require(URL(string: "http://catalog.example/v0/manifest.json"))
+    let elsewhere: URL = try #require(URL(string: "https://192.0.2.80/v0/manifest.json"))
+
+    let firstResponse: HTTPURLResponse = try #require(
+      HTTPURLResponse(url: Self.catalogManifest, statusCode: 302, httpVersion: "HTTP/1.1", headerFields: ["Location": downgrade.absoluteString])
+    )
+    let first: URLRequest? = await Self.ask(refusal, session: session, task: task, response: firstResponse, redirect: URLRequest(url: downgrade))
+
+    #expect(first == nil)
+    #expect(refusal.refusedRedirect)
+    #expect(refusal.refusedTarget == downgrade)
+
+    // Were the HTTP step's answer rewritten to send the request on to another HTTPS host, that
+    // step is refused too, and the first refusal is the one recorded.
+    let secondResponse: HTTPURLResponse = try #require(
+      HTTPURLResponse(url: downgrade, statusCode: 302, httpVersion: "HTTP/1.1", headerFields: ["Location": elsewhere.absoluteString])
+    )
+    let second: URLRequest? = await Self.ask(refusal, session: session, task: task, response: secondResponse, redirect: URLRequest(url: elsewhere))
+
+    #expect(second == nil)
+    #expect(refusal.refusedTarget == downgrade)
+    #expect(URLSessionHTTPClient.error(refusing: refusal.refusedTarget, of: URLRequest(url: Self.catalogManifest), policy: .sameOriginHTTPSOnly) == .insecureRedirect)
+
+  }
+
+  @Test func sameOriginComparesEachStepWithTheFirstAddress() async throws {
+
+    let session: URLSession = URLSession(configuration: .ephemeral)
+    let task: URLSessionDataTask = session.dataTask(with: URLRequest(url: Self.catalogManifest))
+    let refusal: RedirectRefusal = RedirectRefusal(policy: .sameOriginHTTPSOnly, original: Self.catalogManifest)
+    let directory: URL = try #require(URL(string: "https://catalog.example/v0/"))
+    let elsewhere: URL = try #require(URL(string: "https://192.0.2.80/v0/manifest.json"))
+    let response: HTTPURLResponse = try #require(HTTPURLResponse(url: Self.catalogManifest, statusCode: 301, httpVersion: "HTTP/1.1", headerFields: [:]))
+
+    let first: URLRequest? = await Self.ask(refusal, session: session, task: task, response: response, redirect: URLRequest(url: directory))
+    let second: URLRequest? = await Self.ask(refusal, session: session, task: task, response: response, redirect: URLRequest(url: elsewhere))
+
+    #expect(first?.url == directory)
+    #expect(second == nil)
+    #expect(refusal.refusedTarget == elsewhere)
+
+  }
+
+  @Test func sameOriginFollowsNothingFromARequestThatIsntHTTPS() async throws {
+
+    let original: URL = try #require(URL(string: "http://catalog.example/v0/manifest.json"))
+    let followed: URLRequest? = try await Self.decide(.sameOriginHTTPSOnly, from: original, to: Self.catalogManifest)
+
+    #expect(followed == nil)
+
+  }
+
+  @Test func followAllFollowsAnotherHostAndRefuseAllFollowsNothing() async throws {
+
+    let redirect: URL = try #require(URL(string: "http://192.0.2.80/collect"))
+
+    let followed: URLRequest? = try await Self.decide(.followAll, from: Self.catalogManifest, to: redirect)
+    let refused: URLRequest? = try await Self.decide(.refuseAll, from: Self.catalogManifest, to: Self.catalogManifest)
+
+    #expect(followed?.url == redirect)
+    #expect(refused == nil)
+
+  }
+
+  @Test func aRefusedDowngradeIsInsecureAndAnotherHostIsRefused() throws {
+
+    let request: URLRequest = URLRequest(url: Self.catalogManifest)
+    let downgrade: URL = try #require(URL(string: "http://catalog.example/v0/manifest.json"))
+    let elsewhere: URL = try #require(URL(string: "https://192.0.2.80/v0/manifest.json"))
+
+    #expect(URLSessionHTTPClient.error(refusing: downgrade, of: request, policy: .sameOriginHTTPSOnly) == .insecureRedirect)
+    #expect(URLSessionHTTPClient.error(refusing: elsewhere, of: request, policy: .sameOriginHTTPSOnly) == .redirectRefused)
+    // A request with credentials reports every refused redirect the same way.
+    #expect(URLSessionHTTPClient.error(refusing: downgrade, of: request, policy: .refuseAll) == .redirectRefused)
+
+  }
+
+  // MARK: Which policy a request gets
+
+  @Test func aRequestWithCredentialsRefusesEveryRedirectWhateverTheClientsPolicy() {
+
+    var request: URLRequest = URLRequest(url: Self.catalogManifest)
+    request.setValue("Basic \(Self.encodedCredentials)", forHTTPHeaderField: "Authorization")
+
+    for clientPolicy in [RedirectPolicy.followAll, .sameOriginHTTPSOnly, .refuseAll] {
+
+      #expect(URLSessionHTTPClient.policy(for: request, configuration: .ephemeral, clientPolicy: clientPolicy) == .refuseAll)
+
+    }
+
+  }
+
+  @Test func aRequestWithoutCredentialsGetsTheClientsPolicy() {
+
+    let request: URLRequest = URLRequest(url: Self.catalogManifest)
+
+    for clientPolicy in [RedirectPolicy.followAll, .sameOriginHTTPSOnly, .refuseAll] {
+
+      #expect(URLSessionHTTPClient.policy(for: request, configuration: .ephemeral, clientPolicy: clientPolicy) == clientPolicy)
+
+    }
+
+  }
+
+  @Test func aClientFollowsEveryRedirectByDefault() {
+
+    #expect(URLSessionHTTPClient().redirectPolicy == .followAll)
+    #expect(URLSessionHTTPClient(redirectPolicy: .sameOriginHTTPSOnly).redirectPolicy == .sameOriginHTTPSOnly)
+
+  }
+
   // MARK: The error
 
   @Test func theErrorLeavesOutTheCredentials() {
@@ -192,6 +359,25 @@ struct RedirectRefusalTests {
       #expect(!error.description.isEmpty)
 
     }
+
+  }
+
+  /// Asks a new delegate with a policy whether to follow one redirect, as the session does.
+  private static func decide(_ policy: RedirectPolicy, from original: URL, to target: URL) async throws -> URLRequest? {
+
+    let refusal: RedirectRefusal = RedirectRefusal(policy: policy, original: original)
+    let session: URLSession = URLSession(configuration: .ephemeral)
+    // The task is never resumed, so nothing is sent.
+    let task: URLSessionDataTask = session.dataTask(with: URLRequest(url: original))
+    let response: HTTPURLResponse = try #require(
+      HTTPURLResponse(url: original, statusCode: 302, httpVersion: "HTTP/1.1", headerFields: ["Location": target.absoluteString])
+    )
+
+    let followed: URLRequest? = await ask(refusal, session: session, task: task, response: response, redirect: URLRequest(url: target))
+
+    #expect(refusal.refusedRedirect == (followed == nil))
+
+    return followed
 
   }
 

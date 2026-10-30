@@ -121,7 +121,7 @@ It reads the catalog's published manifest over HTTPS, and downloads the catalog 
 
 Other commands use the cached copy when it has the bundled copy's MAJOR.MINOR and a PATCH at least as high, and the bundled copy otherwise, such as after installing a newer release of the package. A cached copy that can't be read gets a one-line warning, and the bundled copy is used. A catalog published in a newer format needs a newer swift-insteon; `catalog update` says so and keeps the current copy.
 
-`catalog update` asks only the catalog's site. It needs no Hub or modem, doesn't read the environment file or the Hub's settings, and sends no credentials. It exits with status 1 when the catalog can't be downloaded.
+`catalog update` asks only the catalog's site. It needs no Hub or modem, doesn't read the environment file or the Hub's settings, and sends no credentials. It follows a redirect only to HTTPS on the catalog's own host and port, deciding before each one; any other redirect fails the update and keeps the current copy, since the catalog isn't signed and its integrity rests on HTTPS to the expected host plus the manifest's SHA-256. It exits with status 1 when the catalog can't be downloaded.
 
 ### Which messages reach the modem
 

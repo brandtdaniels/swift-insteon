@@ -10,12 +10,17 @@ struct URLSessionHTTPClientTests {
 
   let client: URLSessionHTTPClient
 
+  let sameOriginClient: URLSessionHTTPClient
+
   init() {
 
     let configuration = URLSessionConfiguration.ephemeral
     configuration.protocolClasses = [StubURLProtocol.self]
 
-    client = URLSessionHTTPClient(session: URLSession(configuration: configuration))
+    let session: URLSession = URLSession(configuration: configuration)
+
+    client = URLSessionHTTPClient(session: session)
+    sameOriginClient = URLSessionHTTPClient(session: session, redirectPolicy: .sameOriginHTTPSOnly)
 
   }
 
@@ -81,6 +86,55 @@ struct URLSessionHTTPClientTests {
       try await client.send(URLRequest(url: URL(string: "https://example.com/manifest.json")!))
 
     }
+
+  }
+
+  // MARK: Same-origin HTTPS, checked again after the response
+
+  @Test func sameOriginRejectsAnAnswerFromAnotherHTTPSHost() async {
+
+    // As if the session followed a redirect without asking the delegate.
+    StubURLProtocol.stub = .answeredFrom(URL(string: "https://192.0.2.80/v0/manifest.json")!)
+
+    await #expect(throws: HTTPClientError.redirectRefused) {
+
+      try await sameOriginClient.send(URLRequest(url: URL(string: "https://catalog.example/v0/manifest.json")!))
+
+    }
+
+  }
+
+  @Test func sameOriginRejectsAnAnswerFromAnotherPort() async {
+
+    StubURLProtocol.stub = .answeredFrom(URL(string: "https://catalog.example:8443/v0/manifest.json")!)
+
+    await #expect(throws: HTTPClientError.redirectRefused) {
+
+      try await sameOriginClient.send(URLRequest(url: URL(string: "https://catalog.example/v0/manifest.json")!))
+
+    }
+
+  }
+
+  @Test func sameOriginRejectsAnAnswerThatIsntHTTPS() async {
+
+    StubURLProtocol.stub = .answeredFrom(URL(string: "http://catalog.example/v0/manifest.json")!)
+
+    await #expect(throws: HTTPClientError.insecureRedirect) {
+
+      try await sameOriginClient.send(URLRequest(url: URL(string: "https://catalog.example/v0/manifest.json")!))
+
+    }
+
+  }
+
+  @Test func sameOriginAcceptsAnAnswerFromTheSameHost() async throws {
+
+    StubURLProtocol.stub = .answeredFrom(URL(string: "https://catalog.example/v0/")!)
+
+    let response: HTTPResponse = try await sameOriginClient.send(URLRequest(url: URL(string: "https://catalog.example/v0")!))
+
+    #expect(response.statusCode == 200)
 
   }
 

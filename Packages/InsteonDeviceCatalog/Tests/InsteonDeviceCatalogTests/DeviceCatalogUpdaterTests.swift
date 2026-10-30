@@ -42,6 +42,30 @@ actor PublishedFiles: HTTPClient {
 
 }
 
+/// Answers as `PublishedFiles` does, except that a request for one file throws, as a client
+/// does when it refuses that file's redirect.
+struct RedirectedFile: HTTPClient {
+
+  let files: PublishedFiles
+
+  let name: String
+
+  let error: HTTPClientError
+
+  func send(_ request: URLRequest) async throws -> HTTPResponse {
+
+    if request.url?.lastPathComponent == name {
+
+      throw error
+
+    }
+
+    return try await files.send(request)
+
+  }
+
+}
+
 struct DeviceCatalogUpdaterTests {
 
   static let published = DeviceCatalogTests.json(DeviceCatalogTests.leakSensor)
@@ -276,6 +300,49 @@ struct DeviceCatalogUpdaterTests {
     _ = try await DeviceCatalogUpdater(client: files, location: location).update(replacing: Self.published)
 
     #expect(await files.urls.map(\.absoluteString) == ["https://example.com/mirror/v0/manifest.json"])
+
+  }
+
+  // MARK: Redirects
+
+  @Test func followsRedirectsOnlyToHTTPSOnTheSameHostByDefault() throws {
+
+    let client: URLSessionHTTPClient = try #require(DeviceCatalogUpdater().client as? URLSessionHTTPClient)
+
+    #expect(DeviceCatalogUpdater.redirectPolicy == .sameOriginHTTPSOnly)
+    #expect(client.redirectPolicy == .sameOriginHTTPSOnly)
+
+  }
+
+  @Test(arguments: [HTTPClientError.redirectRefused, .insecureRedirect])
+  func aRefusedRedirectForTheManifestFailsTheUpdate(_ error: HTTPClientError) async throws {
+
+    let files: PublishedFiles = Self.files(manifest: try Self.manifest(sha256: Self.sha256(of: Self.published)))
+    let client: RedirectedFile = RedirectedFile(files: files, name: "manifest.json", error: error)
+
+    await #expect(throws: error) {
+
+      try await DeviceCatalogUpdater(client: client).update(replacing: Data("{}".utf8))
+
+    }
+
+    #expect(await files.requested.isEmpty)
+
+  }
+
+  @Test(arguments: [HTTPClientError.redirectRefused, .insecureRedirect])
+  func aRefusedRedirectForTheCatalogFailsTheUpdate(_ error: HTTPClientError) async throws {
+
+    let files: PublishedFiles = Self.files(manifest: try Self.manifest(sha256: Self.sha256(of: Self.published)))
+    let client: RedirectedFile = RedirectedFile(files: files, name: "catalog.json", error: error)
+
+    await #expect(throws: error) {
+
+      try await DeviceCatalogUpdater(client: client).update(replacing: Data("{}".utf8))
+
+    }
+
+    #expect(await files.requested == ["manifest.json"])
 
   }
 
