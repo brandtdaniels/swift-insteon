@@ -22,6 +22,7 @@ let package = Package(
     .library(name: "InsteonScheduling", targets: ["InsteonScheduling"]),
     .library(name: "InsteonDeviceCatalog", targets: ["InsteonDeviceCatalog"]),
     .library(name: "InsteonNotifications", targets: ["InsteonNotifications"]),
+    .library(name: "InsteonCore", targets: ["InsteonCore"]),
     .executable(name: "insteon", targets: ["insteon"])
   ],
   dependencies: [
@@ -144,6 +145,18 @@ let package = Package(
       name: "InsteonNotificationsTests",
       dependencies: ["InsteonNotifications", "InsteonDeviceCatalog", "InsteonProtocol"],
       path: "Packages/InsteonNotifications/Tests/InsteonNotificationsTests"
+    ),
+
+    // The library a front end, such as an app or the `insteon` command, depends on.
+    .target(
+      name: "InsteonCore",
+      dependencies: ["InsteonDeviceCatalog", "InsteonProtocol"],
+      path: "Packages/InsteonCore/Sources/InsteonCore"
+    ),
+    .testTarget(
+      name: "InsteonCoreTests",
+      dependencies: ["InsteonCore", "InsteonDeviceCatalog", "InsteonProtocol"],
+      path: "Packages/InsteonCore/Tests/InsteonCoreTests"
     ),
 
     // The `insteon` command. Its command-line parsing is in InsteonCLICore, so it can be tested.
