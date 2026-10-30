@@ -253,38 +253,53 @@ enum DeviceCommands {
   /// `nil` if the device doesn't send one.
   private static func requestProductData(_ device: InsteonAddress, modem: Modem) async throws -> ProductData? {
 
-    // Listening starts before the request, so the response can't be missed.
-    let replies = await modem.replies()
-
     do {
 
-      try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.productDataRequest))
+      // Listening starts before the request, so the response can't be missed.
+      return try await modem.firstReply(
+        within: Modem.defaultExtendedRequestTimeout,
+        after: {
 
-    } catch let error as ModemError {
+          do {
 
-      // Not every device answers Product Data Request.
-      switch error {
-      case .deviceRejected, .deviceTimedOut:
-        return nil
-      default:
-        throw error
-      }
+            _ = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.productDataRequest))
 
-    }
+          } catch let error as ModemError {
 
-    return try await Replies.first(in: replies, within: Modem.defaultExtendedRequestTimeout) { (reply: ModemReply) -> ProductData? in
+            // Not every device answers Product Data Request.
+            switch error {
+            case .deviceRejected, .deviceTimedOut:
+              throw NoProductData()
+            default:
+              throw error
+            }
 
-      guard case let .messageReceived(message) = reply, message.sender == device else {
+          }
 
-        return nil
+        },
+        matching: { (reply: ModemReply) -> ProductData? in
 
-      }
+          guard case let .messageReceived(message) = reply, message.sender == device else {
 
-      return ProductData(message)
+            return nil
+
+          }
+
+          return ProductData(message)
+
+        }
+      )
+
+    } catch is NoProductData {
+
+      return nil
 
     }
 
   }
+
+  /// A device didn't answer Product Data Request.
+  private struct NoProductData: Error {}
 
   // MARK: - ping
 

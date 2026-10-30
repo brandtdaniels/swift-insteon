@@ -132,6 +132,8 @@ enum Names {
       return describe(error)
     case let error as LinkingError:
       return describe(error)
+    case let error as LinkMismatch:
+      return LinkOutcome.explanation(of: error)
     case let error as InsteonConnectError:
       return describe(error)
     case let error as LocalNetworkError:

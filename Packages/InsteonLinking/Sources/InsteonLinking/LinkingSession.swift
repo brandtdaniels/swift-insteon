@@ -269,7 +269,7 @@ struct LinkingSession: Sendable {
         within: linkingTimeout,
         clock: clock,
         after: start,
-        matching: { (reply: ModemReply) -> AllLinkingCompleted? in
+        matching: { (reply: ModemReply) throws -> AllLinkingCompleted? in
 
           guard case let .allLinkingCompleted(link) = reply else {
 

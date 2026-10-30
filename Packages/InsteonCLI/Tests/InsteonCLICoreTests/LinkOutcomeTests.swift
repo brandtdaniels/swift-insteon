@@ -1,5 +1,6 @@
 import Testing
 import InsteonCLICore
+import InsteonLinking
 import InsteonProtocol
 
 /// What `insteon link` and `insteon unlink` say about a link that isn't the one asked for.
@@ -60,6 +61,40 @@ struct LinkOutcomeTests {
       + "Run the command again, and hold its SET button only until it first beeps."
 
     #expect(LinkOutcome.mismatch(link(.delete, with: lamp), mode: .linking, device: nil) == expected)
+
+  }
+
+
+  @Test func explainsAMismatchTheLibraryFound() {
+
+    let mismatch = LinkMismatch(link: link(.delete, with: lamp), reason: .unlinkedInsteadOfLinking)
+
+    #expect(LinkOutcome.explanation(of: mismatch) == LinkOutcome.mismatch(link(.delete, with: lamp), mode: .linking, device: nil))
+
+  }
+
+  // MARK: - unlink --all
+
+  @Test func saysWhichLinkIsBeingRemoved() {
+
+    let controls: String = LinkingInstructions.remoteUnlinking(modemRole: .controller, device: "1A.2B.3C", group: 0)
+    let responds: String = LinkingInstructions.remoteUnlinking(modemRole: .responder, device: "1A.2B.3C", group: 1)
+
+    #expect(controls.hasPrefix("Removing 1A.2B.3C from the modem's group 0:"))
+    #expect(responds.hasPrefix("Removing the modem from 1A.2B.3C's group 1:"))
+
+  }
+
+  @Test func givesTheDevicesOwnUnlinkingStepsWhenRemoteUnlinkingFails() {
+
+    let lines: [String] = LinkingInstructions.setButtonUnlinking(device: "1A.2B.3C", steps: ["Hold the SET button.", "Hold it again."])
+
+    #expect(lines == [
+      "Remove the links that are left with the SET button of 1A.2B.3C. To put it into unlinking mode:",
+      "  1. Hold the SET button.",
+      "  2. Hold it again.",
+    ])
+    #expect(LinkingInstructions.setButtonUnlinking(device: "1A.2B.3C", steps: []).count == 1)
 
   }
 

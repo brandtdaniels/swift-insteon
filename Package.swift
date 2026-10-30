@@ -163,12 +163,12 @@ let package = Package(
     ),
     .target(
       name: "InsteonCLICore",
-      dependencies: ["InsteonDeviceCatalog", "InsteonProtocol"],
+      dependencies: ["InsteonDeviceCatalog", "InsteonLinking", "InsteonProtocol"],
       path: "Packages/InsteonCLI/Sources/InsteonCLICore"
     ),
     .testTarget(
       name: "InsteonCLICoreTests",
-      dependencies: ["InsteonCLICore", "InsteonDeviceCatalog", "InsteonProtocol"],
+      dependencies: ["InsteonCLICore", "InsteonDeviceCatalog", "InsteonLinking", "InsteonProtocol"],
       path: "Packages/InsteonCLI/Tests/InsteonCLICoreTests"
     ),
 

@@ -1,4 +1,5 @@
 import InsteonDeviceCatalog
+import InsteonLinking
 import InsteonProtocol
 
 /// What `insteon link` and `insteon unlink` tell the person to do, and in which order.
@@ -131,6 +132,57 @@ public enum LinkingInstructions {
 
   }
 
+  /// What to tell the person before one link is removed without the device's SET button.
+  ///
+  /// - Parameters:
+  ///   - modemRole: The modem's role in the link.
+  ///   - device: The device, as ``deviceLabel(_:profile:)`` writes it.
+  ///   - group: The link's group: the modem's when it's the controller, the device's when
+  ///     it's the responder.
+  /// - Returns: The line.
+  public static func remoteUnlinking(modemRole: ModemRole, device: String, group: AllLinkGroupNumber) -> String {
+
+    switch modemRole {
+    case .controller:
+      return "Removing \(device) from the modem's group \(group): the modem starts ALL-Linking in unlinking mode "
+        + "and sends the device Enter Linking Mode..."
+    case .responder:
+      return "Removing the modem from \(device)'s group \(group): the device is sent Enter Unlinking Mode, "
+        + "and the modem joins as responder..."
+    }
+
+  }
+
+  /// What to tell the person when links couldn't be removed without the device's SET button:
+  /// how to put the device into unlinking mode for the commands that remove each link that's
+  /// left.
+  ///
+  /// - Parameters:
+  ///   - device: The device, as ``deviceLabel(_:profile:)`` writes it.
+  ///   - steps: The device's own steps to unlink, from ``steps(of:)``, or empty if the catalog
+  ///     doesn't have them.
+  /// - Returns: The lines, in order.
+  public static func setButtonUnlinking(device: String, steps: [String]) -> [String] {
+
+    guard !steps.isEmpty else {
+
+      return [
+        "Remove the links that are left with the SET button of \(device). On most devices, unlinking mode is: "
+          + "press and hold the SET button until it beeps, then press and hold it again until it beeps again."
+      ]
+
+    }
+
+    let numbered: [String] = steps.enumerated().map { (step: (offset: Int, element: String)) -> String in
+
+      "  \(step.offset + 1). \(step.element)"
+
+    }
+
+    return ["Remove the links that are left with the SET button of \(device). To put it into unlinking mode:"] + numbered
+
+  }
+
 }
 
 /// Explains a link the modem reported that isn't the one asked for.
@@ -146,25 +198,33 @@ public enum LinkOutcome {
   ///   one asked for.
   public static func mismatch(_ link: AllLinkingCompleted, mode: LinkingInstructions.Mode, device: InsteonAddress?) -> String? {
 
-    if let device, link.address != device {
+    let direction: LinkingDirection = mode == .linking ? .linking : .unlinking
 
-      let change = link.mode == .delete ? "removed its link" : "linked"
+    return LinkMismatch(link, direction: direction, device: device).map(explanation(of:))
+
+  }
+
+  /// What to tell the person about a link the modem reported that isn't the one asked for.
+  ///
+  /// - Parameter mismatch: What's wrong with the link.
+  /// - Returns: A message that says what happened and what to do.
+  public static func explanation(of mismatch: LinkMismatch) -> String {
+
+    let link: AllLinkingCompleted = mismatch.link
+
+    switch mismatch.reason {
+    case let .otherDevice(device):
+      let change: String = link.mode == .delete ? "removed its link" : "linked"
 
       return "The modem reported \(link.address), not \(device): another device's SET button was pressed, "
         + "and the modem \(change) with it in group \(link.group). Run the command again for \(device)."
-
-    }
-
-    switch (mode, link.mode == .delete) {
-    case (.unlinking, false):
+    case .linkedInsteadOfUnlinking:
       return "\(link.address) linked again in group \(link.group) instead of unlinking: it was in linking mode, not unlinking mode. "
         + "Put it into unlinking mode (on most devices, hold its SET button until it beeps, then hold it again until it beeps again) "
         + "and run the command again."
-    case (.linking, true):
+    case .unlinkedInsteadOfLinking:
       return "\(link.address) removed its link in group \(link.group) instead of linking: it was in unlinking mode, not linking mode. "
         + "Run the command again, and hold its SET button only until it first beeps."
-    default:
-      return nil
     }
 
   }

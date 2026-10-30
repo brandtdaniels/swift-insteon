@@ -41,7 +41,8 @@ public enum HelpText {
       info                Show the modem's Insteon ID, identity and product
       links               List the modem's ALL-Link database
       link [ADDRESS]      Link a device to the modem, by its address or its SET button
-      unlink [ADDRESS]    Unlink a device from the modem with its SET button
+      unlink [ADDRESS]    Unlink a device from the modem, with its SET button or, with
+                          --all, by its address
       device ADDRESS ...  Control a device, read and change its settings, or read its
                           ALL-Link database
       scene GROUP on|off  Turn the devices in one of the modem's groups on or off
@@ -141,10 +142,11 @@ public enum HelpText {
            insteon [--hub HOST[:PORT] | --serial PATH] link --cancel
 
     With ADDRESS, the device's Insteon address from its label, links the device without its
-    SET button: the modem starts ALL-Linking and sends the device Enter Linking Mode. If the
-    device doesn't answer, as an i2CS device may not until it's linked, the command falls
-    back to its SET button. A device the Insteon device catalog says can control is then
-    linked back, with the modem as its responder.
+    SET button: the modem starts ALL-Linking and sends the device Enter Linking Mode. When
+    the modem is the controller, the device is first turned fully on with Light On, so it
+    links with full on as its on-level. If the device doesn't answer, as an i2CS device may
+    not until it's linked, the command falls back to its SET button. A device the Insteon
+    device catalog says can control is then linked back, with the modem as its responder.
 
     Without ADDRESS, puts the modem into linking mode with Start ALL-Linking, then waits for
     someone to press and hold a device's SET button, and prints the linked device.
@@ -169,10 +171,19 @@ public enum HelpText {
   public static let unlink = """
     Usage: insteon [--hub HOST[:PORT] | --serial PATH] unlink [ADDRESS] [--group N]
                    [--controller | --responder] [--timeout SECONDS] [--json]
+           insteon [--hub HOST[:PORT] | --serial PATH] unlink ADDRESS --all
+                   [--timeout SECONDS] [--json]
 
     Removes a link with a device's SET button and prints the unlinked device. With ADDRESS,
     only that device's unlink is accepted, and its own steps are shown when its identity is
     known. Afterward, it says which groups still link the device.
+
+    With ADDRESS and --all, removes every link between the modem and the device, in every
+    group the modem's ALL-Link database has for it and in both directions, without its SET
+    button: for a link the device controls, the device is sent Enter Unlinking Mode and the
+    modem joins as responder; for a link in one of the modem's groups, the modem starts
+    ALL-Linking in unlinking mode and the device is sent Enter Linking Mode. If that fails,
+    the command says which links are left and how to remove them with the SET button.
 
       --group N           The modem's ALL-Link group in the link, from 0 to 254. With
                           ADDRESS, defaults to the group the modem's records for the device
@@ -183,7 +194,10 @@ public enum HelpText {
       --responder         The modem responds to the device, which is the controller, so it
                           goes into unlinking mode first: the command says how, and waits
                           for Return before the modem joins.
-      --timeout SECONDS   How long to wait. Defaults to 240.
+      --all               Remove every link with ADDRESS without its SET button, as above.
+                          Not with --group, --controller or --responder.
+      --timeout SECONDS   How long to wait. Defaults to 240, or with --all, 30 for each
+                          link.
     """
 
   /// The help for `insteon device`.
