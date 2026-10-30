@@ -2,6 +2,7 @@ import Testing
 import InsteonLinking
 import InsteonModem
 import InsteonProtocol
+import InsteonTestSupport
 
 struct LinkerTests {
 

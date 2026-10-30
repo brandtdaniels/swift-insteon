@@ -5,6 +5,7 @@ import Darwin
 import Glibc
 #endif
 import InsteonCLICore
+import InsteonCore
 import InsteonHubClient
 import InsteonModem
 import InsteonProtocol
@@ -129,6 +130,23 @@ enum ModemSession {
   ///   - body: The work to do with the modem.
   static func run(_ invocation: Invocation, _ body: @escaping @Sendable (Modem) async throws -> Void) async throws {
 
+    try await run(invocation, reachingHub: { (modem: Modem, _: HubLocation?) async throws -> Void in
+
+      try await body(modem)
+
+    })
+
+  }
+
+  /// Opens the modem, runs `body` with it and the Hub it's reached through, in a task that
+  /// Control-C cancels, and closes the modem.
+  ///
+  /// - Parameters:
+  ///   - invocation: The command line, which names the modem with `--hub` or `--serial`.
+  ///   - body: The work to do with the modem, given the Hub's host and port, or `nil` for a
+  ///     serial modem. The Hub's credentials aren't part of it.
+  static func run(_ invocation: Invocation, reachingHub body: @escaping @Sendable (Modem, HubLocation?) async throws -> Void) async throws {
+
     let environment = try loadEnvironment(explicitPath: invocation.envFilePath)
     let target = try ModemTarget.resolve(hub: invocation.hub, serialPath: invocation.serialPath, environment: environment)
 
@@ -143,7 +161,13 @@ enum ModemSession {
 
       do {
 
-        try await withModem(HubConnection(hub: hub), body)
+        let location = HubLocation(host: endpoint.host, port: endpoint.port)
+
+        try await withModem(HubConnection(hub: hub)) { (modem: Modem) async throws -> Void in
+
+          try await body(modem, location)
+
+        }
 
       } catch is HubStoppedAnswering {
 
@@ -168,7 +192,11 @@ enum ModemSession {
       let port = try SerialPort(path: path)
       defer { port.close() }
 
-      try await withModem(port, body)
+      try await withModem(port) { (modem: Modem) async throws -> Void in
+
+        try await body(modem, nil)
+
+      }
       #else
       _ = path
 

@@ -126,6 +126,8 @@ changing the modem's records.
 ### Databases
 
 - ``AllLinkDatabaseCache``
+- ``AllLinkDatabaseCopy``
+- ``AllLinkDatabaseReading``
 - ``AllLinkGroupReader``
 - ``AllLinkGroupReading``
 

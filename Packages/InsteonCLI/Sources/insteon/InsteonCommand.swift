@@ -5,6 +5,7 @@ import Darwin
 import Glibc
 #endif
 import InsteonCLICore
+import InsteonCore
 import InsteonModem
 
 /// The `insteon` command: drives an Insteon Hub or modem, and its devices, from the terminal.
@@ -66,9 +67,9 @@ struct InsteonCommand {
 
       }
     case let .links(options):
-      try await withModem(invocation) { modem, names in
+      try await withModemAndHub(invocation) { modem, names, hub in
 
-        try await ModemCommands.links(modem, options: options, names: names, printsJSON: printsJSON)
+        try await ModemCommands.links(modem, hub: hub, options: options, names: names, printsJSON: printsJSON)
 
       }
     case let .link(options):
@@ -90,9 +91,9 @@ struct InsteonCommand {
 
       }
     case let .device(device, action):
-      try await withModem(invocation) { modem, names in
+      try await withModemAndHub(invocation) { modem, names, hub in
 
-        try await DeviceCommands.run(action, device: device, modem: modem, names: names, printsJSON: printsJSON)
+        try await DeviceCommands.run(action, device: device, modem: modem, hub: hub, names: names, printsJSON: printsJSON)
 
       }
     case let .scene(group, isOn):
@@ -142,6 +143,23 @@ struct InsteonCommand {
       try await body(modem, names)
 
     }
+
+  }
+
+  /// Opens the modem the command line names and runs `body` with it, the catalog's product
+  /// names, and the Hub's host and port, or `nil` for a serial modem.
+  private static func withModemAndHub(
+    _ invocation: Invocation,
+    _ body: @escaping @Sendable (Modem, ProductNames, HubLocation?) async throws -> Void
+  ) async throws {
+
+    let names = ProductNames()
+
+    try await ModemSession.run(invocation, reachingHub: { (modem: Modem, hub: HubLocation?) async throws -> Void in
+
+      try await body(modem, names, hub)
+
+    })
 
   }
 

@@ -90,24 +90,34 @@ enum ModemCommands {
 
   }
 
-  static func links(_ modem: Modem, options: LinksOptions, names: ProductNames, printsJSON: Bool) async throws {
+  static func links(_ modem: Modem, hub: HubLocation?, options: LinksOptions, names: ProductNames, printsJSON: Bool) async throws {
 
     Output.note("Reading the modem's ALL-Link database...")
 
-    let records = try await modem.allLinkRecords()
-    let registry: DeviceRegistry = IdentityStore.registry(names: names)
+    try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (cached: CachedNetwork) async throws -> Void in
+
+      try await links(cached, options: options, printsJSON: printsJSON)
+
+    }
+
+  }
+
+  private static func links(_ cached: CachedNetwork, options: LinksOptions, printsJSON: Bool) async throws {
+
+    let network: DeviceNetwork = cached.network
+    let entries: [ModemDatabaseEntry] = try await network.modemDatabase()
 
     if options.identifiesDevices {
 
       var asked: Set<InsteonAddress> = []
 
-      for record in records where asked.insert(record.address).inserted {
+      for entry in entries where asked.insert(entry.record.address).inserted {
 
-        if let identity = try await identify(record.address, modem: modem) {
+        try await identify(entry.record.address, network: network)
 
-          await registry.record(identity, for: record.address)
-
-        }
+        // Each identity is saved as it's learned, so a second Control-C, which ends the
+        // command at once, loses at most the one being asked for.
+        await cached.save()
 
       }
 
@@ -115,9 +125,12 @@ enum ModemCommands {
 
     var rows: [Record] = []
 
-    for record in records {
+    for entry in entries {
 
-      let known: DeviceDescription? = await registry.device(record.address)?.deviceDescription
+      let record: AllLinkRecord = entry.record
+      // A device identified above is described from the registry.
+      let registered: RegisteredDevice? = options.identifiesDevices ? await network.registry.device(record.address) : entry.device
+      let known: DeviceDescription? = registered?.deviceDescription
 
       rows.append(Record(
         role: record.flags.contains(.controller) ? "controller" : "responder",
@@ -171,36 +184,30 @@ enum ModemCommands {
 
   }
 
-  /// Asks a device for its identity and remembers it, saying on standard error if it didn't
-  /// answer.
+  /// Asks a device for its identity through the network, which records it, saying on
+  /// standard error if it didn't answer.
   ///
   /// - Throws: `CancellationError` after Control-C; other errors are reported and passed
   ///   over, so one device that doesn't answer doesn't stop the list.
-  private static func identify(_ device: InsteonAddress, modem: Modem) async throws -> ReportedIdentity? {
+  private static func identify(_ device: InsteonAddress, network: DeviceNetwork) async throws {
 
     Output.note("Asking \(device) for its identity with ID Request...")
 
     do {
 
-      let identification = try await DeviceIdentifier(modem: modem).identify(device)
+      let identification: DeviceIdentification = try await network.identify(device)
 
-      guard let pressed = identification.identity else {
+      guard identification.identity == nil else {
 
-        Output.note(
-          identification.acceptsModem
-            ? "\(device) didn't report its identity."
-            : "\(device) runs i2CS and has no link to the modem, so it won't say what it is."
-        )
-
-        return nil
+        return
 
       }
 
-      let identity = ReportedIdentity(pressed)
-
-      await IdentityStore.remember(identity, for: device)
-
-      return identity
+      Output.note(
+        identification.acceptsModem
+          ? "\(device) didn't report its identity."
+          : "\(device) runs i2CS and has no link to the modem, so it won't say what it is."
+      )
 
     } catch let error as CancellationError {
 
@@ -209,8 +216,6 @@ enum ModemCommands {
     } catch {
 
       Output.note(Names.message(for: error))
-
-      return nil
 
     }
 

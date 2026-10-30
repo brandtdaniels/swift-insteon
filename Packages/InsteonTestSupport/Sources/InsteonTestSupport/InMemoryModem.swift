@@ -6,39 +6,57 @@ import InsteonProtocol
 ///
 /// Each device's database is linear: its records count down by 8 from `0x0FFF`, and an
 /// address that was never written holds a record that marks the end of the database.
-actor InMemoryModem: LinkingModem {
+///
+/// Each stream ``replies()`` returns stops being fed once its reader stops reading, and
+/// finishes when the modem is released.
+public actor InMemoryModem: LinkingModem {
 
   /// A write to a device's database.
-  struct Write: Hashable {
+  public struct Write: Hashable, Sendable {
 
-    let device: InsteonAddress
+    /// The device written to.
+    public let device: InsteonAddress
 
-    let address: UInt16
+    /// The record's address in the device's database.
+    public let address: UInt16
+
+    /// Creates a write.
+    public init(device: InsteonAddress, address: UInt16) {
+
+      self.device = device
+      self.address = address
+
+    }
 
   }
 
-  let address = InsteonAddress(0x11, 0x22, 0x33)
+  /// The modem's own address.
+  public let address = InsteonAddress(0x11, 0x22, 0x33)
 
   /// Each device's records, by address.
-  var databases: [InsteonAddress: [UInt16: AllLinkRecord]] = [:]
+  public var databases: [InsteonAddress: [UInt16: AllLinkRecord]] = [:]
 
   /// The modem's own records, in the order it found or added them.
-  var modemRecords: [AllLinkRecord] = []
+  public var modemRecords: [AllLinkRecord] = []
 
   /// Every write to a device's database, in order.
-  private(set) var writes: [Write] = []
+  public private(set) var writes: [Write] = []
 
   /// Devices that reject every request, as an i2CS device does before it's linked to the modem.
-  var unlinkedDevices: Set<InsteonAddress> = []
+  public var unlinkedDevices: Set<InsteonAddress> = []
 
   /// Devices that acknowledge writes without storing them.
-  var forgetfulDevices: Set<InsteonAddress> = []
+  public var forgetfulDevices: Set<InsteonAddress> = []
+
+  /// The addresses of records in each device's database that arrive with a checksum that
+  /// fails, as a record damaged on the way does.
+  public var damagedRecords: [InsteonAddress: Set<UInt16>] = [:]
 
   /// Flags each device sets on its own in every record in use written to it.
-  var maintainedFlags: [InsteonAddress: AllLinkRecordFlags] = [:]
+  public var maintainedFlags: [InsteonAddress: AllLinkRecordFlags] = [:]
 
   /// Something the modem was asked to do in linking, in order.
-  enum LinkingStep: Hashable {
+  public enum LinkingStep: Hashable, Sendable {
 
     /// The modem entered linking or unlinking mode.
     case modem(AllLinkMode, AllLinkGroupNumber)
@@ -52,30 +70,34 @@ actor InMemoryModem: LinkingModem {
   }
 
   /// The linking steps taken, in order.
-  private(set) var linkingSteps: [LinkingStep] = []
+  public private(set) var linkingSteps: [LinkingStep] = []
 
   /// The engine each device reports. Devices not listed report i2.
-  var engines: [InsteonAddress: InsteonEngine] = [:]
+  public var engines: [InsteonAddress: InsteonEngine] = [:]
 
   /// Engine versions devices report that ``InsteonEngine`` doesn't name, by device.
-  var unknownEngines: [InsteonAddress: UInt8] = [:]
+  public var unknownEngines: [InsteonAddress: UInt8] = [:]
 
   /// The SET Button Pressed broadcast each device sends in reply to an ID request. Devices not
   /// listed don't reply.
-  var identities: [InsteonAddress: SetButtonPressed] = [:]
+  public var identities: [InsteonAddress: SetButtonPressed] = [:]
 
   /// Devices that never complete a link.
-  var silentDevices: Set<InsteonAddress> = []
+  public var silentDevices: Set<InsteonAddress> = []
+
+  /// Devices that acknowledge no standard message, so each one sent to them throws
+  /// `ModemError.deviceTimedOut`.
+  public var unansweringDevices: Set<InsteonAddress> = []
 
   /// Devices whose unlinks the modem carries out without reporting them.
-  var unreportedUnlinks: Set<InsteonAddress> = []
+  public var unreportedUnlinks: Set<InsteonAddress> = []
 
   /// The group the modem reports for each device's links, when it isn't the modem's group.
-  var reportedGroups: [InsteonAddress: AllLinkGroupNumber] = [:]
+  public var reportedGroups: [InsteonAddress: AllLinkGroupNumber] = [:]
 
   /// Each device's level, from the Light On or Light Off it was last sent. Devices not listed
   /// are off.
-  private(set) var levels: [InsteonAddress: UInt8] = [:]
+  public private(set) var levels: [InsteonAddress: UInt8] = [:]
 
   /// The mode the modem is in, if it's linking.
   private var linkingMode: (mode: AllLinkMode, group: AllLinkGroupNumber)?
@@ -84,68 +106,118 @@ actor InMemoryModem: LinkingModem {
   private var waitingDevice: (address: InsteonAddress, isUnlinking: Bool)?
 
   /// How many records were deleted from the modem.
-  private(set) var modemDeletions = 0
+  public private(set) var modemDeletions = 0
 
   /// Each device's ALL-Link database delta, which changes with every write to its database.
   private var deltas: [InsteonAddress: UInt8] = [:]
 
   /// How many times each device's whole database was read.
-  private(set) var databaseReads: [InsteonAddress: Int] = [:]
+  public private(set) var databaseReads: [InsteonAddress: Int] = [:]
 
   /// How many times the modem's whole database was read.
-  private(set) var modemDatabaseReads = 0
+  public private(set) var modemDatabaseReads = 0
 
   /// Whether the modem was asked for its own address.
-  private(set) var wasAskedForItsAddress = false
+  public private(set) var wasAskedForItsAddress = false
 
-  private var subscribers: [AsyncStream<ModemReply>.Continuation] = []
+  /// The streams ``replies()`` returned that are still read, by the order they were made.
+  private var subscribers: [Int: AsyncStream<ModemReply>.Continuation] = [:]
+
+  private var nextSubscriber: Int = 0
+
+  /// Creates a modem with no records, whose devices have empty databases.
+  public init() {}
+
+  deinit {
+
+    for continuation in subscribers.values {
+
+      continuation.finish()
+
+    }
+
+  }
+
+  /// Sets the level a device reports in its acknowledgment of a status request, as if it had
+  /// been turned on or off at the device.
+  public func setLevel(_ level: UInt8, of device: InsteonAddress) {
+
+    levels[device] = level
+
+  }
 
   private static let end = AllLinkRecord(flags: [], group: 0x00, address: InsteonAddress(0x00, 0x00, 0x00))
 
-  func setModemRecords(_ records: [AllLinkRecord]) {
+  /// Replaces the modem's own records.
+  public func setModemRecords(_ records: [AllLinkRecord]) {
 
     modemRecords = records
 
   }
 
-  func setEngine(_ engine: InsteonEngine, of device: InsteonAddress) {
+  /// Sets the engine a device reports.
+  public func setEngine(_ engine: InsteonEngine, of device: InsteonAddress) {
 
     engines[device] = engine
 
   }
 
-  func setSilent(_ device: InsteonAddress) {
+  /// Makes a device never complete a link.
+  public func setSilent(_ device: InsteonAddress) {
 
     silentDevices.insert(device)
 
   }
 
-  func setUnlinkUnreported(_ device: InsteonAddress) {
+  /// Makes a device acknowledge no standard message, or acknowledge them again.
+  ///
+  /// - Parameters:
+  ///   - device: The device.
+  ///   - isUnanswering: Whether the device stops acknowledging. Defaults to `true`.
+  public func setUnanswering(_ device: InsteonAddress, _ isUnanswering: Bool = true) {
+
+    if isUnanswering {
+
+      unansweringDevices.insert(device)
+
+    } else {
+
+      unansweringDevices.remove(device)
+
+    }
+
+  }
+
+  /// Makes the modem carry out a device's unlinks without reporting them.
+  public func setUnlinkUnreported(_ device: InsteonAddress) {
 
     unreportedUnlinks.insert(device)
 
   }
 
-  func setReportedGroup(_ group: AllLinkGroupNumber, of device: InsteonAddress) {
+  /// Sets the group the modem reports for a device's links.
+  public func setReportedGroup(_ group: AllLinkGroupNumber, of device: InsteonAddress) {
 
     reportedGroups[device] = group
 
   }
 
-  func setUnknownEngine(_ version: UInt8, of device: InsteonAddress) {
+  /// Sets an engine version a device reports that `InsteonEngine` doesn't name.
+  public func setUnknownEngine(_ version: UInt8, of device: InsteonAddress) {
 
     unknownEngines[device] = version
 
   }
 
-  func setIdentity(_ identity: SetButtonPressed) {
+  /// Sets the SET Button Pressed broadcast a device sends in reply to an ID request.
+  public func setIdentity(_ identity: SetButtonPressed) {
 
     identities[identity.sender] = identity
 
   }
 
   /// A device broadcasts its identity, if it has one.
-  func broadcastIdentity(of device: InsteonAddress) {
+  public func broadcastIdentity(of device: InsteonAddress) {
 
     guard let identity = identities[device] else {
 
@@ -160,7 +232,7 @@ actor InMemoryModem: LinkingModem {
       command: Command(command1: identity.role.rawValue, command2: 0x00)
     )
 
-    for subscriber in subscribers {
+    for subscriber in subscribers.values {
 
       subscriber.yield(.messageReceived(broadcast))
 
@@ -169,26 +241,62 @@ actor InMemoryModem: LinkingModem {
   }
 
   /// Someone presses a device's SET button: it enters linking mode, or unlinking mode.
-  func pressSetButton(of device: InsteonAddress, unlinking: Bool = false) {
+  public func pressSetButton(of device: InsteonAddress, unlinking: Bool = false) {
 
     waitingDevice = (device, unlinking)
     completeLink()
 
   }
 
-  func setDatabase(_ records: [UInt16: AllLinkRecord], of device: InsteonAddress) {
+  /// Replaces a device's records, by address.
+  public func setDatabase(_ records: [UInt16: AllLinkRecord], of device: InsteonAddress) {
 
     databases[device] = records
 
   }
 
-  func setUnlinked(_ device: InsteonAddress) {
+  /// Makes a device reject every request, as an i2CS device does before it's linked to the modem.
+  public func setUnlinked(_ device: InsteonAddress) {
 
     unlinkedDevices.insert(device)
 
   }
 
-  func setForgetful(_ device: InsteonAddress) {
+  /// Makes the record at an address in a device's database arrive with a checksum that fails,
+  /// or arrive whole again.
+  ///
+  /// - Parameters:
+  ///   - isDamaged: Whether the record arrives damaged.
+  ///   - address: The record's address in the device's database.
+  ///   - device: The device.
+  public func setDamaged(_ isDamaged: Bool, record address: UInt16, of device: InsteonAddress) {
+
+    if isDamaged {
+
+      damagedRecords[device, default: []].insert(address)
+
+    } else {
+
+      _ = damagedRecords[device]?.remove(address)
+
+    }
+
+  }
+
+  /// The record at an address in a device's database as it arrives, with its checksum.
+  private func arrivingRecord(of device: InsteonAddress, at address: UInt16) -> AllLinkRecordResponse {
+
+    AllLinkRecordResponse(
+      sender: device,
+      address: address,
+      record: record(of: device, at: address),
+      hasIntactChecksum: !(damagedRecords[device]?.contains(address) ?? false)
+    )
+
+  }
+
+  /// Makes a device acknowledge writes without storing them.
+  public func setForgetful(_ device: InsteonAddress) {
 
     forgetfulDevices.insert(device)
 
@@ -196,7 +304,7 @@ actor InMemoryModem: LinkingModem {
 
   /// The device sets `flags` in every record in use written to it, as an i3 device may set its
   /// fast fail and smart hop bits.
-  func setMaintainedFlags(_ flags: AllLinkRecordFlags, of device: InsteonAddress) {
+  public func setMaintainedFlags(_ flags: AllLinkRecordFlags, of device: InsteonAddress) {
 
     maintainedFlags[device] = flags
 
@@ -204,13 +312,14 @@ actor InMemoryModem: LinkingModem {
 
   /// Someone changes a device's database without the linker, such as by pressing its SET
   /// button, so its delta changes.
-  func changeDatabase(of device: InsteonAddress) {
+  public func changeDatabase(of device: InsteonAddress) {
 
     deltas[device, default: 0] &+= 1
 
   }
 
-  func record(of device: InsteonAddress, at address: UInt16) -> AllLinkRecord {
+  /// The record at an address in a device's database, or the record that marks the end of the database.
+  public func record(of device: InsteonAddress, at address: UInt16) -> AllLinkRecord {
 
     databases[device]?[address] ?? Self.end
 
@@ -218,7 +327,9 @@ actor InMemoryModem: LinkingModem {
 
   // MARK: - LinkingModem
 
-  func modemInfo() async throws -> ModemInfo {
+  /// Returns the modem's address, category, subcategory and firmware version, and records
+  /// that it was asked.
+  public func modemInfo() async throws -> ModemInfo {
 
     wasAskedForItsAddress = true
 
@@ -226,7 +337,9 @@ actor InMemoryModem: LinkingModem {
 
   }
 
-  func send(_ command: SerialCommand) async throws {
+  /// Carries out a serial command: changes the modem's own records, or enters or leaves
+  /// linking mode. Other commands are accepted and do nothing.
+  public func send(_ command: SerialCommand) async throws {
 
     switch command {
     case let .manageAllLinkRecord(action, record):
@@ -244,10 +357,23 @@ actor InMemoryModem: LinkingModem {
 
   }
 
-  func request(_ message: StandardMessage, timeout: Duration) async throws -> ReceivedMessage {
+  /// Answers a standard message as the device it's sent to would: a status request with the
+  /// device's delta and level, Get Insteon Engine Version with its engine, ID Request with an
+  /// acknowledgment and then its SET Button Pressed broadcast, Light On and Light Off by
+  /// setting its level, and a linking command by entering linking mode.
+  ///
+  /// - Throws: `ModemError.deviceTimedOut` for a device that acknowledges nothing, and
+  ///   `ModemError.deviceRejected` for a request an unlinked device rejects.
+  public func request(_ message: StandardMessage, timeout: Duration) async throws -> ReceivedMessage {
 
     let device = message.destination
     var command2 = message.command.command2
+
+    guard !unansweringDevices.contains(device) else {
+
+      throw ModemError.deviceTimedOut(device)
+
+    }
 
     if message.command.command1 == 0x19 {
 
@@ -257,12 +383,13 @@ actor InMemoryModem: LinkingModem {
 
       }
 
-      // A status request's acknowledgment carries the database delta in cmd1.
+      // A status request's acknowledgment carries the database delta in cmd1 and the level
+      // in cmd2.
       return ReceivedMessage(
         sender: device,
         destination: address,
         flags: MessageFlags(messageType: .directAcknowledgment),
-        command: Command(command1: deltas[device, default: 0], command2: 0x00)
+        command: Command(command1: deltas[device, default: 0], command2: levels[device, default: 0x00])
       )
 
     }
@@ -318,7 +445,12 @@ actor InMemoryModem: LinkingModem {
 
   }
 
-  func request(_ message: ExtendedMessage, timeout: Duration) async throws -> ReceivedMessage {
+  /// Answers an extended message as the device it's sent to would: a linking command enters
+  /// linking mode, and a write to its ALL-Link database stores the record, unless the device
+  /// forgets writes.
+  ///
+  /// - Throws: `ModemError.deviceRejected` for a message an unlinked device rejects.
+  public func request(_ message: ExtendedMessage, timeout: Duration) async throws -> ReceivedMessage {
 
     let device = message.destination
 
@@ -374,7 +506,11 @@ actor InMemoryModem: LinkingModem {
 
   }
 
-  func readAllLinkRecord(of device: InsteonAddress, at address: UInt16, timeout: Duration) async throws -> AllLinkRecordResponse {
+  /// Returns the record at an address in a device's database, where `0x0000` asks for the
+  /// first record, at `0x0FFF`.
+  ///
+  /// - Throws: `ModemError.deviceRejected` for an unlinked device.
+  public func readAllLinkRecord(of device: InsteonAddress, at address: UInt16, timeout: Duration) async throws -> AllLinkRecordResponse {
 
     guard !unlinkedDevices.contains(device) else {
 
@@ -384,17 +520,19 @@ actor InMemoryModem: LinkingModem {
 
     let recordAddress: UInt16 = address == 0x0000 ? 0x0FFF : address
 
-    return AllLinkRecordResponse(sender: device, address: recordAddress, record: record(of: device, at: recordAddress))
+    return arrivingRecord(of: device, at: recordAddress)
 
   }
 
-  func allLinkRecords(group: AllLinkGroupNumber, device: InsteonAddress) async throws -> [AllLinkRecord] {
+  /// Returns the modem's own records for a group and device.
+  public func allLinkRecords(group: AllLinkGroupNumber, device: InsteonAddress) async throws -> [AllLinkRecord] {
 
     modemRecords.filter { $0.group == group && $0.address == device }
 
   }
 
-  func allLinkRecords() async throws -> [AllLinkRecord] {
+  /// Returns the modem's own records, and counts the read.
+  public func allLinkRecords() async throws -> [AllLinkRecord] {
 
     modemDatabaseReads += 1
 
@@ -402,7 +540,11 @@ actor InMemoryModem: LinkingModem {
 
   }
 
-  func readAllLinkDatabase(of device: InsteonAddress, timeout: Duration) async throws -> [AllLinkRecordResponse] {
+  /// Returns a device's records from `0x0FFF` down, ending with the record that marks the
+  /// end of its database, and counts the read.
+  ///
+  /// - Throws: `ModemError.deviceRejected` for an unlinked device.
+  public func readAllLinkDatabase(of device: InsteonAddress, timeout: Duration) async throws -> [AllLinkRecordResponse] {
 
     guard !unlinkedDevices.contains(device) else {
 
@@ -417,7 +559,7 @@ actor InMemoryModem: LinkingModem {
 
     while true {
 
-      let response = AllLinkRecordResponse(sender: device, address: recordAddress, record: record(of: device, at: recordAddress))
+      let response: AllLinkRecordResponse = arrivingRecord(of: device, at: recordAddress)
 
       responses.append(response)
 
@@ -433,13 +575,42 @@ actor InMemoryModem: LinkingModem {
 
   }
 
-  func replies() -> AsyncStream<ModemReply> {
+  /// Returns a stream of the broadcasts and link reports the modem sends after this call.
+  ///
+  /// The stream finishes when the modem is released, and stops being fed once its reader
+  /// stops reading.
+  public func replies() -> AsyncStream<ModemReply> {
 
     let (stream, continuation) = AsyncStream<ModemReply>.makeStream()
+    let id: Int = nextSubscriber
 
-    subscribers.append(continuation)
+    nextSubscriber += 1
+    subscribers[id] = continuation
+
+    continuation.onTermination = { [weak self] (_: AsyncStream<ModemReply>.Continuation.Termination) -> Void in
+
+      guard let self else {
+
+        return
+
+      }
+
+      Task {
+
+        await self.removeSubscriber(id)
+
+      }
+
+    }
 
     return stream
+
+  }
+
+  /// Stops feeding a stream whose reader stopped reading.
+  private func removeSubscriber(_ id: Int) {
+
+    subscribers[id] = nil
 
   }
 
@@ -506,7 +677,7 @@ actor InMemoryModem: LinkingModem {
 
     }
 
-    for subscriber in subscribers {
+    for subscriber in subscribers.values {
 
       subscriber.yield(.allLinkingCompleted(link))
 
