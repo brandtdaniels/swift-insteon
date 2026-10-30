@@ -15,8 +15,9 @@ enum PrivateFile {
   /// into place.
   ///
   /// The temporary file has a name no other process can guess, and is created only if nothing, such
-  /// as a symbolic link, is already there. The file's directory is created readable only by the
-  /// current user, but a directory that's already there is left as it is.
+  /// as a symbolic link, is already there. The file's own directory is created readable only by
+  /// the current user, any directory above it that isn't there is created with the system's
+  /// default permissions, and a directory that's already there is left as it is.
   ///
   /// - Parameters:
   ///   - path: The file's path.
@@ -56,29 +57,51 @@ enum PrivateFile {
 
   }
 
-  /// Makes a directory, readable only by the current user, if it isn't there.
+  /// Makes a directory, readable only by the current user, if it isn't there, after making
+  /// any directory above it that isn't there with the system's default permissions.
   private static func makeDirectory(_ directory: String) throws {
+
+    try makeParents(of: directory)
+
+    // A directory that's already there keeps its permissions.
+    try makeOne(directory, permissions: 0o700)
+
+  }
+
+  /// Makes the directories above a directory that aren't there, outermost first, with the
+  /// system's default permissions, as `mkdir -p` does.
+  private static func makeParents(of directory: String) throws {
 
     let parent: String = self.directory(of: directory)
 
-    if !FileManager.default.fileExists(atPath: parent) {
+    guard parent != directory, parent != "/", parent != ".", !FileManager.default.fileExists(atPath: parent) else {
 
-      do {
-
-        try FileManager.default.createDirectory(atPath: parent, withIntermediateDirectories: true)
-
-      } catch {
-
-        throw DeviceRegistryStoreError.writeFailed(code: EACCES)
-
-      }
+      return
 
     }
 
-    // A directory that's already there keeps its permissions.
-    guard mkdir(directory, 0o700) == 0 || errno == EEXIST else {
+    try makeParents(of: parent)
+    try makeOne(parent, permissions: 0o777)
 
-      throw DeviceRegistryStoreError.writeFailed(code: errno)
+  }
+
+  /// Makes one directory, whose parent is there, unless something is already at its path.
+  ///
+  /// - Throws: ``DeviceRegistryStoreError/writeFailed(code:)`` with the system's error code if
+  ///   it couldn't be made.
+  private static func makeOne(_ directory: String, permissions: mode_t) throws {
+
+    guard mkdir(directory, permissions) != 0 else {
+
+      return
+
+    }
+
+    let code: Int32 = errno
+
+    guard code == EEXIST else {
+
+      throw DeviceRegistryStoreError.writeFailed(code: code)
 
     }
 

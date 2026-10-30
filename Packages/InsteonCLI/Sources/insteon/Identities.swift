@@ -17,7 +17,8 @@ import InsteonProtocol
 ///
 /// The cache holds only Insteon addresses and identities. It's written readable only by the
 /// current user, in a directory only they can open when the command creates it, and a cache
-/// that can't be read or written only means devices go unnamed.
+/// that can't be read or written only means devices go unnamed. A warning that an identity
+/// can't be remembered is printed at most once a run.
 enum IdentityStore {
 
   /// The devices in the cache, described with the catalog, or none if there's no cache or it
@@ -40,19 +41,42 @@ enum IdentityStore {
   /// Remembers the identity a device reported, if it isn't already remembered.
   ///
   /// The cache is read again first, so an identity another command remembered in the meantime
-  /// is kept.
+  /// is kept. A cache that can't be read isn't written, so it isn't lost.
   ///
   /// - Returns: What the catalog says about the device.
   @discardableResult
   static func remember(_ identity: ReportedIdentity, for device: InsteonAddress, names: ProductNames? = nil) async -> DeviceDescription {
 
-    let registry = DeviceRegistry(catalog: names?.catalog, snapshot: load())
+    guard let path = path() else {
+
+      return await DeviceRegistry(catalog: names?.catalog).record(identity, for: device).deviceDescription
+
+    }
+
+    let store = JSONFileDeviceRegistryStore(fileURL: URL(fileURLWithPath: path))
+    let snapshot: DeviceRegistrySnapshot
+    let isReadable: Bool
+
+    do {
+
+      snapshot = try store.load()
+      isReadable = true
+
+    } catch {
+
+      snapshot = DeviceRegistrySnapshot()
+      isReadable = false
+      warn(about: error, path: path)
+
+    }
+
+    let registry = DeviceRegistry(catalog: names?.catalog, snapshot: snapshot)
     let isRemembered: Bool = await registry.device(device)?.identity == identity
     let registered: RegisteredDevice = await registry.record(identity, for: device)
 
-    if !isRemembered {
+    if isReadable, !isRemembered {
 
-      await save(registry)
+      await save(registry, to: store, path: path)
 
     }
 
@@ -84,29 +108,71 @@ enum IdentityStore {
   /// Two commands that save at the same time each write the cache as they read it, so the
   /// entry one of them added can be lost. The device's identity is then learned again the next
   /// time it's asked. A cache that can't be read isn't replaced, so it isn't lost.
-  private static func save(_ registry: DeviceRegistry) async {
-
-    guard let path = path() else {
-
-      return
-
-    }
+  private static func save(_ registry: DeviceRegistry, to store: JSONFileDeviceRegistryStore, path: String) async {
 
     let snapshot: DeviceRegistrySnapshot = await registry.snapshot
 
     do {
 
-      try JSONFileDeviceRegistryStore(fileURL: URL(fileURLWithPath: path)).save(snapshot)
-
-    } catch DeviceRegistryStoreError.malformedContents, DeviceRegistryStoreError.unsupportedVersion(_) {
-
-      Output.note("insteon: warning: the identity cache \(path) isn't in a format this command reads, so it's left as it is and this device's identity won't be remembered. Delete it to start a new one.")
+      try store.save(snapshot)
 
     } catch {
 
-      Output.note("insteon: warning: the identity cache \(path) couldn't be written, so this device's identity won't be remembered.")
+      warn(about: error, path: path)
 
     }
+
+  }
+
+  /// Prints a warning that identities won't be remembered, the first time it's called in a run.
+  private static func warn(about error: any Error, path: String) {
+
+    guard warning.claim() else {
+
+      return
+
+    }
+
+    switch error as? DeviceRegistryStoreError {
+    case .malformedContents?, .unsupportedVersion(_)?:
+      Output.note("insteon: warning: the identity cache \(path) isn't in a format this command reads, so it's left as it is and the identities devices report won't be remembered. Delete it to start a new one.")
+    case .unreadableFile?:
+      Output.note("insteon: warning: the identity cache \(path) couldn't be read, so it's left as it is and the identities devices report won't be remembered.")
+    default:
+      Output.note("insteon: warning: the identity cache \(path) couldn't be written, so the identities devices report won't be remembered.")
+    }
+
+  }
+
+  /// Whether the warning has been printed in this run.
+  private static let warning: Latch = Latch()
+
+}
+
+/// A flag that's set once, safely from any task.
+final class Latch: @unchecked Sendable {
+
+  private let lock: NSLock = NSLock()
+
+  private var isSet: Bool = false
+
+  /// Sets the flag.
+  ///
+  /// - Returns: `true` the first time it's called, and `false` after that.
+  func claim() -> Bool {
+
+    lock.lock()
+    defer { lock.unlock() }
+
+    guard !isSet else {
+
+      return false
+
+    }
+
+    isSet = true
+
+    return true
 
   }
 

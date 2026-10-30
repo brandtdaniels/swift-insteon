@@ -3,40 +3,40 @@ import InsteonProtocol
 
 /// Keeps a ``DeviceRegistry``'s devices in a JSON file, readable only by the current user.
 ///
-/// The file names its format's version, and holds each device's identity by its address:
+/// The file names its format's version, and holds each device by its address, with the
+/// identity's fields directly in the device's entry:
 ///
 /// ```json
 /// {
 ///   "devices" : {
 ///     "1A.2B.3C" : {
-///       "identity" : { "category" : "0x02", "firmwareVersion" : "0x41", "subcategory" : "0x2A" }
+///       "category" : "0x02",
+///       "firmwareVersion" : "0x41",
+///       "subcategory" : "0x2A"
 ///     }
 ///   },
 ///   "version" : 1
 /// }
 /// ```
 ///
-/// The store also reads a file with no version whose devices are bare identities, as the
-/// `insteon` command's identity cache is written:
+/// Each entry has the same keys as an entry in the `insteon` command's identity cache, which
+/// has no version, so a reader of that cache that ignores keys it doesn't know reads the
+/// devices in this file too. A field a later format adds to a device goes beside the
+/// identity's fields in the device's entry.
 ///
-/// ```json
-/// {
-///   "devices" : {
-///     "1A.2B.3C" : { "category" : "0x02", "firmwareVersion" : "0x41", "subcategory" : "0x2A" }
-///   }
-/// }
-/// ```
-///
-/// and writes it back in the versioned format the next time it saves. A device entry that
+/// The store also reads a file with no version, as the `insteon` command's identity cache is
+/// written, and writes it back with a version the next time it saves. A device entry that
 /// doesn't read as an address and an identity is left out, so one bad entry doesn't lose the
-/// others.
+/// others. When two keys name one address, such as `"1A.2B.3C"` and `"1a2b3c"`, the entry
+/// whose key sorts last is kept.
 ///
-/// Saving writes a temporary file of its own, readable only by the current user where the platform
-/// has POSIX permissions, then moves it into place, so a reader never sees half a file. A
-/// directory the store creates for the file is readable only by the current user. The store
-/// never replaces a file it can't read, such as one written in a newer format, so nothing in it
-/// is lost. Two processes that save at the same time each write the devices they hold, so the
-/// last one to save wins.
+/// Saving writes a temporary file of its own, readable only by the current user, then moves it
+/// into place, so a reader never sees half a file. If the file's directory isn't there, the
+/// store creates it readable only by the current user; a directory that's already there keeps
+/// its permissions, and any directory above it that the store creates has the system's default
+/// permissions. The store never replaces a file it can't read, such as one written in a newer
+/// format or a symbolic link, so nothing in it is lost. Two processes that save at the same
+/// time each write the devices they hold, so the last one to save wins.
 ///
 /// ```swift
 /// let store = JSONFileDeviceRegistryStore(fileURL: url)
@@ -97,8 +97,7 @@ public struct JSONFileDeviceRegistryStore: DeviceRegistryStore {
 
   }
 
-  /// Reads devices from a registry file's contents, in the versioned format or as bare
-  /// identities with no version.
+  /// Reads devices from a registry file's contents, with or without a version.
   ///
   /// - Parameter json: The file's contents.
   /// - Returns: The devices. An entry that doesn't read as an address and an identity is left
@@ -121,8 +120,6 @@ public struct JSONFileDeviceRegistryStore: DeviceRegistryStore {
 
     }
 
-    let identities: [String: ReportedIdentity]
-
     if let version = header.version {
 
       guard version <= formatVersion else {
@@ -137,20 +134,17 @@ public struct JSONFileDeviceRegistryStore: DeviceRegistryStore {
 
       }
 
-      let file: VersionedFile = try decode(VersionedFile.self, from: json, with: decoder)
-      identities = file.devices.compactMapValues { (entry: Lenient<StoredDevice>) -> ReportedIdentity? in entry.value?.identity }
-
-    } else {
-
-      let file: UnversionedFile = try decode(UnversionedFile.self, from: json, with: decoder)
-      identities = file.devices.compactMapValues { (entry: Lenient<ReportedIdentity>) -> ReportedIdentity? in entry.value }
-
     }
+
+    // A device's entry is read the same way with or without a version: the identity's fields
+    // are in the entry itself.
+    let file: StoredFile = try decode(StoredFile.self, from: json, with: decoder)
+    let identities: [String: ReportedIdentity] = file.devices.compactMapValues { (entry: Lenient<StoredDevice>) -> ReportedIdentity? in entry.value?.identity }
 
     var snapshot = DeviceRegistrySnapshot()
 
-    // In key order, so two keys for one address, such as "1A.2B.3C" and "1a2b3c", always
-    // read the same way.
+    // In key order, so of two keys for one address, such as "1A.2B.3C" and "1a2b3c", the one
+    // that sorts last is always kept.
     for key in identities.keys.sorted() {
 
       guard let address = InsteonAddress(key), let identity = identities[key] else {
@@ -167,8 +161,8 @@ public struct JSONFileDeviceRegistryStore: DeviceRegistryStore {
 
   }
 
-  /// A snapshot as a registry file's contents, in the versioned format, with the devices in
-  /// address order.
+  /// A snapshot as a registry file's contents, with a version, and with the devices in address
+  /// order.
   ///
   /// - Parameter snapshot: The devices.
   /// - Returns: The file's contents.
@@ -186,7 +180,7 @@ public struct JSONFileDeviceRegistryStore: DeviceRegistryStore {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
 
-    return try encoder.encode(VersionedFile(version: formatVersion, devices: devices))
+    return try encoder.encode(StoredFile(version: formatVersion, devices: devices))
 
   }
 
@@ -253,10 +247,11 @@ public struct JSONFileDeviceRegistryStore: DeviceRegistryStore {
 
   }
 
-  /// The versioned format.
-  private struct VersionedFile: Codable {
+  /// The file, with a version or, as the `insteon` command's identity cache is written,
+  /// without one.
+  private struct StoredFile: Codable {
 
-    var version: Int
+    var version: Int?
 
     var devices: [String: Lenient<StoredDevice>]
 
@@ -269,17 +264,29 @@ public struct JSONFileDeviceRegistryStore: DeviceRegistryStore {
 
   }
 
-  /// A device in the versioned format.
+  /// A device's entry: the identity's fields, directly in the entry, so a reader that decodes
+  /// each entry as a `ReportedIdentity` reads it. A field a later format adds goes beside them.
   private struct StoredDevice: Codable {
 
     var identity: ReportedIdentity
 
-  }
+    init(identity: ReportedIdentity) {
 
-  /// The format with no version, whose devices are bare identities.
-  private struct UnversionedFile: Decodable {
+      self.identity = identity
 
-    var devices: [String: Lenient<ReportedIdentity>]
+    }
+
+    init(from decoder: any Decoder) throws {
+
+      identity = try ReportedIdentity(from: decoder)
+
+    }
+
+    func encode(to encoder: any Encoder) throws {
+
+      try identity.encode(to: encoder)
+
+    }
 
   }
 
@@ -312,7 +319,7 @@ public struct JSONFileDeviceRegistryStore: DeviceRegistryStore {
 
 /// Why a ``JSONFileDeviceRegistryStore`` couldn't read or write its file.
 ///
-/// The errors never include the file's contents.
+/// The errors never include the file's devices or identities.
 public enum DeviceRegistryStoreError: Error, Hashable, Sendable, CustomStringConvertible {
 
   /// Something other than a regular file is at the file's path, or the file couldn't be read.
@@ -324,7 +331,7 @@ public enum DeviceRegistryStoreError: Error, Hashable, Sendable, CustomStringCon
   /// The file is in a newer format than the store reads, with this version.
   case unsupportedVersion(Int)
 
-  /// The file couldn't be written, with the system's error code, such as `EACCES`.
+  /// The file couldn't be written, with the system's error code, such as `EACCES` or `ENOSPC`.
   case writeFailed(code: Int32)
 
   /// The error as a sentence.

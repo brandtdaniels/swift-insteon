@@ -100,7 +100,7 @@ A setting the device didn't report reads "not reported". Settings the catalog ma
 
 ### Naming devices
 
-The command names a device only from the identity it reported: its category, subcategory and firmware version, from an ID Request or from the modem's ALL-Linking Completed report. It never reads them from the data bytes of the modem's ALL-Link records, which don't hold them reliably. Identities that `link`, `links --identify` and `device ADDRESS id` learn are kept in `$XDG_CACHE_HOME/insteon/identities.json`, or `~/.cache/insteon/identities.json`, readable only by you. The file holds only Insteon addresses and identities; delete it to forget them. A file in a format the command doesn't read is left as it is, with a warning when an identity can't be remembered.
+The command names a device only from the identity it reported: its category, subcategory and firmware version, from an ID Request or from the modem's ALL-Linking Completed report. It never reads them from the data bytes of the modem's ALL-Link records, which don't hold them reliably. Identities that `link`, `links --identify` and `device ADDRESS id` learn are kept in `$XDG_CACHE_HOME/insteon/identities.json`, or `~/.cache/insteon/identities.json`, readable only by you. The file holds only Insteon addresses and identities; delete it to forget them. A file in a format the command doesn't read is left as it is, with one warning a run when an identity can't be remembered. A symbolic link at the file's path is left as it is too, with a warning, and is never replaced.
 
 ### Updating the catalog
 

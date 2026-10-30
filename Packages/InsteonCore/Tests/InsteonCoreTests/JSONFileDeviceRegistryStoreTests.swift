@@ -41,6 +41,46 @@ struct JSONFileDeviceRegistryStoreTests {
     }
     """.utf8)
 
+  /// A file as an older `insteon` command reads its identity cache: each entry on its own as
+  /// a `ReportedIdentity`, and each key as an `InsteonAddress`, leaving out what doesn't read.
+  struct OlderCommandsFile: Decodable {
+
+    struct Entry: Decodable {
+
+      var identity: ReportedIdentity?
+
+      init(from decoder: any Decoder) throws {
+
+        identity = try? ReportedIdentity(from: decoder)
+
+      }
+
+    }
+
+    var devices: [String: Entry]
+
+    var identities: [InsteonAddress: ReportedIdentity] {
+
+      var identities: [InsteonAddress: ReportedIdentity] = [:]
+
+      for (text, entry) in devices {
+
+        guard let address = InsteonAddress(text), let identity = entry.identity else {
+
+          continue
+
+        }
+
+        identities[address] = identity
+
+      }
+
+      return identities
+
+    }
+
+  }
+
   let snapshot = DeviceRegistrySnapshot(identities: [Example.plug: Example.plugIdentity, Example.lamp: Example.lampIdentity])
 
   // MARK: - The format
@@ -53,7 +93,47 @@ struct JSONFileDeviceRegistryStoreTests {
     #expect(try JSONFileDeviceRegistryStore.snapshot(json: json) == snapshot)
     #expect(text.contains("\"version\" : 1"))
     #expect(text.contains("\"1A.2B.3C\""))
-    #expect(text.contains("\"identity\""))
+    #expect(!text.contains("\"identity\""))
+
+  }
+
+  @Test func writesEachDevicesIdentityFieldsDirectlyInItsEntry() throws {
+
+    struct FlatFile: Decodable {
+
+      var version: Int
+
+      var devices: [String: [String: String]]
+
+    }
+
+    let json: Data = try JSONFileDeviceRegistryStore.json(snapshot)
+    let file: FlatFile = try JSONDecoder().decode(FlatFile.self, from: json)
+    let expected: [String: [String: String]] = [
+      "1A.2B.3C": ["category": "0x02", "subcategory": "0x7A", "firmwareVersion": "0x41"],
+      "4D.5E.6F": ["category": "0x01", "subcategory": "0x7B"]
+    ]
+
+    #expect(file.version == 1)
+    #expect(file.devices == expected)
+
+  }
+
+  @Test func writesAFileAnOlderCommandReadsEntryByEntry() throws {
+
+    let directory: URL = Self.temporaryDirectory()
+
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    let file: URL = Self.file(in: directory)
+
+    try JSONFileDeviceRegistryStore(fileURL: file).save(snapshot)
+
+    let read: OlderCommandsFile = try JSONDecoder().decode(OlderCommandsFile.self, from: Data(contentsOf: file))
+
+    #expect(read.devices.count == 2)
+    #expect(read.devices.values.allSatisfy { (entry: OlderCommandsFile.Entry) -> Bool in entry.identity != nil })
+    #expect(read.identities == snapshot.identities)
 
   }
 
@@ -79,9 +159,10 @@ struct JSONFileDeviceRegistryStoreTests {
       """.utf8)
     let versioned = Data("""
       {"version": 1, "devices": {
-        "1A.2B.3C": {"identity": {"category": "0x02", "subcategory": "0x7A", "firmwareVersion": "0x41"}},
-        "4D.5E.6F": {"category": "0x02", "subcategory": "0x7A"},
-        "7A.8B.9C": {"identity": "0x02 0x7A"}
+        "1A.2B.3C": {"category": "0x02", "subcategory": "0x7A", "firmwareVersion": "0x41", "room": "kitchen"},
+        "4D.5E.6F": {"identity": {"category": "0x02", "subcategory": "0x7A"}},
+        "7A.8B.9C": "0x02 0x7A",
+        "not an address": {"category": "0x02", "subcategory": "0x7A"}
       }}
       """.utf8)
     let expected = DeviceRegistrySnapshot(identities: [Example.plug: Example.plugIdentity])
@@ -100,6 +181,32 @@ struct JSONFileDeviceRegistryStoreTests {
     let read: DeviceRegistrySnapshot = try JSONFileDeviceRegistryStore.snapshot(json: json)
 
     #expect(read.identities == [Example.lamp: ReportedIdentity(category: 0x02, subcategory: 0x7A, firmwareVersion: nil)])
+
+  }
+
+  @Test func keepsTheSameEntryForTwoKeysThatNameOneAddress() throws {
+
+    let plugFirst = Data("""
+      {"version": 1, "devices": {
+        "1A.2B.3C": {"category": "0x02", "subcategory": "0x7A", "firmwareVersion": "0x41"},
+        "1a2b3c": {"category": "0x01", "subcategory": "0x7B"}
+      }}
+      """.utf8)
+    let lampFirst = Data("""
+      {"version": 1, "devices": {
+        "1a2b3c": {"category": "0x01", "subcategory": "0x7B"},
+        "1A.2B.3C": {"category": "0x02", "subcategory": "0x7A", "firmwareVersion": "0x41"}
+      }}
+      """.utf8)
+    // "1a2b3c" sorts after "1A.2B.3C", so its entry is kept.
+    let expected = DeviceRegistrySnapshot(identities: [Example.plug: Example.lampIdentity])
+
+    for _ in 0..<20 {
+
+      #expect(try JSONFileDeviceRegistryStore.snapshot(json: plugFirst) == expected)
+      #expect(try JSONFileDeviceRegistryStore.snapshot(json: lampFirst) == expected)
+
+    }
 
   }
 
@@ -152,6 +259,25 @@ struct JSONFileDeviceRegistryStoreTests {
 
   }
 
+  @Test func leavesTheFilesDirectoryWithItsPermissionsWhenItsThere() throws {
+
+    let directory: URL = Self.temporaryDirectory()
+
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    let file: URL = Self.file(in: directory)
+    let folder: String = file.deletingLastPathComponent().path(percentEncoded: false)
+
+    try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
+    try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o751)], ofItemAtPath: folder)
+
+    try JSONFileDeviceRegistryStore(fileURL: file).save(snapshot)
+
+    #expect(try Self.permissions(of: file.deletingLastPathComponent()) == 0o751)
+    #expect(try Self.permissions(of: file) == 0o600)
+
+  }
+
   @Test func savesThroughTheProtocol() async throws {
 
     let directory: URL = Self.temporaryDirectory()
@@ -170,7 +296,7 @@ struct JSONFileDeviceRegistryStoreTests {
 
   }
 
-  @Test func readsTheCommandsIdentityCacheAndSavesItInTheVersionedFormat() throws {
+  @Test func readsTheCommandsIdentityCacheAndSavesItWithAVersion() throws {
 
     let directory: URL = Self.temporaryDirectory()
 
@@ -283,6 +409,65 @@ struct JSONFileDeviceRegistryStoreTests {
       try store.load()
 
     }
+
+  }
+
+  @Test func leavesADirectoryAtThePathAsItIs() throws {
+
+    let directory: URL = Self.temporaryDirectory()
+
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    let file: URL = Self.file(in: directory)
+    let store = JSONFileDeviceRegistryStore(fileURL: file)
+
+    try FileManager.default.createDirectory(at: file, withIntermediateDirectories: true)
+
+    #expect(throws: DeviceRegistryStoreError.unreadableFile) {
+
+      try store.save(snapshot)
+
+    }
+
+    var isDirectory: ObjCBool = false
+    let exists: Bool = FileManager.default.fileExists(atPath: file.path(percentEncoded: false), isDirectory: &isDirectory)
+
+    #expect(exists)
+    #expect(isDirectory.boolValue)
+
+  }
+
+  @Test func leavesASymbolicLinkAtThePathAsItIs() throws {
+
+    let directory: URL = Self.temporaryDirectory()
+
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    let file: URL = Self.file(in: directory)
+    let target: URL = directory.appending(path: "elsewhere.json", directoryHint: .notDirectory)
+    let store = JSONFileDeviceRegistryStore(fileURL: file)
+    let contents: Data = try JSONFileDeviceRegistryStore.json(snapshot)
+
+    try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try contents.write(to: target)
+    try FileManager.default.createSymbolicLink(atPath: file.path(percentEncoded: false), withDestinationPath: target.path(percentEncoded: false))
+
+    #expect(throws: DeviceRegistryStoreError.unreadableFile) {
+
+      try store.load()
+
+    }
+
+    #expect(throws: DeviceRegistryStoreError.unreadableFile) {
+
+      try store.save(DeviceRegistrySnapshot())
+
+    }
+
+    let destination: String = try FileManager.default.destinationOfSymbolicLink(atPath: file.path(percentEncoded: false))
+
+    #expect(destination == target.path(percentEncoded: false))
+    #expect(try Data(contentsOf: target) == contents)
 
   }
 

@@ -7,6 +7,10 @@ Keep track of the Insteon devices on a network, for an app or a command to build
 InsteonCore is the library a front end depends on, such as an app or the `insteon` command.
 It keeps the devices an app knows and what the Insteon device catalog says about each.
 
+The API uses some types from the lower-level modules, such as `DeviceCatalog` from
+InsteonDeviceCatalog and `InsteonAddress` and `ReportedIdentity` from InsteonProtocol, so an
+app imports those modules too.
+
 A ``DeviceRegistry`` holds each device's address and the identity it reported: its category,
 subcategory and firmware version. It describes every device with the catalog, and describes
 them all again when it's given a newer catalog, so no device is lost when the catalog
@@ -15,6 +19,7 @@ reports, and look it up later by its address:
 
 ```swift
 import InsteonCore
+import InsteonDeviceCatalog
 
 let registry = DeviceRegistry(catalog: try DeviceCatalog.bundled())
 
@@ -41,8 +46,9 @@ try store.save(await registry.snapshot)
 ```
 
 The file holds only device addresses and identities, never credentials, names or rooms. Its
-format has a version, so later versions can add to it, and the store never replaces a file it
-can't read, such as one in a newer format.
+format has a version, so later versions can add to it, and each device's entry has the same
+keys as an entry in the `insteon` command's identity cache, so a reader of that cache reads the
+file too. The store never replaces a file it can't read, such as one in a newer format.
 
 ## Topics
 
