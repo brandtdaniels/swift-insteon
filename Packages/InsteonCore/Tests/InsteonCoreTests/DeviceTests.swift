@@ -338,7 +338,7 @@ struct DeviceTests {
     #expect(status.reading == .raw)
     #expect(status.value == 0x40)
     #expect(status.group == nil)
-    #expect(try await device.capabilities().source == .none)
+    #expect(try await device.capabilities().source == .uncontrolled)
 
     await #expect(throws: DeviceControlError.unsupported(.turnOn, product: "category 0x07, subcategory 0x55")) {
 

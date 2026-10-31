@@ -28,7 +28,7 @@ public struct DeviceCapabilities: Hashable, Sendable {
     /// Nothing says how to control the device, because its identity isn't known or neither
     /// the catalog nor its category says. It can still be pinged, and its status read as the
     /// raw byte Light Status Request reports.
-    case none
+    case uncontrolled
 
   }
 

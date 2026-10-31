@@ -33,7 +33,7 @@ struct DeviceControlModel: Sendable {
 
     /// Nothing: the device's identity isn't known, or neither the catalog nor its category
     /// says how to control it.
-    case none
+    case uncontrolled
 
   }
 
@@ -164,7 +164,7 @@ struct DeviceControlModel: Sendable {
 
     guard let description else {
 
-      return DeviceControlModel(description: nil, source: .none, groups: [], mainGroupNumber: nil, standardCommands: [])
+      return DeviceControlModel(description: nil, source: .uncontrolled, groups: [], mainGroupNumber: nil, standardCommands: [])
 
     }
 
@@ -198,7 +198,7 @@ struct DeviceControlModel: Sendable {
 
     guard let kind = GroupType.Kind.fallback(for: description.category) else {
 
-      return DeviceControlModel(description: description, source: .none, groups: [], mainGroupNumber: nil, standardCommands: [])
+      return DeviceControlModel(description: description, source: .uncontrolled, groups: [], mainGroupNumber: nil, standardCommands: [])
 
     }
 

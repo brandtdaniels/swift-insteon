@@ -148,8 +148,8 @@ public struct Device: Sendable {
       source = .catalog
     case .categoryFallback:
       source = .categoryFallback
-    case .none:
-      source = .none
+    case .uncontrolled:
+      source = .uncontrolled
     }
 
     return DeviceCapabilities(
