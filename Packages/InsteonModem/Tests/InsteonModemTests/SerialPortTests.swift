@@ -177,11 +177,22 @@ struct SerialPortTests {
 
   @Test func reportsAMissingDevice() {
 
-    #expect(throws: SerialPortError.self) {
+    let error: SerialPortError? = #expect(throws: SerialPortError.self) {
 
       try SerialPort(path: "/dev/insteon-modem-that-does-not-exist")
 
     }
+
+    guard case let .cannotOpen(path, code)? = error else {
+
+      Issue.record("Expected cannotOpen, got \(String(describing: error)).")
+
+      return
+
+    }
+
+    #expect(path == "/dev/insteon-modem-that-does-not-exist")
+    #expect(code == ENOENT)
 
   }
 

@@ -356,7 +356,8 @@ struct RequestTests {
 
       }
 
-      await #expect(throws: ModemError.self) {
+      // The second missed echo in a row is the modem's, not a busy device's.
+      await #expect(throws: ModemError.timedOut(.sendMessage)) {
 
         // An earlier exchange's timeout may have had the same deadline, so wait for a sleep
         // that starts after this exchange does.

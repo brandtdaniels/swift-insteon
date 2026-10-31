@@ -322,7 +322,7 @@ struct LinkingPrimitivesTests {
     let modem = InMemoryModem()
     await modem.setUnlinked(lamp)
 
-    await #expect(throws: ModemError.self) {
+    await #expect(throws: ModemError.deviceRejected(lamp, .notLinked)) {
 
       try await linker(modem).prepareResponder(lamp)
 

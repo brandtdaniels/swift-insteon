@@ -271,7 +271,7 @@ struct DeviceNetworkTests {
     await modem.setUnanswering(Example.plug)
     let network: DeviceNetwork = self.network(modem)
 
-    await #expect(throws: ModemError.self) {
+    await #expect(throws: ModemError.deviceTimedOut(Example.plug)) {
 
       _ = try await network.identify(Example.plug)
 
@@ -454,7 +454,7 @@ struct DeviceNetworkTests {
     await modem.setUnlinked(Example.plug)
     let network: DeviceNetwork = self.network(modem)
 
-    await #expect(throws: ModemError.self) {
+    await #expect(throws: ModemError.deviceRejected(Example.plug, .notLinked)) {
 
       _ = try await network.allLinkDatabase(of: Example.plug)
 

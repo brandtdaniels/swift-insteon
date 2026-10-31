@@ -453,7 +453,7 @@ struct ExploringArgumentTests {
     #expect(SerialCommandPolicy.refusal(for: operatingFlags) != nil)
     #expect(SerialCommandPolicy.refusal(for: extendedSet) != nil)
 
-    #expect(throws: ArgumentError.self) {
+    #expect(throws: ArgumentError.refusedSerialCommand(SerialCommandPolicy.refusal(for: deleteLinking) ?? "")) {
 
       try Invocation.parse(["modem", "send", "0264FF00"])
 

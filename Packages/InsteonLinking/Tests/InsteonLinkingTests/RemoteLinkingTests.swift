@@ -25,6 +25,13 @@ struct RemoteLinkingTests {
 
   }
 
+  /// A link the in-memory modem reports, which carries no category, subcategory or firmware.
+  func reported(_ address: InsteonAddress, linkCode: UInt8, group: AllLinkGroupNumber) -> AllLinkingCompleted {
+
+    AllLinkingCompleted(linkCode: linkCode, group: group, address: address, category: nil, subcategory: nil, firmwareVersion: nil)
+
+  }
+
   // Insteon's trace: the modem enters linking mode as controller of group 4, then the device
   // is sent Enter Linking Mode, and the modem reports the link.
   @Test func linksAnI2DeviceAsTheModemsResponder() async throws {
@@ -180,7 +187,7 @@ struct RemoteLinkingTests {
     let modem = InMemoryModem()
     await modem.setReportedGroup(0x05, of: lamp)
 
-    await #expect(throws: LinkingError.self) {
+    await #expect(throws: LinkingError.unexpectedLink(reported(lamp, linkCode: 0x01, group: 0x05))) {
 
       try await linker(modem).linkRemotely(lamp, modemRole: .controller, modemGroup: 0x04, deviceGroup: 0x00)
 
@@ -235,7 +242,7 @@ struct RemoteLinkingTests {
     let other = InsteonAddress(0x44, 0x55, 0x66)
     await modem.setSilent(lamp)
 
-    await #expect(throws: LinkingError.self) {
+    await #expect(throws: LinkingError.unexpectedLink(reported(other, linkCode: 0x01, group: 0x04))) {
 
       async let link = linker(modem).linkRemotely(lamp, modemRole: .controller, modemGroup: 0x04, deviceGroup: 0x00)
       await modem.pressSetButton(of: other)
@@ -251,7 +258,8 @@ struct RemoteLinkingTests {
 
     let modem = InMemoryModem()
 
-    await #expect(throws: LinkingError.self) {
+    // The modem, as the responder, reports a new link: link code 0x00 rather than 0xFF.
+    await #expect(throws: LinkingError.unexpectedLink(reported(lamp, linkCode: 0x00, group: 0x01))) {
 
       async let unlink = unlinker(modem).unlinkManually(modemRole: .responder, group: 0x01)
       // The device links instead of unlinking.
@@ -336,7 +344,7 @@ struct RemoteLinkingTests {
     let modem = InMemoryModem()
     await modem.setReportedGroup(0x05, of: lamp)
 
-    await #expect(throws: LinkingError.self) {
+    await #expect(throws: LinkingError.unexpectedLink(reported(lamp, linkCode: 0x01, group: 0x05))) {
 
       async let link = linker(modem).linkManually(modemRole: .controller, group: 0x01)
       await modem.pressSetButton(of: lamp)
