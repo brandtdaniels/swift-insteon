@@ -172,9 +172,9 @@ actor CachedNetwork {
   /// The network.
   nonisolated let network: DeviceNetwork
 
-  /// What the network knew when it last saved, or when it started: what the cache holds of
-  /// it.
-  private var saved: NetworkSnapshot
+  /// Saves one at a time, from what the network knew when it last saved, or when it
+  /// started: what the cache holds of it.
+  private let saver: OrderedSaver<NetworkSnapshot>
 
   /// Creates a network to save.
   ///
@@ -184,21 +184,21 @@ actor CachedNetwork {
   init(network: DeviceNetwork, start: NetworkSnapshot) {
 
     self.network = network
-    self.saved = start
+    self.saver = OrderedSaver(saved: start)
 
   }
 
   /// Writes what the network learned since it last saved to the cache, merged with what the
-  /// cache holds now. What couldn't be written is tried again the next time.
+  /// cache holds now. What couldn't be written is tried again the next time. Saves called at
+  /// once run one after another, so neither undoes the other.
   func save() async {
 
-    let learned: NetworkSnapshot = await network.snapshot()
+    let network: DeviceNetwork = network
 
-    if IdentityStore.save(learned, since: saved) {
-
-      saved = learned
-
-    }
+    await saver.save(
+      reading: { () async -> NetworkSnapshot in await network.snapshot() },
+      writing: { (learned: NetworkSnapshot, since: NetworkSnapshot) -> Bool in IdentityStore.save(learned, since: since) }
+    )
 
   }
 

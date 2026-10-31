@@ -345,7 +345,7 @@ extension CommandSet: Decodable {
   ///   and two hexadecimal digits, a position is outside its message's user data, a field's bytes
   ///   or mask can't be read, a range ends before it starts, a standard command has both a
   ///   fixed cmd2 and a parameter, a field names an enumeration the command set doesn't
-  ///   have, or a value's scale isn't above zero.
+  ///   have, or a value's or field's scale isn't a finite number above zero.
   public init(from decoder: any Decoder) throws {
 
     let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -451,6 +451,13 @@ extension CommandSet: Decodable {
       else {
 
         throw corrupted(key, "The \(field.name) value isn't in cmd2 or one to four distinct bytes from D1 through D14 as its message needs, or its mask isn't contiguous bits of one byte.")
+
+      }
+
+      // A scale of zero would read every value as 0, and a negative one would read them inverted.
+      if let scale = field.scale, !(scale > 0 && scale.isFinite) {
+
+        throw corrupted(key, "The \(field.name) value's scale isn't a finite number above zero.")
 
       }
 
@@ -647,9 +654,9 @@ extension CommandSet: Decodable {
 
       }
 
-      if let scale = value.scale, !(scale > 0) {
+      if let scale = value.scale, !(scale > 0 && scale.isFinite) {
 
-        throw corrupted("The \(value.name) value's scale isn't above zero.")
+        throw corrupted("The \(value.name) value's scale isn't a finite number above zero.")
 
       }
 

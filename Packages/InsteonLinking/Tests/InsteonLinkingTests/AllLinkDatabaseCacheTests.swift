@@ -22,6 +22,54 @@ struct AllLinkDatabaseCacheTests {
 
   }
 
+  // A link is made while the modem's database is being read: the read in progress is
+  // returned, but the next call reads the database again rather than keep the stale copy.
+  @Test(.timeLimit(.minutes(1)))
+  func doesntKeepAModemReadThatWasForgottenWhileInProgress() async throws {
+
+    let modem = InMemoryModem()
+    let before = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0x01, address: lamp)
+    let added = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0x02, address: keypad)
+    await modem.setModemRecords([before])
+    let cache = AllLinkDatabaseCache(modem: modem)
+
+    let (reached, reachedSignal) = AsyncStream<Void>.makeStream()
+    let (release, releaseSignal) = AsyncStream<Void>.makeStream()
+
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      guard case .readModemDatabase = operation else {
+
+        return
+
+      }
+
+      reachedSignal.yield()
+
+      for await _ in release {
+
+        break
+
+      }
+
+    }
+
+    let reading = Task { try await cache.modemRecords() }
+    var reachedRead = reached.makeAsyncIterator()
+    _ = await reachedRead.next()
+
+    // The read has taken its copy; the link changes the modem's database meanwhile.
+    await modem.setBeforeOperation(nil)
+    await modem.setModemRecords([before, added])
+    await cache.invalidateModem()
+    releaseSignal.yield()
+
+    #expect(try await reading.value == [before])
+    #expect(try await cache.modemRecords() == [before, added])
+    #expect(await modem.modemDatabaseReads == 2)
+
+  }
+
   @Test func readsADevicesDatabaseOnceWhileItsDeltaStaysTheSame() async throws {
 
     let modem = InMemoryModem()

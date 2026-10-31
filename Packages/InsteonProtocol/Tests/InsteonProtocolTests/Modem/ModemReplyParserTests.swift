@@ -388,6 +388,34 @@ struct ModemReplyParserTests {
 
   }
 
+  // Skipping lasts until the next start byte, however the bytes arrive.
+  @Test func ignoresANegativeAcknowledgmentAmongSkippedBytesThatArriveLater() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("0299")).isEmpty)
+    #expect(parser.parse(bytes("15")).isEmpty)
+    #expect(parser.parse(bytes("AA")).isEmpty)
+    #expect(parser.parse(bytes("15" + "0255" + "15")) == [.userReset, .negativeAcknowledgment])
+
+  }
+
+  // A stray byte starts skipping, which ends at the next start byte or once a wait ends with
+  // nothing pending, so a later NAK isn't skipped for good.
+  @Test func stopsSkippingOnceAWaitEnds() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("AA")).isEmpty)
+    #expect(parser.parse(bytes("15")).isEmpty)
+
+    let discarded: Bool = parser.discardStalledFrame()
+
+    #expect(!discarded)
+    #expect(parser.parse(bytes("15")) == [.negativeAcknowledgment])
+
+  }
+
   @Test func finishesARejectedInfoRequestWhenNoMoreBytesCome() {
 
     var parser = ModemReplyParser()
@@ -398,15 +426,17 @@ struct ModemReplyParserTests {
 
   }
 
-  @Test func finishesARejectedConfigurationRequestAndTheRepliesAfterIt() {
+  // The frame start after the NAK settles it as a rejection at once, without waiting for the
+  // answer's timeout, and the frame after it is read as usual.
+  @Test func readsARejectedConfigurationRequestAndTheRepliesAfterIt() {
 
     var parser = ModemReplyParser()
 
-    #expect(parser.parse(bytes("027315" + "0255")).isEmpty)
-    #expect(parser.finishPendingReply() == [
+    #expect(parser.parse(bytes("027315" + "0255")) == [
       .echo(CommandEcho(number: .getModemConfiguration, parameters: [], isAccepted: false)),
       .userReset
     ])
+    #expect(parser.finishPendingReply().isEmpty)
 
   }
 
@@ -420,6 +450,48 @@ struct ModemReplyParserTests {
 
   }
 
+  // A frame that lost bytes from its middle would take the next frame's bytes as its own, so
+  // once nothing has arrived for a while its bytes are discarded whole, never read as frames.
+  @Test func discardsAFrameThatStalled() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("0250AABB" + "0255")).isEmpty)
+    #expect(parser.finishPendingReply().isEmpty)
+    let discarded: Bool = parser.discardStalledFrame()
+    #expect(discarded)
+    #expect(parser.parse(bytes("0255")) == [.userReset])
+    let discarded2: Bool = parser.discardStalledFrame()
+    #expect(!discarded2)
+
+  }
+
+  // An extended message arriving a byte at a time, with every timeout along the way, whose
+  // user data looks like a standard message: only the extended message is reported.
+  @Test func neverReadsTheDataOfASlowMessageAsAReply() throws {
+
+    var parser = ModemReplyParser()
+    let userData: [UInt8] = bytes("0250" + "AABBCC" + "112233" + "2B" + "11FF" + "060606")
+    let frame: [UInt8] = bytes("0251" + "AABBCC" + "112233" + "1B" + "2E00") + userData
+    var replies: [ModemReply] = []
+
+    for byte in frame {
+
+      replies += parser.parse([byte])
+      replies += parser.finishPendingReply()
+
+    }
+
+    #expect(replies == [.messageReceived(ReceivedMessage(
+      sender: Self.device,
+      destination: Self.modem,
+      flags: MessageFlags(rawValue: 0x1B),
+      command: Command(command1: 0x2E, command2: 0x00),
+      userData: try UserData(userData)
+    ))])
+
+  }
+
   @Test func keepsNegativeAcknowledgmentInsideAnEcho() {
 
     var parser = ModemReplyParser()
@@ -428,6 +500,8 @@ struct ModemReplyParserTests {
 
   }
 
+  // The counter-case for ending a NAK at the next frame: `15 AA` isn't a NAK followed by a
+  // frame, so the whole reply is read as the modem's information.
   @Test func parsesModemInfoForAnAddressStartingWithNAK() {
 
     var parser = ModemReplyParser()
@@ -475,6 +549,66 @@ struct ModemReplyParserTests {
       .userReset,
       .userReset
     ])
+
+  }
+
+  // A busy modem NAKs Get IM Configuration, then reports a message from a device whose
+  // address starts with 0x06. Read on, `02 73 15 02 50 06` would be a configuration of 0x15.
+  @Test func endsARejectedConfigurationRequestAtAMessageFromADeviceStartingWithAnACKByte() {
+
+    var parser = ModemReplyParser()
+    let sender = InsteonAddress(0x06, 0xBB, 0xCC)
+
+    #expect(parser.parse(bytes("027315" + "0250" + "06BBCC" + "112233" + "2B" + "11FF")) == [
+      .echo(CommandEcho(number: .getModemConfiguration, parameters: [], isAccepted: false)),
+      .messageReceived(ReceivedMessage(
+        sender: sender,
+        destination: Self.modem,
+        flags: MessageFlags(rawValue: 0x2B),
+        command: Command(command1: 0x11, command2: 0xFF)
+      ))
+    ])
+
+  }
+
+  // The same for Get IM Info, followed by a direct message to a modem whose address starts
+  // with 0x06: read on, the destination's first byte would be the reply's ACK.
+  @Test func endsARejectedInfoRequestAtAMessageToAModemStartingWithAnACKByte() {
+
+    var parser = ModemReplyParser()
+    let modem = InsteonAddress(0x06, 0x22, 0x33)
+
+    #expect(parser.parse(bytes("026015" + "0250" + "AABBCC" + "062233" + "2B" + "11FF")) == [
+      .echo(CommandEcho(number: .getModemInfo, parameters: [], isAccepted: false)),
+      .messageReceived(ReceivedMessage(
+        sender: Self.device,
+        destination: modem,
+        flags: MessageFlags(rawValue: 0x2B),
+        command: Command(command1: 0x11, command2: 0xFF)
+      ))
+    ])
+
+  }
+
+  @Test func endsARejectedRadioStatusRequestAtTheNextReply() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("027E15" + "025806" + "0255")) == [
+      .echo(CommandEcho(number: .readRadioStatus, parameters: [], isAccepted: false)),
+      .allLinkCleanupStatus(isComplete: true),
+      .userReset
+    ])
+
+  }
+
+  // A reply whose data starts the way a NAK and the next frame would is read as the NAK, so
+  // the command is sent again rather than a made-up configuration accepted.
+  @Test func readsAnAmbiguousConfigurationAsARejection() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("027315" + "025006")).first == .echo(CommandEcho(number: .getModemConfiguration, parameters: [], isAccepted: false)))
 
   }
 

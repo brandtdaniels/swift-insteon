@@ -250,9 +250,9 @@ struct LinkingSession: Sendable {
   /// modem to report the link.
   ///
   /// When the wait fails, the modem is taken out of linking mode and `cleanUp` runs before the
-  /// error is thrown, so the next session can't start while the modem is still in this one. A
-  /// canceled task can't send anything, so then a task of its own does both while this one
-  /// waits, rather than leaving the modem open to any device that's linked for 4 minutes.
+  /// error is thrown, so the next session can't start while the modem is still in this one.
+  /// Both run in a task of their own, which canceling this one doesn't reach, rather than
+  /// leaving the modem open to any device that's linked for 4 minutes.
   private func awaitLink(
     with device: InsteonAddress?,
     modemMode: AllLinkMode,
@@ -324,27 +324,21 @@ struct LinkingSession: Sendable {
   /// Takes the modem out of linking mode and runs `cleanUp`, then forgets the modem's
   /// database, since a link may have been made even so, such as one with another device.
   ///
-  /// A canceled task can't send anything, so then a task of its own does both while this one
-  /// waits, rather than leaving the modem open to any device that's linked for 4 minutes.
+  /// A canceled task can't send anything, and this one can be canceled at any moment,
+  /// including while it's leaving linking mode. So a task of its own, which canceling this
+  /// one doesn't reach, always does both while this one waits, rather than leaving the modem
+  /// open to any device that's linked for 4 minutes.
   private func leaveLinkingMode(cleanUp: @escaping @Sendable () async -> Void) async {
 
     let modem = modem
-    let restore: @Sendable () async -> Void = {
+
+    // Unstructured, so cancellation that arrives during cleanup doesn't stop it.
+    await Task { () async -> Void in
 
       _ = try? await modem.send(.cancelAllLinking)
       await cleanUp()
 
-    }
-
-    if Task.isCancelled {
-
-      await Task { await restore() }.value
-
-    } else {
-
-      await restore()
-
-    }
+    }.value
 
     await cache?.invalidateModem()
 

@@ -47,7 +47,11 @@ protocol Framing {
   static var negativeAcknowledgment: Reply { get }
 
   /// The length of the frame at the start of `bytes`, which start with ``ControlByte/startOfText``.
-  static func frameLength(of bytes: [UInt8]) -> FrameLength
+  ///
+  /// - Parameters:
+  ///   - bytes: The pending bytes.
+  ///   - written: The command written last, or `nil` if the parser isn't told what's written.
+  static func frameLength(of bytes: [UInt8], after written: [UInt8]?) -> FrameLength
 
   /// Whether a complete frame is a reply, rather than a start byte that only looked like one.
   static func isReply(_ frame: ArraySlice<UInt8>) -> Bool
@@ -78,10 +82,42 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
   /// Bytes received that haven't made a complete frame yet.
   private(set) var pending: [UInt8] = []
 
+  /// Whether bytes are being skipped up to the next start byte, so a NAK byte among them isn't
+  /// reported. It lasts from one read to the next, so how the bytes are split doesn't change
+  /// what's reported.
+  private var isSkipping = false
+
+  /// How many bytes have been received in all.
+  private var received = 0
+
+  /// The command written last, which some frames must answer, or `nil` if the reader isn't told
+  /// what's written.
+  private var written: [UInt8]?
+
+  /// Records the command about to be written, and returns the replies the pending bytes
+  /// complete once frames are read as answers to it.
+  mutating func willWrite(_ command: [UInt8]) -> [Format.Reply] {
+
+    written = command
+
+    return read([])
+
+  }
+
+  /// Where in everything received the pending bytes start, counting from the first byte, or
+  /// `nil` if no bytes are pending. The same position means the same pending frame.
+  var pendingFrameStart: Int? {
+
+    pending.isEmpty ? nil : received - pending.count
+
+  }
+
   /// Adds received bytes and returns every reply they complete, oldest first.
   mutating func read(_ bytes: some Sequence<UInt8>) -> [Format.Reply] {
 
+    let count: Int = pending.count
     pending.append(contentsOf: bytes)
+    received += pending.count - count
 
     var replies: [Format.Reply] = []
 
@@ -114,16 +150,43 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
     }
 
     pending.removeFirst(3)
+    isSkipping = false
 
     return number
+
+  }
+
+  /// Discards the pending bytes of a frame that stopped arriving before it was complete.
+  ///
+  /// Call this only once no bytes at all have arrived for a while, so the frame has truly
+  /// stalled, such as one begun by line noise or missing bytes from its middle; a frame still
+  /// arriving is never cut short. Its bytes are discarded whole, never read again as frames,
+  /// so data inside it, such as a message's user data holding `02 50`, can't pass for a reply.
+  /// The next byte to arrive starts afresh, so bytes being skipped stop being skipped even if
+  /// none are pending.
+  ///
+  /// - Returns: Whether any bytes were discarded.
+  @discardableResult
+  mutating func discardStalledFrame() -> Bool {
+
+    // A wait that ended with nothing more arriving ends any skipping too.
+    isSkipping = false
+
+    guard !pending.isEmpty else {
+
+      return false
+
+    }
+
+    pending.removeAll()
+
+    return true
 
   }
 
   private mutating func nextReply() -> Format.Reply? {
 
     // A NAK counts only where a frame can start, not among bytes being skipped.
-    var isSkipping = false
-
     while true {
 
       // A device sometimes answers a command with a lone NAK instead of an echo.
@@ -137,6 +200,8 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
 
       guard let start = pending.firstIndex(of: ControlByte.startOfText) else {
 
+        // These bytes start no frame, and neither do the bytes up to the next start byte.
+        isSkipping = isSkipping || !pending.isEmpty
         pending.removeAll()
 
         return nil
@@ -144,8 +209,9 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
       }
 
       pending.removeFirst(start)
+      isSkipping = false
 
-      switch Format.frameLength(of: pending) {
+      switch Format.frameLength(of: pending, after: written) {
       case .needMoreBytes:
         return nil
       case .unrecognized:

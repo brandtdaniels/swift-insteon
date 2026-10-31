@@ -1,4 +1,5 @@
 #if os(macOS) || os(Linux)
+import Dispatch
 import Testing
 import InsteonModem
 #if canImport(Darwin)
@@ -119,11 +120,84 @@ struct SerialPortTests {
 
   }
 
+  // Nothing reads the pseudo-terminal's other end, so the port stops taking bytes and the
+  // write waits until it's canceled.
+  @Test(.timeLimit(.minutes(1)))
+  func cancelingAWriteThePortStoppedTakingEndsIt() async throws {
+
+    let (controller, path) = try #require(openPseudoTerminal())
+    defer { _ = close(controller) }
+
+    let port = try SerialPort(path: path)
+    defer { port.close() }
+
+    let writing = Task { () async throws -> Void in
+
+      try await port.write([UInt8](repeating: 0x55, count: 1 << 20))
+
+    }
+
+    // A byte arriving means the write has started.
+    try #require(await readByte(from: controller) != nil)
+
+    writing.cancel()
+
+    await #expect(throws: CancellationError.self) {
+
+      try await writing.value
+
+    }
+
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func closingThePortEndsAWriteItStoppedTaking() async throws {
+
+    let (controller, path) = try #require(openPseudoTerminal())
+    defer { _ = close(controller) }
+
+    let port = try SerialPort(path: path)
+    let writing = Task { () async throws -> Void in
+
+      try await port.write([UInt8](repeating: 0x55, count: 1 << 20))
+
+    }
+
+    try #require(await readByte(from: controller) != nil)
+
+    port.close()
+
+    await #expect(throws: SerialPortError.closed) {
+
+      try await writing.value
+
+    }
+
+  }
+
   @Test func reportsAMissingDevice() {
 
     #expect(throws: SerialPortError.self) {
 
       try SerialPort(path: "/dev/insteon-modem-that-does-not-exist")
+
+    }
+
+  }
+
+}
+
+/// Reads one byte on a thread of its own, so the blocking read doesn't hold a thread the tests'
+/// tasks run on.
+private func readByte(from descriptor: Int32) async -> UInt8? {
+
+  await withCheckedContinuation { (continuation: CheckedContinuation<UInt8?, Never>) in
+
+    DispatchQueue.global().async {
+
+      var byte: UInt8 = 0
+
+      continuation.resume(returning: read(descriptor, &byte, 1) == 1 ? byte : nil)
 
     }
 

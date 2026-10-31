@@ -163,6 +163,87 @@ struct IBIOSTests {
 
   }
 
+  // Line noise that looks like the header of a 65,535-byte upload would take every reply after
+  // it as the upload's data. Once nothing has arrived for a while, it's discarded whole.
+  @Test func discardsAnUploadThatStalled() {
+
+    var parser = IBIOSReplyParser()
+
+    #expect(parser.parse(bytes("02420000FFFF" + "02450A")).isEmpty)
+    #expect(parser.finishPendingReply().isEmpty)
+    let discarded: Bool = parser.discardStalledFrame()
+    #expect(discarded)
+    #expect(parser.parse(bytes("02450B")) == [.eventReport(.buttonHeld)])
+
+  }
+
+  // An upload arriving a byte at a time, with every timeout along the way, whose data looks
+  // like an event report: only the upload is reported.
+  @Test func neverReadsTheDataOfASlowUploadAsAReply() {
+
+    var parser = IBIOSReplyParser()
+    let data: [UInt8] = [0x02, 0x45, 0x0A, 0x06]
+    let header: [UInt8] = [0x03, 0x00, 0x00, 0x04]
+    let checksum: UInt16 = IBIOSCommand.checksum(of: header + data)
+    let frame: [UInt8] = [0x02, 0x42] + header + data + [UInt8(checksum >> 8), UInt8(checksum & 0xFF), 0x06]
+    var replies: [IBIOSReply] = []
+
+    for byte in frame {
+
+      replies += parser.parse([byte])
+      replies += parser.finishPendingReply()
+
+    }
+
+    #expect(replies == [.memory(address: 0x0300, data: data, isIntact: true)])
+
+  }
+
+  // Once the parser knows what's written, an upload header that answers no upload asked for
+  // isn't one, so it can't take the replies after it as its data.
+  @Test func skipsAnUploadHeaderThatAnswersNoUploadAskedFor() {
+
+    var parser = IBIOSReplyParser()
+
+    #expect(parser.parse(bytes("02420000FFFF")).isEmpty)
+    #expect(parser.willWrite(IBIOSCommand.getVersion.bytes).isEmpty)
+    #expect(parser.parse(bytes("02450A")) == [.eventReport(.buttonTapped)])
+
+  }
+
+  @Test func readsTheUploadAskedFor() {
+
+    var parser = IBIOSReplyParser()
+    let data: [UInt8] = [0x02, 0x45, 0x0A, 0x06]
+    let header: [UInt8] = [0x03, 0x00, 0x00, 0x04]
+    let checksum: UInt16 = IBIOSCommand.checksum(of: header + data)
+
+    #expect(parser.willWrite(IBIOSCommand.upload(address: 0x0300, length: 4).bytes).isEmpty)
+    #expect(parser.parse(bytes("02420000FFFF")).isEmpty)
+    #expect(parser.parse([0x02, 0x42] + header + data + [UInt8(checksum >> 8), UInt8(checksum & 0xFF), 0x06]) == [
+      .memory(address: 0x0300, data: data, isIntact: true)
+    ])
+
+  }
+
+  @Test func skipsTextLongerThanATextReport() {
+
+    var parser = IBIOSReplyParser()
+    let text = String(repeating: "41", count: IBIOSReplyParser.longestText + 1)
+
+    #expect(parser.parse(bytes("0243" + text + "02450A")) == [.eventReport(.buttonTapped)])
+
+  }
+
+  @Test func readsTextAsLongAsATextReport() {
+
+    var parser = IBIOSReplyParser()
+    let text = String(repeating: "41", count: IBIOSReplyParser.longestText)
+
+    #expect(parser.parse(bytes("0243" + text + "03")) == [.text(String(repeating: "A", count: IBIOSReplyParser.longestText))])
+
+  }
+
   @Test func skipsNoiseAndUnknownNumbers() {
 
     var parser = IBIOSReplyParser()

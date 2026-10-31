@@ -8,8 +8,10 @@
 ///
 /// A NAK to ``SerialCommand/getModemInfo``, ``SerialCommand/getModemConfiguration`` or
 /// ``SerialCommand/readRadioStatus`` is reported once more bytes arrive, since until then it
-/// can't be told apart from a reply whose data starts with `0x15`. If no more bytes are coming, ``ModemReplyParser/finishPendingReply()``
-/// reports it.
+/// can't be told apart from a reply whose data starts with `0x15`. A frame that starts right
+/// after the NAK ends it, so the frame's bytes are never read as the reply's data. If no more
+/// bytes are coming, ``ModemReplyParser/finishPendingReply()`` reports it. A frame that stops
+/// arriving partway is discarded with ``ModemReplyParser/discardStalledFrame()``.
 ///
 /// ```swift
 /// var parser = ModemReplyParser()
@@ -71,6 +73,34 @@ public struct ModemReplyParser: ReplyParser, Hashable, Sendable {
 
   }
 
+  /// Discards the pending bytes of a frame that stopped arriving before it was complete, such
+  /// as one begun by line noise or missing bytes from its middle, which would otherwise take
+  /// the replies after it as the rest of its bytes.
+  ///
+  /// Call this only once the frame has stalled, such as when no bytes at all have arrived for
+  /// a while, or when it was already pending before a command that has since timed out: a
+  /// frame still arriving is never cut short. Its bytes are discarded whole rather than read
+  /// again as frames, so data inside it can't pass for a reply.
+  ///
+  /// - Returns: Whether any bytes were discarded.
+  @discardableResult
+  public mutating func discardStalledFrame() -> Bool {
+
+    reader.discardStalledFrame()
+
+  }
+
+  /// Where the frame the parser is waiting on starts, as a count of the bytes received before
+  /// it, or `nil` if it isn't waiting on one.
+  ///
+  /// The same position later means the same frame is still incomplete, such as one that was
+  /// pending before a command was written and is still pending when its answer times out.
+  public var pendingFrameStart: Int? {
+
+    reader.pendingFrameStart
+
+  }
+
 }
 
 /// The frames of the Insteon modem (IM) serial protocol.
@@ -96,7 +126,7 @@ private enum ModemFraming: Framing {
   }
 
   /// The total length of the frame at the start of `bytes`, which starts with `0x02`.
-  static func frameLength(of bytes: [UInt8]) -> FrameLength {
+  static func frameLength(of bytes: [UInt8], after written: [UInt8]?) -> FrameLength {
 
     guard bytes.count >= 2 else {
 
@@ -138,6 +168,16 @@ private enum ModemFraming: Framing {
       // a full-length reply that ends in an ACK or NAK takes precedence.
       let dataLength = number == .getModemConfiguration ? 6 : 9
 
+      // Unless the next frame starts right after the NAK: reading on would take that frame's
+      // bytes as the reply's data, and its ACK-like byte as the reply's ACK. A reply whose
+      // data happens to start the same way is then read as a NAK, so the command is sent
+      // again rather than a made-up reply accepted.
+      if bytes.count >= 5, bytes[2] == ControlByte.negativeAcknowledgment, bytes[3] == ControlByte.startOfText, startsFrame(bytes[4]) {
+
+        return .complete(3)
+
+      }
+
       guard bytes.count >= dataLength else {
 
         return bytes.count >= 3 && bytes[2] != ControlByte.negativeAcknowledgment ? .complete(dataLength) : .needMoreBytes
@@ -168,6 +208,14 @@ private enum ModemFraming: Framing {
       // Only 0x62 and 0x77 have no single length, and both are handled above.
       return .complete((number.commandLength ?? 2) + 1)
     }
+
+  }
+
+  /// Whether a number after a start byte begins a frame the modem sends: a report of its own,
+  /// `0x50` through `0x5B`, or the reply to a host command.
+  private static func startsFrame(_ number: UInt8) -> Bool {
+
+    (0x50...0x5B).contains(number) || SerialCommandNumber(rawValue: number) != nil
 
   }
 

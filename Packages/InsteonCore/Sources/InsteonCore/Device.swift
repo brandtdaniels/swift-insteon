@@ -1490,9 +1490,11 @@ public struct Device: Sendable {
 
     }
 
-    if model.canDim(group), let reply, case let .number(_, _, unit) = reply.kind, unit == .percent, case let .number(number)? = reply.value(command2: value, userData: nil) {
+    // A catalog's scale can make the number NaN or infinite, which can't become an `Int`, so
+    // it's clamped as a `Double` first.
+    if model.canDim(group), let reply, case let .number(_, _, unit) = reply.kind, unit == .percent, case let .number(number)? = reply.value(command2: value, userData: nil), !number.isNaN {
 
-      let percent: Int = min(max(Int(number.rounded()), 0), 100)
+      let percent: Int = Int(min(max(number.rounded(), 0), 100))
 
       return (.percent(percent), isNonzero)
 

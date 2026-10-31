@@ -54,6 +54,10 @@ public actor AllLinkDatabaseCache {
 
   private var modemDatabase: [AllLinkRecord]?
 
+  /// How many times the modem's database has been forgotten, so a read that was in progress
+  /// meanwhile isn't kept.
+  private var modemGeneration = 0
+
   /// Creates an empty cache.
   ///
   /// - Parameters:
@@ -189,6 +193,9 @@ public actor AllLinkDatabaseCache {
 
   /// The modem's own ALL-Link database, read the first time it's needed.
   ///
+  /// A read that ``AllLinkDatabaseCache/invalidateModem()`` forgets while it's in progress is
+  /// returned but not kept, since the modem's database may have changed after it was read.
+  ///
   /// - Returns: The modem's records, in its order.
   /// - Throws: The modem's errors.
   public func modemRecords() async throws -> [AllLinkRecord] {
@@ -199,8 +206,14 @@ public actor AllLinkDatabaseCache {
 
     }
 
+    let generation: Int = modemGeneration
     let records = try await modem.allLinkRecords()
-    modemDatabase = records
+
+    if generation == modemGeneration {
+
+      modemDatabase = records
+
+    }
 
     return records
 
@@ -243,10 +256,12 @@ public actor AllLinkDatabaseCache {
 
   }
 
-  /// Forgets the modem's database, so it's read again the next time it's needed.
+  /// Forgets the modem's database, so it's read again the next time it's needed, including a
+  /// read in progress.
   public func invalidateModem() {
 
     modemDatabase = nil
+    modemGeneration &+= 1
 
   }
 

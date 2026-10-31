@@ -170,6 +170,10 @@ actor CommandPacer<Parser: ReplyParser> {
 
   private var isRunning = false
 
+  /// How many chunks of bytes have arrived, so a timeout can tell whether anything arrived
+  /// while it waited.
+  private var receivedChunks = 0
+
   private var isClosed = false
 
   /// Whether the device has sent anything since the pacer started reading or since the last
@@ -234,6 +238,7 @@ actor CommandPacer<Parser: ReplyParser> {
 
       for try await chunk in connection.receive() {
 
+        receivedChunks &+= 1
         deliver(parser.parse(chunk))
 
       }
@@ -454,6 +459,10 @@ actor CommandPacer<Parser: ReplyParser> {
 
     }
 
+    // Pending bytes are read as answers to this command before it can be answered, so a frame
+    // that can't answer it doesn't take the answer as its own bytes.
+    deliver(parser.willWrite(exchange.bytes))
+
     let id = makeID()
     let (results, continuation) = Results.makeStream()
 
@@ -495,6 +504,12 @@ actor CommandPacer<Parser: ReplyParser> {
   }
 
   /// Runs `write`, then waits for the pending answer's result, the timeout or cancellation.
+  ///
+  /// The timeout bounds the whole exchange, the write included: a write still going when the
+  /// timeout passes is canceled, and the answer times out. The time a write takes leaves that
+  /// much less for the answer. So that a test on a clock it controls sees one sleeper at the
+  /// timeout's deadline, and only once the write is done, the write's own limit is a
+  /// nanosecond past it.
   private func awaitAnswer(
     _ id: Int,
     timeout: Duration,
@@ -502,15 +517,25 @@ actor CommandPacer<Parser: ReplyParser> {
     write: @escaping @Sendable () async throws -> Void
   ) async -> Result<Outcome<Reply>, any Error> {
 
-    await withTaskGroup(of: Void.self, returning: Result<Outcome<Reply>, any Error>.self) { group in
+    // A frame pending before the write that's still pending at the timeout has stalled.
+    let frameBeforeWrite: Int? = parser.pendingFrameStart
+
+    return await withTaskGroup(of: Void.self, returning: Result<Outcome<Reply>, any Error>.self) { group in
 
       // Writes, then gives up on the answer once the timeout passes. The group cancels this
       // child as soon as the answer arrives, so a timeout never outlives its command.
       group.addTask { [clock] in
 
+        var isWritten = false
+        let writing: Duration
+
         do {
 
-          try await write()
+          writing = try await clock.measure {
+
+            isWritten = try await Self.write(write, within: timeout, on: clock)
+
+          }
 
         } catch {
 
@@ -520,9 +545,21 @@ actor CommandPacer<Parser: ReplyParser> {
 
         }
 
+        guard isWritten else {
+
+          await self.answerTimedOut(id, chunksBeforeWait: nil, frameBeforeWrite: frameBeforeWrite)
+
+          return
+
+        }
+
+        // Whether anything arrives during the wait tells a frame still arriving from one that
+        // stalled.
+        let chunksBeforeWait: Int = await self.receivedChunks
+
         do {
 
-          try await clock.sleep(for: timeout)
+          try await clock.sleep(for: max(timeout - writing, .zero))
 
         } catch {
 
@@ -530,7 +567,7 @@ actor CommandPacer<Parser: ReplyParser> {
 
         }
 
-        await self.answerTimedOut(id)
+        await self.answerTimedOut(id, chunksBeforeWait: chunksBeforeWait, frameBeforeWrite: frameBeforeWrite)
 
       }
 
@@ -549,9 +586,55 @@ actor CommandPacer<Parser: ReplyParser> {
 
   }
 
+  /// Runs a write, and cancels it if it's still going a nanosecond after `timeout`.
+  ///
+  /// - Returns: `true` once the write finishes, or `false` if the time ran out first.
+  /// - Throws: The write's error.
+  private static func write(
+    _ write: @escaping @Sendable () async throws -> Void,
+    within timeout: Duration,
+    on clock: any Clock<Duration>
+  ) async throws -> Bool {
+
+    try await withThrowingTaskGroup(of: Bool.self, returning: Bool.self) { group in
+
+      group.addTask {
+
+        try await write()
+
+        return true
+
+      }
+
+      group.addTask {
+
+        try await clock.sleep(for: timeout + .nanoseconds(1))
+
+        return false
+
+      }
+
+      defer { group.cancelAll() }
+
+      return try await group.next() ?? false
+
+    }
+
+  }
+
   /// Fails the command waiting for an answer, unless the parser is holding back a NAK for it,
   /// which only more bytes or the end of the wait can tell apart from data.
-  private func answerTimedOut(_ id: Int) {
+  ///
+  /// A frame the parser is still waiting on has stalled when nothing at all arrived during the
+  /// wait, or when it was already pending before the command was written, such as one begun by
+  /// line noise, so it's discarded whole; a frame still arriving is left alone. Bytes being
+  /// skipped stop being skipped either way.
+  ///
+  /// - Parameters:
+  ///   - chunksBeforeWait: How many chunks had arrived when the wait started, or `nil` if the
+  ///     write never finished.
+  ///   - frameBeforeWrite: Where the frame pending before the write started, if any.
+  private func answerTimedOut(_ id: Int, chunksBeforeWait: Int?, frameBeforeWrite: Int?) {
 
     guard let pending = pendingAnswer, pending.id == id else {
 
@@ -562,6 +645,16 @@ actor CommandPacer<Parser: ReplyParser> {
     let step: AnswerStep<Reply> = pending.steps[pending.step]
 
     deliver(parser.finishPendingReply())
+
+    let pendingFrame: Int? = parser.pendingFrameStart
+    let isQuiet: Bool = chunksBeforeWait == receivedChunks
+    let isLeftOver: Bool = pendingFrame != nil && pendingFrame == frameBeforeWrite
+
+    if pendingFrame == nil || isQuiet || isLeftOver {
+
+      parser.discardStalledFrame()
+
+    }
 
     // A NAK the parser was holding back may have answered the command.
     guard pendingAnswer?.id == id else {

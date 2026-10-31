@@ -658,7 +658,15 @@ extension CommandSet {
 
     }
 
-    let milliseconds: Int64 = Int64((seconds * 1_000).rounded())
+    // Compared in floating point, so no text, however long, overflows: a duration no table
+    // has, NaN or an infinity matches no entry.
+    let milliseconds: Double = (seconds * 1_000).rounded()
+
+    guard milliseconds.isFinite else {
+
+      throw .outOfRange(value.name)
+
+    }
 
     for entry in table.entries {
 
@@ -669,7 +677,7 @@ extension CommandSet {
       }
 
       let components = duration.components
-      let entryMilliseconds: Int64 = components.seconds * 1_000 + components.attoseconds / 1_000_000_000_000_000
+      let entryMilliseconds: Double = Double(components.seconds) * 1_000 + (Double(components.attoseconds) / 1e15).rounded(.towardZero)
 
       if abs(entryMilliseconds - milliseconds) <= 1 {
 

@@ -288,4 +288,161 @@ struct LinkerTests {
 
   }
 
+  // The modem stops taking records after deleting both: the record of the other role, which
+  // the caller didn't ask to remove, is reported lost.
+  @Test(.timeLimit(.minutes(1)))
+  func reportsTheModemsRecordOfTheOtherRoleWhenItCantBeAddedBack() async throws {
+
+    let modem = InMemoryModem()
+    let responder = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 0x05, address: lamp, data1: 0x01)
+    let controller = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0x05, address: lamp)
+    await modem.setModemRecords([responder, controller])
+    await modem.setBeforeOperation(Self.failing(adds: Int.max))
+
+    let error: ModemRecordsNotRestored? = await #expect(throws: ModemRecordsNotRestored.self) {
+
+      try await Unlinker(modem: modem).unlink(group(responder: .device(lamp)))
+
+    }
+
+    #expect(error?.records == [responder])
+    #expect(error?.cause as? ModemError == .timedOut(.manageAllLinkRecord))
+    #expect(await modem.modemRecords.isEmpty)
+
+  }
+
+  // The unlink is canceled while the record of the other role is being added back, and adding
+  // it back once more fails too: both the record and the cancellation are reported.
+  @Test(.timeLimit(.minutes(1)))
+  func reportsTheCancellationWithTheRecordItLost() async throws {
+
+    let modem = InMemoryModem()
+    let responder = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 0x05, address: lamp, data1: 0x01)
+    let controller = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0x05, address: lamp)
+    await modem.setModemRecords([responder, controller])
+
+    let (reached, reachedSignal) = AsyncStream<Void>.makeStream()
+    let (release, releaseSignal) = AsyncStream<Void>.makeStream()
+    let pauses = Countdown(1)
+
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      guard case let .send(.manageAllLinkRecord(action, _)) = operation, action == .modifyFirstResponderOrAdd else {
+
+        return
+
+      }
+
+      guard await pauses.take() else {
+
+        throw ModemError.timedOut(.manageAllLinkRecord)
+
+      }
+
+      reachedSignal.yield()
+
+      // Ends at once when the unlink is canceled, and the modem then throws CancellationError.
+      for await _ in release {
+
+        break
+
+      }
+
+    }
+
+    let unlinker = Unlinker(modem: modem)
+    let linked: AllLinkGroup = group(responder: .device(lamp))
+    let unlinking = Task { try await unlinker.unlink(linked) }
+
+    var reachedAdd = reached.makeAsyncIterator()
+    _ = await reachedAdd.next()
+
+    unlinking.cancel()
+    releaseSignal.yield()
+
+    let error: ModemRecordsNotRestored? = await #expect(throws: ModemRecordsNotRestored.self) {
+
+      try await unlinking.value
+
+    }
+
+    #expect(error?.records == [responder])
+    #expect(error?.cause is CancellationError)
+
+  }
+
+  // The first attempt to add it back fails, the second succeeds: the record is back, and the
+  // first failure is thrown.
+  @Test(.timeLimit(.minutes(1)))
+  func addsTheModemsRecordOfTheOtherRoleBackAfterAFailure() async throws {
+
+    let modem = InMemoryModem()
+    let responder = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 0x05, address: lamp, data1: 0x01)
+    let controller = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0x05, address: lamp)
+    await modem.setModemRecords([responder, controller])
+    await modem.setBeforeOperation(Self.failing(adds: 1))
+
+    await #expect(throws: ModemError.timedOut(.manageAllLinkRecord)) {
+
+      try await Unlinker(modem: modem).unlink(group(responder: .device(lamp)))
+
+    }
+
+    #expect(await modem.modemRecords == [responder])
+
+  }
+
+  /// A hook that fails the modem's first `count` record additions as timed out.
+  static func failing(adds count: Int) -> @Sendable (InMemoryModem.Operation) async throws -> Void {
+
+    let remaining = Countdown(count)
+
+    return { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      guard
+        case let .send(.manageAllLinkRecord(action, _)) = operation,
+        action == .modifyFirstControllerOrAdd || action == .modifyFirstResponderOrAdd,
+        await remaining.take()
+      else {
+
+        return
+
+      }
+
+      throw ModemError.timedOut(.manageAllLinkRecord)
+
+    }
+
+  }
+
+}
+
+/// A count that's taken one at a time, from any task.
+actor Countdown {
+
+  private var remaining: Int
+
+  init(_ count: Int) {
+
+    remaining = count
+
+  }
+
+  /// Takes one, if any are left.
+  ///
+  /// - Returns: Whether one was left.
+  func take() -> Bool {
+
+    guard remaining > 0 else {
+
+      return false
+
+    }
+
+    remaining -= 1
+
+    return true
+
+  }
+
 }

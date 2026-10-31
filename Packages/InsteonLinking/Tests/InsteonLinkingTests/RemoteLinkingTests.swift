@@ -127,6 +127,52 @@ struct RemoteLinkingTests {
 
   }
 
+  // The wait times out, and the task is canceled while Cancel ALL-Linking waits its turn: the
+  // modem and the device still leave linking mode.
+  @Test(.timeLimit(.minutes(1)))
+  func takesTheModemAndDeviceOutOfLinkingModeWhenCanceledDuringCleanup() async throws {
+
+    let modem = InMemoryModem()
+    let links = linker(modem)
+    await modem.setSilent(lamp)
+
+    let (reached, reachedSignal) = AsyncStream<Void>.makeStream()
+    let (release, releaseSignal) = AsyncStream<Void>.makeStream()
+
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      guard case .send(.cancelAllLinking) = operation else {
+
+        return
+
+      }
+
+      reachedSignal.yield()
+
+      // Ends at once if this runs in the canceled task, so the test can't hang.
+      for await _ in release {
+
+        break
+
+      }
+
+    }
+
+    let link = Task { try await links.linkRemotely(lamp, modemRole: .controller, modemGroup: 0x04, deviceGroup: 0x00) }
+    await clock.waitForSleeper(until: Linker.defaultRemoteLinkingTimeout)
+    clock.advance(by: Linker.defaultRemoteLinkingTimeout)
+
+    var reachedCleanup = reached.makeAsyncIterator()
+    _ = await reachedCleanup.next()
+
+    link.cancel()
+    releaseSignal.yield()
+
+    await #expect(throws: LinkingError.linkingTimedOut) { try await link.value }
+    #expect(await modem.linkingSteps.suffix(2) == [.cancel, .device(lamp, Command(command1: 0x08), isExtended: false)])
+
+  }
+
   @Test func refusesTheDevicesLinkInAnotherGroup() async throws {
 
     let modem = InMemoryModem()

@@ -277,6 +277,41 @@ struct MessageFieldTests {
 
   }
 
+  // A scale of zero would read every value as 0, a negative one would read them inverted,
+  // and an infinite one would read them as infinities. JSON has no infinity, so the decoder
+  // reads one from text.
+  @Test(arguments: ["0", "-0.5", #""inf""#])
+  func refusesAFieldScaleThatIsntAFiniteNumberAboveZero(_ scale: String) {
+
+    let json = #"""
+      { "id": "a", "name": "A", "description": "A.", "sources": ["A"],
+        "directMessages": [{ "name": "levelReport", "description": "Level.", "command1": "0x70",
+          "value": { "name": "level", "description": "Level.", "scale": \#(scale) } }] }
+      """#
+    let decoder = JSONDecoder()
+    decoder.nonConformingFloatDecodingStrategy = .convertFromString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
+
+    #expect(throws: DecodingError.self) {
+
+      try decoder.decode(CommandSet.self, from: Data(json.utf8))
+
+    }
+
+  }
+
+  // The same command set with a finite scale reads, so the refusals above are the scale's.
+  @Test func readsAFieldScaleAboveZero() throws {
+
+    let json = #"""
+      { "id": "a", "name": "A", "description": "A.", "sources": ["A"],
+        "directMessages": [{ "name": "levelReport", "description": "Level.", "command1": "0x70",
+          "value": { "name": "level", "description": "Level.", "scale": 0.5 } }] }
+      """#
+
+    _ = try JSONDecoder().decode(CommandSet.self, from: Data(json.utf8))
+
+  }
+
   @Test func refusesAFieldWithAnEnumerationItDoesntHave() {
 
     let json = #"""

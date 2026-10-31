@@ -40,6 +40,8 @@ public enum InsteonErrorDescription {
       return describe(error)
     case let error as ModemStoppedEchoing:
       return didntConfirmSending(to: error.device)
+    case let error as ModemRecordsNotRestored:
+      return describe(error)
     case let error as HubError:
       return describe(error)
     case let error as LinkingError:
@@ -184,6 +186,14 @@ public enum InsteonErrorDescription {
     case let .reservedSlot(slot):
       "The Hub's slot \(slot) is reserved."
     }
+
+  }
+
+  private static func describe(_ error: ModemRecordsNotRestored) -> String {
+
+    let records: String = error.records.map { (record: AllLinkRecord) -> String in "\(record.address), group \(record.group)" }.joined(separator: "; ")
+
+    return "Removing a link also removed the modem's \(error.records.count == 1 ? "record" : "records") of \(records), which couldn't be added back. Link them again."
 
   }
 
