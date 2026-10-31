@@ -172,7 +172,8 @@ actor CommandPacer<Parser: ReplyParser> {
 
   private var isClosed = false
 
-  /// Whether the device has sent anything since the pacer started reading.
+  /// Whether the device has sent anything since the pacer started reading or since the last
+  /// command it didn't answer at all.
   private var hasReceivedReplies = false
 
   private var nextID = 0
@@ -569,11 +570,19 @@ actor CommandPacer<Parser: ReplyParser> {
 
     }
 
-    // A device that has answered before is connected and powered, so a step with an error for
-    // that case reports it.
+    // A device that has sent something since its last unanswered command is connected and
+    // powered, so a step with an error for that case reports it. A second unanswered command with
+    // nothing heard in between reports the step's own error, since the device may have stopped
+    // working.
     let timedOut: any Error = hasReceivedReplies ? (step.timedOutAfterReplies ?? step.timedOut) : step.timedOut
 
     let isUnanswered: Bool = pending.step == 0
+
+    if isUnanswered {
+
+      hasReceivedReplies = false
+
+    }
 
     completePendingAnswer(.success(.timedOut(timedOut, isUnanswered: isUnanswered)))
 

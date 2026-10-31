@@ -3,7 +3,7 @@ import InsteonProtocol
 /// What the command says when the modem doesn't echo a command.
 public enum ModemText {
 
-  /// For a modem that didn't echo a command and hasn't sent anything, as when it's
+  /// For a modem that didn't echo a command, when nothing suggests it's busy, as when it's
   /// disconnected or off.
   ///
   /// - Parameter command: The command's name, such as "Get IM Info".

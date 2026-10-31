@@ -319,6 +319,51 @@ struct RequestTests {
 
   }
 
+  @Test func reportsAModemThatMissesTwoEchoesInARowAsNotAnswering() async throws {
+
+    // The modem echoes the first request and the device acknowledges it; then the modem sends
+    // nothing more, so the second missed echo blames the modem rather than a busy device.
+    let acknowledgment: [UInt8] = received(
+      from: device,
+      .directAcknowledgment,
+      command1: engineVersionRequest.command.command1,
+      command2: 0x02
+    )
+    let connection = ScriptedConnection { (written: [UInt8], index: Int) -> [UInt8] in
+
+      index == 0 ? written + [0x06] + acknowledgment : []
+
+    }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      try await modem.request(engineVersionRequest)
+
+      await #expect(throws: ModemStoppedEchoing(device: device, command: .sendMessage)) {
+
+        async let answer = modem.request(engineVersionRequest)
+        await clock.waitForSleeper(until: .seconds(3))
+        clock.advance(by: .seconds(3))
+        _ = try await answer
+
+      }
+
+      await #expect(throws: ModemError.self) {
+
+        async let answer = modem.request(engineVersionRequest)
+        await clock.waitForSleeper(until: .seconds(6))
+        clock.advance(by: .seconds(3))
+        _ = try await answer
+
+      }
+
+    }
+
+    #expect(connection.written.count == 3)
+
+  }
+
   @Test func reportsAModemThatStopsEchoingPartwayThroughADatabaseReadAsBusyWithTheDevice() async throws {
 
     let acknowledgment: [UInt8] = received(from: device, .directAcknowledgment, command1: 0x2F, command2: 0x00)
