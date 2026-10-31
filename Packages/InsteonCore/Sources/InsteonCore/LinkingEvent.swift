@@ -204,7 +204,7 @@ public enum LinkingEvent: Sendable {
 
   /// The modem reported a leg's link with ALL-Linking Completed, and the next leg can start.
   /// ``LinkingEvent/linked(_:)`` reports the same link with the device.
-  case hubLinkingLegCompleted(HubLinkingLeg, link: AllLinkingCompleted)
+  case hubLinkingLegCompleted(HubLinkingLeg, link: LinkMade)
 
   /// A leg after the first failed without an error being thrown, for the reason given, and the
   /// legs listed after it aren't run. When the leg is
@@ -494,7 +494,7 @@ public enum LinkLeg: Hashable, Sendable {
 public struct LinkedDevice: Hashable, Sendable {
 
   /// The link.
-  public var link: AllLinkingCompleted
+  public var link: LinkMade
 
   /// The device, with the identity it reported and its description, or `nil` if its identity
   /// isn't known.
@@ -509,11 +509,18 @@ public struct LinkedDevice: Hashable, Sendable {
   ///   - link: The link.
   ///   - device: The device as the registry knows it.
   ///   - leg: Which leg the link is.
-  public init(link: AllLinkingCompleted, device: RegisteredDevice?, leg: LinkLeg) {
+  public init(link: LinkMade, device: RegisteredDevice?, leg: LinkLeg) {
 
     self.link = link
     self.device = device
     self.leg = leg
+
+  }
+
+  /// Creates a reported link from the modem's reply.
+  init(link: AllLinkingCompleted, device: RegisteredDevice?, leg: LinkLeg) {
+
+    self.init(link: LinkMade(link), device: device, leg: leg)
 
   }
 
@@ -523,7 +530,7 @@ public struct LinkedDevice: Hashable, Sendable {
 public struct UnlinkedLink: Hashable, Sendable {
 
   /// The removed link. A removed link carries no identity.
-  public var link: AllLinkingCompleted
+  public var link: LinkMade
 
   /// The device as the registry knew it, or `nil` if its identity isn't known.
   public var device: RegisteredDevice?
@@ -533,10 +540,17 @@ public struct UnlinkedLink: Hashable, Sendable {
   /// - Parameters:
   ///   - link: The removed link.
   ///   - device: The device as the registry knew it.
-  public init(link: AllLinkingCompleted, device: RegisteredDevice?) {
+  public init(link: LinkMade, device: RegisteredDevice?) {
 
     self.link = link
     self.device = device
+
+  }
+
+  /// Creates a removed link from the modem's reply.
+  init(link: AllLinkingCompleted, device: RegisteredDevice?) {
+
+    self.init(link: LinkMade(link), device: device)
 
   }
 
@@ -591,7 +605,7 @@ public struct DeviceLinkingResult: Sendable {
 
   /// The links the modem reported, in order: the link asked for, then the link back if there
   /// was one, or each leg's link of the catalog's linking from a Hub.
-  public var links: [AllLinkingCompleted]
+  public var links: [LinkMade]
 
   /// The device, as the registry knows it after the link, or `nil` if its identity isn't
   /// known.
@@ -613,12 +627,24 @@ public struct DeviceLinkingResult: Sendable {
   ///   - linkBackFailure: Why the link back failed.
   ///   - legs: Each leg of the catalog's linking from a Hub and what became of it. Defaults to
   ///     none.
-  public init(links: [AllLinkingCompleted], device: RegisteredDevice?, linkBackFailure: (any Error)?, legs: [HubLinkingLegOutcome] = []) {
+  public init(links: [LinkMade], device: RegisteredDevice?, linkBackFailure: (any Error)?, legs: [HubLinkingLegOutcome] = []) {
 
     self.links = links
     self.device = device
     self.linkBackFailure = linkBackFailure
     self.legs = legs
+
+  }
+
+  /// Creates a result from the modem's replies.
+  init(links: [AllLinkingCompleted], device: RegisteredDevice?, linkBackFailure: (any Error)?, legs: [HubLinkingLegOutcome] = []) {
+
+    self.init(
+      links: links.map { (link: AllLinkingCompleted) -> LinkMade in LinkMade(link) },
+      device: device,
+      linkBackFailure: linkBackFailure,
+      legs: legs
+    )
 
   }
 

@@ -236,10 +236,10 @@ extension DeviceLinkingCoordinator {
       }
 
       links.append(made.link)
-      outcomes.append(HubLinkingLegOutcome(leg: leg, status: .linked(made.link, by: made.join)))
+      outcomes.append(HubLinkingLegOutcome(leg: leg, status: .linked(LinkMade(made.link), by: made.join)))
 
       await observer.linking(.linked(LinkedDevice(link: made.link, device: registered, leg: leg.isFirst ? .first : .hubLinking(leg.index))))
-      await observer.linking(.hubLinkingLegCompleted(leg, link: made.link))
+      await observer.linking(.hubLinkingLegCompleted(leg, link: LinkMade(made.link)))
 
     }
 

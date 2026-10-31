@@ -323,7 +323,7 @@ public enum LinkingJSON {
   ///   - link: The link.
   ///   - known: What the catalog says about the device, or `nil` if its identity isn't known.
   /// - Returns: The link as JSON prints it.
-  public static func link(_ link: AllLinkingCompleted, known: DeviceInfo?) -> Link {
+  public static func link(_ link: LinkMade, known: DeviceInfo?) -> Link {
 
     Link(
       address: "\(link.address)",
@@ -361,7 +361,7 @@ public enum LinkingJSON {
     let known: DeviceInfo? = result.device?.info
 
     return LinkReport(
-      links: result.links.map { (made: AllLinkingCompleted) -> Link in link(made, known: known) },
+      links: result.links.map { (made: LinkMade) -> Link in link(made, known: known) },
       legs: result.legs.map { (outcome: HubLinkingLegOutcome) -> Leg in leg(outcome, message: message) }
     )
 

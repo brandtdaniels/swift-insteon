@@ -161,7 +161,7 @@ struct LinkingPrompter: LinkingObserver {
   /// if it was known before.
   private func report(_ unlinked: UnlinkedLink) {
 
-    let link: AllLinkingCompleted = unlinked.link
+    let link: LinkMade = unlinked.link
     let known: DeviceInfo? = unlinked.device?.info
 
     Output.line("Unlinked \(LinkingInstructions.deviceLabel(link.address, info: known)) from group \(link.group).")

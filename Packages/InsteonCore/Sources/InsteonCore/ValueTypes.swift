@@ -42,9 +42,6 @@ public typealias NAKReason = InsteonProtocol.NAKReason
 
 // MARK: - Links
 
-/// The modem's report of a link it made or removed.
-public typealias AllLinkingCompleted = InsteonProtocol.AllLinkingCompleted
-
 /// The modem's role in a link it reported: controller, responder or deleted.
 public typealias AllLinkMode = InsteonProtocol.AllLinkMode
 

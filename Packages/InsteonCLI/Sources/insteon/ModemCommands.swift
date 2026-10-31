@@ -439,7 +439,7 @@ enum ModemCommands {
 
   /// Prints a new link, with the device's identity when it's known. Pass `nil` for `known` to
   /// print the link alone.
-  static func report(_ link: AllLinkingCompleted, known: DeviceInfo?, names: ProductNames) {
+  static func report(_ link: LinkMade, known: DeviceInfo?, names: ProductNames) {
 
     Output.line("Linked \(link.address) in group \(link.group), modem as \(Names.mode(link.mode)).")
 

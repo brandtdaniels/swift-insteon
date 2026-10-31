@@ -244,7 +244,7 @@ public enum LinkOutcome {
   ///   - device: The device asked for, or `nil` for any device.
   /// - Returns: A message that says what happened and what to do, or `nil` if the link is the
   ///   one asked for.
-  public static func mismatch(_ link: AllLinkingCompleted, mode: LinkingInstructions.Mode, device: InsteonAddress?) -> String? {
+  public static func mismatch(_ link: LinkMade, mode: LinkingInstructions.Mode, device: InsteonAddress?) -> String? {
 
     let direction: LinkingDirection = mode == .linking ? .linking : .unlinking
 

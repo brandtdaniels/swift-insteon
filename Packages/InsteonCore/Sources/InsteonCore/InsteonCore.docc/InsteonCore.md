@@ -400,7 +400,7 @@ do {
 - ``NAKReason``
 - ``LinkRecord``
 - ``LinkDatabase``
-- ``AllLinkingCompleted``
+- ``LinkMade``
 - ``SceneResult``
 - ``AllLinkMode``
 - ``ModemLink``

@@ -304,8 +304,8 @@ struct DeviceTextTests {
 
   @Test func explainsADeviceInTheWrongMode() throws {
 
-    let relinked = AllLinkingCompleted(linkCode: 0x00, group: 1, address: plug, category: nil, subcategory: nil, firmwareVersion: nil)
-    let removed = AllLinkingCompleted(linkCode: 0xFF, group: 0, address: plug, category: nil, subcategory: nil, firmwareVersion: nil)
+    let relinked = LinkMade(address: plug, group: 1, mode: .responder)
+    let removed = LinkMade(address: plug, group: 0, mode: .delete)
 
     let wrongMode = try #require(LinkOutcome.mismatch(relinked, mode: .unlinking, device: nil))
 
@@ -318,7 +318,7 @@ struct DeviceTextTests {
 
   @Test func refusesALinkWithAnotherDevice() throws {
 
-    let other = AllLinkingCompleted(linkCode: 0x01, group: 0, address: InsteonAddress(0x4D, 0x5E, 0x6F), category: nil, subcategory: nil, firmwareVersion: nil)
+    let other = LinkMade(address: InsteonAddress(0x4D, 0x5E, 0x6F), group: 0, mode: .controller)
     let message = try #require(LinkOutcome.mismatch(other, mode: .linking, device: plug))
 
     #expect(message.hasPrefix("The modem reported 4D.5E.6F, not 1A.2B.3C"))

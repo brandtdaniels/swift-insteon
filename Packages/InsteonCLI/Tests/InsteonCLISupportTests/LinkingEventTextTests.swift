@@ -87,7 +87,7 @@ struct LinkingEventTextTests {
 
   @Test func leavesTheResultsToTheCommand() {
 
-    let link = AllLinkingCompleted(linkCode: 0x01, group: 0, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let link = LinkMade(address: lamp, group: 0, mode: .controller)
 
     #expect(notes(.linked(LinkedDevice(link: link, device: nil, leg: .first))).isEmpty)
     #expect(notes(.unlinkedAll(RemovedLinks(address: lamp, device: nil, links: []))).isEmpty)
@@ -97,7 +97,7 @@ struct LinkingEventTextTests {
   @Test func saysWhatEachLegDoes() {
 
     let leg = HubLinkingLeg(device: lamp, index: 1, count: 3, modemRole: .responder, modemGroup: 2, deviceGroup: 2)
-    let link = AllLinkingCompleted(linkCode: 0x00, group: 2, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let link = LinkMade(address: lamp, group: 2, mode: .responder)
 
     #expect(notes(.hubLinkingLegStarted(leg)) == [
       "Leg 2 of 3: the modem starts ALL-Linking as responder of group 2, for 1A.2B.3C's group 2..."
@@ -136,7 +136,7 @@ struct LinkingEventTextTests {
 
     let first = HubLinkingLeg(device: lamp, index: 0, count: 2, modemRole: .controller, modemGroup: 0, deviceGroup: 1)
     let second = HubLinkingLeg(device: lamp, index: 1, count: 2, modemRole: .responder, modemGroup: 1, deviceGroup: 1)
-    let made = AllLinkingCompleted(linkCode: 0x01, group: 0, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let made = LinkMade(address: lamp, group: 0, mode: .controller)
     let result = DeviceLinkingResult(
       links: [made],
       device: nil,
@@ -232,7 +232,7 @@ struct LinkingEventTextTests {
 
     let first = HubLinkingLeg(device: lamp, index: 0, count: 2, modemRole: .controller, modemGroup: 0, deviceGroup: 1)
     let second = HubLinkingLeg(device: lamp, index: 1, count: 2, modemRole: .responder, modemGroup: 1, deviceGroup: 1)
-    let made = AllLinkingCompleted(linkCode: 0x01, group: 0, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let made = LinkMade(address: lamp, group: 0, mode: .controller)
     let result = DeviceLinkingResult(
       links: [made],
       device: nil,

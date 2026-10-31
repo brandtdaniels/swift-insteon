@@ -741,7 +741,7 @@ struct HubLinkingTests {
     // The modem responds to each group the bridge controls, and never controls it.
     #expect(await modem.linkingSteps == expected)
     #expect(result.links.map(\.group.rawValue) == groups)
-    #expect(result.links.allSatisfy { (link: AllLinkingCompleted) -> Bool in link.mode == .responder })
+    #expect(result.links.allSatisfy { (link: LinkMade) -> Bool in link.mode == .responder })
 
   }
 

@@ -9,9 +9,9 @@ struct LinkOutcomeTests {
 
   let other = InsteonAddress(0x4D, 0x5E, 0x6F)
 
-  func link(_ mode: AllLinkMode, with device: InsteonAddress, group: AllLinkGroupNumber = 0) -> AllLinkingCompleted {
+  func link(_ mode: AllLinkMode, with device: InsteonAddress, group: AllLinkGroupNumber = 0) -> LinkMade {
 
-    AllLinkingCompleted(linkCode: mode.rawValue, group: group, address: device, category: nil, subcategory: nil, firmwareVersion: nil)
+    LinkMade(address: device, group: group, mode: mode)
 
   }
 
