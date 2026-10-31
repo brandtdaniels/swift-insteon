@@ -223,26 +223,6 @@ enum ModemCommands {
 
   // MARK: - link
 
-  /// A link the modem reported as `--json` prints it, with the device's identity when it's
-  /// known.
-  struct Link: Encodable {
-
-    let address: String
-
-    let group: Int
-
-    let modemRole: String
-
-    let category: String?
-
-    let subcategory: String?
-
-    let firmwareVersion: String?
-
-    let product: String?
-
-  }
-
   static func link(_ modem: Modem, options: LinkOptions, names: ProductNames, printsJSON: Bool) async throws {
 
     try await IdentityStore.withNetwork(modem: modem, hub: nil, names: names) { (cached: CachedNetwork) async throws -> Void in
@@ -284,18 +264,7 @@ enum ModemCommands {
 
     if printsJSON {
 
-      let known: DeviceDescription? = result.device?.deviceDescription
-      let reports: [Link] = result.links.map { (link: AllLinkingCompleted) -> Link in json(for: link, known: known) }
-
-      if reports.count == 1 {
-
-        try Output.json(reports[0])
-
-      } else {
-
-        try Output.json(reports)
-
-      }
+      try Output.json(LinkingJSON.report(result))
 
     }
 
@@ -326,30 +295,6 @@ enum ModemCommands {
 
   // MARK: - unlink
 
-  /// A removed link as `--json` prints it.
-  struct Unlink: Encodable {
-
-    let address: String
-
-    let group: Int
-
-    let product: String?
-
-  }
-
-  /// A link `unlink ADDRESS --all` removed, as `--json` prints it.
-  struct RemovedLink: Encodable {
-
-    let address: String
-
-    let group: Int
-
-    let modemRole: String
-
-    let product: String?
-
-  }
-
   static func unlink(_ modem: Modem, options: UnlinkOptions, names: ProductNames, printsJSON: Bool) async throws {
 
     try await IdentityStore.withNetwork(modem: modem, hub: nil, names: names) { (cached: CachedNetwork) async throws -> Void in
@@ -359,7 +304,7 @@ enum ModemCommands {
 
       if options.removesAllLinks, let device = options.device {
 
-        try await unlinkAll(device, coordinator: coordinator, options: options, observer: observer)
+        try await unlinkAll(device, coordinator: coordinator, options: options, observer: observer, printsJSON: printsJSON)
 
         return
 
@@ -367,13 +312,19 @@ enum ModemCommands {
 
       let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? Linker.defaultManualLinkingTimeout
 
-      _ = try await coordinator.unlink(
+      let result: DeviceUnlinkingResult = try await coordinator.unlink(
         options.device,
         as: options.role == .responder ? .responder : .controller,
         group: options.group,
         timeout: timeout,
         observer: observer
       )
+
+      if printsJSON {
+
+        try Output.json(LinkingJSON.unlink(result.link))
+
+      }
 
     }
 
@@ -385,20 +336,28 @@ enum ModemCommands {
     _ device: InsteonAddress,
     coordinator: DeviceLinkingCoordinator,
     options: UnlinkOptions,
-    observer: LinkingPrompter
+    observer: LinkingPrompter,
+    printsJSON: Bool
   ) async throws {
 
     let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? Linker.defaultRemoteLinkingTimeout
+    let result: DeviceUnlinkingAllResult
 
     do {
 
-      _ = try await coordinator.unlinkAll(device, timeout: timeout, observer: observer)
+      result = try await coordinator.unlinkAll(device, timeout: timeout, observer: observer)
 
     } catch let failure as RemoteUnlinkingError {
 
       let label: String = LinkingInstructions.deviceLabel(device, profile: failure.deviceDescription?.profile)
 
       throw CommandFailure(description: "\(label) wasn't unlinked without its SET button: \(Names.message(for: failure.underlying))")
+
+    }
+
+    if printsJSON {
+
+      try Output.json(LinkingJSON.removedLinks(result.removed))
 
     }
 
@@ -439,20 +398,6 @@ enum ModemCommands {
     }
 
     Output.table(rows)
-
-  }
-
-  static func json(for link: AllLinkingCompleted, known: DeviceDescription?) -> Link {
-
-    Link(
-      address: "\(link.address)",
-      group: Int(link.group.rawValue),
-      modemRole: Names.mode(link.mode),
-      category: known.map { "\($0.category)" },
-      subcategory: known.map { "\($0.subcategory)" },
-      firmwareVersion: known?.firmwareVersion.map { "\($0)" },
-      product: known?.displayName
-    )
 
   }
 
