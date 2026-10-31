@@ -282,7 +282,7 @@ struct RequestTests {
 
   }
 
-  @Test func reportsAModemThatStopsEchoingAfterAnsweringAsBusyWithTheDevice() async throws {
+  @Test(.timeLimit(.minutes(1))) func reportsAModemThatStopsEchoingAfterAnsweringAsBusyWithTheDevice() async throws {
 
     // The modem echoes the first request and the device acknowledges it; then the modem goes
     // quiet, as a Hub's modem does while it's still retrying a message to a device.
@@ -319,7 +319,7 @@ struct RequestTests {
 
   }
 
-  @Test func reportsAModemThatMissesTwoEchoesInARowAsNotAnswering() async throws {
+  @Test(.timeLimit(.minutes(1))) func reportsAModemThatMissesTwoEchoesInARowAsNotAnswering() async throws {
 
     // The modem echoes the first request and the device acknowledges it; then the modem sends
     // nothing more, so the second missed echo blames the modem rather than a busy device.
@@ -364,7 +364,7 @@ struct RequestTests {
 
   }
 
-  @Test func reportsAModemThatStopsEchoingPartwayThroughADatabaseReadAsBusyWithTheDevice() async throws {
+  @Test(.timeLimit(.minutes(1))) func reportsAModemThatStopsEchoingPartwayThroughADatabaseReadAsBusyWithTheDevice() async throws {
 
     let acknowledgment: [UInt8] = received(from: device, .directAcknowledgment, command1: 0x2F, command2: 0x00)
     let first: [UInt8] = recordResponse(at: 0x0FFF, [0xE2, 0x04, 0x00, 0x5E, 0x5D, 0x00, 0x00, 0x04])
@@ -492,7 +492,7 @@ struct RequestTests {
 
   }
 
-  @Test func waitsTheRetryDelayBeforeAskingForARecordAgain() async throws {
+  @Test(.timeLimit(.minutes(1))) func waitsTheRetryDelayBeforeAskingForARecordAgain() async throws {
 
     let acknowledgment: [UInt8] = received(from: device, .directAcknowledgment, command1: 0x2F, command2: 0x00)
     let end: [UInt8] = recordResponse(at: 0x0FFF, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
