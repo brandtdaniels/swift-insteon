@@ -198,6 +198,10 @@ public enum InsteonErrorDescription {
       "The ALL-Link database of \(device) is full."
     case let .recordNotWritten(device, address):
       "A record written to the ALL-Link database of \(device) at \(hexAddress(address)) didn't read back as written."
+    case let .modemRecordsLost(records):
+      "Removing a link also removed the modem's \(records.count == 1 ? "record" : "records") of "
+        + records.map { (record: AllLinkRecord) -> String in "\(record.address), group \(record.group)" }.joined(separator: "; ")
+        + ", which couldn't be added back. Link them again."
     }
 
   }

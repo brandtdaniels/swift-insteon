@@ -319,6 +319,7 @@ struct DatabaseEditor {
     // The modem deletes the first record matching a group and address whatever its role, so
     // every match is deleted and those of the other role are added back.
     let key = AllLinkRecord(flags: [], group: group, address: address)
+    let otherRole: [AllLinkRecord] = existing.filter { (record: AllLinkRecord) -> Bool in record.flags.contains(.controller) != isController }
 
     do {
 
@@ -328,11 +329,9 @@ struct DatabaseEditor {
 
       }
 
-      for record in existing where record.flags.contains(.controller) != isController {
+      for record in otherRole {
 
-        let action: AllLinkRecordAction = record.flags.contains(.controller) ? .modifyFirstControllerOrAdd : .modifyFirstResponderOrAdd
-
-        try await modem.send(.manageAllLinkRecord(action: action, record: record))
+        try await modem.send(.manageAllLinkRecord(action: Self.addAction(for: record), record: record))
 
       }
 
@@ -341,11 +340,84 @@ struct DatabaseEditor {
       // Some records may have changed before the failure.
       await cache?.invalidateModem()
 
+      // A record of the other role that's gone is a link the caller didn't ask to remove, so
+      // it's added back once more, in a task of its own that canceling this one doesn't reach.
+      let modem: any LinkingModem = modem
+      let lost: [AllLinkRecord] = await Task { () async -> [AllLinkRecord] in
+
+        await Self.restore(otherRole, group: group, address: address, on: modem)
+
+      }.value
+
+      if !lost.isEmpty {
+
+        throw LinkingError.modemRecordsLost(lost)
+
+      }
+
       throw error
 
     }
 
     await cache?.invalidateModem()
+
+  }
+
+  /// The action that adds a record to the modem's database in its role.
+  private static func addAction(for record: AllLinkRecord) -> AllLinkRecordAction {
+
+    record.flags.contains(.controller) ? .modifyFirstControllerOrAdd : .modifyFirstResponderOrAdd
+
+  }
+
+  /// Adds back the records that are no longer in the modem's database.
+  ///
+  /// - Returns: The records that are still missing, or all of them if the modem's database
+  ///   can't be read.
+  private static func restore(
+    _ records: [AllLinkRecord],
+    group: AllLinkGroupNumber,
+    address: InsteonAddress,
+    on modem: any LinkingModem
+  ) async -> [AllLinkRecord] {
+
+    guard !records.isEmpty else {
+
+      return []
+
+    }
+
+    guard let remaining = try? await modem.allLinkRecords(group: group, device: address) else {
+
+      return records
+
+    }
+
+    var lost: [AllLinkRecord] = []
+
+    for record in records {
+
+      let isController: Bool = record.flags.contains(.controller)
+
+      guard !remaining.contains(where: { (stored: AllLinkRecord) -> Bool in stored.flags.contains(.controller) == isController }) else {
+
+        continue
+
+      }
+
+      do {
+
+        try await modem.send(.manageAllLinkRecord(action: addAction(for: record), record: record))
+
+      } catch {
+
+        lost.append(record)
+
+      }
+
+    }
+
+    return lost
 
   }
 
