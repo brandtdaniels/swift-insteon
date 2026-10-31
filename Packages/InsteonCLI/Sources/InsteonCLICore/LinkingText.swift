@@ -1,3 +1,4 @@
+import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonProtocol
@@ -29,7 +30,18 @@ public enum LinkingInstructions {
   /// - Returns: The steps, in order.
   public static func steps(of procedure: DeviceLifecycle.Procedure) -> [String] {
 
-    procedure.steps.filter { !$0.isOnOtherDevice }.map { step in
+    steps(procedure.steps.filter { !$0.isOnOtherDevice })
+
+  }
+
+  /// Steps done on a device, each with what the device does in answer, such as
+  /// `"Press and hold the SET button until the module beeps. [LED blinks green]"`.
+  ///
+  /// - Parameter steps: The steps, such as a `SETButtonPrompt`'s.
+  /// - Returns: The steps, in order.
+  public static func steps(_ steps: [DeviceLifecycle.Step]) -> [String] {
+
+    steps.map { (step: DeviceLifecycle.Step) -> String in
 
       step.expectation.map { "\(step.text) [\($0)]" } ?? step.text
 
@@ -244,6 +256,145 @@ public enum LinkOutcome {
     case .unlinkedInsteadOfLinking:
       return "\(link.address) removed its link in group \(link.group) instead of linking: it was in unlinking mode, not linking mode. "
         + "Run the command again, and hold its SET button only until it first beeps."
+    }
+
+  }
+
+}
+
+/// What `insteon link` and `insteon unlink` tell the person about each step a
+/// `DeviceLinkingCoordinator` takes, on standard error.
+public enum LinkingEventText {
+
+  /// The notes for an event, in order, or none for an event the command reports as a result,
+  /// such as a link made.
+  ///
+  /// - Parameters:
+  ///   - event: The event.
+  ///   - message: The sentence that describes an error, ending with a period.
+  /// - Returns: The notes.
+  public static func notes(for event: LinkingEvent, message: (any Error) -> String) -> [String] {
+
+    switch event {
+    case let .identifying(device):
+      return ["Asking \(device) for its identity with ID Request..."]
+    case let .turningOnBeforeLinking(device):
+      return ["Turning \(device) on with Light On first, so it links with full on as its on-level..."]
+    case let .notTurnedOnBeforeLinking(device, reason):
+      return [LinkingInstructions.didNotTurnOnBeforeLinking(device, reason: message(reason))]
+    case let .notTurningOnBeforeLinking(device):
+      return [
+        "Not turning \(device) on first: the catalog doesn't identify it as a light or switched load, "
+          + "so it links with whatever on-level it captures."
+      ]
+    case let .linkingRemotely(device, modemRole):
+      return [
+        "Linking \(device) without its SET button: the modem starts ALL-Linking as \(role(modemRole)) "
+          + "and sends the device Enter Linking Mode..."
+      ]
+    case let .fallback(.setButtonLinking(device, reason)):
+      return ["\(device) didn't link remotely: \(message(reason)) Link it with its SET button instead."]
+    case let .fallback(.setButtonUnlinking(device, description, steps)):
+      return LinkingInstructions.setButtonUnlinking(
+        device: LinkingInstructions.deviceLabel(device, profile: description?.profile),
+        steps: LinkingInstructions.steps(steps)
+      )
+    case let .pressSETButton(prompt):
+      return LinkingInstructions.modemFirst(
+        mode(prompt.direction),
+        group: prompt.group,
+        seconds: prompt.timeout.components.seconds,
+        device: prompt.device.map { (device: InsteonAddress) -> String in
+
+          LinkingInstructions.deviceLabel(device, profile: prompt.deviceDescription?.profile)
+
+        },
+        steps: LinkingInstructions.steps(prompt.steps)
+      )
+    case let .modemJoining(timeout):
+      return ["The modem is joining as responder. Waiting up to \(timeout.components.seconds) seconds; Control-C stops."]
+    case let .linkingBack(device, group):
+      return ["Linking back: sending \(device) Enter Linking Mode for its group \(group), so the modem becomes its responder..."]
+    case .linked, .unlinked, .unlinkedAll:
+      return []
+    case let .readingModemLinks(device, purpose):
+      switch purpose {
+      case .findingLinksToRemove:
+        return ["Reading the modem's ALL-Link database for \(device)'s links..."]
+      case .findingGroupToUnlink:
+        return ["Reading the modem's ALL-Link database for \(device)'s groups..."]
+      }
+    case let .unlinkGroupChosen(device, group, isFromModemRecords):
+      return [
+        isFromModemRecords
+          ? "The modem's records link \(device) in group \(group), so the unlink uses it."
+          : "The modem has no record for \(device) in that role, so the unlink uses group \(group)."
+      ]
+    case let .unlinkingRemotely(device, description, link):
+      return [
+        LinkingInstructions.remoteUnlinking(
+          modemRole: link.modemRole,
+          device: LinkingInstructions.deviceLabel(device, profile: description?.profile),
+          group: link.group
+        )
+      ]
+    case let .linksRemaining(device, links):
+      return links.map { (link: ModemLink) -> String in
+
+        let roleOption: String = link.modemRole == .controller ? "" : " --responder"
+
+        return "\(device) still has links in group \(link.group); run 'insteon unlink \(device) --group \(link.group)\(roleOption)'."
+
+      }
+    case let .remainingLinksUnknown(device, reason):
+      return ["Couldn't check the modem for \(device)'s other links: \(message(reason))"]
+    }
+
+  }
+
+  /// What to tell the person before the modem joins a device as its responder: put the device
+  /// into its mode first, then press Return.
+  ///
+  /// - Parameters:
+  ///   - prompt: What the device is to do.
+  ///   - waitsForReturn: Whether the command waits for Return before starting the modem,
+  ///     which it does when it reads from a terminal.
+  /// - Returns: The lines, in order.
+  public static func deviceFirst(_ prompt: DeviceFirstPrompt, waitsForReturn: Bool) -> [String] {
+
+    LinkingInstructions.deviceFirst(
+      mode(prompt.direction),
+      device: prompt.device.map { (device: InsteonAddress) -> String in
+
+        LinkingInstructions.deviceLabel(device, profile: prompt.deviceDescription?.profile)
+
+      },
+      steps: LinkingInstructions.steps(prompt.steps),
+      waitsForReturn: waitsForReturn
+    )
+
+  }
+
+  /// The instructions' mode for a direction.
+  private static func mode(_ direction: LinkingDirection) -> LinkingInstructions.Mode {
+
+    switch direction {
+    case .linking:
+      return .linking
+    case .unlinking:
+      return .unlinking
+    }
+
+  }
+
+  /// The modem's role as the command names it.
+  private static func role(_ role: ModemRole) -> String {
+
+    switch role {
+    case .controller:
+      return "controller"
+    case .responder:
+      return "responder"
     }
 
   }

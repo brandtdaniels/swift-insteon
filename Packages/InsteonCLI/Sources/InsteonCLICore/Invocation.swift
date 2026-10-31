@@ -1,3 +1,4 @@
+import InsteonCore
 import InsteonProtocol
 
 /// What a person asked the `insteon` command to do: where to find the modem, whether to print
@@ -302,9 +303,11 @@ public struct LinkOptions: Hashable, Sendable {
   /// The modem's role in the link.
   public var role: LinkingRole
 
-  /// Whether to link both ways: the modem as controller, then as the device's responder,
-  /// without a second SET button press.
-  public var isTwoWay: Bool
+  /// Whether to link the device back after the modem links as its controller, so the modem
+  /// becomes its responder and hears it, without a second SET button press:
+  /// `TwoWayLinking.whenDeviceControls` by default, `TwoWayLinking.always` with `--two-way`,
+  /// and `TwoWayLinking.never` with `--one-way`.
+  public var twoWay: TwoWayLinking
 
   /// How many seconds to wait for the SET button, or `nil` for the library's default.
   public var timeoutSeconds: Int?
@@ -316,21 +319,22 @@ public struct LinkOptions: Hashable, Sendable {
   ///     Defaults to `nil`.
   ///   - group: The modem's ALL-Link group. Defaults to ``LinkOptions/defaultGroup``, group 0.
   ///   - role: The modem's role. Defaults to ``LinkingRole/controller``.
-  ///   - isTwoWay: Whether to link both ways. Defaults to `false`.
+  ///   - twoWay: Whether to link the device back. Defaults to
+  ///     `TwoWayLinking.whenDeviceControls`.
   ///   - timeoutSeconds: How many seconds to wait, or `nil` for the library's default.
   ///     Defaults to `nil`.
   public init(
     device: InsteonAddress? = nil,
     group: AllLinkGroupNumber = LinkOptions.defaultGroup,
     role: LinkingRole = .controller,
-    isTwoWay: Bool = false,
+    twoWay: TwoWayLinking = .whenDeviceControls,
     timeoutSeconds: Int? = nil
   ) {
 
     self.device = device
     self.group = group
     self.role = role
-    self.isTwoWay = isTwoWay
+    self.twoWay = twoWay
     self.timeoutSeconds = timeoutSeconds
 
   }

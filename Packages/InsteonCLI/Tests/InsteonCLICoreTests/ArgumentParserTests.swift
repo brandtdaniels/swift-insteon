@@ -1,5 +1,6 @@
 import Testing
 import InsteonCLICore
+import InsteonCore
 import InsteonProtocol
 
 struct ArgumentParserTests {
@@ -308,9 +309,9 @@ struct ArgumentParserTests {
     #expect(try Invocation.parse(["link", "1A.2B.3C"]).subcommand == .link(LinkOptions(device: lamp)))
     #expect(
       try Invocation.parse(["link", "--two-way", "1a2b3c", "--group", "2"]).subcommand
-        == .link(LinkOptions(device: lamp, group: 2, isTwoWay: true))
+        == .link(LinkOptions(device: lamp, group: 2, twoWay: .always))
     )
-    #expect(try Invocation.parse(["link", "--two-way"]).subcommand == .link(LinkOptions(isTwoWay: true)))
+    #expect(try Invocation.parse(["link", "--two-way"]).subcommand == .link(LinkOptions(twoWay: .always)))
     #expect(try Invocation.parse(["unlink", "1A.2B.3C", "--responder"]).subcommand == .unlink(UnlinkOptions(device: lamp, role: .responder)))
 
   }
@@ -326,6 +327,40 @@ struct ArgumentParserTests {
     #expect(throws: ArgumentError.unexpectedArgument("4D.5E.6F", subcommand: "unlink")) {
 
       try Invocation.parse(["unlink", "1A.2B.3C", "4D.5E.6F"])
+
+    }
+
+  }
+
+  @Test func linksBackWhenTheDeviceControlsUnlessOneWay() throws {
+
+    #expect(LinkOptions().twoWay == .whenDeviceControls)
+    #expect(try Invocation.parse(["link"]).subcommand == .link(LinkOptions(twoWay: .whenDeviceControls)))
+    #expect(try Invocation.parse(["link", "1A.2B.3C"]).subcommand == .link(LinkOptions(device: lamp, twoWay: .whenDeviceControls)))
+    #expect(try Invocation.parse(["link", "--one-way"]).subcommand == .link(LinkOptions(twoWay: .never)))
+    #expect(try Invocation.parse(["link", "1A.2B.3C", "--one-way"]).subcommand == .link(LinkOptions(device: lamp, twoWay: .never)))
+    #expect(try Invocation.parse(["link", "--responder", "--one-way"]).subcommand == .link(LinkOptions(role: .responder, twoWay: .never)))
+    #expect(try Invocation.parse(["link", "--two-way", "--two-way"]).subcommand == .link(LinkOptions(twoWay: .always)))
+
+  }
+
+  @Test func rejectsOneWayWithTwoWay() {
+
+    #expect(throws: ArgumentError.conflictingOptions("--one-way", "--two-way")) {
+
+      try Invocation.parse(["link", "--one-way", "--two-way"])
+
+    }
+
+    #expect(throws: ArgumentError.conflictingOptions("--two-way", "--one-way")) {
+
+      try Invocation.parse(["link", "1A.2B.3C", "--two-way", "--one-way"])
+
+    }
+
+    #expect(throws: ArgumentError.conflictingOptions("--cancel", "--one-way")) {
+
+      try Invocation.parse(["link", "--one-way", "--cancel"])
 
     }
 

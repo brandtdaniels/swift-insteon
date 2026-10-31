@@ -95,6 +95,11 @@ public actor InMemoryModem: LinkingModem {
   /// The group the modem reports for each device's links, when it isn't the modem's group.
   public var reportedGroups: [InsteonAddress: AllLinkGroupNumber] = [:]
 
+  /// Whether the modem keeps its own records in step with the links it reports: a controller
+  /// or responder record for a link it makes, and none for a link it removes. Defaults to `false`, so
+  /// the modem's records change only as a test sets them.
+  public var recordsLinks: Bool = false
+
   /// Each device's level, from the Light On or Light Off it was last sent. Devices not listed
   /// are off.
   public private(set) var levels: [InsteonAddress: UInt8] = [:]
@@ -199,6 +204,16 @@ public actor InMemoryModem: LinkingModem {
   public func setReportedGroup(_ group: AllLinkGroupNumber, of device: InsteonAddress) {
 
     reportedGroups[device] = group
+
+  }
+
+  /// Makes the modem keep its own records in step with the links it reports, or stop.
+  ///
+  /// - Parameter isRecording: Whether the modem adds and removes its records as it reports
+  ///   links. Defaults to `true`.
+  public func setRecordsLinks(_ isRecording: Bool = true) {
+
+    recordsLinks = isRecording
 
   }
 
@@ -677,9 +692,58 @@ public actor InMemoryModem: LinkingModem {
 
     }
 
+    if recordsLinks {
+
+      recordLink(link, modemMode: linking.mode)
+
+    }
+
     for subscriber in subscribers.values {
 
       subscriber.yield(.allLinkingCompleted(link))
+
+    }
+
+  }
+
+  /// Adds the modem's record for a link it reports, or removes the record of a link it removed:
+  /// its controller record when it was in unlinking mode, and its responder record when it
+  /// joined a device that was.
+  private func recordLink(_ link: AllLinkingCompleted, modemMode: AllLinkMode) {
+
+    switch link.mode {
+    case .controller?:
+      addModemRecord(AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: link.group, address: link.address))
+    case .responder?:
+      addModemRecord(AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: link.group, address: link.address))
+    case .delete?:
+      let removesController: Bool = modemMode == .delete
+
+      modemRecords.removeAll { (record: AllLinkRecord) -> Bool in
+
+        record.address == link.address && record.group == link.group && record.flags.contains(.controller) == removesController
+
+      }
+    default:
+      break
+    }
+
+  }
+
+  /// Adds a record to the modem's own database, unless one for the same device, group and role
+  /// is there.
+  private func addModemRecord(_ record: AllLinkRecord) {
+
+    let isController: Bool = record.flags.contains(.controller)
+    let isThere: Bool = modemRecords.contains { (stored: AllLinkRecord) -> Bool in
+
+      stored.address == record.address && stored.group == record.group && stored.flags.contains(.controller) == isController
+
+    }
+
+    if !isThere {
+
+      modemRecords.append(record)
 
     }
 

@@ -1,3 +1,4 @@
+import InsteonCore
 import InsteonProtocol
 
 extension Invocation {
@@ -254,6 +255,7 @@ extension Invocation {
 
     var options = LinkOptions()
     var roleOption: String?
+    var twoWayOption: String?
     var otherOption: String?
     var deviceArgument: String?
     var cancels = false
@@ -291,9 +293,17 @@ extension Invocation {
 
         roleOption = name
         options.role = LinkingRole(rawValue: String(name.dropFirst(2))) ?? .controller
-      case "--two-way":
+      case "--two-way", "--one-way":
         try expectNoValue(name, inlineValue)
-        options.isTwoWay = true
+
+        if let twoWayOption, twoWayOption != name {
+
+          throw ArgumentError.conflictingOptions(twoWayOption, name)
+
+        }
+
+        twoWayOption = name
+        options.twoWay = name == "--two-way" ? .always : .never
         otherOption = name
       case "--cancel":
         try expectNoValue(name, inlineValue)
@@ -307,7 +317,7 @@ extension Invocation {
     guard cancels else {
 
       // Two-way linking starts with the modem as the controller.
-      if options.isTwoWay, let roleOption, roleOption != "--controller" {
+      if options.twoWay == .always, let roleOption, roleOption != "--controller" {
 
         throw ArgumentError.conflictingOptions("--two-way", roleOption)
 
