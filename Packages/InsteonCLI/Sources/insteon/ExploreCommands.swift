@@ -1,4 +1,4 @@
-import InsteonCLICore
+import InsteonCLISupport
 import InsteonCore
 import InsteonModem
 import InsteonProtocol

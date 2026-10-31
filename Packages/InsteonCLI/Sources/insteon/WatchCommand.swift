@@ -1,5 +1,5 @@
 import Foundation
-import InsteonCLICore
+import InsteonCLISupport
 import InsteonCore
 
 /// `insteon watch`: prints what the modem hears until Control-C, as the network's

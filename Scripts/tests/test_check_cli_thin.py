@@ -184,7 +184,7 @@ class CheckCLIThinTests(unittest.TestCase):
         self.assertEqual(self.rules_of("/* a /* b */ c */ if kind == .relay { }\n"), ["group-kind"])
 
     def test_checks_every_root_by_its_path_from_the_roots_parent(self):
-        core = pathlib.Path(self.directory.name) / "InsteonCLICore"
+        core = pathlib.Path(self.directory.name) / "InsteonCLISupport"
         core.mkdir()
         (core / "ControlText.swift").write_text("let level = 0xFF\n", encoding="utf-8")
         self.write("DeviceCommands.swift", "if kind == .relay { }\n")
@@ -196,7 +196,7 @@ class CheckCLIThinTests(unittest.TestCase):
 
         self.assertEqual(status, 1)
         self.assertIn("insteon/DeviceCommands.swift:1: group-kind:", output.getvalue())
-        self.assertIn("InsteonCLICore/ControlText.swift:1: hex-literal:", output.getvalue())
+        self.assertIn("InsteonCLISupport/ControlText.swift:1: hex-literal:", output.getvalue())
 
 
 if __name__ == "__main__":

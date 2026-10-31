@@ -1,5 +1,5 @@
 import Testing
-import InsteonCLICore
+import InsteonCLISupport
 import InsteonCore
 import InsteonDeviceCatalog
 import InsteonProtocol

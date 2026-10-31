@@ -160,4 +160,4 @@ Turned 4D.5E.6F on at 50%.
 ## Layout
 
 - `Sources/insteon`: the command, which runs what the command line asks for
-- `Sources/InsteonCLICore`: reading the command line, finding and checking the environment file and reading its variables, choosing the modem, where the identity cache is kept, choosing between the bundled and cached catalogs, and the text the command prints from the catalog, as plain functions the tests in `Tests/InsteonCLICoreTests` cover
+- `Sources/InsteonCLISupport`: reading the command line, finding and checking the environment file and reading its variables, choosing the modem, where the identity cache is kept, choosing between the bundled and cached catalogs, and the text the command prints from the catalog, as plain functions the tests in `Tests/InsteonCLISupportTests` cover

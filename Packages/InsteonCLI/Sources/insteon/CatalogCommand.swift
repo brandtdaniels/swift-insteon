@@ -2,7 +2,7 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
-import InsteonCLICore
+import InsteonCLISupport
 import InsteonDeviceCatalog
 import InsteonNetworking
 
