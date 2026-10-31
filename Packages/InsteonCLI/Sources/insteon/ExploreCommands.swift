@@ -3,12 +3,12 @@ import InsteonCore
 
 /// `insteon device ADDRESS send` and `insteon modem send`: messages and serial commands sent
 /// as given, for exploring what the Insteon device catalog doesn't describe yet, through
-/// InsteonCore's `ModemSession`.
+/// InsteonCore's `DeviceNetwork` and `ModemSession`, which refuse what's never sent.
 enum ExploreCommands {
 
   // MARK: - device ADDRESS send
 
-  static func send(_ request: DirectMessageRequest, to device: InsteonAddress, modem: ModemSession) async throws {
+  static func send(_ request: DirectMessageRequest, to device: InsteonAddress, network: DeviceNetwork) async throws {
 
     let message = DirectMessage(
       to: device,
@@ -33,11 +33,15 @@ enum ExploreCommands {
     do {
 
       // Listening starts before the message, so nothing the device sends is missed.
-      messages = try await modem.send(message, collectingFor: .seconds(request.waitSeconds)) { (acknowledgment: ReceivedFrame) -> Void in
+      messages = try await network.send(message, collectingFor: .seconds(request.waitSeconds)) { (acknowledgment: ReceivedFrame) -> Void in
 
         Output.line("ACK: \(text(of: acknowledgment))")
 
       }
+
+    } catch let refusal as SendRefusal {
+
+      throw CommandFailure(description: SendRefusalText.sentence(refusal))
 
     } catch {
 
@@ -73,7 +77,17 @@ enum ExploreCommands {
 
     Output.note("Writing \(Hex.pairs(request.bytes)) to the modem")
 
-    let received: [RawModemReply] = try await modem.write(rawCommand: request.bytes, collectingFor: .seconds(request.waitSeconds))
+    let received: [RawModemReply]
+
+    do {
+
+      received = try await modem.write(rawCommand: request.bytes, forcing: request.isForced, collectingFor: .seconds(request.waitSeconds))
+
+    } catch let refusal as SendRefusal {
+
+      throw CommandFailure(description: SendRefusalText.sentence(refusal))
+
+    }
 
     for reply in received {
 

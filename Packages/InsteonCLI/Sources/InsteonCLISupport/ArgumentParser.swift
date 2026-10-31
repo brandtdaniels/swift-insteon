@@ -729,6 +729,14 @@ extension Invocation {
 
     }
 
+    // Refused before the modem is opened; the network checks the message again, with the
+    // device's command set when it knows the device.
+    if let protected = ProtectedCommand(command1: bytes[0], command2: bytes[1]) {
+
+      throw ArgumentError.neverSent(.protected(protected))
+
+    }
+
     // All 14 bytes given are sent as they are.
     let checksums: Bool = hasChecksum && (userData?.count ?? 0) < 14
 
@@ -856,13 +864,17 @@ extension Invocation {
 
     }
 
-    if !forces, let reason = SerialCommandPolicy.refusal(for: bytes) {
-
+    // Refused before the modem is opened; ModemSession checks the bytes again.
+    switch SerialCommandPolicy.refusal(of: bytes, forcing: forces) {
+    case nil:
+      break
+    case let .serialCommand(reason)?:
       throw ArgumentError.refusedSerialCommand(reason)
-
+    case let refusal?:
+      throw ArgumentError.neverSent(refusal)
     }
 
-    return .modemSend(RawSerialRequest(bytes: bytes, waitSeconds: waitSeconds))
+    return .modemSend(RawSerialRequest(bytes: bytes, waitSeconds: waitSeconds, isForced: forces))
 
   }
 

@@ -398,7 +398,7 @@ struct ExploringArgumentTests {
     #expect(try Invocation.parse(["modem", "send", "0277"]).subcommand == .modemSend(RawSerialRequest(bytes: [0x02, 0x77])))
     #expect(try Invocation.parse(["modem", "send", "02", "77", "01", "--wait", "2"]).subcommand
       == .modemSend(RawSerialRequest(bytes: [0x02, 0x77, 0x01], waitSeconds: 2)))
-    #expect(try Invocation.parse(["modem", "send", "0267", "--force"]).subcommand == .modemSend(RawSerialRequest(bytes: [0x02, 0x67])))
+    #expect(try Invocation.parse(["modem", "send", "0267", "--force"]).subcommand == .modemSend(RawSerialRequest(bytes: [0x02, 0x67], isForced: true)))
 
   }
 
@@ -477,7 +477,7 @@ struct ExploringArgumentTests {
 
     }
 
-    #expect(try Invocation.parse(["modem", "send", "0264FF00", "--force"]).subcommand == .modemSend(RawSerialRequest(bytes: deleteLinking)))
+    #expect(try Invocation.parse(["modem", "send", "0264FF00", "--force"]).subcommand == .modemSend(RawSerialRequest(bytes: deleteLinking, isForced: true)))
 
   }
 

@@ -427,6 +427,45 @@ public actor DeviceNetwork {
 
   }
 
+  /// Sends a device a message as it's given, for exploring what the Insteon device catalog
+  /// doesn't describe yet, then collects the other messages the device sends for a time.
+  ///
+  /// The message passes the same guards as every message a ``Device`` sends, checked by its
+  /// bytes before anything is sent. A ``ProtectedCommand`` is never sent to any device, known
+  /// or not. For a device the ``registry`` knows, neither are the bytes its command set never
+  /// sends, nor an extended message that writes a byte holding a flag the catalog guards,
+  /// which only ``Device/writeSetting(_:to:button:)`` writes. The device isn't asked for its
+  /// identity first.
+  ///
+  /// Listening starts before the message, so nothing the device sends is missed. The
+  /// device's acknowledgment is handed to `onAcknowledgment` as soon as it arrives, and isn't
+  /// among the messages returned. The time is timed by the network's clock.
+  ///
+  /// ```swift
+  /// let message = DirectMessage(to: lamp, command1: 0x19, command2: 0x00, data: nil, hasChecksum: false)
+  /// let frames = try await network.send(message, collectingFor: .seconds(3)) { acknowledgment in
+  ///   print(acknowledgment.summary)
+  /// }
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - message: The message.
+  ///   - duration: How long to collect what the device sends after its acknowledgment.
+  ///   - onAcknowledgment: Called with the device's acknowledgment.
+  /// - Returns: The other messages from the device, in order.
+  /// - Throws: ``SendRefusal`` before anything is sent; the modem's error, which
+  ///   ``SendFailure`` reads as the device rejecting the message or not answering; or
+  ///   `CancellationError`.
+  public nonisolated func send(
+    _ message: DirectMessage,
+    collectingFor duration: Duration,
+    onAcknowledgment: (ReceivedFrame) -> Void
+  ) async throws -> [ReceivedFrame] {
+
+    try await device(message.device).sendAsGiven(message, collectingFor: duration, onAcknowledgment: onAcknowledgment)
+
+  }
+
   /// Records that a device answered, and the level it's at when it's known.
   ///
   /// - Parameters:

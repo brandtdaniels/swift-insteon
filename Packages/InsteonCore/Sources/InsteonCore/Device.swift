@@ -913,6 +913,23 @@ public struct Device: Sendable {
     /// Writing a setting, refused with ``DeviceSettingError/neverWritten(label:)``.
     case setting(label: String)
 
+    /// A message sent as it's given, through a raw passthrough, refused with the
+    /// ``SendRefusal`` itself.
+    case asGiven
+
+    /// Whether the message's bytes are sent as they're given, rather than built and checked
+    /// against what the device reported, so any guarded flag in a byte it writes refuses it.
+    var sendsBytesAsGiven: Bool {
+
+      switch self {
+      case .asGiven, .control(.keepAwake):
+        return true
+      case .control, .setting:
+        return false
+      }
+
+    }
+
   }
 
   /// Sends a message the catalog's linking from a Hub names, such as the one that keeps a
@@ -956,6 +973,14 @@ public struct Device: Sendable {
     switch message {
     case let .bytes(raw):
       if raw.isExtended {
+
+        // A message given by its bytes never writes the device's extended settings: which
+        // bits they hold is the command set's to say, through a command it names.
+        if raw.command == Command(command1: 0x2E, command2: 0x00), raw.fixedBytes.contains(where: { (byte: FixedUserDataByte) -> Bool in byte.position == 2 && byte.value != 0x00 }) {
+
+          throw refused
+
+        }
 
         var userData = UserData()
 
@@ -1076,6 +1101,126 @@ public struct Device: Sendable {
 
   }
 
+  /// Refuses to keep a device awake when the message that lets it sleep again is never sent
+  /// to it, so it isn't left awake, draining its batteries: a ``ProtectedCommand``, or bytes
+  /// its command set never sends.
+  ///
+  /// - Parameter keepAwake: How the catalog keeps the device awake.
+  /// - Throws: ``DeviceControlError/unsupported(_:product:)`` when the release is never sent.
+  func refuseKeepAwakeWithoutRelease(_ keepAwake: DeviceLifecycle.HubLinking.KeepAwake) async throws {
+
+    guard let release = keepAwake.release else {
+
+      return
+
+    }
+
+    let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription
+    let commands: CommandSet? = description?.commandSet
+
+    guard let command = Self.command(of: release, in: commands), DeviceSettingSafety.isNeverSent(command, in: commands) else {
+
+      return
+
+    }
+
+    throw DeviceControlError.unsupported(.keepAwake, product: description.map { (described: DeviceDescription) -> String in DeviceControlModel.product(of: described) } ?? "this device")
+
+  }
+
+  /// The cmd1 and cmd2 a message the catalog's linking from a Hub names sends, when its bytes
+  /// or the command set say what they are.
+  static func command(of message: DeviceLifecycle.HubLinking.HubMessage, in commands: CommandSet?) -> Command? {
+
+    switch message {
+    case let .bytes(raw):
+      return raw.command
+    case let .flag(condition):
+      guard let commands, let flag = commands.operatingFlag(named: condition.flag), let change = commands.change(for: flag, setting: condition.isSet) else {
+
+        return nil
+
+      }
+
+      switch change {
+      case let .setOperatingFlags(command2):
+        return Command(command1: DeviceSettingSafety.setOperatingFlagsCommand1, command2: command2)
+      case let .standardCommand(standard):
+        return try? standard.command()
+      }
+    case let .command(name):
+      if let flagCommand = commands?.flagCommands.first(where: { (entry: OperatingFlagCommand) -> Bool in entry.name == name }) {
+
+        return flagCommand.command.command
+
+      }
+
+      if let standard = commands?.standardCommand(named: name), case let .fixed(command2) = standard.command2 {
+
+        return Command(command1: standard.command1, command2: command2)
+
+      }
+
+      return commands?.extendedCommand(named: name)?.command
+    }
+
+  }
+
+  /// Sends a message as it's given, through the guards every message the device is sent
+  /// passes, then collects the other messages the device sends for a time.
+  ///
+  /// - Parameters:
+  ///   - message: The message, whose ``DirectMessage/device`` is the device.
+  ///   - duration: How long to collect what the device sends after its acknowledgment.
+  ///   - onAcknowledgment: Called with the device's acknowledgment.
+  /// - Returns: The other messages from the device, in order.
+  /// - Throws: ``SendRefusal`` before anything is sent, and the modem's errors.
+  func sendAsGiven(_ message: DirectMessage, collectingFor duration: Duration, onAcknowledgment: (ReceivedFrame) -> Void) async throws -> [ReceivedFrame] {
+
+    let device: InsteonAddress = address
+    let replies: AsyncStream<ModemReply> = await modem.replies()
+    let acknowledgment: ReceivedMessage
+
+    if let extended = message.extended {
+
+      acknowledgment = try await request(extended, timeout: Modem.defaultExtendedRequestTimeout, for: .asGiven)
+
+    } else {
+
+      acknowledgment = try await request(StandardMessage(to: device, command: message.command), timeout: network.requestTimeout, for: .asGiven)
+
+    }
+
+    onAcknowledgment(ReceivedFrame(acknowledgment))
+
+    let received: [ModemReply] = await ModemSession.collect(replies, within: duration, clock: network.clock)
+    var skippedAcknowledgment = false
+    var frames: [ReceivedFrame] = []
+
+    for reply in received {
+
+      guard case let .messageReceived(incoming) = reply, incoming.sender == device else {
+
+        continue
+
+      }
+
+      // The acknowledgment comes through the stream too.
+      if !skippedAcknowledgment, incoming == acknowledgment {
+
+        skippedAcknowledgment = true
+        continue
+
+      }
+
+      frames.append(ReceivedFrame(incoming))
+
+    }
+
+    return frames
+
+  }
+
   /// The parameter of a keep-awake extended command that takes how long to stay awake: the
   /// one in seconds, or else its only number, or `nil` when neither says.
   static func durationParameter(of command: DeviceExtendedCommand) -> MessageField? {
@@ -1151,15 +1296,33 @@ public struct Device: Sendable {
 
   }
 
-  /// Refuses a command whose bytes are never sent to the device, as
-  /// `DeviceSettingSafety.isNeverSent(_:in:)` says from its command set. Every message the
-  /// device sends is checked here, with the bytes it actually carries, so a command filled in
-  /// with a value, or listed under another name, can't send them.
-  private func refuseIfNeverSent(_ command: Command, for purpose: SendPurpose) async throws {
+  /// Refuses a message whose bytes are never sent to the device: a ``ProtectedCommand``,
+  /// which no device is sent whatever the catalog says; bytes
+  /// `DeviceSettingSafety.isNeverSent(_:in:)` says its command set never sends; and, for a
+  /// message sent as it's given, an extended message that writes a byte holding a guarded
+  /// flag, as `DeviceSettingSafety.guardedFlagWritten(by:userData:in:)` finds it. Every
+  /// message the device is sent is checked here, with the bytes it actually carries, so a
+  /// command filled in with a value, or listed under another name, can't send them.
+  private func refuseIfNeverSent(_ command: Command, userData: UserData? = nil, for purpose: SendPurpose) async throws {
 
     let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription
+    let commands: CommandSet? = description?.commandSet
+    let product: String = description.map { (described: DeviceDescription) -> String in DeviceControlModel.product(of: described) } ?? "this device"
+    let refusal: SendRefusal
 
-    guard DeviceSettingSafety.isNeverSent(command, in: description?.commandSet) else {
+    if let protected = ProtectedCommand(command) {
+
+      refusal = .protected(protected)
+
+    } else if DeviceSettingSafety.isNeverSent(command, in: commands) {
+
+      refusal = .neverSentToDevice(product: product)
+
+    } else if purpose.sendsBytesAsGiven, let userData, let commands, let label = DeviceSettingSafety.guardedFlagWritten(by: command, userData: userData, in: commands) {
+
+      refusal = .writesGuardedFlags(label: label)
+
+    } else {
 
       return
 
@@ -1167,14 +1330,17 @@ public struct Device: Sendable {
 
     switch purpose {
     case let .control(operation):
-      throw DeviceControlError.unsupported(operation, product: description.map { (described: DeviceDescription) -> String in DeviceControlModel.product(of: described) } ?? "this device")
+      throw DeviceControlError.unsupported(operation, product: product)
     case let .setting(label):
       throw DeviceSettingError.neverWritten(label: label)
+    case .asGiven:
+      throw refusal
     }
 
   }
 
-  /// Sends a standard message once ``refuseIfNeverSent(_:for:)`` allows it.
+  /// Sends a standard message once ``refuseIfNeverSent(_:userData:for:)`` allows it. Every
+  /// standard message the device is sent goes through here.
   private func request(_ message: StandardMessage, timeout: Duration, for purpose: SendPurpose) async throws -> ReceivedMessage {
 
     try await refuseIfNeverSent(message.command, for: purpose)
@@ -1183,10 +1349,11 @@ public struct Device: Sendable {
 
   }
 
-  /// Sends an extended message once ``refuseIfNeverSent(_:for:)`` allows it.
+  /// Sends an extended message once ``refuseIfNeverSent(_:userData:for:)`` allows it, by its
+  /// cmd1, cmd2 and user data. Every extended message the device is sent goes through here.
   private func request(_ message: ExtendedMessage, timeout: Duration, for purpose: SendPurpose) async throws -> ReceivedMessage {
 
-    try await refuseIfNeverSent(message.command, for: purpose)
+    try await refuseIfNeverSent(message.command, userData: message.userData, for: purpose)
 
     return try await modem.request(message, timeout: timeout)
 
@@ -1389,7 +1556,7 @@ public struct Device: Sendable {
     let message = ExtendedMessage(to: device, command: ExtendedDirectCommand.getSet(), userData: settings.getUserData(button: button))
     let isPerButton: Bool = settings.isPerButton
 
-    try await refuseIfNeverSent(message.command, for: .control(.settings))
+    try await refuseIfNeverSent(message.command, userData: message.userData, for: .control(.settings))
 
     do {
 
