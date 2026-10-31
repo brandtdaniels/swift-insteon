@@ -81,7 +81,13 @@ enum DeviceCommands {
 
       }
     case let .send(request):
-      try await ExploreCommands.send(request, to: device, modem: modem)
+      // The network starts from the identity cache, so a device known from earlier commands
+      // is checked against its command set too. It isn't asked for its identity.
+      try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (cached: CachedNetwork) async throws -> Void in
+
+        try await ExploreCommands.send(request, to: device, network: cached.network)
+
+      }
     case .status:
       try await withDevice(device, modem: modem, hub: hub, names: names) { (target: Device) async throws -> Void in
 

@@ -466,7 +466,7 @@ extension DeviceLinkingCoordinator {
   }
 
   /// Sends the message that keeps a device awake through its guarded send path, and tells the
-  /// observer.
+  /// observer. It isn't sent when the message that lets the device sleep again never would be.
   ///
   /// - Returns: Whether the message may have reached the device, so it's to be let sleep again:
   ///   `false` only when it was refused before anything was sent.
@@ -482,7 +482,11 @@ extension DeviceLinkingCoordinator {
 
     do {
 
-      try await network.device(device).sendLinkingMessage(keepAwake.send, duration: keepAwake.duration, writableFlags: writableFlags)
+      let target: Device = network.device(device)
+
+      // A device that couldn't be let sleep again isn't kept awake.
+      try await target.refuseKeepAwakeWithoutRelease(keepAwake, writableFlags: writableFlags)
+      try await target.sendLinkingMessage(keepAwake.send, duration: keepAwake.duration, writableFlags: writableFlags)
       await observer.linking(.keepAwake(.sent(device)))
 
       return true

@@ -729,6 +729,14 @@ extension Invocation {
 
     }
 
+    // Poke is refused before the modem is opened. Whether a protected Set Operating Flags is
+    // sent depends on the device's command set, so the network decides that.
+    if ProtectedCommand(command1: bytes[0], command2: bytes[1]) == .poke {
+
+      throw ArgumentError.neverSent(.protected(.poke), by: .deviceSend)
+
+    }
+
     // All 14 bytes given are sent as they are.
     let checksums: Bool = hasChecksum && (userData?.count ?? 0) < 14
 
@@ -856,13 +864,17 @@ extension Invocation {
 
     }
 
-    if !forces, let reason = SerialCommandPolicy.refusal(for: bytes) {
-
+    // Refused before the modem is opened; ModemSession checks the bytes again.
+    switch SerialCommandPolicy.refusal(of: bytes, forcing: forces) {
+    case nil:
+      break
+    case let .serialCommand(reason)?:
       throw ArgumentError.refusedSerialCommand(reason)
-
+    case let refusal?:
+      throw ArgumentError.neverSent(refusal, by: .modemSend)
     }
 
-    return .modemSend(RawSerialRequest(bytes: bytes, waitSeconds: waitSeconds))
+    return .modemSend(RawSerialRequest(bytes: bytes, waitSeconds: waitSeconds, isForced: forces))
 
   }
 

@@ -41,16 +41,18 @@ import InsteonProtocol
 /// created with, so a test can give fixed times.
 public actor DeviceNetwork {
 
-  /// The modem the devices are reached through.
-  public nonisolated let modem: any LinkingModem
+  /// The modem the devices are reached through. It's internal, so every message a front end
+  /// sends a device goes through the guards of ``Device`` and ``send(_:collectingFor:onAcknowledgment:)``.
+  nonisolated let modem: any LinkingModem
 
   /// The identities devices reported, described with the Insteon device catalog.
   public nonisolated let registry: DeviceRegistry
 
   /// The copies of devices' ALL-Link databases, the only cache that reads them through the
-  /// modem. Give it to a linker or unlinker that changes databases, so it forgets the copies
-  /// they change.
-  public nonisolated let cache: AllLinkDatabaseCache
+  /// modem. The network's ``linking`` coordinator gives it to the linkers and unlinkers that
+  /// change databases, so it forgets the copies they change; it's internal, so it has no other
+  /// writer.
+  nonisolated let cache: AllLinkDatabaseCache
 
   private let identifier: DeviceIdentifier
 
@@ -447,6 +449,47 @@ public actor DeviceNetwork {
 
   }
 
+  /// Sends a device a message as it's given, for exploring what the Insteon device catalog
+  /// doesn't describe yet, then collects the other messages the device sends for a time.
+  ///
+  /// The message passes the same guards as every message a ``Device`` sends, checked by its
+  /// bytes before anything is sent. Poke is never sent, and a ``ProtectedCommand``'s Set
+  /// Operating Flags bytes are sent only to a device the ``registry`` knows whose command set
+  /// names the cmd2 for a flag or command it doesn't guard. Nor are the bytes the device's
+  /// command set never sends, or an extended message that writes a byte holding a flag the
+  /// catalog guards, which only ``Device/writeSetting(_:to:button:)`` writes. An extended Set
+  /// to a device with no command set isn't sent either, since which bits it writes can't be
+  /// told. The device isn't asked for its identity first.
+  ///
+  /// Listening starts before the message, so nothing the device sends is missed. The
+  /// device's acknowledgment is handed to `onAcknowledgment` as soon as it arrives, and isn't
+  /// among the messages returned. The time is timed by the network's clock.
+  ///
+  /// ```swift
+  /// let message = DirectMessage(to: lamp, command1: 0x19, command2: 0x00, data: nil, hasChecksum: false)
+  /// let frames = try await network.send(message, collectingFor: .seconds(3)) { acknowledgment in
+  ///   print(acknowledgment.summary)
+  /// }
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - message: The message.
+  ///   - duration: How long to collect what the device sends after its acknowledgment.
+  ///   - onAcknowledgment: Called with the device's acknowledgment.
+  /// - Returns: The other messages from the device, in order.
+  /// - Throws: ``SendRefusal`` before anything is sent; the modem's error, which
+  ///   ``SendFailure`` reads as the device rejecting the message or not answering; or
+  ///   `CancellationError`.
+  public nonisolated func send(
+    _ message: DirectMessage,
+    collectingFor duration: Duration,
+    onAcknowledgment: (ReceivedFrame) -> Void
+  ) async throws -> [ReceivedFrame] {
+
+    try await device(message.device).sendAsGiven(message, collectingFor: duration, onAcknowledgment: onAcknowledgment)
+
+  }
+
   /// Records that a device answered, and the level it's at when it's known.
   ///
   /// - Parameters:
@@ -468,7 +511,7 @@ public actor DeviceNetwork {
   // MARK: - Linking
 
   /// The coordinator that links devices to the modem and unlinks them, and keeps the
-  /// ``registry``, the ``cache`` and the network's ``snapshot()`` up to date as it does.
+  /// ``registry``, the cache of ALL-Link databases and the network's ``snapshot()`` up to date as it does.
   ///
   /// Every coordinator a network hands out takes turns with the others, so one link or unlink
   /// runs at a time and the modem is in one linking mode at a time.
@@ -503,7 +546,7 @@ public actor DeviceNetwork {
 
   }
 
-  /// The modem's records in use for a device, read through the ``cache``, which reads the
+  /// The modem's records in use for a device, read through the cache of ALL-Link databases, which reads the
   /// modem's ALL-Link database when it has no copy. The records read are kept for the
   /// snapshot.
   ///
@@ -525,7 +568,7 @@ public actor DeviceNetwork {
   }
 
   /// Forgets a device removed from the network: its identity in the ``registry``, its state,
-  /// the ``cache``'s copy of its ALL-Link database, and the records that name it in the copy of
+  /// the cached copy of its ALL-Link database, and the records that name it in the copy of
   /// the modem's ALL-Link database the snapshot holds.
   ///
   /// - Parameter device: The device.
@@ -548,7 +591,7 @@ public actor DeviceNetwork {
   }
 
   /// Every device the network knows something about: those the ``registry`` knows, those with
-  /// a state, and those whose ALL-Link database the ``cache`` holds a copy of, in address
+  /// a state, and those whose ALL-Link database the network holds a cached copy of, in address
   /// order.
   func knownDevices() async -> [InsteonAddress] {
 

@@ -487,10 +487,11 @@ enum DeviceSettingSafety {
   ]
 
   /// Whether a standard command may be sent: it has no guard, isn't named as a command that's
-  /// never sent, and, with a fixed cmd2, doesn't have the bytes of one.
+  /// never sent, isn't Poke, whatever its cmd2, and, with a fixed cmd2, doesn't have the bytes
+  /// of one.
   static func isSendable(_ command: DeviceStandardCommand, in commands: CommandSet?) -> Bool {
 
-    guard !isNeverSent(command.sendGuard), !neverSentNames.contains(command.name) else {
+    guard !isNeverSent(command.sendGuard), !neverSentNames.contains(command.name), command.command1 != ProtectedCommand.pokeCommand1 else {
 
       return false
 
@@ -524,15 +525,20 @@ enum DeviceSettingSafety {
   /// ``neverSentNames``. So a command set with no guards at all, such as one with only a
   /// programming lock flag or a `programmingLockOn` command, still never sends those bytes
   /// under another name.
+  ///
+  /// Under them all is the byte floor, ``floorCommands(in:)``: the Set Operating Flags
+  /// commands of ``ProtectedCommand``, sent only to a device whose command set names the cmd2
+  /// for a flag that isn't guarded. Poke has no fixed cmd2, so it isn't among the bytes;
+  /// ``isNeverSent(_:in:)`` refuses it by its cmd1.
   static func neverSentCommands(in commands: CommandSet?) -> Set<Command> {
+
+    var never: Set<Command> = floorCommands(in: commands)
 
     guard let commands else {
 
-      return []
+      return never
 
     }
-
-    var never: Set<Command> = []
 
     func insertSetOperatingFlags(_ command2: UInt8?) {
 
@@ -599,11 +605,114 @@ enum DeviceSettingSafety {
 
   }
 
+  /// The protected Set Operating Flags commands never sent to a device that uses a command
+  /// set: all four with no command set, and otherwise each whose cmd2 the command set doesn't
+  /// name for a flag it doesn't guard.
+  ///
+  /// The catalog's meaning wins where it gives one: an i3 Keypad's lock buttons flag is turned
+  /// on with cmd2 `0x19`, which turns checksums on elsewhere, so it's sent to an i3 Keypad. A
+  /// cmd2 the command set names for a guarded flag, such as radio off or the programming
+  /// lock's on, or names for nothing, stays refused, and the catalog's guards still add their
+  /// own bytes in ``neverSentCommands(in:)``.
+  static func floorCommands(in commands: CommandSet?) -> Set<Command> {
+
+    guard let commands else {
+
+      return ProtectedCommand.setOperatingFlagsCommands
+
+    }
+
+    let named: Set<UInt8> = unguardedSetOperatingFlags(in: commands)
+
+    return ProtectedCommand.setOperatingFlagsCommands.filter { (command: Command) -> Bool in !named.contains(command.command2) }
+
+  }
+
+  /// The Set Operating Flags cmd2s a command set names for a flag it doesn't guard: an
+  /// operating flag's on or off, a flag command, and a standard or extended command with Set
+  /// Operating Flags' cmd1 and a fixed cmd2, each with no guard and a name that neither the
+  /// floor holds nor ``namesGuardedMeaning(_:)`` matches.
+  static func unguardedSetOperatingFlags(in commands: CommandSet) -> Set<UInt8> {
+
+    var named: Set<UInt8> = []
+
+    for flag in commands.operatingFlags where rule(for: flag) == nil && !namesGuardedMeaning(flag.name) {
+
+      if let on = flag.on {
+
+        named.insert(on)
+
+      }
+
+      if let off = flag.off {
+
+        named.insert(off)
+
+      }
+
+    }
+
+    for flagCommand in commands.flagCommands where isUnguardedCommand(flagCommand.name, sendGuard: flagCommand.sendGuard) {
+
+      let command: Command = flagCommand.command.command
+
+      if command.command1 == setOperatingFlagsCommand1 {
+
+        named.insert(command.command2)
+
+      }
+
+    }
+
+    for standard in commands.standardCommands where standard.command1 == setOperatingFlagsCommand1 && isUnguardedCommand(standard.name, sendGuard: standard.sendGuard) {
+
+      if case let .fixed(command2) = standard.command2 {
+
+        named.insert(command2)
+
+      }
+
+    }
+
+    for extended in commands.extendedCommands where extended.command.command1 == setOperatingFlagsCommand1 && isUnguardedCommand(extended.name, sendGuard: extended.sendGuard) {
+
+      named.insert(extended.command.command2)
+
+    }
+
+    return named
+
+  }
+
+  /// Whether a command is one the command set doesn't guard: it has no guard, and its name is
+  /// neither one the floor never sends nor one ``namesGuardedMeaning(_:)`` matches.
+  private static func isUnguardedCommand(_ name: SettingName, sendGuard: CommandGuard?) -> Bool {
+
+    !isNeverSent(sendGuard) && !neverSentNames.contains(name) && !namesGuardedMeaning(name)
+
+  }
+
+  /// The parts of a name that mean a guarded flag, in lowercase: the radio, the powerline,
+  /// checksums and the programming lock.
+  static let guardedMeanings: [String] = ["radiooff", "powerlineoff", "checksum", "programminglock"]
+
+  /// Whether a name, in any case, means a guarded flag, such as `checksumRequired2` or
+  /// `PowerLineOff`. A flag or command so named never unlocks a protected cmd2, even with no
+  /// guard, so a catalog entry that gets its guard wrong stays refused.
+  static func namesGuardedMeaning(_ name: SettingName) -> Bool {
+
+    let lowercased: String = name.rawValue.lowercased()
+
+    return guardedMeanings.contains { (meaning: String) -> Bool in lowercased.contains(meaning) }
+
+  }
+
   /// Whether a command's bytes are ones never sent to a device that uses a command set, as
-  /// ``neverSentCommands(in:)`` gives them. Every message a ``Device`` sends is checked.
+  /// ``neverSentCommands(in:)`` gives them, or Poke. Every message a ``Device`` sends is
+  /// checked.
   static func isNeverSent(_ command: Command, in commands: CommandSet?) -> Bool {
 
-    neverSentCommands(in: commands).contains(command)
+    ProtectedCommand(command) == .poke || neverSentCommands(in: commands).contains(command)
 
   }
 
@@ -619,7 +728,22 @@ enum DeviceSettingSafety {
 
     switch item.source {
     case let .flag(flag):
-      return rule(for: flag) == .keep
+      switch rule(for: flag) {
+      case .keep?:
+        return true
+      case .neverSet?:
+        // Only ever turned off, so it's written only if turning it off is sent.
+        return commands.change(for: flag, setting: false).map { (change: FlagChange) -> Bool in sendsNeverSentCommand(change, in: commands) } ?? false
+      case nil:
+        // Written either way, so it's never written only when both ways are refused by their
+        // bytes; a flag one way is refused, such as one whose on is a never-sent command's
+        // bytes, can still be turned the other way.
+        return [true, false].allSatisfy { (state: Bool) -> Bool in
+
+          commands.change(for: flag, setting: state).map { (change: FlagChange) -> Bool in sendsNeverSentCommand(change, in: commands) } ?? false
+
+        }
+      }
     case .reading:
       return false
     case let .value(value):
@@ -748,6 +872,95 @@ enum DeviceSettingSafety {
     }
 
     return bits
+
+  }
+
+  /// The label of a guarded flag that an extended message sent as it's given writes, or `nil`
+  /// if it writes none the command set knows of.
+  ///
+  /// Such a message comes from a raw passthrough or the catalog's keep-awake message, so its
+  /// bytes aren't checked against what the device reported first, as
+  /// `Device.writeSetting(_:to:button:)` checks them: any guarded bit in a byte it writes
+  /// refuses it, whatever the bit's value. A byte is written by an extended Set whose D2 is the
+  /// selector of one of the command set's extended settings writes, and by an extended command
+  /// of the command set with the same cmd1 and cmd2 and fixed bytes: through the values it
+  /// writes, and through a flags parameter.
+  ///
+  /// - Parameters:
+  ///   - command: The message's cmd1 and cmd2.
+  ///   - userData: The message's user data.
+  ///   - commands: The device's command set.
+  /// - Returns: The label of a guarded flag, or `nil`.
+  static func guardedFlagWritten(by command: Command, userData: UserData, in commands: CommandSet) -> String? {
+
+    let settings: ExtendedSettings? = commands.extendedSettings
+
+    // An extended Set (cmd1 0x2E, cmd2 0x00) with a selector in D2; 0x00 is the Get.
+    if command == Command(command1: 0x2E, command2: 0x00), userData[2] != 0x00, let settings {
+
+      for write in settings.writes where write.selector == userData[2] {
+
+        for byte in write.bytes {
+
+          if let value = settings.value(named: byte.value), let bit = guardedBits(in: value, of: commands).first {
+
+            return bit.label
+
+          }
+
+        }
+
+      }
+
+    }
+
+    for extended in commands.extendedCommands where extended.command == command {
+
+      let matches: Bool = extended.fixedBytes.allSatisfy { (byte: FixedUserDataByte) -> Bool in userData[byte.position] == byte.value }
+
+      guard matches else {
+
+        continue
+
+      }
+
+      for parameter in extended.parameters {
+
+        guard case let .flags(bits) = parameter.kind else {
+
+          continue
+
+        }
+
+        for bit in bits where rule(named: bit.name, writeGuard: bit.writeGuard) != nil {
+
+          return commands.operatingFlag(named: bit.name).map { (flag: OperatingFlag) -> String in SettingItem(flag: flag).label } ?? bit.name.rawValue
+
+        }
+
+      }
+
+      for value in settings?.values ?? [] where value.write == extended.name {
+
+        if let bit = guardedBits(in: value, of: commands).first {
+
+          return bit.label
+
+        }
+
+      }
+
+    }
+
+    return nil
+
+  }
+
+  /// Whether a message is an extended Set: cmd1 `0x2E` and cmd2 `0x00` with a selector other
+  /// than `0x00` in D2, which writes whatever bytes the device's selector names.
+  static func isExtendedSet(_ command: Command, userData: UserData) -> Bool {
+
+    command == Command(command1: 0x2E, command2: 0x00) && userData[2] != 0x00
 
   }
 
