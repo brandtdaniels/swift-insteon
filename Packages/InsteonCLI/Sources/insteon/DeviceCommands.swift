@@ -1,14 +1,10 @@
 import InsteonCLISupport
 import InsteonCore
-import InsteonDeviceCatalog
-import InsteonLinking
-import InsteonModem
-import InsteonProtocol
 
 /// `insteon device ADDRESS ACTION`: commands sent to one device.
 enum DeviceCommands {
 
-  static func run(_ action: DeviceAction, device: InsteonAddress, modem: Modem, hub: HubLocation?, names: ProductNames, printsJSON: Bool) async throws {
+  static func run(_ action: DeviceAction, device: InsteonAddress, modem: ModemSession, hub: HubLocation?, names: ProductNames, printsJSON: Bool) async throws {
 
     switch action {
     case .id:
@@ -109,7 +105,7 @@ enum DeviceCommands {
   /// sentences.
   private static func withDevice(
     _ address: InsteonAddress,
-    modem: Modem,
+    modem: ModemSession,
     hub: HubLocation?,
     names: ProductNames,
     _ body: (Device) async throws -> Void
@@ -161,13 +157,16 @@ enum DeviceCommands {
 
       result = try await device.beep()
 
-    } catch ModemError.deviceRejected(_, let reason) {
+    } catch {
 
-      throw CommandFailure(description: DeviceText.beepRejected(address, reason: reason))
-
-    } catch ModemError.deviceTimedOut {
-
-      throw CommandFailure(description: DeviceText.beepUnanswered(address))
+      switch SendFailure(error) {
+      case let .deviceRejected(_, reason)?:
+        throw CommandFailure(description: DeviceText.beepRejected(address, reason: reason))
+      case .deviceUnanswered?:
+        throw CommandFailure(description: DeviceText.beepUnanswered(address))
+      default:
+        throw error
+      }
 
     }
 
@@ -234,7 +233,7 @@ enum DeviceCommands {
     }
 
     // What the catalog says the product reports explains a key that's missing.
-    let catalogKey: DeviceIdentity.ProductKeyEntry? = await network.registry.device(device)?.deviceDescription.productKey
+    let catalogKey: ProductKeyEntry? = await network.registry.device(device)?.deviceDescription.productKey
 
     // Newer devices leave the product key out, or report zeros; that's expected, not a failure.
     let productKey = productData?.productKey
@@ -371,7 +370,7 @@ enum DeviceCommands {
     // The network reads the database only if the device's delta changed since the copy it
     // holds, and says so only then. The last record marks the end of the database, and
     // deleted records are no longer in use.
-    let database: AllLinkDatabaseCopy = try await network.allLinkDatabase(of: device, beforeReading: { () -> Void in
+    let database = try await network.allLinkDatabase(of: device, beforeReading: { () -> Void in
 
       Output.note("Reading the ALL-Link database of \(device), one record at a time...")
 

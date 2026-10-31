@@ -1,6 +1,6 @@
 # InsteonCLI
 
-`insteon`, a command for driving an Insteon Hub or modem, and its devices, from a terminal on your home network. It's built on the libraries in this package: InsteonCore to keep the devices it has identified, InsteonHubClient and InsteonModem to talk to the modem, InsteonLinking to link devices, InsteonHubDiscovery to find Hubs, and InsteonDeviceCatalog to name products and events.
+`insteon`, a command for driving an Insteon Hub or modem, and its devices, from a terminal on your home network. It's built on InsteonCore, the one library in this package it depends on, which opens the Hub or modem, finds Hubs, keeps the devices it has identified, links them, and names products and events from the Insteon device catalog, with the package's lower-level libraries underneath.
 
 ```sh
 swift run insteon --hub 192.168.1.20 info

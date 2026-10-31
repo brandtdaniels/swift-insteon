@@ -7,10 +7,23 @@ Keep track of the Insteon devices on a network, for an app or a command to build
 InsteonCore is the library a front end depends on, such as an app or the `insteon` command.
 It keeps the devices an app knows and what the Insteon device catalog says about each.
 
-The API uses some types from the lower-level modules, such as `DeviceCatalog` from
-InsteonDeviceCatalog, `InsteonAddress` and `ReportedIdentity` from InsteonProtocol, and
-`LinkingModem` and `AllLinkDatabaseCopy` from InsteonLinking, so an app imports those modules
-too.
+A front end needs no other module. ``ModemSession`` opens a Hub's modem or a PowerLinc Modem,
+``HubSearch`` finds Hubs, ``ProductCatalog`` loads and updates the Insteon device catalog, and
+``InsteonErrorDescription`` describes the lower-level modules' errors. Values that are pure
+data, such as `InsteonAddress`, `AllLinkRecord` and `DeviceDescription`, are the lower-level
+modules' types under the same names, declared in InsteonCore. Some initializers for an app that
+brings its own modem or catalog, such as ``DeviceNetwork``'s, take lower-level types, such as
+`LinkingModem` from InsteonLinking and `DeviceCatalog` from InsteonDeviceCatalog.
+
+```swift
+import InsteonCore
+
+try await ModemSession.withHub(host: host, port: HubLocation.defaultPort, user: user, password: password) { session in
+  let network = session.network(catalog: catalog, snapshot: NetworkSnapshot(), hub: session.hub)
+
+  try await network.device(lamp).turnOn(level: 50)
+}
+```
 
 A ``DeviceRegistry`` holds each device's address and the identity it reported: its category,
 subcategory and firmware version. It describes every device with the catalog, and describes
@@ -308,6 +321,62 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 - ``JSONFileDeviceRegistryStore``
 - ``DeviceRegistryStoreError``
 
+### Opening a modem
+
+- ``ModemSession``
+- ``SendFailure``
+- ``HubFailure``
+- ``InsteonErrorDescription``
+
+### Finding Hubs
+
+- ``HubSearch``
+- ``HubCandidate``
+- ``HubSource``
+- ``LocalHubSearch``
+- ``HubIdentification``
+
+### The Insteon device catalog
+
+- ``ProductCatalog``
+- ``ProductCatalogUpdate``
+- ``ProductCatalogUpdateError``
+
 ### Raw passthroughs
 
 - ``SerialCommandPolicy``
+- ``DirectMessage``
+- ``ReceivedFrame``
+- ``RawModemReply``
+
+### Values
+
+- ``InsteonAddress``
+- ``AllLinkGroupNumber``
+- ``DeviceCategory``
+- ``DeviceSubcategory``
+- ``FirmwareVersion``
+- ``ProductKey``
+- ``InsteonEngine``
+- ``ReportedIdentity``
+- ``ModemInfo``
+- ``NAKReason``
+- ``AllLinkRecord``
+- ``AllLinkRecordResponse``
+- ``AllLinkingCompleted``
+- ``AllLinkCleanupReport``
+- ``AllLinkMode``
+- ``ModemLink``
+- ``ModemRole``
+- ``ManualLinkingRole``
+- ``LinkingDirection``
+- ``DeviceDescription``
+- ``DeviceProfile``
+- ``DeviceLifecycle``
+- ``LifecycleProcedure``
+- ``LifecycleStep``
+- ``LifecycleErasure``
+- ``ProductKeyEntry``
+- ``RecordDataExplanation``
+- ``RecordDataByte``
+- ``DeviceCatalogVersion``

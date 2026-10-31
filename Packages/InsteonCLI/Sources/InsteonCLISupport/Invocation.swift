@@ -1,5 +1,4 @@
 import InsteonCore
-import InsteonProtocol
 
 /// What a person asked the `insteon` command to do: where to find the modem, whether to print
 /// JSON, and the subcommand to run.

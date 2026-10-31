@@ -1,5 +1,5 @@
 import Foundation
-import InsteonDeviceCatalog
+import InsteonCore
 
 /// Which copy of the Insteon device catalog the `insteon` command uses.
 public enum CatalogSource: Hashable, Sendable {

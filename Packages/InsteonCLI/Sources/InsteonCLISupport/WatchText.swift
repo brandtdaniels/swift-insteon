@@ -1,5 +1,4 @@
 import InsteonCore
-import InsteonProtocol
 
 /// What `insteon watch` prints for what a `DeviceMonitor` heard.
 public enum WatchText {

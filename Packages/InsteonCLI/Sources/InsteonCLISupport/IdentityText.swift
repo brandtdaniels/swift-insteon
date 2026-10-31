@@ -1,5 +1,4 @@
-import InsteonDeviceCatalog
-import InsteonProtocol
+import InsteonCore
 
 /// What `insteon device ADDRESS id` prints about a device's product key: what the device
 /// reported to Product Data Request, next to what the Insteon device catalog says it reports,
@@ -15,7 +14,7 @@ public enum IdentityText {
   ///     doesn't have the device.
   /// - Returns: The text, such as `"0x00001A"`, or
   ///   `"not reported; the Insteon device catalog says this product doesn't report one"`.
-  public static func productKey(reported: ProductKey?, answered: Bool, catalog: DeviceIdentity.ProductKeyEntry?) -> String {
+  public static func productKey(reported: ProductKey?, answered: Bool, catalog: ProductKeyEntry?) -> String {
 
     if let reported {
 
@@ -51,7 +50,7 @@ public enum IdentityText {
   ///
   /// - Parameter entry: What the catalog says the product reports.
   /// - Returns: The value.
-  public static func catalogProductKey(_ entry: DeviceIdentity.ProductKeyEntry?) -> String? {
+  public static func catalogProductKey(_ entry: ProductKeyEntry?) -> String? {
 
     switch entry {
     case let .key(key)?:

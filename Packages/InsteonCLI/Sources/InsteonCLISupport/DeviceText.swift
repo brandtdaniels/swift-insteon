@@ -1,5 +1,4 @@
 import InsteonCore
-import InsteonProtocol
 
 /// What `insteon device ADDRESS on`, `status` and the other commands sent through a `Device`
 /// print. The library says what the device did and what it is; this only words it.

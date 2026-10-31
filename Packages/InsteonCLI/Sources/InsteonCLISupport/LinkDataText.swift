@@ -1,5 +1,4 @@
-import InsteonDeviceCatalog
-import InsteonProtocol
+import InsteonCore
 
 /// Writes what the data bytes of an ALL-Link database record hold, as the MEANING column of
 /// `insteon device ADDRESS links` prints them.
@@ -17,7 +16,7 @@ public enum LinkDataText {
   /// - Returns: The text.
   public static func meaning(of explanation: RecordDataExplanation) -> String {
 
-    let parts: [String] = explanation.bytes.map { (byte: RecordDataExplanation.DataByte) -> String in
+    let parts: [String] = explanation.bytes.map { (byte: RecordDataByte) -> String in
 
       var notes: [String] = []
 

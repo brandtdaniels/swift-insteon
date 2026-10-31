@@ -1,7 +1,4 @@
 import InsteonCore
-import InsteonDeviceCatalog
-import InsteonLinking
-import InsteonProtocol
 
 /// What `insteon remove` asks and prints, from what a `DeviceLinkingCoordinator` reports as it
 /// removes a device.
@@ -266,18 +263,18 @@ public enum RemovalText {
   ///
   /// - Parameter erases: What the catalog says a reset erases.
   /// - Returns: The phrases.
-  public static func erasures(_ erases: Set<DeviceLifecycle.Erasure>) -> [String] {
+  public static func erasures(_ erases: Set<LifecycleErasure>) -> [String] {
 
-    let phrases: [(erasure: DeviceLifecycle.Erasure, phrase: String)] = [
+    let phrases: [(erasure: LifecycleErasure, phrase: String)] = [
       (erasure: .links, phrase: "its ALL-Link database"),
       (erasure: .settings, phrase: "its settings")
     ]
 
-    return phrases.filter { (entry: (erasure: DeviceLifecycle.Erasure, phrase: String)) -> Bool in
+    return phrases.filter { (entry: (erasure: LifecycleErasure, phrase: String)) -> Bool in
 
       erases.contains(entry.erasure)
 
-    }.map { (entry: (erasure: DeviceLifecycle.Erasure, phrase: String)) -> String in
+    }.map { (entry: (erasure: LifecycleErasure, phrase: String)) -> String in
 
       entry.phrase
 

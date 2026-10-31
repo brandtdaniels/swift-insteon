@@ -1,7 +1,4 @@
 import InsteonCore
-import InsteonDeviceCatalog
-import InsteonLinking
-import InsteonProtocol
 
 /// What `insteon link` and `insteon unlink` tell the person to do, and in which order.
 ///
@@ -28,7 +25,7 @@ public enum LinkingInstructions {
   ///
   /// - Parameter procedure: The procedure, such as the profile's lifecycle `linking`.
   /// - Returns: The steps, in order.
-  public static func steps(of procedure: DeviceLifecycle.Procedure) -> [String] {
+  public static func steps(of procedure: LifecycleProcedure) -> [String] {
 
     steps(procedure.steps.filter { !$0.isOnOtherDevice })
 
@@ -39,9 +36,9 @@ public enum LinkingInstructions {
   ///
   /// - Parameter steps: The steps, such as a `SETButtonPrompt`'s.
   /// - Returns: The steps, in order.
-  public static func steps(_ steps: [DeviceLifecycle.Step]) -> [String] {
+  public static func steps(_ steps: [LifecycleStep]) -> [String] {
 
-    steps.map { (step: DeviceLifecycle.Step) -> String in
+    steps.map { (step: LifecycleStep) -> String in
 
       step.expectation.map { "\(step.text) [\($0)]" } ?? step.text
 
@@ -238,7 +235,8 @@ public enum LinkingInstructions {
 /// Explains a link the modem reported that isn't the one asked for.
 public enum LinkOutcome {
 
-  /// Why a link the modem reported isn't the one asked for, or `nil` if it is.
+  /// Why a link the modem reported isn't the one asked for, or `nil` if it is, as
+  /// `InsteonErrorDescription.linkMismatch(_:direction:device:)` words it.
   ///
   /// - Parameters:
   ///   - link: The modem's report.
@@ -250,32 +248,7 @@ public enum LinkOutcome {
 
     let direction: LinkingDirection = mode == .linking ? .linking : .unlinking
 
-    return LinkMismatch(link, direction: direction, device: device).map(explanation(of:))
-
-  }
-
-  /// What to tell the person about a link the modem reported that isn't the one asked for.
-  ///
-  /// - Parameter mismatch: What's wrong with the link.
-  /// - Returns: A message that says what happened and what to do.
-  public static func explanation(of mismatch: LinkMismatch) -> String {
-
-    let link: AllLinkingCompleted = mismatch.link
-
-    switch mismatch.reason {
-    case let .otherDevice(device):
-      let change: String = link.mode == .delete ? "removed its link" : "linked"
-
-      return "The modem reported \(link.address), not \(device): another device's SET button was pressed, "
-        + "and the modem \(change) with it in group \(link.group). Run the command again for \(device)."
-    case .linkedInsteadOfUnlinking:
-      return "\(link.address) linked again in group \(link.group) instead of unlinking: it was in linking mode, not unlinking mode. "
-        + "Put it into unlinking mode (on most devices, hold its SET button until it beeps, then hold it again until it beeps again) "
-        + "and run the command again."
-    case .unlinkedInsteadOfLinking:
-      return "\(link.address) removed its link in group \(link.group) instead of linking: it was in unlinking mode, not linking mode. "
-        + "Run the command again, and hold its SET button only until it first beeps."
-    }
+    return InsteonErrorDescription.linkMismatch(link, direction: direction, device: device)
 
   }
 

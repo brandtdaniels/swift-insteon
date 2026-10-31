@@ -54,11 +54,12 @@ jobs:
       - name: Show the Swift version
         run: swift --version
       # Warnings fail the build here rather than in Package.swift, so they don't affect apps
-      # that depend on the package.
+      # that depend on the package. An import of a module a target doesn't depend on fails
+      # too, so the insteon command can't reach past InsteonCore.
       - name: Build
-        run: swift build -Xswiftc -warnings-as-errors
+        run: swift build --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
       - name: Test
-        run: swift test
+        run: swift test --explicit-target-dependency-import-check error
       - name: Build documentation
         run: Scripts/build-docs.sh
 
@@ -73,7 +74,8 @@ jobs:
       - name: Show the Swift version
         run: swift --version
       # The package declares iOS, where SerialPort isn't available, so check that everything
-      # else builds there.
+      # else builds there. xcodebuild has no check of imports against a package's target
+      # dependencies; the macOS and Linux builds make it.
       - name: Build
         run: xcodebuild build -scheme swift-insteon-Package -destination 'generic/platform=iOS Simulator'
 
@@ -84,8 +86,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: swift build -Xswiftc -warnings-as-errors
+        run: swift build --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
       - name: Test
-        run: swift test
+        run: swift test --explicit-target-dependency-import-check error
       - name: Build documentation
         run: Scripts/build-docs.sh
