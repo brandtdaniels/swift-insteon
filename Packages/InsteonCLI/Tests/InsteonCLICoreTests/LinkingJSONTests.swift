@@ -52,19 +52,19 @@ struct LinkingJSONTests {
 
   }
 
-  @Test func printsOneLinkAsAnObject() throws {
+  @Test func printsOneLinkInTheSameObjectWithNoLegs() throws {
 
     let made = AllLinkingCompleted(linkCode: 0x01, group: 0, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
     let result = DeviceLinkingResult(links: [made], device: registered, linkBackFailure: nil)
 
     #expect(try encoded(LinkingJSON.report(result)) == """
-      {"address":"1A.2B.3C","category":"0x01","firmwareVersion":"0x41","group":0,"modemRole":"controller",\
-      "product":"\(product)","subcategory":"0x5A"}
+      {"legs":[],"links":[{"address":"1A.2B.3C","category":"0x01","firmwareVersion":"0x41","group":0,"modemRole":"controller",\
+      "product":"\(product)","subcategory":"0x5A"}]}
       """)
 
   }
 
-  @Test func printsALinkBackAsAnArray() throws {
+  @Test func printsALinkBackInTheSameObject() throws {
 
     let made = AllLinkingCompleted(linkCode: 0x01, group: 0, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
     let back = AllLinkingCompleted(linkCode: 0x00, group: 1, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
@@ -72,7 +72,7 @@ struct LinkingJSONTests {
 
     // A device whose identity isn't known has no category, subcategory, firmware or product.
     #expect(try encoded(LinkingJSON.report(result)) == """
-      [{"address":"1A.2B.3C","group":0,"modemRole":"controller"},{"address":"1A.2B.3C","group":1,"modemRole":"responder"}]
+      {"legs":[],"links":[{"address":"1A.2B.3C","group":0,"modemRole":"controller"},{"address":"1A.2B.3C","group":1,"modemRole":"responder"}]}
       """)
 
   }

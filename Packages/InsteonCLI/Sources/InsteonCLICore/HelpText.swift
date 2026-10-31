@@ -186,6 +186,11 @@ public enum HelpText {
                           modem stays in linking mode.
       --cancel            Take the modem out of linking mode with Cancel ALL-Linking.
 
+    With --json, prints one object, the same for every device: "links", every link the modem
+    reported, in order, and "legs", each of the catalog's links to a Hub with its modemRole,
+    modemGroup, deviceGroup, status (linked, failed or notRun), joinedBy and error, or an
+    empty array when the device wasn't linked by them.
+
     Control-C stops waiting and takes the modem out of linking mode.
     """
 
