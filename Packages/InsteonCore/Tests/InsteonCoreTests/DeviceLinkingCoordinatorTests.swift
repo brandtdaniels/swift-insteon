@@ -1064,7 +1064,160 @@ struct DeviceLinkingCoordinatorTests {
     }
 
     #expect(await turns.waitingCount == 0)
+    #expect(await turns.openTicketCount == 0)
     await turns.end()
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func keepsNothingForACancellationAfterTheTurnIsHandedOver() async throws {
+
+    let turns = LinkingTurns()
+
+    try await turns.begin()
+
+    // The first caller to wait gets ticket 0.
+    let second = Task { () async throws -> Void in
+
+      try await turns.begin()
+
+    }
+
+    while await turns.waitingCount == 0 {
+
+      await Task.yield()
+
+    }
+
+    #expect(await turns.openTicketCount == 1)
+
+    await turns.end()
+    try await second.value
+
+    // A cancellation that arrives once the caller has its turn, as one can between the
+    // handover and the caller's return, leaves nothing behind.
+    await turns.cancel(0)
+
+    #expect(await turns.openTicketCount == 0)
+    #expect(await turns.canceledTicketCount == 0)
+
+    // Nor does one for a ticket that was never handed out.
+    await turns.cancel(7)
+
+    #expect(await turns.canceledTicketCount == 0)
+    await turns.end()
+
+    // The next caller takes the turn at once.
+    try await turns.begin()
+    await turns.end()
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func givesThreeWaitersTheirTurnsInTheOrderTheyAsked() async throws {
+
+    let turns = LinkingTurns()
+    let log = TurnLog()
+
+    try await turns.begin()
+
+    var waiting: [Task<Void, any Error>] = []
+
+    for caller in 1...3 {
+
+      waiting.append(Task { () async throws -> Void in
+
+        try await turns.begin()
+        await log.append(caller)
+        await turns.end()
+
+      })
+
+      // Each caller is waiting before the next asks.
+      while await turns.waitingCount < caller {
+
+        await Task.yield()
+
+      }
+
+    }
+
+    await turns.end()
+
+    for task in waiting {
+
+      try await task.value
+
+    }
+
+    #expect(await log.entries == [1, 2, 3])
+    #expect(await turns.openTicketCount == 0)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func runsTwoCoordinatorCallsOneAfterTheOther() async throws {
+
+    let modem = InMemoryModem()
+    let module: InsteonAddress = LinkingExample.module
+    let lamp: InsteonAddress = LinkingExample.lamp
+    // The module never links, so the first call waits until it's canceled.
+    await modem.setSilent(module)
+    await modem.setIdentity(pressed(LinkingExample.lampIdentity, of: lamp))
+    let network: DeviceNetwork = self.network(modem, identities: [module: LinkingExample.moduleIdentity])
+    let first = Task { () async throws -> DeviceLinkingResult in
+
+      try await network.linking.link(module, as: .controller, observer: LinkingRecorder())
+
+    }
+
+    await clock.waitForSleeper(until: Linker.defaultRemoteLinkingTimeout)
+
+    let recorder: LinkingRecorder = pressing(lamp, on: modem)
+    let second = Task { () async throws -> DeviceLinkingResult in
+
+      try await network.linking.linkBySETButton(as: .controller, observer: recorder)
+
+    }
+
+    while await network.linkingTurns.waitingCount == 0 {
+
+      await Task.yield()
+
+    }
+
+    // The second call waits for its turn, so the modem entered linking mode once.
+    let before: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+
+    #expect(before.filter { (step: InMemoryModem.LinkingStep) -> Bool in step == .modem(.controller, 0x00) }.count == 1)
+    #expect(!before.contains(.cancel))
+
+    first.cancel()
+
+    await #expect(throws: CancellationError.self) {
+
+      _ = try await first.value
+
+    }
+
+    let result: DeviceLinkingResult = try await second.value
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+    let canceled: Int? = steps.firstIndex(of: .cancel)
+    let secondStart: Int? = steps.lastIndex(of: .modem(.controller, 0x00))
+
+    #expect(result.links.map(\.address) == [lamp])
+    // The first call left linking mode before the second entered it.
+    #expect((canceled ?? Int.max) < (secondStart ?? Int.min))
+
+  }
+
+}
+
+/// The order callers took their turns in.
+actor TurnLog {
+
+  private(set) var entries: [Int] = []
+
+  func append(_ entry: Int) {
+
+    entries.append(entry)
 
   }
 
