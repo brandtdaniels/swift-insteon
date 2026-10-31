@@ -422,13 +422,14 @@ struct ModemReplyParserTests {
 
   }
 
-  @Test func keepsPendingBytesThatArentARejectedRequest() {
+  // A frame that lost bytes from its middle would take the next frame's bytes as its own.
+  @Test func givesUpOnAFrameThatNeverFinishes() {
 
     var parser = ModemReplyParser()
 
-    #expect(parser.parse(bytes("0250AABB")).isEmpty)
-    #expect(parser.finishPendingReply().isEmpty)
-    #expect(parser.parse(bytes("CC" + "112233" + "2B" + "11FF")).count == 1)
+    #expect(parser.parse(bytes("0250AABB" + "0255")).isEmpty)
+    #expect(parser.finishPendingReply() == [.userReset])
+    #expect(parser.parse(bytes("CC" + "112233" + "2B" + "11FF" + "0255")) == [.userReset])
 
   }
 

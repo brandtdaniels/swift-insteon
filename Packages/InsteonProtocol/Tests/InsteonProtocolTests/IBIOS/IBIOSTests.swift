@@ -163,6 +163,36 @@ struct IBIOSTests {
 
   }
 
+  // Line noise that looks like the header of a 65,535-byte upload would take every reply after
+  // it as the upload's data. Once nothing answers in time, its start byte is given up on.
+  @Test func givesUpOnAnUploadThatNeverFinishes() {
+
+    var parser = IBIOSReplyParser()
+
+    #expect(parser.parse(bytes("02420000FFFF" + "02450A")).isEmpty)
+    #expect(parser.finishPendingReply() == [.eventReport(.buttonTapped)])
+    #expect(parser.parse(bytes("02450B")) == [.eventReport(.buttonHeld)])
+
+  }
+
+  @Test func skipsTextLongerThanATextReport() {
+
+    var parser = IBIOSReplyParser()
+    let text = String(repeating: "41", count: IBIOSReplyParser.longestText + 1)
+
+    #expect(parser.parse(bytes("0243" + text + "02450A")) == [.eventReport(.buttonTapped)])
+
+  }
+
+  @Test func readsTextAsLongAsATextReport() {
+
+    var parser = IBIOSReplyParser()
+    let text = String(repeating: "41", count: IBIOSReplyParser.longestText)
+
+    #expect(parser.parse(bytes("0243" + text + "03")) == [.text(String(repeating: "A", count: IBIOSReplyParser.longestText))])
+
+  }
+
   @Test func skipsNoiseAndUnknownNumbers() {
 
     var parser = IBIOSReplyParser()

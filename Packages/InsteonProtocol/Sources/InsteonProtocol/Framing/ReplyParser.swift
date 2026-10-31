@@ -15,12 +15,14 @@ public protocol ReplyParser: Sendable {
   mutating func parse(_ bytes: some Sequence<UInt8>) -> [Reply]
 
   /// Reports a reply held back because it can't yet be told apart from a longer one, along
-  /// with any replies after it.
+  /// with any replies after it, or gives up on a frame that never finished.
   ///
-  /// Call this once no more bytes are coming, for example when a reply has timed out.
+  /// Call this once no more bytes are coming, for example when a reply has timed out. A frame
+  /// that never finished, such as one begun by line noise, loses its start byte, so the bytes
+  /// after it are read afresh.
   ///
-  /// - Returns: The held-back reply and the replies after it, or no replies if nothing is held
-  ///   back.
+  /// - Returns: The held-back reply and the replies after it, or the replies in the bytes after
+  ///   the dropped start byte.
   mutating func finishPendingReply() -> [Reply]
 
 }

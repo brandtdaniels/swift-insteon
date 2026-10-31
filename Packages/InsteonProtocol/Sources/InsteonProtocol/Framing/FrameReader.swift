@@ -125,6 +125,39 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
 
   }
 
+  /// Gives up on the frame the pending bytes start with, which more bytes haven't completed,
+  /// and returns the replies in the bytes after its start byte.
+  ///
+  /// Call this once no more bytes are coming for the frame, such as when a reply has timed
+  /// out. A start byte from line noise, or a frame missing bytes from its middle, would
+  /// otherwise take the replies that follow as the rest of its bytes.
+  ///
+  /// - Returns: The replies in the bytes after the dropped start byte, oldest first, or no
+  ///   replies if no bytes are pending.
+  mutating func resynchronize() -> [Format.Reply] {
+
+    guard !pending.isEmpty else {
+
+      return []
+
+    }
+
+    pending.removeFirst()
+    isSkipping = true
+
+    let replies: [Format.Reply] = read([])
+
+    // Nothing more was coming, so the next byte to arrive starts afresh.
+    if pending.isEmpty {
+
+      isSkipping = false
+
+    }
+
+    return replies
+
+  }
+
   private mutating func nextReply() -> Format.Reply? {
 
     // A NAK counts only where a frame can start, not among bytes being skipped.

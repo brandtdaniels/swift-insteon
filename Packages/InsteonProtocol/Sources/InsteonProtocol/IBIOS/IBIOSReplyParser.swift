@@ -7,8 +7,17 @@
 ///
 /// A NAK that follows a command's number, such as `02 48 15`, begins the same way as a reply
 /// whose data starts with `0x15`, so it's reported once more bytes arrive. If no more bytes are
-/// coming, ``IBIOSReplyParser/finishPendingReply()`` reports it.
+/// coming, ``IBIOSReplyParser/finishPendingReply()`` reports it, or gives up on a frame that
+/// never finished.
+///
+/// A text report (`0x43`) longer than ``IBIOSReplyParser/longestText`` bytes isn't one, so its
+/// start byte is skipped rather than every reply after it waited on for an End of Text byte.
+/// An upload's echo is as long as its header says, up to 65,544 bytes, since IBIOS returns
+/// what was asked for.
 public struct IBIOSReplyParser: ReplyParser, Hashable, Sendable {
+
+  /// The most bytes of text a text report (`0x43`) holds before its End of Text byte: 256.
+  public static let longestText = 256
 
   private var reader = FrameReader<IBIOSFraming>()
 
@@ -29,13 +38,17 @@ public struct IBIOSReplyParser: ReplyParser, Hashable, Sendable {
   ///
   /// Call this once no more bytes are coming, for example when the reply has timed out.
   ///
-  /// - Returns: The NAK's echo and the replies after it, or no replies if the pending bytes
-  ///   don't start with such a NAK. Those bytes are kept.
+  /// Pending bytes that don't start with such a NAK start a frame that never finished, such
+  /// as an upload whose header line noise made up. Its start byte is dropped, so the bytes
+  /// after it are read afresh rather than taken as the rest of that frame.
+  ///
+  /// - Returns: The NAK's echo and the replies after it, or the replies in the bytes after the
+  ///   dropped start byte.
   public mutating func finishPendingReply() -> [IBIOSReply] {
 
     guard let number = reader.takeShortNegativeAcknowledgment(of: IBIOSCommandNumber.init(rawValue:)) else {
 
-      return []
+      return reader.resynchronize()
 
     }
 
@@ -136,9 +149,11 @@ private enum IBIOSFraming: Framing {
 
       return .complete(3 + Int(bytes[2]))
     case 0x43:
-      guard let end = bytes.dropFirst(2).firstIndex(of: ControlByte.endOfText) else {
+      // Text runs until End of Text, which a start byte from line noise may never be followed
+      // by within a text's length.
+      guard let end = bytes.dropFirst(2).prefix(IBIOSReplyParser.longestText + 1).firstIndex(of: ControlByte.endOfText) else {
 
-        return .needMoreBytes
+        return bytes.count - 2 > IBIOSReplyParser.longestText ? .unrecognized : .needMoreBytes
 
       }
 
