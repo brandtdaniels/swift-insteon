@@ -110,11 +110,11 @@ The command names products and events from the Insteon device catalog. A copy sh
 ```text
 $ insteon catalog update
 Checking https://brandtdaniels.github.io/insteon-device-catalog/v0/ for a newer Insteon device catalog...
-Updated the Insteon device catalog to 0.5.26.
+Updated the Insteon device catalog to 0.6.12.
 
 $ insteon catalog
-Bundled:  0.5.25
-Cached:   0.5.26
+Bundled:  0.6.11
+Cached:   0.6.12
 In use:   cached
 ```
 

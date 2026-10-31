@@ -8,12 +8,12 @@
 /// ```swift
 /// let bundled = try DeviceCatalog.bundledVersion()
 ///
-/// if DeviceCatalogVersion("0.5.12")?.isCompatible(with: bundled) == true {
+/// if DeviceCatalogVersion("0.6.12")?.isCompatible(with: bundled) == true {
 ///   print("This package reads it")
 /// }
 /// ```
 ///
-/// It encodes and decodes as its string, such as `"0.5.12"`, so an app can save it beside a
+/// It encodes and decodes as its string, such as `"0.6.12"`, so an app can save it beside a
 /// catalog it downloaded.
 public struct DeviceCatalogVersion: Hashable, Sendable, LosslessStringConvertible, Codable {
 
@@ -40,7 +40,7 @@ public struct DeviceCatalogVersion: Hashable, Sendable, LosslessStringConvertibl
 
   }
 
-  /// Reads a version written `MAJOR.MINOR.PATCH`, such as `"0.5.12"`.
+  /// Reads a version written `MAJOR.MINOR.PATCH`, such as `"0.6.12"`.
   ///
   /// - Parameter description: The version, three numbers of ASCII digits separated by dots.
   /// - Returns: The version, or `nil` if it isn't written that way.
@@ -88,7 +88,7 @@ public struct DeviceCatalogVersion: Hashable, Sendable, LosslessStringConvertibl
 
   }
 
-  /// Decodes a version from its string, such as `"0.5.12"`.
+  /// Decodes a version from its string, such as `"0.6.12"`.
   ///
   /// - Parameter decoder: The decoder to read from.
   /// - Throws: `DecodingError` if the value isn't a string written `MAJOR.MINOR.PATCH`.
@@ -107,7 +107,7 @@ public struct DeviceCatalogVersion: Hashable, Sendable, LosslessStringConvertibl
 
   }
 
-  /// Encodes the version as its string, such as `"0.5.12"`.
+  /// Encodes the version as its string, such as `"0.6.12"`.
   ///
   /// - Parameter encoder: The encoder to write to.
   /// - Throws: The encoder's error.

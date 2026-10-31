@@ -6,7 +6,7 @@ import InsteonDeviceCatalog
 struct CatalogCacheTests {
 
   // Made-up versions; only their numbers matter.
-  let bundled = DeviceCatalogVersion(major: 0, minor: 5, patch: 20)
+  let bundled = DeviceCatalogVersion(major: 0, minor: 6, patch: 20)
 
   // MARK: - Which copy
 
@@ -18,7 +18,7 @@ struct CatalogCacheTests {
 
   @Test func usesACachedCopyWithAHigherOrEqualPatch() {
 
-    let newer = DeviceCatalogVersion(major: 0, minor: 5, patch: 21)
+    let newer = DeviceCatalogVersion(major: 0, minor: 6, patch: 21)
 
     #expect(CatalogCache.source(bundled: bundled, cached: newer) == .cached)
     #expect(CatalogCache.source(bundled: bundled, cached: bundled) == .cached)
@@ -27,7 +27,7 @@ struct CatalogCacheTests {
 
   @Test func usesTheBundledCopyOverACachedOneWithALowerPatch() {
 
-    let older = DeviceCatalogVersion(major: 0, minor: 5, patch: 19)
+    let older = DeviceCatalogVersion(major: 0, minor: 6, patch: 19)
 
     #expect(CatalogCache.source(bundled: bundled, cached: older) == .bundled)
 
@@ -35,9 +35,9 @@ struct CatalogCacheTests {
 
   @Test func usesTheBundledCopyOverACachedOneInAnotherFormat() {
 
-    let nextMinor = DeviceCatalogVersion(major: 0, minor: 6, patch: 0)
-    let earlierMinor = DeviceCatalogVersion(major: 0, minor: 4, patch: 99)
-    let nextMajor = DeviceCatalogVersion(major: 1, minor: 5, patch: 20)
+    let nextMinor = DeviceCatalogVersion(major: 0, minor: 7, patch: 0)
+    let earlierMinor = DeviceCatalogVersion(major: 0, minor: 5, patch: 99)
+    let nextMajor = DeviceCatalogVersion(major: 1, minor: 6, patch: 20)
 
     #expect(CatalogCache.source(bundled: bundled, cached: nextMinor) == .bundled)
     #expect(CatalogCache.source(bundled: bundled, cached: earlierMinor) == .bundled)
@@ -47,7 +47,7 @@ struct CatalogCacheTests {
 
   @Test func usesACachedCopyWithoutABundledOne() {
 
-    let cached = DeviceCatalogVersion(major: 0, minor: 5, patch: 3)
+    let cached = DeviceCatalogVersion(major: 0, minor: 6, patch: 3)
 
     #expect(CatalogCache.source(bundled: nil, cached: cached) == .cached)
     #expect(CatalogCache.source(bundled: nil, cached: nil) == .bundled)
@@ -72,12 +72,12 @@ struct CatalogCacheTests {
 
   @Test func readsAndWritesTheVersionAsAString() throws {
 
-    let version = DeviceCatalogVersion(major: 0, minor: 5, patch: 26)
+    let version = DeviceCatalogVersion(major: 0, minor: 6, patch: 26)
     let json: Data = try CatalogCache.versionJSON(version)
 
-    #expect(String(decoding: json, as: UTF8.self) == "\"0.5.26\"")
+    #expect(String(decoding: json, as: UTF8.self) == "\"0.6.26\"")
     #expect(CatalogCache.version(json: json) == version)
-    #expect(CatalogCache.version(json: Data("\"0.5\"".utf8)) == nil)
+    #expect(CatalogCache.version(json: Data("\"0.6\"".utf8)) == nil)
     #expect(CatalogCache.version(json: Data("not json".utf8)) == nil)
 
   }
@@ -86,15 +86,15 @@ struct CatalogCacheTests {
 
   @Test func printsTheVersionsAndTheCopyInUse() {
 
-    let cached = DeviceCatalogVersion(major: 0, minor: 5, patch: 26)
+    let cached = DeviceCatalogVersion(major: 0, minor: 6, patch: 26)
 
     #expect(
       CatalogText.status(bundled: bundled, cached: cached, hasCachedFile: true, inUse: .cached)
-        == ["Bundled:  0.5.20", "Cached:   0.5.26", "In use:   cached"]
+        == ["Bundled:  0.6.20", "Cached:   0.6.26", "In use:   cached"]
     )
     #expect(
       CatalogText.status(bundled: bundled, cached: nil, hasCachedFile: false, inUse: .bundled)
-        == ["Bundled:  0.5.20", "Cached:   none", "In use:   bundled"]
+        == ["Bundled:  0.6.20", "Cached:   none", "In use:   bundled"]
     )
     #expect(
       CatalogText.status(bundled: nil, cached: nil, hasCachedFile: true, inUse: nil)
@@ -105,24 +105,24 @@ struct CatalogCacheTests {
 
   @Test func saysWhatAnUpdateDid() {
 
-    let version = DeviceCatalogVersion(major: 0, minor: 5, patch: 26)
+    let version = DeviceCatalogVersion(major: 0, minor: 6, patch: 26)
 
-    #expect(CatalogText.updated(to: version) == "Updated the Insteon device catalog to 0.5.26.")
-    #expect(CatalogText.upToDate(version) == "The Insteon device catalog is up to date (0.5.26).")
-    #expect(CatalogText.bundledIsNewer(published: version, bundled: bundled).contains("0.5.20"))
+    #expect(CatalogText.updated(to: version) == "Updated the Insteon device catalog to 0.6.26.")
+    #expect(CatalogText.upToDate(version) == "The Insteon device catalog is up to date (0.6.26).")
+    #expect(CatalogText.bundledIsNewer(published: version, bundled: bundled).contains("0.6.20"))
 
   }
 
   @Test func saysWhenThePublishedCatalogNeedsANewerPackage() {
 
-    let newer = DeviceCatalogVersion(major: 0, minor: 6, patch: 0)
-    let older = DeviceCatalogVersion(major: 0, minor: 4, patch: 9)
+    let newer = DeviceCatalogVersion(major: 0, minor: 7, patch: 0)
+    let older = DeviceCatalogVersion(major: 0, minor: 5, patch: 9)
 
     let needsNewer: String = CatalogText.incompatible(published: newer, bundled: bundled, current: bundled)
     let isOlder: String = CatalogText.incompatible(published: older, bundled: bundled, current: bundled)
 
     #expect(needsNewer.contains("needs a newer swift-insteon"))
-    #expect(needsNewer.contains("the current copy, 0.5.20, stays"))
+    #expect(needsNewer.contains("the current copy, 0.6.20, stays"))
     #expect(isOlder.contains("older format"))
     #expect(!isOlder.contains("needs a newer swift-insteon"))
 
