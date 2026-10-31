@@ -659,7 +659,7 @@ public actor InMemoryModem: LinkingModem {
 
     try checkCancellation()
 
-    modemRecords.filter { $0.group == group && $0.address == device }
+    return modemRecords.filter { $0.group == group && $0.address == device }
 
   }
 
