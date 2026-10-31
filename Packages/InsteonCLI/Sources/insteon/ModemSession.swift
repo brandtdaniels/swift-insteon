@@ -216,6 +216,8 @@ enum ModemSession {
       return options.device
     case let .unlink(options):
       return options.device
+    case let .remove(options):
+      return options.device
     default:
       return nil
     }
