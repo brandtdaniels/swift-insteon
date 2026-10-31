@@ -348,7 +348,7 @@ struct DeviceNetworkTests {
     let snapshot = NetworkSnapshot(devices: [Example.plug: NetworkDeviceState(allLinkDatabase: kept)])
     let network: DeviceNetwork = self.network(modem, snapshot: snapshot)
 
-    let database: AllLinkDatabaseCopy = try await network.allLinkDatabase(of: Example.plug)
+    let database: AllLinkDatabaseCopy = try await network.databaseCopy(of: Example.plug)
 
     #expect(database == kept)
     #expect(await modem.databaseReads[Example.plug] == nil)
@@ -366,7 +366,7 @@ struct DeviceNetworkTests {
     let snapshot = NetworkSnapshot(devices: [Example.plug: NetworkDeviceState(allLinkDatabase: stale)])
     let network: DeviceNetwork = self.network(modem, snapshot: snapshot)
 
-    let database: AllLinkDatabaseCopy = try await network.allLinkDatabase(of: Example.plug)
+    let database: AllLinkDatabaseCopy = try await network.databaseCopy(of: Example.plug)
 
     #expect(database.delta == 0x01)
     #expect(database.records.first?.record == link)
@@ -479,7 +479,7 @@ struct DeviceNetworkTests {
     let entries: [ModemDatabaseEntry] = try await network.modemDatabase()
     _ = try await network.modemDatabase()
 
-    #expect(entries.map(\.record) == [controls, responds])
+    #expect(entries.map(\.record) == [controls, responds].map { (record: AllLinkRecord) -> LinkRecord in LinkRecord(record) })
     #expect(entries.first?.device?.deviceDescription.displayName == "Example Plug 9001")
     #expect(entries.last?.device == nil)
     #expect(await modem.modemDatabaseReads == 2)
@@ -584,7 +584,7 @@ struct DeviceNetworkTests {
     await modem.setDamaged(true, record: 0x0FFF, of: Example.plug)
     let network: DeviceNetwork = self.network(modem)
 
-    let database: AllLinkDatabaseCopy = try await network.allLinkDatabase(of: Example.plug)
+    let database: AllLinkDatabaseCopy = try await network.databaseCopy(of: Example.plug)
     let snapshot: NetworkSnapshot = await network.snapshot()
 
     #expect(database.records.first?.hasIntactChecksum == false)

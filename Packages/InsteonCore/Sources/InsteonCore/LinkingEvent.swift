@@ -243,7 +243,7 @@ public enum LinkingEvent: Sendable {
 
   /// The modem's own records that named the device were deleted directly, in the modem's
   /// order.
-  case modemRecordsDeleted(InsteonAddress, [AllLinkRecord])
+  case modemRecordsDeleted(InsteonAddress, [LinkRecord])
 
   /// The device wasn't forgotten, since its links with the modem aren't confirmed gone, for
   /// the reason given.

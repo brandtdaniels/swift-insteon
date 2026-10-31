@@ -594,7 +594,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
         if deletionFailure == nil {
 
-          await observer.linking(.modemRecordsDeleted(device, deleted))
+          await observer.linking(.modemRecordsDeleted(device, deleted.map { (record: AllLinkRecord) -> LinkRecord in LinkRecord(record) }))
 
         }
 
@@ -613,7 +613,7 @@ public struct DeviceLinkingCoordinator: Sendable {
           removed: removed,
           remainingLinks: left.links,
           remoteUnlinkingFailure: remoteFailure,
-          deletedModemRecords: deleted,
+          deletedModemRecords: deleted.map { (record: AllLinkRecord) -> LinkRecord in LinkRecord(record) },
           forgotten: nil,
           keptBecause: keptBecause,
           leftoverRecords: nil,
@@ -649,7 +649,7 @@ public struct DeviceLinkingCoordinator: Sendable {
         removed: removed,
         remainingLinks: left.links,
         remoteUnlinkingFailure: remoteFailure,
-        deletedModemRecords: deleted,
+        deletedModemRecords: deleted.map { (record: AllLinkRecord) -> LinkRecord in LinkRecord(record) },
         forgotten: forgotten,
         keptBecause: nil,
         leftoverRecords: leftovers,
@@ -1116,7 +1116,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
       do {
 
-        let copy: AllLinkDatabaseCopy = try await network.allLinkDatabase(of: other)
+        let copy: AllLinkDatabaseCopy = try await network.databaseCopy(of: other)
         let naming: [AllLinkRecordResponse] = copy.records.filter { (response: AllLinkRecordResponse) -> Bool in
 
           response.record.flags.contains(.inUse) && response.record.address == device
@@ -1125,7 +1125,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
         if !naming.isEmpty {
 
-          holders.append(LeftoverRecords(address: other, device: registered, records: naming))
+          holders.append(LeftoverRecords(address: other, device: registered, records: naming.map { (response: AllLinkRecordResponse) -> LinkRecord in LinkRecord(response) }))
 
         }
 

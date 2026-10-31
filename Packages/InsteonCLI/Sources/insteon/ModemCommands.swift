@@ -123,16 +123,16 @@ enum ModemCommands {
 
     for entry in entries {
 
-      let record: AllLinkRecord = entry.record
+      let record: LinkRecord = entry.record
       // A device identified above is described from the registry.
       let registered: RegisteredDevice? = options.identifiesDevices ? await network.registry.device(record.address) : entry.device
       let known: DeviceDescription? = registered?.deviceDescription
 
       rows.append(Record(
-        role: record.flags.contains(.controller) ? "controller" : "responder",
+        role: record.isController ? "controller" : "responder",
         group: Int(record.group.rawValue),
         address: "\(record.address)",
-        data: [record.data1, record.data2, record.data3].map(Hex.byte),
+        data: record.data.map(Hex.byte),
         category: known.map { "\($0.category)" },
         subcategory: known.map { "\($0.subcategory)" },
         firmwareVersion: known?.firmwareVersion.map { "\($0)" },

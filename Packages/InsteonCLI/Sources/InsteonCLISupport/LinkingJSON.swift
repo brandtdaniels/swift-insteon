@@ -242,7 +242,7 @@ public enum LinkingJSON {
 
     }
 
-    let deleted: [ModemLinkReport] = result.deletedModemRecords.map { (record: AllLinkRecord) -> ModemLinkReport in
+    let deleted: [ModemLinkReport] = result.deletedModemRecords.map { (record: LinkRecord) -> ModemLinkReport in
 
       ModemLinkReport(group: Int(record.group.rawValue), modemRole: RemovalText.role(record))
 
@@ -296,12 +296,12 @@ public enum LinkingJSON {
   /// A device whose database names a removed device, with those records.
   private static func leftoverHolder(_ holder: LeftoverRecords) -> LeftoverHolder {
 
-    let records: [LeftoverRecord] = holder.records.map { (response: AllLinkRecordResponse) -> LeftoverRecord in
+    let records: [LeftoverRecord] = holder.records.map { (record: LinkRecord) -> LeftoverRecord in
 
       LeftoverRecord(
-        recordAddress: Hex.address(response.address),
-        role: RemovalText.role(response.record),
-        group: Int(response.record.group.rawValue)
+        recordAddress: record.memoryAddress.map(Hex.address) ?? "",
+        role: RemovalText.role(record),
+        group: Int(record.group.rawValue)
       )
 
     }

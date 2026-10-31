@@ -45,7 +45,7 @@ public struct LeftoverRecords: Hashable, Sendable {
 
   /// The records in use that name the removed device, in the database's order, each with its
   /// address in the database.
-  public var records: [AllLinkRecordResponse]
+  public var records: [LinkRecord]
 
   /// Creates leftover records.
   ///
@@ -53,7 +53,7 @@ public struct LeftoverRecords: Hashable, Sendable {
   ///   - address: The device whose database holds the records.
   ///   - device: The device as the registry knows it.
   ///   - records: The records that name the removed device.
-  public init(address: InsteonAddress, device: RegisteredDevice?, records: [AllLinkRecordResponse]) {
+  public init(address: InsteonAddress, device: RegisteredDevice?, records: [LinkRecord]) {
 
     self.address = address
     self.device = device
@@ -236,7 +236,7 @@ public struct DeviceRemovalResult: Sendable {
 
   /// The modem's records that named the device and were deleted directly, because the caller
   /// said it's gone. Empty otherwise.
-  public var deletedModemRecords: [AllLinkRecord]
+  public var deletedModemRecords: [LinkRecord]
 
   /// The device the network forgot, or `nil` when it was kept.
   public var forgotten: ForgottenDevice?
@@ -269,7 +269,7 @@ public struct DeviceRemovalResult: Sendable {
     removed: RemovedLinks,
     remainingLinks: [ModemLink]?,
     remoteUnlinkingFailure: (any Error)?,
-    deletedModemRecords: [AllLinkRecord],
+    deletedModemRecords: [LinkRecord],
     forgotten: ForgottenDevice?,
     keptBecause: DeviceKeptReason?,
     leftoverRecords: LeftoverRecordScan?,

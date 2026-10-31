@@ -382,20 +382,17 @@ enum DeviceCommands {
 
     })
     let records = database.records
-      .filter { $0.record.flags.contains(.inUse) }
-      .map { response in
+      .filter { $0.isInUse }
+      .map { record in
 
-        let record = response.record
-        let data = [record.data1, record.data2, record.data3]
-        let isController = record.flags.contains(.controller)
-        let explanation: RecordDataExplanation? = known?.explain(record, isController: isController)
+        let explanation: RecordDataExplanation? = known?.explain(record)
 
         return Record(
-          memoryAddress: Hex.address(response.address),
-          role: isController ? "controller" : "responder",
+          memoryAddress: record.memoryAddress.map(Hex.address) ?? "",
+          role: record.isController ? "controller" : "responder",
           group: Int(record.group.rawValue),
           address: "\(record.address)",
-          data: data.map(Hex.byte),
+          data: record.data.map(Hex.byte),
           meaning: explanation.map(LinkDataText.meaning(of:))
         )
 

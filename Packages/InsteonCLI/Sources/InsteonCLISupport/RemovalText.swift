@@ -81,7 +81,7 @@ public enum RemovalText {
   ///   - device: The device's address.
   ///   - records: The records deleted, in the modem's order.
   /// - Returns: The lines.
-  public static func modemRecordsDeleted(_ device: InsteonAddress, _ records: [AllLinkRecord]) -> [String] {
+  public static func modemRecordsDeleted(_ device: InsteonAddress, _ records: [LinkRecord]) -> [String] {
 
     guard !records.isEmpty else {
 
@@ -89,7 +89,7 @@ public enum RemovalText {
 
     }
 
-    return records.map { (record: AllLinkRecord) -> String in
+    return records.map { (record: LinkRecord) -> String in
 
       "Deleted the modem's \(role(record)) record for \(device) in group \(record.group)."
 
@@ -187,9 +187,9 @@ public enum RemovalText {
 
     for holder in scan.holders {
 
-      let records: [String] = holder.records.map { (response: AllLinkRecordResponse) -> String in
+      let records: [String] = holder.records.map { (record: LinkRecord) -> String in
 
-        "\(role(response.record)) in group \(response.record.group) at \(Hex.address(response.address))"
+        "\(role(record)) in group \(record.group) at \(record.memoryAddress.map(Hex.address) ?? "an unknown address")"
 
       }
 
@@ -290,9 +290,9 @@ public enum RemovalText {
   }
 
   /// A record's role in its device's database.
-  static func role(_ record: AllLinkRecord) -> String {
+  static func role(_ record: LinkRecord) -> String {
 
-    record.flags.contains(.controller) ? "controller" : "responder"
+    record.isController ? "controller" : "responder"
 
   }
 

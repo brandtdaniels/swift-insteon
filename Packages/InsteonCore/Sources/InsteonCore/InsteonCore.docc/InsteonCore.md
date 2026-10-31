@@ -395,8 +395,8 @@ do {
 - ``ReportedIdentity``
 - ``ModemInfo``
 - ``NAKReason``
-- ``AllLinkRecord``
-- ``AllLinkRecordResponse``
+- ``LinkRecord``
+- ``LinkDatabase``
 - ``AllLinkingCompleted``
 - ``SceneResult``
 - ``AllLinkMode``

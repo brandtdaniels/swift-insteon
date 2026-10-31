@@ -42,12 +42,6 @@ public typealias NAKReason = InsteonProtocol.NAKReason
 
 // MARK: - Links
 
-/// A record of an ALL-Link database: its flags, group, address and data bytes.
-public typealias AllLinkRecord = InsteonProtocol.AllLinkRecord
-
-/// A record of a device's ALL-Link database with the memory address it was read from.
-public typealias AllLinkRecordResponse = InsteonProtocol.AllLinkRecordResponse
-
 /// The modem's report of a link it made or removed.
 public typealias AllLinkingCompleted = InsteonProtocol.AllLinkingCompleted
 

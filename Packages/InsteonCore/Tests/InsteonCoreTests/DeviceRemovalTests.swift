@@ -243,8 +243,8 @@ struct DeviceRemovalTests {
     #expect(scan?.removedDevice == lamp)
     #expect(scan?.holders.map(\.address) == [keypad])
     #expect(scan?.holders.first?.device?.identity == RemovalExample.keypadIdentity)
-    #expect(scan?.holders.first?.records.map(\.record) == [scene])
-    #expect(scan?.holders.first?.records.map(\.address) == [0x0FF7])
+    #expect(scan?.holders.first?.records.map(\.address) == [scene.address])
+    #expect(scan?.holders.first?.records.map(\.memoryAddress) == [0x0FF7])
     #expect(scan?.unread.map(\.address) == [sensor])
     // Nothing was written to any device's database.
     #expect(await modem.writes.isEmpty)
@@ -318,7 +318,7 @@ struct DeviceRemovalTests {
 
     #expect(result.removed.links.isEmpty)
     #expect(result.remoteUnlinkingFailure != nil)
-    #expect(result.deletedModemRecords == RemovalExample.lampRecords)
+    #expect(result.deletedModemRecords == RemovalExample.lampRecords.map { (record: AllLinkRecord) -> LinkRecord in LinkRecord(record) })
     #expect(result.remainingLinks == [])
     #expect(await modem.modemRecords == [RemovalExample.keypadRecord])
     #expect(await modem.modemDeletions == 2)
@@ -388,7 +388,7 @@ struct DeviceRemovalTests {
     #expect(result.keptBecause == nil)
     #expect(result.forgotten?.address == lamp)
     #expect(result.remoteUnlinkingFailure == nil)
-    #expect(result.deletedModemRecords == RemovalExample.lampRecords)
+    #expect(result.deletedModemRecords == RemovalExample.lampRecords.map { (record: AllLinkRecord) -> LinkRecord in LinkRecord(record) })
     #expect(result.remainingLinks == [])
     #expect(await modem.modemRecords == [RemovalExample.keypadRecord])
     #expect(await recorder.lines == [

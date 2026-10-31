@@ -116,8 +116,7 @@ struct RemovalTextTests {
 
   @Test func listsTheRecordsOtherDevicesHoldAndThoseNotRead() {
 
-    let scene = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 3, address: lamp)
-    let response = AllLinkRecordResponse(sender: keypad, address: 0x0FF7, record: scene)
+    let response = LinkRecord(isController: true, isInUse: true, group: 3, address: lamp, data: [0x00, 0x00, 0x00], memoryAddress: 0x0FF7)
     let scan = LeftoverRecordScan(
       removedDevice: lamp,
       holders: [LeftoverRecords(address: keypad, device: nil, records: [response])],
@@ -196,9 +195,9 @@ struct RemovalTextTests {
 
   @Test func listsTheModemsRecordsDeleted() {
 
-    let records: [AllLinkRecord] = [
-      AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0, address: lamp),
-      AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 1, address: lamp)
+    let records: [LinkRecord] = [
+      LinkRecord(isController: true, isInUse: true, group: 0, address: lamp, data: [0x00, 0x00, 0x00]),
+      LinkRecord(isController: false, isInUse: true, group: 1, address: lamp, data: [0x00, 0x00, 0x00])
     ]
 
     #expect(RemovalText.modemRecordsDeleted(lamp, records) == [
@@ -230,7 +229,7 @@ struct RemovalTextTests {
 
   @Test func printsTheRemovalAsJSON() throws {
 
-    let scene = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 1, address: lamp)
+    let scene = LinkRecord(isController: false, isInUse: true, group: 1, address: lamp, data: [0x00, 0x00, 0x00], memoryAddress: 0x0FFF)
     let result = DeviceRemovalResult(
       address: lamp,
       removed: RemovedLinks(address: lamp, device: registered, links: [ModemLink(modemRole: .responder, group: 1), ModemLink(modemRole: .controller, group: 0)]),
@@ -241,7 +240,7 @@ struct RemovalTextTests {
       keptBecause: nil,
       leftoverRecords: LeftoverRecordScan(
         removedDevice: lamp,
-        holders: [LeftoverRecords(address: keypad, device: nil, records: [AllLinkRecordResponse(sender: keypad, address: 0x0FFF, record: scene)])],
+        holders: [LeftoverRecords(address: keypad, device: nil, records: [scene])],
         unread: [UnreadDatabase(address: sensor, device: nil, reason: Failure())]
       ),
       factoryReset: reset
@@ -264,7 +263,7 @@ struct RemovalTextTests {
 
   @Test func printsTheModemsDeletedRecordsAndLeavesOutWhatWasntDone() throws {
 
-    let record = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0, address: lamp)
+    let record = LinkRecord(isController: true, isInUse: true, group: 0, address: lamp, data: [0x00, 0x00, 0x00])
     let result = DeviceRemovalResult(
       address: lamp,
       removed: RemovedLinks(address: lamp, device: nil, links: []),
