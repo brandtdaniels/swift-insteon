@@ -138,8 +138,8 @@ public struct DeviceLinkingCoordinator: Sendable {
   /// ALL-Linking Completed (`0x53`) before the next leg. A device the catalog says goes first
   /// is put in linking mode by a person, with the catalog's steps, before the first leg. When
   /// Enter Linking Mode fails for the first leg, the device is linked with its SET button
-  /// instead, unless the catalog says Enter Linking Mode works for it, when the failure is
-  /// thrown. A later leg that fails stops the legs after it without throwing; the result's
+  /// instead, and the observer is told whether the catalog expected Enter Linking Mode to work.
+  /// A later leg that fails stops the legs after it without throwing; the result's
   /// ``DeviceLinkingResult/legs`` say what became of each.
   ///
   /// Otherwise the device is linked as follows.

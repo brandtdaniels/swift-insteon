@@ -273,6 +273,12 @@ public enum LinkingFallback: Sendable {
   /// instead, and only its link is accepted.
   case setButtonLinking(InsteonAddress, reason: any Error)
 
+  /// The first leg of the catalog's linking from a Hub didn't link without the device's SET
+  /// button, so it's linked with its SET button instead, with the catalog's steps, and only
+  /// its link is accepted. When the leg is ``HubLinkingLeg/isRemoteLinkingExpectedToWork``,
+  /// the catalog says Enter Linking Mode works for the device, so the failure wasn't expected.
+  case setButtonLeg(HubLinkingLeg, reason: any Error)
+
   /// The device's links couldn't all be removed without its SET button. The links left are
   /// removed with its SET button, in unlinking mode, with the catalog's steps for it, which are
   /// empty when the catalog doesn't have them.

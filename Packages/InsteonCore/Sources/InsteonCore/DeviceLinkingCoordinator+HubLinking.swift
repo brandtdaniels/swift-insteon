@@ -26,12 +26,12 @@ extension DeviceLinkingCoordinator {
   ///    observer gets ``LinkingEvent/linked(_:)`` and
   ///    ``LinkingEvent/hubLinkingLegCompleted(_:link:)`` before the next leg starts.
   ///
-  /// When Enter Linking Mode fails for the first leg and the catalog doesn't know whether it
-  /// works, the device is linked with its SET button instead, as for a device without legs.
-  /// When the catalog says it works, the failure is reported with
-  /// ``LinkingEvent/hubLinkingLegFailed(_:reason:notRun:)`` and thrown. A later leg that fails
-  /// is reported the same way, and stops the legs after it; the links made stay made, and the
-  /// result's ``DeviceLinkingResult/legs`` say which leg failed and which weren't run.
+  /// When Enter Linking Mode fails for the first leg, the device is linked with its SET button
+  /// instead, as for a device without legs, and ``LinkingFallback/setButtonLeg(_:reason:)``
+  /// says whether the catalog expected Enter Linking Mode to work. A later leg that fails is
+  /// reported with ``LinkingEvent/hubLinkingLegFailed(_:reason:notRun:)``, the same whatever
+  /// the catalog says, and stops the legs after it; the links made stay made, and the result's
+  /// ``DeviceLinkingResult/legs`` say which leg failed and which weren't run.
   ///
   /// When the catalog says how to keep a battery-powered device awake, the coordinator sends
   /// that message through the device's guarded send path, as ``KeepAwakeEvent`` reports:
@@ -298,15 +298,16 @@ extension DeviceLinkingCoordinator {
 
     } catch {
 
-      // Only a first leg the catalog doesn't promise falls back, as a device without legs
-      // does; a later leg reports its failure, since the device is linked to the modem by then.
-      guard leg.isFirst, !leg.isRemoteLinkingExpectedToWork else {
+      // A first leg falls back to the SET button, as a device without legs does, even when
+      // the catalog says Enter Linking Mode works, which the fallback says; a later leg
+      // reports its failure, since the device is linked to the modem by then.
+      guard leg.isFirst else {
 
         throw error
 
       }
 
-      await observer.linking(.fallback(.setButtonLinking(device, reason: error)))
+      await observer.linking(.fallback(.setButtonLeg(leg, reason: error)))
 
       let link: AllLinkingCompleted = try await linkBySETButton(leg, steps: steps, description: description, timeout: setButtonTimeout, observer: observer)
 

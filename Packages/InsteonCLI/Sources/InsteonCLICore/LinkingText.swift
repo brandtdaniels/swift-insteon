@@ -295,6 +295,17 @@ public enum LinkingEventText {
       ]
     case let .fallback(.setButtonLinking(device, reason)):
       return ["\(device) didn't link remotely: \(message(reason)) Link it with its SET button instead."]
+    case let .fallback(.setButtonLeg(leg, reason)):
+      guard leg.isRemoteLinkingExpectedToWork else {
+
+        return ["\(leg.device) didn't link remotely: \(message(reason)) Link it with its SET button instead."]
+
+      }
+
+      return [
+        "\(leg.device) didn't link remotely, though the Insteon device catalog says it takes Enter Linking Mode: \(message(reason)) "
+          + "Link it with its SET button instead."
+      ]
     case let .fallback(.setButtonUnlinking(device, description, steps)):
       return LinkingInstructions.setButtonUnlinking(
         device: LinkingInstructions.deviceLabel(device, profile: description?.profile),

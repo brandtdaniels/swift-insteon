@@ -183,4 +183,19 @@ struct LinkingEventTextTests {
 
   }
 
+  @Test func saysWhenALegFallsBackToTheSETButtonThoughEnterLinkingModeWasExpectedToWork() {
+
+    let promised = HubLinkingLeg(device: lamp, index: 0, count: 2, modemRole: .controller, modemGroup: 0, deviceGroup: 1, remoteEnterLinkingMode: .yes)
+    let unknown = HubLinkingLeg(device: lamp, index: 0, count: 2, modemRole: .controller, modemGroup: 0, deviceGroup: 1, remoteEnterLinkingMode: .unknown)
+
+    #expect(notes(.fallback(.setButtonLeg(promised, reason: Failure()))) == [
+      "1A.2B.3C didn't link remotely, though the Insteon device catalog says it takes Enter Linking Mode: It failed. "
+        + "Link it with its SET button instead."
+    ])
+    #expect(notes(.fallback(.setButtonLeg(unknown, reason: Failure()))) == [
+      "1A.2B.3C didn't link remotely: It failed. Link it with its SET button instead."
+    ])
+
+  }
+
 }

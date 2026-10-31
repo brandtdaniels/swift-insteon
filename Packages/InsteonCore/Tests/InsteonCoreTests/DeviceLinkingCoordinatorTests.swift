@@ -242,6 +242,8 @@ actor LinkingRecorder: LinkingObserver {
       return "linking remotely \(device) as \(role(modemRole))"
     case let .fallback(.setButtonLinking(device, _)):
       return "fallback: SET button linking \(device)"
+    case let .fallback(.setButtonLeg(leg, _)):
+      return "fallback: SET button linking \(leg.device)\(leg.isRemoteLinkingExpectedToWork ? " expected to work" : "")"
     case let .fallback(.setButtonUnlinking(device, _, steps)):
       return "fallback: SET button unlinking \(device) steps \(steps.count)"
     case let .pressSETButton(prompt):
