@@ -224,7 +224,7 @@ public enum LinkingJSON {
 
     if let reset = result.factoryReset {
 
-      let steps: [String]? = reset.procedure.map { (procedure: DeviceLifecycle.Procedure) -> [String] in
+      let steps: [String]? = reset.procedure.map { (procedure: LifecycleProcedure) -> [String] in
 
         LinkingInstructions.steps(procedure.steps)
 

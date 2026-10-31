@@ -25,7 +25,7 @@ public enum LinkingInstructions {
   ///
   /// - Parameter procedure: The procedure, such as the profile's lifecycle `linking`.
   /// - Returns: The steps, in order.
-  public static func steps(of procedure: DeviceLifecycle.Procedure) -> [String] {
+  public static func steps(of procedure: LifecycleProcedure) -> [String] {
 
     steps(procedure.steps.filter { !$0.isOnOtherDevice })
 
@@ -36,9 +36,9 @@ public enum LinkingInstructions {
   ///
   /// - Parameter steps: The steps, such as a `SETButtonPrompt`'s.
   /// - Returns: The steps, in order.
-  public static func steps(_ steps: [DeviceLifecycle.Step]) -> [String] {
+  public static func steps(_ steps: [LifecycleStep]) -> [String] {
 
-    steps.map { (step: DeviceLifecycle.Step) -> String in
+    steps.map { (step: LifecycleStep) -> String in
 
       step.expectation.map { "\(step.text) [\($0)]" } ?? step.text
 

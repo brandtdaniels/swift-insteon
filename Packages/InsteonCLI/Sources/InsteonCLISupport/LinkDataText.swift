@@ -16,7 +16,7 @@ public enum LinkDataText {
   /// - Returns: The text.
   public static func meaning(of explanation: RecordDataExplanation) -> String {
 
-    let parts: [String] = explanation.bytes.map { (byte: RecordDataExplanation.DataByte) -> String in
+    let parts: [String] = explanation.bytes.map { (byte: RecordDataByte) -> String in
 
       var notes: [String] = []
 

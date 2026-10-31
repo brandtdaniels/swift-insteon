@@ -82,6 +82,20 @@ public typealias DeviceProfile = InsteonDeviceCatalog.DeviceProfile
 /// What the Insteon device catalog says about linking, unlinking and resetting a product.
 public typealias DeviceLifecycle = InsteonDeviceCatalog.DeviceLifecycle
 
+/// A procedure in a product's lifecycle, such as linking or a factory reset: its steps, in order.
+///
+/// Named on its own so a module that reaches the catalog only through InsteonCore can name it.
+public typealias LifecycleProcedure = InsteonDeviceCatalog.DeviceLifecycle.Procedure
+
+/// A step of a lifecycle procedure, done on a device, with what the device does in answer.
+public typealias LifecycleStep = InsteonDeviceCatalog.DeviceLifecycle.Step
+
+/// Something a factory reset erases, as the Insteon device catalog gives it.
+public typealias LifecycleErasure = InsteonDeviceCatalog.DeviceLifecycle.Erasure
+
+/// What one data byte of an ALL-Link record means, as the Insteon device catalog gives it.
+public typealias RecordDataByte = InsteonDeviceCatalog.RecordDataExplanation.DataByte
+
 /// The product key the Insteon device catalog gives a product, or that it reports none.
 public typealias ProductKeyEntry = InsteonDeviceCatalog.DeviceIdentity.ProductKeyEntry
 

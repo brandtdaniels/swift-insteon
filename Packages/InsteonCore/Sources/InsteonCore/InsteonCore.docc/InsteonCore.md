@@ -373,6 +373,10 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 - ``DeviceDescription``
 - ``DeviceProfile``
 - ``DeviceLifecycle``
+- ``LifecycleProcedure``
+- ``LifecycleStep``
+- ``LifecycleErasure``
 - ``ProductKeyEntry``
 - ``RecordDataExplanation``
+- ``RecordDataByte``
 - ``DeviceCatalogVersion``
