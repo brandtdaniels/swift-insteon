@@ -729,11 +729,11 @@ extension Invocation {
 
     }
 
-    // Refused before the modem is opened; the network checks the message again, with the
-    // device's command set when it knows the device.
-    if let protected = ProtectedCommand(command1: bytes[0], command2: bytes[1]) {
+    // Poke is refused before the modem is opened. Whether a protected Set Operating Flags is
+    // sent depends on the device's command set, so the network decides that.
+    if ProtectedCommand(command1: bytes[0], command2: bytes[1]) == .poke {
 
-      throw ArgumentError.neverSent(.protected(protected))
+      throw ArgumentError.neverSent(.protected(.poke))
 
     }
 

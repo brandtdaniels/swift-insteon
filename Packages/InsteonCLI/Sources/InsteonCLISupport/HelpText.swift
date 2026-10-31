@@ -309,13 +309,15 @@ public enum HelpText {
                           3 by default. Bytes are hexadecimal, such as 0x2E or 2E. With
                           --extended, the message is extended, with the data bytes given and
                           0x00 after; unless all 14 are given or --no-checksum is, D14 holds
-                          the checksum i2CS devices require. Set Operating Flags (20) that
-                          turns the radio (0C) or the powerline (0E) off, requires a checksum
-                          (19) or turns the programming lock on (00) is never sent, to any
-                          device, and nor is Poke (29). For a device the identity
-                          cache knows, nor is a message its catalog entry never sends, or an
-                          extended message that writes a byte holding a guarded flag, which
-                          only 'set' writes. Nothing forces them.
+                          the checksum i2CS devices require. Set Operating Flags (20) with
+                          cmd2 0C, 0E, 19 or 00, which turn most devices' radio or
+                          powerline off, require a checksum or turn the programming lock
+                          on, is sent only to a device the identity cache knows whose
+                          catalog entry names that cmd2 for a flag it doesn't guard, such
+                          as an i3 Keypad's lock buttons (19). Poke (29) is never sent. Nor
+                          is a message the device's catalog entry never sends, or an
+                          extended message that writes a byte holding a guarded flag,
+                          which only 'set' writes. Nothing forces them.
 
     'on', 'off', 'instant', 'status', 'beep', 'links', 'settings' and 'set' use the device's
     identity, from the identity cache or, for a device the cache doesn't know, an ID Request
@@ -353,7 +355,9 @@ public enum HelpText {
     A message to a device (0x62) or a group (0x61) is never written, with or without
     --force, when it's Set Operating Flags (0x20) that turns the radio (0C) or the powerline
     (0E) off, requires a checksum (19) or turns the programming lock on (00), or Poke
-    (0x29), which writes a device's memory. Nor is one cut short.
+    (0x29), which writes a device's memory. Nor is one cut short. 'insteon device ADDRESS
+    send' sends those Set Operating Flags to a device whose catalog entry gives the byte
+    another meaning.
 
     Without --force, a command is refused when the package doesn't know its number, since the
     modem's answer can't be read, or when it changes or erases what the modem keeps or stops

@@ -9,9 +9,10 @@ import InsteonTestSupport
 
 /// The byte floor under every guard: the four protected Set Operating Flags, radio off
 /// (`0x0C`), powerline off (`0x0E`), checksum on (`0x19`) and programming lock on (`0x00`), and
-/// Poke (cmd1 `0x29`), pushed through every send path. Each is refused with nothing
-/// written, for a device the catalog doesn't know, with no catalog at all, and for a command
-/// set with no programming lock flag; bytes the floor doesn't hold still go through.
+/// Poke (cmd1 `0x29`), pushed through every send path. Each is refused with nothing written,
+/// for a device the catalog doesn't know, with no catalog at all, and for a command set that
+/// doesn't name the cmd2; bytes the floor doesn't hold still go through, and so does a cmd2 a
+/// command set names for a flag it doesn't guard.
 struct GuardedBytesTests {
 
   let clock: TestClock = TestClock()
@@ -46,8 +47,8 @@ struct GuardedBytesTests {
     /// No catalog, and a registry that knows the device's identity.
     case noCatalog
 
-    /// A command set with no operating flags, so no programming lock flag, that fills Set
-    /// Operating Flags' cmd2 with the caller's value.
+    /// A command set with no operating flags, so none that names a protected cmd2, that fills
+    /// Set Operating Flags' cmd2 with the caller's value.
     case noProgrammingLockFlag
 
   }
@@ -396,6 +397,98 @@ struct GuardedBytesTests {
     })
     #expect(await recorder.lines.contains("keep awake: not sent \(sensor)"))
     #expect(await !recorder.lines.contains { (line: String) -> Bool in line.hasPrefix("keep awake: releasing") })
+
+  }
+
+  // MARK: - The catalog's meaning
+
+  /// The bundled i3 Keypad, KP014, whose lockButtons flag is turned on with Set Operating
+  /// Flags `0x19`, checksum on's bytes elsewhere, and whose radioOff flag the catalog keeps.
+  static let i3Keypad = (address: InsteonAddress(0x3A, 0x4B, 0x42), identity: ReportedIdentity(category: 0x01, subcategory: 0x59, firmwareVersion: 0x45))
+
+  /// The bundled Hidden Door Sensor 2845, whose stayAwakeOff flag command lets it sleep again
+  /// with Set Operating Flags `0x19`.
+  static let hiddenDoor = (address: InsteonAddress(0x3A, 0x4B, 0x43), identity: ReportedIdentity(category: 0x10, subcategory: 0x11, firmwareVersion: 0x41))
+
+  /// A network with the bundled catalog that knows a device.
+  func bundledNetwork(_ modem: SettingsModem, knowing device: (address: InsteonAddress, identity: ReportedIdentity)) throws -> DeviceNetwork {
+
+    DeviceNetwork(
+      modem: modem,
+      catalog: try DeviceCatalog.bundled(),
+      snapshot: NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: [device.address: device.identity])),
+      clock: clock,
+      now: { () -> Date in Date(timeIntervalSince1970: 1_800_000_000) }
+    )
+
+  }
+
+  @Test func sendsAProtectedCmd2OnlyWhereTheCommandSetNamesItForAnUnguardedFlag() throws {
+
+    let catalog: DeviceCatalog = try DeviceCatalog.bundled()
+    let i3Keypad: CommandSet = try #require(catalog.commandSet(id: "i3Keypad"))
+    let keypadLinc: CommandSet = try #require(catalog.commandSet(id: "keypadLinc"))
+    let checksumOn = Command(command1: 0x20, command2: 0x19)
+
+    // The i3 Keypad turns lockButtons on with 0x19.
+    #expect(!DeviceSettingSafety.isNeverSent(checksumOn, in: i3Keypad))
+    // Its kept radioOff flag's 0x0C, the programming lock's 0x00, and 0x0E, which it doesn't
+    // name, stay refused.
+    #expect(DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x0C), in: i3Keypad))
+    #expect(DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x00), in: i3Keypad))
+    #expect(DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x0E), in: i3Keypad))
+    // A KeypadLinc names 0x19 for checksumRequired, which is kept.
+    #expect(DeviceSettingSafety.isNeverSent(checksumOn, in: keypadLinc))
+    // With no command set, all four are refused.
+    #expect(DeviceSettingSafety.floorCommands(in: nil) == ProtectedCommand.setOperatingFlagsCommands)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func sendsAnI3KeypadsLockButtonsOnAsGiven() async throws {
+
+    let modem = SettingsModem(device: Self.i3Keypad.address, flags: 0x00, values: [:])
+    let network: DeviceNetwork = try bundledNetwork(modem, knowing: Self.i3Keypad)
+    let lockButtons = DirectMessage(to: Self.i3Keypad.address, command1: 0x20, command2: 0x19, data: nil, hasChecksum: false)
+    let radioOff = DirectMessage(to: Self.i3Keypad.address, command1: 0x20, command2: 0x0C, data: nil, hasChecksum: false)
+
+    _ = try await network.send(lockButtons, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+
+    await #expect(throws: SendRefusal.protected(.radioOff)) {
+
+      _ = try await network.send(radioOff, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+
+    }
+
+    #expect(await modem.standardCommands == [Command(command1: 0x20, command2: 0x19)])
+
+    // The settings page agrees: lockButtons is writable, radioOff isn't.
+    let settings: [DeviceSetting] = try await network.device(Self.i3Keypad.address).capabilities().settings
+    let writable: [String: Bool] = Dictionary(settings.map { (setting: DeviceSetting) -> (String, Bool) in (setting.key, setting.isWritable) }, uniquingKeysWith: { (first: Bool, _: Bool) -> Bool in first })
+
+    #expect(writable["lockButtons"] == true)
+    #expect(writable["radioOff"] == false)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func keepsTheBundledHiddenDoorSensorAwakeAndLetsItSleepAgain() async throws {
+
+    let modem = SettingsModem(device: Self.hiddenDoor.address, flags: 0x00, values: [:])
+    let network: DeviceNetwork = try bundledNetwork(modem, knowing: Self.hiddenDoor)
+    let device: Device = network.device(Self.hiddenDoor.address)
+    let description: DeviceDescription = try #require(await network.registry.device(Self.hiddenDoor.address)?.deviceDescription)
+    let keepAwake: DeviceLifecycle.HubLinking.KeepAwake = try #require(description.hubLinking?.keepAwake)
+    let release: DeviceLifecycle.HubLinking.HubMessage = try #require(keepAwake.release)
+    let writableFlags: Set<SettingName> = DeviceLinkingCoordinator.writableLinkingFlags(of: description)
+
+    // Its release, stayAwakeOff, is 0x19, which its command set names for a flag command.
+    try await device.refuseKeepAwakeWithoutRelease(keepAwake)
+    try await device.sendLinkingMessage(keepAwake.send, duration: keepAwake.duration, writableFlags: writableFlags)
+    try await device.sendLinkingMessage(release, duration: nil, writableFlags: writableFlags)
+
+    let sent: [Command] = await modem.standardCommands.filter { (command: Command) -> Bool in command.command1 == 0x20 }
+      + modem.extendedMessages.map(\.command)
+
+    #expect(sent == [Command(command1: 0x20, command2: 0x18), Command(command1: 0x20, command2: 0x19)])
 
   }
 

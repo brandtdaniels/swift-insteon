@@ -1102,8 +1102,8 @@ public struct Device: Sendable {
   }
 
   /// Refuses to keep a device awake when the message that lets it sleep again is never sent
-  /// to it, so it isn't left awake, draining its batteries: a ``ProtectedCommand``, or bytes
-  /// its command set never sends.
+  /// to it, so it isn't left awake, draining its batteries: a ``ProtectedCommand`` its
+  /// command set doesn't name, or bytes its command set never sends.
   ///
   /// - Parameter keepAwake: How the catalog keeps the device awake.
   /// - Throws: ``DeviceControlError/unsupported(_:product:)`` when the release is never sent.
@@ -1296,9 +1296,10 @@ public struct Device: Sendable {
 
   }
 
-  /// Refuses a message whose bytes are never sent to the device: a ``ProtectedCommand``,
-  /// which no device is sent whatever the catalog says; bytes
-  /// `DeviceSettingSafety.isNeverSent(_:in:)` says its command set never sends; and, for a
+  /// Refuses a message whose bytes are never sent to the device, as
+  /// `DeviceSettingSafety.isNeverSent(_:in:)` says from its command set: Poke, a
+  /// ``ProtectedCommand`` the command set doesn't name for a flag it doesn't guard, and the
+  /// bytes the catalog's guards add; and, for a
   /// message sent as it's given, an extended message that writes a byte holding a guarded
   /// flag, as `DeviceSettingSafety.guardedFlagWritten(by:userData:in:)` finds it. Every
   /// message the device is sent is checked here, with the bytes it actually carries, so a
@@ -1310,11 +1311,13 @@ public struct Device: Sendable {
     let product: String = description.map { (described: DeviceDescription) -> String in DeviceControlModel.product(of: described) } ?? "this device"
     let refusal: SendRefusal
 
-    if let protected = ProtectedCommand(command) {
+    let isNeverSent: Bool = DeviceSettingSafety.isNeverSent(command, in: commands)
+
+    if isNeverSent, let protected = ProtectedCommand(command) {
 
       refusal = .protected(protected)
 
-    } else if DeviceSettingSafety.isNeverSent(command, in: commands) {
+    } else if isNeverSent {
 
       refusal = .neverSentToDevice(product: product)
 

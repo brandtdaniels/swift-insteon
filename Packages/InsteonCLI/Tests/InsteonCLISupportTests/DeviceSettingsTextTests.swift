@@ -369,19 +369,7 @@ struct ExploringArgumentTests {
 
   }
 
-  @Test func refusesAProtectedCommandBeforeOpeningTheModem() {
-
-    #expect(throws: ArgumentError.neverSent(.protected(.radioOff))) {
-
-      try Invocation.parse(["device", "1A.2B.3C", "send", "20", "0C"])
-
-    }
-
-    #expect(throws: ArgumentError.neverSent(.protected(.programmingLockOn))) {
-
-      try Invocation.parse(["device", "1A.2B.3C", "send", "0x20", "0x00", "--extended"])
-
-    }
+  @Test func refusesPokeBeforeOpeningTheModem() throws {
 
     #expect(throws: ArgumentError.neverSent(.protected(.poke))) {
 
@@ -389,18 +377,12 @@ struct ExploringArgumentTests {
 
     }
 
-    // Radio on isn't protected, and Set Address MSB writes nothing.
-    #expect(throws: Never.self) {
-
-      try Invocation.parse(["device", "1A.2B.3C", "send", "20", "0D"])
-
-    }
-
-    #expect(throws: Never.self) {
-
-      try Invocation.parse(["device", "1A.2B.3C", "send", "28", "0F"])
-
-    }
+    // Whether a protected Set Operating Flags is sent depends on the device's command set, so
+    // the network decides; Set Address MSB writes nothing.
+    #expect(try Invocation.parse(["device", "1A.2B.3C", "send", "20", "19"]).subcommand
+      == .device(lamp, .send(DirectMessageRequest(command1: 0x20, command2: 0x19))))
+    #expect(try Invocation.parse(["device", "1A.2B.3C", "send", "28", "0F"]).subcommand
+      == .device(lamp, .send(DirectMessageRequest(command1: 0x28, command2: 0x0F))))
 
   }
 
@@ -569,7 +551,7 @@ struct ExploringArgumentTests {
 
     }
 
-    #expect(SendRefusalText.sentence(.protected(.radioOff)) == "Turning radio off would cut the device off the network; insteon never sends it.")
+    #expect(SendRefusalText.sentence(.protected(.radioOff)).hasPrefix("Turning radio off would cut the device off the network; insteon sends it only"))
     #expect(SendRefusalText.sentence(.protected(.poke)).hasSuffix("insteon never sends it."))
     #expect(SendRefusalText.sentence(.serialCommand("Reset.")).hasSuffix("Pass --force to send it anyway."))
 

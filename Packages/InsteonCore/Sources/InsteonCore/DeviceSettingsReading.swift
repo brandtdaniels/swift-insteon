@@ -526,13 +526,13 @@ enum DeviceSettingSafety {
   /// programming lock flag or a `programmingLockOn` command, still never sends those bytes
   /// under another name.
   ///
-  /// Under them all is the byte floor: the Set Operating Flags commands of
-  /// ``ProtectedCommand``, which are never sent to any device, even one with no command set,
-  /// and whatever the command set names them. Poke has no fixed cmd2, so it isn't among the
-  /// bytes; ``isNeverSent(_:in:)`` refuses it by its cmd1.
+  /// Under them all is the byte floor, ``floorCommands(in:)``: the Set Operating Flags
+  /// commands of ``ProtectedCommand``, sent only to a device whose command set names the cmd2
+  /// for a flag that isn't guarded. Poke has no fixed cmd2, so it isn't among the bytes;
+  /// ``isNeverSent(_:in:)`` refuses it by its cmd1.
   static func neverSentCommands(in commands: CommandSet?) -> Set<Command> {
 
-    var never: Set<Command> = ProtectedCommand.setOperatingFlagsCommands
+    var never: Set<Command> = floorCommands(in: commands)
 
     guard let commands else {
 
@@ -605,12 +605,74 @@ enum DeviceSettingSafety {
 
   }
 
+  /// The protected Set Operating Flags commands never sent to a device that uses a command
+  /// set: all four with no command set, and otherwise each whose cmd2 the command set doesn't
+  /// name for a flag it doesn't guard.
+  ///
+  /// The catalog's meaning wins where it gives one: an i3 Keypad's lock buttons flag is turned
+  /// on with cmd2 `0x19`, which turns checksums on elsewhere, so it's sent to an i3 Keypad. A
+  /// cmd2 the command set names for a guarded flag, such as radio off or the programming
+  /// lock's on, or names for nothing, stays refused, and the catalog's guards still add their
+  /// own bytes in ``neverSentCommands(in:)``.
+  static func floorCommands(in commands: CommandSet?) -> Set<Command> {
+
+    guard let commands else {
+
+      return ProtectedCommand.setOperatingFlagsCommands
+
+    }
+
+    let named: Set<UInt8> = unguardedSetOperatingFlags(in: commands)
+
+    return ProtectedCommand.setOperatingFlagsCommands.filter { (command: Command) -> Bool in !named.contains(command.command2) }
+
+  }
+
+  /// The Set Operating Flags cmd2s a command set names for a flag it doesn't guard: an
+  /// operating flag's on or off with no guard and a name the floor doesn't hold, and a flag
+  /// command with no guard and a name that isn't never sent.
+  static func unguardedSetOperatingFlags(in commands: CommandSet) -> Set<UInt8> {
+
+    var named: Set<UInt8> = []
+
+    for flag in commands.operatingFlags where rule(for: flag) == nil {
+
+      if let on = flag.on {
+
+        named.insert(on)
+
+      }
+
+      if let off = flag.off {
+
+        named.insert(off)
+
+      }
+
+    }
+
+    for flagCommand in commands.flagCommands where !isNeverSent(flagCommand.sendGuard) && !neverSentNames.contains(flagCommand.name) {
+
+      let command: Command = flagCommand.command.command
+
+      if command.command1 == setOperatingFlagsCommand1 {
+
+        named.insert(command.command2)
+
+      }
+
+    }
+
+    return named
+
+  }
+
   /// Whether a command's bytes are ones never sent to a device that uses a command set, as
-  /// ``neverSentCommands(in:)`` gives them, or a ``ProtectedCommand`` such as Poke. Every
-  /// message a ``Device`` sends is checked.
+  /// ``neverSentCommands(in:)`` gives them, or Poke. Every message a ``Device`` sends is
+  /// checked.
   static func isNeverSent(_ command: Command, in commands: CommandSet?) -> Bool {
 
-    ProtectedCommand(command) != nil || neverSentCommands(in: commands).contains(command)
+    ProtectedCommand(command) == .poke || neverSentCommands(in: commands).contains(command)
 
   }
 
@@ -626,7 +688,22 @@ enum DeviceSettingSafety {
 
     switch item.source {
     case let .flag(flag):
-      return rule(for: flag) == .keep
+      switch rule(for: flag) {
+      case .keep?:
+        return true
+      case .neverSet?:
+        // Only ever turned off, so it's written only if turning it off is sent.
+        return commands.change(for: flag, setting: false).map { (change: FlagChange) -> Bool in sendsNeverSentCommand(change, in: commands) } ?? false
+      case nil:
+        // Written either way, so it's never written only when both ways are refused by their
+        // bytes; a flag one way is refused, such as one whose on is a never-sent command's
+        // bytes, can still be turned the other way.
+        return [true, false].allSatisfy { (state: Bool) -> Bool in
+
+          commands.change(for: flag, setting: state).map { (change: FlagChange) -> Bool in sendsNeverSentCommand(change, in: commands) } ?? false
+
+        }
+      }
     case .reading:
       return false
     case let .value(value):

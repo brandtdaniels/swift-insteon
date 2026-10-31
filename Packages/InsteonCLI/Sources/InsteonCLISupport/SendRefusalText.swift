@@ -27,7 +27,7 @@ public enum SendRefusalText {
 
   }
 
-  /// Why a command that's never sent to any device isn't, as one sentence.
+  /// Why a protected command isn't sent, as one sentence.
   ///
   /// - Parameter command: The command.
   /// - Returns: The sentence.
@@ -35,13 +35,13 @@ public enum SendRefusalText {
 
     switch command {
     case .programmingLockOn:
-      return "Turning the programming lock on would stop the device's SET button from linking it; insteon never sends it."
+      return "Turning the programming lock on would stop the device's SET button from linking it; insteon sends it only to a device whose catalog entry gives the byte another meaning."
     case .radioOff:
-      return "Turning radio off would cut the device off the network; insteon never sends it."
+      return "Turning radio off would cut the device off the network; insteon sends it only to a device whose catalog entry gives the byte another meaning."
     case .powerlineOff:
-      return "Turning powerline off would cut the device off the network; insteon never sends it."
+      return "Turning powerline off would cut the device off the network; insteon sends it only to a device whose catalog entry gives the byte another meaning."
     case .checksumOn:
-      return "Requiring a checksum in every message would cut the device off from a modem that doesn't send one; insteon never sends it."
+      return "Requiring a checksum in every message would cut the device off from a modem that doesn't send one; insteon sends it only to a device whose catalog entry gives the byte another meaning."
     case .poke:
       return "Poke One Byte writes any byte of a device's memory, its ALL-Link database included; insteon never sends it."
     }

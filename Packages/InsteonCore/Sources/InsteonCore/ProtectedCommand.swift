@@ -1,12 +1,18 @@
 import InsteonProtocol
 
-/// A command InsteonCore never sends to any device, whatever the Insteon device catalog says
-/// about the device, and whether or not the catalog knows it.
+/// A command InsteonCore sends to a device only where the Insteon device catalog says it means
+/// something harmless for that device, or, for Poke, never.
 ///
-/// The four Set Operating Flags (cmd1 `0x20`) commands here cut a device off from the modem or
-/// leave it locked, and Poke writes any byte of a device's memory. Every message InsteonCore
-/// sends, raw or not, is checked against them by its bytes; nothing forces one through. The
-/// catalog can name more commands that are never sent to a device, but never fewer.
+/// The four Set Operating Flags (cmd1 `0x20`) commands here cut most devices off from the
+/// modem or leave them locked. Each is refused for a device the catalog doesn't know or gives
+/// no command set, and for a command set that doesn't say what its cmd2 means. It's sent only
+/// where the device's command set names that cmd2 for a flag it doesn't guard, such as an
+/// i3 Keypad's lock buttons flag, turned on with cmd2 `0x19`; a cmd2 the command set names for
+/// a guarded flag, such as radio off, stays refused. Poke writes any byte of a device's memory
+/// and is never sent. Every message InsteonCore sends, raw or not, is checked by its bytes,
+/// and nothing forces one through. A raw serial command has no device to look up, so
+/// ``SerialCommandPolicy`` refuses all of them in it. The catalog's guards add more commands
+/// that are never sent to a device.
 ///
 /// ```swift
 /// if let protected = ProtectedCommand(command1: 0x20, command2: 0x0C) {
@@ -124,7 +130,8 @@ public enum ProtectedCommand: Hashable, Sendable, CaseIterable {
 /// ```
 public enum SendRefusal: Error, Hashable, Sendable {
 
-  /// The message is a command never sent to any device.
+  /// The message is a protected command, which isn't sent to the device: Poke, or Set
+  /// Operating Flags with a cmd2 its command set doesn't name for a flag it doesn't guard.
   case protected(ProtectedCommand)
 
   /// The Insteon device catalog marks the message's bytes as never sent to the device. The
