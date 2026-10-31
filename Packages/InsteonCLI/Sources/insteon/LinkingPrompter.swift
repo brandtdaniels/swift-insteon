@@ -2,6 +2,7 @@ import InsteonCLICore
 import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
+import InsteonProtocol
 
 /// What `insteon link` and `insteon unlink` show as a `DeviceLinkingCoordinator` works: its
 /// progress and instructions on standard error, worded by `LinkingEventText`, and each link
