@@ -941,10 +941,9 @@ public struct Device: Sendable {
     let refused = DeviceControlError.unsupported(.keepAwake, product: product)
     let purpose: SendPurpose = .control(.keepAwake)
 
+    // A linking flow writes only the flags the catalog lets it. The registry can change while
+    // a device links, so a flag outside them is refused rather than asserted.
     if let written = DeviceLinkingCoordinator.flagWritten(by: message, in: commands) {
-
-      // A linking flow writes only the flags the catalog lets it.
-      assert(writableFlags.contains(written), "A linking flow wrote the operating flag \(written), which the catalog doesn't let it write.")
 
       guard writableFlags.contains(written) else {
 
@@ -1054,11 +1053,13 @@ public struct Device: Sendable {
 
         }
 
+        let takesDuration: MessageField? = Self.durationParameter(of: extended)
         var values: [SettingName: FieldValue] = [:]
 
+        // Only the parameter that takes the duration gets it; any other is zero.
         for parameter in extended.parameters {
 
-          values[parameter.name] = Self.durationValue(duration, for: parameter)
+          values[parameter.name] = parameter == takesDuration ? Self.durationValue(duration, for: parameter) : Self.zeroValue(for: parameter)
 
         }
 
@@ -1072,6 +1073,57 @@ public struct Device: Sendable {
     }
 
     await network.recordAnswer(of: address, level: nil)
+
+  }
+
+  /// The parameter of a keep-awake extended command that takes how long to stay awake: the
+  /// one in seconds, or else its only number, or `nil` when neither says.
+  static func durationParameter(of command: DeviceExtendedCommand) -> MessageField? {
+
+    let numbers: [MessageField] = command.parameters.filter { (field: MessageField) -> Bool in
+
+      if case .number = field.kind {
+
+        return true
+
+      }
+
+      return false
+
+    }
+
+    let seconds: MessageField? = numbers.first { (field: MessageField) -> Bool in
+
+      if case let .number(_, _, unit) = field.kind, unit == .seconds {
+
+        return true
+
+      }
+
+      return false
+
+    }
+
+    return seconds ?? (numbers.count == 1 ? numbers[0] : nil)
+
+  }
+
+  /// A parameter's value whose bits are all zero, for a parameter a keep-awake message leaves
+  /// as it is.
+  static func zeroValue(for field: MessageField) -> FieldValue {
+
+    switch field.kind {
+    case .number:
+      return .number(0)
+    case .buttons:
+      return .buttons([])
+    case .enumeration:
+      return .unnamed(0)
+    case .flags:
+      return .flags([])
+    case .boolean:
+      return .boolean(false)
+    }
 
   }
 

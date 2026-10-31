@@ -310,6 +310,35 @@ struct KeepAwakeTests {
 
   }
 
+  @Test func fillsOnlyTheParameterThatTakesTheDuration() throws {
+
+    let duration = MessageField(name: "duration", summary: "How long.", location: .userData([3]), kind: .number(unit: .seconds), range: 0...255)
+    let mode = MessageField(name: "mode", summary: "Something else.", location: .userData([4]), range: 0...255)
+    let command = DeviceExtendedCommand(
+      name: "stayAwake",
+      summary: "Keeps it awake.",
+      command: Command(command1: 0x2E, command2: 0x00),
+      fixedBytes: [FixedUserDataByte(position: 1, value: 0x01)],
+      parameters: [mode, duration]
+    )
+
+    // The parameter in seconds takes the duration, even after another number.
+    #expect(Device.durationParameter(of: command) == duration)
+    #expect(Device.durationValue(.seconds(60), for: duration) == .number(60))
+    #expect(Device.zeroValue(for: mode) == .number(0))
+
+    let values: [SettingName: FieldValue] = [mode.name: Device.zeroValue(for: mode), duration.name: Device.durationValue(nil, for: duration)]
+    let userData: UserData = try command.userData(values: values)
+
+    #expect([userData[1], userData[3], userData[4]] == [0x01, 0xFF, 0x00])
+
+    // With no unit, a command's only number takes it.
+    let only = DeviceExtendedCommand(name: "stayAwake", summary: "Keeps it awake.", command: Command(command1: 0x2E, command2: 0x00), parameters: [mode])
+
+    #expect(Device.durationParameter(of: only) == mode)
+
+  }
+
   @Test func writesOnlyTheFlagsTheKeepAwakeMessagesName() throws {
 
     let catalog: DeviceCatalog = try DeviceCatalog.bundled()
