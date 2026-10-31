@@ -94,6 +94,18 @@ struct LocalNetworkClientTests {
     // An address range in no_proxy doesn't count, since older libcurl doesn't read ranges.
     ["http_proxy": "http://127.0.0.1:9", "no_proxy": "192.168.0.0/16"],
     ["http_proxy": "http://127.0.0.1:9", "no_proxy": "192.168.1.2, .example.com"],
+    // A wildcard counts only as the whole of no_proxy, exactly as written.
+    ["http_proxy": "http://127.0.0.1:9", "no_proxy": "localhost,*"],
+    ["http_proxy": "http://127.0.0.1:9", "no_proxy": " *"],
+    ["http_proxy": "http://127.0.0.1:9", "no_proxy": "*,"],
+    // A no_proxy that's only spaces names nothing, and NO_PROXY isn't read in its place.
+    ["http_proxy": "http://127.0.0.1:9", "no_proxy": "   "],
+    ["http_proxy": "http://127.0.0.1:9", "no_proxy": " ", "NO_PROXY": "192.168.1.20"],
+    // An address counts only as written, without a dot in front.
+    ["http_proxy": "http://127.0.0.1:9", "no_proxy": ".192.168.1.20"],
+    ["http_proxy": "http://127.0.0.1:9", "no_proxy": "1.20"],
+    // A proxy of only spaces is still set.
+    ["http_proxy": " "],
   ])
   func findsAProxyForTheHub(_ environment: [String: String]) {
 
@@ -108,6 +120,7 @@ struct LocalNetworkClientTests {
     ["http_proxy": "http://127.0.0.1:9", "no_proxy": "*"],
     ["http_proxy": "http://127.0.0.1:9", "no_proxy": "localhost, 192.168.1.20"],
     ["ALL_PROXY": "http://127.0.0.1:9", "NO_PROXY": "192.168.1.20"],
+    ["http_proxy": "http://127.0.0.1:9", "no_proxy": "", "NO_PROXY": "192.168.1.20"],
   ])
   func findsNoProxyForTheHub(_ environment: [String: String]) {
 

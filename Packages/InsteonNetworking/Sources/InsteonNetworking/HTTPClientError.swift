@@ -32,7 +32,8 @@ public enum HTTPClientError: Error, Hashable, Sendable {
   /// network doesn't send a request through one, so the request wasn't sent.
   ///
   /// Only Linux reads a proxy from the environment, from `http_proxy`, `HTTP_PROXY`,
-  /// `all_proxy` or `ALL_PROXY`. Naming the address in `no_proxy` sends the request directly.
+  /// `all_proxy` or `ALL_PROXY`. Naming the exact address in `no_proxy` sends the request
+  /// directly; an address range there isn't read.
   case proxyConfigured
 
   /// A request carried credentials, such as an `Authorization` header, through a client that
@@ -56,7 +57,7 @@ extension HTTPClientError: CustomStringConvertible, LocalizedError {
     case let .responseTooLarge(limit):
       "The server's answer was larger than \(limit) bytes, so it wasn't used."
     case .proxyConfigured:
-      "A proxy is set in the environment for this address, and requests on the local network aren't sent through one, so the request wasn't sent. Add the address to no_proxy to send it directly."
+      "A proxy is set in the environment for this address, in http_proxy, HTTP_PROXY, all_proxy or ALL_PROXY, and requests on the local network aren't sent through one, so the request wasn't sent. Add the exact address to no_proxy to send it directly; an address range there isn't read."
     case .credentialsRefused:
       "A request carried credentials through a client that never sends them, so it wasn't sent."
     }

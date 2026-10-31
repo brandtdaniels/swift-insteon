@@ -8,10 +8,18 @@ import Foundation
 /// the request's host. A client for the local network asks this whether a request would go
 /// through a proxy, and refuses to send it if it would.
 ///
-/// The reading errs toward finding a proxy. `HTTP_PROXY` counts as well as `http_proxy`,
-/// though libcurl reads only the lowercase name for plain HTTP. In `no_proxy`, only `*`, the
-/// host itself and, for a host name, a domain it's in count; an address range such as
-/// `192.168.0.0/16` doesn't, since libcurl before 7.86 doesn't read ranges.
+/// The reading errs toward finding a proxy, and is never more willing than libcurl to go
+/// direct:
+///
+/// - A variable that's set to anything but the empty string names a proxy, and `HTTP_PROXY`
+///   counts as well as `http_proxy`, though libcurl reads only the lowercase name for plain
+///   HTTP.
+/// - `no_proxy` is read when it's set and not empty, and `NO_PROXY` otherwise.
+/// - `*` turns every proxy off only when it's the whole of `no_proxy`, exactly as written.
+/// - Otherwise an entry counts only when it's the host itself or, for a host name, a domain the
+///   name is in, with or without a leading dot. An entry for an address must be the address as
+///   written, without a leading dot, and an address range such as `192.168.0.0/16` doesn't
+///   count, since libcurl before 7.86 doesn't read ranges.
 struct ProxyEnvironment: Hashable, Sendable {
 
   /// The proxy for plain HTTP, from `http_proxy` or `HTTP_PROXY`, if one is set.
@@ -23,7 +31,10 @@ struct ProxyEnvironment: Hashable, Sendable {
   /// The proxy for every scheme, from `all_proxy` or `ALL_PROXY`, if one is set.
   let allProxy: String?
 
-  /// The entries of `no_proxy` or `NO_PROXY`, lowercased and trimmed, without empty ones.
+  /// Whether `no_proxy` is exactly `*`, which turns every proxy off.
+  let excludesEveryHost: Bool
+
+  /// The entries of `no_proxy` or `NO_PROXY`, lowercased, without empty ones.
   let exclusions: [String]
 
   /// Reads the proxy settings from an environment.
@@ -31,9 +42,10 @@ struct ProxyEnvironment: Hashable, Sendable {
   /// - Parameter environment: The environment, such as the process's.
   init(_ environment: [String: String]) {
 
+    // The first of the names that's set to anything but the empty string.
     func value(_ names: String...) -> String? {
 
-      names.lazy.compactMap { environment[$0] }.first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+      names.lazy.compactMap { (name: String) -> String? in environment[name] }.first { (value: String) -> Bool in !value.isEmpty }
 
     }
 
@@ -41,9 +53,11 @@ struct ProxyEnvironment: Hashable, Sendable {
     httpsProxy = value("https_proxy", "HTTPS_PROXY")
     allProxy = value("all_proxy", "ALL_PROXY")
 
-    // libcurl separates entries with commas, and trims spaces around them.
     let exclusionText: String = value("no_proxy", "NO_PROXY") ?? ""
 
+    excludesEveryHost = exclusionText == "*"
+
+    // libcurl separates entries with commas, and trims spaces around them.
     exclusions = exclusionText
       .split(whereSeparator: { (character: Character) -> Bool in character == "," || character.isWhitespace })
       .map { (entry: Substring) -> String in entry.lowercased() }
@@ -85,32 +99,34 @@ struct ProxyEnvironment: Hashable, Sendable {
 
   }
 
-  /// Whether `no_proxy` names a host: as `*`, as the host itself, or, for a host name, as a
-  /// domain it's in, with or without a leading dot.
+  /// Whether `no_proxy` names a host: as `*` alone, as the host itself, or, for a host name,
+  /// as a domain it's in, with or without a leading dot.
   private func isExcluded(_ host: String) -> Bool {
+
+    if excludesEveryHost {
+
+      return true
+
+    }
 
     // An IPv6 address keeps its brackets in some URL readings and not in others.
     let bareHost: String = host.hasPrefix("[") && host.hasSuffix("]") ? String(host.dropFirst().dropLast()) : host
-    let isAddress: Bool = bareHost.contains(":") || bareHost.allSatisfy { (character: Character) -> Bool in character == "." || character.isASCII && character.isNumber }
+    let isAddress: Bool = bareHost.contains(":")
+      || bareHost.allSatisfy { (character: Character) -> Bool in character == "." || character.isASCII && character.isNumber }
 
     return exclusions.contains { (entry: String) -> Bool in
 
-      if entry == "*" {
+      // An address counts only as written; a dot in front of it, or a wildcard among other
+      // entries, isn't read the same way by every libcurl.
+      if isAddress {
 
-        return true
+        return entry == bareHost
 
       }
 
       let name: String = entry.hasPrefix(".") ? String(entry.dropFirst()) : entry
 
-      if name == bareHost {
-
-        return true
-
-      }
-
-      // A domain covers the names in it, but not an address.
-      return !isAddress && !name.isEmpty && bareHost.hasSuffix("." + name)
+      return !name.isEmpty && name != "*" && (name == bareHost || bareHost.hasSuffix("." + name))
 
     }
 

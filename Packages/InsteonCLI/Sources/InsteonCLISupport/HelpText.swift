@@ -77,8 +77,9 @@ public enum HelpText {
       172.16.0.0/12 or 192.168.0.0/16, where a Hub on a home network is. A host name, an IPv6,
       loopback or link-local address, and a public address are refused before anything is
       sent; through a VPN, give the Hub's address on the home network. Requests go to the Hub
-      directly, never through a proxy. On Linux, where http_proxy or all_proxy sets one, add
-      the Hub's address to no_proxy.
+      directly, never through a proxy. On Linux, where http_proxy, HTTP_PROXY, all_proxy or
+      ALL_PROXY sets one, add the Hub's exact address to no_proxy, such as
+      no_proxy=192.168.1.20; an address range there isn't read.
 
     Environment file:
       $XDG_CONFIG_HOME/insteon/env, or ~/.config/insteon/env, or the file --env-file names,
