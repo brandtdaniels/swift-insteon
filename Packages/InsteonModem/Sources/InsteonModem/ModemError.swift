@@ -8,6 +8,9 @@ public enum ModemError: Error, Hashable, Sendable {
   case rejected(SerialCommandNumber)
 
   /// The modem didn't echo a command within the configured timeout.
+  ///
+  /// A request to a device throws ``ModemStoppedEchoing`` in its place once the modem has sent
+  /// anything, since a modem that has answered is more likely busy than disconnected.
   case timedOut(SerialCommandNumber)
 
   /// The modem is closed: its connection ended, or ``Modem/run()`` returned.

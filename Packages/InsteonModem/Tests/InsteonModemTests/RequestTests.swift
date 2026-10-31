@@ -282,6 +282,71 @@ struct RequestTests {
 
   }
 
+  @Test func reportsAModemThatStopsEchoingAfterAnsweringAsBusyWithTheDevice() async throws {
+
+    // The modem echoes the first request and the device acknowledges it; then the modem goes
+    // quiet, as a Hub's modem does while it's still retrying a message to a device.
+    let acknowledgment: [UInt8] = received(
+      from: device,
+      .directAcknowledgment,
+      command1: engineVersionRequest.command.command1,
+      command2: 0x02
+    )
+    let connection = ScriptedConnection { (written: [UInt8], index: Int) -> [UInt8] in
+
+      index == 0 ? written + [0x06] + acknowledgment : []
+
+    }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      try await modem.request(engineVersionRequest)
+
+      await #expect(throws: ModemStoppedEchoing(device: device, command: .sendMessage)) {
+
+        async let answer = modem.request(engineVersionRequest)
+        await clock.waitForSleeper(until: .seconds(3))
+        clock.advance(by: .seconds(3))
+        _ = try await answer
+
+      }
+
+    }
+
+    // The message isn't sent again, since the modem may still send it once it's free.
+    #expect(connection.written.count == 2)
+
+  }
+
+  @Test func reportsAModemThatStopsEchoingPartwayThroughADatabaseReadAsBusyWithTheDevice() async throws {
+
+    let acknowledgment: [UInt8] = received(from: device, .directAcknowledgment, command1: 0x2F, command2: 0x00)
+    let first: [UInt8] = recordResponse(at: 0x0FFF, [0xE2, 0x04, 0x00, 0x5E, 0x5D, 0x00, 0x00, 0x04])
+    let connection = ScriptedConnection { (written: [UInt8], index: Int) -> [UInt8] in
+
+      index == 0 ? written + [0x06] + acknowledgment + first : []
+
+    }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      await #expect(throws: ModemStoppedEchoing(device: device, command: .sendMessage)) {
+
+        async let records = modem.readAllLinkDatabase(of: device)
+        await clock.waitForSleeper(until: .milliseconds(4_170))
+        clock.advance(by: .milliseconds(4_170))
+        _ = try await records
+
+      }
+
+    }
+
+    #expect(connection.written.count == 2)
+
+  }
+
   @Test func returnsTheAcknowledgmentOfAnExtendedMessage() async throws {
 
     let message = ExtendedMessage(to: device, command: ExtendedDirectCommand.getSet())

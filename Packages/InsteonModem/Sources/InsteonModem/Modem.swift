@@ -477,9 +477,10 @@ public actor Modem: SerialCommandSender {
   /// - Returns: The device's acknowledgment.
   /// - Throws: ``ModemError/deviceRejected(_:_:)`` if the device rejects the message,
   ///   ``ModemError/deviceTimedOut(_:)`` if it doesn't answer, ``ModemError/rejected(_:)`` if
-  ///   the modem NAKs every attempt, ``ModemError/timedOut(_:)`` if the modem doesn't echo
-  ///   the message, ``ModemError/connectionClosed`` if the modem is closed,
-  ///   `CancellationError` if the task is canceled, or the connection's error.
+  ///   the modem NAKs every attempt, ``ModemStoppedEchoing`` if the modem doesn't echo the
+  ///   message after it has sent anything else, ``ModemError/timedOut(_:)`` if it doesn't echo
+  ///   the message and hasn't sent anything, ``ModemError/connectionClosed`` if the modem is
+  ///   closed, `CancellationError` if the task is canceled, or the connection's error.
   @discardableResult
   public func request(
     _ message: StandardMessage,
@@ -510,9 +511,10 @@ public actor Modem: SerialCommandSender {
   /// - Returns: The device's acknowledgment.
   /// - Throws: ``ModemError/deviceRejected(_:_:)`` if the device rejects the message,
   ///   ``ModemError/deviceTimedOut(_:)`` if it doesn't answer, ``ModemError/rejected(_:)`` if
-  ///   the modem NAKs every attempt, ``ModemError/timedOut(_:)`` if the modem doesn't echo
-  ///   the message, ``ModemError/connectionClosed`` if the modem is closed,
-  ///   `CancellationError` if the task is canceled, or the connection's error.
+  ///   the modem NAKs every attempt, ``ModemStoppedEchoing`` if the modem doesn't echo the
+  ///   message after it has sent anything else, ``ModemError/timedOut(_:)`` if it doesn't echo
+  ///   the message and hasn't sent anything, ``ModemError/connectionClosed`` if the modem is
+  ///   closed, `CancellationError` if the task is canceled, or the connection's error.
   @discardableResult
   public func request(
     _ message: ExtendedMessage,
@@ -556,9 +558,11 @@ public actor Modem: SerialCommandSender {
   /// - Returns: The device's reply.
   /// - Throws: ``ModemError/deviceRejected(_:_:)`` if the device rejects the message,
   ///   ``ModemError/deviceTimedOut(_:)`` if it doesn't acknowledge it or doesn't reply,
-  ///   ``ModemError/rejected(_:)`` if the modem NAKs every attempt, ``ModemError/timedOut(_:)``
-  ///   if the modem doesn't echo the message, ``ModemError/connectionClosed`` if the modem is
-  ///   closed, `CancellationError` if the task is canceled, or the connection's error.
+  ///   ``ModemError/rejected(_:)`` if the modem NAKs every attempt, ``ModemStoppedEchoing`` if
+  ///   the modem doesn't echo the message after it has sent anything else,
+  ///   ``ModemError/timedOut(_:)`` if it doesn't echo the message and hasn't sent anything,
+  ///   ``ModemError/connectionClosed`` if the modem is closed, `CancellationError` if the task
+  ///   is canceled, or the connection's error.
   public func request<Reply: Sendable>(
     _ message: ExtendedMessage,
     awaitingReply reply: @escaping @Sendable (ReceivedMessage) -> Reply?,
@@ -753,7 +757,19 @@ public actor Modem: SerialCommandSender {
   ) async throws -> ReceivedMessage {
 
     let modemExchange = Self.exchange(for: command)
-    var steps = modemExchange.steps + [Self.acknowledgment(from: device, of: command1)]
+    let unconfirmed: ModemStoppedEchoing = ModemStoppedEchoing(device: device, command: command.number)
+
+    // A modem that has answered before and then doesn't echo a message to a device is most
+    // likely still busy with a device that doesn't answer, not disconnected.
+    let echoSteps: [AnswerStep<ModemReply>] = modemExchange.steps.map { (step: AnswerStep<ModemReply>) -> AnswerStep<ModemReply> in
+
+      var echoStep: AnswerStep<ModemReply> = step
+      echoStep.timedOutAfterReplies = unconfirmed
+
+      return echoStep
+
+    }
+    var steps: [AnswerStep<ModemReply>] = echoSteps + [Self.acknowledgment(from: device, of: command1)]
 
     if let isReply {
 
