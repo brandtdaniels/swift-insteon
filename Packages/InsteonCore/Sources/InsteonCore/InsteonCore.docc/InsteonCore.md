@@ -99,6 +99,23 @@ if try await lamp.capabilities().canDim {
 and its settings with their controls. ``Device/readSettings(includingAdvanced:beforeReading:)``
 reads the settings, and ``Device/writeSetting(_:to:button:)`` changes one and reads it back.
 
+### Linking devices
+
+``DeviceNetwork/linking`` hands out a ``DeviceLinkingCoordinator``, which links devices to the
+modem and unlinks them, one at a time, and keeps the network's registry, cache and snapshot up
+to date as it does. The Insteon device catalog decides what each device needs: whether it's
+turned on before it links, the steps a person takes on it, and whether it's linked back so
+the modem hears it. A ``LinkingObserver`` gets each ``LinkingEvent`` to show, and asks a
+person to put a device into its mode when the device goes first:
+
+```swift
+let result = try await network.linking.link(lamp, as: .controller, group: 0, observer: prompter)
+
+if let failure = result.linkBackFailure {
+  print("Linked one way only: \(failure)")
+}
+```
+
 ## Topics
 
 ### Controlling devices
@@ -134,6 +151,25 @@ reads the settings, and ``Device/writeSetting(_:to:button:)`` changes one and re
 - ``ModemDatabaseEntry``
 - ``NetworkDeviceState``
 - ``HubLocation``
+
+### Linking devices
+
+- ``DeviceLinkingCoordinator``
+- ``LinkingObserver``
+- ``LinkingEvent``
+- ``LinkingFallback``
+- ``ModemLinksPurpose``
+- ``SETButtonPrompt``
+- ``DeviceFirstPrompt``
+- ``LinkLeg``
+- ``LinkedDevice``
+- ``UnlinkedLink``
+- ``RemovedLinks``
+- ``TwoWayLinking``
+- ``DeviceLinkingResult``
+- ``DeviceUnlinkingResult``
+- ``DeviceUnlinkingAllResult``
+- ``RemoteUnlinkingError``
 
 ### Keeping devices
 

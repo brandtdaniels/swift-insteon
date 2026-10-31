@@ -72,6 +72,9 @@ public actor DeviceNetwork {
   /// modem's address is the Hub's Insteon ID.
   private let isHubsModem: Bool
 
+  /// Takes turns for the network's links and unlinks, so one runs at a time.
+  nonisolated let linkingTurns: LinkingTurns
+
   /// An identification in progress, which every caller for its address waits on.
   private struct Identification {
 
@@ -155,6 +158,7 @@ public actor DeviceNetwork {
     self.modemRecords = snapshot.modemDatabase
     self.hub = location
     self.isHubsModem = hub != nil
+    self.linkingTurns = LinkingTurns()
 
   }
 
@@ -438,6 +442,65 @@ public actor DeviceNetwork {
     }
 
     markSeen(device)
+
+  }
+
+  // MARK: - Linking
+
+  /// The coordinator that links devices to the modem and unlinks them, and keeps the
+  /// ``registry``, the ``cache`` and the network's ``snapshot()`` up to date as it does.
+  ///
+  /// Every coordinator a network hands out takes turns with the others, so one link or unlink
+  /// runs at a time and the modem is in one linking mode at a time.
+  ///
+  /// ```swift
+  /// let result = try await network.linking.link(lamp, as: .controller, group: 0, observer: prompter)
+  /// ```
+  public nonisolated var linking: DeviceLinkingCoordinator {
+
+    DeviceLinkingCoordinator(network: self)
+
+  }
+
+  /// Records that a link with a device was made or removed: the copies of the device's and the
+  /// modem's ALL-Link databases are forgotten, since both changed, and so are the modem's
+  /// records the snapshot holds, until they're read again.
+  ///
+  /// - Parameters:
+  ///   - device: The device.
+  ///   - answered: Whether the device took part, so it answered at the current time.
+  func recordLinkChange(of device: InsteonAddress, answered: Bool) async {
+
+    await cache.invalidate(device)
+    await cache.invalidateModem()
+    modemRecords = nil
+
+    if answered {
+
+      markSeen(device)
+
+    }
+
+  }
+
+  /// The modem's records in use for a device, read through the ``cache``, which reads the
+  /// modem's ALL-Link database when it has no copy. The records read are kept for the
+  /// snapshot.
+  ///
+  /// - Parameter device: The device.
+  /// - Returns: The modem's records in use that name the device, in the modem's order.
+  /// - Throws: The modem's errors.
+  func modemLinks(of device: InsteonAddress) async throws -> [AllLinkRecord] {
+
+    let records: [AllLinkRecord] = try await cache.modemRecords()
+
+    modemRecords = records
+
+    return records.filter { (record: AllLinkRecord) -> Bool in
+
+      record.address == device && record.flags.contains(.inUse)
+
+    }
 
   }
 
