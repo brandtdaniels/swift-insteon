@@ -30,12 +30,17 @@ public enum InsteonConnectError: Error, Hashable, Sendable {
 /// let hubs = try await InsteonConnectLookup().hubs()
 /// ```
 ///
-/// The lookup sends Insteon no credentials, but Insteon sees the network's public IP address,
-/// as it does for any request. The page also lists each Hub's MAC address, public IP address
-/// and network settings; only the Hub's local address, Insteon ID, modem category, subcategory
-/// and firmware version, and unit type are kept. A Hub that
-/// hasn't reported recently, or can't reach the internet, isn't listed; power-cycling it
-/// makes it report again.
+/// The lookup sends Insteon no credentials, no cookies and no identifying headers: its
+/// `User-Agent` is ``InsteonConnectLookup/userAgent`` rather than the app's name and version,
+/// and its `Accept-Language` is `en` rather than the person's languages.
+/// Insteon still sees the network's public IP address, as it does for any request. The page
+/// also lists each Hub's MAC address, public IP address and network settings; only the Hub's
+/// local address, Insteon ID, modem category, subcategory and firmware version, and unit type
+/// are kept. The default client keeps nothing on the device: its session has no cache, no
+/// cookies and no credential storage, so the page is never saved. It follows a redirect only
+/// to HTTPS on Insteon Connect's own host, so no other host's page decides which addresses
+/// are offered for the Hub's password. A Hub that hasn't reported recently, or can't reach
+/// the internet, isn't listed; power-cycling it makes it report again.
 ///
 /// The page is HTML for people rather than an API, so it's read by its labels, and a change
 /// to its wording can stop the lookup with ``InsteonConnectError/unrecognizedPage``.
@@ -47,26 +52,49 @@ public struct InsteonConnectLookup: Sendable {
   /// How long to wait for the page by default: 10 seconds.
   public static let defaultTimeout: Duration = .seconds(10)
 
-  /// The client the page is requested with.
-  public let httpClient: any HTTPClient
+  /// The largest page that's read: 1 MiB.
+  public static let maximumResponseSize: Int = 1_024 * 1_024
 
-  /// How long to wait for the page.
+  /// The `User-Agent` the lookup sends, which names this package rather than the app, its
+  /// version or the device's system.
+  public static let userAgent: String = "swift-insteon"
+
+  /// The client the page is requested with, which can't carry credentials.
+  public let httpClient: UnauthenticatedHTTPClient
+
+  /// How long to wait for the page, in all.
   public let timeout: Duration
+
+  /// Makes the default client: a session of its own that keeps no cache, cookies or
+  /// credentials, follows a redirect only to HTTPS on the same host, and reads at most
+  /// ``InsteonConnectLookup/maximumResponseSize`` bytes. It uses the system's or the
+  /// environment's proxy, as other requests to the internet do; the request is HTTPS and
+  /// carries no credentials, so a proxy carries only an encrypted tunnel to Insteon Connect.
+  ///
+  /// - Returns: The client.
+  public static func defaultClient() -> UnauthenticatedHTTPClient {
+
+    UnauthenticatedHTTPClient(
+      URLSessionHTTPClient.ephemeral(
+        redirectPolicy: .sameOriginHTTPSOnly,
+        maximumResponseSize: maximumResponseSize,
+        resourceTimeout: .seconds(60)
+      )
+    )
+
+  }
 
   /// Creates a lookup.
   ///
   /// - Parameters:
-  ///   - httpClient: The client to request the page with. Defaults to a
-  ///     `URLSessionHTTPClient`. It must not add credentials, so a
-  ///     `BasicAuthenticationHTTPClient` is refused.
-  ///   - timeout: How long to wait for the page. Defaults to
+  ///   - httpClient: The client to request the page with, which can't carry credentials.
+  ///     Defaults to ``InsteonConnectLookup/defaultClient()``.
+  ///   - timeout: How long to wait for the page, in all. Defaults to
   ///     ``InsteonConnectLookup/defaultTimeout``.
-  public init(httpClient: any HTTPClient = URLSessionHTTPClient(), timeout: Duration = InsteonConnectLookup.defaultTimeout) {
-
-    precondition(
-      !(httpClient is BasicAuthenticationHTTPClient),
-      "The lookup must not send the Hub's credentials to Insteon."
-    )
+  public init(
+    httpClient: UnauthenticatedHTTPClient = InsteonConnectLookup.defaultClient(),
+    timeout: Duration = InsteonConnectLookup.defaultTimeout
+  ) {
 
     self.httpClient = httpClient
     self.timeout = timeout
@@ -78,7 +106,11 @@ public struct InsteonConnectLookup: Sendable {
   /// - Returns: The Hubs in the page's order, each with its local endpoint and Insteon ID.
   ///   Empty when the page says it found no Hub.
   /// - Throws: ``InsteonConnectError/unexpectedStatus(_:)`` if the page doesn't load,
-  ///   ``InsteonConnectError/unrecognizedPage`` if it can't be read, or the client's error.
+  ///   ``InsteonConnectError/unrecognizedPage`` if it can't be read, `URLError(.timedOut)` if
+  ///   it takes longer than ``InsteonConnectLookup/timeout`` in all,
+  ///   `HTTPClientError.responseTooLarge(limit:)` if it's larger than
+  ///   ``InsteonConnectLookup/maximumResponseSize``, or the client's error, such as
+  ///   `HTTPClientError.redirectRefused` for a redirect to another host.
   public func hubs() async throws -> [DiscoveredHub] {
 
     var request = URLRequest(url: Self.pageURL)
@@ -86,8 +118,28 @@ public struct InsteonConnectLookup: Sendable {
     // Cookies would let Insteon link one lookup to the next.
     request.httpShouldHandleCookies = false
     request.timeoutInterval = timeout.timeInterval
+    // The system's own User-Agent names the app, its version and the device's system, and
+    // its Accept-Language the person's languages; the page is in English whatever they are.
+    request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
+    request.setValue("en", forHTTPHeaderField: "Accept-Language")
 
-    let response = try await httpClient.send(request)
+    let httpClient: UnauthenticatedHTTPClient = httpClient
+    let sent: URLRequest = request
+
+    // The request's own timeout limits only the wait between bytes, so the whole lookup is
+    // limited too.
+    let response: HTTPResponse = try await withDeadline(timeout) {
+
+      try await httpClient.send(sent)
+
+    }
+
+    // Whatever the client, a page larger than Insteon Connect's isn't read.
+    guard response.body.count <= Self.maximumResponseSize else {
+
+      throw HTTPClientError.responseTooLarge(limit: Self.maximumResponseSize)
+
+    }
 
     guard response.statusCode == 200 else {
 

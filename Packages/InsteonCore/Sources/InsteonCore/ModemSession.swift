@@ -44,14 +44,20 @@ public struct ModemSession: Sendable {
 
   /// Opens a Hub's modem, runs `body` with it, and closes it.
   ///
+  /// The Hub's credentials go only to an IPv4 address in `10.0.0.0/8`, `172.16.0.0/12` or
+  /// `192.168.0.0/16`. Any other host, such as a host name, an IPv6, loopback or link-local
+  /// address, or a public address, is refused with ``HubAddressRefused`` before anything is
+  /// sent. Requests go to the Hub directly, never through a proxy.
+  ///
   /// - Parameters:
-  ///   - host: The Hub's host name or IP address.
+  ///   - host: The Hub's private IPv4 address, such as `192.168.1.20`.
   ///   - port: The Hub's port, such as ``HubLocation/defaultPort``.
   ///   - user: The Hub's user name.
   ///   - password: The Hub's password.
   ///   - body: The work to do with the modem.
-  /// - Throws: The error `body` throws, or the connection's, such as the Hub's
-  ///   `HubStoppedAnswering`, which ``HubFailure`` reads.
+  /// - Throws: ``HubAddressRefused`` for a host that isn't a private IPv4 address, the error
+  ///   `body` throws, or the connection's, such as the Hub's `HubStoppedAnswering`, which
+  ///   ``HubFailure`` reads.
   public static func withHub(
     host: String,
     port: Int,
@@ -59,6 +65,13 @@ public struct ModemSession: Sendable {
     password: String,
     _ body: @Sendable (ModemSession) async throws -> Void
   ) async throws {
+
+    // Checked before the Hub is made, so nothing is sent to a host that's refused.
+    guard HubLocation(host: host, port: port).acceptsCredentials else {
+
+      throw HubAddressRefused(host: host)
+
+    }
 
     let endpoint = HubEndpoint(host: host, port: port)
     let hub = Hub(endpoint: endpoint, user: user, password: password)

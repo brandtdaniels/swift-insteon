@@ -354,7 +354,7 @@ struct RedirectRefusalTests {
 
   @Test func everyErrorHasADescription() {
 
-    for error in [HTTPClientError.nonHTTPResponse, .insecureRedirect, .redirectRefused] {
+    for error in [HTTPClientError.nonHTTPResponse, .insecureRedirect, .redirectRefused, .responseTooLarge(limit: 8), .proxyConfigured, .credentialsRefused] {
 
       #expect(!error.description.isEmpty)
 

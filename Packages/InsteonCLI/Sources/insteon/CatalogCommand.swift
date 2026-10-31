@@ -217,8 +217,9 @@ enum CatalogCommand {
 
   }
 
-  /// Downloads the published catalog when it's compatible with the bundled copy and differs
-  /// from the copy in use, and saves it when it's at least as new as the bundled copy.
+  /// Downloads the published catalog when it's compatible with the bundled copy, differs
+  /// from the copy in use, and is at least as new as that copy and the bundled copy, and
+  /// saves it.
   ///
   /// Only the catalog's site is asked, over HTTPS, with a session that keeps no cookies or
   /// credentials, so nothing about the Hub is ever sent. A redirect is followed only to HTTPS
@@ -250,6 +251,7 @@ enum CatalogCommand {
 
     // The cached copy is compared with the published one only when it's the copy in use.
     var current: Data? = nil
+    var cachedVersion: DeviceCatalogVersion? = nil
     var currentVersion: DeviceCatalogVersion = bundled
 
     if let cached = CatalogStore.cachedVersion(),
@@ -258,6 +260,7 @@ enum CatalogCommand {
     {
 
       current = json
+      cachedVersion = cached
       currentVersion = cached
 
     }
@@ -277,8 +280,9 @@ enum CatalogCommand {
     do {
 
       // Only the catalog's site is asked, with a session that keeps no cookies or
-      // credentials, and redirects only to HTTPS on its own host.
-      result = try await ProductCatalog.update(replacing: current, from: location, requestTimeout: requestTimeout)
+      // credentials, and redirects only to HTTPS on its own host. A published copy older
+      // than the one in use is refused.
+      result = try await ProductCatalog.update(replacing: current, currentVersion: cachedVersion, from: location, requestTimeout: requestTimeout)
 
     } catch let error as CancellationError {
 
@@ -302,14 +306,6 @@ enum CatalogCommand {
     case .unchanged:
       Output.line(CatalogText.upToDate(currentVersion))
     case let .updated(json, version):
-      guard CatalogCache.source(bundled: bundled, cached: version) == .cached else {
-
-        Output.line(CatalogText.bundledIsNewer(published: version, bundled: bundled))
-
-        return
-
-      }
-
       try CatalogStore.save(json: json, version: version)
       Output.line(CatalogText.updated(to: version))
     }
@@ -325,6 +321,8 @@ enum CatalogCommand {
     switch error {
     case let .incompatibleVersion(published):
       Output.line(CatalogText.incompatible(published: published, bundled: bundled, current: current))
+    case let .olderThanCurrent(published):
+      Output.line(CatalogText.publishedIsOlder(published: published, current: current))
     case let .unexpectedStatus(status):
       throw CommandFailure(
         description: "The Insteon device catalog's site answered with HTTP status \(status), so the current copy, \(current), stays."

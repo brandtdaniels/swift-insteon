@@ -31,7 +31,10 @@ on the Hub.
 Discovery sends one request to each address on private subnets (`10.0.0.0/8`,
 `172.16.0.0/12` and `192.168.0.0/16`) of at most 1,024 addresses, a few dozen at a time, and
 nothing more to the Hubs it finds. It never searches a cellular, public or larger network,
-and it sends no credentials: its client mustn't add any.
+and it sends no credentials: its client is an `UnauthenticatedHTTPClient`, which can be made
+only from a `URLSessionHTTPClient` and refuses any request that carries credentials. The
+default client goes to each address directly rather than through a proxy, keeps nothing
+between requests, and gives up on an address after ``HubDiscovery/probeTimeout`` in all.
 
 Any device on port `25105` that asks for a password the same way would be reported too, so a
 result is a candidate rather than a verified Hub. The Hub's interface sends its password
@@ -49,6 +52,11 @@ and its modem's category and subcategory, which name its model,
 but it needs the internet, sends the network's public IP address to Insteon, and misses a
 Hub that hasn't reported recently. It's opt-in: nothing in this library calls it for you.
 
+The page lists each Hub's MAC address and public IP address, so the default client keeps
+nothing on the device: no cache, cookies or credentials. It follows a redirect only to HTTPS on
+Insteon Connect's own host, and sends a `User-Agent` that names this package rather than the
+app.
+
 ```swift
 let hubs = try await InsteonConnectLookup().hubs()
 ```
@@ -63,8 +71,8 @@ the first time discovery runs, and until they do, every probe fails as if no Hub
 
 A found Hub is a candidate until it answers Get IM Info with the user name and password printed
 on it. ``HubIdentifier`` asks for that, but sends the credentials only where a Hub on the local
-network is: to a candidate at a private address on the Hub's port, stopping at the first
-candidate that rejects them. The per-candidate decision to send them stays with the caller, so a
+network is: to a candidate at a private address on the Hub's port, as ``HubAddressPolicy``
+decides, stopping at the first candidate that rejects them. The per-candidate decision to send them stays with the caller, so a
 command-line tool can ask in a terminal and an app can show a prompt.
 
 ```swift
@@ -89,6 +97,7 @@ let results = try await HubIdentifier().identify(result.hubs) { candidate in
 ### Confirming a Hub
 
 - ``HubIdentifier``
+- ``HubAddressPolicy``
 
 ### The local network
 

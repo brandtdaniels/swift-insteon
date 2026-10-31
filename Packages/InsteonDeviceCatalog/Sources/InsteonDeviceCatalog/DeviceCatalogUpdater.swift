@@ -41,6 +41,11 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
   /// The downloaded catalog's SHA-256 doesn't match the manifest's.
   case checksumMismatch
 
+  /// The published catalog is a version older than the app's copy, or than
+  /// ``DeviceCatalog/bundledVersion()``, with that version, so it isn't downloaded: a stale
+  /// cache or a rolled-back site can't take back data a newer copy has.
+  case olderThanCurrent(DeviceCatalogVersion)
+
 }
 
 /// Downloads the published device catalog when it differs from the app's copy.
@@ -49,15 +54,21 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
 /// fetches the manifest and goes on only if the version has the same MAJOR.MINOR as the copy
 /// the package ships with, ``DeviceCatalog/bundledVersion()``, since below 1.0 the catalog's
 /// format can change in any MINOR. It then compares the manifest's SHA-256 with the app's
-/// copy, and downloads the catalog only when they differ. A downloaded catalog is used only if
+/// copy, and downloads the catalog only when they differ and the published version is at
+/// least as new as the app's copy and the bundled copy, so a stale cache or a rolled-back site
+/// never replaces newer data with older. A downloaded catalog is used only if
 /// its bytes hash to the manifest's SHA-256 and it reads as a catalog, so a download cut
 /// short, or a catalog from a different version than the manifest, is never used. The hash
 /// shows that the two files agree; HTTPS is what shows they came from the catalog's host.
 ///
 /// ```swift
 /// let saved: Data? = try? Data(contentsOf: savedURL)
+/// let savedVersion: DeviceCatalogVersion? = try? JSONDecoder().decode(
+///   DeviceCatalogVersion.self,
+///   from: Data(contentsOf: savedVersionURL)
+/// )
 ///
-/// switch try await DeviceCatalogUpdater().update(replacing: saved) {
+/// switch try await DeviceCatalogUpdater().update(replacing: saved, currentVersion: savedVersion) {
 /// case .unchanged:
 ///   break
 /// case let .updated(json, catalog, version):
@@ -98,15 +109,22 @@ public struct DeviceCatalogUpdater: Sendable {
   /// The directory the manifest and catalog are published in.
   public let location: URL
 
+  /// The largest file the updater reads: 16 MiB, several times the catalog's size.
+  public static let maximumResponseSize: Int = 16 * 1_024 * 1_024
+
   /// Creates an updater.
   ///
   /// - Parameters:
   ///   - client: The client to send requests through. Defaults to a `URLSessionHTTPClient` with
-  ///     ``DeviceCatalogUpdater/redirectPolicy``.
+  ///     ``DeviceCatalogUpdater/redirectPolicy`` that reads at most
+  ///     ``DeviceCatalogUpdater/maximumResponseSize`` bytes.
   ///   - location: The directory the manifest and catalog are published in. Defaults to
   ///     ``DeviceCatalogUpdater/defaultLocation``.
   public init(
-    client: any HTTPClient = URLSessionHTTPClient(redirectPolicy: DeviceCatalogUpdater.redirectPolicy),
+    client: any HTTPClient = URLSessionHTTPClient(
+      redirectPolicy: DeviceCatalogUpdater.redirectPolicy,
+      maximumResponseSize: DeviceCatalogUpdater.maximumResponseSize
+    ),
     location: URL = DeviceCatalogUpdater.defaultLocation
   ) {
 
@@ -115,19 +133,28 @@ public struct DeviceCatalogUpdater: Sendable {
 
   }
 
-  /// Downloads the published catalog if it differs from the app's copy.
+  /// Downloads the published catalog if it differs from the app's copy and is at least as new
+  /// as both the app's copy and the copy the package ships with.
   ///
-  /// - Parameter current: The JSON of the app's copy, such as one saved from an earlier
-  ///   update, or `nil` for the copy the package ships with.
+  /// - Parameters:
+  ///   - current: The JSON of the app's copy, such as one saved from an earlier update, or
+  ///     `nil` for the copy the package ships with.
+  ///   - currentVersion: The version saved beside the app's copy, or `nil` for the copy the
+  ///     package ships with, or a copy saved without its version. A version in another format
+  ///     than ``DeviceCatalog/bundledVersion()``'s isn't compared. The bundled copy's version is
+  ///     always compared.
   /// - Returns: ``DeviceCatalogUpdate/unchanged``, or the new catalog, its JSON and its version.
   /// - Throws: ``DeviceCatalogUpdateError/incompatibleVersion(_:)`` if the published catalog
-  ///   is in another format, so the app should keep its copy; another
-  ///   ``DeviceCatalogUpdateError`` if a download fails its checks; `DecodingError` if a
-  ///   catalog that matches its SHA-256 doesn't read as a catalog;
-  ///   `DeviceCatalogError.missingBundledCatalog` if the shipped copy or its manifest is
-  ///   missing; or the client's error if a request gets no response or is redirected somewhere
-  ///   its policy refuses, such as `HTTPClientError.redirectRefused`.
-  public func update(replacing current: Data?) async throws -> DeviceCatalogUpdate {
+  ///   is in another format, so the app should keep its copy;
+  ///   ``DeviceCatalogUpdateError/olderThanCurrent(_:)`` if it's older than the app's copy or
+  ///   the bundled copy, before it's downloaded; another ``DeviceCatalogUpdateError`` if a
+  ///   download fails its checks; `HTTPClientError.responseTooLarge(limit:)` for a file larger
+  ///   than ``DeviceCatalogUpdater/maximumResponseSize``; `DecodingError` if a catalog that
+  ///   matches its SHA-256 doesn't read as a catalog; `DeviceCatalogError.missingBundledCatalog`
+  ///   if the shipped copy or its manifest is missing; or the client's error if a request gets
+  ///   no response or is redirected somewhere its policy refuses, such as
+  ///   `HTTPClientError.redirectRefused`.
+  public func update(replacing current: Data?, currentVersion: DeviceCatalogVersion?) async throws -> DeviceCatalogUpdate {
 
     let manifest = try await manifest()
     let bundledVersion = try DeviceCatalog.bundledVersion()
@@ -143,6 +170,19 @@ public struct DeviceCatalogUpdater: Sendable {
     if currentDigest == manifest.sha256 {
 
       return .unchanged
+
+    }
+
+    // A published version older than the copy in use, or than the bundled copy, would take
+    // back data, such as a guard, that the newer copy has.
+    let newest: DeviceCatalogVersion = [bundledVersion, currentVersion]
+      .compactMap { (version: DeviceCatalogVersion?) -> DeviceCatalogVersion? in version }
+      .filter { (version: DeviceCatalogVersion) -> Bool in version.isCompatible(with: bundledVersion) }
+      .max() ?? bundledVersion
+
+    guard manifest.version >= newest else {
+
+      throw DeviceCatalogUpdateError.olderThanCurrent(manifest.version)
 
     }
 
@@ -198,6 +238,13 @@ public struct DeviceCatalogUpdater: Sendable {
     }
 
     let response = try await client.send(URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData))
+
+    // Whatever the client, a file larger than the catalog could be isn't read.
+    guard response.body.count <= Self.maximumResponseSize else {
+
+      throw HTTPClientError.responseTooLarge(limit: Self.maximumResponseSize)
+
+    }
 
     guard response.isSuccess else {
 

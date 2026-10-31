@@ -124,7 +124,7 @@ swift run insteon --hub 192.168.1.20 device 1A.2B.3C on 50%
 swift run insteon --help
 ```
 
-The command reads the credentials only from the environment or that file, never from its arguments or from a file in the current directory. `Scripts/install-insteon.sh [PREFIX]` installs it, with the Insteon device catalog it names products from, into `PREFIX/bin`, `~/.local/bin` by default. See [InsteonCLI](Packages/InsteonCLI) for every command.
+The command reads the credentials only from the environment or that file, never from its arguments or from a file in the current directory. It sends them only to a private IPv4 address, in `10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16`, given with `--hub` or `INSTEON_HUB_HOST`, and refuses a host name or any other address before sending anything. Requests go to the Hub directly, never through a proxy. `Scripts/install-insteon.sh [PREFIX]` installs it, with the Insteon device catalog it names products from, into `PREFIX/bin`, `~/.local/bin` by default. See [InsteonCLI](Packages/InsteonCLI) for every command.
 
 ## Documentation
 

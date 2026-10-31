@@ -120,6 +120,23 @@ public struct DeviceCatalogVersion: Hashable, Sendable, LosslessStringConvertibl
 
 }
 
+extension DeviceCatalogVersion: Comparable {
+
+  /// Whether a version is older than another: its MAJOR, then its MINOR, then its PATCH is
+  /// lower.
+  ///
+  /// - Parameters:
+  ///   - lhs: A version.
+  ///   - rhs: Another version.
+  /// - Returns: `true` if `lhs` comes before `rhs`.
+  public static func < (lhs: DeviceCatalogVersion, rhs: DeviceCatalogVersion) -> Bool {
+
+    (lhs.major, lhs.minor, lhs.patch) < (rhs.major, rhs.minor, rhs.patch)
+
+  }
+
+}
+
 /// The fields of the catalog's `manifest.json` this package reads.
 struct CatalogManifest: Decodable, Sendable {
 

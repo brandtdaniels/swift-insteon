@@ -14,7 +14,7 @@ Keep track of the Insteon devices on a network: the library an app or a command 
 - `ModemDatabaseEntry`: a record of the modem's ALL-Link database and the device it names
 - `NetworkSnapshot`: what a network knows, to save and restore: the registry's identities, each device's engine, ALL-Link database copy and delta, last known level and when it last answered, the modem's ALL-Link database, and the Hub's location
 - `NetworkDeviceState`: what a network learned about one device besides its identity
-- `HubLocation`: the Hub's host, port and Insteon ID
+- `HubLocation`: the Hub's host, port and Insteon ID, and whether the Hub's credentials may be sent to its host: only to a private IPv4 address, as `ModemSession.withHub` requires
 - `NetworkSnapshotStore`: somewhere an app keeps a network's snapshot; `JSONFileDeviceRegistryStore` is one
 - `Device`: one device on a network, controlled as the Insteon device catalog describes it; reads its settings and changes them, never writing the flags that turn off its radio or powerline or require a checksum, or any flag or command the Insteon device catalog guards, and only turning its programming lock off, also through a value whose byte holds those flags
 - `DeviceSetting`, `DeviceSettingsReading`, `DeviceSettingChange`: a setting with what a settings page shows for it, the settings a device reported, and what a write changed

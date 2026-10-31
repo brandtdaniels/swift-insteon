@@ -45,7 +45,10 @@ only if its ``DeviceCatalogVersion`` has the same MAJOR.MINOR as the copy the pa
 with, ``DeviceCatalog/bundledVersion()``, downloads the catalog only when the manifest's
 SHA-256 differs from the app's copy, and uses the download only if it hashes to that SHA-256.
 Below 1.0 any MINOR can change the catalog's format, so a catalog with another MAJOR.MINOR
-waits for an update of the package. Updating is optional.
+waits for an update of the package. A published version older than the app's copy, whose
+version the app passes to ``DeviceCatalogUpdater/update(replacing:currentVersion:)``, or than
+the bundled copy is refused with ``DeviceCatalogUpdateError/olderThanCurrent(_:)``, so a stale
+cache or a rolled-back site never takes back newer data. Updating is optional.
 
 The catalog isn't signed, so a download's integrity rests on HTTPS to the expected host plus
 the manifest's SHA-256. The SHA-256 only shows that the catalog matches a manifest fetched

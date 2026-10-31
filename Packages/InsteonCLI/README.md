@@ -17,7 +17,7 @@ The script, run from the package's root, builds the command for release and copi
 
 ## Connecting
 
-- `--hub HOST[:PORT]`: a Hub 2245 or Hub 2242 on the local network. Without `--hub`, the host comes from `INSTEON_HUB_HOST`, and a host without a port takes it from `INSTEON_HUB_PORT`, or else uses the Hub's port, 25105.
+- `--hub HOST[:PORT]`: a Hub 2245 or Hub 2242 on the local network, by its private IPv4 address, as described below. Without `--hub`, the host comes from `INSTEON_HUB_HOST`, and a host without a port takes it from `INSTEON_HUB_PORT`, or else uses the Hub's port, 25105.
 - `--serial PATH`: a PowerLinc Modem or USB Adapter on a serial or USB port, such as `/dev/ttyUSB0`, on macOS and Linux.
 - `--env-file PATH`: the environment file to read in place of the default one, described below.
 
@@ -33,6 +33,8 @@ INSTEON_HUB_HOST=192.168.1.20
 Make it readable only by you with `chmod 600 ~/.config/insteon/env`. The command reads the file only if you own it and no one else can write to it, and warns if others can read it. It never reads a file from the current directory, so a project you clone can't point the command, and your password, at another Hub. `--env-file PATH` reads another file, with the same checks.
 
 Each line is `KEY=VALUE`, optionally after `export`; lines starting with `#` are comments. A value can be wrapped in single or double quotes, and nothing in it is expanded. A variable set in the environment wins over the file.
+
+The command sends the Hub's user name and password only to an IPv4 address in `10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16`, where a Hub on a home network is, whether the address comes from `--hub` or `INSTEON_HUB_HOST`. A host name, an IPv6, loopback or link-local address, and a public address, such as a mistyped one, are refused before anything is sent, and there's no option to allow them. Through a VPN, give the Hub's address on the home network. Requests go to the Hub directly, never through a proxy, which would read the password. On Linux, where `http_proxy`, `HTTP_PROXY`, `all_proxy` or `ALL_PROXY` can name a proxy the command can't turn off, it refuses to connect unless `no_proxy` names the Hub's exact address, such as `no_proxy=192.168.1.20`; an address range there isn't read, and `*` counts only as the whole value.
 
 Before it connects, the command prints the Hub's address to standard error, as `Connecting to the Hub at HOST:PORT`, so you can see where the password is going.
 
@@ -122,7 +124,7 @@ In use:   cached
 
 It reads the catalog's published manifest over HTTPS, and downloads the catalog only when its version has the same MAJOR.MINOR as the bundled copy, the format the command reads, and its SHA-256 differs from the copy in use. A download is used only if it matches the manifest's SHA-256 and reads as a catalog. It's kept in `$XDG_CACHE_HOME/insteon/catalog.json`, or `~/.cache/insteon/catalog.json`, with its version in `catalog-version.json` beside it, both readable only by you. They hold only the public catalog; delete them to go back to the bundled copy.
 
-Other commands use the cached copy when it has the bundled copy's MAJOR.MINOR and a PATCH at least as high, and the bundled copy otherwise, such as after installing a newer release of the package. A cached copy that can't be read gets a one-line warning, and the bundled copy is used. A catalog published in a newer format needs a newer swift-insteon; `catalog update` says so and keeps the current copy.
+Other commands use the cached copy when it has the bundled copy's MAJOR.MINOR and a PATCH at least as high, and the bundled copy otherwise, such as after installing a newer release of the package. A cached copy that can't be read gets a one-line warning, and the bundled copy is used. A catalog published in a newer format needs a newer swift-insteon; `catalog update` says so and keeps the current copy. A published catalog older than the copy in use, or than the bundled copy, isn't downloaded, so a stale cache or a rolled-back site can't take back newer data; `catalog update` says so and keeps the current copy.
 
 `catalog update` asks only the catalog's site. It needs no Hub or modem, doesn't read the environment file or the Hub's settings, and sends no credentials. It follows a redirect only to HTTPS on the catalog's own host and port, deciding before each one; any other redirect fails the update and keeps the current copy, since the catalog isn't signed and its integrity rests on HTTPS to the expected host plus the manifest's SHA-256. It exits with status 1 when the catalog can't be downloaded.
 

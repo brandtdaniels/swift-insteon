@@ -15,7 +15,7 @@ import InsteonProtocol
 /// Asking for Get IM Info confirms a candidate really is a Hub and reads its Insteon ID,
 /// category, subcategory and firmware version. It needs the user name and password printed on
 /// the Hub, which the Hub's interface sends unencrypted, so the credentials go only where a Hub
-/// on the local network is:
+/// on the local network is, at a private address as ``HubAddressPolicy`` decides:
 ///
 /// - ``HubIdentifier/identify(_:provideCredentials:onResult:)``, which identifies several
 ///   candidates, sends them only to a candidate at a private address on the Hub's
@@ -129,7 +129,9 @@ public struct HubIdentifier: Sendable {
   ///
   /// - Parameters:
   ///   - httpClient: The client to send requests with, before the Hub's credentials are added.
-  ///     Defaults to a `URLSessionHTTPClient`.
+  ///     Defaults to `URLSessionHTTPClient.localNetwork()`, which goes to each candidate
+  ///     directly rather than through a proxy, keeps nothing between requests and refuses
+  ///     redirects.
   ///   - port: The Hub's port, which a candidate must be on for
   ///     ``HubIdentifier/identify(_:provideCredentials:onResult:)`` to send it credentials.
   ///     Defaults to `HubEndpoint.defaultPort`, 25105. Pass another port only when the Hub is
@@ -137,7 +139,7 @@ public struct HubIdentifier: Sendable {
   ///   - timeout: How long a candidate has to answer Get IM Info. Defaults to
   ///     ``HubIdentifier/defaultTimeout``.
   public init(
-    httpClient: any HTTPClient = URLSessionHTTPClient(),
+    httpClient: any HTTPClient = URLSessionHTTPClient.localNetwork(),
     port: Int = HubEndpoint.defaultPort,
     timeout: Duration = HubIdentifier.defaultTimeout
   ) {
@@ -320,10 +322,11 @@ public struct HubIdentifier: Sendable {
 
   }
 
-  /// Whether a host is a private IPv4 address, where a Hub on the local network is.
+  /// Whether a host is a private IPv4 address, where a Hub on the local network is, as
+  /// ``HubAddressPolicy`` decides.
   private static func isPrivate(_ host: String) -> Bool {
 
-    IPv4Subnet(address: host, prefixLength: 32)?.isPrivate == true
+    HubAddressPolicy.allowsCredentials(to: host)
 
   }
 

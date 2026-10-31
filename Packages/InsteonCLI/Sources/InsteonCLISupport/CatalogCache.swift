@@ -188,16 +188,16 @@ public enum CatalogText {
 
   }
 
-  /// What `insteon catalog update` says when the published copy is older than the bundled
-  /// one, so it isn't saved.
+  /// What `insteon catalog update` says when the published copy is older than the copy in use
+  /// or the bundled one, so it isn't downloaded.
   ///
   /// - Parameters:
   ///   - published: The published copy's version.
-  ///   - bundled: The bundled copy's version.
+  ///   - current: The version of the copy in use, which stays.
   /// - Returns: The message.
-  public static func bundledIsNewer(published: DeviceCatalogVersion, bundled: DeviceCatalogVersion) -> String {
+  public static func publishedIsOlder(published: DeviceCatalogVersion, current: DeviceCatalogVersion) -> String {
 
-    "The bundled Insteon device catalog, \(bundled), is newer than the published one, \(published), so the published one isn't saved."
+    "The published Insteon device catalog, \(published), is older than the current copy, \(current), so it isn't downloaded and the current copy stays."
 
   }
 

@@ -66,6 +66,19 @@ refuses any redirect for a request carrying the Hub's credentials and throws
 another host a redirect names. An HTTP stack of your own must refuse redirects for these
 requests too.
 
+The default client is `URLSessionHTTPClient.localNetwork()`. Its session goes to the Hub
+directly, never through a proxy, which would read the credentials, and keeps no cookies,
+credentials or cache. On Linux, where the environment's proxy can't be turned off, it refuses
+a request a proxy would carry with `HTTPClientError.proxyConfigured`; naming the Hub's address
+in `no_proxy` sends it directly. Each request may take ``Hub/requestTimeout`` in all, however
+slowly the Hub answers, and a page larger than ``Hub/maximumResponseSize`` isn't read. The
+first time the Hub rejects the credentials with `401` or `403`, a ``HubConnection`` sends no
+more requests.
+
+``Hub`` sends the credentials to whatever address its endpoint names. A front end that takes
+the address from a person should check it first: InsteonCore's `ModemSession.withHub` sends
+them only to an IPv4 address in `10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16`.
+
 ### Reaching a Hub away from home
 
 The Hub's interface is meant for the local network: it's plain HTTP, so its password and

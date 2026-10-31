@@ -39,8 +39,8 @@ struct HubFinderTests {
     }
 
     return HubFinder(
-      discovery: HubDiscovery(httpClient: local, network: FixedNetwork(fixed: [network])),
-      lookup: InsteonConnectLookup(httpClient: connect)
+      discovery: HubDiscovery(httpClient: UnauthenticatedHTTPClient(transport: local), network: FixedNetwork(fixed: [network])),
+      lookup: InsteonConnectLookup(httpClient: UnauthenticatedHTTPClient(transport: connect))
     )
 
   }

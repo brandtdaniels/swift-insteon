@@ -5,12 +5,15 @@ import FoundationNetworking
 import Testing
 import InsteonNetworking
 
-@Suite(.serialized)
+@Suite(.serialized, .timeLimit(.minutes(1)))
 struct URLSessionHTTPClientTests {
 
   let client: URLSessionHTTPClient
 
   let sameOriginClient: URLSessionHTTPClient
+
+  /// Reads at most 8 bytes of an answer.
+  let limitedClient: URLSessionHTTPClient
 
   init() {
 
@@ -21,6 +24,41 @@ struct URLSessionHTTPClientTests {
 
     client = URLSessionHTTPClient(session: session)
     sameOriginClient = URLSessionHTTPClient(session: session, redirectPolicy: .sameOriginHTTPSOnly)
+    limitedClient = URLSessionHTTPClient(session: session, maximumResponseSize: 8)
+
+  }
+
+  // MARK: The size of an answer
+
+  @Test(.timeLimit(.minutes(1))) func refusesABodyLargerThanTheLimit() async {
+
+    StubURLProtocol.stub = .success(statusCode: 200, headers: [:], body: Data(repeating: 0x41, count: 9))
+
+    await #expect(throws: HTTPClientError.responseTooLarge(limit: 8)) {
+
+      try await limitedClient.send(URLRequest(url: URL(string: "http://192.168.1.20:25105/buffstatus.xml")!))
+
+    }
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func readsABodyAsLargeAsTheLimit() async throws {
+
+    StubURLProtocol.stub = .success(statusCode: 200, headers: [:], body: Data(repeating: 0x41, count: 8))
+
+    let response: HTTPResponse = try await limitedClient.send(URLRequest(url: URL(string: "http://192.168.1.20:25105/buffstatus.xml")!))
+
+    #expect(response.body == Data(repeating: 0x41, count: 8))
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func readsALargeBodyWithoutALimit() async throws {
+
+    StubURLProtocol.stub = .success(statusCode: 200, headers: [:], body: Data(repeating: 0x41, count: 100_000))
+
+    let response: HTTPResponse = try await client.send(URLRequest(url: URL(string: "http://192.168.1.20:25105/buffstatus.xml")!))
+
+    #expect(response.body.count == 100_000)
 
   }
 
