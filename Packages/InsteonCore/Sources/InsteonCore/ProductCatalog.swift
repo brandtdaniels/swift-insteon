@@ -8,7 +8,7 @@ import InsteonNetworking
 /// A copy of the Insteon device catalog, which names products and describes what they do.
 ///
 /// A front end loads the copy the package ships with, or a newer one it downloaded with
-/// ``update(replacing:from:requestTimeout:resourceTimeout:)`` and saved, and hands it to
+/// ``update(replacing:currentVersion:from:requestTimeout:resourceTimeout:)`` and saved, and hands it to
 /// ``ModemSession/network(catalog:snapshot:hub:)``:
 ///
 /// ```swift
@@ -94,15 +94,20 @@ public struct ProductCatalog: Sendable {
   /// Where the Insteon device catalog publishes the versions this package reads, over HTTPS.
   public static let updateLocation: URL = DeviceCatalogUpdater.defaultLocation
 
-  /// Downloads the published catalog when it's in the format the package reads and differs
-  /// from a copy.
+  /// Downloads the published catalog when it's in the format the package reads, differs from
+  /// a copy, and is at least as new as that copy and the copy the package ships with.
   ///
   /// Only an HTTPS address is asked, and only the catalog's site, with a session that keeps no cookies, credentials or
   /// cache, so nothing about a Hub is ever sent. A redirect is followed only to HTTPS on the
-  /// same host and port. The published catalog is checked against its manifest's SHA-256.
+  /// same host and port. The published catalog is checked against its manifest's SHA-256, and
+  /// a file larger than 16 MiB isn't read. A published version older than the copy in use, or
+  /// than the bundled copy, is refused before it's downloaded, so a stale cache or a
+  /// rolled-back site never takes back newer data.
   ///
   /// - Parameters:
   ///   - current: The JSON of the copy in use, or `nil` for the copy the package ships with.
+  ///   - currentVersion: The version of the copy in use, as saved beside it, or `nil` for the
+  ///     copy the package ships with.
   ///   - location: Where the catalog is published. Defaults to ``updateLocation``.
   ///   - requestTimeout: How long each request may take, in seconds. Defaults to 30.
   ///   - resourceTimeout: How long the whole download may take, in seconds. Defaults to 120.
@@ -112,6 +117,7 @@ public struct ProductCatalog: Sendable {
   ///   describes.
   public static func update(
     replacing current: Data?,
+    currentVersion: DeviceCatalogVersion?,
     from location: URL = ProductCatalog.updateLocation,
     requestTimeout: TimeInterval = 30,
     resourceTimeout: TimeInterval = 120
@@ -138,13 +144,17 @@ public struct ProductCatalog: Sendable {
     }
 
     // Redirects are followed only to HTTPS on the catalog's own host, decided before each one.
-    let client: URLSessionHTTPClient = URLSessionHTTPClient(session: session, redirectPolicy: DeviceCatalogUpdater.redirectPolicy)
+    let client: URLSessionHTTPClient = URLSessionHTTPClient(
+      session: session,
+      redirectPolicy: DeviceCatalogUpdater.redirectPolicy,
+      maximumResponseSize: DeviceCatalogUpdater.maximumResponseSize
+    )
     let updater: DeviceCatalogUpdater = DeviceCatalogUpdater(client: client, location: location)
     let result: DeviceCatalogUpdate
 
     do {
 
-      result = try await updater.update(replacing: current)
+      result = try await updater.update(replacing: current, currentVersion: currentVersion)
 
     } catch let error as CancellationError {
 
@@ -155,6 +165,8 @@ public struct ProductCatalog: Sendable {
       switch error {
       case let .incompatibleVersion(published):
         throw ProductCatalogUpdateError.incompatibleVersion(published)
+      case let .olderThanCurrent(published):
+        throw ProductCatalogUpdateError.olderThanCurrent(published)
       case let .unexpectedStatus(status):
         throw ProductCatalogUpdateError.unexpectedStatus(status)
       case .malformedManifest:
@@ -205,6 +217,10 @@ public enum ProductCatalogUpdateError: Error, Hashable, Sendable {
   /// The published catalog is in a format the package doesn't read: a different MAJOR.MINOR
   /// than the shipped copy's. This isn't a failure; the copy in use stays.
   case incompatibleVersion(DeviceCatalogVersion)
+
+  /// The published catalog is older than the copy in use or the shipped copy, with its
+  /// version, so it isn't downloaded. This isn't a failure; the copy in use stays.
+  case olderThanCurrent(DeviceCatalogVersion)
 
   /// The catalog's site answered with an HTTP status other than 200.
   case unexpectedStatus(Int)

@@ -109,7 +109,11 @@ struct CatalogCacheTests {
 
     #expect(CatalogText.updated(to: version) == "Updated the Insteon device catalog to 0.6.26.")
     #expect(CatalogText.upToDate(version) == "The Insteon device catalog is up to date (0.6.26).")
-    #expect(CatalogText.bundledIsNewer(published: version, bundled: bundled).contains("0.6.20"))
+    let older: String = CatalogText.publishedIsOlder(published: bundled, current: version)
+
+    #expect(older.contains("0.6.20"))
+    #expect(older.contains("0.6.26"))
+    #expect(older.contains("current copy stays"))
 
   }
 

@@ -12,7 +12,7 @@ struct ProductCatalogUpdateTests {
 
     await #expect(throws: ProductCatalogUpdateError.insecureLocation) {
 
-      _ = try await ProductCatalog.update(replacing: nil, from: location)
+      _ = try await ProductCatalog.update(replacing: nil, currentVersion: nil, from: location)
 
     }
 

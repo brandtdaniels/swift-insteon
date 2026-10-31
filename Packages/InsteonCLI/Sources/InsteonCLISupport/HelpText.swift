@@ -406,7 +406,8 @@ public enum HelpText {
     command reads and differs from the copy in use, and checks its SHA-256 before saving
     it. It needs no Hub or modem, reads no Hub settings, and sends nothing but the requests
     for the catalog. A catalog in a newer format needs a newer swift-insteon; the current
-    copy stays until then.
+    copy stays until then. A published catalog older than the copy in use, or than the
+    bundled copy, isn't downloaded, and the current copy stays.
     """
 
 }

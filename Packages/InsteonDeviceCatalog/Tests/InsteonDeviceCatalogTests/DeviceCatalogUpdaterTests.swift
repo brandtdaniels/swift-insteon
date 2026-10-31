@@ -66,6 +66,7 @@ struct RedirectedFile: HTTPClient {
 
 }
 
+@Suite(.timeLimit(.minutes(1)))
 struct DeviceCatalogUpdaterTests {
 
   static let published = DeviceCatalogTests.json(DeviceCatalogTests.leakSensor)
@@ -198,13 +199,140 @@ struct DeviceCatalogUpdaterTests {
   @Test func takesAnotherPatch() async throws {
 
     let bundled = try DeviceCatalog.bundledVersion()
-    let version = DeviceCatalogVersion(major: bundled.major, minor: bundled.minor, patch: 0)
+    let version = DeviceCatalogVersion(major: bundled.major, minor: bundled.minor, patch: bundled.patch + 1)
     let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published), version: version.description))
 
     let update = try await DeviceCatalogUpdater(client: files).update(replacing: nil)
     let expected = try DeviceCatalog(json: Self.published)
 
     #expect(update == .updated(json: Self.published, catalog: expected, version: version))
+
+  }
+
+  // MARK: Rolling back
+
+  // A stale cache or a rolled-back site can't take back data a newer copy has.
+  @Test func refusesAVersionOlderThanTheCurrentCopy() async throws {
+
+    let bundled = try DeviceCatalog.bundledVersion()
+    let current = DeviceCatalogVersion(major: bundled.major, minor: bundled.minor, patch: 990)
+    let published = try #require(DeviceCatalogVersion(try Self.compatibleVersion()))
+    let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published), version: published.description))
+
+    await #expect(throws: DeviceCatalogUpdateError.olderThanCurrent(published)) {
+
+      try await DeviceCatalogUpdater(client: files).update(replacing: Data("{}".utf8), currentVersion: current)
+
+    }
+
+    // The catalog itself is never downloaded.
+    #expect(await files.requested == ["manifest.json"])
+
+  }
+
+  @Test func refusesAVersionOlderThanTheBundledCopy() async throws {
+
+    let bundled = try DeviceCatalog.bundledVersion()
+
+    // A bundled PATCH of 0 has nothing older in its format.
+    guard bundled.patch > 0 else {
+
+      return
+
+    }
+
+    let older = DeviceCatalogVersion(major: bundled.major, minor: bundled.minor, patch: bundled.patch - 1)
+    let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published), version: older.description))
+
+    await #expect(throws: DeviceCatalogUpdateError.olderThanCurrent(older)) {
+
+      try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+
+    }
+
+    // The bundled copy is the floor even when the app's copy says it's older still.
+    let oldest = DeviceCatalogVersion(major: bundled.major, minor: bundled.minor, patch: 0)
+
+    await #expect(throws: DeviceCatalogUpdateError.olderThanCurrent(older)) {
+
+      try await DeviceCatalogUpdater(client: files).update(replacing: Data("{}".utf8), currentVersion: oldest)
+
+    }
+
+  }
+
+  // The same version with other bytes is a republished copy, not an older one.
+  @Test func takesTheCurrentVersionWithOtherBytes() async throws {
+
+    let published = try #require(DeviceCatalogVersion(try Self.compatibleVersion()))
+    let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published), version: published.description))
+
+    let update = try await DeviceCatalogUpdater(client: files).update(replacing: Data("{}".utf8), currentVersion: published)
+
+    #expect(update == .updated(json: Self.published, catalog: try DeviceCatalog(json: Self.published), version: published))
+
+  }
+
+  // A saved copy in another format isn't the package's to compare with.
+  @Test func ignoresACurrentVersionInAnotherFormat() async throws {
+
+    let bundled = try DeviceCatalog.bundledVersion()
+    let otherFormat = DeviceCatalogVersion(major: bundled.major, minor: bundled.minor + 1, patch: 0)
+    let published = try #require(DeviceCatalogVersion(try Self.compatibleVersion()))
+    let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published), version: published.description))
+
+    let update = try await DeviceCatalogUpdater(client: files).update(replacing: Data("{}".utf8), currentVersion: otherFormat)
+
+    #expect(update == .updated(json: Self.published, catalog: try DeviceCatalog(json: Self.published), version: published))
+
+  }
+
+  @Test func theSameDigestIsUnchangedWhateverTheVersions() async throws {
+
+    let bundled = try DeviceCatalog.bundledVersion()
+    let current = DeviceCatalogVersion(major: bundled.major, minor: bundled.minor, patch: 990)
+    let files = Self.files(manifest: try Self.manifest(sha256: Self.sha256(of: Self.published)))
+
+    let update = try await DeviceCatalogUpdater(client: files).update(replacing: Self.published, currentVersion: current)
+
+    #expect(update == .unchanged)
+
+  }
+
+  @Test func versionsCompareByMajorThenMinorThenPatch() {
+
+    let versions: [DeviceCatalogVersion] = [
+      DeviceCatalogVersion(major: 0, minor: 6, patch: 9),
+      DeviceCatalogVersion(major: 0, minor: 6, patch: 10),
+      DeviceCatalogVersion(major: 0, minor: 7, patch: 0),
+      DeviceCatalogVersion(major: 1, minor: 0, patch: 0),
+    ]
+
+    #expect(versions.sorted(by: >).sorted() == versions)
+    #expect(DeviceCatalogVersion(major: 0, minor: 6, patch: 10) > DeviceCatalogVersion(major: 0, minor: 6, patch: 9))
+
+  }
+
+  // MARK: The size of a file
+
+  @Test func refusesAFileLargerThanItReads() async {
+
+    let body = Data(repeating: 0x20, count: DeviceCatalogUpdater.maximumResponseSize + 1)
+    let files = PublishedFiles(["manifest.json": HTTPResponse(statusCode: 200, body: body)])
+
+    await #expect(throws: HTTPClientError.responseTooLarge(limit: DeviceCatalogUpdater.maximumResponseSize)) {
+
+      try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+
+    }
+
+  }
+
+  @Test func theDefaultClientReadsALimitedFile() throws {
+
+    let client: URLSessionHTTPClient = try #require(DeviceCatalogUpdater().client as? URLSessionHTTPClient)
+
+    #expect(client.maximumResponseSize == DeviceCatalogUpdater.maximumResponseSize)
 
   }
 
