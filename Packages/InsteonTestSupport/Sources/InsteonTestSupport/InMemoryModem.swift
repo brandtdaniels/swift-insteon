@@ -9,7 +9,35 @@ import InsteonProtocol
 ///
 /// Each stream ``replies()`` returns stops being fed once its reader stops reading, and
 /// finishes when the modem is released.
+///
+/// Like a real modem, it throws `CancellationError` from a canceled task rather than carrying
+/// out what it's asked, unless ``setHonorsCancellation(_:)`` turns that off. A test can pause
+/// or fail what it's asked to do with ``setBeforeOperation(_:)``.
 public actor InMemoryModem: LinkingModem {
+
+  /// Something the modem is asked to do, which ``setBeforeOperation(_:)`` can pause or fail.
+  public enum Operation: Sendable {
+
+    /// A serial command, such as Cancel ALL-Linking.
+    case send(SerialCommand)
+
+    /// A standard message to a device.
+    case standardRequest(StandardMessage)
+
+    /// An extended message to a device.
+    case extendedRequest(ExtendedMessage)
+
+    /// A read of the modem's whole ALL-Link database.
+    case readModemDatabase
+
+  }
+
+  /// What runs before the modem carries out each operation, if anything.
+  private var beforeOperation: (@Sendable (Operation) async throws -> Void)?
+
+  /// Whether a canceled task's operations throw `CancellationError` rather than being carried
+  /// out. Defaults to `true`, as for a real modem.
+  public private(set) var honorsCancellation: Bool = true
 
   /// A write to a device's database.
   public struct Write: Hashable, Sendable {
@@ -367,11 +395,57 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Runs `hook` before each operation the modem carries out, or stops running one.
+  ///
+  /// The hook can wait, to hold the operation while a test does something else, such as
+  /// canceling the task that asked for it, or throw, to fail the operation with its error.
+  /// Cancellation is checked after the hook returns.
+  ///
+  /// - Parameter hook: What to run, or `nil` for nothing.
+  public func setBeforeOperation(_ hook: (@Sendable (Operation) async throws -> Void)?) {
+
+    beforeOperation = hook
+
+  }
+
+  /// Makes a canceled task's operations throw `CancellationError`, or be carried out anyway.
+  public func setHonorsCancellation(_ honors: Bool) {
+
+    honorsCancellation = honors
+
+  }
+
+  /// Runs the hook for an operation, then checks for cancellation.
+  private func begin(_ operation: Operation) async throws {
+
+    if let beforeOperation {
+
+      try await beforeOperation(operation)
+
+    }
+
+    try checkCancellation()
+
+  }
+
+  /// Throws `CancellationError` if the task is canceled and the modem honors cancellation.
+  private func checkCancellation() throws {
+
+    if honorsCancellation {
+
+      try Task.checkCancellation()
+
+    }
+
+  }
+
   // MARK: - LinkingModem
 
   /// Returns the modem's address, category, subcategory and firmware version, and records
   /// that it was asked.
   public func modemInfo() async throws -> ModemInfo {
+
+    try checkCancellation()
 
     wasAskedForItsAddress = true
 
@@ -381,7 +455,12 @@ public actor InMemoryModem: LinkingModem {
 
   /// Carries out a serial command: changes the modem's own records, or enters or leaves
   /// linking mode. Other commands are accepted and do nothing.
+  ///
+  /// - Throws: The error of the hook ``setBeforeOperation(_:)`` set, `CancellationError` if
+  ///   the task is canceled, or `ModemError.rejected` for a record the modem can't delete.
   public func send(_ command: SerialCommand) async throws {
+
+    try await begin(.send(command))
 
     switch command {
     case let .manageAllLinkRecord(action, record):
@@ -407,6 +486,8 @@ public actor InMemoryModem: LinkingModem {
   /// - Throws: `ModemError.deviceTimedOut` for a device that acknowledges nothing, and
   ///   `ModemError.deviceRejected` for a request an unlinked device rejects.
   public func request(_ message: StandardMessage, timeout: Duration) async throws -> ReceivedMessage {
+
+    try await begin(.standardRequest(message))
 
     let device = message.destination
     var command2 = message.command.command2
@@ -494,6 +575,8 @@ public actor InMemoryModem: LinkingModem {
   /// - Throws: `ModemError.deviceRejected` for a message an unlinked device rejects.
   public func request(_ message: ExtendedMessage, timeout: Duration) async throws -> ReceivedMessage {
 
+    try await begin(.extendedRequest(message))
+
     let device = message.destination
 
     extendedRequests.append(ExtendedRequest(device: device, command: message.command, userData: message.userData))
@@ -556,6 +639,8 @@ public actor InMemoryModem: LinkingModem {
   /// - Throws: `ModemError.deviceRejected` for an unlinked device.
   public func readAllLinkRecord(of device: InsteonAddress, at address: UInt16, timeout: Duration) async throws -> AllLinkRecordResponse {
 
+    try checkCancellation()
+
     guard !unlinkedDevices.contains(device) else {
 
       throw ModemError.deviceRejected(device, .notLinked)
@@ -571,12 +656,16 @@ public actor InMemoryModem: LinkingModem {
   /// Returns the modem's own records for a group and device.
   public func allLinkRecords(group: AllLinkGroupNumber, device: InsteonAddress) async throws -> [AllLinkRecord] {
 
+    try checkCancellation()
+
     modemRecords.filter { $0.group == group && $0.address == device }
 
   }
 
   /// Returns the modem's own records, and counts the read.
   public func allLinkRecords() async throws -> [AllLinkRecord] {
+
+    try await begin(.readModemDatabase)
 
     modemDatabaseReads += 1
 
@@ -589,6 +678,8 @@ public actor InMemoryModem: LinkingModem {
   ///
   /// - Throws: `ModemError.deviceRejected` for an unlinked device.
   public func readAllLinkDatabase(of device: InsteonAddress, timeout: Duration) async throws -> [AllLinkRecordResponse] {
+
+    try checkCancellation()
 
     guard !unlinkedDevices.contains(device) else {
 

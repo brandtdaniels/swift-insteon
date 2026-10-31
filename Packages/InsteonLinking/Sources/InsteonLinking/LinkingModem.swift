@@ -7,6 +7,10 @@ import InsteonProtocol
 ///
 /// `Modem` from InsteonModem conforms, over a serial port or an Insteon Hub. Tests can
 /// conform a type that keeps databases in memory.
+///
+/// A conforming type throws `CancellationError` from a canceled task rather than sending
+/// anything, as `Modem` does, so linking takes the modem out of linking mode from a task of
+/// its own.
 public protocol LinkingModem: Sendable {
 
   /// Sends a serial command and waits for the modem to accept it.

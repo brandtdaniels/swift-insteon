@@ -517,7 +517,8 @@ extension DeviceLinkingCoordinator {
   /// Sends the message that lets a device sleep again, when the catalog gives one, through its
   /// guarded send path, and tells the observer. It never throws: linking is over either way.
   ///
-  /// A canceled task can't send anything, so then a task of its own sends it while this one
+  /// A canceled task can't send anything, and this one can be canceled while it sends. So a
+  /// task of its own, which canceling this one doesn't reach, always sends it while this one
   /// waits, rather than leaving the device awake and draining its batteries.
   private func releaseKeepAwake(
     _ keepAwake: DeviceLifecycle.HubLinking.KeepAwake?,
@@ -550,15 +551,8 @@ extension DeviceLinkingCoordinator {
 
     }
 
-    if Task.isCancelled {
-
-      await Task { await send() }.value
-
-    } else {
-
-      await send()
-
-    }
+    // Unstructured, so cancellation that arrives while it sends doesn't stop it.
+    await Task { await send() }.value
 
   }
 
