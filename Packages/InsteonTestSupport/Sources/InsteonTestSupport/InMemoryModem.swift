@@ -27,7 +27,8 @@ public actor InMemoryModem: LinkingModem {
     /// An extended message to a device.
     case extendedRequest(ExtendedMessage)
 
-    /// A read of the modem's whole ALL-Link database.
+    /// A read of the modem's whole ALL-Link database, which runs after the records are read
+    /// and before they're returned.
     case readModemDatabase
 
   }
@@ -662,14 +663,19 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
-  /// Returns the modem's own records, and counts the read.
+  /// Returns the modem's own records as they were when the read began, and counts the read.
   public func allLinkRecords() async throws -> [AllLinkRecord] {
+
+    try checkCancellation()
+
+    // The records are read before the hook runs, so a test can change them while the read
+    // is in progress.
+    let records: [AllLinkRecord] = modemRecords
+    modemDatabaseReads += 1
 
     try await begin(.readModemDatabase)
 
-    modemDatabaseReads += 1
-
-    return modemRecords
+    return records
 
   }
 
