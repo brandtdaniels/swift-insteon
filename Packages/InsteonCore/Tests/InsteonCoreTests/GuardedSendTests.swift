@@ -151,8 +151,8 @@ struct GuardedSendTests {
     let outdoor: CommandSet = try #require(catalog.commandSet(id: "outdoorApplianceLinc"))
     let keypad: CommandSet = try #require(catalog.commandSet(id: "keypadLinc"))
 
-    // The thermostat's extended programmingLockOn is Set Operating Flags 0x00, with no guard in
-    // the catalog and no flag to derive it from.
+    // The thermostat's extended programmingLockOn is Set Operating Flags 0x00, which the
+    // catalog guards and the floor names, with no flag to derive it from.
     #expect(DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x00), in: tempLinc))
     #expect(!DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x01), in: tempLinc))
     #expect(tempLinc.extendedCommand(named: "programmingLockOn").map { DeviceSettingSafety.isSendable($0, in: tempLinc) } == false)
@@ -167,6 +167,239 @@ struct GuardedSendTests {
     #expect(DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x00), in: keypad))
     #expect(!DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x0A), in: keypad))
     #expect(!DeviceSettingSafety.isNeverSent(Command(command1: 0x11, command2: 0xFF), in: keypad))
+
+  }
+
+  // MARK: - The bundled catalog's own guards
+
+  @Test func refusesEveryGuardTheBundledCatalogGives() throws {
+
+    let catalog: DeviceCatalog = try DeviceCatalog.bundled()
+    var guardedFlags: Int = 0
+    var guardedFlagCommands: Int = 0
+    var guardedExtendedCommands: Int = 0
+    var guardedBits: Int = 0
+
+    for commands in catalog.commandSets {
+
+      let never: Set<Command> = DeviceSettingSafety.neverSentCommands(in: commands)
+
+      for flag in commands.operatingFlags {
+
+        guard let writeGuard = flag.writeGuard else {
+
+          continue
+
+        }
+
+        guardedFlags += 1
+
+        let rule: DeviceSettingSafety.Rule? = DeviceSettingSafety.rule(for: flag)
+
+        // A guard is never weakened: never set stays at least never set, and anything else is kept.
+        #expect(rule == .keep || (writeGuard == .neverSet && rule == .neverSet), "\(commands.id) \(flag.name)")
+
+        if let on = flag.on {
+
+          #expect(never.contains(Command(command1: 0x20, command2: on)), "\(commands.id) \(flag.name) on")
+
+        }
+
+        if rule == .keep, let off = flag.off {
+
+          #expect(never.contains(Command(command1: 0x20, command2: off)), "\(commands.id) \(flag.name) off")
+
+        }
+
+      }
+
+      for flagCommand in commands.flagCommands where flagCommand.sendGuard != nil {
+
+        guardedFlagCommands += 1
+
+        #expect(never.contains(flagCommand.command.command), "\(commands.id) \(flagCommand.name)")
+
+      }
+
+      for standard in commands.standardCommands where standard.sendGuard != nil {
+
+        #expect(!DeviceSettingSafety.isSendable(standard, in: commands), "\(commands.id) \(standard.name)")
+
+      }
+
+      for extended in commands.extendedCommands {
+
+        if extended.sendGuard != nil {
+
+          guardedExtendedCommands += 1
+
+          #expect(!DeviceSettingSafety.isSendable(extended, in: commands), "\(commands.id) \(extended.name)")
+
+        }
+
+        for parameter in extended.parameters {
+
+          guard case let .flags(bits) = parameter.kind else {
+
+            continue
+
+          }
+
+          for bit in bits {
+
+            guard let writeGuard = bit.writeGuard else {
+
+              continue
+
+            }
+
+            guardedBits += 1
+
+            let rule: DeviceSettingSafety.Rule? = DeviceSettingSafety.rule(named: bit.name, writeGuard: writeGuard)
+
+            #expect(rule == .keep || (writeGuard == .neverSet && rule == .neverSet), "\(commands.id) \(extended.name) \(bit.name)")
+
+          }
+
+        }
+
+      }
+
+    }
+
+    // The bundled catalog gives guards of every kind, so none of the loops above is empty.
+    #expect(guardedFlags > 0)
+    #expect(guardedFlagCommands > 0)
+    #expect(guardedExtendedCommands > 0)
+    #expect(guardedBits > 0)
+
+  }
+
+  @Test func refusesTheBundledOutdoorPlugsRadioOffAndAnI3ProgrammingLockBit() throws {
+
+    let catalog: DeviceCatalog = try DeviceCatalog.bundled()
+
+    // The outdoor plug's radioOff is a flag command, Set Operating Flags 0x0C, that the catalog
+    // never sends, in both of its command sets; radioOn isn't guarded.
+    for id: CommandSetID in ["outdoorApplianceLinc", "outdoorApplianceLincFirmware42"] {
+
+      let outdoor: CommandSet = try #require(catalog.commandSet(id: id))
+      let radioOff: OperatingFlagCommand = try #require(outdoor.flagCommands.first { (command: OperatingFlagCommand) -> Bool in command.name == "radioOff" })
+
+      #expect(radioOff.sendGuard == .never)
+      #expect(radioOff.command.command == Command(command1: 0x20, command2: 0x0C))
+      #expect(DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x0C), in: outdoor))
+      #expect(!DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x0D), in: outdoor))
+
+    }
+
+    // An i3 paddle's writeProperties holds the 0x00 flags in its flags00 parameter: the
+    // programming lock's bit is never set, and the radio's is kept.
+    let paddle: CommandSet = try #require(catalog.commandSet(id: "i3Paddle"))
+    let writeProperties: DeviceExtendedCommand = try #require(paddle.extendedCommand(named: "writeProperties"))
+    let flags00: MessageField = try #require(writeProperties.parameters.first { (field: MessageField) -> Bool in field.name == "flags00" })
+
+    guard case let .flags(bits) = flags00.kind else {
+
+      Issue.record("Expected flags00 to be flags, got \(String(describing: flags00.kind)).")
+
+      return
+
+    }
+
+    let lock: FieldBit = try #require(bits.first { (bit: FieldBit) -> Bool in bit.name == "programmingLock" })
+    let radio: FieldBit = try #require(bits.first { (bit: FieldBit) -> Bool in bit.name == "radioOff" })
+
+    #expect(lock.mask == 0x01)
+    #expect(lock.writeGuard == .neverSet)
+    #expect(DeviceSettingSafety.rule(named: lock.name, writeGuard: lock.writeGuard) == .neverSet)
+    #expect(radio.mask == 0x40)
+    #expect(radio.writeGuard == .keep)
+    #expect(DeviceSettingSafety.rule(named: radio.name, writeGuard: radio.writeGuard) == .keep)
+
+  }
+
+  /// A device the bundled catalog describes, on a ``SettingsModem`` with its flags clear.
+  func bundledDevice(_ address: InsteonAddress, identity: ReportedIdentity, modem: SettingsModem) throws -> Device {
+
+    let network = DeviceNetwork(
+      modem: modem,
+      catalog: try DeviceCatalog.bundled(),
+      snapshot: NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: [address: identity])),
+      clock: clock,
+      now: { () -> Date in Date(timeIntervalSince1970: 1_800_000_000) }
+    )
+
+    return network.device(address)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func neverLocksOrSilencesABundledI3Paddle() async throws {
+
+    // The bundled catalog's i3 paddle, 0x01/0x57: its programming lock is never set and its
+    // radio off flag is kept.
+    let paddle = InsteonAddress(0x3A, 0x4B, 0x32)
+    let modem = SettingsModem(device: paddle, flags: 0x00, values: [:])
+    let device: Device = try bundledDevice(paddle, identity: ReportedIdentity(category: 0x01, subcategory: 0x57, firmwareVersion: 0x45), modem: modem)
+
+    let lock: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+      _ = try await device.writeSetting("programmingLock", to: "on")
+
+    }
+
+    guard case .leavesProgrammingLocked? = lock else {
+
+      Issue.record("Expected leavesProgrammingLocked, got \(String(describing: lock)).")
+
+      return
+
+    }
+
+    let radio: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+      _ = try await device.writeSetting("radioOff", to: "on")
+
+    }
+
+    guard case .neverWritten? = radio else {
+
+      Issue.record("Expected neverWritten, got \(String(describing: radio)).")
+
+      return
+
+    }
+
+    #expect(await modem.standardCommands.isEmpty)
+    #expect(await modem.extendedMessages.isEmpty)
+    #expect(await modem.flags == 0x00)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func neverLocksABundledOutdoorPlugRunningFirmware42() async throws {
+
+    // The bundled catalog's outdoor plug, 0x02/0x38, whose firmware 0x42 has a programming
+    // lock flag the catalog guards as never set.
+    let plug = InsteonAddress(0x3A, 0x4B, 0x33)
+    let modem = SettingsModem(device: plug, flags: 0x00, values: [:])
+    let device: Device = try bundledDevice(plug, identity: ReportedIdentity(category: 0x02, subcategory: 0x38, firmwareVersion: 0x42), modem: modem)
+
+    let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+      _ = try await device.writeSetting("programmingLock", to: "on")
+
+    }
+
+    guard case .leavesProgrammingLocked? = error else {
+
+      Issue.record("Expected leavesProgrammingLocked, got \(String(describing: error)).")
+
+      return
+
+    }
+
+    #expect(await modem.standardCommands.isEmpty)
+    #expect(await modem.extendedMessages.isEmpty)
 
   }
 

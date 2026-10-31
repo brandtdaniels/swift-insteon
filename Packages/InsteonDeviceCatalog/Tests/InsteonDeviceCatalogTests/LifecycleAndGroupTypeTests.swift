@@ -255,6 +255,15 @@ struct LifecycleAndGroupTypeTests {
     let fromHub = try #require(linking.alternatives.first)
     #expect(fromHub.steps.first?.action == .send)
     #expect(fromHub.steps.first?.isOnOtherDevice == true)
+    // The Hub starts ALL-Linking as the responder before it sends Enter Linking Mode.
+    #expect(fromHub.steps.compactMap(\.command) == ["Start ALL-Linking", "ID Request", "Start ALL-Linking", "Enter Linking Mode", "Ping"])
+    // The same links as data, in order: the modem controls the switch, then responds to its
+    // group 1.
+    let hubLinking = try #require(lifecycle.fromHub)
+    #expect(hubLinking.isDeviceFirst == false)
+    #expect(hubLinking.legs.map(\.modemRole) == [.controller, .responder])
+    #expect(hubLinking.legs.map(\.modemGroup) == [0, 1])
+    #expect(hubLinking.legs.map(\.deviceGroup) == [1, 1])
     #expect(lifecycle.installation?.steps.isEmpty == false)
     let reset = try #require(lifecycle.reset)
     #expect(reset.steps.contains(where: { $0.action == .wait && $0.duration == .seconds(10) }))
@@ -277,6 +286,21 @@ struct LifecycleAndGroupTypeTests {
     let rampRate = try #require(light.linkData.responder.first { $0.position == 2 })
     let table = try #require(rampRate.table.flatMap { commands.valueTable(named: $0) })
     #expect(table.entry(for: 0x00)?.duration == .seconds(2))
+
+    // The outdoor plug's load and the I/O module's group 1 control as well as respond, so the
+    // modem links to them both ways.
+    for model: ProductModel in ["2634-222", "2450"] {
+
+      let profile = try #require(catalog.profile(model: model))
+
+      #expect(profile.groups.first { $0.number == 0x01 }?.role == .both, "\(model)")
+      #expect(profile.lifecycle?.fromHub?.legs.map(\.modemRole) == [.controller, .responder], "\(model)")
+
+    }
+
+    // Product keys: the I/O module's, and none for a product made before them.
+    #expect(catalog.describe(category: 0x07, subcategory: 0x00, firmwareVersion: nil).productKey == .key(ProductKey(0x00, 0x00, 0x1A)))
+    #expect(catalog.profile(model: "2476D")?.identities.first { $0.subcategory == 0x01 }?.productKey == .notReported)
 
     // Every group type a profile's group names is in each command set its identities use.
     for profile in catalog.profiles {

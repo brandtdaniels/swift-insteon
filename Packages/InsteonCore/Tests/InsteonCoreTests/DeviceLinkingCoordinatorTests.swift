@@ -1316,6 +1316,26 @@ struct DeviceLinkingCoordinatorTests {
 
   }
 
+  @Test func linksBackToTheBundledProductsWhoseLoadAlsoControls() throws {
+
+    let catalog: DeviceCatalog = try DeviceCatalog.bundled()
+
+    // The outdoor plug and the I/O module control in group 1 as well as respond, so linking
+    // makes the modem their responder too; a dimmer switch's load also controls.
+    let identities: [(DeviceCategory, DeviceSubcategory)] = [(0x02, 0x38), (0x07, 0x00), (0x01, 0x20)]
+
+    for (category, subcategory) in identities {
+
+      let description: DeviceDescription = catalog.describe(category: category, subcategory: subcategory, firmwareVersion: 0x42)
+
+      #expect(description.profile != nil, "\(category)/\(subcategory)")
+      #expect(DeviceLinkingCoordinator.controls(description), "\(category)/\(subcategory)")
+      #expect(DeviceLinkingCoordinator.controllingGroup(of: description) == 1, "\(category)/\(subcategory)")
+
+    }
+
+  }
+
 }
 
 /// The order callers took their turns in.
