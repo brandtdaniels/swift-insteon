@@ -8,6 +8,7 @@ import Darwin
 import Glibc
 #endif
 import InsteonCLICore
+import InsteonCore
 import InsteonDeviceCatalog
 import InsteonHubClient
 import InsteonHubDiscovery
@@ -81,28 +82,11 @@ enum Names {
 
   }
 
-  /// The kind of a reply the modem sent, as `insteon watch --raw` names a reply that isn't a
+  /// The kind of a reply the modem sent, as `insteon modem send` names a reply that isn't a
   /// message from a device.
   static func replyKind(_ reply: ModemReply) -> String {
 
-    switch reply {
-    case .messageReceived: "Insteon message"
-    case .x10Received: "X10 received"
-    case .allLinkingCompleted: "ALL-Linking Completed"
-    case .buttonEvent: "button event"
-    case .userReset: "user reset"
-    case .allLinkCleanupFailed: "ALL-Link cleanup failure"
-    case .allLinkRecord: "ALL-Link record"
-    case .allLinkCleanupStatus: "ALL-Link cleanup status"
-    case .databaseRecord: "database record"
-    case .diagnosticRecord: "diagnostic record"
-    case .deviceRecordFound: "device record"
-    case .radioStatus: "radio status"
-    case .modemInfo: "Get IM Info reply"
-    case .modemConfiguration: "configuration"
-    case let .echo(echo): "echo of \(echo.number.name)\(echo.isAccepted ? "" : ", NAK")"
-    case .negativeAcknowledgment: "NAK"
-    }
+    DeviceMonitor.replyKind(reply)
 
   }
 

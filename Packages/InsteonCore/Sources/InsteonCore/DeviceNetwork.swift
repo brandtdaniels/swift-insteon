@@ -549,8 +549,32 @@ public actor DeviceNetwork {
 
   // MARK: - Changes
 
-  // A stream of changes, fed by the modem's replies, belongs here: devices' levels as they
-  // report them, links as they're made, and identities as devices report them.
+  /// The monitor that reads what the modem hears as events, and records in the ``registry``
+  /// the identities devices report. It doesn't record when a device was heard.
+  ///
+  /// ```swift
+  /// for await event in await network.monitor.changes() {
+  ///   print(event)
+  /// }
+  /// ```
+  public nonisolated var monitor: DeviceMonitor {
+
+    DeviceMonitor(network: self)
+
+  }
+
+  /// Records the identity a device reported, such as in a broadcast the monitor heard, in the
+  /// ``registry``. When the device was heard isn't recorded: a device's last-seen time is the
+  /// time it last answered a command.
+  ///
+  /// - Parameters:
+  ///   - identity: The identity the device reported.
+  ///   - device: The device.
+  func recordReportedIdentity(_ identity: ReportedIdentity, of device: InsteonAddress) async {
+
+    await registry.record(identity, for: device)
+
+  }
 
   // MARK: - Helpers
 

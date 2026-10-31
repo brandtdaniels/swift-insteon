@@ -876,6 +876,309 @@ struct DeviceTests {
 
   }
 
+  // MARK: - Settings that are never written
+
+  /// A network whose registry knows only the guarded device.
+  func guardedNetwork(_ modem: SettingsModem) -> DeviceNetwork {
+
+    network(modem, identities: [ControlExample.guarded: ControlExample.guardedIdentity])
+
+  }
+
+  @Test(.timeLimit(.minutes(1)), arguments: ["radioOff", "powerLineOff", "checksumRequired"])
+  func neverWritesAFlagThatCutsTheDeviceOff(key: String) async throws {
+
+    for state in ["on", "off"] {
+
+      let modem = SettingsModem(device: ControlExample.guarded, flags: 0x00, values: [:])
+      let device: Device = guardedNetwork(modem).device(ControlExample.guarded)
+
+      let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+        _ = try await device.writeSetting(key, to: state)
+
+      }
+
+      guard case .neverWritten? = error else {
+
+        Issue.record("Expected neverWritten for \(key) \(state), got \(String(describing: error)).")
+
+        return
+
+      }
+
+      // Refused before anything is sent: not even the flag is read.
+      #expect(await modem.standardCommands.isEmpty)
+      #expect(await modem.extendedMessages.isEmpty)
+
+    }
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func neverTurnsTheProgrammingLockOn() async throws {
+
+    let modem = SettingsModem(device: ControlExample.guarded, flags: 0x00, values: [:])
+    let device: Device = guardedNetwork(modem).device(ControlExample.guarded)
+
+    let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+      _ = try await device.writeSetting("programmingLock", to: "on")
+
+    }
+
+    guard case let .leavesProgrammingLocked(label)? = error else {
+
+      Issue.record("Expected leavesProgrammingLocked, got \(String(describing: error)).")
+
+      return
+
+    }
+
+    #expect(label == "Programming lock")
+    #expect(await modem.standardCommands.isEmpty)
+    #expect(await modem.flags == 0x00)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func turnsTheProgrammingLockOff() async throws {
+
+    let modem = SettingsModem(device: ControlExample.guarded, flags: 0x02, values: [:])
+
+    let change: DeviceSettingChange = try await guardedNetwork(modem).device(ControlExample.guarded).writeSetting("programmingLock", to: "off")
+
+    #expect(change.before == "on")
+    #expect(change.after == "off")
+    #expect(await modem.flags == 0x00)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func showsTheFlagsThatAreNeverWrittenAsReadOnly() async throws {
+
+    let modem = SettingsModem(device: ControlExample.guarded, flags: 0x00, values: [:])
+    let capabilities: DeviceCapabilities = try await guardedNetwork(modem).device(ControlExample.guarded).capabilities()
+    let writable: [String: Bool] = Dictionary(uniqueKeysWithValues: capabilities.settings.map { (setting: DeviceSetting) -> (String, Bool) in
+
+      (setting.key, setting.isWritable)
+
+    })
+
+    #expect(writable == ["programmingLock": true, "radioOff": false, "powerLineOff": false, "checksumRequired": false, "operatingFlags": true])
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func neverWritesTheFlagsByTheirLabelsEither() async throws {
+
+    let modem = SettingsModem(device: ControlExample.guarded, flags: 0x00, values: [:])
+    let device: Device = guardedNetwork(modem).device(ControlExample.guarded)
+
+    let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+      _ = try await device.writeSetting("radio off", to: "off")
+
+    }
+
+    guard case let .neverWritten(label)? = error else {
+
+      Issue.record("Expected neverWritten, got \(String(describing: error)).")
+
+      return
+
+    }
+
+    #expect(label == "Radio off")
+    #expect(await modem.standardCommands.isEmpty)
+
+  }
+
+  // MARK: - A value whose byte holds operating flags
+
+  @Test(.timeLimit(.minutes(1))) func neverTurnsTheProgrammingLockOnThroughAValueThatHoldsTheFlags() async throws {
+
+    let modem = SettingsModem(device: ControlExample.guarded, flags: 0x00, values: [7: 0x00])
+    let device: Device = guardedNetwork(modem).device(ControlExample.guarded)
+
+    let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+      // Bit 0x02 is the programming lock.
+      _ = try await device.writeSetting("operatingFlags", to: "0x03")
+
+    }
+
+    guard case let .leavesProgrammingLocked(label)? = error else {
+
+      Issue.record("Expected leavesProgrammingLocked, got \(String(describing: error)).")
+
+      return
+
+    }
+
+    #expect(label == "Programming lock")
+    // Refused before anything is sent: not even the byte is read.
+    #expect(await modem.extendedMessages.isEmpty)
+    #expect(await modem.values[7] == 0x00)
+
+  }
+
+  @Test(.timeLimit(.minutes(1)), arguments: [UInt8(0x10), 0x20, 0x40])
+  func neverChangesAFlagThatsNeverWrittenThroughAValueThatHoldsIt(bit: UInt8) async throws {
+
+    for (current, written) in [(UInt8(0x00), bit), (bit, UInt8(0x00))] {
+
+      let modem = SettingsModem(device: ControlExample.guarded, flags: 0x00, values: [7: current])
+      let device: Device = guardedNetwork(modem).device(ControlExample.guarded)
+
+      let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+        _ = try await device.writeSetting("operatingFlags", to: "0x" + (written < 0x10 ? "0" : "") + String(written, radix: 16, uppercase: true))
+
+      }
+
+      guard case .neverWritten? = error else {
+
+        Issue.record("Expected neverWritten writing \(written) over \(current), got \(String(describing: error)).")
+
+        return
+
+      }
+
+      // Only the extended Get that read the byte was sent; no extended Set.
+      #expect(await modem.extendedMessages.allSatisfy { (message: ExtendedMessage) -> Bool in message.userData[2] == 0x00 })
+      #expect(await modem.values[7] == current)
+
+    }
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func writesAValueThatHoldsTheFlagsWhenItLeavesThemAsTheyAre() async throws {
+
+    // The radio's bit is set already and stays set; bit 0x01 is no guarded flag's.
+    let modem = SettingsModem(device: ControlExample.guarded, flags: 0x00, values: [7: 0x10])
+
+    let change: DeviceSettingChange = try await guardedNetwork(modem).device(ControlExample.guarded).writeSetting("operatingFlags", to: "0x11")
+
+    #expect(change.isConfirmed)
+    #expect(await modem.values[7] == 0x11)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func neverLocksAnOpenCloseSensorThroughItsConfigurationByte() async throws {
+
+    // The bundled catalog's open/close sensor: its configuration byte is Get Operating Flags
+    // 0x00's, whose bit 0x80 is the programming lock.
+    let sensor = InsteonAddress(0x3A, 0x4B, 0x0C)
+    let modem = SettingsModem(device: sensor, flags: 0x00, values: [:])
+    let catalog: DeviceCatalog = try DeviceCatalog.bundled()
+    let network = DeviceNetwork(
+      modem: modem,
+      catalog: catalog,
+      snapshot: NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: [sensor: ReportedIdentity(category: 0x10, subcategory: 0x02, firmwareVersion: 0x45)])),
+      clock: clock
+    )
+    let device: Device = network.device(sensor)
+
+    let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+      _ = try await device.writeSetting("configuration", to: "0xC3")
+
+    }
+
+    guard case .leavesProgrammingLocked? = error else {
+
+      Issue.record("Expected leavesProgrammingLocked, got \(String(describing: error)).")
+
+      return
+
+    }
+
+    #expect(await modem.standardCommands.isEmpty)
+    #expect(await modem.extendedMessages.isEmpty)
+
+  }
+
+  // MARK: - Refusals that are kept
+
+  @Test(.timeLimit(.minutes(1))) func refusesAButtonForAWholeDeviceSettingAndAnUnreadableStateBeforeSending() async throws {
+
+    let modem = SettingsModem(device: ControlExample.dimmer, flags: 0x02, values: [7: 0x1C, 8: 0xFF])
+    let lamp: Device = self.network(modem).device(ControlExample.dimmer)
+
+    let button: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+      _ = try await lamp.writeSetting("keyBeep", to: "off", button: 2)
+
+    }
+
+    let state: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+      _ = try await lamp.writeSetting("keyBeep", to: "loud")
+
+    }
+
+    let value: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+      _ = try await lamp.writeSetting("rampRate", to: "0.5 s", button: 2)
+
+    }
+
+    guard case let .takesNoButton(label)? = button, case let .unreadableState(text, _)? = state, case .takesNoButton? = value else {
+
+      Issue.record("Expected takesNoButton, unreadableState and takesNoButton, got \(String(describing: button)), \(String(describing: state)), \(String(describing: value)).")
+
+      return
+
+    }
+
+    #expect(label == "Key beep")
+    #expect(text == "loud")
+    #expect(await modem.standardCommands.isEmpty)
+    #expect(await modem.extendedMessages.isEmpty)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func saysWhatAValueTakesWhenItCantReadIt() async throws {
+
+    let modem = SettingsModem(device: ControlExample.dimmer, flags: 0x00, values: [7: 0x1C, 8: 0xFF])
+    let lamp: Device = self.network(modem).device(ControlExample.dimmer)
+
+    let onLevel: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+      _ = try await lamp.writeSetting("onLevel", to: "bright")
+
+    }
+
+    let rampRate: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+      _ = try await lamp.writeSetting("rampRate", to: "fast")
+
+    }
+
+    guard case let .unreadableValue(text, label, accepts)? = onLevel, case let .unreadableValue(_, _, table)? = rampRate else {
+
+      Issue.record("Expected unreadableValue twice, got \(String(describing: onLevel)) and \(String(describing: rampRate)).")
+
+      return
+
+    }
+
+    #expect(text == "bright")
+    #expect(label == "On-level")
+    #expect(accepts == DeviceSettingInput(form: .number(unit: "percent", symbol: "%"), bytes: 0x00...0xFF))
+    #expect(table == DeviceSettingInput(form: .label(examples: ["0.5 s", "0.1 s"], durationExample: "0.5s"), bytes: 0x00...0xFF))
+    #expect(await modem.extendedMessages.isEmpty)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func countsTheAdvancedSettingsLeftOut() async throws {
+
+    let modem = SettingsModem(device: ControlExample.dimmer, flags: 0x00, values: [7: 0x1C, 8: 0xFF])
+
+    let reading: DeviceSettingsReading = try await self.network(modem).device(ControlExample.dimmer).readSettings(includingAdvanced: false)
+
+    #expect(reading.advancedSettingsLeftOut == 0)
+    #expect(reading.entries.count == 3)
+
+  }
+
 }
 
 /// A modem whose connection is closed: every request fails with `ModemError.connectionClosed`.

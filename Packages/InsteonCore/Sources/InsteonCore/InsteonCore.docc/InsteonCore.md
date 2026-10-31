@@ -98,6 +98,52 @@ if try await lamp.capabilities().canDim {
 ``DeviceCapabilities`` says what to show for a device: its groups, whether it dims or beeps,
 and its settings with their controls. ``Device/readSettings(includingAdvanced:beforeReading:)``
 reads the settings, and ``Device/writeSetting(_:to:button:)`` changes one and reads it back.
+Each ``DeviceSetting`` carries what a settings page needs from the catalog: its label,
+section, whether it's advanced, its control, and its default as each reading's entry shows it.
+
+Some settings are never written, whatever the catalog says: turning off a device's radio or
+powerline, and requiring a checksum in every message, any of which can cut the device off from
+the modem. They're shown as read-only, and writing one throws
+``DeviceSettingError/neverWritten(label:)``. The programming lock is only ever turned off, so
+a device is never left locked; turning it on throws
+``DeviceSettingError/leavesProgrammingLocked(label:)``. The same holds for a value whose byte
+holds those flags, such as an open/close sensor's configuration byte: it's refused before it's
+written when it would set the programming lock's bit or change another of them. A value a
+setting doesn't take throws
+an error with a ``DeviceSettingInput`` that says what it takes:
+
+```swift
+do {
+  let change = try await lamp.writeSetting("rampRate", to: "0.5 s")
+  print("\(change.title): \(change.before ?? "?") to \(change.after ?? "not confirmed")")
+} catch DeviceSettingError.neverWritten(let label) {
+  print("\(label) can't be changed.")
+}
+```
+
+### Watching what the modem hears
+
+``DeviceNetwork/monitor`` hands out a ``DeviceMonitor``, whose
+``DeviceMonitor/changes(includingRaw:)`` stream reads what the modem hears as
+``DeviceMonitorEvent``s: which device sent a command to which group, what the device's profile
+in the Insteon device catalog says it means, whether it turns the group on or off, and the
+product's name. A device is known from the identities the network's registry holds and from
+any identity a device reports while the stream runs, which the monitor records in the
+registry. It records nothing else: not when a device was heard, which for a sensor would be a
+record of what happens in a home, so a device's last-seen time stays the time it last
+answered a command. The stream runs in its reader's task, one task at a time, and ends when
+that task is canceled or the modem's replies finish:
+
+```swift
+for await event in await network.monitor.changes() {
+  if case let .groupCommand(command) = event, command.event == "wet" {
+    print("\(command.device) detected water")
+  }
+}
+```
+
+A front end that shows the modem's bytes asks for them with `includingRaw`, which adds each
+message's bytes before its events and the kind of each reply that isn't otherwise reported.
 
 ### Linking devices
 
@@ -155,6 +201,8 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 - ``DeviceSettingsReading``
 - ``DeviceSettingChange``
 - ``DeviceSettingError``
+- ``DeviceSettingInput``
+- ``DeviceSettingFieldProblem``
 
 ### Devices
 
@@ -167,6 +215,15 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 - ``ModemDatabaseEntry``
 - ``NetworkDeviceState``
 - ``HubLocation``
+
+### Watching devices
+
+- ``DeviceMonitor``
+- ``DeviceMonitorEvent``
+- ``DeviceGroupCommand``
+- ``DeviceSetButtonPress``
+- ``DeviceMessageSummary``
+- ``ModemNotice``
 
 ### Linking devices
 

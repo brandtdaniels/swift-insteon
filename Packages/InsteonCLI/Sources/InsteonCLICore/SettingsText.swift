@@ -1,49 +1,4 @@
-import InsteonDeviceCatalog
-import InsteonProtocol
-
-/// What a device reported to `insteon device ADDRESS settings`: the cmd2 of each Get Operating
-/// Flags reply, and the values of each extended Get's reply.
-public struct ReportedSettings: Hashable, Sendable {
-
-  /// The cmd2 of each Get Operating Flags acknowledgment, by its request.
-  public var operatingFlags: [OperatingFlagsRequest: UInt8]
-
-  /// The values of each extended Get's reply, by button or group.
-  public var values: [UInt8: [SettingName: UInt8]]
-
-  /// Creates what a device reported.
-  ///
-  /// - Parameters:
-  ///   - operatingFlags: The cmd2 of each Get Operating Flags acknowledgment. Defaults to none.
-  ///   - values: The values of each extended Get's reply, by button. Defaults to none.
-  public init(operatingFlags: [OperatingFlagsRequest: UInt8] = [:], values: [UInt8: [SettingName: UInt8]] = [:]) {
-
-    self.operatingFlags = operatingFlags
-    self.values = values
-
-  }
-
-  /// The byte a device reported for an item, or `nil` if it didn't: a Get Operating Flags
-  /// reply's cmd2 for a flag or reading, and a value's byte for a value.
-  ///
-  /// - Parameters:
-  ///   - item: The item.
-  ///   - button: The button or group whose extended Get to read a value from.
-  /// - Returns: The byte.
-  public func raw(for item: SettingItem, button: UInt8 = 0x01) -> UInt8? {
-
-    switch item.source {
-    case let .flag(flag):
-      operatingFlags[flag.query]
-    case let .reading(reading):
-      operatingFlags[reading.query]
-    case let .value(value):
-      values[button]?[value.name]
-    }
-
-  }
-
-}
+import InsteonCore
 
 /// One line of `insteon device ADDRESS settings`, and its JSON.
 public struct SettingLine: Hashable, Sendable, Encodable {
@@ -145,11 +100,11 @@ public struct SettingLine: Hashable, Sendable, Encodable {
 
 }
 
-/// The lines `insteon device ADDRESS settings` prints, from what the Insteon device catalog
-/// says about the settings and what the device reported.
+/// The lines `insteon device ADDRESS settings` prints, and what `insteon device ADDRESS set`
+/// says, from what InsteonCore read from or wrote to a device.
 public enum SettingsText {
 
-  /// The section of items the catalog gives none.
+  /// The section of settings the catalog gives none.
   public static let otherSection = "Other"
 
   /// A flag's state in words.
@@ -162,43 +117,27 @@ public enum SettingsText {
 
   }
 
-  /// An item's value as shown, from the byte the device reported.
+  /// The lines for a device's settings, in the catalog's order of sections: one for each of
+  /// the reading's entries, so a value that's per button gets a line for each button read.
   ///
-  /// - Parameters:
-  ///   - item: The item.
-  ///   - raw: The byte: a Get Operating Flags reply's cmd2 for a flag or reading, and a
-  ///     value's byte for a value.
-  ///   - commands: The item's command set.
-  /// - Returns: `"on"` or `"off"` for a flag, the number for a reading, and the value as the
-  ///   command set shows it for a value.
-  public static func value(of item: SettingItem, raw: UInt8, in commands: CommandSet) -> String {
+  /// - Parameter reading: The settings a device reported.
+  /// - Returns: The lines.
+  public static func lines(for reading: DeviceSettingsReading) -> [SettingLine] {
 
-    switch item.source {
-    case let .flag(flag):
-      Self.flag(raw & flag.bit != 0)
-    case .reading:
-      String(raw)
-    case let .value(value):
-      commands.text(for: value, raw: raw)
-    }
+    reading.entries.map { (entry: DeviceSettingsReading.Entry) -> SettingLine in
 
-  }
+      SettingLine(
+        section: entry.setting.section ?? otherSection,
+        name: entry.setting.key,
+        label: entry.setting.label,
+        button: entry.button,
+        value: entry.text,
+        raw: entry.raw.map(Hex.byte),
+        defaultValue: entry.defaultText,
+        isWritable: entry.setting.isWritable,
+        isAdvanced: entry.setting.isAdvanced
+      )
 
-  /// An item's default as shown, if the catalog gives it.
-  ///
-  /// - Parameters:
-  ///   - item: The item.
-  ///   - commands: The item's command set.
-  /// - Returns: The default, or `nil`.
-  public static func defaultValue(of item: SettingItem, in commands: CommandSet) -> String? {
-
-    switch item.source {
-    case let .flag(flag):
-      flag.defaultValue.map(Self.flag)
-    case .reading:
-      nil
-    case let .value(value):
-      value.defaultValue.map { commands.text(for: value, raw: $0) }
     }
 
   }
@@ -207,162 +146,119 @@ public enum SettingsText {
   /// `"a label such as 0.5 s, or a byte such as 0x1C"`. A value table whose entries stand
   /// for durations also takes a duration, such as `2s`.
   ///
-  /// - Parameters:
-  ///   - value: The setting.
-  ///   - commands: Its command set.
+  /// - Parameter input: What the setting takes.
   /// - Returns: The description.
-  public static func expectedInput(for value: SettingValue, in commands: CommandSet) -> String {
+  public static func expectedInput(_ input: DeviceSettingInput) -> String {
 
     var kinds: [String] = []
 
-    if let name = value.table, let table = commands.valueTable(named: name), !table.entries.isEmpty {
+    switch input.form {
+    case let .label(examples, durationExample):
+      kinds.append("a label such as " + examples.joined(separator: ", "))
 
-      let labels: [String] = table.entries.prefix(3).map(\.label)
+      if let durationExample {
 
-      kinds.append("a label such as " + labels.joined(separator: ", "))
-
-      if let example: String = durationExample(in: table) {
-
-        kinds.append("a duration such as " + example)
+        kinds.append("a duration such as " + durationExample)
 
       }
-
-    } else if value.kind == .buttons {
-
+    case .buttons:
       kinds.append("buttons such as 1,3, or none")
-
-    } else if let unit = value.unit {
-
-      kinds.append("a number in \(unit.rawValue) such as 50\(unit.symbol)")
-
-    } else if let range = value.range {
-
+    case let .number(unit, symbol):
+      kinds.append("a number in \(unit) such as 50\(symbol)")
+    case let .range(range):
       kinds.append("a number from \(range.lowerBound) to \(range.upperBound)")
-
+    case .byte:
+      break
     }
 
-    let lowest: UInt8 = value.range?.lowerBound ?? 0x00
-    let highest: UInt8 = value.range?.upperBound ?? 0xFF
-
-    kinds.append("a byte from \(Hex.byte(lowest)) to \(Hex.byte(highest))")
+    kinds.append("a byte from \(Hex.byte(input.bytes.lowerBound)) to \(Hex.byte(input.bytes.upperBound))")
 
     return kinds.joined(separator: ", or ")
 
   }
 
-  /// The first duration a value table has, written as someone could type it, such as `2s`.
-  private static func durationExample(in table: ValueTable) -> String? {
+  /// What `insteon device ADDRESS set` says a setting changed from and to, such as
+  /// `"Ramp rate: 0.5 s → 0.1 s"`, and that it isn't confirmed when the device didn't report it
+  /// afterward.
+  ///
+  /// - Parameter change: The change.
+  /// - Returns: The line.
+  public static func change(_ change: DeviceSettingChange) -> String {
 
-    let durations: [Duration] = table.entries.compactMap { (entry: ValueTable.Entry) -> Duration? in entry.duration }
+    let before: String = change.before ?? "not reported"
 
-    guard let duration: Duration = durations.first else {
+    guard let after = change.after else {
 
-      return nil
+      let what: String = change.setting.control == .toggle ? "flag" : "value"
 
-    }
-
-    let components = duration.components
-    let milliseconds: Int64 = components.seconds * 1_000 + components.attoseconds / 1_000_000_000_000_000
-
-    if milliseconds % 1_000 == 0 {
-
-      return String(milliseconds / 1_000) + "s"
+      return "\(change.title): \(before) → \(change.requested), not confirmed: the device didn't report the \(what) afterward."
 
     }
 
-    let seconds: Double = Double(milliseconds) / 1_000
-
-    return String(seconds) + "s"
+    return "\(change.title): \(before) → \(after)"
 
   }
 
-  /// Why the text given for a setting couldn't be used, as a sentence.
+  /// Why a device's settings couldn't be read or a setting written, as a sentence.
   ///
   /// - Parameters:
-  ///   - error: The error reading the text threw, usually a `SettingInputError`.
-  ///   - value: The setting.
-  ///   - label: What to call the setting.
-  ///   - commands: Its command set.
+  ///   - error: The error.
+  ///   - device: The device's address, as it's printed.
   /// - Returns: The sentence.
-  public static func inputProblem(_ error: any Error, value: SettingValue, label: String, in commands: CommandSet) -> String {
+  public static func failure(_ error: DeviceSettingError, device: String) -> String {
 
-    let expected: String = expectedInput(for: value, in: commands)
-
-    switch error as? SettingInputError {
-    case let .unreadable(_, text)?:
-      return "'\(text)' isn't a value \(label) takes: expected \(expected)."
-    case .outOfRange?:
-      return "That's outside what \(label) takes: expected \(expected)."
-    case nil:
-      return "That isn't a value \(label) takes: expected \(expected)."
+    switch error {
+    case .notIdentified:
+      return "\(device) didn't report its identity, so its settings can't be looked up. Check that it's linked and in range."
+    case let .noSettings(product):
+      return "The Insteon device catalog doesn't describe the settings of \(product)."
+    case let .noSuchSetting(name, product):
+      return "The Insteon device catalog has no setting '\(name)' for \(product). 'insteon device \(device) settings --advanced' lists them."
+    case let .isReading(label):
+      return "\(label) is a reading the device reports, so it can't be changed."
+    case let .takesNoButton(label):
+      return "\(label) is the whole device's, so it takes no --button."
+    case let .unreadableState(text, label):
+      return "'\(text)' isn't a state for \(label): expected on or off."
+    case let .noCommandForState(label, isOn):
+      return "\(label) can't be turned \(flag(isOn)) on this device: "
+        + "the Insteon device catalog gives no command that does it."
+    case let .readOnly(label):
+      return "\(label) is read-only for this device: the Insteon device catalog gives no command that writes it."
+    case let .unreadableValue(text, label, accepts):
+      return "'\(text)' isn't a value \(label) takes: expected \(expectedInput(accepts))."
+    case let .valueOutOfRange(_, label, accepts):
+      return "That's outside what \(label) takes: expected \(expectedInput(accepts))."
+    case let .missingValue(label, other):
+      return "Writing \(label) also writes \(other), which the device didn't report, so nothing was changed."
+    case let .unwritableValue(problem, label, value):
+      return "The Insteon device catalog's command for \(label) can't take \(value): \(fieldProblem(problem)), so nothing was changed."
+    case .engineRejected:
+      return "\(device) rejected Get Insteon Engine Version, as an i2CS device does when it isn't linked to the modem, "
+        + "so its settings can't be written. Link it first with 'insteon link \(device)'."
+    case let .notChanged(title, requested, reported):
+      return "\(title) wasn't changed to \(requested): the device reports \(reported)."
+    case let .neverWritten(label):
+      return "\(label) is never changed, since a wrong value can cut the device off from the modem."
+    case let .leavesProgrammingLocked(label):
+      return "\(label) is never turned on, so the device isn't left locked. Turning it off is allowed."
     }
 
   }
 
-  /// The lines for a device's settings, in the catalog's order of sections.
-  ///
-  /// A value that's per button gets a line for each button asked about; everything else gets
-  /// one line, from button 1's extended Get.
-  ///
-  /// - Parameters:
-  ///   - commands: The device's command set.
-  ///   - reported: What the device reported.
-  ///   - buttons: The buttons or groups whose values were asked for, with button 1 first.
-  ///   - showsAdvanced: Whether to include advanced settings.
-  /// - Returns: The lines.
-  public static func lines(for commands: CommandSet, reported: ReportedSettings, buttons: [UInt8] = [0x01], showsAdvanced: Bool) -> [SettingLine] {
+  /// Why a catalog's extended command couldn't take a value, as a clause.
+  private static func fieldProblem(_ problem: DeviceSettingFieldProblem) -> String {
 
-    var lines: [SettingLine] = []
-
-    for item in commands.settingItems where showsAdvanced || !item.isAdvanced {
-
-      for button in Self.buttons(for: item, in: commands, asked: buttons) {
-
-        lines.append(line(for: item, button: button, in: commands, reported: reported))
-
-      }
-
+    switch problem {
+    case let .mismatchedKind(name):
+      "its parameter \(name) is a different kind of value"
+    case let .outOfRange(name):
+      "it's outside what its parameter \(name) takes"
+    case let .unknownName(name):
+      "its parameter \(name) has no such name"
+    case let .missingValue(name):
+      "it has no parameter for \(name)"
     }
-
-    return lines
-
-  }
-
-  /// The buttons an item gets a line for, or `nil` alone for an item that isn't per button.
-  private static func buttons(for item: SettingItem, in commands: CommandSet, asked: [UInt8]) -> [UInt8?] {
-
-    guard
-      case .value = item.source,
-      let settings = commands.extendedSettings,
-      settings.isValuePerButton(item.name),
-      asked.count > 1
-    else {
-
-      return [nil]
-
-    }
-
-    return asked.map { Optional($0) }
-
-  }
-
-  private static func line(for item: SettingItem, button: UInt8?, in commands: CommandSet, reported: ReportedSettings) -> SettingLine {
-
-    let raw: UInt8? = reported.raw(for: item, button: button ?? 0x01)
-    let value: String? = raw.map { Self.value(of: item, raw: $0, in: commands) }
-    let rawText: String? = raw.map(Hex.byte)
-
-    return SettingLine(
-      section: item.section?.rawValue ?? otherSection,
-      name: item.name.rawValue,
-      label: item.label,
-      button: button.map { Int($0) },
-      value: value,
-      raw: rawText,
-      defaultValue: defaultValue(of: item, in: commands),
-      isWritable: commands.isWritable(item),
-      isAdvanced: item.isAdvanced
-    )
 
   }
 

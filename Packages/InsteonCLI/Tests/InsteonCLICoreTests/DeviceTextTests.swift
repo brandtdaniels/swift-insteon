@@ -332,10 +332,13 @@ struct DeviceTextTests {
     let pressed = SetButtonPressed(sender: plug, role: .responder, category: 0x02, subcategory: 0x7A, firmwareVersion: 0x41)
 
     #expect(
-      WatchText.setButtonPressed(pressed, productName: "Example Plug 9001")
+      WatchText.setButtonPressed(DeviceSetButtonPress(pressed, productName: "Example Plug 9001"))
         == "1A.2B.3C SET button pressed (cmd1 0x01, links as a responder); identified as Example Plug 9001"
     )
-    #expect(WatchText.setButtonPressed(pressed, productName: nil).hasSuffix("identified as category 0x02, subcategory 0x7A, firmware 0x41"))
+    #expect(
+      WatchText.setButtonPressed(DeviceSetButtonPress(pressed, productName: nil))
+        .hasSuffix("identified as category 0x02, subcategory 0x7A, firmware 0x41")
+    )
 
   }
 
@@ -348,14 +351,64 @@ struct DeviceTextTests {
       command: Command(command1: 0x01, command2: 0x00)
     )
 
-    #expect(RawFrame.text(of: standard) == "0250 1A2B3C 027A41 8F 01 00")
+    #expect(RawFrame.text(of: standard.modemFrame) == "0250 1A2B3C 027A41 8F 01 00")
 
     var extended = standard
     extended.flags = MessageFlags(rawValue: 0x1F)
     extended.userData = try UserData([UInt8](repeating: 0x00, count: 13) + [0xD2])
 
-    #expect(RawFrame.text(of: extended).hasPrefix("0251 1A2B3C 027A41 1F 01 00 0000"))
-    #expect(RawFrame.text(of: extended).hasSuffix("D2"))
+    #expect(RawFrame.text(of: extended.modemFrame).hasPrefix("0251 1A2B3C 027A41 1F 01 00 0000"))
+    #expect(RawFrame.text(of: extended.modemFrame).hasSuffix("D2"))
+    #expect(RawFrame.text(of: [0x02, 0x50, 0x1A]) == "0250 1A")
+
+  }
+
+  @Test func printsWhatTheMonitorHeard() {
+
+    let modem = InsteonAddress(0x11, 0x22, 0x33)
+    let wet = DeviceGroupCommand(device: plug, group: 2, command1: 0x11, commandName: "Light On", event: "wet", isOn: true, productName: nil)
+    let unnamed = DeviceGroupCommand(device: plug, group: 1, command1: 0x13, commandName: "Light Off", event: nil, isOn: false, productName: nil)
+    let acknowledgment = ReceivedMessage(
+      sender: plug,
+      destination: modem,
+      flags: MessageFlags(messageType: .directAcknowledgment),
+      command: Command(command1: 0x11, command2: 0xFF)
+    )
+
+    let events: [DeviceMonitorEvent] = [
+      .identified(plug, productName: "Example Plug 9001"),
+      .identified(plug, productName: nil),
+      .groupCommand(wet),
+      .groupCommand(unnamed),
+      .heartbeat(plug, group: 4),
+      .heartbeatBroadcast(plug, batteryLevel: 0x5A),
+      .statusChanged(plug),
+      .message(DeviceMessageSummary(acknowledgment)),
+      .modem(.allLinkingCompleted(plug, group: 1, modemRole: "controller")),
+      .modem(.allLinkingCompleted(plug, group: 1, modemRole: nil)),
+      .modem(.userReset),
+      .modem(.allLinkCleanupFailed(plug, group: 3)),
+      .rawMessage([0x02, 0x50, 0x1A, 0x2B, 0x3C, 0x11, 0x22, 0x33, 0x2F, 0x11, 0xFF]),
+      .rawReply(kind: "ALL-Link record")
+    ]
+    let lines: [String] = events.map { (event: DeviceMonitorEvent) -> String in WatchText.line(for: event) }
+
+    #expect(lines == [
+      "1A.2B.3C identified as Example Plug 9001",
+      "1A.2B.3C reported an identity the Insteon device catalog doesn't have",
+      "1A.2B.3C group 2: wet",
+      "1A.2B.3C group 1: cmd1 0x13 (Light Off)",
+      "1A.2B.3C heartbeat, group 4",
+      "1A.2B.3C heartbeat, battery level 0x5A",
+      "1A.2B.3C status changed; ask with 'insteon device 1A.2B.3C status'",
+      "1A.2B.3C to 11.22.33: ACK, cmd1 0x11 (Light On) cmd2 0xFF",
+      "ALL-Linking completed with 1A.2B.3C in group 1, modem controller",
+      "ALL-Linking completed with 1A.2B.3C in group 1, modem unknown",
+      "The modem was reset to factory defaults with its SET button",
+      "1A.2B.3C didn't acknowledge the ALL-Link cleanup for group 3",
+      "raw  0250 1A2B3C 112233 2F 11 FF",
+      "raw  modem reply: ALL-Link record"
+    ])
 
   }
 

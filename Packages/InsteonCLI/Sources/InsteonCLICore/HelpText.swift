@@ -288,6 +288,9 @@ public enum HelpText {
                           as 0.5s, a number in the setting's unit such as 50%, or a byte such
                           as 0x1C. --button picks the button or group of a per-button
                           setting; it defaults to 1. The setting is read back afterward.
+                          Turning off the radio or the powerline, and requiring a checksum,
+                          are never written, and the programming lock is only turned off,
+                          also through a value whose byte holds them.
       send CMD1 CMD2 [--extended [D1 ... D14]] [--no-checksum] [--wait SECONDS]
                           Send the device a direct message as given, for exploring, and print
                           its ACK or NAK and the messages it sends in the next SECONDS,
@@ -351,8 +354,9 @@ public enum HelpText {
 
     Prints what the modem hears until Control-C: devices' group commands, read as named
     events, such as a leak sensor's wet, when the Insteon device catalog knows the device,
-    and other messages as they are. A device becomes known when it reports its identity,
-    such as when its SET button is pressed.
+    and other messages as they are. A device is known when an earlier command learned its
+    identity, or when it reports one, such as when its SET button is pressed; the identities
+    devices report are kept in the identity cache.
 
     Only messages sent to the modem, and group broadcasts from devices it has responder
     records for, reach it. To hear a device's buttons, link the modem as its responder

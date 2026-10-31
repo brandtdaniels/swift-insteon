@@ -625,6 +625,14 @@ public struct Device: Sendable {
 
   /// Changes one of the device's settings, and reads it back to confirm the change.
   ///
+  /// Some settings are never written, whatever the catalog says: turning off the device's
+  /// radio or powerline, and requiring a checksum in every message, any of which can cut the
+  /// device off from the modem. The programming lock is only turned off, never on, so a
+  /// device is never left locked. Both are refused before anything is sent. A value whose
+  /// byte holds operating flags, such as an open/close sensor's configuration byte, is refused
+  /// before it's written when it would set the programming lock's bit, or change the bit of a
+  /// flag that's never written; the device is asked for the byte first, to compare.
+  ///
   /// A flag is changed with Set Operating Flags, in the form the device takes: extended with a
   /// checksum for an i2CS device, extended with the command repeated while the flag the
   /// catalog names in `OperatingFlag.extendedWhen` is set, and standard otherwise; or with the
@@ -640,6 +648,8 @@ public struct Device: Sendable {
   /// - Returns: The value before and after. A change the device didn't report afterward isn't
   ///   confirmed.
   /// - Throws: ``DeviceSettingError`` when the setting or the value isn't one the device takes,
+  ///   ``DeviceSettingError/neverWritten(label:)`` or
+  ///   ``DeviceSettingError/leavesProgrammingLocked(label:)`` for a setting that isn't written,
   ///   or ``DeviceSettingError/notChanged(title:requested:reported:)`` when the device reports
   ///   another value afterward; ``DeviceControlError/noSuchGroup(_:product:)`` for a button
   ///   that isn't a group number; and the modem's errors.
@@ -650,6 +660,13 @@ public struct Device: Sendable {
     guard let item = commands.settingItem(named: key) else {
 
       throw DeviceSettingError.noSuchSetting(key, product: DeviceControlModel.product(of: description))
+
+    }
+
+    // Refused before anything is sent, whatever the catalog says about writing it.
+    if DeviceSettingSafety.isNeverWritten(item) {
+
+      throw DeviceSettingError.neverWritten(label: item.label)
 
     }
 
@@ -1059,6 +1076,12 @@ public struct Device: Sendable {
 
     }
 
+    if DeviceSettingSafety.locksProgramming(item, state: state) {
+
+      throw DeviceSettingError.leavesProgrammingLocked(label: item.label)
+
+    }
+
     guard let change = commands.change(for: flag, setting: state) else {
 
       throw DeviceSettingError.noCommandForState(label: item.label, isOn: state)
@@ -1199,11 +1222,38 @@ public struct Device: Sendable {
 
     } catch {
 
-      throw DeviceSettingError.unreadableValue(error, value: value, label: item.label, commandSet: commands)
+      let accepts: DeviceSettingInput = SettingPresentation.input(for: value, in: commands)
+
+      switch error {
+      case let .unreadable(_, given):
+        throw DeviceSettingError.unreadableValue(given, label: item.label, accepts: accepts)
+      case .outOfRange:
+        throw DeviceSettingError.valueOutOfRange(text, label: item.label, accepts: accepts)
+      }
+
+    }
+
+    // A byte that holds operating flags writes them all, so it never turns the programming
+    // lock on, and never changes a flag that's never written.
+    let guardedFlags: [OperatingFlag] = DeviceSettingSafety.guardedFlags(in: value, of: commands)
+
+    if let lock = guardedFlags.first(where: { (flag: OperatingFlag) -> Bool in flag.name == DeviceSettingSafety.programmingLock }), raw & lock.bit != 0 {
+
+      throw DeviceSettingError.leavesProgrammingLocked(label: SettingItem(flag: lock).label)
 
     }
 
     let before: [SettingName: UInt8]? = try await readValues(settings: settings, button: target)
+
+    for flag in guardedFlags where DeviceSettingSafety.neverWritten.contains(flag.name) {
+
+      guard let current = before?[value.name], current & flag.bit == raw & flag.bit else {
+
+        throw DeviceSettingError.neverWritten(label: SettingItem(flag: flag).label)
+
+      }
+
+    }
     let message: ExtendedMessage
 
     do {
@@ -1212,11 +1262,11 @@ public struct Device: Sendable {
 
     } catch SettingWriteError.missingValue(let other) {
 
-      throw DeviceSettingError.missingValue(label: item.label, other: other)
+      throw DeviceSettingError.missingValue(label: item.label, other: other.rawValue)
 
     } catch let error as FieldError {
 
-      throw DeviceSettingError.unwritableValue(error, label: item.label, value: commands.text(for: value, raw: raw))
+      throw DeviceSettingError.unwritableValue(DeviceSettingFieldProblem(error), label: item.label, value: commands.text(for: value, raw: raw))
 
     }
 

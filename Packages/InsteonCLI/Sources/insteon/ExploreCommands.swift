@@ -1,4 +1,5 @@
 import InsteonCLICore
+import InsteonCore
 import InsteonModem
 import InsteonProtocol
 
@@ -40,7 +41,7 @@ enum ExploreCommands {
 
     }
 
-    Output.line("ACK: \(RawFrame.text(of: acknowledgment))  \(WatchCommand.describe(acknowledgment))")
+    Output.line("ACK: \(RawFrame.text(of: acknowledgment.modemFrame))  \(WatchText.message(DeviceMessageSummary(acknowledgment)))")
 
     let messages: [ModemReply] = await Replies.all(in: replies, within: .seconds(request.waitSeconds))
     var skippedAcknowledgment = false
@@ -63,7 +64,7 @@ enum ExploreCommands {
       }
 
       count += 1
-      Output.line("\(RawFrame.text(of: message))  \(WatchCommand.describe(message))")
+      Output.line("\(RawFrame.text(of: message.modemFrame))  \(WatchText.message(DeviceMessageSummary(message)))")
 
     }
 
@@ -130,7 +131,7 @@ enum ExploreCommands {
 
       return "\(Hex.pairs(bytes))  \(Names.replyKind(reply))"
     case let .messageReceived(message):
-      return "\(RawFrame.text(of: message))  \(WatchCommand.describe(message))"
+      return "\(RawFrame.text(of: message.modemFrame))  \(WatchText.message(DeviceMessageSummary(message)))"
     case .negativeAcknowledgment:
       return "15  NAK"
     default:

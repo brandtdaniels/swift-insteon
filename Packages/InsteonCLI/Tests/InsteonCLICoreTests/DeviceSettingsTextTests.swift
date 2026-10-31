@@ -1,5 +1,6 @@
 import Testing
 import InsteonCLICore
+import InsteonCore
 import InsteonDeviceCatalog
 import InsteonProtocol
 
@@ -64,6 +65,26 @@ enum ExampleSettings {
     valueTables: [ValueTable(name: "rampRate", entries: [.init(value: 0x1C, label: "0.5 s", duration: .milliseconds(500)), .init(value: 0x1F, label: "0.1 s", duration: .milliseconds(100))])]
   )
 
+  /// A reading of the dimmer's settings, as `Device.readSettings(includingAdvanced:beforeReading:)`
+  /// returns it.
+  static func reading(
+    showsAdvanced: Bool,
+    operatingFlags: [OperatingFlagsRequest: UInt8] = [:],
+    values: [UInt8: [SettingName: UInt8]] = [:],
+    buttons: [UInt8] = [0x01]
+  ) -> DeviceSettingsReading {
+
+    DeviceSettingsReading(
+      productName: "Example Dimmer 9001",
+      commandSet: commands,
+      items: commands.settingItems.filter { (item: SettingItem) -> Bool in showsAdvanced || !item.isAdvanced },
+      operatingFlags: operatingFlags,
+      values: values,
+      buttons: buttons
+    )
+
+  }
+
 }
 
 struct DeviceSettingsTextTests {
@@ -74,8 +95,8 @@ struct DeviceSettingsTextTests {
 
   @Test func listsSettingsBySectionWithTheirValuesAndDefaults() {
 
-    let reported = ReportedSettings(operatingFlags: [0x00: 0x21, 0x01: 0x07], values: [0x01: ["rampRate": 0x1F, "onLevel": 0x80]])
-    let lines: [SettingLine] = SettingsText.lines(for: ExampleSettings.commands, reported: reported, showsAdvanced: false)
+    let reading = ExampleSettings.reading(showsAdvanced: false, operatingFlags: [0x00: 0x21, 0x01: 0x07], values: [0x01: ["rampRate": 0x1F, "onLevel": 0x80]])
+    let lines: [SettingLine] = SettingsText.lines(for: reading)
     let texts: [String] = lines.map { "\($0.section) | \($0.title): \($0.valueText) (\($0.notes))" }
 
     #expect(texts == [
@@ -85,12 +106,14 @@ struct DeviceSettingsTextTests {
       "Buttons | Beep on button press: on (default off, writable)",
       "Diagnostics | ALL-Link database changes: 7 (read-only)"
     ])
+    #expect(lines.first { $0.name == "rampRate" }?.raw == "0x1F")
+    #expect(reading.advancedSettingsLeftOut == 1)
 
   }
 
   @Test func marksWhatTheDeviceDidntReport() throws {
 
-    let lines: [SettingLine] = SettingsText.lines(for: ExampleSettings.commands, reported: ReportedSettings(), showsAdvanced: true)
+    let lines: [SettingLine] = SettingsText.lines(for: ExampleSettings.reading(showsAdvanced: true))
     let radio = try #require(lines.first { $0.name == "radioOff" })
 
     #expect(radio.value == nil)
@@ -100,10 +123,25 @@ struct DeviceSettingsTextTests {
 
   }
 
+  @Test func showsTheRadioFlagAsReadOnlyThoughTheCatalogGivesItsCommands() throws {
+
+    let lines: [SettingLine] = SettingsText.lines(for: ExampleSettings.reading(showsAdvanced: true, operatingFlags: [0x05: 0x00]))
+    let radio = try #require(lines.first { $0.name == "radioOff" })
+
+    #expect(radio.value == "off")
+    #expect(!radio.isWritable)
+    #expect(radio.notes == "read-only")
+
+  }
+
   @Test func listsAPerButtonValueForEachButton() {
 
-    let reported = ReportedSettings(values: [0x01: ["rampRate": 0x1C, "onLevel": 0xFF], 0x02: ["rampRate": 0x1F, "onLevel": 0x00]])
-    let lines: [SettingLine] = SettingsText.lines(for: ExampleSettings.commands, reported: reported, buttons: [0x01, 0x02], showsAdvanced: false)
+    let reading = ExampleSettings.reading(
+      showsAdvanced: false,
+      values: [0x01: ["rampRate": 0x1C, "onLevel": 0xFF], 0x02: ["rampRate": 0x1F, "onLevel": 0x00]],
+      buttons: [0x01, 0x02]
+    )
+    let lines: [SettingLine] = SettingsText.lines(for: reading)
     let titles: [String] = lines.filter { $0.section == "Load" }.map { "\($0.title): \($0.valueText)" }
 
     // The on-level's write is the whole device's, so it's read from button 1 only.
@@ -113,14 +151,65 @@ struct DeviceSettingsTextTests {
 
   @Test func saysWhatAValueTakes() {
 
-    let commands = ExampleSettings.commands
+    let rampRate = DeviceSettingInput(form: .label(examples: ["0.5 s", "0.1 s"], durationExample: "0.5s"), bytes: 0x00...0x1F)
+    let onLevel = DeviceSettingInput(form: .number(unit: "percent", symbol: "%"), bytes: 0x00...0xFF)
+    let mask = DeviceSettingInput(form: .buttons, bytes: 0x00...0xFF)
+    let count = DeviceSettingInput(form: .range(0x01...0x0A), bytes: 0x01...0x0A)
+    let byte = DeviceSettingInput(form: .byte, bytes: 0x00...0xFF)
 
-    #expect(SettingsText.expectedInput(for: ExampleSettings.rampRate, in: commands) == "a label such as 0.5 s, 0.1 s, or a duration such as 0.5s, or a byte from 0x00 to 0x1F")
-    #expect(SettingsText.expectedInput(for: ExampleSettings.onLevel, in: commands) == "a number in percent such as 50%, or a byte from 0x00 to 0xFF")
+    #expect(SettingsText.expectedInput(rampRate) == "a label such as 0.5 s, 0.1 s, or a duration such as 0.5s, or a byte from 0x00 to 0x1F")
+    #expect(SettingsText.expectedInput(onLevel) == "a number in percent such as 50%, or a byte from 0x00 to 0xFF")
+    #expect(SettingsText.expectedInput(mask) == "buttons such as 1,3, or none, or a byte from 0x00 to 0xFF")
+    #expect(SettingsText.expectedInput(count) == "a number from 1 to 10, or a byte from 0x01 to 0x0A")
+    #expect(SettingsText.expectedInput(byte) == "a byte from 0x00 to 0xFF")
 
-    let problem = SettingsText.inputProblem(SettingInputError.unreadable("onLevel", "bright"), value: ExampleSettings.onLevel, label: "On-level", in: commands)
+    let unreadable = SettingsText.failure(.unreadableValue("bright", label: "On-level", accepts: onLevel), device: "1A.2B.3C")
+    let outOfRange = SettingsText.failure(.valueOutOfRange("0x20", label: "Ramp rate", accepts: rampRate), device: "1A.2B.3C")
 
-    #expect(problem == "'bright' isn't a value On-level takes: expected a number in percent such as 50%, or a byte from 0x00 to 0xFF.")
+    #expect(unreadable == "'bright' isn't a value On-level takes: expected a number in percent such as 50%, or a byte from 0x00 to 0xFF.")
+    #expect(outOfRange == "That's outside what Ramp rate takes: expected a label such as 0.5 s, 0.1 s, or a duration such as 0.5s, or a byte from 0x00 to 0x1F.")
+
+  }
+
+  @Test func explainsTheSettingsThatAreNeverWritten() {
+
+    let radio: String = SettingsText.failure(.neverWritten(label: "Turn off radio"), device: "1A.2B.3C")
+    let lock: String = SettingsText.failure(.leavesProgrammingLocked(label: "Programming lock"), device: "1A.2B.3C")
+
+    #expect(radio == "Turn off radio is never changed, since a wrong value can cut the device off from the modem.")
+    #expect(lock == "Programming lock is never turned on, so the device isn't left locked. Turning it off is allowed.")
+
+  }
+
+  @Test func explainsWhyASettingWasntWritten() {
+
+    #expect(SettingsText.failure(.engineRejected, device: "1A.2B.3C").hasSuffix("Link it first with 'insteon link 1A.2B.3C'."))
+    #expect(SettingsText.failure(.missingValue(label: "Ramp rate", other: "onLevel"), device: "1A.2B.3C")
+      == "Writing Ramp rate also writes onLevel, which the device didn't report, so nothing was changed.")
+    #expect(SettingsText.failure(.unwritableValue(.outOfRange("level"), label: "Ramp rate", value: "0.1 s"), device: "1A.2B.3C")
+      == "The Insteon device catalog's command for Ramp rate can't take 0.1 s: it's outside what its parameter level takes, so nothing was changed.")
+    #expect(SettingsText.failure(.noCommandForState(label: "Key beep", isOn: true), device: "1A.2B.3C")
+      == "Key beep can't be turned on on this device: the Insteon device catalog gives no command that does it.")
+
+  }
+
+  @Test func saysWhatASettingChangedFromAndTo() {
+
+    let setting = DeviceSetting(
+      key: "rampRate",
+      label: "Ramp rate",
+      section: "Load",
+      summary: "Ramp rate.",
+      isAdvanced: false,
+      isWritable: true,
+      isPerButton: true,
+      control: .choice(["0.5 s", "0.1 s"])
+    )
+    let confirmed = DeviceSettingChange(setting: setting, button: 2, before: "0.5 s", requested: "0.1 s", after: "0.1 s")
+    let unconfirmed = DeviceSettingChange(setting: setting, button: nil, before: nil, requested: "0.1 s", after: nil)
+
+    #expect(SettingsText.change(confirmed) == "Ramp rate (button 2): 0.5 s → 0.1 s")
+    #expect(SettingsText.change(unconfirmed) == "Ramp rate: not reported → 0.1 s, not confirmed: the device didn't report the value afterward.")
 
   }
 
