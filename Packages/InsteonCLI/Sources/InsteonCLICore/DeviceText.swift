@@ -169,6 +169,11 @@ public enum DeviceText {
     case let .unaddressable(operation, group, product):
       return "The Insteon device catalog gives no command that can \(phrase(operation)) group \(group) of \(product) on its own; "
         + "its command reaches another group. \(passthrough)"
+    case let .noSuchOutput(name, group, product):
+      return "Group \(group) of \(product) has no output '\(name)' in the Insteon device catalog."
+    case let .outputsInactive(group, product):
+      return "Group \(group) of \(product) isn't switched by its outputs in the mode it's in, so one can't be switched on its own. "
+        + "'insteon device \(device) settings' shows the mode."
     }
 
   }

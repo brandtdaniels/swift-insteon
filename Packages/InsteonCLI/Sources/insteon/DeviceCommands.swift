@@ -202,6 +202,10 @@ enum DeviceCommands {
 
     let productKey: String?
 
+    /// The product key the Insteon device catalog gives, or `"none"` for a product it says
+    /// reports none.
+    let catalogProductKey: String?
+
     let product: String?
 
   }
@@ -229,6 +233,9 @@ enum DeviceCommands {
 
     }
 
+    // What the catalog says the product reports explains a key that's missing.
+    let catalogKey: DeviceIdentity.ProductKeyEntry? = await network.registry.device(device)?.deviceDescription.productKey
+
     // Newer devices leave the product key out, or report zeros; that's expected, not a failure.
     let productKey = productData.map(\.productKey).flatMap { $0 == ProductKey(0x00, 0x00, 0x00) ? nil : $0 }
 
@@ -243,6 +250,7 @@ enum DeviceCommands {
         subcategory: subcategory.map { "\($0)" },
         firmwareVersion: identity?.firmwareVersion.map { "\($0)" },
         productKey: productKey.map { "\($0)" },
+        catalogProductKey: IdentityText.catalogProductKey(catalogKey),
         product: product
       ))
 
@@ -254,10 +262,7 @@ enum DeviceCommands {
     let categoryText: String = category.map(Names.category) ?? "not reported"
     let subcategoryText: String = subcategory.map { "\($0)" } ?? "not reported"
     let firmwareText: String = identity?.firmwareVersion.map { "\($0)" } ?? "not reported"
-    // A device that answered Product Data Request without a key is a newer one; a device that
-    // didn't answer said nothing about its key.
-    let missingKeyText: String = productData == nil ? "not reported" : "none; newer devices don't report one"
-    let productKeyText: String = productKey.map { "\($0)" } ?? missingKeyText
+    let productKeyText: String = IdentityText.productKey(reported: productKey, answered: productData != nil, catalog: catalogKey)
     var rows: [[String]] = [
       ["Device:", "\(device)"],
       ["Engine:", Names.engine(identification.engine)],

@@ -143,7 +143,18 @@ public struct Device: Sendable {
         canDim: model.canDim(group),
         canTurnOnAndOff: model.canTurnOnAndOff(group),
         hasStatus: model.canRead(group),
-        actionLabels: group.type.actions.map { (action: GroupType.Action) -> String in action.label }
+        actionLabels: group.type.actions.map { (action: GroupType.Action) -> String in action.label },
+        outputs: (group.type.outputs?.bits ?? []).map { (output: GroupType.Outputs.Output) -> DeviceOutput in
+
+          DeviceOutput(key: output.name.rawValue, label: output.label)
+
+        },
+        outputsActiveWhen: group.type.outputs?.activeWhen.map { (condition: DeviceProfile.Group.Condition) -> DeviceFlagCondition in
+
+          DeviceFlagCondition(flag: condition.flag.rawValue, isSet: condition.isSet)
+
+        },
+        armModes: group.type.armModes.map(\.rawValue)
       )
 
     }
@@ -267,6 +278,121 @@ public struct Device: Sendable {
     try await send(message, for: .turnOff)
 
     await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? 0x00 : nil)
+
+  }
+
+  /// Turns some of a group's outputs on, such as one of a ballast dimmer's two relays, with its
+  /// type's `on` action, and leaves the others as they are.
+  ///
+  /// The catalog's ``DeviceGroup/outputs`` give each output a bit; the bits of the outputs
+  /// named are ORed together into the action's parameter. When the catalog says the outputs
+  /// are the load only while an operating flag is in a state, such as relay mode, the device is
+  /// asked for the flag with Get Operating Flags first, and nothing is switched otherwise.
+  ///
+  /// - Parameters:
+  ///   - outputs: The outputs' keys, such as `"relay1"`, or their labels, in any case.
+  ///   - group: The group, or `nil` for the device's main group. Defaults to `nil`.
+  /// - Returns: What was done. No level is reported.
+  /// - Throws: ``DeviceControlError/noSuchOutput(_:group:product:)`` for an output the group
+  ///   doesn't have, ``DeviceControlError/outputsInactive(group:product:)`` when the flag isn't
+  ///   in its state, the other ``DeviceControlError`` refusals of ``turnOn(level:group:)``,
+  ///   and the modem's errors.
+  @discardableResult
+  public func turnOn(outputs: [String], group: Int? = nil) async throws -> DeviceTurnOnResult {
+
+    let number: Int = try await switchOutputs(outputs, group: group, action: DeviceControlModel.onAction, for: .turnOn)
+
+    return DeviceTurnOnResult(group: number, level: nil, ignoredLevel: nil)
+
+  }
+
+  /// Turns some of a group's outputs off with its type's `off` action, as
+  /// ``turnOn(outputs:group:)`` turns them on, and leaves the others as they are.
+  ///
+  /// - Parameters:
+  ///   - outputs: The outputs' keys or labels.
+  ///   - group: The group, or `nil` for the device's main group. Defaults to `nil`.
+  /// - Throws: The errors of ``turnOn(outputs:group:)``.
+  public func turnOff(outputs: [String], group: Int? = nil) async throws {
+
+    _ = try await switchOutputs(outputs, group: group, action: DeviceControlModel.offAction, for: .turnOff)
+
+  }
+
+  /// Sends a group's action with the named outputs' bits ORed into its parameter, once the
+  /// outputs are the load.
+  ///
+  /// - Returns: The group's number.
+  private func switchOutputs(_ names: [String], group number: Int?, action name: SettingName, for operation: DeviceOperation) async throws -> Int {
+
+    let model: DeviceControlModel = try await controlModel()
+    let target: DeviceControlModel.Group = try controlGroup(number, in: model, for: operation)
+    let groupNumber: Int = Int(target.number.rawValue)
+
+    guard let action = target.type.action(named: name), action.value == nil else {
+
+      throw DeviceControlError.unsupported(operation, product: model.product)
+
+    }
+
+    guard let outputs = target.type.outputs, !names.isEmpty else {
+
+      throw DeviceControlError.noSuchOutput(names.first ?? "", group: groupNumber, product: model.product)
+
+    }
+
+    var mask: UInt8 = 0
+
+    for name in names {
+
+      let wanted: String = name.lowercased()
+
+      guard let output = outputs.bits.first(where: { (output: GroupType.Outputs.Output) -> Bool in
+
+        output.name.rawValue.lowercased() == wanted || output.label.lowercased() == wanted
+
+      }) else {
+
+        throw DeviceControlError.noSuchOutput(name, group: groupNumber, product: model.product)
+
+      }
+
+      mask |= output.mask
+
+    }
+
+    let message: DeviceControlModel.ActionMessage = try model.message(for: action, of: target, value: mask, to: address)
+
+    guard model.canAddress(target, with: name) else {
+
+      throw DeviceControlError.unaddressable(operation, group: groupNumber, product: model.product)
+
+    }
+
+    if let condition = outputs.activeWhen {
+
+      guard let flag = model.commandSet?.operatingFlag(named: condition.flag) else {
+
+        throw DeviceControlError.outputsInactive(group: groupNumber, product: model.product)
+
+      }
+
+      let reply: ReceivedMessage = try await request(StandardMessage(to: address, command: flag.readCommand), timeout: network.requestTimeout, for: .control(operation))
+
+      guard flag.isSet(in: reply) == condition.isSet else {
+
+        throw DeviceControlError.outputsInactive(group: groupNumber, product: model.product)
+
+      }
+
+    }
+
+    try await send(message, for: operation)
+
+    // The level isn't the outputs' mask, so only that the device answered is recorded.
+    await network.recordAnswer(of: address, level: nil)
+
+    return groupNumber
 
   }
 

@@ -309,8 +309,10 @@ struct DeviceControlModel: Sendable {
 
   /// Whether a group's state can be read as its type says: its state command is a standard
   /// command the command set describes, and its reply is about the group. A reply with a bit
-  /// per group is about groups 1 through 8; any other reply is about the main group, or about
-  /// a group whose state command no other group's state shares.
+  /// per group is about groups 1 through 8, and a reply whose bits the group's
+  /// `GroupType.State.onWhen` names is about the group that pattern names, such as each of an
+  /// EZFlora's zones in its shared valve status; any other reply is about the main group, or
+  /// about a group whose state command no other group's state shares.
   func canRead(_ group: Group) -> Bool {
 
     guard
@@ -329,7 +331,7 @@ struct DeviceControlModel: Sendable {
 
     }
 
-    if group.number == mainGroupNumber {
+    if group.number == mainGroupNumber || state.onWhen != nil {
 
       return true
 
