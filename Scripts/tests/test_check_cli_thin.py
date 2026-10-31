@@ -1,0 +1,143 @@
+"""Tests for Scripts/check-cli-thin.py, on made-up sources in a temporary directory.
+
+Usage: python3 -m unittest discover -s Scripts/tests
+"""
+
+import contextlib
+import importlib.util
+import io
+import pathlib
+import tempfile
+import textwrap
+import unittest
+
+SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "check-cli-thin.py"
+
+spec = importlib.util.spec_from_file_location("check_cli_thin", SCRIPT)
+check = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(check)
+
+# A command that decides what a device does, once by each rule.
+THICK = textwrap.dedent("""\
+    enum DeviceCommands {
+      static func on(_ known: DeviceDescription?) async throws {
+        if known?.category == .dimmableLightingControl { print("dims") }
+        if known?.firmwareVersion ?? 0 >= 0x41 { print("new firmware") }
+        if kind == .relay { print("on/off only") }
+        if engine == .i2cs { print("checksum") }
+        try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.beep))
+      }
+    }
+    """)
+
+# A command that only words what the library says, with the rules' words in comments and
+# strings.
+THIN = textwrap.dedent("""\
+    // A relay, category 0x02, is on/off only: kind == .relay.
+    /* firmwareVersion >= 0x41 */
+    enum DeviceCommands {
+      static func on(_ device: Device) async throws {
+        let result = try await device.turnOn(level: 50)
+        print("category == 0x01 or StandardDirectCommand.on")
+        print(\"\"\"
+          kind == .relay
+          \"\"\")
+        print("Turned \\(result.group) on.")
+      }
+    }
+    """)
+
+
+class CheckCLIThinTests(unittest.TestCase):
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.root = pathlib.Path(self.directory.name) / "insteon"
+        self.root.mkdir()
+        self.allowlist = pathlib.Path(self.directory.name) / "allowlist.txt"
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def write(self, name, text):
+        (self.root / name).write_text(text, encoding="utf-8")
+
+    def run_check(self, *extra):
+        output = io.StringIO()
+
+        with contextlib.redirect_stdout(output):
+            status = check.main(["--root", str(self.root), "--allowlist", str(self.allowlist), *extra])
+
+        return status, output.getvalue()
+
+    def rules(self):
+        return sorted({name for _, name, _, _ in check.violations(self.root)})
+
+    def test_finds_each_rule(self):
+        self.write("DeviceCommands.swift", THICK)
+
+        status, output = self.run_check()
+
+        self.assertEqual(status, 1)
+        self.assertEqual(self.rules(), ["category", "engine", "firmware", "group-kind", "hex-literal", "protocol-command"])
+        self.assertIn("DeviceCommands.swift:3: category:", output)
+
+    def test_ignores_comments_and_strings(self):
+        self.write("DeviceCommands.swift", THIN)
+
+        status, output = self.run_check()
+
+        self.assertEqual(status, 0, output)
+        self.assertEqual(self.rules(), [])
+
+    def test_reads_interpolations_as_code(self):
+        self.write("DeviceCommands.swift", 'print("is \\(kind == .relay ? "on" : "off")")\n')
+
+        self.assertEqual(self.rules(), ["group-kind"])
+
+    def test_waives_bytes_and_commands_only_for_the_raw_passthroughs(self):
+        self.write("ExploreCommands.swift", THICK)
+
+        self.assertEqual(self.rules(), ["category", "engine", "firmware", "group-kind"])
+
+    def test_passes_known_lines_and_fails_new_ones(self):
+        self.write("DeviceCommands.swift", THICK)
+
+        status, _ = self.run_check("--update")
+        self.assertEqual(status, 0)
+
+        status, output = self.run_check()
+        self.assertEqual(status, 0, output)
+
+        self.write("SceneCommands.swift", "let command = StandardDirectCommand.on(level: 0xFF)\n")
+
+        status, output = self.run_check()
+        self.assertEqual(status, 1)
+        self.assertIn("SceneCommands.swift:1: hex-literal:", output)
+        self.assertIn("SceneCommands.swift:1: protocol-command:", output)
+        self.assertNotIn("DeviceCommands.swift", output)
+
+    def test_fails_on_an_entry_that_no_longer_matches(self):
+        self.write("DeviceCommands.swift", THICK)
+        self.run_check("--update")
+        self.write("DeviceCommands.swift", THIN)
+
+        status, output = self.run_check()
+
+        self.assertEqual(status, 1)
+        self.assertIn("no longer found, so remove it", output)
+
+    def test_counts_a_repeated_line_once_for_each_entry(self):
+        line = "if kind == .relay { print() }\n"
+        self.write("DeviceCommands.swift", line)
+        self.run_check("--update")
+        self.write("DeviceCommands.swift", line + line)
+
+        status, output = self.run_check()
+
+        self.assertEqual(status, 1)
+        self.assertIn("DeviceCommands.swift:2: group-kind:", output)
+
+
+if __name__ == "__main__":
+    unittest.main()

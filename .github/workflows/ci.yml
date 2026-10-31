@@ -16,6 +16,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check the docs and comments for ruled-out terms
         run: python3 Scripts/check-terms.py
+      - name: Check that the insteon command leaves device behavior to the libraries
+        run: python3 Scripts/check-cli-thin.py
+      - name: Test the check
+        run: python3 -m unittest discover -s Scripts/tests -v
 
   macos:
     name: macOS
