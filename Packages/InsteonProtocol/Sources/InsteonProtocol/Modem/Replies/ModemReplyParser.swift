@@ -10,8 +10,8 @@
 /// ``SerialCommand/readRadioStatus`` is reported once more bytes arrive, since until then it
 /// can't be told apart from a reply whose data starts with `0x15`. A frame that starts right
 /// after the NAK ends it, so the frame's bytes are never read as the reply's data. If no more
-/// bytes are coming, ``ModemReplyParser/finishPendingReply()`` reports it, or gives up on a
-/// frame that never finished.
+/// bytes are coming, ``ModemReplyParser/finishPendingReply()`` reports it. A frame that stops
+/// arriving partway is discarded with ``ModemReplyParser/discardStalledFrame()``.
 ///
 /// ```swift
 /// var parser = ModemReplyParser()
@@ -47,12 +47,8 @@ public struct ModemReplyParser: ReplyParser, Hashable, Sendable {
   /// `0x15`, so ``ModemReplyParser/parse(_:)`` waits for more bytes before reporting it. Call
   /// this once no more bytes are coming, for example when the reply has timed out.
   ///
-  /// Pending bytes that don't start with such a NAK start a frame that never finished, such
-  /// as one begun by line noise or missing bytes from its middle. Its start byte is dropped,
-  /// so the bytes after it are read afresh rather than taken as the rest of that frame.
-  ///
-  /// - Returns: The NAK's echo and the replies after it, or the replies in the bytes after the
-  ///   dropped start byte.
+  /// - Returns: The NAK's echo and the replies after it, or no replies if the pending bytes
+  ///   don't start with such a NAK. Those bytes are kept.
   public mutating func finishPendingReply() -> [ModemReply] {
 
     let number = reader.takeShortNegativeAcknowledgment { byte -> SerialCommandNumber? in
@@ -69,11 +65,27 @@ public struct ModemReplyParser: ReplyParser, Hashable, Sendable {
 
     guard let number else {
 
-      return reader.resynchronize()
+      return []
 
     }
 
     return [.echo(CommandEcho(number: number, parameters: [], isAccepted: false))] + parse([])
+
+  }
+
+  /// Discards the pending bytes of a frame that stopped arriving before it was complete, such
+  /// as one begun by line noise or missing bytes from its middle, which would otherwise take
+  /// the replies after it as the rest of its bytes.
+  ///
+  /// Call this only once no bytes at all have arrived for a while: a frame still arriving is
+  /// never cut short. Its bytes are discarded whole rather than read again as frames, so data
+  /// inside it can't pass for a reply.
+  ///
+  /// - Returns: Whether any bytes were discarded.
+  @discardableResult
+  public mutating func discardStalledFrame() -> Bool {
+
+    reader.discardStalledFrame()
 
   }
 

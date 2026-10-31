@@ -170,6 +170,10 @@ actor CommandPacer<Parser: ReplyParser> {
 
   private var isRunning = false
 
+  /// How many chunks of bytes have arrived, so a timeout can tell whether anything arrived
+  /// while it waited.
+  private var receivedChunks = 0
+
   private var isClosed = false
 
   /// Whether the device has sent anything since the pacer started reading or since the last
@@ -234,6 +238,7 @@ actor CommandPacer<Parser: ReplyParser> {
 
       for try await chunk in connection.receive() {
 
+        receivedChunks &+= 1
         deliver(parser.parse(chunk))
 
       }
@@ -530,6 +535,10 @@ actor CommandPacer<Parser: ReplyParser> {
 
         }
 
+        // Whether anything arrives during the wait tells a frame still arriving from one that
+        // stalled.
+        let chunksBeforeWait: Int = await self.receivedChunks
+
         do {
 
           try await clock.sleep(for: max(timeout - writing, .zero))
@@ -540,7 +549,7 @@ actor CommandPacer<Parser: ReplyParser> {
 
         }
 
-        await self.answerTimedOut(id)
+        await self.answerTimedOut(id, chunksBeforeWait: chunksBeforeWait)
 
       }
 
@@ -561,7 +570,13 @@ actor CommandPacer<Parser: ReplyParser> {
 
   /// Fails the command waiting for an answer, unless the parser is holding back a NAK for it,
   /// which only more bytes or the end of the wait can tell apart from data.
-  private func answerTimedOut(_ id: Int) {
+  ///
+  /// When nothing at all arrived during the wait, a frame the parser is still waiting on has
+  /// stalled, such as one begun by line noise, so it's discarded whole; a frame still arriving
+  /// is left alone.
+  ///
+  /// - Parameter chunksBeforeWait: How many chunks had arrived when the wait started.
+  private func answerTimedOut(_ id: Int, chunksBeforeWait: Int) {
 
     guard let pending = pendingAnswer, pending.id == id else {
 
@@ -572,6 +587,12 @@ actor CommandPacer<Parser: ReplyParser> {
     let step: AnswerStep<Reply> = pending.steps[pending.step]
 
     deliver(parser.finishPendingReply())
+
+    if receivedChunks == chunksBeforeWait {
+
+      parser.discardStalledFrame()
+
+    }
 
     // A NAK the parser was holding back may have answered the command.
     guard pendingAnswer?.id == id else {

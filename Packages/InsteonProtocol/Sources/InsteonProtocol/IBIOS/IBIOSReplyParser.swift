@@ -7,8 +7,9 @@
 ///
 /// A NAK that follows a command's number, such as `02 48 15`, begins the same way as a reply
 /// whose data starts with `0x15`, so it's reported once more bytes arrive. If no more bytes are
-/// coming, ``IBIOSReplyParser/finishPendingReply()`` reports it, or gives up on a frame that
-/// never finished.
+/// coming, ``IBIOSReplyParser/finishPendingReply()`` reports it. A frame that stops arriving
+/// partway, such as an upload whose header line noise made up, is discarded with
+/// ``IBIOSReplyParser/discardStalledFrame()``.
 ///
 /// A text report (`0x43`) longer than ``IBIOSReplyParser/longestText`` bytes isn't one, so its
 /// start byte is skipped rather than every reply after it waited on for an End of Text byte.
@@ -38,21 +39,33 @@ public struct IBIOSReplyParser: ReplyParser, Hashable, Sendable {
   ///
   /// Call this once no more bytes are coming, for example when the reply has timed out.
   ///
-  /// Pending bytes that don't start with such a NAK start a frame that never finished, such
-  /// as an upload whose header line noise made up. Its start byte is dropped, so the bytes
-  /// after it are read afresh rather than taken as the rest of that frame.
-  ///
-  /// - Returns: The NAK's echo and the replies after it, or the replies in the bytes after the
-  ///   dropped start byte.
+  /// - Returns: The NAK's echo and the replies after it, or no replies if the pending bytes
+  ///   don't start with such a NAK. Those bytes are kept.
   public mutating func finishPendingReply() -> [IBIOSReply] {
 
     guard let number = reader.takeShortNegativeAcknowledgment(of: IBIOSCommandNumber.init(rawValue:)) else {
 
-      return reader.resynchronize()
+      return []
 
     }
 
     return [.echo(IBIOSEcho(number: number, parameters: [], isAccepted: false))] + parse([])
+
+  }
+
+  /// Discards the pending bytes of a frame that stopped arriving before it was complete, such
+  /// as an upload whose header line noise made up, which would otherwise take every reply
+  /// after it as its data.
+  ///
+  /// Call this only once no bytes at all have arrived for a while: a frame still arriving,
+  /// such as a long upload, is never cut short. Its bytes are discarded whole rather than read
+  /// again as frames, so data inside it can't pass for a reply.
+  ///
+  /// - Returns: Whether any bytes were discarded.
+  @discardableResult
+  public mutating func discardStalledFrame() -> Bool {
+
+    reader.discardStalledFrame()
 
   }
 

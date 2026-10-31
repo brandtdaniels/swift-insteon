@@ -11,7 +11,7 @@ struct IBIOSReplyParserFuzzTests {
   static let seeds: [UInt64] = [1, 2, 3, 0x1A2B3C, 0xC0FFEE]
 
   // Any bytes at all: the parser never traps, reports the same replies however the bytes are
-  // split, and once nothing more is coming gets past whatever it was waiting on.
+  // split, and once a stalled frame is discarded reads the next reply.
   @Test(arguments: seeds)
   func recoversFromRandomBytes(seed: UInt64) {
 
@@ -52,12 +52,9 @@ struct IBIOSReplyParserFuzzTests {
 
       #expect(pieces == all, "bytes: \(ModemReplyParserFuzzTests.hex(bytes))")
 
-      // Each call gives up on at least one pending byte.
-      for _ in 0...bytes.count {
-
-        _ = whole.finishPendingReply()
-
-      }
+      // Once nothing more arrives, whatever was pending is discarded.
+      _ = whole.finishPendingReply()
+      whole.discardStalledFrame()
 
       #expect(whole.parse([0x02, 0x45, 0x0A]) == [.eventReport(.buttonTapped)], "bytes: \(ModemReplyParserFuzzTests.hex(bytes))")
 

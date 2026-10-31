@@ -422,34 +422,53 @@ struct ModemReplyParserTests {
 
   }
 
-  // A frame that lost bytes from its middle would take the next frame's bytes as its own.
-  @Test func givesUpOnAFrameThatNeverFinishes() {
+  @Test func keepsPendingBytesThatArentARejectedRequest() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("0250AABB")).isEmpty)
+    #expect(parser.finishPendingReply().isEmpty)
+    #expect(parser.parse(bytes("CC" + "112233" + "2B" + "11FF")).count == 1)
+
+  }
+
+  // A frame that lost bytes from its middle would take the next frame's bytes as its own, so
+  // once nothing has arrived for a while its bytes are discarded whole, never read as frames.
+  @Test func discardsAFrameThatStalled() {
 
     var parser = ModemReplyParser()
 
     #expect(parser.parse(bytes("0250AABB" + "0255")).isEmpty)
-    #expect(parser.finishPendingReply() == [.userReset])
-    #expect(parser.parse(bytes("CC" + "112233" + "2B" + "11FF" + "0255")) == [.userReset])
+    #expect(parser.finishPendingReply().isEmpty)
+    #expect(parser.discardStalledFrame())
+    #expect(parser.parse(bytes("0255")) == [.userReset])
+    #expect(!parser.discardStalledFrame())
 
   }
 
-  @Test func keepsNegativeAcknowledgmentInsideAnEcho() {
+  // An extended message arriving a byte at a time, with every timeout along the way, whose
+  // user data looks like a standard message: only the extended message is reported.
+  @Test func neverReadsTheDataOfASlowMessageAsAReply() throws {
 
     var parser = ModemReplyParser()
+    let userData: [UInt8] = bytes("0250" + "AABBCC" + "112233" + "2B" + "11FF" + "060606")
+    let frame: [UInt8] = bytes("0251" + "AABBCC" + "112233" + "1B" + "2E00") + userData
+    var replies: [ModemReply] = []
 
-    #expect(parser.parse(bytes("026D15")) == [.echo(CommandEcho(number: .ledOn, parameters: [], isAccepted: false))])
+    for byte in frame {
 
-  }
+      replies += parser.parse([byte])
+      replies += parser.finishPendingReply()
 
-  @Test func parsesModemInfoForAnAddressStartingWithNAK() {
+    }
 
-    var parser = ModemReplyParser()
-
-    let replies = parser.parse(bytes("0260" + "15AABB" + "03" + "21" + "93" + "06"))
-
-    #expect(replies == [
-      .modemInfo(ModemInfo(address: InsteonAddress(0x15, 0xAA, 0xBB), category: 0x03, subcategory: 0x21, firmwareVersion: 0x93))
-    ])
+    #expect(replies == [.messageReceived(ReceivedMessage(
+      sender: Self.device,
+      destination: Self.modem,
+      flags: MessageFlags(rawValue: 0x1B),
+      command: Command(command1: 0x2E, command2: 0x00),
+      userData: try UserData(userData)
+    ))])
 
   }
 

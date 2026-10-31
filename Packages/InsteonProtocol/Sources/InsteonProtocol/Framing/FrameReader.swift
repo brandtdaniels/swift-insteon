@@ -125,36 +125,28 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
 
   }
 
-  /// Gives up on the frame the pending bytes start with, which more bytes haven't completed,
-  /// and returns the replies in the bytes after its start byte.
+  /// Discards the pending bytes of a frame that stopped arriving before it was complete.
   ///
-  /// Call this once no more bytes are coming for the frame, such as when a reply has timed
-  /// out. A start byte from line noise, or a frame missing bytes from its middle, would
-  /// otherwise take the replies that follow as the rest of its bytes.
+  /// Call this only once no bytes at all have arrived for a while, so the frame has truly
+  /// stalled, such as one begun by line noise or missing bytes from its middle; a frame still
+  /// arriving is never cut short. Its bytes are discarded whole, never read again as frames,
+  /// so data inside it, such as a message's user data holding `02 50`, can't pass for a reply.
+  /// The next byte to arrive starts afresh.
   ///
-  /// - Returns: The replies in the bytes after the dropped start byte, oldest first, or no
-  ///   replies if no bytes are pending.
-  mutating func resynchronize() -> [Format.Reply] {
+  /// - Returns: Whether any bytes were discarded.
+  @discardableResult
+  mutating func discardStalledFrame() -> Bool {
 
     guard !pending.isEmpty else {
 
-      return []
+      return false
 
     }
 
-    pending.removeFirst()
-    isSkipping = true
+    pending.removeAll()
+    isSkipping = false
 
-    let replies: [Format.Reply] = read([])
-
-    // Nothing more was coming, so the next byte to arrive starts afresh.
-    if pending.isEmpty {
-
-      isSkipping = false
-
-    }
-
-    return replies
+    return true
 
   }
 

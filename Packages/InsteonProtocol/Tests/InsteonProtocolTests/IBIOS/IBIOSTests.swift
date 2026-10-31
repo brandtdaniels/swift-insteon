@@ -164,14 +164,37 @@ struct IBIOSTests {
   }
 
   // Line noise that looks like the header of a 65,535-byte upload would take every reply after
-  // it as the upload's data. Once nothing answers in time, its start byte is given up on.
-  @Test func givesUpOnAnUploadThatNeverFinishes() {
+  // it as the upload's data. Once nothing has arrived for a while, it's discarded whole.
+  @Test func discardsAnUploadThatStalled() {
 
     var parser = IBIOSReplyParser()
 
     #expect(parser.parse(bytes("02420000FFFF" + "02450A")).isEmpty)
-    #expect(parser.finishPendingReply() == [.eventReport(.buttonTapped)])
+    #expect(parser.finishPendingReply().isEmpty)
+    #expect(parser.discardStalledFrame())
     #expect(parser.parse(bytes("02450B")) == [.eventReport(.buttonHeld)])
+
+  }
+
+  // An upload arriving a byte at a time, with every timeout along the way, whose data looks
+  // like an event report: only the upload is reported.
+  @Test func neverReadsTheDataOfASlowUploadAsAReply() {
+
+    var parser = IBIOSReplyParser()
+    let data: [UInt8] = [0x02, 0x45, 0x0A, 0x06]
+    let header: [UInt8] = [0x03, 0x00, 0x00, 0x04]
+    let checksum: UInt16 = IBIOSCommand.checksum(of: header + data)
+    let frame: [UInt8] = [0x02, 0x42] + header + data + [UInt8(checksum >> 8), UInt8(checksum & 0xFF), 0x06]
+    var replies: [IBIOSReply] = []
+
+    for byte in frame {
+
+      replies += parser.parse([byte])
+      replies += parser.finishPendingReply()
+
+    }
+
+    #expect(replies == [.memory(address: 0x0300, data: data, isIntact: true)])
 
   }
 
