@@ -1,5 +1,5 @@
 import Testing
-import InsteonCore
+@testable import InsteonCore
 import InsteonDeviceCatalog
 import InsteonProtocol
 

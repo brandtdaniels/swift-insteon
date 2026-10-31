@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import InsteonCore
+@testable import InsteonCore
 import InsteonProtocol
 
 struct JSONFileDeviceRegistryStoreTests {
