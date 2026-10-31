@@ -171,6 +171,7 @@ let package = Package(
         "InsteonLinking",
         "InsteonLinkingTestSupport",
         "InsteonModem",
+        "InsteonNetworking",
         "InsteonProtocol",
         "InsteonTestSupport"
       ],
