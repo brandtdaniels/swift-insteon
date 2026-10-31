@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import InsteonCore
 import InsteonLinking
+import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
 import InsteonTestSupport

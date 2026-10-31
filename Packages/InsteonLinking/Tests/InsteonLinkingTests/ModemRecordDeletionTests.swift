@@ -1,8 +1,8 @@
 import Testing
 import InsteonLinking
+import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
-import InsteonTestSupport
 
 /// Deleting a gone device's records from the modem's own ALL-Link database.
 @Suite(.timeLimit(.minutes(1)))

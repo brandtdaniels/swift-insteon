@@ -101,7 +101,7 @@ let package = Package(
     ),
     .testTarget(
       name: "InsteonLinkingTests",
-      dependencies: ["InsteonLinking", "InsteonModem", "InsteonProtocol", "InsteonTestSupport"],
+      dependencies: ["InsteonLinking", "InsteonLinkingTestSupport", "InsteonModem", "InsteonProtocol", "InsteonTestSupport"],
       path: "Packages/InsteonLinking/Tests/InsteonLinkingTests"
     ),
 
@@ -169,6 +169,7 @@ let package = Package(
         "InsteonHubClient",
         "InsteonHubDiscovery",
         "InsteonLinking",
+        "InsteonLinkingTestSupport",
         "InsteonModem",
         "InsteonProtocol",
         "InsteonTestSupport"
@@ -195,11 +196,19 @@ let package = Package(
       path: "Packages/InsteonCLI/Tests/InsteonCLISupportTests"
     ),
 
-    // Test doubles shared by the test targets. Not a product.
+    // Test doubles shared by the test targets. Not products. InsteonTestSupport has the clock,
+    // the scripted modem connection and the HTTP stub; InsteonLinkingTestSupport has the
+    // in-memory modem, which is a LinkingModem, so the tests of the layers below InsteonLinking
+    // don't link it.
     .target(
       name: "InsteonTestSupport",
-      dependencies: ["InsteonLinking", "InsteonModem", "InsteonNetworking", "InsteonProtocol"],
+      dependencies: ["InsteonModem", "InsteonNetworking"],
       path: "Packages/InsteonTestSupport/Sources/InsteonTestSupport"
+    ),
+    .target(
+      name: "InsteonLinkingTestSupport",
+      dependencies: ["InsteonLinking", "InsteonModem", "InsteonProtocol"],
+      path: "Packages/InsteonTestSupport/Sources/InsteonLinkingTestSupport"
     )
   ]
 )

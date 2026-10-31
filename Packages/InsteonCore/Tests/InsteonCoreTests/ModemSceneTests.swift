@@ -1,5 +1,6 @@
 import Testing
 @testable import InsteonCore
+import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
 import InsteonTestSupport

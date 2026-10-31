@@ -1,8 +1,8 @@
 import Testing
 import InsteonLinking
+import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
-import InsteonTestSupport
 
 @Suite(.timeLimit(.minutes(1)))
 struct LinkerTests {

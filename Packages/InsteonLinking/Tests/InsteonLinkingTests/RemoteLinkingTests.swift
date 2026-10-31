@@ -1,5 +1,6 @@
 import Testing
 import InsteonLinking
+import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
 import InsteonTestSupport
