@@ -154,12 +154,12 @@ struct DeviceNetworkTests {
 
   }
 
-  @Test(.timeLimit(.minutes(1))) func cancelingOneCallCancelsTheIdentificationItShares() async throws {
+  @Test(.timeLimit(.minutes(1))) func cancelingOneCallLeavesTheIdentificationItSharesToTheOthers() async throws {
 
     let modem = InMemoryModem()
     let network: DeviceNetwork = self.network(modem)
 
-    // The device sends no broadcast, so the identification stays in progress.
+    // The device sends no broadcast yet, so the identification stays in progress.
     let first = Task { () async throws -> DeviceIdentification in try await network.identify(Example.plug) }
 
     await clock.waitForSleeper(until: Modem.defaultRequestTimeout)
@@ -173,6 +173,45 @@ struct DeviceNetworkTests {
     }
 
     second.cancel()
+
+    // The device answers after all: the call still waiting gets its identity.
+    await modem.setIdentity(plugPressed)
+    await modem.broadcastIdentity(of: Example.plug)
+
+    let identification: DeviceIdentification = try await first.value
+
+    #expect(identification.identity == plugPressed)
+
+    await #expect(throws: CancellationError.self) {
+
+      _ = try await second.value
+
+    }
+
+    #expect(await engineRequests(modem) == 1)
+    #expect(await network.registry.device(Example.plug)?.identity == Example.plugIdentity)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func cancelingEveryCallCancelsTheIdentification() async throws {
+
+    let modem = InMemoryModem()
+    let network: DeviceNetwork = self.network(modem)
+
+    let first = Task { () async throws -> DeviceIdentification in try await network.identify(Example.plug) }
+
+    await clock.waitForSleeper(until: Modem.defaultRequestTimeout)
+
+    let second = Task { () async throws -> DeviceIdentification in try await network.identify(Example.plug) }
+
+    while await network.joinedIdentifications < 1 {
+
+      await Task.yield()
+
+    }
+
+    second.cancel()
+    first.cancel()
 
     await #expect(throws: CancellationError.self) {
 
@@ -193,7 +232,6 @@ struct DeviceNetworkTests {
 
     #expect(identification.identity == plugPressed)
     #expect(await engineRequests(modem) == 2)
-    #expect(await network.registry.device(Example.plug)?.identity == Example.plugIdentity)
 
   }
 

@@ -82,6 +82,9 @@ public actor DeviceNetwork {
 
     let task: Task<DeviceIdentification, any Error>
 
+    /// The calls that wait on it and haven't been canceled.
+    let waiters: IdentificationWaiters
+
   }
 
   private var identifications: [InsteonAddress: Identification] = [:]
@@ -279,27 +282,39 @@ public actor DeviceNetwork {
   ///
   /// The identity goes in the ``registry``, and the engine and when the device answered in
   /// the device's state. While an identification of the same address is in progress, the call
-  /// waits for its result instead of asking the device again. Canceling a call cancels the
-  /// identification it waits on, so every call waiting on it throws `CancellationError`; a
-  /// call made after that starts a new identification instead of waiting on the canceled one.
+  /// waits for its result instead of asking the device again. Canceling a call stops it
+  /// waiting once the identification ends, and throws `CancellationError`; the identification
+  /// itself is canceled only when every call waiting on it is, so canceling one call leaves
+  /// the others their result. A call made after that starts a new identification instead of
+  /// waiting on the canceled one.
   ///
   /// - Parameter device: The device to ask.
   /// - Returns: What the device said, as `DeviceIdentifier.identify(_:)` returns it.
-  /// - Throws: `DeviceIdentifier`'s errors, or `CancellationError` if the identification was
-  ///   canceled.
+  /// - Throws: `DeviceIdentifier`'s errors, or `CancellationError` if the call or the
+  ///   identification was canceled.
   public func identify(_ device: InsteonAddress) async throws -> DeviceIdentification {
 
-    let task: Task<DeviceIdentification, any Error> = identification(of: device)
+    let (task, waiters): (Task<DeviceIdentification, any Error>, IdentificationWaiters) = identification(of: device)
 
-    return try await withTaskCancellationHandler {
+    let result: Result<DeviceIdentification, any Error> = await withTaskCancellationHandler {
 
-      try await task.value
+      await task.result
 
     } onCancel: {
 
-      task.cancel()
+      // The last call to stop waiting cancels the identification, at once, so a call made
+      // after it starts a new one.
+      if waiters.leave() {
+
+        task.cancel()
+
+      }
 
     }
+
+    try Task.checkCancellation()
+
+    return try result.get()
 
   }
 
@@ -307,13 +322,16 @@ public actor DeviceNetwork {
   ///
   /// An identification that's canceled but hasn't finished yet isn't joined: a new one
   /// replaces it, and the canceled one, when it finishes, leaves the new one in place.
-  private func identification(of device: InsteonAddress) -> Task<DeviceIdentification, any Error> {
+  ///
+  /// - Returns: The identification's task, and its waiters, with the caller counted among
+  ///   them.
+  private func identification(of device: InsteonAddress) -> (Task<DeviceIdentification, any Error>, IdentificationWaiters) {
 
-    if let running = identifications[device], !running.task.isCancelled {
+    if let running = identifications[device], !running.task.isCancelled, running.waiters.join() {
 
       joinedIdentifications += 1
 
-      return running.task
+      return (running.task, running.waiters)
 
     }
 
@@ -344,9 +362,11 @@ public actor DeviceNetwork {
 
     }
 
-    identifications[device] = Identification(id: id, task: task)
+    let waiters = IdentificationWaiters()
 
-    return task
+    identifications[device] = Identification(id: id, task: task, waiters: waiters)
+
+    return (task, waiters)
 
   }
 
@@ -616,6 +636,55 @@ public struct ModemDatabaseEntry: Hashable, Sendable {
 
     self.record = record
     self.device = device
+
+  }
+
+}
+
+/// How many calls wait on an identification and haven't been canceled, counted from any task,
+/// since a cancellation handler can't reach the network's actor.
+final class IdentificationWaiters: @unchecked Sendable {
+
+  // `lock` guards `count`.
+  private let lock = NSLock()
+
+  /// Starts at 1, the call that started the identification.
+  private var count = 1
+
+  /// Counts another call as waiting.
+  ///
+  /// - Returns: `false` if every call has stopped waiting, so the identification is being
+  ///   canceled and mustn't be joined.
+  func join() -> Bool {
+
+    lock.withLock {
+
+      guard count > 0 else {
+
+        return false
+
+      }
+
+      count += 1
+
+      return true
+
+    }
+
+  }
+
+  /// Stops counting a canceled call as waiting.
+  ///
+  /// - Returns: `true` if it was the last call waiting, so the identification is to be canceled.
+  func leave() -> Bool {
+
+    lock.withLock {
+
+      count -= 1
+
+      return count == 0
+
+    }
 
   }
 
