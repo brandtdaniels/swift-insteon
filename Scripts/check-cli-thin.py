@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """Checks that the `insteon` command stays a thin layer over the libraries.
 
-Usage: python3 Scripts/check-cli-thin.py [--root DIR] [--allowlist FILE] [--update]
+Usage: python3 Scripts/check-cli-thin.py [--root DIR ...] [--allowlist FILE] [--update]
 
 The command parses arguments, prompts and prints; what a device is and how to control it comes
 from the Insteon device catalog through the libraries. So its sources mustn't compare a
 device's category, subcategory, firmware version, engine or group kind, and mustn't hold
-protocol bytes or command numbers: hexadecimal literals, or the protocol's command
-enumerations.
+protocol bytes or command numbers: hexadecimal literals, decimal command bytes, or the
+protocol's command enumerations. A comparison with `nil` only asks whether a value is known,
+so it's allowed.
 
-It reads the Swift files under the root, `Packages/InsteonCLI/Sources/insteon` by default,
-leaving out comments and string literals, and prints each line that breaks a rule. A line
+It reads the Swift files under each root, `Packages/InsteonCLI/Sources/insteon` and
+`Packages/InsteonCLI/Sources/InsteonCLICore` by default, leaving out comments, including
+nested ones, and string literals, including raw ones, and prints each line that breaks a
+rule, by its path from the root's parent, such as `insteon/DeviceCommands.swift`. A line
 that's in the allow-list, `Scripts/check-cli-thin-allowlist.txt` by default, is known and
 waits to move into the libraries; any other is new, and so is a failure. An allow-list entry
 that no longer matches anything is a failure too, so the list only shrinks: remove the entry.
@@ -26,7 +29,10 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
-DEFAULT_SOURCES = ROOT / "Packages" / "InsteonCLI" / "Sources" / "insteon"
+DEFAULT_SOURCES = [
+    ROOT / "Packages" / "InsteonCLI" / "Sources" / "insteon",
+    ROOT / "Packages" / "InsteonCLI" / "Sources" / "InsteonCLICore",
+]
 
 DEFAULT_ALLOWLIST = ROOT / "Scripts" / "check-cli-thin-allowlist.txt"
 
@@ -41,16 +47,25 @@ PASSTHROUGH_FILES = {
 # aren't comparisons.
 COMPARISON = r"(?:==|!=|<=|>=|~=|\s<\s|\s>\s)"
 
+# What may follow a value before it's compared: an optional's `?`, and its `.rawValue`.
+RAW = r"\??(?:\.rawValue)?\??"
+
+# A comparison with nil, which only asks whether a value is known.
+NIL_COMPARISON = re.compile(r"\s*(?:==|!=)\s*nil\b|\bnil\s*(?:==|!=)\s*")
+
+KINDS = r"(?:dimmer|relay|fan|sensor|button)"
+
 # Each rule: its name, a regular expression for code that breaks it, whether the raw
 # passthroughs are waived from it, and what to do instead.
 RULES = [
     (
         "category",
         re.compile(
-            r"\w*[cC]ategory\??\s*" + COMPARISON
-            + r"|" + COMPARISON + r"\s*[\w.]*[cC]ategory\b"
+            r"\w*[cC]ategory" + RAW + r"\s*" + COMPARISON
+            + r"|" + COMPARISON + r"\s*[\w.?]*[cC]ategory\b"
             + r"|\bcase\s+\.(?:dimmableLightingControl|switchedLightingControl)\b"
             + r"|\bswitch\s+[\w.?]*[cC]ategory\b"
+            + r"|\.contains\(\s*[\w.?]*[cC]ategory\b"
         ),
         False,
         "ask the libraries what the device can do, such as a Device's capabilities",
@@ -58,8 +73,8 @@ RULES = [
     (
         "firmware",
         re.compile(
-            r"\w*[fF]irmware\w*\??\s*(?:\?\?\s*[\w.]+\)?\s*)?" + COMPARISON
-            + r"|" + COMPARISON + r"\s*[\w.]*[fF]irmware\w*"
+            r"\w*[fF]irmware\w*" + RAW + r"\s*(?:\?\?\s*[\w.]+\)?\s*)?" + COMPARISON
+            + r"|" + COMPARISON + r"\s*[\w.?]*[fF]irmware\w*"
         ),
         False,
         "let the Insteon device catalog choose by firmware version",
@@ -67,9 +82,12 @@ RULES = [
     (
         "group-kind",
         re.compile(
-            r"\bkind\??\s*(?:==|!=)"
-            + r"|(?:==|!=)\s*\.(?:dimmer|relay|fan|sensor|button)\b"
-            + r"|\bcase\s+\.(?:dimmer|relay|fan|sensor|button)\b"
+            r"\bkind" + RAW + r"\s*(?:==|!=)"
+            + r"|(?:==|!=)\s*[\w.?]*\bkind\b"
+            + r"|(?:==|!=)\s*\." + KINDS + r"\b"
+            + r"|\bcase\s+\." + KINDS + r"\b"
+            + r"|\.contains\(\s*[\w.?]*\bkind\b"
+            + r"|\[\s*\." + KINDS + r"\b"
             + r"|\bmainGroupType\b|\bGroupType\.Kind\b"
         ),
         False,
@@ -88,6 +106,12 @@ RULES = [
         "name the command or value in a library, or take it from the catalog",
     ),
     (
+        "command-byte",
+        re.compile(r"\bcommand[12]\s*:\s*\d+\b(?!\.)"),
+        True,
+        "name the command or value in a library, or take it from the catalog",
+    ),
+    (
         "protocol-command",
         re.compile(r"\b(?:StandardDirectCommand|ExtendedDirectCommand)\b"),
         True,
@@ -99,35 +123,41 @@ RULES = [
 def code_lines(text):
     """Yields each line number and its code, without comments or string literals.
 
-    A string literal becomes `""`, followed by the code of its interpolations, so a comparison
-    can't hide in one. Block comments and `//` comments are removed.
+    A string literal, raw or not, becomes `""`, followed by the code of its interpolations, so
+    a comparison can't hide in one. Block comments, nested or not, and `//` comments are
+    removed.
     """
 
-    in_block_comment = False
-    in_multiline_string = False
+    comment_depth = 0
+    # The number of `#` around the multiline string the line is in, or None outside one.
+    multiline_hashes = None
 
     for number, line in enumerate(text.split("\n"), start=1):
         code = []
         index = 0
 
         while index < len(line):
-            if in_block_comment:
-                end = line.find("*/", index)
+            if comment_depth > 0:
+                opening = line.find("/*", index)
+                closing = line.find("*/", index)
 
-                if end < 0:
+                if closing < 0 and opening < 0:
                     index = len(line)
+                elif opening >= 0 and (closing < 0 or opening < closing):
+                    comment_depth += 1
+                    index = opening + 2
                 else:
-                    in_block_comment = False
-                    index = end + 2
+                    comment_depth -= 1
+                    index = closing + 2
 
                 continue
 
-            if in_multiline_string:
-                index, interpolations, closed = scan_string(line, index, '"""')
+            if multiline_hashes is not None:
+                index, interpolations, closed = scan_string(line, index, '"""', multiline_hashes)
                 code.append(interpolations)
 
                 if closed:
-                    in_multiline_string = False
+                    multiline_hashes = None
                     code.append('""')
 
                 continue
@@ -136,17 +166,21 @@ def code_lines(text):
                 break
 
             if line.startswith("/*", index):
-                in_block_comment = True
+                comment_depth = 1
                 index += 2
                 continue
 
-            if line.startswith('"""', index):
-                in_multiline_string = True
-                index += 3
-                continue
+            opening = re.match(r'(#*)("""|")', line[index:])
 
-            if line[index] == '"':
-                index, interpolations, _ = scan_string(line, index + 1, '"')
+            if opening and (opening.group(1) or line[index] == '"'):
+                hashes = len(opening.group(1))
+                index += opening.end()
+
+                if opening.group(2) == '"""':
+                    multiline_hashes = hashes
+                    continue
+
+                index, interpolations, _ = scan_string(line, index, '"', hashes)
                 code.append('""' + interpolations)
                 continue
 
@@ -156,28 +190,34 @@ def code_lines(text):
         yield number, "".join(code)
 
 
-def scan_string(line, index, closing):
+def scan_string(line, index, closing, hashes=0):
     """Reads a string literal's contents from `index` to its closing quotes, skipping escapes.
+
+    `hashes` is the number of `#` around a raw string, such as 1 for `#"..."#`: its closing
+    quotes are followed by as many, and only a backslash followed by as many starts an escape
+    or an interpolation.
 
     Returns the index after the closing quotes, or the line's end; the code of the
     interpolations, each followed by a space; and whether the string closed on the line.
     """
 
     interpolations = []
+    escape = "\\" + "#" * hashes
+    end = closing + "#" * hashes
 
     while index < len(line):
-        if line.startswith("\\(", index):
-            end, inner = interpolation(line, index + 2)
+        if line.startswith(escape + "(", index):
+            after, inner = interpolation(line, index + len(escape) + 1)
             interpolations.append(inner + " ")
-            index = end
+            index = after
             continue
 
-        if line[index] == "\\":
-            index += 2
+        if line.startswith(escape, index):
+            index += len(escape) + 1
             continue
 
-        if line.startswith(closing, index):
-            return index + len(closing), "".join(interpolations), True
+        if line.startswith(end, index):
+            return index + len(end), "".join(interpolations), True
 
         index += 1
 
@@ -196,9 +236,10 @@ def interpolation(line, index):
 
     while index < len(line):
         character = line[index]
+        opening = re.match(r'(#*)"', line[index:])
 
-        if character == '"':
-            index, inner, _ = scan_string(line, index + 1, '"')
+        if opening and (opening.group(1) or character == '"'):
+            index, inner, _ = scan_string(line, index + opening.end(), '"', len(opening.group(1)))
             code.append('""' + inner)
             continue
 
@@ -222,22 +263,32 @@ def normalized(code):
     return " ".join(code.split())
 
 
-def violations(sources):
-    """Each line that breaks a rule, as (path, rule, code, line number), in file order."""
+def violations(roots):
+    """Each line that breaks a rule, as (path, rule, code, line number), in file order.
+
+    `roots` is a directory or a list of them; each path is from its root's parent, such as
+    `insteon/DeviceCommands.swift`.
+    """
+
+    if isinstance(roots, pathlib.Path):
+        roots = [roots]
 
     found = []
 
-    for path in sorted(sources.rglob("*.swift")):
-        relative = path.relative_to(sources).as_posix()
-        is_passthrough = path.name in PASSTHROUGH_FILES
+    for root in roots:
+        for path in sorted(root.rglob("*.swift")):
+            relative = path.relative_to(root.parent).as_posix()
+            is_passthrough = path.name in PASSTHROUGH_FILES
 
-        for number, code in code_lines(path.read_text(encoding="utf-8")):
-            for name, pattern, waived_for_passthrough, _ in RULES:
-                if is_passthrough and waived_for_passthrough:
-                    continue
+            for number, code in code_lines(path.read_text(encoding="utf-8")):
+                checked = NIL_COMPARISON.sub(" ", code)
 
-                if pattern.search(code):
-                    found.append((relative, name, normalized(code), number))
+                for name, pattern, waived_for_passthrough, _ in RULES:
+                    if is_passthrough and waived_for_passthrough:
+                        continue
+
+                    if pattern.search(checked):
+                        found.append((relative, name, normalized(code), number))
 
     return found
 
@@ -266,9 +317,10 @@ def read_allowlist(path):
 
 ALLOWLIST_HEADER = """\
 # Lines of the `insteon` command that Scripts/check-cli-thin.py knows break its rules, waiting
-# to move into the libraries. Each entry is a path under Packages/InsteonCLI/Sources/insteon,
-# the rule, and the line's code without comments or strings, separated by tabs. Entries only
-# go: a change that moves code into the libraries removes them, with --update.
+# to move into the libraries. Each entry is a path under Packages/InsteonCLI/Sources, the rule,
+# and the line's code without comments or strings, separated by tabs. Entries only go: a
+# change that moves code into the libraries removes them, with --update, and CI fails a pull
+# request that adds one.
 """
 
 
@@ -282,12 +334,12 @@ def write_allowlist(path, found):
 
 def main(arguments=None):
     parser = argparse.ArgumentParser(description="Checks that the insteon command stays a thin layer.")
-    parser.add_argument("--root", type=pathlib.Path, default=DEFAULT_SOURCES, help="the sources to check")
+    parser.add_argument("--root", type=pathlib.Path, action="append", help="sources to check; may be given more than once")
     parser.add_argument("--allowlist", type=pathlib.Path, default=DEFAULT_ALLOWLIST, help="the known lines")
     parser.add_argument("--update", action="store_true", help="write the allow-list from the sources")
     options = parser.parse_args(arguments)
 
-    found = violations(options.root)
+    found = violations(options.root or DEFAULT_SOURCES)
 
     if options.update:
         write_allowlist(options.allowlist, found)
