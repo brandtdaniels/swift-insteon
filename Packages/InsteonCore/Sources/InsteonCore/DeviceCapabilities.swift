@@ -204,6 +204,15 @@ public struct DeviceGroupKind: RawRepresentable, Hashable, Sendable, CustomStrin
   /// A button that controls other devices.
   public static let button = DeviceGroupKind(rawValue: "button")
 
+  /// A window covering or other motorized cover that opens and closes.
+  public static let windowCovering = DeviceGroupKind(rawValue: "windowCovering")
+
+  /// An alarm that sounds when a linked device triggers it while the device is armed.
+  public static let alarm = DeviceGroupKind(rawValue: "alarm")
+
+  /// A group that arms the device.
+  public static let arming = DeviceGroupKind(rawValue: "arming")
+
   /// The kind as the catalog writes it.
   public var description: String { rawValue }
 

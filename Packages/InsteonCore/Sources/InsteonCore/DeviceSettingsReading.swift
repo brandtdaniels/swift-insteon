@@ -270,16 +270,18 @@ public enum DeviceSettingError: Error, Sendable {
   case unwritableValue(DeviceSettingFieldProblem, label: String, value: String)
 
   /// The setting is one that's never written, because a wrong value can cut the device off
-  /// from the modem: turning its radio or its powerline off, or requiring a checksum in every
-  /// message. The associated value is its label. A value whose byte holds one of these flags
-  /// is refused with the flag's label when writing it would change the flag, or when the
-  /// device didn't report the byte before.
+  /// from the modem or change the messages it understands: turning its radio or its
+  /// powerline off, requiring a checksum in every message, or another flag the catalog guards
+  /// with `FlagGuard.keep`; or writing it sends a command the catalog guards with
+  /// `CommandGuard.never`. The associated value is its label. A value whose byte holds one of
+  /// these flags is refused with the flag's label when writing it would change the flag, or
+  /// when the device didn't report the byte before.
   case neverWritten(label: String)
 
-  /// The setting is the programming lock, which is never turned on, so a device is never left
-  /// locked. Turning it off is allowed. The associated value is its label. A value whose byte
-  /// holds the programming lock is refused with the lock's label when it would set the lock's
-  /// bit.
+  /// The setting is the programming lock, or another flag the catalog guards with
+  /// `FlagGuard.neverSet`, which is never turned on, so a device is never left locked.
+  /// Turning it off is allowed. The associated value is its label. A value whose byte holds
+  /// such a flag is refused with the flag's label when it would set the flag's bit.
   case leavesProgrammingLocked(label: String)
 
   /// The device rejected Get Insteon Engine Version, as an i2CS device does when it isn't
@@ -387,45 +389,217 @@ public enum DeviceSettingFieldProblem: Hashable, Sendable {
 
 }
 
-/// The settings that are never written, whatever the catalog says, so no device is cut off
-/// from the modem or left locked.
+/// The settings and commands that are never written, so no device is cut off from the modem,
+/// left locked, or made to stop understanding it.
 ///
-/// They're named here rather than in the catalog: these flags stop a device hearing the modem
-/// at all, which no settings page should offer. Other flags are written as the catalog
-/// describes them. A value whose byte holds operating flags is checked against them too.
+/// The Insteon device catalog marks them: an operating flag's or flags parameter bit's
+/// `FlagGuard`, a command's `CommandGuard`, and a value's `SettingValue.flagsQuery`. A list
+/// here is a floor under the catalog, so a catalog without those marks is guarded too: the
+/// catalog can add guards, but never removes one of these.
 enum DeviceSettingSafety {
 
-  /// The settings never written: turning off the radio or the powerline, and requiring a
-  /// checksum in every message, which a modem that doesn't send one can't undo.
+  /// How a write treats a bit.
+  enum Rule: Hashable, Sendable {
+
+    /// A write leaves the bit as the device reported it.
+    case keep
+
+    /// A write may clear the bit but never sets it.
+    case neverSet
+
+  }
+
+  /// A bit a value's byte holds that a write must guard, with the label of its flag.
+  struct GuardedBit: Hashable, Sendable {
+
+    /// The bit's mask in the byte.
+    let mask: UInt8
+
+    /// What a settings page calls the bit's flag.
+    let label: String
+
+    /// How a write treats the bit.
+    let rule: Rule
+
+  }
+
+  /// The settings always kept as the device reported them, whatever the catalog says: turning
+  /// off the radio or the powerline, and requiring a checksum in every message, which a modem
+  /// that doesn't send one can't undo.
   static let neverWritten: Set<SettingName> = ["radioOff", "powerLineOff", "powerlineOff", "checksumRequired"]
 
-  /// The programming lock, which is only ever turned off.
+  /// The programming lock, which is only ever turned off, whatever the catalog says.
   static let programmingLock: SettingName = "programmingLock"
 
-  /// Whether an item is never written.
-  static func isNeverWritten(_ item: SettingItem) -> Bool {
+  /// Set Operating Flags' cmd1, which the catalog's never-sent commands share.
+  static let setOperatingFlagsCommand1: UInt8 = 0x20
 
-    neverWritten.contains(item.name)
+  /// How a write treats a flag or bit: kept for a floor flag, a `keep` guard, or a guard this
+  /// package doesn't know; never set for the programming lock or a `neverSet` guard; and
+  /// written freely otherwise. The stricter rule wins.
+  ///
+  /// - Parameters:
+  ///   - name: The flag's or bit's name.
+  ///   - writeGuard: The catalog's guard for it, if any.
+  /// - Returns: The rule, or `nil` if the bit is written freely.
+  static func rule(named name: SettingName, writeGuard: FlagGuard?) -> Rule? {
+
+    if neverWritten.contains(name) || (writeGuard != nil && writeGuard != .neverSet) {
+
+      return .keep
+
+    }
+
+    if name == programmingLock || writeGuard == .neverSet {
+
+      return .neverSet
+
+    }
+
+    return nil
 
   }
 
-  /// Whether giving an item a state would leave the device's programming locked.
-  static func locksProgramming(_ item: SettingItem, state: Bool) -> Bool {
+  /// How a write treats an operating flag.
+  static func rule(for flag: OperatingFlag) -> Rule? {
 
-    state && item.name == programmingLock
+    rule(named: flag.name, writeGuard: flag.writeGuard)
 
   }
 
-  // TODO: Catalog schema 0.6 should mark a value whose byte holds operating flags, with the
-  // request it mirrors, so this list can be read from the catalog and removed.
+  /// Whether the catalog marks a command as one an app never sends: any guard does, since a
+  /// guard this package doesn't know is treated as the strictest.
+  static func isNeverSent(_ commandGuard: CommandGuard?) -> Bool {
+
+    commandGuard != nil
+
+  }
+
+  /// Whether a standard command may be sent: it has no guard, and isn't a Set Operating Flags
+  /// command with the bytes of one the command set never sends.
+  static func isSendable(_ command: DeviceStandardCommand, in commands: CommandSet?) -> Bool {
+
+    guard !isNeverSent(command.sendGuard) else {
+
+      return false
+
+    }
+
+    guard case let .fixed(command2) = command.command2 else {
+
+      return true
+
+    }
+
+    return !isNeverSentSetOperatingFlags(Command(command1: command.command1, command2: command2), in: commands)
+
+  }
+
+  /// Whether an extended command may be sent: it has no guard, and isn't a Set Operating Flags
+  /// command with the bytes of one the command set never sends.
+  static func isSendable(_ command: DeviceExtendedCommand, in commands: CommandSet?) -> Bool {
+
+    !isNeverSent(command.sendGuard) && !isNeverSentSetOperatingFlags(command.command, in: commands)
+
+  }
+
+  /// Whether a command is Set Operating Flags (cmd1 `0x20`) with the cmd2 of a flag, standard
+  /// or extended command the command set never sends.
+  ///
+  /// The catalog marks such a command wherever it lists it, so the same bytes sent by another
+  /// route, such as a flag's own Set Operating Flags, are refused too.
+  static func isNeverSentSetOperatingFlags(_ command: Command, in commands: CommandSet?) -> Bool {
+
+    guard command.command1 == setOperatingFlagsCommand1, let commands else {
+
+      return false
+
+    }
+
+    let flagCommands: Bool = commands.flagCommands.contains { (flagCommand: OperatingFlagCommand) -> Bool in
+
+      isNeverSent(flagCommand.sendGuard) && flagCommand.command.command == command
+
+    }
+
+    let standardCommands: Bool = commands.standardCommands.contains { (standard: DeviceStandardCommand) -> Bool in
+
+      guard isNeverSent(standard.sendGuard), standard.command1 == command.command1, case let .fixed(command2) = standard.command2 else {
+
+        return false
+
+      }
+
+      return command2 == command.command2
+
+    }
+
+    let extendedCommands: Bool = commands.extendedCommands.contains { (extended: DeviceExtendedCommand) -> Bool in
+
+      isNeverSent(extended.sendGuard) && extended.command == command
+
+    }
+
+    return flagCommands || standardCommands || extendedCommands
+
+  }
+
+  /// Whether an item is never written: a flag that's kept, or one named in the floor, or a
+  /// value whose only write is a command the command set never sends.
+  static func isNeverWritten(_ item: SettingItem, in commands: CommandSet) -> Bool {
+
+    if neverWritten.contains(item.name) {
+
+      return true
+
+    }
+
+    switch item.source {
+    case let .flag(flag):
+      return rule(for: flag) == .keep
+    case .reading:
+      return false
+    case let .value(value):
+      guard case let .extendedCommand(command) = commands.change(for: value) else {
+
+        return false
+
+      }
+
+      return !isSendable(command, in: commands)
+    }
+
+  }
+
+  /// Whether giving a flag a state would set a bit that's never set.
+  static func setsNeverSetFlag(_ item: SettingItem, state: Bool) -> Bool {
+
+    guard state, case let .flag(flag) = item.source else {
+
+      return false
+
+    }
+
+    return rule(for: flag) == .neverSet
+
+  }
+
+  /// Whether a change to a flag sends a command the command set never sends.
+  static func sendsNeverSentCommand(_ change: FlagChange, in commands: CommandSet) -> Bool {
+
+    switch change {
+    case let .setOperatingFlags(command2):
+      return isNeverSentSetOperatingFlags(Command(command1: setOperatingFlagsCommand1, command2: command2), in: commands)
+    case let .standardCommand(command):
+      return !isSendable(command, in: commands)
+    }
+
+  }
 
   /// Extended settings values whose byte is a Get Operating Flags reply's cmd2, by command set
-  /// and value, with the request whose reply it is. A value named `operatingFlags` in any
-  /// command set is taken to be Get Operating Flags `0x00`'s byte too.
-  ///
-  /// Writing such a value writes every flag in its byte, so it's checked against the flags
-  /// above: an open/close sensor's configuration byte holds its programming lock in bit
-  /// `0x80`. The catalog says so only in the value's description today.
+  /// and value, with the request whose reply it is, for a catalog that doesn't give their
+  /// `SettingValue.flagsQuery`. A value named `operatingFlags` in any command set is taken to
+  /// be Get Operating Flags `0x00`'s byte too.
   static let operatingFlagsValues: [CommandSetID: [SettingName: OperatingFlagsRequest]] = [
     "openCloseSensor": ["configuration": .operatingFlags],
     "hiddenDoorSensor": ["operatingFlags": .operatingFlags]
@@ -434,35 +608,82 @@ enum DeviceSettingSafety {
   /// The value name that holds Get Operating Flags `0x00`'s byte in any command set.
   static let operatingFlagsValue: SettingName = "operatingFlags"
 
-  /// The flags that are never written, and the programming lock, that a value's byte holds.
+  /// The Get Operating Flags query whose reply a value's byte is: the catalog's
+  /// `SettingValue.flagsQuery`, or else the floor's.
+  static func flagsQuery(of value: SettingValue, in commands: CommandSet) -> OperatingFlagsRequest? {
+
+    if let query = value.flagsQuery {
+
+      return query
+
+    }
+
+    if let listed = operatingFlagsValues[commands.id]?[value.name] {
+
+      return listed
+
+    }
+
+    return value.name == operatingFlagsValue ? .operatingFlags : nil
+
+  }
+
+  /// The bits of a value's byte a write must guard: the guarded operating flags the byte
+  /// holds, and the guarded bits of the flags parameter of the extended command that writes
+  /// it.
+  ///
+  /// Writing such a byte writes every bit in it, so it never sets a bit that's never set, and
+  /// never changes one that's kept.
   ///
   /// - Parameters:
   ///   - value: The value.
   ///   - commands: Its command set.
-  /// - Returns: The flags, or none if the value's byte isn't a Get Operating Flags reply's.
-  static func guardedFlags(in value: SettingValue, of commands: CommandSet) -> [OperatingFlag] {
+  /// - Returns: The bits, or none if the value's byte holds none.
+  static func guardedBits(in value: SettingValue, of commands: CommandSet) -> [GuardedBit] {
 
-    let query: OperatingFlagsRequest
+    var bits: [GuardedBit] = []
 
-    if let listed = operatingFlagsValues[commands.id]?[value.name] {
+    if let query = flagsQuery(of: value, in: commands) {
 
-      query = listed
+      for flag in commands.operatingFlags where flag.query == query {
 
-    } else if value.name == operatingFlagsValue {
+        if let flagRule = rule(for: flag) {
 
-      query = .operatingFlags
+          bits.append(GuardedBit(mask: flag.bit, label: SettingItem(flag: flag).label, rule: flagRule))
 
-    } else {
+        }
 
-      return []
+      }
+
+    }
+
+    if case let .extendedCommand(command) = commands.change(for: value), let parameter = parameter(of: command, for: value), case let .flags(fieldBits) = parameter.kind {
+
+      for bit in fieldBits {
+
+        if let bitRule = rule(named: bit.name, writeGuard: bit.writeGuard) {
+
+          let label: String = commands.operatingFlag(named: bit.name).map { (flag: OperatingFlag) -> String in SettingItem(flag: flag).label } ?? bit.name.rawValue
+
+          bits.append(GuardedBit(mask: bit.mask, label: label, rule: bitRule))
+
+        }
+
+      }
 
     }
 
-    return commands.operatingFlags.filter { (flag: OperatingFlag) -> Bool in
+    return bits
 
-      flag.query == query && (neverWritten.contains(flag.name) || flag.name == programmingLock)
+  }
 
-    }
+  /// The parameter of an extended command a value is written into: the value's own, or else
+  /// the command's only one, as `ValueChange.message(to:button:setting:to:current:)` chooses it.
+  private static func parameter(of command: DeviceExtendedCommand, for value: SettingValue) -> MessageField? {
+
+    let named: MessageField? = command.parameters.first { (field: MessageField) -> Bool in field.name == value.name }
+
+    return named ?? (command.parameters.count == 1 ? command.parameters.first : nil)
 
   }
 
@@ -500,7 +721,7 @@ enum SettingPresentation {
       section: item.section?.rawValue,
       summary: item.summary,
       isAdvanced: item.isAdvanced,
-      isWritable: commands.isWritable(item) && !DeviceSettingSafety.isNeverWritten(item),
+      isWritable: commands.isWritable(item) && !DeviceSettingSafety.isNeverWritten(item, in: commands),
       isPerButton: isPerButton,
       control: control
     )

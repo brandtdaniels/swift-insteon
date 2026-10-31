@@ -625,13 +625,19 @@ public struct Device: Sendable {
 
   /// Changes one of the device's settings, and reads it back to confirm the change.
   ///
-  /// Some settings are never written, whatever the catalog says: turning off the device's
-  /// radio or powerline, and requiring a checksum in every message, any of which can cut the
-  /// device off from the modem. The programming lock is only turned off, never on, so a
-  /// device is never left locked. Both are refused before anything is sent. A value whose
-  /// byte holds operating flags, such as an open/close sensor's configuration byte, is refused
-  /// before it's written when it would set the programming lock's bit, or change the bit of a
-  /// flag that's never written; the device is asked for the byte first, to compare.
+  /// Some settings are never written: turning off the device's radio or powerline, and
+  /// requiring a checksum in every message, any of which can cut the device off from the
+  /// modem, and any other flag the catalog guards with `FlagGuard.keep`. The programming lock,
+  /// and any flag the catalog guards with `FlagGuard.neverSet`, is only turned off, never on,
+  /// so a device is never left locked. A command the catalog guards with `CommandGuard.never`
+  /// is never sent, nor is a Set Operating Flags command with the same bytes. All of these are
+  /// refused before anything is sent, and the radio, powerline, checksum and programming lock
+  /// flags are refused even when the catalog gives no guard. A value whose byte holds
+  /// operating flags, which the catalog marks with `SettingValue.flagsQuery`, such as an
+  /// open/close sensor's configuration byte, is refused before it's written when it would set
+  /// a bit that's never set, or change a bit that's kept; the device is asked for the byte
+  /// first, to compare. The guarded bits of an extended command's flags parameter are checked
+  /// the same way.
   ///
   /// A flag is changed with Set Operating Flags, in the form the device takes: extended with a
   /// checksum for an i2CS device, extended with the command repeated while the flag the
@@ -664,7 +670,7 @@ public struct Device: Sendable {
     }
 
     // Refused before anything is sent, whatever the catalog says about writing it.
-    if DeviceSettingSafety.isNeverWritten(item) {
+    if DeviceSettingSafety.isNeverWritten(item, in: commands) {
 
       throw DeviceSettingError.neverWritten(label: item.label)
 
@@ -792,7 +798,7 @@ public struct Device: Sendable {
 
     }
 
-    guard let command = commands.standardCommand(named: name) else {
+    guard let command = commands.standardCommand(named: name), DeviceSettingSafety.isSendable(command, in: commands) else {
 
       throw DeviceControlError.unsupported(operation, product: model.product)
 
@@ -1076,7 +1082,7 @@ public struct Device: Sendable {
 
     }
 
-    if DeviceSettingSafety.locksProgramming(item, state: state) {
+    if DeviceSettingSafety.setsNeverSetFlag(item, state: state) {
 
       throw DeviceSettingError.leavesProgrammingLocked(label: item.label)
 
@@ -1085,6 +1091,13 @@ public struct Device: Sendable {
     guard let change = commands.change(for: flag, setting: state) else {
 
       throw DeviceSettingError.noCommandForState(label: item.label, isOn: state)
+
+    }
+
+    // The same bytes as a command the catalog never sends are refused by any route.
+    if DeviceSettingSafety.sendsNeverSentCommand(change, in: commands) {
+
+      throw DeviceSettingError.neverWritten(label: item.label)
 
     }
 
@@ -1233,23 +1246,23 @@ public struct Device: Sendable {
 
     }
 
-    // A byte that holds operating flags writes them all, so it never turns the programming
-    // lock on, and never changes a flag that's never written.
-    let guardedFlags: [OperatingFlag] = DeviceSettingSafety.guardedFlags(in: value, of: commands)
+    // A byte that holds operating flags writes them all, so it never sets a bit that's never
+    // set, such as the programming lock's, and never changes a bit that's kept.
+    let guardedBits: [DeviceSettingSafety.GuardedBit] = DeviceSettingSafety.guardedBits(in: value, of: commands)
 
-    if let lock = guardedFlags.first(where: { (flag: OperatingFlag) -> Bool in flag.name == DeviceSettingSafety.programmingLock }), raw & lock.bit != 0 {
+    for bit in guardedBits where bit.rule == .neverSet && raw & bit.mask != 0 {
 
-      throw DeviceSettingError.leavesProgrammingLocked(label: SettingItem(flag: lock).label)
+      throw DeviceSettingError.leavesProgrammingLocked(label: bit.label)
 
     }
 
     let before: [SettingName: UInt8]? = try await readValues(settings: settings, button: target)
 
-    for flag in guardedFlags where DeviceSettingSafety.neverWritten.contains(flag.name) {
+    for bit in guardedBits where bit.rule == .keep {
 
-      guard let current = before?[value.name], current & flag.bit == raw & flag.bit else {
+      guard let current = before?[value.name], current & bit.mask == raw & bit.mask else {
 
-        throw DeviceSettingError.neverWritten(label: SettingItem(flag: flag).label)
+        throw DeviceSettingError.neverWritten(label: bit.label)
 
       }
 

@@ -414,8 +414,17 @@ struct DeviceControlModel: Sendable {
         source: .catalog,
         groups: groups,
         mainGroupNumber: main,
-        standardCommands: description.commandSet?.standardCommands ?? [],
-        extendedCommands: description.commandSet?.extendedCommands ?? []
+        // A command the catalog marks as never sent isn't one an action can send.
+        standardCommands: (description.commandSet?.standardCommands ?? []).filter { (command: DeviceStandardCommand) -> Bool in
+
+          DeviceSettingSafety.isSendable(command, in: description.commandSet)
+
+        },
+        extendedCommands: (description.commandSet?.extendedCommands ?? []).filter { (command: DeviceExtendedCommand) -> Bool in
+
+          DeviceSettingSafety.isSendable(command, in: description.commandSet)
+
+        }
       )
 
     }

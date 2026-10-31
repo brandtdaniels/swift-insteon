@@ -101,16 +101,20 @@ reads the settings, and ``Device/writeSetting(_:to:button:)`` changes one and re
 Each ``DeviceSetting`` carries what a settings page needs from the catalog: its label,
 section, whether it's advanced, its control, and its default as each reading's entry shows it.
 
-Some settings are never written, whatever the catalog says: turning off a device's radio or
-powerline, and requiring a checksum in every message, any of which can cut the device off from
-the modem. They're shown as read-only, and writing one throws
-``DeviceSettingError/neverWritten(label:)``. The programming lock is only ever turned off, so
-a device is never left locked; turning it on throws
-``DeviceSettingError/leavesProgrammingLocked(label:)``. The same holds for a value whose byte
-holds those flags, such as an open/close sensor's configuration byte: it's refused before it's
-written when it would set the programming lock's bit or change another of them. A value a
-setting doesn't take throws
-an error with a ``DeviceSettingInput`` that says what it takes:
+Some settings are never written: turning off a device's radio or powerline, and requiring a
+checksum in every message, any of which can cut the device off from the modem, and any other
+flag the catalog guards with `FlagGuard.keep`. They're shown as read-only, and writing one
+throws ``DeviceSettingError/neverWritten(label:)``, as does writing a setting whose command
+the catalog guards with `CommandGuard.never`. The programming lock, and any flag the catalog
+guards with `FlagGuard.neverSet`, is only ever turned off, so a device is never left locked;
+turning it on throws ``DeviceSettingError/leavesProgrammingLocked(label:)``. The same holds for
+a value whose byte holds those flags, such as an open/close sensor's configuration byte, which
+the catalog marks with `SettingValue.flagsQuery`, and for the guarded bits of an extended
+command's flags parameter: it's refused before it's written when it would set a bit that's
+never set or change one that's kept. The radio, powerline, checksum and programming lock flags
+are guarded even where the catalog gives no guard; the catalog adds guards, and never removes
+these. A device's actions never send a command the catalog guards. A value a setting doesn't
+take throws an error with a ``DeviceSettingInput`` that says what it takes:
 
 ```swift
 do {
