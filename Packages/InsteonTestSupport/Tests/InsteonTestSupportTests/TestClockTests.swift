@@ -132,7 +132,7 @@ struct TestClockTests {
 
       await clock.waitForSleeper(until: .seconds(5), after: mark)
 
-      // Only a sleep that started after the mark ends the wait, so both are sleeping by now.
+      // Only a sleep that started after the mark ends the wait, so both are sleeping when it returns.
       return clock.sleeperCount(until: .seconds(5))
 
     }

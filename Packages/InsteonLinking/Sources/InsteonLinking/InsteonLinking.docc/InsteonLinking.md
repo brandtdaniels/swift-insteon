@@ -84,7 +84,7 @@ A device's database is a list of 8-byte records whose addresses count down by 8,
 `0x0FFF` to `0x0307`. ``Linker`` writes each responder's record first, then the controller's:
 
 - A responder record updates every record that already links the same devices in the same
-  group, otherwise reuses the first record that's no longer in use, otherwise goes at the end
+  group, otherwise reuses the first record that isn't in use, otherwise goes at the end
   of the database, after the record below it is marked as the new end.
 - A controller record is added only when there's none, since an existing one holds data the
   controller keeps for itself, such as a keypad's button number.

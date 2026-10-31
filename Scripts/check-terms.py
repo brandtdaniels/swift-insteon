@@ -31,6 +31,15 @@ RULES = [
     (r"\bclean-up", "cleanup"),
     (r"\b[Ss]et button\b", "SET button"),
     (r"(?<!Insteon )(?<!Modem )(?<!Hub )\b[Dd]eveloper'?s? [Gg]uides?\b|\b[Tt]he guide\b", "the document's title, such as Insteon Developer's Guide"),
+    # Temporal wording ties the prose to when it was written, which a reader can't know. Say
+    # what's true, as of no time. A parameter named `now` is fine, as in "- now: The time".
+    (r"\b[Cc]urrently\b|\b[Pp]reviously\b", "what's true, without a time"),
+    (r"\b[Nn]o longer\b", "what's true, without a time, such as doesn't"),
+    (r"(?<!- )\b[Nn]ow\b(?!:)", "what's true, without a time"),
+    (
+        r"\b[Nn]ew (?:in|API|APIs|option|options|behavior|method|methods|parameter|parameters)\b|\b[Nn]ewly\b",
+        "what's true, without a time, rather than what changed",
+    ),
 ]
 
 FENCE = re.compile(r"^\s*(?:///?\s*)?(```|~~~)")

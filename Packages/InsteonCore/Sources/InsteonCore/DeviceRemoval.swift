@@ -4,9 +4,9 @@ import InsteonProtocol
 
 /// A device a ``DeviceLinkingCoordinator`` forgot after removing it from the network.
 ///
-/// The network's registry no longer has its identity, its state in the network's snapshot is
+/// The network's registry doesn't have its identity, its state in the network's snapshot is
 /// gone, its ALL-Link database copy is forgotten, and the snapshot's copy of the modem's
-/// ALL-Link database no longer holds records that name it.
+/// ALL-Link database doesn't hold records that name it.
 public struct ForgottenDevice: Hashable, Sendable {
 
   /// The device's address.

@@ -445,7 +445,7 @@ struct LinkingPrimitivesTests {
 
   }
 
-  // A cache that still lists a record the modem no longer has can't make an unreported
+  // A cache that still lists a record the modem doesn't have can't make an unreported
   // unlink count as removed: the modem itself is read before the unlink.
   @Test func doesntCountAnUnreportedUnlinkFromAStaleCache() async throws {
 

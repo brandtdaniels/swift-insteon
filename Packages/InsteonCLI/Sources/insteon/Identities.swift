@@ -189,7 +189,7 @@ actor CachedNetwork {
   }
 
   /// Writes what the network learned since it last saved to the cache, merged with what the
-  /// cache holds now. What couldn't be written is tried again the next time. Saves called at
+  /// cache holds when it saves. What couldn't be written is tried again the next time. Saves called at
   /// once run one after another, so neither undoes the other.
   func save() async {
 

@@ -15,7 +15,7 @@
 /// to check, from any clock, so tests can use one they control. It keeps nothing across
 /// launches either: to carry a device's time over, save how long ago it was last heard from,
 /// ``HeartbeatMonitor/lastHeard(from:)`` measured against the wall clock, and watch it again
-/// since that long before now.
+/// since that long before the time you start watching.
 ///
 /// ```swift
 /// var monitor = HeartbeatMonitor<ContinuousClock.Instant>()

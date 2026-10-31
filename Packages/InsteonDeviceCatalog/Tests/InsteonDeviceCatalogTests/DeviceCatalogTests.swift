@@ -262,7 +262,7 @@ struct DeviceCatalogTests {
 
   }
 
-  // The version is in the manifest, not the catalog, so a key the catalog no longer has, or
+  // The version is in the manifest, not the catalog, so a key the catalog doesn't have, or
   // one from a later version, is passed over.
   @Test func passesOverKeysItDoesntRead() throws {
 

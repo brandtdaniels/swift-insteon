@@ -40,7 +40,7 @@ public struct DeviceMonitor: Sendable {
 
   }
 
-  /// The events the modem hears from now on, until the reader's task is canceled or the
+  /// The events the modem hears from the call on, until the reader's task is canceled or the
   /// modem's replies finish.
   ///
   /// The modem's replies are subscribed to before this returns, so nothing the modem hears

@@ -56,6 +56,29 @@ jobs:
             exit 1
           fi
           echo "The allow-list didn't grow."
+      - name: Check the libraries for unstructured tasks, unchecked Sendable types and real clocks
+        run: python3 Scripts/check-concurrency.py
+      # This allow-list only shrinks too. An entry is its path, rule and code; its reason may
+      # be reworded.
+      - name: Check that the concurrency allow-list doesn't grow
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          list=Scripts/check-concurrency-allowlist.txt
+          if ! git cat-file -e "origin/${BASE_REF}:${list}" 2>/dev/null; then
+            echo "The base branch has no allow-list yet, so there's nothing to compare."
+            exit 0
+          fi
+          entries() { grep -v -e '^#' -e '^$' | cut -f1-3 | sort; }
+          added=$(comm -13 <(git show "origin/${BASE_REF}:${list}" | entries) <(entries < "$list"))
+          if [ -n "$added" ]; then
+            echo "These entries were added to $list, which may only lose entries:"
+            echo "$added"
+            echo "Keep the work structured and the clock injected instead of allowing it."
+            exit 1
+          fi
+          echo "The allow-list didn't grow."
       - name: Test the checks
         run: python3 -m unittest discover -s Scripts/tests -v
 
