@@ -190,8 +190,14 @@ public enum LinkingJSON {
     /// The devices whose databases couldn't be read, with `--scan`.
     public let unreadDevices: [UnreadDevice]?
 
-    /// The catalog's factory reset steps.
-    public let factoryReset: FactoryReset
+    /// Whether the device was removed and forgotten; `false` when it was kept.
+    public let forgotten: Bool
+
+    /// Why the device was kept, or `nil` when it was forgotten.
+    public let keptBecause: String?
+
+    /// The catalog's factory reset steps, or `nil` when the device was kept.
+    public let factoryReset: FactoryReset?
 
   }
 
@@ -204,8 +210,28 @@ public enum LinkingJSON {
   public static func removal(_ result: DeviceRemovalResult, message: (any Error) -> String) -> Removal {
 
     let scan: LeftoverRecordScan? = result.leftoverRecords
-    let procedure: DeviceLifecycle.Procedure? = result.factoryReset.procedure
-    let erases: [String] = result.factoryReset.erases.map(\.rawValue).sorted()
+    var factoryReset: FactoryReset?
+
+    if let reset = result.factoryReset {
+
+      let steps: [String]? = reset.procedure.map { (procedure: DeviceLifecycle.Procedure) -> [String] in
+
+        LinkingInstructions.steps(procedure.steps)
+
+      }
+
+      factoryReset = FactoryReset(steps: steps, notes: reset.procedure?.notes ?? [], erases: reset.erases.map(\.rawValue).sorted())
+
+    }
+
+    var keptBecause: String?
+
+    if let reason = result.keptBecause {
+
+      keptBecause = RemovalText.keptReason(result.address, reason, message: message)
+
+    }
+
     let deleted: [ModemLinkReport] = result.deletedModemRecords.map { (record: AllLinkRecord) -> ModemLinkReport in
 
       ModemLinkReport(group: Int(record.group.rawValue), modemRole: RemovalText.role(record))
@@ -241,22 +267,18 @@ public enum LinkingJSON {
 
     }
 
-    let steps: [String]? = procedure.map { (reset: DeviceLifecycle.Procedure) -> [String] in
-
-      LinkingInstructions.steps(reset.steps)
-
-    }
-
     return Removal(
-      address: "\(result.forgotten.address)",
-      product: result.forgotten.device?.deviceDescription.displayName,
+      address: "\(result.address)",
+      product: result.removed.device?.deviceDescription.displayName,
       removedLinks: result.removed.links.map(modemLink),
       remoteUnlinkingFailure: failure,
       deletedModemRecords: deleted,
       remainingLinks: remaining,
       leftoverRecords: holders,
       unreadDevices: unread,
-      factoryReset: FactoryReset(steps: steps, notes: procedure?.notes ?? [], erases: erases)
+      forgotten: result.forgotten != nil,
+      keptBecause: keptBecause,
+      factoryReset: factoryReset
     )
 
   }

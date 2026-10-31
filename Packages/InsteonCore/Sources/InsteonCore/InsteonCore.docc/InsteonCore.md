@@ -117,8 +117,9 @@ if let failure = result.linkBackFailure {
 ```
 
 ``DeviceLinkingCoordinator/remove(_:scan:forceModemSide:timeout:observer:)`` removes a device
-from the network: every link between it and the modem, with the modem's group 0 last, then
-the network forgets it. Asked to, it reads the other devices' ALL-Link databases and reports
+from the network: every link between it and the modem, with the modem's group 0 last, then,
+once the modem's ALL-Link database has no links with it, the network forgets it. A device
+with links left is kept, and ``DeviceRemovalResult/keptBecause`` says why. Asked to, it reads the other devices' ALL-Link databases and reports
 the records that still name the device, without changing them. It ends with the catalog's
 factory reset steps, as ``FactoryResetSteps``, for a person to follow; it never resets the
 device:
@@ -126,7 +127,7 @@ device:
 ```swift
 let removal = try await network.linking.remove(lamp, scan: true, observer: prompter)
 
-for step in removal.factoryReset.procedure?.steps ?? [] {
+for step in removal.factoryReset?.procedure?.steps ?? [] {
   print(step.text)
 }
 ```
@@ -190,6 +191,8 @@ for step in removal.factoryReset.procedure?.steps ?? [] {
 
 - ``DeviceRemovalResult``
 - ``ForgottenDevice``
+- ``DeviceKeptReason``
+- ``ModemRecordDeletionReason``
 - ``LeftoverRecordScan``
 - ``LeftoverRecords``
 - ``UnreadDatabase``

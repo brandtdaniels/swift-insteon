@@ -178,8 +178,8 @@ struct DeviceRemovalTests {
     let snapshot: NetworkSnapshot = await network.snapshot()
     let modemDatabase: [AllLinkRecord] = snapshot.modemDatabase ?? []
 
-    #expect(result.forgotten.address == lamp)
-    #expect(result.forgotten.device?.identity == RemovalExample.lampIdentity)
+    #expect(result.forgotten?.address == lamp)
+    #expect(result.forgotten?.device?.identity == RemovalExample.lampIdentity)
     #expect(await network.registry.device(lamp) == nil)
     #expect(await network.state(of: lamp) == nil)
     #expect(await network.cache.copies[lamp] == nil)
@@ -322,16 +322,160 @@ struct DeviceRemovalTests {
     #expect(await modem.modemRecords == [RemovalExample.keypadRecord])
     #expect(await modem.modemDeletions == 2)
     #expect(await network.registry.device(lamp) == nil)
-    // No SET button steps for a device that's gone.
+    // No SET button steps, and no links to unlink, for a device that's gone.
     #expect(await recorder.lines == [
       "reading modem links \(lamp) to remove",
       "unlinking remotely \(lamp) responder 1",
-      "remaining \(lamp) [\"controller 0\", \"responder 1\"]",
-      "deleting modem records \(lamp)",
-      "remaining \(lamp) []",
+      "deleting modem records \(lamp) no answer",
+      "modem records deleted \(lamp) 2",
       "forgot \(lamp) known",
       "factory reset \(lamp) steps 2"
     ])
+
+  }
+
+  // MARK: - Links left
+
+  @Test(.timeLimit(.minutes(1))) func keepsADeviceTheModemStillHasLinksWith() async throws {
+
+    let modem = InMemoryModem()
+    let lamp: InsteonAddress = RemovalExample.lamp
+    let network: DeviceNetwork = await self.network(modem)
+    // The modem reports each link removed but keeps its records, so the links are left.
+    await modem.setRecordsLinks(false)
+    let recorder = LinkingRecorder()
+
+    let result: DeviceRemovalResult = try await network.linking.remove(lamp, scan: true, observer: recorder)
+
+    #expect(result.address == lamp)
+    #expect(result.forgotten == nil)
+    #expect(result.factoryReset == nil)
+    #expect(result.leftoverRecords == nil)
+    #expect(result.remainingLinks == [ModemLink(modemRole: .controller, group: 0x00), ModemLink(modemRole: .responder, group: 0x01)])
+
+    guard case let .linksRemain(links)? = result.keptBecause else {
+
+      Issue.record("Expected the device to be kept for its links.")
+
+      return
+
+    }
+
+    #expect(links == result.remainingLinks)
+    #expect(await network.registry.device(lamp)?.identity == RemovalExample.lampIdentity)
+    #expect(await recorder.lines == [
+      "reading modem links \(lamp) to remove",
+      "unlinking remotely \(lamp) responder 1",
+      "unlinking remotely \(lamp) controller 0",
+      "unlinked all \(lamp) [\"responder 1\", \"controller 0\"]",
+      "remaining \(lamp) [\"controller 0\", \"responder 1\"]",
+      "kept \(lamp) links remain [\"controller 0\", \"responder 1\"]"
+    ])
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func deletesTheLinksLeftWhenForcedThenForgets() async throws {
+
+    let modem = InMemoryModem()
+    let lamp: InsteonAddress = RemovalExample.lamp
+    let network: DeviceNetwork = await self.network(modem)
+    await modem.setRecordsLinks(false)
+    let recorder = LinkingRecorder()
+
+    let result: DeviceRemovalResult = try await network.linking.remove(lamp, forceModemSide: true, observer: recorder)
+
+    #expect(result.keptBecause == nil)
+    #expect(result.forgotten?.address == lamp)
+    #expect(result.remoteUnlinkingFailure == nil)
+    #expect(result.deletedModemRecords == RemovalExample.lampRecords)
+    #expect(result.remainingLinks == [])
+    #expect(await modem.modemRecords == [RemovalExample.keypadRecord])
+    #expect(await recorder.lines == [
+      "reading modem links \(lamp) to remove",
+      "unlinking remotely \(lamp) responder 1",
+      "unlinking remotely \(lamp) controller 0",
+      "unlinked all \(lamp) [\"responder 1\", \"controller 0\"]",
+      "deleting modem records \(lamp) links left 2",
+      "modem records deleted \(lamp) 2",
+      "forgot \(lamp) known",
+      "factory reset \(lamp) steps 2"
+    ])
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func keepsADeviceWhenTheModemRejectsADeletionMidway() async throws {
+
+    let inner = InMemoryModem()
+    let lamp: InsteonAddress = RemovalExample.lamp
+    await inner.setUnanswering(lamp)
+    // The modem accepts the first delete and rejects the second.
+    let modem = RejectingModem(inner: inner, rejectingDeletion: 2)
+    let times: FixedTimes = self.times
+    await inner.setModemRecords(RemovalExample.lampRecords + [RemovalExample.keypadRecord])
+    let network = DeviceNetwork(
+      modem: modem,
+      catalog: RemovalExample.catalog,
+      snapshot: NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: [lamp: RemovalExample.lampIdentity])),
+      clock: clock,
+      now: { () -> Date in times.now() }
+    )
+    let recorder = LinkingRecorder()
+
+    let result: DeviceRemovalResult = try await network.linking.remove(lamp, forceModemSide: true, observer: recorder)
+
+    #expect(result.forgotten == nil)
+    #expect(result.factoryReset == nil)
+    #expect(result.deletedModemRecords.isEmpty)
+    #expect(result.remainingLinks == [ModemLink(modemRole: .responder, group: 0x01)])
+    #expect(await inner.modemRecords == [RemovalExample.lampRecords[1], RemovalExample.keypadRecord])
+    #expect(await network.registry.device(lamp)?.identity == RemovalExample.lampIdentity)
+    #expect(await recorder.lines == [
+      "reading modem links \(lamp) to remove",
+      "unlinking remotely \(lamp) responder 1",
+      "deleting modem records \(lamp) no answer",
+      "kept \(lamp) records not deleted"
+    ])
+
+    guard case let .modemRecordsNotDeleted(error)? = result.keptBecause else {
+
+      Issue.record("Expected the device to be kept for the rejected deletion.")
+
+      return
+
+    }
+
+    #expect((error as? ModemError) == .rejected(.manageAllLinkRecord))
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func saysWhenADeviceCantBeUnlinkedRemotelyBeforeDeletingItsRecords() async throws {
+
+    let modem = InMemoryModem()
+    let lamp: InsteonAddress = RemovalExample.lamp
+    await modem.setEngine(.i1, of: lamp)
+    let network: DeviceNetwork = await self.network(modem)
+    let recorder = LinkingRecorder()
+
+    _ = try await network.linking.remove(lamp, forceModemSide: true, observer: recorder)
+
+    #expect(await recorder.lines.contains("deleting modem records \(lamp) unsupported"))
+
+  }
+
+  @Test func classifiesWhyTheModemsRecordsAreDeleted() {
+
+    let lamp: InsteonAddress = RemovalExample.lamp
+
+    func name(_ error: any Error) -> String {
+
+      LinkingRecorder.deletionReason(DeviceLinkingCoordinator.deletionReason(for: error))
+
+    }
+
+    #expect(name(ModemError.deviceTimedOut(lamp)) == "no answer")
+    #expect(name(LinkingError.linkingTimedOut) == "no answer")
+    #expect(name(LinkingError.remoteLinkingUnsupported(lamp)) == "unsupported")
+    #expect(name(LinkingError.databaseFull(lamp)) == "failed")
 
   }
 
@@ -401,10 +545,10 @@ struct DeviceRemovalTests {
 
     let result: DeviceRemovalResult = try await network.linking.remove(lamp, observer: recorder)
 
-    #expect(result.factoryReset.address == lamp)
-    #expect(result.factoryReset.procedure?.steps == RemovalExample.resetSteps)
-    #expect(result.factoryReset.erases == [.links, .settings])
-    #expect(result.factoryReset.deviceDescription?.profile?.model == "9301")
+    #expect(result.factoryReset?.address == lamp)
+    #expect(result.factoryReset?.procedure?.steps == RemovalExample.resetSteps)
+    #expect(result.factoryReset?.erases == [.links, .settings])
+    #expect(result.factoryReset?.deviceDescription?.profile?.model == "9301")
     #expect(await recorder.lines.last == "factory reset \(lamp) steps 2")
     // The device was sent only what removing its links takes: no reset.
     let sentToLamp: [Command] = await modem.linkingSteps.compactMap { (step: InMemoryModem.LinkingStep) -> Command? in
@@ -434,10 +578,116 @@ struct DeviceRemovalTests {
 
     let result: DeviceRemovalResult = try await network.linking.remove(stranger, observer: recorder)
 
-    #expect(result.factoryReset.procedure == nil)
-    #expect(result.factoryReset.erases.isEmpty)
-    #expect(result.forgotten.device == nil)
+    #expect(result.factoryReset != nil)
+    #expect(result.factoryReset?.procedure == nil)
+    #expect(result.factoryReset?.erases.isEmpty == true)
+    #expect(result.forgotten != nil)
+    #expect(result.forgotten?.device == nil)
     #expect(await recorder.lines.suffix(2) == ["forgot \(stranger) unknown", "factory reset \(stranger) steps 0"])
+
+  }
+
+}
+
+/// A modem that passes everything to an in-memory modem, but rejects one of the records it's
+/// asked to delete with Manage ALL-Link Record, as a modem NAKs a delete it can't carry out.
+struct RejectingModem: LinkingModem {
+
+  let inner: InMemoryModem
+
+  /// Which delete is rejected, counting from 1.
+  let rejectingDeletion: Int
+
+  private let deletions: DeletionCount = DeletionCount()
+
+  init(inner: InMemoryModem, rejectingDeletion: Int) {
+
+    self.inner = inner
+    self.rejectingDeletion = rejectingDeletion
+
+  }
+
+  func send(_ command: SerialCommand) async throws {
+
+    if case let .manageAllLinkRecord(action, _) = command, action == .deleteFirst {
+
+      let count: Int = await deletions.next()
+
+      if count == rejectingDeletion {
+
+        throw ModemError.rejected(.manageAllLinkRecord)
+
+      }
+
+    }
+
+    try await inner.send(command)
+
+  }
+
+  func modemInfo() async throws -> ModemInfo {
+
+    try await inner.modemInfo()
+
+  }
+
+  func request(_ message: StandardMessage, timeout: Duration) async throws -> ReceivedMessage {
+
+    try await inner.request(message, timeout: timeout)
+
+  }
+
+  func request(_ message: ExtendedMessage, timeout: Duration) async throws -> ReceivedMessage {
+
+    try await inner.request(message, timeout: timeout)
+
+  }
+
+  func readAllLinkDatabase(of device: InsteonAddress, timeout: Duration) async throws -> [AllLinkRecordResponse] {
+
+    try await inner.readAllLinkDatabase(of: device, timeout: timeout)
+
+  }
+
+  func readAllLinkRecord(of device: InsteonAddress, at address: UInt16, timeout: Duration) async throws -> AllLinkRecordResponse {
+
+    try await inner.readAllLinkRecord(of: device, at: address, timeout: timeout)
+
+  }
+
+  func allLinkRecords(group: AllLinkGroupNumber, device: InsteonAddress) async throws -> [AllLinkRecord] {
+
+    try await inner.allLinkRecords(group: group, device: device)
+
+  }
+
+  func allLinkRecords() async throws -> [AllLinkRecord] {
+
+    try await inner.allLinkRecords()
+
+  }
+
+  func replies() async -> AsyncStream<ModemReply> {
+
+    await inner.replies()
+
+  }
+
+}
+
+/// How many deletes a ``RejectingModem`` was asked for.
+actor DeletionCount {
+
+  private var count: Int = 0
+
+  /// Counts one more delete.
+  ///
+  /// - Returns: The count, from 1.
+  func next() -> Int {
+
+    count += 1
+
+    return count
 
   }
 

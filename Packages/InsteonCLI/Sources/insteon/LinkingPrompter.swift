@@ -70,6 +70,12 @@ struct LinkingPrompter: LinkingObserver {
         lines(RemovalText.leftoverRecords(scan, message: Names.message(for:)))
 
       }
+    case let .modemRecordsDeleted(device, records):
+      if !printsJSON {
+
+        lines(RemovalText.modemRecordsDeleted(device, records))
+
+      }
     case let .factoryReset(reset):
       if !printsJSON {
 

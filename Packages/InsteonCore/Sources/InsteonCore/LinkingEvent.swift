@@ -118,10 +118,18 @@ public enum LinkingEvent: Sendable {
   /// The modem's ALL-Link database couldn't be read to find the device's other links.
   case remainingLinksUnknown(InsteonAddress, reason: any Error)
 
-  /// The device's links couldn't be removed through it, and the caller said it's gone, so
-  /// the modem's own records that name it are being deleted directly. The device's records
-  /// stay as they are.
-  case deletingModemRecords(InsteonAddress)
+  /// The caller said the device is gone, and its links with the modem aren't confirmed gone,
+  /// for the reason given, so the modem's own records that name it are being deleted
+  /// directly. The device's records stay as they are.
+  case deletingModemRecords(InsteonAddress, reason: ModemRecordDeletionReason)
+
+  /// The modem's own records that named the device were deleted directly, in the modem's
+  /// order.
+  case modemRecordsDeleted(InsteonAddress, [AllLinkRecord])
+
+  /// The device wasn't forgotten, since its links with the modem aren't confirmed gone, for
+  /// the reason given.
+  case kept(InsteonAddress, because: DeviceKeptReason)
 
   /// The network forgot a removed device: its identity, its state and its records in the
   /// snapshot's copy of the modem's ALL-Link database.

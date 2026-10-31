@@ -222,13 +222,14 @@ public enum HelpText {
 
     Removes a device from the network. First it removes every link between the modem and the
     device without its SET button, as 'unlink ADDRESS --all' does: the links the device
-    controls first, and the modem's group 0 last. Then the identity cache forgets the device:
-    its identity, its state and the modem's records for it. Last, it shows the Insteon device
-    catalog's steps to restore the device's factory settings, which erases the links the
-    device itself keeps; the command never resets a device.
+    controls first, and the modem's group 0 last. Once the modem's ALL-Link database, read
+    again, has no links with the device, the identity cache forgets it: its identity, its
+    state and the modem's records for it. Last, it shows the Insteon device catalog's steps
+    to restore the device's factory settings, which erases the links the device itself
+    keeps; the command never resets a device.
 
-    If a link can't be removed that way, the command says which links are left and how to
-    remove them with the device's SET button, and keeps the device.
+    If a link can't be removed that way, or the modem still has links with the device, the
+    command says which and how to remove them, keeps the device, and fails.
 
     It asks before it starts. Without a terminal to ask at, it needs --yes.
 
@@ -237,9 +238,10 @@ public enum HelpText {
                           as a scene's. Those records are only listed, never changed.
       --force-modem-side  For a device that's gone, such as one thrown away or one whose
                           batteries are dead: when its links can't be removed through it,
-                          delete the modem's records for it directly with Manage ALL-Link
-                          Record, and remove it anyway. The device's own records stay, so
-                          only use it for a device that won't come back.
+                          or the modem still has links with it, delete the modem's records
+                          for it directly with Manage ALL-Link Record, list them, and remove
+                          it once none are left. The device's own records stay, so only use
+                          it for a device that won't come back.
       -y, --yes           Don't ask first.
       --timeout SECONDS   How long to wait for each link to be removed. Defaults to 30.
 

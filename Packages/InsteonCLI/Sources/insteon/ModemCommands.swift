@@ -413,6 +413,13 @@ enum ModemCommands {
 
       }
 
+      // A device whose links aren't confirmed gone stays in the cache, and the command fails.
+      if let reason = result.keptBecause {
+
+        throw CommandFailure(description: RemovalText.kept(device, device: label, reason: reason, message: Names.message(for:)))
+
+      }
+
     }
 
   }

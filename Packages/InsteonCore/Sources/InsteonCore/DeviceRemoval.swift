@@ -167,8 +167,59 @@ public struct FactoryResetSteps: Hashable, Sendable {
 
 }
 
+/// Why a ``DeviceLinkingCoordinator`` deletes the modem's records for a removed device
+/// directly, once the caller said the device is gone.
+public enum ModemRecordDeletionReason: Sendable {
+
+  /// The device didn't answer, such as one whose batteries are dead.
+  case noAnswer
+
+  /// The device's engine can't be linked or unlinked remotely, as an i1 device can't.
+  case remoteLinkingUnsupported
+
+  /// Removing a link through the device failed for another reason.
+  case remoteUnlinkingFailed(any Error)
+
+  /// The links were removed through the device, but the modem still has these.
+  case linksLeft([ModemLink])
+
+  /// The links were removed through the device, but the modem's ALL-Link database couldn't be
+  /// read to check that none are left.
+  case modemLinksUnreadable(any Error)
+
+}
+
+/// Why a ``DeviceLinkingCoordinator`` kept a device it was asked to remove, so the network
+/// still knows it.
+///
+/// The device is forgotten only once the modem's ALL-Link database, read again, has no links
+/// with it.
+public enum DeviceKeptReason: Sendable {
+
+  /// The modem still has these links with the device, each role and group once, in the
+  /// modem's order.
+  case linksRemain([ModemLink])
+
+  /// The modem's ALL-Link database couldn't be read again, so whether links are left isn't
+  /// known.
+  case modemLinksUnreadable(any Error)
+
+  /// The modem rejected deleting one of its records for the device, or failed partway; the
+  /// records deleted before that stay deleted.
+  case modemRecordsNotDeleted(any Error)
+
+}
+
 /// What a ``DeviceLinkingCoordinator`` did to remove a device from the network.
+///
+/// A device whose links with the modem are all gone is forgotten, and the result has the
+/// catalog's factory reset steps. A device with links left is kept:
+/// ``DeviceRemovalResult/keptBecause`` says why, and there's no
+/// ``DeviceRemovalResult/forgotten`` device, scan or reset steps.
 public struct DeviceRemovalResult: Sendable {
+
+  /// The device's address.
+  public var address: InsteonAddress
 
   /// The links removed through the device, without its SET button. Empty when the modem had
   /// none with it, or when the device didn't answer and the modem's records were deleted
@@ -183,45 +234,55 @@ public struct DeviceRemovalResult: Sendable {
   /// it were deleted directly instead, or `nil` when they weren't.
   public var remoteUnlinkingFailure: (any Error)?
 
-  /// The modem's records that named the device and were deleted directly, because it didn't
-  /// answer and the caller asked for it. Empty otherwise.
+  /// The modem's records that named the device and were deleted directly, because the caller
+  /// said it's gone. Empty otherwise.
   public var deletedModemRecords: [AllLinkRecord]
 
-  /// The device the network forgot.
-  public var forgotten: ForgottenDevice
+  /// The device the network forgot, or `nil` when it was kept.
+  public var forgotten: ForgottenDevice?
+
+  /// Why the device was kept, or `nil` when it was forgotten.
+  public var keptBecause: DeviceKeptReason?
 
   /// The records other devices still hold that name the device, or `nil` when they weren't
-  /// looked for.
+  /// looked for or the device was kept.
   public var leftoverRecords: LeftoverRecordScan?
 
-  /// How to restore the device's factory settings, for a person to follow.
-  public var factoryReset: FactoryResetSteps
+  /// How to restore the device's factory settings, for a person to follow, or `nil` when the
+  /// device was kept.
+  public var factoryReset: FactoryResetSteps?
 
   /// Creates a result.
   ///
   /// - Parameters:
+  ///   - address: The device's address.
   ///   - removed: The links removed through the device.
   ///   - remainingLinks: The links the modem still has with the device.
   ///   - remoteUnlinkingFailure: Why the links couldn't be removed through the device.
   ///   - deletedModemRecords: The modem's records deleted directly.
-  ///   - forgotten: The device the network forgot.
+  ///   - forgotten: The device the network forgot, or `nil` when it was kept.
+  ///   - keptBecause: Why the device was kept, or `nil` when it was forgotten.
   ///   - leftoverRecords: The records other devices still hold that name the device.
   ///   - factoryReset: How to restore the device's factory settings.
   public init(
+    address: InsteonAddress,
     removed: RemovedLinks,
     remainingLinks: [ModemLink]?,
     remoteUnlinkingFailure: (any Error)?,
     deletedModemRecords: [AllLinkRecord],
-    forgotten: ForgottenDevice,
+    forgotten: ForgottenDevice?,
+    keptBecause: DeviceKeptReason?,
     leftoverRecords: LeftoverRecordScan?,
-    factoryReset: FactoryResetSteps
+    factoryReset: FactoryResetSteps?
   ) {
 
+    self.address = address
     self.removed = removed
     self.remainingLinks = remainingLinks
     self.remoteUnlinkingFailure = remoteUnlinkingFailure
     self.deletedModemRecords = deletedModemRecords
     self.forgotten = forgotten
+    self.keptBecause = keptBecause
     self.leftoverRecords = leftoverRecords
     self.factoryReset = factoryReset
 

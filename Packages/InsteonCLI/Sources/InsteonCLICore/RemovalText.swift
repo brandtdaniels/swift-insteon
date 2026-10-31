@@ -53,6 +53,113 @@ public enum RemovalText {
 
   }
 
+  /// Why the modem's records for a device are being deleted directly, as a sentence that ends
+  /// with a period.
+  ///
+  /// - Parameters:
+  ///   - device: The device's address.
+  ///   - reason: Why the records are being deleted.
+  ///   - message: The sentence that describes an error, ending with a period.
+  /// - Returns: The sentence.
+  public static func deletionReason(_ device: InsteonAddress, _ reason: ModemRecordDeletionReason, message: (any Error) -> String) -> String {
+
+    switch reason {
+    case .noAnswer:
+      return "\(device) didn't answer."
+    case .remoteLinkingUnsupported:
+      return "\(device) can't be unlinked without its SET button, since its engine doesn't take Enter Unlinking Mode."
+    case let .remoteUnlinkingFailed(error):
+      return "\(device)'s links couldn't be removed through it: \(message(error))"
+    case let .linksLeft(links):
+      return "The modem still has \(Wording.count(links.count, "link")) with \(device): \(describe(links))."
+    case let .modemLinksUnreadable(error):
+      return "The modem's ALL-Link database couldn't be read to check \(device)'s links are gone: \(message(error))"
+    }
+
+  }
+
+  /// The modem's records deleted directly for a device that's gone.
+  ///
+  /// - Parameters:
+  ///   - device: The device's address.
+  ///   - records: The records deleted, in the modem's order.
+  /// - Returns: The lines.
+  public static func modemRecordsDeleted(_ device: InsteonAddress, _ records: [AllLinkRecord]) -> [String] {
+
+    guard !records.isEmpty else {
+
+      return ["The modem had no records for \(device) to delete."]
+
+    }
+
+    return records.map { (record: AllLinkRecord) -> String in
+
+      "Deleted the modem's \(role(record)) record for \(device) in group \(record.group)."
+
+    }
+
+  }
+
+  /// Why a device was kept rather than removed, as a sentence that ends with a period.
+  ///
+  /// - Parameters:
+  ///   - device: The device's address.
+  ///   - reason: Why it was kept.
+  ///   - message: The sentence that describes an error, ending with a period.
+  /// - Returns: The sentence.
+  public static func keptReason(_ device: InsteonAddress, _ reason: DeviceKeptReason, message: (any Error) -> String) -> String {
+
+    switch reason {
+    case let .linksRemain(links):
+      return "The modem still has \(Wording.count(links.count, "link")) with \(device): \(describe(links))."
+    case let .modemLinksUnreadable(error):
+      return "The modem's ALL-Link database couldn't be read to check its links are gone: \(message(error))"
+    case let .modemRecordsNotDeleted(error):
+      return "The modem's records for it couldn't all be deleted: \(message(error))"
+    }
+
+  }
+
+  /// What to say when a device was kept in the identity cache because its links with the
+  /// modem aren't confirmed gone.
+  ///
+  /// - Parameters:
+  ///   - address: The device's address.
+  ///   - device: The device, as `LinkingInstructions.deviceLabel(_:profile:)` writes it.
+  ///   - reason: Why it was kept.
+  ///   - message: The sentence that describes an error, ending with a period.
+  /// - Returns: The message.
+  public static func kept(_ address: InsteonAddress, device: String, reason: DeviceKeptReason, message: (any Error) -> String) -> String {
+
+    let why: String = keptReason(address, reason, message: message)
+    let next: String
+
+    switch reason {
+    case .linksRemain:
+      next = "Remove them with 'insteon unlink \(address)' and the device's SET button, then run 'insteon remove \(address)' again; "
+        + "if the device is gone for good, run 'insteon remove \(address) --force-modem-side'."
+    case .modemLinksUnreadable:
+      next = "Run 'insteon remove \(address)' again."
+    case .modemRecordsNotDeleted:
+      next = "Run 'insteon remove \(address) --force-modem-side' again."
+    }
+
+    return "\(device) was kept, not removed. \(why) \(next)"
+
+  }
+
+  /// Links between the modem and a device, such as `"controller in group 0, responder in
+  /// group 1"`.
+  static func describe(_ links: [ModemLink]) -> String {
+
+    links.map { (link: ModemLink) -> String in
+
+      "\(link.modemRole == .controller ? "controller" : "responder") in group \(link.group)"
+
+    }.joined(separator: ", ")
+
+  }
+
   /// What to say once the identity cache forgot the device.
   ///
   /// - Parameter forgotten: The device forgotten.
