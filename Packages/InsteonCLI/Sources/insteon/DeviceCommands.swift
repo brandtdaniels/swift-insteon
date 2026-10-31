@@ -18,20 +18,19 @@ enum DeviceCommands {
 
       }
     case .ping:
-      try await ping(device, modem: modem)
-    case let .on(levelPercent):
-      // A level means something only to a device that dims, so the device is looked up first.
-      var kind: GroupType.Kind?
+      try await withDevice(device, modem: modem, hub: hub, names: names) { (target: Device) async throws -> Void in
 
-      if levelPercent != nil {
-
-        kind = try await Identities.known(device, modem: modem, names: names, asking: true)?.mainGroupType?.kind
+        try await ping(target)
 
       }
+    case let .on(levelPercent):
+      try await withDevice(device, modem: modem, hub: hub, names: names) { (target: Device) async throws -> Void in
 
-      try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.on(level: ControlText.level(percent: levelPercent, kind: kind))))
+        let result: DeviceTurnOnResult = try await target.turnOn(level: levelPercent)
 
-      Output.line(ControlText.turnedOn(device, percent: levelPercent, kind: kind))
+        Output.line(DeviceText.turnedOn(device, result: result))
+
+      }
     case let .onFast(levelPercent):
       let known = try await Identities.known(device, modem: modem, names: names, asking: true)
       let kind: GroupType.Kind? = known?.mainGroupType?.kind
@@ -41,9 +40,13 @@ enum DeviceCommands {
 
       Output.line(ControlText.turnedOn(device, percent: levelPercent, kind: kind))
     case .off:
-      try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.off))
+      try await withDevice(device, modem: modem, hub: hub, names: names) { (target: Device) async throws -> Void in
 
-      Output.line("Turned \(device) off.")
+        try await target.turnOff()
+
+        Output.line("Turned \(device) off.")
+
+      }
     case .offFast:
       let known = try await Identities.known(device, modem: modem, names: names, asking: true)
 
@@ -54,21 +57,72 @@ enum DeviceCommands {
     case let .instant(levelPercent):
       try await instant(device, percent: levelPercent, modem: modem, names: names)
     case .beep:
-      try await beep(device, modem: modem, names: names)
+      try await withDevice(device, modem: modem, hub: hub, names: names) { (target: Device) async throws -> Void in
+
+        try await beep(target)
+
+      }
     case let .settings(showsAdvanced):
-      try await SettingsCommands.show(device, showsAdvanced: showsAdvanced, modem: modem, names: names, printsJSON: printsJSON)
+      try await withDevice(device, modem: modem, hub: hub, names: names) { (target: Device) async throws -> Void in
+
+        try await SettingsCommands.show(target, showsAdvanced: showsAdvanced, printsJSON: printsJSON)
+
+      }
     case let .set(request):
-      try await SettingsCommands.set(request, device: device, modem: modem, names: names)
+      try await withDevice(device, modem: modem, hub: hub, names: names) { (target: Device) async throws -> Void in
+
+        try await SettingsCommands.set(request, device: target)
+
+      }
     case let .send(request):
       try await ExploreCommands.send(request, to: device, modem: modem)
     case .status:
-      try await status(device, modem: modem, names: names, printsJSON: printsJSON)
+      try await withDevice(device, modem: modem, hub: hub, names: names) { (target: Device) async throws -> Void in
+
+        try await status(target, printsJSON: printsJSON)
+
+      }
     case .links:
       try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (cached: CachedNetwork) async throws -> Void in
 
         try await links(device, network: cached.network, printsJSON: printsJSON)
 
       }
+    }
+
+  }
+
+  // MARK: - Devices
+
+  /// Runs `body` with the device on a network that starts from the identity cache and saves
+  /// what it learned there, such as the device's level, and turns the libraries' refusals into
+  /// sentences.
+  private static func withDevice(
+    _ address: InsteonAddress,
+    modem: Modem,
+    hub: HubLocation?,
+    names: ProductNames,
+    _ body: (Device) async throws -> Void
+  ) async throws {
+
+    try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (cached: CachedNetwork) async throws -> Void in
+
+      let device: Device = cached.network.device(address, beforeIdentifying: { () -> Void in
+
+        Output.note("Asking \(address) for its identity with ID Request...")
+
+      })
+
+      do {
+
+        try await body(device)
+
+      } catch let error as DeviceControlError {
+
+        throw CommandFailure(description: DeviceText.failure(error, device: address))
+
+      }
+
     }
 
   }
@@ -121,32 +175,26 @@ enum DeviceCommands {
 
   }
 
-  /// Beep, which the device is sent even when its command set doesn't list it.
-  private static func beep(_ device: InsteonAddress, modem: Modem, names: ProductNames) async throws {
+  /// Beep, which only a device whose command set lists it is sent.
+  private static func beep(_ device: Device) async throws {
 
-    let known = try await Identities.known(device, modem: modem, names: names, asking: true)
-
-    if known?.commandSet?.standardCommand(named: "beep") == nil {
-
-      Output.note("The Insteon device catalog doesn't list Beep for this device; sending anyway.")
-
-    }
+    let address: InsteonAddress = device.address
 
     do {
 
-      try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.beep))
+      try await device.beep()
 
     } catch ModemError.deviceRejected(_, let reason) {
 
-      throw CommandFailure(description: "\(device) rejected Beep (NAK): \(reason.summary).")
+      throw CommandFailure(description: "\(address) rejected Beep (NAK): \(reason.summary).")
 
     } catch ModemError.deviceTimedOut {
 
-      throw CommandFailure(description: "\(device) didn't answer Beep. Check that it's powered and in range.")
+      throw CommandFailure(description: "\(address) didn't answer Beep. Check that it's powered and in range.")
 
     }
 
-    Output.line("\(device) beeped.")
+    Output.line("\(address) beeped.")
 
   }
 
@@ -307,17 +355,17 @@ enum DeviceCommands {
 
   // MARK: - ping
 
-  private static func ping(_ device: InsteonAddress, modem: Modem) async throws {
+  private static func ping(_ device: Device) async throws {
 
     let clock = ContinuousClock()
     let start = clock.now
 
-    try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.ping))
+    try await device.ping()
 
     let elapsed = start.duration(to: clock.now).components
     let milliseconds = elapsed.seconds * 1_000 + elapsed.attoseconds / 1_000_000_000_000_000
 
-    Output.line("\(device) answered in \(milliseconds) ms.")
+    Output.line("\(device.address) answered in \(milliseconds) ms.")
 
   }
 
@@ -338,29 +386,25 @@ enum DeviceCommands {
 
   }
 
-  private static func status(_ device: InsteonAddress, modem: Modem, names: ProductNames, printsJSON: Bool) async throws {
+  private static func status(_ device: Device, printsJSON: Bool) async throws {
 
-    let kind = try await Identities.known(device, modem: modem, names: names, asking: true)?.mainGroupType?.kind
-
-    // The acknowledgment carries the level in cmd2 and the ALL-Link database delta in cmd1.
-    let acknowledgment = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.statusRequest()))
-    let level = acknowledgment.command.command2
+    let status: DeviceStatus = try await device.status()
 
     if printsJSON {
 
       try Output.json(Status(
-        address: "\(device)",
-        level: Hex.byte(level),
-        isOn: level != 0,
-        percent: kind == .relay ? nil : LightLevel.percent(level: level),
-        allLinkDatabaseDelta: Hex.byte(acknowledgment.command.command1)
+        address: "\(device.address)",
+        level: Hex.byte(status.value),
+        isOn: status.isOn,
+        percent: status.percent,
+        allLinkDatabaseDelta: Hex.byte(status.allLinkDatabaseDelta)
       ))
 
       return
 
     }
 
-    Output.line(ControlText.status(device, level: level, kind: kind))
+    Output.line(DeviceText.status(device.address, status: status))
 
   }
 

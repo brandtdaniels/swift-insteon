@@ -2,37 +2,19 @@
 # to move into the libraries. Each entry is a path under Packages/InsteonCLI/Sources/insteon,
 # the rule, and the line's code without comments or strings, separated by tabs. Entries only
 # go: a change that moves code into the libraries removes them, with --update.
-DeviceCommands.swift	group-kind	var kind: GroupType.Kind?
-DeviceCommands.swift	group-kind	kind = try await Identities.known(device, modem: modem, names: names, asking: true)?.mainGroupType?.kind
-DeviceCommands.swift	protocol-command	try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.on(level: ControlText.level(percent: levelPercent, kind: kind))))
 DeviceCommands.swift	group-kind	let kind: GroupType.Kind? = known?.mainGroupType?.kind
 DeviceCommands.swift	protocol-command	try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.fastOn(level: ControlText.level(percent: levelPercent, kind: kind))))
-DeviceCommands.swift	protocol-command	try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.off))
 DeviceCommands.swift	protocol-command	try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.fastOff))
 DeviceCommands.swift	group-kind	let kind: GroupType.Kind? = known?.mainGroupType?.kind
 DeviceCommands.swift	group-kind	if kind == .relay, !isListed {
 DeviceCommands.swift	hex-literal	let command: StandardDirectCommand = level == 0 ? .off : .on(level: 0xFF)
 DeviceCommands.swift	protocol-command	let command: StandardDirectCommand = level == 0 ? .off : .on(level: 0xFF)
 DeviceCommands.swift	protocol-command	try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.instantChange(level: level)))
-DeviceCommands.swift	protocol-command	try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.beep))
 DeviceCommands.swift	hex-literal	let productKey = productData.map(\.productKey).flatMap { $0 == ProductKey(0x00, 0x00, 0x00) ? nil : $0 }
 DeviceCommands.swift	category	if category != nil, names.catalog != nil {
 DeviceCommands.swift	protocol-command	_ = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.productDataRequest))
-DeviceCommands.swift	protocol-command	try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.ping))
-DeviceCommands.swift	group-kind	let kind = try await Identities.known(device, modem: modem, names: names, asking: true)?.mainGroupType?.kind
-DeviceCommands.swift	protocol-command	let acknowledgment = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.statusRequest()))
-DeviceCommands.swift	group-kind	percent: kind == .relay ? nil : LightLevel.percent(level: level),
 ModemCommands.swift	category	if !options.identifiesDevices, rows.contains(where: { $0.category == nil }) {
 SceneCommands.swift	hex-literal	let command: Command = isOn ? StandardDirectCommand.on(level: 0xFF).command : StandardDirectCommand.off.command
 SceneCommands.swift	protocol-command	let command: Command = isOn ? StandardDirectCommand.on(level: 0xFF).command : StandardDirectCommand.off.command
-SettingsCommands.swift	protocol-command	let request = StandardMessage(to: device, command: StandardDirectCommand.getOperatingFlags(query))
-SettingsCommands.swift	hex-literal	return [0x01]
-SettingsCommands.swift	hex-literal	let others: [UInt8] = profile.groups.map(\.number.rawValue).filter { $0 > 1 && $0 < 0xFF }
-SettingsCommands.swift	hex-literal	return [0x01] + Array(Set(others)).sorted()
-SettingsCommands.swift	protocol-command	let command = StandardDirectCommand.setOperatingFlags(flag: command2)
-SettingsCommands.swift	engine	if try await engine(of: device, known: known, modem: modem) == .i2cs {
-SettingsCommands.swift	protocol-command	acknowledgment = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.getEngineVersion))
-SettingsCommands.swift	hex-literal	let button: UInt8 = request.button ?? 0x01
-SettingsCommands.swift	protocol-command	let message = ExtendedMessage(to: device, command: ExtendedDirectCommand.getSet(), userData: settings.getUserData(button: button))
 WatchCommand.swift	protocol-command	let name = StandardDirectCommand.name(command1: command.command1).map { ""$0 } ?? ""
 WatchCommand.swift	protocol-command	let name = StandardDirectCommand.name(command1: message.command.command1).map { ""$0 } ?? ""
