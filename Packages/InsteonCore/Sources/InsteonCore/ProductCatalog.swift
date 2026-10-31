@@ -200,7 +200,7 @@ public struct ProductCatalog: Sendable {
         return ProductCatalogUpdateError.insecureRedirect
       case .redirectRefused:
         return ProductCatalogUpdateError.redirectRefused
-      case .nonHTTPResponse, .responseTooLarge:
+      case .nonHTTPResponse, .responseTooLarge, .proxyConfigured, .credentialsRefused:
         return error
       }
 
