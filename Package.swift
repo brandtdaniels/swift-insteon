@@ -177,24 +177,16 @@ let package = Package(
     ),
 
     // The `insteon` command. Its command-line parsing is in InsteonCLISupport, so it can be tested.
+    // Both depend only on InsteonCore, the library every front end uses; CI builds with
+    // --explicit-target-dependency-import-check error, so an import of a lower-level module fails.
     .executableTarget(
       name: "insteon",
-      dependencies: [
-        "InsteonCLISupport",
-        "InsteonCore",
-        "InsteonDeviceCatalog",
-        "InsteonHubClient",
-        "InsteonHubDiscovery",
-        "InsteonLinking",
-        "InsteonModem",
-        "InsteonNetworking",
-        "InsteonProtocol"
-      ],
+      dependencies: ["InsteonCLISupport", "InsteonCore"],
       path: "Packages/InsteonCLI/Sources/insteon"
     ),
     .target(
       name: "InsteonCLISupport",
-      dependencies: ["InsteonCore", "InsteonDeviceCatalog", "InsteonLinking", "InsteonProtocol"],
+      dependencies: ["InsteonCore"],
       path: "Packages/InsteonCLI/Sources/InsteonCLISupport"
     ),
     .testTarget(
