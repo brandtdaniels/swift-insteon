@@ -1,5 +1,5 @@
 import Testing
-import InsteonModem
+@_spi(Raw) import InsteonModem
 import InsteonProtocol
 import InsteonTestSupport
 

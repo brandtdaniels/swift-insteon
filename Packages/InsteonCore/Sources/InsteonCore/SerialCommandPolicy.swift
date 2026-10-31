@@ -1,13 +1,12 @@
 import InsteonProtocol
 
-/// Which serial commands a front end's raw passthrough, such as `insteon modem send`, writes to
-/// the modem without being forced.
+/// Which serial commands a raw passthrough, such as `insteon modem send`, writes to the modem,
+/// with or without being forced. ``ModemSession/write(rawCommand:forcing:collectingFor:clock:)``
+/// enforces it.
 ///
 /// ```swift
-/// guard SerialCommandPolicy.isSerialCommand(bytes) else { return }
-///
-/// if let reason = SerialCommandPolicy.refusal(for: bytes) {
-///   print(reason)
+/// if let refusal = SerialCommandPolicy.refusal(of: bytes, forcing: false) {
+///   print(refusal.canBeForced ? "Refused unless forced." : "Never written.")
 /// }
 /// ```
 public enum SerialCommandPolicy {
@@ -22,10 +21,88 @@ public enum SerialCommandPolicy {
 
   }
 
+  /// Why bytes aren't written to the modem, or `nil` if they are.
+  ///
+  /// Bytes are never written, forced or not, when ``neverWritten(_:)`` says why. Otherwise
+  /// they're refused, unless `forcing` is `true`, when ``refusal(for:)`` says why.
+  ///
+  /// - Parameters:
+  ///   - bytes: The command's bytes, starting with `0x02`.
+  ///   - forcing: Whether to write a command that's refused only unless it's forced.
+  /// - Returns: The refusal, or `nil`.
+  public static func refusal(of bytes: [UInt8], forcing: Bool) -> SendRefusal? {
+
+    if let refusal: SendRefusal = neverWritten(bytes) {
+
+      return refusal
+
+    }
+
+    guard !forcing, let reason: String = refusal(for: bytes) else {
+
+      return nil
+
+    }
+
+    return .serialCommand(reason)
+
+  }
+
+  /// Why bytes are never written to the modem, forced or not, or `nil` if they may be.
+  ///
+  /// Bytes that don't start with `0x02` aren't a serial command. Every Send Insteon Standard
+  /// or Extended Message (`0x62`) and Send ALL-Link Command (`0x61`) the bytes hold, wherever
+  /// it starts, is read for its cmd1 and cmd2, and one that carries a ``ProtectedCommand`` is
+  /// refused, as is one cut short, which the next command's bytes could finish.
+  ///
+  /// - Parameter bytes: The bytes.
+  /// - Returns: The refusal, or `nil`.
+  public static func neverWritten(_ bytes: [UInt8]) -> SendRefusal? {
+
+    guard isSerialCommand(bytes) else {
+
+      return .notSerialCommand
+
+    }
+
+    for start in bytes.indices where bytes[start] == SerialCommand.startOfText && start + 1 < bytes.count {
+
+      // A message is 02 62 ADDRESS(3) FLAGS CMD1 CMD2, and a group command 02 61 GROUP CMD1
+      // CMD2; the command bytes are counted from 02.
+      let commandOffset: Int
+
+      switch bytes[start + 1] {
+      case SerialCommandNumber.sendMessage.rawValue:
+        commandOffset = 6
+      case SerialCommandNumber.sendAllLinkCommand.rawValue:
+        commandOffset = 3
+      default:
+        continue
+      }
+
+      guard start + commandOffset + 1 < bytes.count else {
+
+        return .incompleteMessage
+
+      }
+
+      if let protected = ProtectedCommand(command1: bytes[start + commandOffset], command2: bytes[start + commandOffset + 1]) {
+
+        return .protected(protected)
+
+      }
+
+    }
+
+    return nil
+
+  }
+
   /// Why a serial command is refused unless it's forced, or `nil` if it isn't.
   ///
   /// A command that doesn't start with `0x02` is always refused, so this isn't asked about it:
-  /// ask ``isSerialCommand(_:)`` first. One whose number the package doesn't know is refused,
+  /// ask ``isSerialCommand(_:)`` first, or ask ``refusal(of:forcing:)``, which also refuses
+  /// what ``neverWritten(_:)`` does. One whose number the package doesn't know is refused,
   /// since the modem's answer can't be read. So are those that change or erase what the modem
   /// keeps, or stop it answering: Set Host Device Category, Reset the IM, Set IM Configuration,
   /// Manage ALL-Link Record, RF Sleep, Write Database, Set Radio and Manage Device Record.
@@ -39,7 +116,7 @@ public enum SerialCommandPolicy {
   /// device that writes its ALL-Link database (Read/Write ALL-Link Database, `0x2F`), its
   /// operating flags (Set Operating Flags, `0x20`) or its settings (Extended Set/Get, `0x2E`
   /// with D2 other than `0x00`). `insteon device ADDRESS set` and `insteon device ADDRESS send`
-  /// send those to a device.
+  /// send those to a device, checked against its command set.
   ///
   /// - Parameter bytes: The command's bytes, starting with `0x02`.
   /// - Returns: The reason, as a sentence.

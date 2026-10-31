@@ -116,15 +116,21 @@ public struct RawSerialRequest: Hashable, Sendable {
   /// How many seconds to print what the modem sends back.
   public var waitSeconds: Int
 
+  /// Whether `--force` was given, so a command `SerialCommandPolicy` refuses only unless it's
+  /// forced is written.
+  public var isForced: Bool
+
   /// Creates a request.
   ///
   /// - Parameters:
   ///   - bytes: The command's bytes, starting with `0x02`.
   ///   - waitSeconds: How many seconds to print what the modem sends back. Defaults to 3.
-  public init(bytes: [UInt8], waitSeconds: Int = 3) {
+  ///   - isForced: Whether `--force` was given. Defaults to `false`.
+  public init(bytes: [UInt8], waitSeconds: Int = 3, isForced: Bool = false) {
 
     self.bytes = bytes
     self.waitSeconds = waitSeconds
+    self.isForced = isForced
 
   }
 
