@@ -133,31 +133,16 @@ public struct DeviceCatalogUpdater: Sendable {
 
   }
 
-  /// Downloads the published catalog if it differs from the copy the package ships with and
-  /// is at least as new.
-  ///
-  /// The same as ``DeviceCatalogUpdater/update(replacing:currentVersion:)`` with no version
-  /// for the app's copy, so only a version older than ``DeviceCatalog/bundledVersion()`` is
-  /// refused. An app that saved a copy should pass its version.
-  ///
-  /// - Parameter current: The JSON of the app's copy, such as one saved from an earlier
-  ///   update, or `nil` for the copy the package ships with.
-  /// - Returns: ``DeviceCatalogUpdate/unchanged``, or the new catalog, its JSON and its version.
-  /// - Throws: The errors ``DeviceCatalogUpdater/update(replacing:currentVersion:)`` throws.
-  public func update(replacing current: Data?) async throws -> DeviceCatalogUpdate {
-
-    try await update(replacing: current, currentVersion: nil)
-
-  }
-
   /// Downloads the published catalog if it differs from the app's copy and is at least as new
   /// as both the app's copy and the copy the package ships with.
   ///
   /// - Parameters:
   ///   - current: The JSON of the app's copy, such as one saved from an earlier update, or
   ///     `nil` for the copy the package ships with.
-  ///   - currentVersion: The version saved beside the app's copy, or `nil` if there's none.
-  ///     A version in another format than ``DeviceCatalog/bundledVersion()``'s isn't compared.
+  ///   - currentVersion: The version saved beside the app's copy, or `nil` for the copy the
+  ///     package ships with, or a copy saved without its version. A version in another format
+  ///     than ``DeviceCatalog/bundledVersion()``'s isn't compared. The bundled copy's version is
+  ///     always compared.
   /// - Returns: ``DeviceCatalogUpdate/unchanged``, or the new catalog, its JSON and its version.
   /// - Throws: ``DeviceCatalogUpdateError/incompatibleVersion(_:)`` if the published catalog
   ///   is in another format, so the app should keep its copy;

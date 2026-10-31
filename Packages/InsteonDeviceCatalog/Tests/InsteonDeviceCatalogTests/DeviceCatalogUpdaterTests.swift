@@ -108,7 +108,7 @@ struct DeviceCatalogUpdaterTests {
 
     let files = Self.files(manifest: try Self.manifest(sha256: Self.sha256(of: Self.published)))
 
-    let update = try await DeviceCatalogUpdater(client: files).update(replacing: Data("{}".utf8))
+    let update = try await DeviceCatalogUpdater(client: files).update(replacing: Data("{}".utf8), currentVersion: nil)
     let expected = try DeviceCatalog(json: Self.published)
     let version = try #require(DeviceCatalogVersion(try Self.compatibleVersion()))
 
@@ -121,7 +121,7 @@ struct DeviceCatalogUpdaterTests {
 
     let files = Self.files(manifest: try Self.manifest(sha256: Self.sha256(of: Self.published)))
 
-    let update = try await DeviceCatalogUpdater(client: files).update(replacing: Self.published)
+    let update = try await DeviceCatalogUpdater(client: files).update(replacing: Self.published, currentVersion: nil)
 
     #expect(update == .unchanged)
     #expect(await files.requested == ["manifest.json"])
@@ -132,7 +132,7 @@ struct DeviceCatalogUpdaterTests {
 
     let files = Self.files(manifest: try Self.manifest(sha256: Self.sha256(of: try DeviceCatalog.bundledJSON())))
 
-    let update = try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+    let update = try await DeviceCatalogUpdater(client: files).update(replacing: nil, currentVersion: nil)
 
     #expect(update == .unchanged)
     #expect(await files.requested == ["manifest.json"])
@@ -145,7 +145,7 @@ struct DeviceCatalogUpdaterTests {
     let digest = Self.sha256(of: Self.published)
     let files = Self.files(manifest: try Self.manifest(sha256: digest))
 
-    _ = try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+    _ = try await DeviceCatalogUpdater(client: files).update(replacing: nil, currentVersion: nil)
 
     #expect(await files.urls.last?.query == "sha256=\(digest)")
 
@@ -157,7 +157,7 @@ struct DeviceCatalogUpdaterTests {
 
     await #expect(throws: DeviceCatalogUpdateError.checksumMismatch) {
 
-      try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+      try await DeviceCatalogUpdater(client: files).update(replacing: nil, currentVersion: nil)
 
     }
 
@@ -185,7 +185,7 @@ struct DeviceCatalogUpdaterTests {
 
       await #expect(throws: DeviceCatalogUpdateError.incompatibleVersion(other)) {
 
-        try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+        try await DeviceCatalogUpdater(client: files).update(replacing: nil, currentVersion: nil)
 
       }
 
@@ -202,7 +202,7 @@ struct DeviceCatalogUpdaterTests {
     let version = DeviceCatalogVersion(major: bundled.major, minor: bundled.minor, patch: bundled.patch + 1)
     let files = Self.files(manifest: Self.manifest(sha256: Self.sha256(of: Self.published), version: version.description))
 
-    let update = try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+    let update = try await DeviceCatalogUpdater(client: files).update(replacing: nil, currentVersion: nil)
     let expected = try DeviceCatalog(json: Self.published)
 
     #expect(update == .updated(json: Self.published, catalog: expected, version: version))
@@ -246,7 +246,7 @@ struct DeviceCatalogUpdaterTests {
 
     await #expect(throws: DeviceCatalogUpdateError.olderThanCurrent(older)) {
 
-      try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+      try await DeviceCatalogUpdater(client: files).update(replacing: nil, currentVersion: nil)
 
     }
 
@@ -322,7 +322,7 @@ struct DeviceCatalogUpdaterTests {
 
     await #expect(throws: HTTPClientError.responseTooLarge(limit: DeviceCatalogUpdater.maximumResponseSize)) {
 
-      try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+      try await DeviceCatalogUpdater(client: files).update(replacing: nil, currentVersion: nil)
 
     }
 
@@ -343,7 +343,7 @@ struct DeviceCatalogUpdaterTests {
 
     await #expect(throws: DeviceCatalogUpdateError.malformedManifest) {
 
-      try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+      try await DeviceCatalogUpdater(client: files).update(replacing: nil, currentVersion: nil)
 
     }
 
@@ -358,7 +358,7 @@ struct DeviceCatalogUpdaterTests {
 
     await #expect(throws: DeviceCatalogUpdateError.malformedManifest) {
 
-      try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+      try await DeviceCatalogUpdater(client: files).update(replacing: nil, currentVersion: nil)
 
     }
 
@@ -388,7 +388,7 @@ struct DeviceCatalogUpdaterTests {
 
     await #expect(throws: DeviceCatalogUpdateError.malformedManifest) {
 
-      try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+      try await DeviceCatalogUpdater(client: files).update(replacing: nil, currentVersion: nil)
 
     }
 
@@ -400,7 +400,7 @@ struct DeviceCatalogUpdaterTests {
 
     await #expect(throws: DeviceCatalogUpdateError.malformedManifest) {
 
-      try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+      try await DeviceCatalogUpdater(client: files).update(replacing: nil, currentVersion: nil)
 
     }
 
@@ -414,7 +414,7 @@ struct DeviceCatalogUpdaterTests {
 
     await #expect(throws: DeviceCatalogUpdateError.unexpectedStatus(503)) {
 
-      try await DeviceCatalogUpdater(client: files).update(replacing: nil)
+      try await DeviceCatalogUpdater(client: files).update(replacing: nil, currentVersion: nil)
 
     }
 
@@ -425,7 +425,7 @@ struct DeviceCatalogUpdaterTests {
     let files = Self.files(manifest: try Self.manifest(sha256: Self.sha256(of: Self.published)))
     let location = try #require(URL(string: "https://example.com/mirror/v0/"))
 
-    _ = try await DeviceCatalogUpdater(client: files, location: location).update(replacing: Self.published)
+    _ = try await DeviceCatalogUpdater(client: files, location: location).update(replacing: Self.published, currentVersion: nil)
 
     #expect(await files.urls.map(\.absoluteString) == ["https://example.com/mirror/v0/manifest.json"])
 
@@ -450,7 +450,7 @@ struct DeviceCatalogUpdaterTests {
 
     await #expect(throws: error) {
 
-      try await DeviceCatalogUpdater(client: client).update(replacing: Data("{}".utf8))
+      try await DeviceCatalogUpdater(client: client).update(replacing: Data("{}".utf8), currentVersion: nil)
 
     }
 
@@ -466,7 +466,7 @@ struct DeviceCatalogUpdaterTests {
 
     await #expect(throws: error) {
 
-      try await DeviceCatalogUpdater(client: client).update(replacing: Data("{}".utf8))
+      try await DeviceCatalogUpdater(client: client).update(replacing: Data("{}".utf8), currentVersion: nil)
 
     }
 
