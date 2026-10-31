@@ -262,12 +262,13 @@ public enum LinkOutcome {
 
 }
 
-/// What `insteon link` and `insteon unlink` tell the person about each step a
-/// `DeviceLinkingCoordinator` takes, on standard error.
+/// What `insteon link`, `insteon unlink` and `insteon remove` tell the person about each step
+/// a `DeviceLinkingCoordinator` takes, on standard error.
 public enum LinkingEventText {
 
   /// The notes for an event, in order, or none for an event the command reports as a result,
-  /// such as a link made.
+  /// such as a link made, a device forgotten, the records other devices hold for it, and its
+  /// factory reset steps, which `RemovalText` words.
   ///
   /// - Parameters:
   ///   - event: The event.
@@ -348,6 +349,15 @@ public enum LinkingEventText {
       }
     case let .remainingLinksUnknown(device, reason):
       return ["Couldn't check the modem for \(device)'s other links: \(message(reason))"]
+    case let .deletingModemRecords(device):
+      return [
+        "\(device) didn't answer, so the modem's records for it are being deleted with Manage ALL-Link Record, "
+          + "as --force-modem-side asks. The device keeps its own records."
+      ]
+    case let .scanningDatabase(device, removedDevice):
+      return ["Reading \(device)'s ALL-Link database for records that name \(removedDevice)..."]
+    case .forgotten, .leftoverRecords, .factoryReset:
+      return []
     }
 
   }

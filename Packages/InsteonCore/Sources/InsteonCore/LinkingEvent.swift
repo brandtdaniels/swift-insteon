@@ -118,6 +118,27 @@ public enum LinkingEvent: Sendable {
   /// The modem's ALL-Link database couldn't be read to find the device's other links.
   case remainingLinksUnknown(InsteonAddress, reason: any Error)
 
+  /// The device's links couldn't be removed through it, and the caller said it's gone, so
+  /// the modem's own records that name it are being deleted directly. The device's records
+  /// stay as they are.
+  case deletingModemRecords(InsteonAddress)
+
+  /// The network forgot a removed device: its identity, its state and its records in the
+  /// snapshot's copy of the modem's ALL-Link database.
+  case forgotten(ForgottenDevice)
+
+  /// A device's ALL-Link database, the first address, is being read for records that still
+  /// name the removed device, the second.
+  case scanningDatabase(InsteonAddress, removedDevice: InsteonAddress)
+
+  /// The records other devices still hold that name a removed device, and the devices whose
+  /// databases couldn't be read. Nothing was changed in them.
+  case leftoverRecords(LeftoverRecordScan)
+
+  /// How to restore a removed device's factory settings, from the catalog, for a person to
+  /// follow. The coordinator doesn't reset the device.
+  case factoryReset(FactoryResetSteps)
+
 }
 
 /// Why a ``DeviceLinkingCoordinator`` reads the modem's ALL-Link database for a device's

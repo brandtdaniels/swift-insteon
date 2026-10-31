@@ -185,6 +185,16 @@ actor LinkingRecorder: LinkingObserver {
       return "remaining \(device) \(links.map { "\(role($0.modemRole)) \($0.group)" })"
     case let .remainingLinksUnknown(device, _):
       return "remaining unknown \(device)"
+    case let .deletingModemRecords(device):
+      return "deleting modem records \(device)"
+    case let .forgotten(forgotten):
+      return "forgot \(forgotten.address) \(forgotten.device == nil ? "unknown" : "known")"
+    case let .scanningDatabase(device, removedDevice):
+      return "scanning \(device) for \(removedDevice)"
+    case let .leftoverRecords(scan):
+      return "leftovers for \(scan.removedDevice) \(scan.holders.map { "\($0.address) \($0.records.count)" }) unread \(scan.unread.map { "\($0.address)" })"
+    case let .factoryReset(reset):
+      return "factory reset \(reset.address) steps \(reset.procedure?.steps.count ?? 0)"
     }
 
   }

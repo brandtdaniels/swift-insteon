@@ -3,8 +3,9 @@ import InsteonLinking
 import InsteonModem
 import InsteonProtocol
 
-/// Links devices to a network's modem and unlinks them, with the Insteon device catalog
-/// deciding what each device needs, and a ``LinkingObserver`` for what a person sees and does.
+/// Links devices to a network's modem, unlinks them and removes them from the network, with
+/// the Insteon device catalog deciding what each device needs, and a ``LinkingObserver`` for
+/// what a person sees and does.
 ///
 /// Get one from ``DeviceNetwork/linking``. Every coordinator of a network takes turns with the
 /// others, so one link or unlink runs at a time, the modem is in one linking mode at a time,
@@ -30,6 +31,7 @@ import InsteonProtocol
 ///   the device is the controller and the group is its own;
 /// - how a device is sent Enter Unlinking Mode when its links are removed without its SET
 ///   button: extended for a battery-powered i2CS device.
+/// - the steps to restore a removed device's factory settings, which a person follows.
 ///
 /// Operating flags aren't read or written around a link or unlink: a device keeps whatever
 /// flags linking leaves it with.
@@ -361,55 +363,147 @@ public struct DeviceLinkingCoordinator: Sendable {
 
     try await inTurn(changing: device) { () async throws -> DeviceUnlinkingAllResult in
 
-      let known: RegisteredDevice? = await network.registry.device(device)
-      let description: DeviceDescription? = known?.deviceDescription
-      // Battery-powered i2CS devices take Enter Unlinking Mode extended.
-      let isBatteryPowered: Bool = description?.profile?.isBatteryPowered ?? false
-      let unlinkingMode: UnlinkingModeMessage = isBatteryPowered ? .extendedForI2cs : .standard
+      try await removeAllLinks(of: device, timeout: timeout, fallsBackToSETButton: true, observer: observer)
 
-      await observer.linking(.readingModemLinks(device, purpose: .findingLinksToRemove))
+    }
 
-      // The modem itself is asked which links there are, not an older copy.
-      await network.cache.invalidateModem()
+  }
 
-      let removed: [ModemLink]
+  // MARK: - Removing
+
+  /// Removes a device from the network: every link between it and the modem, then what the
+  /// network knows about it, and gives the catalog's steps to restore its factory settings.
+  ///
+  /// The links are removed without the device's SET button, as
+  /// ``DeviceLinkingCoordinator/unlinkAll(_:timeout:observer:)`` removes them: the links the
+  /// device controls first, and the link in the modem's group 0 last. When a link can't be
+  /// removed that way, the observer is told which links are left and how to remove them with
+  /// the device's SET button, with the catalog's steps, and ``RemoteUnlinkingError`` is
+  /// thrown; the device isn't forgotten then.
+  ///
+  /// A device that's gone, such as one thrown away or a battery-powered device whose batteries
+  /// are dead, can't answer. Pass `forceModemSide` only once a person confirms that: when the
+  /// links can't be removed through the device, the modem's own records that name it are
+  /// deleted directly with Manage ALL-Link Record instead, and the removal goes on. The
+  /// device's own records stay, so a device that comes back still holds them.
+  ///
+  /// Once the modem's links are gone, the network forgets the device: the registry's identity,
+  /// its state in the snapshot, such as its ALL-Link database copy, level and when it last
+  /// answered, and its records in the snapshot's copy of the modem's ALL-Link database. Other
+  /// devices may still hold records that name it, such as in a scene. With `scan`, the
+  /// ALL-Link databases of the other devices the network knows are read, from the network's
+  /// copies while they're current, and each record that names the device is reported; none is
+  /// changed. Last, the observer is given the catalog's factory reset steps, for a person to
+  /// follow. The device is never reset.
+  ///
+  /// ```swift
+  /// let result = try await network.linking.remove(lamp, scan: true, observer: prompter)
+  ///
+  /// for holder in result.leftoverRecords?.holders ?? [] {
+  ///   print(holder.address, holder.records.count)
+  /// }
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - device: The device.
+  ///   - scan: Whether to look for records that name the device in other devices' ALL-Link
+  ///     databases. Defaults to `false`.
+  ///   - forceModemSide: Whether to delete the modem's records that name the device directly
+  ///     when its links can't be removed through it, because a person confirmed it's gone.
+  ///     Defaults to `false`.
+  ///   - timeout: How long to wait for the modem to report each link removed. Defaults to
+  ///     `Linker.defaultRemoteLinkingTimeout`.
+  ///   - observer: What a person is told.
+  /// - Returns: What was removed and forgotten, what other devices still hold, and the reset
+  ///   steps.
+  /// - Throws: ``RemoteUnlinkingError`` when a link can't be removed through the device and
+  ///   `forceModemSide` is `false`, the modem's errors when its records can't be deleted, and
+  ///   `CancellationError` if the task is canceled. A device whose database can't be read
+  ///   during the scan doesn't throw; the scan lists it.
+  public func remove(
+    _ device: InsteonAddress,
+    scan: Bool = false,
+    forceModemSide: Bool = false,
+    timeout: Duration = Linker.defaultRemoteLinkingTimeout,
+    observer: any LinkingObserver
+  ) async throws -> DeviceRemovalResult {
+
+    try await inTurn(changing: device) { () async throws -> DeviceRemovalResult in
+
+      let description: DeviceDescription? = await network.registry.device(device)?.deviceDescription
+      let removed: RemovedLinks
+      let remaining: [ModemLink]?
+      var remoteFailure: (any Error)?
+      var deleted: [AllLinkRecord] = []
 
       do {
 
-        removed = try await makeUnlinker().unlinkAllRemotely(device, unlinkingMode: unlinkingMode, timeout: timeout) { (link: ModemLink) async -> Void in
+        let unlinked: DeviceUnlinkingAllResult = try await removeAllLinks(
+          of: device,
+          timeout: timeout,
+          fallsBackToSETButton: !forceModemSide,
+          observer: observer
+        )
 
-          await observer.linking(.unlinkingRemotely(device, deviceDescription: description, link: link))
+        removed = unlinked.removed
+        remaining = unlinked.remainingLinks
+
+      } catch let failure as RemoteUnlinkingError where forceModemSide {
+
+        remoteFailure = failure.underlying
+
+        await observer.linking(.deletingModemRecords(device))
+
+        do {
+
+          deleted = try await makeUnlinker().deleteModemRecords(of: device)
+
+        } catch {
+
+          await network.recordLinkChange(of: device, answered: false)
+
+          throw error
 
         }
 
-      } catch let error as CancellationError {
-
-        // The turn records the change on the way out.
-        throw error
-
-      } catch {
-
         await network.recordLinkChange(of: device, answered: false)
 
-        _ = try await remainingLinks(of: device, observer: observer)
-
-        let steps: [DeviceLifecycle.Step] = Self.deviceSteps(of: description?.profile?.lifecycle?.unlinking)
-
-        await observer.linking(.fallback(.setButtonUnlinking(device, deviceDescription: description, steps: steps)))
-
-        throw RemoteUnlinkingError(device: device, deviceDescription: description, underlying: error)
+        removed = RemovedLinks(address: device, device: await network.registry.device(device), links: [])
+        remaining = try await remainingLinks(of: device, observer: observer)
 
       }
 
-      await network.recordLinkChange(of: device, answered: !removed.isEmpty)
+      let forgotten = ForgottenDevice(address: device, device: await network.forget(device))
 
-      let report = RemovedLinks(address: device, device: known, links: removed)
+      await observer.linking(.forgotten(forgotten))
 
-      await observer.linking(.unlinkedAll(report))
+      var leftovers: LeftoverRecordScan?
 
-      let remaining: [ModemLink]? = try await remainingLinks(of: device, observer: observer)
+      if scan {
 
-      return DeviceUnlinkingAllResult(removed: report, remainingLinks: remaining)
+        leftovers = try await leftoverRecords(naming: device, observer: observer)
+
+      }
+
+      let lifecycle: DeviceLifecycle? = description?.profile?.lifecycle
+      let reset = FactoryResetSteps(
+        address: device,
+        deviceDescription: description,
+        procedure: lifecycle?.reset,
+        erases: lifecycle?.resetErases ?? []
+      )
+
+      await observer.linking(.factoryReset(reset))
+
+      return DeviceRemovalResult(
+        removed: removed,
+        remainingLinks: remaining,
+        remoteUnlinkingFailure: remoteFailure,
+        deletedModemRecords: deleted,
+        forgotten: forgotten,
+        leftoverRecords: leftovers,
+        factoryReset: reset
+      )
 
     }
 
@@ -708,6 +802,139 @@ public struct DeviceLinkingCoordinator: Sendable {
     }
 
     return await network.registry.device(device)
+
+  }
+
+  /// Removes every link between the modem and a device without its SET button, in the
+  /// caller's turn, as ``DeviceLinkingCoordinator/unlinkAll(_:timeout:observer:)`` describes.
+  ///
+  /// - Parameters:
+  ///   - device: The device.
+  ///   - timeout: How long to wait for the modem to report each link removed.
+  ///   - fallsBackToSETButton: Whether to tell the observer how to remove the links left with
+  ///     the device's SET button when a link can't be removed.
+  ///   - observer: What a person is told.
+  /// - Returns: The links removed and the links left.
+  /// - Throws: ``RemoteUnlinkingError`` when a link can't be removed, and `CancellationError`
+  ///   if the task is canceled.
+  private func removeAllLinks(
+    of device: InsteonAddress,
+    timeout: Duration,
+    fallsBackToSETButton: Bool,
+    observer: any LinkingObserver
+  ) async throws -> DeviceUnlinkingAllResult {
+
+    let known: RegisteredDevice? = await network.registry.device(device)
+    let description: DeviceDescription? = known?.deviceDescription
+    // Battery-powered i2CS devices take Enter Unlinking Mode extended.
+    let isBatteryPowered: Bool = description?.profile?.isBatteryPowered ?? false
+    let unlinkingMode: UnlinkingModeMessage = isBatteryPowered ? .extendedForI2cs : .standard
+
+    await observer.linking(.readingModemLinks(device, purpose: .findingLinksToRemove))
+
+    // The modem itself is asked which links there are, not an older copy.
+    await network.cache.invalidateModem()
+
+    let removed: [ModemLink]
+
+    do {
+
+      removed = try await makeUnlinker().unlinkAllRemotely(device, unlinkingMode: unlinkingMode, timeout: timeout) { (link: ModemLink) async -> Void in
+
+        await observer.linking(.unlinkingRemotely(device, deviceDescription: description, link: link))
+
+      }
+
+    } catch let error as CancellationError {
+
+      // The turn records the change on the way out.
+      throw error
+
+    } catch {
+
+      await network.recordLinkChange(of: device, answered: false)
+
+      _ = try await remainingLinks(of: device, observer: observer)
+
+      if fallsBackToSETButton {
+
+        let steps: [DeviceLifecycle.Step] = Self.deviceSteps(of: description?.profile?.lifecycle?.unlinking)
+
+        await observer.linking(.fallback(.setButtonUnlinking(device, deviceDescription: description, steps: steps)))
+
+      }
+
+      throw RemoteUnlinkingError(device: device, deviceDescription: description, underlying: error)
+
+    }
+
+    await network.recordLinkChange(of: device, answered: !removed.isEmpty)
+
+    let report = RemovedLinks(address: device, device: known, links: removed)
+
+    await observer.linking(.unlinkedAll(report))
+
+    let remaining: [ModemLink]? = try await remainingLinks(of: device, observer: observer)
+
+    return DeviceUnlinkingAllResult(removed: report, remainingLinks: remaining)
+
+  }
+
+  /// Reads the ALL-Link databases of the other devices the network knows, and reports the
+  /// records in use that name a removed device. Nothing is written.
+  ///
+  /// - Parameters:
+  ///   - device: The removed device.
+  ///   - observer: What a person is told.
+  /// - Returns: The devices that hold records naming the device, and those whose databases
+  ///   couldn't be read.
+  /// - Throws: `CancellationError` if the task is canceled.
+  private func leftoverRecords(naming device: InsteonAddress, observer: any LinkingObserver) async throws -> LeftoverRecordScan {
+
+    let others: [InsteonAddress] = await network.knownDevices().filter { (address: InsteonAddress) -> Bool in address != device }
+    var holders: [LeftoverRecords] = []
+    var unread: [UnreadDatabase] = []
+
+    for other in others {
+
+      try Task.checkCancellation()
+
+      let registered: RegisteredDevice? = await network.registry.device(other)
+
+      await observer.linking(.scanningDatabase(other, removedDevice: device))
+
+      do {
+
+        let copy: AllLinkDatabaseCopy = try await network.allLinkDatabase(of: other)
+        let naming: [AllLinkRecordResponse] = copy.records.filter { (response: AllLinkRecordResponse) -> Bool in
+
+          response.record.flags.contains(.inUse) && response.record.address == device
+
+        }
+
+        if !naming.isEmpty {
+
+          holders.append(LeftoverRecords(address: other, device: registered, records: naming))
+
+        }
+
+      } catch let error as CancellationError {
+
+        throw error
+
+      } catch {
+
+        unread.append(UnreadDatabase(address: other, device: registered, reason: error))
+
+      }
+
+    }
+
+    let scan = LeftoverRecordScan(removedDevice: device, holders: holders, unread: unread)
+
+    await observer.linking(.leftoverRecords(scan))
+
+    return scan
 
   }
 
