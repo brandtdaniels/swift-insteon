@@ -369,6 +369,35 @@ struct ExploringArgumentTests {
 
   }
 
+  @Test func refusesAProtectedCommandBeforeOpeningTheModem() {
+
+    #expect(throws: ArgumentError.neverSent(.protected(.radioOff))) {
+
+      try Invocation.parse(["device", "1A.2B.3C", "send", "20", "0C"])
+
+    }
+
+    #expect(throws: ArgumentError.neverSent(.protected(.programmingLockOn))) {
+
+      try Invocation.parse(["device", "1A.2B.3C", "send", "0x20", "0x00", "--extended"])
+
+    }
+
+    #expect(throws: ArgumentError.neverSent(.protected(.poke))) {
+
+      try Invocation.parse(["device", "1A.2B.3C", "send", "29", "00"])
+
+    }
+
+    // Radio on isn't protected.
+    #expect(throws: Never.self) {
+
+      try Invocation.parse(["device", "1A.2B.3C", "send", "20", "0D"])
+
+    }
+
+  }
+
   // MARK: - scene
 
   @Test func sendsAGroupOnOrOff() throws {
@@ -478,6 +507,64 @@ struct ExploringArgumentTests {
     }
 
     #expect(try Invocation.parse(["modem", "send", "0264FF00", "--force"]).subcommand == .modemSend(RawSerialRequest(bytes: deleteLinking, isForced: true)))
+
+  }
+
+  @Test func neverWritesAProtectedCommandEvenWhenForced() {
+
+    for forcing in [[], ["--force"]] {
+
+      #expect(throws: ArgumentError.neverSent(.protected(.checksumOn))) {
+
+        try Invocation.parse(["modem", "send", "02621A2B3C0F2019"] + forcing)
+
+      }
+
+      #expect(throws: ArgumentError.neverSent(.protected(.powerlineOff))) {
+
+        try Invocation.parse(["modem", "send", "0261", "01", "200E"] + forcing)
+
+      }
+
+      #expect(throws: ArgumentError.neverSent(.protected(.poke))) {
+
+        try Invocation.parse(["modem", "send", "02621A2B3C0F28FF"] + forcing)
+
+      }
+
+      #expect(throws: ArgumentError.neverSent(.incompleteMessage)) {
+
+        try Invocation.parse(["modem", "send", "02621A2B3C0F20"] + forcing)
+
+      }
+
+    }
+
+  }
+
+  @Test func wordsEveryRefusalInOneLine() {
+
+    let refusals: [SendRefusal] = ProtectedCommand.allCases.map { (command: ProtectedCommand) -> SendRefusal in .protected(command) } + [
+      .neverSentToDevice(product: "Example"),
+      .writesGuardedFlags(label: "Programming lock"),
+      .notSerialCommand,
+      .incompleteMessage,
+      .serialCommand("Reset the IM (0x67) erases the modem's ALL-Link database and configuration.")
+    ]
+
+    for refusal in refusals {
+
+      let sentence: String = SendRefusalText.sentence(refusal)
+
+      #expect(!sentence.isEmpty)
+      #expect(!sentence.contains("\n"))
+      #expect(sentence.hasSuffix("."))
+      #expect(ArgumentError.neverSent(refusal).description == sentence)
+
+    }
+
+    #expect(SendRefusalText.sentence(.protected(.radioOff)) == "Turning radio off would cut the device off the network; insteon never sends it.")
+    #expect(SendRefusalText.sentence(.serialCommand("Reset.")).hasSuffix("Pass --force to send it anyway."))
 
   }
 
