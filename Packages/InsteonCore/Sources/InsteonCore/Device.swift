@@ -923,7 +923,8 @@ public struct Device: Sendable {
   ///   - group: The group.
   ///   - model: The device's model.
   ///   - reply: What the command set says the acknowledgment carries, if anything.
-  /// - Returns: For a state with a bit per group, the group's bit as on or off; for a group that
+  /// - Returns: For a state whose catalog entry gives the bits that mean on, whether they match;
+  ///   for a state with a bit per group, the group's bit as on or off; for a group that
   ///   dims, whose reply is in percent, the level in percent; the name of the range the value
   ///   is in; on or off for a group that only turns on and off; and otherwise the raw byte.
   static func reading(
@@ -938,6 +939,16 @@ public struct Device: Sendable {
     guard let state = group.type.state else {
 
       return (.raw, isNonzero)
+
+    }
+
+    // A reply whose bits carry more than the group's state, such as an EZFlora's valve status,
+    // is on only when the bits the catalog names match.
+    if let onWhen = state.onWhen {
+
+      let isOn: Bool = onWhen.isOn(command2: value)
+
+      return (.onOff(isOn), isOn)
 
     }
 
