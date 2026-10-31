@@ -205,6 +205,11 @@ let package = Package(
       dependencies: ["InsteonModem", "InsteonNetworking"],
       path: "Packages/InsteonTestSupport/Sources/InsteonTestSupport"
     ),
+    .testTarget(
+      name: "InsteonTestSupportTests",
+      dependencies: ["InsteonTestSupport"],
+      path: "Packages/InsteonTestSupport/Tests/InsteonTestSupportTests"
+    ),
     .target(
       name: "InsteonLinkingTestSupport",
       dependencies: ["InsteonLinking", "InsteonModem", "InsteonProtocol"],

@@ -306,14 +306,11 @@ struct RequestTests {
 
       await #expect(throws: ModemStoppedEchoing(device: device, command: .sendMessage)) {
 
+        // An earlier exchange's timeout may have had the same deadline, so wait for a sleep
+        // that starts after this exchange does.
+        let mark = clock.mark()
         async let answer = modem.request(engineVersionRequest)
-        // The earlier exchange's timeout had the same deadline, so wait for this one's message first.
-        while connection.written.count < 2 {
-
-          await Task.yield()
-
-        }
-        await clock.waitForSleeper(until: .seconds(3))
+        await clock.waitForSleeper(until: .seconds(3), after: mark)
         clock.advance(by: .seconds(3))
         _ = try await answer
 
@@ -349,14 +346,11 @@ struct RequestTests {
 
       await #expect(throws: ModemStoppedEchoing(device: device, command: .sendMessage)) {
 
+        // An earlier exchange's timeout may have had the same deadline, so wait for a sleep
+        // that starts after this exchange does.
+        let mark = clock.mark()
         async let answer = modem.request(engineVersionRequest)
-        // The earlier exchange's timeout had the same deadline, so wait for this one's message first.
-        while connection.written.count < 2 {
-
-          await Task.yield()
-
-        }
-        await clock.waitForSleeper(until: .seconds(3))
+        await clock.waitForSleeper(until: .seconds(3), after: mark)
         clock.advance(by: .seconds(3))
         _ = try await answer
 
@@ -364,13 +358,11 @@ struct RequestTests {
 
       await #expect(throws: ModemError.self) {
 
+        // An earlier exchange's timeout may have had the same deadline, so wait for a sleep
+        // that starts after this exchange does.
+        let mark = clock.mark()
         async let answer = modem.request(engineVersionRequest)
-        while connection.written.count < 3 {
-
-          await Task.yield()
-
-        }
-        await clock.waitForSleeper(until: .seconds(6))
+        await clock.waitForSleeper(until: .seconds(6), after: mark)
         clock.advance(by: .seconds(3))
         _ = try await answer
 
@@ -398,12 +390,11 @@ struct RequestTests {
       await #expect(throws: ModemStoppedEchoing(device: device, command: .sendMessage)) {
 
         async let records = modem.readAllLinkDatabase(of: device)
-        // The earlier exchange's timeout had the same deadline, so wait for this one's message first.
-        while connection.written.count < 2 {
-
-          await Task.yield()
-
-        }
+        // The first record's exchange had a timeout with the same deadline, so wait for the
+        // second's message, which is written only once the first exchange is over.
+        var writes = connection.writeLog.makeAsyncIterator()
+        _ = await writes.next()
+        _ = await writes.next()
         await clock.waitForSleeper(until: .milliseconds(4_170))
         clock.advance(by: .milliseconds(4_170))
         _ = try await records
