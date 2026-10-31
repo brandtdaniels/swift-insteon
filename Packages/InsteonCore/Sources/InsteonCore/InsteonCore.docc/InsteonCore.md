@@ -305,3 +305,7 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 - ``NetworkSnapshotStore``
 - ``JSONFileDeviceRegistryStore``
 - ``DeviceRegistryStoreError``
+
+### Raw passthroughs
+
+- ``SerialCommandPolicy``

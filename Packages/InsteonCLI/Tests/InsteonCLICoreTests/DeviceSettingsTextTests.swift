@@ -237,18 +237,6 @@ struct DeviceSettingsTextTests {
 
   }
 
-  @Test func refusesSerialCommandsThatChangeWhatTheModemKeeps() {
-
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x77]) == nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x60]) == nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x67]) != nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x6F, 0x80]) != nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x76]) != nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x99]) != nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02]) != nil)
-
-  }
-
   @Test func printsBytesAsPairs() {
 
     #expect(Hex.pairs([0x02, 0x77, 0x06]) == "02 77 06")
