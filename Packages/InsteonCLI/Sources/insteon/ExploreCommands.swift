@@ -41,7 +41,7 @@ enum ExploreCommands {
 
     } catch let refusal as SendRefusal {
 
-      throw CommandFailure(description: SendRefusalText.sentence(refusal))
+      throw CommandFailure(description: SendRefusalText.sentence(refusal, from: .deviceSend))
 
     } catch {
 
@@ -85,7 +85,7 @@ enum ExploreCommands {
 
     } catch let refusal as SendRefusal {
 
-      throw CommandFailure(description: SendRefusalText.sentence(refusal))
+      throw CommandFailure(description: SendRefusalText.sentence(refusal, from: .modemSend))
 
     }
 

@@ -371,7 +371,7 @@ struct ExploringArgumentTests {
 
   @Test func refusesPokeBeforeOpeningTheModem() throws {
 
-    #expect(throws: ArgumentError.neverSent(.protected(.poke))) {
+    #expect(throws: ArgumentError.neverSent(.protected(.poke), by: .deviceSend)) {
 
       try Invocation.parse(["device", "1A.2B.3C", "send", "29", "00"])
 
@@ -502,25 +502,25 @@ struct ExploringArgumentTests {
 
     for forcing in [[], ["--force"]] {
 
-      #expect(throws: ArgumentError.neverSent(.protected(.checksumOn))) {
+      #expect(throws: ArgumentError.neverSent(.protected(.checksumOn), by: .modemSend)) {
 
         try Invocation.parse(["modem", "send", "02621A2B3C0F2019"] + forcing)
 
       }
 
-      #expect(throws: ArgumentError.neverSent(.protected(.powerlineOff))) {
+      #expect(throws: ArgumentError.neverSent(.protected(.powerlineOff), by: .modemSend)) {
 
         try Invocation.parse(["modem", "send", "0261", "01", "200E"] + forcing)
 
       }
 
-      #expect(throws: ArgumentError.neverSent(.protected(.poke))) {
+      #expect(throws: ArgumentError.neverSent(.protected(.poke), by: .modemSend)) {
 
         try Invocation.parse(["modem", "send", "02621A2B3C0F29FF"] + forcing)
 
       }
 
-      #expect(throws: ArgumentError.neverSent(.incompleteMessage)) {
+      #expect(throws: ArgumentError.neverSent(.incompleteMessage, by: .modemSend)) {
 
         try Invocation.parse(["modem", "send", "02621A2B3C0F20"] + forcing)
 
@@ -543,18 +543,26 @@ struct ExploringArgumentTests {
 
     for refusal in refusals {
 
-      let sentence: String = SendRefusalText.sentence(refusal)
+      for passthrough in [SendRefusalText.Passthrough.deviceSend, .modemSend] {
 
-      #expect(!sentence.isEmpty)
-      #expect(!sentence.contains("\n"))
-      #expect(sentence.hasSuffix("."))
-      #expect(ArgumentError.neverSent(refusal).description == sentence)
+        let sentence: String = SendRefusalText.sentence(refusal, from: passthrough)
+
+        #expect(!sentence.isEmpty)
+        #expect(!sentence.contains("\n"))
+        #expect(sentence.hasSuffix("."))
+        #expect(ArgumentError.neverSent(refusal, by: passthrough).description == sentence)
+
+      }
 
     }
 
-    #expect(SendRefusalText.sentence(.protected(.radioOff)).hasPrefix("Turning radio off would cut the device off the network; insteon sends it only"))
-    #expect(SendRefusalText.sentence(.protected(.poke)).hasSuffix("insteon never sends it."))
-    #expect(SendRefusalText.sentence(.serialCommand("Reset.")).hasSuffix("Pass --force to send it anyway."))
+    // device ADDRESS send sends a protected Set Operating Flags where the catalog gives it
+    // another meaning; modem send, with no device to look up, never does.
+    #expect(SendRefusalText.sentence(.protected(.radioOff), from: .deviceSend).hasPrefix("Turning radio off would cut the device off the network; insteon sends it only"))
+    #expect(SendRefusalText.sentence(.protected(.radioOff), from: .modemSend) == "Turning radio off would cut the device off the network; insteon modem send never writes it.")
+    #expect(SendRefusalText.sentence(.protected(.poke), from: .deviceSend).hasSuffix("insteon never sends it."))
+    #expect(SendRefusalText.sentence(.extendedSetWithoutCommandSet, from: .deviceSend).contains("can't tell which bits"))
+    #expect(SendRefusalText.sentence(.serialCommand("Reset."), from: .modemSend).hasSuffix("Pass --force to send it anyway."))
 
   }
 

@@ -733,7 +733,7 @@ extension Invocation {
     // sent depends on the device's command set, so the network decides that.
     if ProtectedCommand(command1: bytes[0], command2: bytes[1]) == .poke {
 
-      throw ArgumentError.neverSent(.protected(.poke))
+      throw ArgumentError.neverSent(.protected(.poke), by: .deviceSend)
 
     }
 
@@ -871,7 +871,7 @@ extension Invocation {
     case let .serialCommand(reason)?:
       throw ArgumentError.refusedSerialCommand(reason)
     case let refusal?:
-      throw ArgumentError.neverSent(refusal)
+      throw ArgumentError.neverSent(refusal, by: .modemSend)
     }
 
     return .modemSend(RawSerialRequest(bytes: bytes, waitSeconds: waitSeconds, isForced: forces))
