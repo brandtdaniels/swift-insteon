@@ -1,4 +1,5 @@
 #if os(macOS) || os(Linux)
+import Dispatch
 import Testing
 import InsteonModem
 #if canImport(Darwin)
@@ -137,8 +138,7 @@ struct SerialPortTests {
     }
 
     // A byte arriving means the write has started.
-    var first: UInt8 = 0
-    try #require(read(controller, &first, 1) == 1)
+    try #require(await readByte(from: controller) != nil)
 
     writing.cancel()
 
@@ -163,8 +163,7 @@ struct SerialPortTests {
 
     }
 
-    var first: UInt8 = 0
-    try #require(read(controller, &first, 1) == 1)
+    try #require(await readByte(from: controller) != nil)
 
     port.close()
 
@@ -181,6 +180,24 @@ struct SerialPortTests {
     #expect(throws: SerialPortError.self) {
 
       try SerialPort(path: "/dev/insteon-modem-that-does-not-exist")
+
+    }
+
+  }
+
+}
+
+/// Reads one byte on a thread of its own, so the blocking read doesn't hold a thread the tests'
+/// tasks run on.
+private func readByte(from descriptor: Int32) async -> UInt8? {
+
+  await withCheckedContinuation { (continuation: CheckedContinuation<UInt8?, Never>) in
+
+    DispatchQueue.global().async {
+
+      var byte: UInt8 = 0
+
+      continuation.resume(returning: read(descriptor, &byte, 1) == 1 ? byte : nil)
 
     }
 

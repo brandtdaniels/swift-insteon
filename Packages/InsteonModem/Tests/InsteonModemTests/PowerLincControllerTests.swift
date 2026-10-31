@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import InsteonModem
 import InsteonProtocol
@@ -341,6 +342,69 @@ struct PowerLincControllerTests {
 
   }
 
+  // Line noise that looks like the header of a 65,535-byte upload arrives first. No upload was
+  // asked for, so it isn't one, and the next command's echo comes through.
+  @Test(.timeLimit(.minutes(1)))
+  func readsTheNextEchoAfterNoiseThatLooksLikeAnUpload() async throws {
+
+    let connection = ScriptedConnection { frame, _ in Self.answer(frame) }
+    let controller = makeController(connection)
+
+    try await run(controller) {
+
+      connection.incoming.yield(Self.bytes("02420000FFFF"))
+
+      try await controller.send(IBIOSCommand.mask(address: 0x0142, or: 0x10, and: 0xFF))
+      try await controller.send(IBIOSCommand.getVersion)
+
+    }
+
+    #expect(connection.written == [Self.bytes("0246014210FF"), Self.bytes("0248")])
+
+  }
+
+  // The upload asked for is still read, however long, after noise like it.
+  @Test(.timeLimit(.minutes(1)))
+  func readsTheUploadAskedFor() async throws {
+
+    let connection = ScriptedConnection { frame, _ in Self.answer(frame) }
+    let controller = makeController(connection)
+
+    try await run(controller) {
+
+      connection.incoming.yield(Self.bytes("02420000FFFF"))
+
+      try await controller.send(IBIOSCommand.upload(address: 0x0300, length: 0x0200))
+
+    }
+
+  }
+
+  // The connection takes the command but never returns, as a USB adapter that stopped sending
+  // can: the send fails at the answer timeout, and the write is canceled.
+  @Test(.timeLimit(.minutes(1)))
+  func timesOutAWriteThatNeverFinishes() async throws {
+
+    let connection = StuckConnection()
+    let controller = PowerLincController(connection: connection, retryPolicy: policy, clock: clock)
+
+    try await withRunning({ try await controller.run() }) {
+
+      await #expect(throws: PowerLincControllerError.timedOut(.getVersion)) {
+
+        async let sent: Void = controller.send(IBIOSCommand.getVersion)
+        await clock.waitForSleeper(until: .seconds(2) + .nanoseconds(1))
+        clock.advance(by: .seconds(2) + .nanoseconds(1))
+        try await sent
+
+      }
+
+    }
+
+    #expect(connection.canceledWrites == 1)
+
+  }
+
   static func bytes(_ hex: String) -> [UInt8] {
 
     let digits = Array(hex)
@@ -391,6 +455,54 @@ final class SimulatedIBIOS {
   private static func word(_ frame: [UInt8], at index: Int) -> Int {
 
     Int(frame[index]) << 8 | Int(frame[index + 1])
+
+  }
+
+}
+
+/// A connection whose writes never finish until they're canceled, and that never receives.
+final class StuckConnection: ModemConnection, @unchecked Sendable {
+
+  private let lock = NSLock()
+
+  private var canceled = 0
+
+  /// Never yields, so a write waiting on it waits until its task is canceled.
+  private let blocked: AsyncStream<Void>
+
+  private let blocker: AsyncStream<Void>.Continuation
+
+  private let stream: AsyncThrowingStream<[UInt8], any Error>
+
+  private let continuation: AsyncThrowingStream<[UInt8], any Error>.Continuation
+
+  init() {
+
+    (stream, continuation) = AsyncThrowingStream.makeStream()
+    (blocked, blocker) = AsyncStream.makeStream()
+
+  }
+
+  /// How many writes were canceled.
+  var canceledWrites: Int {
+
+    lock.withLock { canceled }
+
+  }
+
+  func write(_ bytes: [UInt8]) async throws {
+
+    for await _ in blocked {}
+
+    lock.withLock { canceled += 1 }
+
+    throw CancellationError()
+
+  }
+
+  func receive() -> AsyncThrowingStream<[UInt8], any Error> {
+
+    stream
 
   }
 
