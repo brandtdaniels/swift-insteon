@@ -491,6 +491,8 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
 
     }
 
+    // `AsyncBytes` hands over one byte at a time, from a buffer it fills in chunks as the body
+    // arrives, so the limit is checked as each byte is added.
     var data: Data = Data()
 
     if response.expectedContentLength > 0 {
@@ -566,7 +568,13 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
 
     }
 
-    // The body arrives whole, so its size can only be checked now.
+    // The body arrives whole, so its size can only be checked here. Counting it as it arrives
+    // would take a data task without a completion handler, and swift-corelibs-foundation
+    // tells only the session's own delegate about such a task's data: a task's delegate hears
+    // only of redirects and challenges. That would mean a delegate for every session the
+    // client is given, and it would change how an answer with `401 Unauthorized` completes,
+    // which discovery reads and which swift-corelibs-foundation has changed between releases.
+    // A local-network client's time limit bounds how long the body can grow instead.
     if let maximumResponseSize, body.count > maximumResponseSize {
 
       throw HTTPClientError.responseTooLarge(limit: maximumResponseSize)

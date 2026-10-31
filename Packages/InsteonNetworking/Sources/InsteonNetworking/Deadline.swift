@@ -24,11 +24,13 @@ package func withDeadline<Value: Sendable>(
   _ operation: @escaping @Sendable () async throws -> Value
 ) async throws -> Value {
 
-  try await withThrowingTaskGroup(of: Value?.self) { group in
+  try await withThrowingTaskGroup(of: DeadlineOutcome<Value>.self) { group in
 
     group.addTask {
 
-      try await operation()
+      let value: Value = try await operation()
+
+      return DeadlineOutcome<Value>.finished(value)
 
     }
 
@@ -36,7 +38,7 @@ package func withDeadline<Value: Sendable>(
 
       try await clock.sleep(for: timeout)
 
-      return nil
+      return DeadlineOutcome<Value>.timedOut
 
     }
 
@@ -47,20 +49,30 @@ package func withDeadline<Value: Sendable>(
 
     }
 
-    guard let first: Value? = try await group.next() else {
+    guard let first: DeadlineOutcome<Value> = try await group.next() else {
 
       throw CancellationError()
 
     }
 
-    guard let value: Value = first else {
-
+    switch first {
+    case let .finished(value):
+      return value
+    case .timedOut:
       throw URLError(.timedOut)
-
     }
 
-    return value
-
   }
+
+}
+
+/// Which of an operation and its deadline finished first.
+private enum DeadlineOutcome<Value: Sendable>: Sendable {
+
+  /// The operation finished with a value.
+  case finished(Value)
+
+  /// The time ran out first.
+  case timedOut
 
 }
