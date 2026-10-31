@@ -440,9 +440,11 @@ struct ModemReplyParserTests {
 
     #expect(parser.parse(bytes("0250AABB" + "0255")).isEmpty)
     #expect(parser.finishPendingReply().isEmpty)
-    #expect(parser.discardStalledFrame())
+    let discarded: Bool = parser.discardStalledFrame()
+    #expect(discarded)
     #expect(parser.parse(bytes("0255")) == [.userReset])
-    #expect(!parser.discardStalledFrame())
+    let discarded2: Bool = parser.discardStalledFrame()
+    #expect(!discarded2)
 
   }
 

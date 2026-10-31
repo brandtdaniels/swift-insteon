@@ -171,7 +171,8 @@ struct IBIOSTests {
 
     #expect(parser.parse(bytes("02420000FFFF" + "02450A")).isEmpty)
     #expect(parser.finishPendingReply().isEmpty)
-    #expect(parser.discardStalledFrame())
+    let discarded: Bool = parser.discardStalledFrame()
+    #expect(discarded)
     #expect(parser.parse(bytes("02450B")) == [.eventReport(.buttonHeld)])
 
   }
