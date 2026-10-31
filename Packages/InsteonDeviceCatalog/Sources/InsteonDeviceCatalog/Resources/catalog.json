@@ -95,7 +95,7 @@
                 "name": "onLevel",
                 "table": "onOff",
                 "verification": {
-                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records.",
+                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the On/Off Module 2456S3 Owner's Manual and the Outdoor On/Off Module 2456S3E Owner's Manual say to set the load to the state the link should recall before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               }
@@ -333,7 +333,14 @@
             "description": "The X10 house code, or 0x20 for no X10 address.",
             "label": "X10 house code",
             "name": "x10HouseCode",
-            "section": "X10"
+            "section": "X10",
+            "verification": {
+              "firmware": [
+                "0x48"
+              ],
+              "note": "Seen on a device running firmware 0x48: the extended Get reply held 0x20 in D5.",
+              "status": "observed"
+            }
           },
           {
             "advanced": true,
@@ -341,7 +348,14 @@
             "description": "The X10 unit code.",
             "label": "X10 unit code",
             "name": "x10UnitCode",
-            "section": "X10"
+            "section": "X10",
+            "verification": {
+              "firmware": [
+                "0x48"
+              ],
+              "note": "Seen on a device running firmware 0x48: the extended Get reply held 0x20 in D6.",
+              "status": "observed"
+            }
           },
           {
             "byte": 9,
@@ -352,7 +366,14 @@
               "from": "0x11",
               "through": "0x7F"
             },
-            "section": "LEDs"
+            "section": "LEDs",
+            "verification": {
+              "firmware": [
+                "0x48"
+              ],
+              "note": "Seen on a device running firmware 0x48: the extended Get reply held 0x3F (63) in D9 before any change, and followed each extended Set of the LED brightness: 0x40, then 0x3F again.",
+              "status": "observed"
+            }
           }
         ],
         "writes": [
@@ -370,7 +391,14 @@
             "description": "Sets the X10 address.",
             "name": "x10Address",
             "perButton": false,
-            "selector": "0x04"
+            "selector": "0x04",
+            "verification": {
+              "firmware": [
+                "0x48"
+              ],
+              "note": "Seen on a device running firmware 0x48: an extended Set with this selector, writing the X10 house and unit codes with the 0x20 they already held, was acknowledged, and the extended Get reply read them unchanged.",
+              "status": "observed"
+            }
           },
           {
             "bytes": [
@@ -382,7 +410,14 @@
             "description": "Sets the brightness of the status LED.",
             "name": "ledBrightness",
             "perButton": false,
-            "selector": "0x07"
+            "selector": "0x07",
+            "verification": {
+              "firmware": [
+                "0x48"
+              ],
+              "note": "Seen on a device running firmware 0x48: an extended Set with this selector writing 0x40 was acknowledged, and D9 of the extended Get reply read 0x40; writing 0x3F set it back.",
+              "status": "observed"
+            }
           }
         ]
       },
@@ -410,7 +445,14 @@
                 "description": "0x00 turns the load off when the controller's On arrives, 0xFF on.",
                 "label": "On or off",
                 "name": "onLevel",
-                "table": "onOff"
+                "table": "onOff",
+                "verification": {
+                  "firmware": [
+                    "0x48"
+                  ],
+                  "note": "Seen on a device running firmware 0x48: the device wrote its own responder record, for a modem's group 0, at ALL-Link database address 0x0FFF, and set Data 1 from the load's state at the time of the link: 0x00 when the load was off and 0xFF when it was on, never 0xFE. It did so on a first link and on a link made over its existing record, and Data 1 didn't change when the load was switched afterward. Data 3 read 0x01, though the modem sent no link data. After a remote link made with the load on, and after a link made again with the load first turned on with Light On (cmd1 0x11), the record held Data 1 to 3 as 0xFF 0x1C 0x01.",
+                  "status": "observed"
+                }
               },
               {
                 "byte": 2,
@@ -420,6 +462,13 @@
                 "range": {
                   "from": "0x00",
                   "through": "0x1F"
+                },
+                "verification": {
+                  "firmware": [
+                    "0x48"
+                  ],
+                  "note": "Seen on a device running firmware 0x48: the device wrote 0x1C in Data 2 of its responder record, the value D7 of its extended Get reply holds.",
+                  "status": "observed"
                 }
               }
             ]
@@ -441,16 +490,22 @@
             ]
           },
           "verification": {
-            "note": "No document says that every nonzero level means on; the ranges are read from the status reply's level byte.",
-            "status": "inferred"
+            "firmware": [
+              "0x48"
+            ],
+            "note": "Seen on a device running firmware 0x48: Light On (cmd1 0x11) with cmd2 0x01 and with cmd2 0x7F turned the load on, and with cmd2 0x00 turned it off; Instant Change (cmd1 0x21) with cmd2 0x01 turned it on, and with cmd2 0x00 turned it off. Light Status Request answered with cmd2 0xFF while the load was on and 0x00 while it was off. No document says that every nonzero level means on; the ranges are read from the status reply's level byte, which read only 0x00 and 0xFF.",
+            "status": "observed"
           }
         }
       ],
       "id": "applianceLincDualBand",
       "name": "ApplianceLinc Dual-Band",
       "notes": [
-        "The On/Off Module, Dual-Band Developer Notes send Set Operating Flags as an extended message with a checksum in D14.",
-        "The On/Off Module, Dual-Band Developer Notes mark bits 2 and 3 of the 0x00 reply and bits 4, 5 and 7 of the 0x05 reply N/A."
+        "The On/Off Module, Dual-Band Developer Notes send Set Operating Flags as an extended message with a checksum in D14. Seen on a device running firmware 0x48: the device acknowledged Set Operating Flags sent so, and each bit it set read back in Get Operating Flags.",
+        "The On/Off Module, Dual-Band Developer Notes mark bits 2 and 3 of the 0x00 reply and bits 4, 5 and 7 of the 0x05 reply N/A.",
+        "Seen on a device running firmware 0x48: Get Operating Flags answered cleanly only with cmd2 0x00 (the 0x00 reply), 0x01 (the ALL-Link database delta) and 0x05 (the 0x05 reply). Other cmd2 values, 0x02 to 0x04 and 0x06 to 0x08, answered with bytes that followed neither this set nor the Outdoor On/Off Plug 2634-222's pattern on firmware 0x42, where an even cmd2 is ORed into the flags; so the CRC error and signal-to-noise failure readings weren't confirmed.",
+        "Seen on a device running firmware 0x48: the 0x05 reply read 0x0D before any change: error blink and cleanup report on, and bit 0x01 set. Bit 0x01 wasn't changed, so what it does on this device wasn't seen.",
+        "Seen on a device running firmware 0x48: the extended Get reply's data read 0x01 0x01 0x00 0x00 0x20 0x20 0x1C 0xFE 0x3F 0x00 0x01 0x00 0x00 0x00, the same in idle reads over time and after the load was switched on and off; unlike D12 and D13 on the Outdoor On/Off Plug 2634-222 on firmware 0x42, no byte counted the device's activity. This set gives no meaning for D7 (0x1C), D8 (0xFE) or D11 (0x01). The operating flags and these settings read the same after the device was unlinked and linked again."
       ],
       "operatingFlags": [
         {
@@ -461,7 +516,14 @@
           "off": "0x01",
           "on": "0x00",
           "query": "0x00",
-          "section": "Linking"
+          "section": "Linking",
+          "verification": {
+            "firmware": [
+              "0x48"
+            ],
+            "note": "Seen on a device running firmware 0x48: with the other bits of the 0x00 reply clear, after Set Operating Flags with cmd2 0x00, Get Operating Flags (cmd2 0x00) read 0x01; after cmd2 0x01, it read 0x00.",
+            "status": "observed"
+          }
         },
         {
           "bit": "0x02",
@@ -471,7 +533,14 @@
           "off": "0x03",
           "on": "0x02",
           "query": "0x00",
-          "section": "LEDs"
+          "section": "LEDs",
+          "verification": {
+            "firmware": [
+              "0x48"
+            ],
+            "note": "Seen on a device running firmware 0x48: with the other bits of the 0x00 reply clear, after Set Operating Flags with cmd2 0x02, Get Operating Flags (cmd2 0x00) read 0x02; after cmd2 0x03, it read 0x00. The LED itself wasn't watched.",
+            "status": "observed"
+          }
         },
         {
           "bit": "0x10",
@@ -481,7 +550,14 @@
           "off": "0x09",
           "on": "0x08",
           "query": "0x00",
-          "section": "LEDs"
+          "section": "LEDs",
+          "verification": {
+            "firmware": [
+              "0x48"
+            ],
+            "note": "Seen on a device running firmware 0x48: with the other bits of the 0x00 reply clear, after Set Operating Flags with cmd2 0x08, Get Operating Flags (cmd2 0x00) read 0x10; after cmd2 0x09, it read 0x00. The LED itself wasn't watched.",
+            "status": "observed"
+          }
         },
         {
           "bit": "0x20",
@@ -491,7 +567,14 @@
           "off": "0x0B",
           "on": "0x0A",
           "query": "0x00",
-          "section": "Buttons"
+          "section": "Buttons",
+          "verification": {
+            "firmware": [
+              "0x48"
+            ],
+            "note": "Seen on a device running firmware 0x48: with the other bits of the 0x00 reply clear, after Set Operating Flags with cmd2 0x0A, Get Operating Flags (cmd2 0x00) read 0x20; after cmd2 0x0B, it read 0x00. Button presses weren't tried with the bit set, so the beep itself wasn't checked.",
+            "status": "observed"
+          }
         },
         {
           "advanced": true,
@@ -545,7 +628,14 @@
           "off": "0x14",
           "on": "0x15",
           "query": "0x05",
-          "section": "LEDs"
+          "section": "LEDs",
+          "verification": {
+            "firmware": [
+              "0x48"
+            ],
+            "note": "Seen on a device running firmware 0x48: Get Operating Flags (cmd2 0x05) read 0x0D; after Set Operating Flags with cmd2 0x14, it read 0x09, and after cmd2 0x15, 0x0D again. So the bit is 1 when the setting is on.",
+            "status": "observed"
+          }
         },
         {
           "advanced": true,
@@ -556,7 +646,14 @@
           "off": "0x16",
           "on": "0x17",
           "query": "0x05",
-          "section": "Communication"
+          "section": "Communication",
+          "verification": {
+            "firmware": [
+              "0x48"
+            ],
+            "note": "Seen on a device running firmware 0x48: Get Operating Flags (cmd2 0x05) read 0x0D; after Set Operating Flags with cmd2 0x16, it read 0x05, and after cmd2 0x17, 0x0D again. So the bit is 1 when the setting is on.",
+            "status": "observed"
+          }
         },
         {
           "advanced": true,
@@ -577,7 +674,14 @@
           "label": "ALL-Link database changes",
           "name": "databaseDelta",
           "query": "0x01",
-          "section": "Diagnostics"
+          "section": "Diagnostics",
+          "verification": {
+            "firmware": [
+              "0x48"
+            ],
+            "note": "Seen on a device running firmware 0x48: Get Operating Flags with cmd2 0x01 answered with the ALL-Link database delta, which the cmd1 of the Light Status Request acknowledgment also carried. The delta went up with every ALL-Link database write, not only with changes: each link attempt raised it, even when it rewrote a record with the data it already held. It read 1 at first, then 2, 4, 5 and 7 after successive link attempts, and 4 after the device was unlinked and linked again. Once it dropped by 1 between two reads with no command sent to the device in between; its button may have been pressed.",
+            "status": "observed"
+          }
         },
         {
           "advanced": true,
@@ -649,7 +753,14 @@
         {
           "command1": "0x30",
           "description": "Beeps once, as pressing the SET button does. The device ignores cmd2.",
-          "name": "beep"
+          "name": "beep",
+          "verification": {
+            "firmware": [
+              "0x48"
+            ],
+            "note": "Seen on a device running firmware 0x48: the device acknowledged Beep (cmd1 0x30) and beeped, both times it was sent.",
+            "status": "observed"
+          }
         }
       ],
       "valueTables": [
@@ -924,7 +1035,7 @@
                 "name": "onLevel",
                 "table": "onOff",
                 "verification": {
-                  "note": "Data 1 and 2 are read from the On/Off Outlet Developer Notes; they don't say how a record picks the top or bottom outlet, so the records here are the same for both and the outlet a record switches may follow the controller's group.",
+                  "note": "Data 1 and 2 are read from the On/Off Outlet Developer Notes; they don't say how a record picks the top or bottom outlet, so the records here are the same for both and the outlet a record switches may follow the controller's group. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               },
@@ -974,7 +1085,7 @@
                 "name": "onLevel",
                 "table": "onOff",
                 "verification": {
-                  "note": "Data 1 and 2 are read from the On/Off Outlet Developer Notes; they don't say how a record picks the top or bottom outlet, so the records here are the same for both and the outlet a record switches may follow the controller's group.",
+                  "note": "Data 1 and 2 are read from the On/Off Outlet Developer Notes; they don't say how a record picks the top or bottom outlet, so the records here are the same for both and the outlet a record switches may follow the controller's group. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               },
@@ -5171,7 +5282,8 @@
         "The FanLinc Developer Notes fill the rest of its fan commands and extended Sets with 0x00 and doesn't mention a checksum in D14.",
         "The FanLinc Developer Notes say that its fan off command also turns the light off on the firmware it describes.",
         "The FanLinc Developer Notes mark bit 0 of the 0x05 reply reserved and doesn't list Set Operating Flags 0x10, 0x11 or 0x14 through 0x19; another source gives them for the KeypadLinc code base.",
-        "The FanLinc Developer Notes control the light, group 1, as a KeypadLinc dimmer's load, and the fan, group 2, with extended commands."
+        "The FanLinc Developer Notes control the light, group 1, as a KeypadLinc dimmer's load, and the fan, group 2, with extended commands.",
+        "Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. So Data 1 (on-level) of the light group's responder records is the state the load was in when the device was linked. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the Ceiling Fan and Light Control Module 2475F Owner's Manual says to turn the load on before linking it as a responder. The values its link data give are what to write when writing the record by hand."
       ],
       "operatingFlags": [
         {
@@ -5869,7 +5981,8 @@
       "notes": [
         "The Global Line Developer Notes' Set Operating Flags table stops at 0x23; other sources add 0x26 through 0x2B for the KeypadLinc code base, which the micro modules run.",
         "Insteon's list of code bases puts subcategory 0x0B on the older LampLinc code base; the Global Line Developer Notes list it as the French 2632-422.",
-        "The Global Line Developer Notes send Set Operating Flags as an extended message with a checksum in D14."
+        "The Global Line Developer Notes send Set Operating Flags as an extended message with a checksum in D14.",
+        "Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. So Data 1 (on-level) of the light and load groups' responder records is the state the load was in when the device was linked. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the Micro Dimmer 2442 Owner's Manual, the Dimmer DIN Rail Module 2452 Owner's Manual, the Micro On/Off 2443 Owner's Manual, the On/Off DIN Rail Module 2453 Owner's Manual and the On/Off Module 2633 Owner's Manual say to set the load to the state the link should recall before linking it as a responder. The values its link data give are what to write when writing the record by hand."
       ],
       "operatingFlags": [
         {
@@ -7387,7 +7500,8 @@
         "The device ignores or rejects any command its documents don't list, Product Data Request (cmd1 0x03) among them. Besides the commands here, they list the linking commands, Get Insteon Engine Version, ID Request and ALL-Link database reads, writes and modifies.",
         "Its database layout gives records from 0x0FFF down to 0x0300, 416 of them; the database read reply gives addresses from 0x0FFF to 0x0407. Bit 0 of a record's flags is fast fail, bit 2 marks a Lighting Director record, bits 3 and 4 hold its hop count and bit 5 is always 1; the device may change some of these bits on its own.",
         "The load settings reply (readLoadSettings) starts with the same bytes as the extended Get reply, so wait for one before asking for the other.",
-        "The extended Get request carries no checksum."
+        "The extended Get request carries no checksum.",
+        "Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. So Data 1 (on-level) of the light group's responder records is the state the load was in when the device was linked. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder. The values its link data give are what to write when writing the record by hand."
       ],
       "operatingFlags": [
         {
@@ -8860,7 +8974,8 @@
         "The load settings reply (readLoadSettings) starts with the same bytes as the extended Get reply, so wait for one before asking for the other.",
         "D14 of the extended Get reply is the group mask, not a checksum, and the Get request carries no checksum.",
         "Bit 4 of operating flags query 0x05, set and cleared with cmd2 0x19 and 0x18, locks the buttons here; on the KeypadLinc it asks for checksums.",
-        "The extended Set also takes selector 0x11, LED flags, per group, which the documents don't describe."
+        "The extended Set also takes selector 0x11, LED flags, per group, which the documents don't describe.",
+        "Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. So Data 1 (on-level) of the light group's responder records is the state the load was in when the device was linked. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder. The values its link data give are what to write when writing the record by hand."
       ],
       "operatingFlags": [
         {
@@ -10158,7 +10273,8 @@
         "The device ignores or rejects any command its documents don't list, Product Data Request (cmd1 0x03) among them. Besides the commands here, they list the linking commands, Get Insteon Engine Version, ID Request and ALL-Link database reads, writes and modifies.",
         "Its database layout gives records from 0x0FFF down to 0x0300, 416 of them; the database read reply gives addresses from 0x0FFF to 0x0407. Bit 0 of a record's flags is fast fail, bit 2 marks a Lighting Director record, bits 3 and 4 hold its hop count and bit 5 is always 1; the device may change some of these bits on its own.",
         "The load settings reply (readLoadSettings) starts with the same bytes as the extended Get reply, so wait for one before asking for the other.",
-        "The extended Get request carries no checksum."
+        "The extended Get request carries no checksum.",
+        "Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. So Data 1 (on-level) of the light group's responder records is the state the load was in when the device was linked. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder. The values its link data give are what to write when writing the record by hand."
       ],
       "operatingFlags": [
         {
@@ -10984,7 +11100,7 @@
                 "scale": 0.392157,
                 "unit": "percent",
                 "verification": {
-                  "note": "Read from the Insteon Developer's Guide, which gives Data 1 as the on-level and Data 2 as the ramp rate as examples, and from the KeypadLinc Line and LED Bulb Developer Notes.",
+                  "note": "Read from the Insteon Developer's Guide, which gives Data 1 as the on-level and Data 2 as the ramp rate as examples, and from the KeypadLinc Line and LED Bulb Developer Notes. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the In-Line Dimmer Module (Dual-Band) 2475DA1 Owner's Manual says to set the load to the state the link should recall before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               },
@@ -11031,7 +11147,7 @@
                 "name": "onLevel",
                 "table": "onOff",
                 "verification": {
-                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records.",
+                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the In-LineLinc On/Off 2475SDB Owner's Manual says to set the load to the state the link should recall before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               }
@@ -11681,7 +11797,7 @@
                   "through": "0xFF"
                 },
                 "verification": {
-                  "note": "The In-Line 0-10VDC Dimmer Developer Notes describe records only in relay mode, as a mask of the relays; the dimmer-mode on-level is read from the KeypadLinc Line and LED Bulb Developer Notes.",
+                  "note": "The In-Line 0-10VDC Dimmer Developer Notes describe records only in relay mode, as a mask of the relays; the dimmer-mode on-level is read from the KeypadLinc Line and LED Bulb Developer Notes. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself, in dimmer mode, writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the 0-10V Ballast Dimmer 2475DA2 Owner's Manual says to set the load to the state the link should recall before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               }
@@ -12460,7 +12576,7 @@
                 "name": "onLevel",
                 "table": "onOff",
                 "verification": {
-                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records.",
+                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the In-LineLinc On/Off 2475SDB Owner's Manual says to set the load to the state the link should recall before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               }
@@ -13125,6 +13241,45 @@
           "name": "x10OnTurnsOn"
         }
       ],
+      "groupTypes": [
+        {
+          "actions": [
+            {
+              "command": "lightOn",
+              "label": "On",
+              "name": "on",
+              "value": "0xFF"
+            },
+            {
+              "command": "lightOff",
+              "label": "Off",
+              "name": "off"
+            }
+          ],
+          "kind": "relay",
+          "label": "Relay",
+          "name": "relay",
+          "state": {
+            "command": "readStatus",
+            "ranges": [
+              {
+                "from": "0x00",
+                "label": "Off",
+                "through": "0x00"
+              },
+              {
+                "from": "0x01",
+                "label": "On",
+                "through": "0xFF"
+              }
+            ]
+          },
+          "verification": {
+            "note": "No document gives the I/O Linc's direct commands. The Insteon Developer's Guide gives Light ON (cmd1 0x11), Light OFF (cmd1 0x13) and Light Status Request (cmd1 0x19, cmd2 0x00) for categories 0x01 and 0x02, not for the I/O Linc's 0x07, and the I/O Module 2450 Owner's Manual says the output relay responds to Insteon ON and OFF commands; the relay's commands are read from those. That every nonzero reply means on is read from Light Status Request's on-level for on/off devices, as the Insteon Developer's Guide gives it, and isn't documented for the I/O Linc.",
+            "status": "inferred"
+          }
+        }
+      ],
       "id": "ioLinc",
       "name": "I/O Linc",
       "notes": [
@@ -13233,7 +13388,52 @@
           "section": "Diagnostics"
         }
       ],
-      "sources": []
+      "sources": [
+        "Insteon Developer's Guide (2009)",
+        "I/O Module 2450 Owner's Manual"
+      ],
+      "standardCommands": [
+        {
+          "command1": "0x11",
+          "description": "Turns the output relay on. The device isn't documented to read cmd2; send 0xFF. In a momentary mode, the relay closes for the momentary time, or not at all if the mode ignores On.",
+          "name": "lightOn",
+          "parameter": {
+            "description": "Not documented to be read; send 0xFF.",
+            "name": "onLevel",
+            "range": {
+              "from": 0,
+              "through": 255
+            }
+          },
+          "verification": {
+            "note": "No document gives the I/O Linc's direct commands. The Insteon Developer's Guide gives Light ON (cmd1 0x11), Light OFF (cmd1 0x13) and Light Status Request (cmd1 0x19, cmd2 0x00) for categories 0x01 and 0x02, not for the I/O Linc's 0x07, and the I/O Module 2450 Owner's Manual says the output relay responds to Insteon ON and OFF commands; the relay's commands are read from those.",
+            "status": "inferred"
+          }
+        },
+        {
+          "command1": "0x13",
+          "description": "Turns the output relay off. In a momentary mode, the relay closes for the momentary time if the mode triggers on Off, and otherwise ignores it.",
+          "name": "lightOff",
+          "verification": {
+            "note": "No document gives the I/O Linc's direct commands. The Insteon Developer's Guide gives Light ON (cmd1 0x11), Light OFF (cmd1 0x13) and Light Status Request (cmd1 0x19, cmd2 0x00) for categories 0x01 and 0x02, not for the I/O Linc's 0x07, and the I/O Module 2450 Owner's Manual says the output relay responds to Insteon ON and OFF commands; the relay's commands are read from those.",
+            "status": "inferred"
+          }
+        },
+        {
+          "command1": "0x19",
+          "command2": "0x00",
+          "description": "Reads whether the output relay is on. The acknowledgment's cmd1 carries the ALL-Link database delta.",
+          "name": "readStatus",
+          "reply": {
+            "description": "0x00 when the relay is off.",
+            "name": "relayState"
+          },
+          "verification": {
+            "note": "No document gives the I/O Linc's direct commands. The Insteon Developer's Guide gives Light ON (cmd1 0x11), Light OFF (cmd1 0x13) and Light Status Request (cmd1 0x19, cmd2 0x00) for categories 0x01 and 0x02, not for the I/O Linc's 0x07, and the I/O Module 2450 Owner's Manual says the output relay responds to Insteon ON and OFF commands; the relay's commands are read from those.",
+            "status": "inferred"
+          }
+        }
+      ]
     },
     {
       "description": "The KeypadLinc code base used by the 6- and 8-button KeypadLinc dimmer and relay keypads, including the 2334 and 2487S keypads. Most extended settings are per button.",
@@ -13799,7 +13999,8 @@
         "The KeypadLinc Line Developer Notes cover firmware 0x41 and later of subcategories 0x1B, 0x1C, 0x0F, 0x1E and 0x2C, and every firmware of 0x41 and 0x42.",
         "In the 6-button layout, the On and Off buttons are group 1 and the four small buttons groups 3 through 6; in the 8-button layout, the buttons are groups 1 through 8.",
         "With the load detached, group 9 controls the load: cmd1 0x19 with cmd2 0x00 reads its level, D11 of the extended Get reply holds the LEDs of groups 1 through 8, a group 1 On or Off sets the group 1 LEDs, and the LED mask Set sets the others.",
-        "To make buttons act as radio buttons, set both the on mask and the off mask of each button to the other buttons in the group, and link each button as a controller with an off-only link (on-level 0x00) to the devices the other buttons control."
+        "To make buttons act as radio buttons, set both the on mask and the off mask of each button to the other buttons in the group, and link each button as a controller with an off-only link (on-level 0x00) to the devices the other buttons control.",
+        "Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. So Data 1 (on-level) of the light and load groups' responder records is the state the load was in when the device was linked. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the Dimmer Keypad 2334 Owner's Manual, the Dimmer Keypad, 6 Buttons 2486DWH6 Owner's Manual, the Dimmer Keypad, 8 Buttons 2486DWH8 Owner's Manual and the On/Off Keypad 2487S Owner's Manual say to set the load to the state the link should recall before linking it as a responder. The values its link data give are what to write when writing the record by hand."
       ],
       "operatingFlags": [
         {
@@ -14659,7 +14860,7 @@
                 "scale": 0.392157,
                 "unit": "percent",
                 "verification": {
-                  "note": "Read from the Insteon Developer's Guide, which gives Data 1 as the on-level and Data 2 as the ramp rate as examples, and from the KeypadLinc Line and LED Bulb Developer Notes.",
+                  "note": "Read from the Insteon Developer's Guide, which gives Data 1 as the on-level and Data 2 as the ramp rate as examples, and from the KeypadLinc Line and LED Bulb Developer Notes. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               },
@@ -14706,7 +14907,7 @@
                 "name": "onLevel",
                 "table": "onOff",
                 "verification": {
-                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records.",
+                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               }
@@ -15439,7 +15640,7 @@
                 "scale": 0.392157,
                 "unit": "percent",
                 "verification": {
-                  "note": "Read from the Insteon Developer's Guide, which gives Data 1 as the on-level and Data 2 as the ramp rate as examples, and from the KeypadLinc Line and LED Bulb Developer Notes.",
+                  "note": "Read from the Insteon Developer's Guide, which gives Data 1 as the on-level and Data 2 as the ramp rate as examples, and from the KeypadLinc Line and LED Bulb Developer Notes. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               },
@@ -15486,7 +15687,7 @@
                 "name": "onLevel",
                 "table": "onOff",
                 "verification": {
-                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records.",
+                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               }
@@ -15964,7 +16165,7 @@
                 "scale": 0.392157,
                 "unit": "percent",
                 "verification": {
-                  "note": "Read from the Insteon Developer's Guide, which gives Data 1 as the on-level and Data 2 as the ramp rate as examples, and from the KeypadLinc Line and LED Bulb Developer Notes.",
+                  "note": "Read from the Insteon Developer's Guide, which gives Data 1 as the on-level and Data 2 as the ramp rate as examples, and from the KeypadLinc Line and LED Bulb Developer Notes. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the Dimmer Plug 2457D2 Owner's Manual says to turn the load on before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               },
@@ -16413,7 +16614,8 @@
         "When it powers up, the bulb sends a SET button broadcast and stays in responder linking mode for 5 seconds; with programming lock on, it doesn't enter linking mode. To link it, put the controller in linking mode, then power the bulb up.",
         "The bulb's levels differ from other dimmers': at 0x0F it gives about a tenth of its full light, and at 0x7F more than half.",
         "The LED Bulb Developer Notes give ramp rate 0x00 as about 2 seconds when setting it and as 9 minutes in their ramp table; the rest of the table runs from 8 minutes at 0x01 to 0.1 second at 0x1F.",
-        "Of the extended Get reply, the LED Bulb Developer Notes use only D7, the ramp rate."
+        "Of the extended Get reply, the LED Bulb Developer Notes use only D7, the ramp rate.",
+        "Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. So Data 1 (on-level) of the light group's responder records is the state the load was in when the device was linked. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder. The values its link data give are what to write when writing the record by hand."
       ],
       "operatingFlags": [
         {
@@ -17273,7 +17475,8 @@
         "The Outdoor ApplianceLinc with RF Developer Notes mark the 0x00 reply N/A, so its Set Operating Flags commands have no bit to read back. It sends them as extended messages with a checksum in D14.",
         "The Outdoor ApplianceLinc with RF Developer Notes give no extended Set for the settings its Get reports.",
         "The device sends its Assign to ALL-Link Group broadcast on power-up, and supports only responder links, whose on-level should be 0xFE and ramp rate 0x1F.",
-        "The Outdoor ApplianceLinc with RF Developer Notes give the device's identity as category 0x01 and subcategory 0x3A, which the catalog gives to the 2672 LED bulb; the catalog keeps 0x02 and 0x38 for the 2634-222."
+        "The Outdoor ApplianceLinc with RF Developer Notes give the device's identity as category 0x01 and subcategory 0x3A, which the catalog gives to the 2672 LED bulb; the catalog keeps 0x02 and 0x38 for the 2634-222.",
+        "Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. So Data 1 (on-level) of the load group's responder records is the state the load was in when the device was linked. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the Outdoor On/Off Plug 2634-222 Owner's Manual says to set the load to the state the link should recall before linking it as a responder. The 0xFE its link data give is what to write when writing the record by hand."
       ],
       "readings": [
         {
@@ -17551,8 +17754,8 @@
         "Seen on a device running firmware 0x42: the extended Get reply's data read 0x01 0x01 0x0F 0xEF 0x00 0x00 0x1C 0xFE 0x20 0x00 0x00 0x01 0x26 0xD1, and no flag change altered it. D12 and D13 changed between some reads with no flag change: later reads gave 0x02 0x4B, then 0x02 0x65, then 0x02 0x6F. They stayed the same across reads while the device was idle and only went up, and one on/off cycle of the load raised them by 10, so they look like they count the device's activity. D3 and D4 (0x0F 0xEF), D9 (0x20) and D12 and D13 aren't explained by any document.",
         "The Outdoor ApplianceLinc with RF Developer Notes give no extended Set for the settings its Get reports.",
         "The Outdoor ApplianceLinc with RF Developer Notes say the device sends its Assign to ALL-Link Group broadcast on power-up and supports only responder links, whose on-level should be 0xFE and ramp rate 0x1F. Seen on a device running firmware 0x42: holding its SET button made it the controller of group 1, but tapping the button sent no group commands over that link. After 10 seconds without power, the load, which had been on, came back on, and no message from the device reached the modem in the 15 seconds after it was plugged back in.",
-        "Seen on a device running firmware 0x42: with both of its ALL-Link database records removed and the modem's ALL-Link database empty, the device acknowledged Light Status Request, with cmd1 0x05 and cmd2 0xFF while the load was on. It answered Get Insteon Engine Version (cmd1 0x0D), Get Operating Flags (cmd1 0x1F, cmd2 0x00) and Ping with a NAK carrying cmd2 0xFF, and didn't answer ID Request. The operating flags (0x42), ramp rate (0x1C) and on-level (0xFE) read the same after it was unlinked and linked again.",
-        "Seen on a device running firmware 0x42: the device writes its own responder record when it's linked remotely, with Start ALL-Linking on the modem and Enter Linking Mode sent to the device, and picks Data 1 itself: none of these links gave the 0xFE above. After one such link, as responder to a Hub 2245's group 0, its record held Data 1 to 3 as 0xFF 0x00 0x00; after a later one, made over its existing record, 0x00 0x00 0x00, and with on-level 0x00 an On to group 0 from the modem left the load off. A fresh link, made after the device had been unlinked, gave 0xFF in Data 1 and 0x1F, the ramp rate, in Data 2. Read/Write ALL-Link Database (cmd1 0x2F) with D2 0x02, writing that record with Data 0xFE 0x1F 0x00, was acknowledged and read back as written; then an On to group 0 from the modem turned the load on and an Off turned it off.",
+        "Seen on a device running firmware 0x42: with both of its ALL-Link database records removed and the modem's ALL-Link database empty, the device acknowledged Light Status Request, with cmd1 0x05 and cmd2 0xFF while the load was on. It answered Get Insteon Engine Version (cmd1 0x0D), Get Operating Flags (cmd1 0x1F, cmd2 0x00) and Ping with a NAK carrying cmd2 0xFF, and didn't answer ID Request. While unlinked, it also rejected Light On (cmd1 0x11) with a NAK carrying cmd2 0xFF. The operating flags (0x42), ramp rate (0x1C) and on-level (0xFE) read the same after it was unlinked and linked again.",
+        "Seen on a device running firmware 0x42: the device writes its own responder record when it's linked remotely, with Start ALL-Linking on the modem and Enter Linking Mode sent to the device, and sets Data 1 from the load's state at the time of the link: 0x00 when the load was off and 0xFF when it was on, never the 0xFE above. Linked as responder to a Hub 2245's group 0 while its load was off, its record held Data 1 to 3 as 0x00 0x1F 0x00; turned on with Light On (cmd1 0x11) first and linked again, 0xFF 0x1F 0x00. Data 2 was 0x1F, the ramp rate, on these links and 0x00 on an earlier one, whose record held 0xFF 0x00 0x00; a link made over that record later gave 0x00 0x00 0x00, and with on-level 0x00 an On to group 0 from the modem left the load off. With Data 1 0xFF, an On to group 0 from the modem turned the load on and an Off turned it off. Its controller record for group 1, to the Hub, held 0x03 0x00 0x00. Read/Write ALL-Link Database (cmd1 0x2F) with D2 0x02, writing that record with Data 0xFE 0x1F 0x00, was acknowledged and read back as written; then an On to group 0 from the modem turned the load on and an Off turned it off.",
         "The Outdoor ApplianceLinc with RF Developer Notes give the device's identity as category 0x01 and subcategory 0x3A, which the catalog gives to the 2672 LED bulb; the catalog keeps 0x02 and 0x38 for the 2634-222."
       ],
       "operatingFlags": [
@@ -18020,7 +18223,8 @@
       "name": "OutletLinc Dimmer",
       "notes": [
         "Earlier sources give ramp rates 0x00 through 0x1F as 9 minutes down to 0.1 second; the later ones make 0x01 8 minutes and 0x00 2 seconds.",
-        "The 2472D Developer Notes' examples show category 0x01 and subcategory 0x0E, which the catalog gives to the 2457D2."
+        "The 2472D Developer Notes' examples show category 0x01 and subcategory 0x0E, which the catalog gives to the 2457D2.",
+        "Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. So Data 1 (on-level) of the light group's responder records is the state the load was in when the device was linked. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the OutletLinc Dimmer 2472D Owner's Manual says to turn the load on before linking it as a responder. The values its link data give are what to write when writing the record by hand."
       ],
       "operatingFlags": [
         {
@@ -18626,7 +18830,7 @@
                 "name": "onLevel",
                 "table": "onOff",
                 "verification": {
-                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records.",
+                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               }
@@ -19805,7 +20009,8 @@
       "id": "switchLincDimmer",
       "name": "SwitchLinc Dimmer",
       "notes": [
-        "Earlier sources give ramp rates 0x00 through 0x1F as 9 minutes down to 0.1 second; the later ones make 0x01 8 minutes and 0x00 2 seconds."
+        "Earlier sources give ramp rates 0x00 through 0x1F as 9 minutes down to 0.1 second; the later ones make 0x01 8 minutes and 0x00 2 seconds.",
+        "Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. So Data 1 (on-level) of the light group's responder records is the state the load was in when the device was linked. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the 2-Wire Dimmer Switch 2474DWH Owner's Manual, the Dimmer Switch 2476D Owner's Manual and the Dimmer Switch 2477D Owner's Manual say to set the load to the state the link should recall before linking it as a responder; the Dimmer Switch 240V 2478D Owner's Manual says to turn the load on before linking it as a responder. The values its link data give are what to write when writing the record by hand."
       ],
       "operatingFlags": [
         {
@@ -20472,7 +20677,7 @@
                 "scale": 0.392157,
                 "unit": "percent",
                 "verification": {
-                  "note": "Read from the Insteon Developer's Guide, which gives Data 1 as the on-level and Data 2 as the ramp rate as examples, and from the KeypadLinc Line and LED Bulb Developer Notes.",
+                  "note": "Read from the Insteon Developer's Guide, which gives Data 1 as the on-level and Data 2 as the ramp rate as examples, and from the KeypadLinc Line and LED Bulb Developer Notes. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the Toggle Dimmer Switch 2466DW Owner's Manual and the Dimmer Switch 2476D Owner's Manual say to set the load to the state the link should recall before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               },
@@ -21076,7 +21281,7 @@
                 "name": "onLevel",
                 "table": "onOff",
                 "verification": {
-                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records.",
+                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the On/Off Switch 2477S Owner's Manual says to set the load to the state the link should recall before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               }
@@ -21693,7 +21898,7 @@
                 "name": "onLevel",
                 "table": "onOff",
                 "verification": {
-                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records.",
+                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               }
@@ -21968,7 +22173,7 @@
                 "name": "onLevel",
                 "table": "onOff",
                 "verification": {
-                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records.",
+                  "note": "Read from the On/Off Outlet and On/Off Module, Dual-Band Developer Notes, which give Data 1 as the on-level; no document describes this product's records. Inferred: seen on two i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48) linked to a Hub 2245, the device itself writes its responder record when it's linked remotely or with the SET button, and takes Data 1 from the load's state at that moment: the two plugs wrote 0x00 when the load was off and 0xFF when it was on. The On/Off Plug 2635-222 Owner's Manual says to make sure the module is on before linking it as a responder; the Toggle On/Off Switch 2466SW Owner's Manual and the On/Off Switch 2476S Owner's Manual say to set the load to the state the link should recall before linking it as a responder. The values given here are what to write when writing the record by hand.",
                   "status": "inferred"
                 }
               }
@@ -24057,7 +24262,8 @@
       "notes": [
         "Seen on a device running Hub firmware 1019: the local interface on port 25105 answers the command pages, such as /3?…=I=3, /buffstatus.xml and /1?XB=M=1, but the settings pages /network.htm and /config.htm don't load, so that device offered no local page for its settings.",
         "Seen on a device running Hub firmware 1019: after an Outdoor On/Off Plug 2634-222 running firmware 0x42 was linked with the Hub as controller, the Hub's controller record for it held Data 1 to 3 as 0x01 0x38 0x42, while the plug had reported 0x02 0x38 0x42 (its category, subcategory and firmware version) in ALL-Linking Completed. Data 2 and 3 matched its subcategory and firmware version, but Data 1 wasn't its category. It was seen again for a controller record of group 0, still with one product only.",
-        "Seen on a device running Hub firmware 1019, with modem firmware 0xA5: the modem answered Beep (0x77), sent without its parameter byte, with a NAK, 0x02 0x77 0x15."
+        "Seen on a device running Hub firmware 1019, with modem firmware 0xA5: the modem answered Beep (0x77), sent without its parameter byte, with a NAK, 0x02 0x77 0x15.",
+        "Seen on a device running Hub firmware 1019: the request /1?L=USERNAME=1=PASSWORD, sent with the current login to set a new one, was answered with HTTP 200, but the login didn't change, either at once or after the Hub was powered off and on; the earlier login still worked and the new one was refused with HTTP 401. So that device offered no local way to change its login."
       ],
       "radio": "dual",
       "role": "both",
@@ -24182,6 +24388,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset should clear them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -24531,6 +24741,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Dimmer Keypad 2334 Owner's Manual gives it, clears them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -28754,6 +28968,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Thermostat Adapter 2441V Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -29526,6 +29744,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Micro Dimmer 2442 Owner's Manual gives it, clears them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -29939,6 +30161,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Micro On/Off 2443 Owner's Manual gives it, clears them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -31789,6 +32015,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Ballast Dimmer 2446 Owner's Manual gives it, clears them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -32001,6 +32231,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset should clear them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -32647,12 +32881,25 @@
       "aliases": [
         "I/O Linc"
       ],
-      "capabilities": [],
+      "capabilities": [
+        {
+          "kind": "onOff"
+        }
+      ],
       "commandSets": [
         {
           "category": "0x07",
           "commandSet": "ioLinc",
           "subcategory": "0x00"
+        },
+        {
+          "category": "0x07",
+          "commandSet": "ioLinc",
+          "subcategory": "0x0D",
+          "verification": {
+            "note": "Read from the 0x07/0x00 version: 0x07/0x0D is the version that detects 50 or 60 Hz power, which Insteon Device Categories (January 2014) lists as model 2450, and no document gives it other commands.",
+            "status": "inferred"
+          }
         }
       ],
       "description": "A plug-in module with a low-voltage sensor input and a relay output. It connects alarm sensors, door strikes, garage door openers, and other contact-closure devices to an Insteon network.",
@@ -32682,10 +32929,32 @@
           "subcategory": "0x0D"
         }
       ],
+      "groups": [
+        {
+          "name": "Sensor and relay",
+          "number": "0x01",
+          "role": "both",
+          "type": "relay",
+          "verification": {
+            "firmware": [
+              "0x41"
+            ],
+            "note": "Seen on a device running firmware 0x41: linked to a Hub 2245, the device wrote its controller record for group 1, to the Hub, with Data 1 to 3 as 0x03 0x00 0x00. Tapping its SET button sent a group 1 broadcast, Light On (cmd1 0x11), then an ALL-Link cleanup to the Hub. The sensor input itself wasn't changed, so its messages weren't seen; neither the I/O Module 2450 Owner's Manual nor the I/O Linc command set gives the input's group number.",
+            "status": "observed"
+          }
+        }
+      ],
       "identities": [
         {
           "category": "0x07",
-          "subcategory": "0x00"
+          "subcategory": "0x00",
+          "verification": {
+            "firmware": [
+              "0x41"
+            ],
+            "note": "Seen on a device running firmware 0x41: ID Request answered with category 0x07, subcategory 0x00 and firmware 0x41, and no product key was reported. Get Insteon Engine Version (cmd1 0x0D) answered with cmd2 0x02, i2CS, as the catalog's engine entry gives. A Hub 2245, with modem firmware 0xA5, kept 0x01 0x00 0x41 as Data 1 to 3 of its controller record for the device in group 0, as it did for other devices: Data 3 there is the firmware, and Data 1 isn't the category.",
+            "status": "observed"
+          }
         },
         {
           "category": "0x07",
@@ -32726,7 +32995,10 @@
               "notes": [
                 "This links the Hub's group 0 to the device as a responder, and the device's group 1 to the Hub as a controller, so the Hub receives the device's reports.",
                 "To add the device without its SET button, have the Hub send it Enter Linking Mode (cmd1 0x09, cmd2 0x01; extended for an i2CS device) right after it starts ALL-Linking, in place of the SET button step.",
-                "A link to the I/O Linc's relay records the relay's state when it's made. To link the relay to a group of the Hub's own, first set the relay to the state the Hub's On command should give (send On, cmd1 0x11, or Off, cmd1 0x13). If the flags read before linking show momentary mode on (bit 3, 0x08), turn it off with Set Operating Flags cmd2 0x07 while linking and back on with cmd2 0x06 afterward; if it was off, leave it off."
+                "A link to the I/O Linc's relay records the relay's state when it's made. To link the relay to a group of the Hub's own, first set the relay to the state the Hub's On command should give (send On, cmd1 0x11, or Off, cmd1 0x13). If the flags read before linking show momentary mode on (bit 3, 0x08), turn it off with Set Operating Flags cmd2 0x07 while linking and back on with cmd2 0x06 afterward; if it was off, leave it off.",
+                "Seen on a device running firmware 0x41: with a Hub 2245's modem already in Start ALL-Linking as controller, holding the SET button for about 3 seconds linked the Hub as its controller. The modem had to be in linking mode before the hold; a hold made before the modem started linking wasn't seen.",
+                "Seen on a device running firmware 0x41: once the device had been linked so, linking it again by its Insteon ID worked for both links with no SET button press: the extended Enter Linking Mode with the modem in Start ALL-Linking as controller of group 0, then Enter Linking Mode for group 1 with the modem in Start ALL-Linking as responder.",
+                "Seen on a device running firmware 0x41: the device wrote its responder record for the Hub's group 0 with Data 1 to 3 as 0x00 0x00 0x00, and its controller record for group 1 as the profile's group gives. Linked again after both links had been removed, it wrote the two records again at other free ALL-Link database addresses."
               ],
               "steps": [
                 {
@@ -32789,7 +33061,7 @@
                 }
               ],
               "verification": {
-                "note": "Assembled from this profile's linking steps, its command set's Reverse the sensor and Momentary relay flags, and the standard Insteon commands Start ALL-Linking, ID Request, Enter Linking Mode and Ping; no document describes adding this product to a Hub. The sensor input's group 1 is assumed: neither the I/O Module 2450 Owner's Manual nor the I/O Linc command set gives its group number.",
+                "note": "Assembled from this profile's linking steps, its command set's Reverse the sensor and Momentary relay flags, and the standard Insteon commands Start ALL-Linking, ID Request, Enter Linking Mode and Ping; no document describes adding this product to a Hub. Neither the I/O Module 2450 Owner's Manual nor the I/O Linc command set gives the sensor input's group number; group 1 is the one a device used, as the profile's group records.",
                 "status": "inferred"
               }
             }
@@ -32819,6 +33091,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Seen on a device running firmware 0x41: with a Hub 2245's modem, these steps removed both links with no SET button press: Enter Unlinking Mode (cmd1 0x0A) for group 1, with the modem joining as responder, then Start ALL-Linking with link code 0xFF and Enter Linking Mode (cmd1 0x09) for the modem's group 0.",
+                "Seen on a device running firmware 0x41: after these steps the device still answered ID Request and Get Insteon Engine Version, because it still held responder records for the same Hub in groups other than 0 and 1, and an i2CS device answers a device that's in its ALL-Link database. Unlinking by the modem's own records leaves the device's records for groups the modem has no record of."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -32873,7 +33149,7 @@
                 }
               ],
               "verification": {
-                "note": "Assembled from the standard Insteon commands Start ALL-Linking, Enter Linking Mode and Enter Unlinking Mode; no document describes removing this product from a Hub. The sensor input's group 1 is assumed: neither the I/O Module 2450 Owner's Manual nor the I/O Linc command set gives its group number.",
+                "note": "Assembled from the standard Insteon commands Start ALL-Linking, Enter Linking Mode and Enter Unlinking Mode; no document describes removing this product from a Hub. Neither the I/O Module 2450 Owner's Manual nor the I/O Linc command set gives the sensor input's group number; group 1 is the one a device used, as the profile's group records.",
                 "status": "inferred"
               }
             }
@@ -32950,7 +33226,8 @@
       "model": "2450",
       "name": "I/O Module",
       "notes": [
-        "0x07/0x0D is the version that detects 50 or 60 Hz power; Insteon Device Categories (January 2014) lists it as model 2450, and HouseLinc as 2450-50-60."
+        "0x07/0x0D is the version that detects 50 or 60 Hz power; Insteon Device Categories (January 2014) lists it as model 2450, and HouseLinc as 2450-50-60.",
+        "Inferred: group 1 is both the sensor, which controls it, and the output relay, which responds to it. The I/O Module 2450 Owner's Manual says the output relay responds to Insteon ON and OFF commands, and the ioLinc command set's relay commands, Light ON (cmd1 0x11) and Light OFF (cmd1 0x13) sent to the device directly, are read from that and the Insteon Developer's Guide; no document gives the I/O Linc's direct commands."
       ],
       "sources": [
         "HouseLinc device catalog",
@@ -33210,6 +33487,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Dimmer DIN Rail Module 2452 Owner's Manual gives it, clears them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -33624,6 +33905,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the On/Off DIN Rail Module 2453 Owner's Manual gives it, clears them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -34248,6 +34533,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Dimmer Module 2456D3 Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -34505,6 +34794,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the On/Off Module 2456S3 Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -34753,6 +35046,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Outdoor On/Off Module 2456S3E Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -35310,6 +35607,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Dimmer Plug 2457D2 Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -35713,6 +36014,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as this profile's reset steps give it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -35945,6 +36250,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Morning Industry Lock Controller 2458A1 Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -36273,6 +36582,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Toggle Dimmer Switch 2466DW Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -36626,6 +36939,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Toggle On/Off Switch 2466SW Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -36934,6 +37251,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the OutletLinc Dimmer 2472D Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -37249,6 +37570,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the On/Off Outlet 2473SWH Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -37704,6 +38029,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the 2-Wire Dimmer Switch 2474DWH Owner's Manual gives it, clears them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -38170,6 +38499,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the In-Line Dimmer Module 2475D Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -38457,6 +38790,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the In-Line Dimmer Module (Dual-Band) 2475DA1 Owner's Manual gives it, clears them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -38831,6 +39168,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the 0-10V Ballast Dimmer 2475DA2 Owner's Manual gives it, clears them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -39195,6 +39536,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Ceiling Fan and Light Control Module 2475F Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -39566,6 +39911,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as this profile's reset steps give it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -39965,6 +40314,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the In-Line On/Off Module with Sense 2475S2 Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -40275,6 +40628,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as this profile's reset steps give it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -40621,6 +40978,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the In-LineLinc On/Off 2475SDB Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -41030,6 +41391,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Dimmer Switch 2476D Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -41722,6 +42087,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the On/Off Switch 2476S Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -41938,6 +42307,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset should clear them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -42681,6 +43054,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as this profile's reset steps give it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -43030,6 +43407,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the On/Off Switch 2477S Owner's Manual gives it, clears them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -43355,6 +43736,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the 240V Load Controller 2477SA Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -43720,6 +44105,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the 240V Load Controller 2477SA Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -44104,6 +44493,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Dimmer Switch 240V 2478D Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -45305,6 +45698,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Dimmer Keypad, 6 Buttons 2486DWH6 Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -45736,6 +46133,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Dimmer Keypad, 8 Buttons 2486DWH8 Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -46164,6 +46565,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as this profile's reset steps give it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -46609,6 +47014,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the On/Off Keypad 2487S Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -46868,6 +47277,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This profile lists no group 1 that the device controls, so what was seen doesn't cover the Enter Unlinking Mode step. This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Integrated Remote Control Thermostat 2491T1E Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -47179,6 +47592,15 @@
           "category": "0x01",
           "commandSet": "globalLine",
           "subcategory": "0x12"
+        },
+        {
+          "category": "0x01",
+          "commandSet": "globalLine",
+          "subcategory": "0x50",
+          "verification": {
+            "note": "The Global Line Developer Notes don't list the 2632-452, sold in Chile. They give this command set's commands for the versions sold in France, Germany, the UK, and Australia and New Zealand (0x01/0x0B, 0x0F, 0x11 and 0x12), and the catalog reads the 2632-452 as the same module.",
+            "status": "inferred"
+          }
         }
       ],
       "engines": [
@@ -47201,6 +47623,15 @@
           "category": "0x01",
           "engine": "i2cs",
           "subcategory": "0x12"
+        },
+        {
+          "category": "0x01",
+          "engine": "i2cs",
+          "subcategory": "0x50",
+          "verification": {
+            "note": "The Global Line Developer Notes don't list the 2632-452, sold in Chile. They describe the versions sold in France, Germany, the UK, and Australia and New Zealand (0x01/0x0B, 0x0F, 0x11 and 0x12) as i2CS devices, and the catalog reads the 2632-452 as the same module.",
+            "status": "inferred"
+          }
         }
       ],
       "groups": [
@@ -47371,6 +47802,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as this profile's reset steps give it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -47546,6 +47981,15 @@
           "category": "0x02",
           "commandSet": "globalLine",
           "subcategory": "0x36"
+        },
+        {
+          "category": "0x02",
+          "commandSet": "globalLine",
+          "subcategory": "0x3A",
+          "verification": {
+            "note": "The Global Line Developer Notes don't list the 2633-452, sold in Chile. They give this command set's commands for the versions sold in France, Germany, the UK, and Australia and New Zealand (0x02/0x2D, 0x30, 0x35 and 0x36), and the catalog reads the 2633-452 as the same module.",
+            "status": "inferred"
+          }
         }
       ],
       "engines": [
@@ -47568,6 +48012,15 @@
           "category": "0x02",
           "engine": "i2cs",
           "subcategory": "0x36"
+        },
+        {
+          "category": "0x02",
+          "engine": "i2cs",
+          "subcategory": "0x3A",
+          "verification": {
+            "note": "The Global Line Developer Notes don't list the 2633-452, sold in Chile. They describe the versions sold in France, Germany, the UK, and Australia and New Zealand (0x02/0x2D, 0x30, 0x35 and 0x36) as i2CS devices, and the catalog reads the 2633-452 as the same module.",
+            "status": "inferred"
+          }
         }
       ],
       "groups": [
@@ -47742,6 +48195,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the On/Off Module 2633 Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -48054,6 +48511,9 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Seen on a device running firmware 0x42: with a Hub 2245's modem, on modem firmware 0xA5, every link between the Hub and the module was removed with no SET button press. First the module's group 1 link: Enter Unlinking Mode (cmd1 0x0A) was sent to the module while the modem joined as responder. Then the modem's group 0 link, as these steps give: the modem started ALL-Linking with link code 0xFF while the module was sent Enter Linking Mode (cmd1 0x09)."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -48169,7 +48629,7 @@
         "Has no X10.",
         "The Outdoor ApplianceLinc with RF Developer Notes give its identity as category 0x01 and subcategory 0x3A, which the catalog gives to the 2672.",
         "Its owner's manual lists it as an Insteon controller; its Developer Notes list it as a responder only. Seen on a device running firmware 0x42: holding its SET button, with a modem in Start ALL-Linking as responder, linked it as the controller of group 1, but tapping its one button, which is also its SET button, switched the load and sent no group commands. The only message seen from it was SET Button Pressed (cmd1 0x01), when the button was held into linking mode. So a controller link can be made, but taps aren't reported, and an app learns its state only with Light Status Request. The catalog gives it the role responder, its practical behavior.",
-        "Seen on a device running firmware 0x42: when a Hub 2245 linked it remotely, as the responder to the Hub's group 0, the module itself wrote its responder record for that link with Data 1 to 3 as 0xFF 0x00 0x00; after a later remote link, made over its existing record, the record, at ALL-Link database address 0x0FFF, read flags 0xA2 and Data 1 to 3 as 0x00 0x00 0x00, and an On to group 0 from the modem left the load off. A fresh remote link, made after the module had been unlinked, gave Data 1 0xFF and Data 2 0x1F. So the module picks Data 1 itself, and none of these links gave 0xFE. The Outdoor ApplianceLinc with RF Developer Notes say to set the on-level to 0xFE and the ramp rate to 0x1F. Read/Write ALL-Link Database (cmd1 0x2F) with D2 0x02, writing that record with Data 0xFE 0x1F 0x00, was acknowledged and read back as written, with only Data 1 to 3 changed; then an On to group 0 from the modem turned the load on and an Off turned it off. Its controller record for group 1, to the Hub, held 0x03 0x00 0x00."
+        "Seen on a device running firmware 0x42: when a Hub 2245 linked it remotely, as the responder to the Hub's group 0, the module itself wrote its responder record for that link, at ALL-Link database address 0x0FFF with flags 0xA2, and set Data 1 from the load's state at the time of the link: 0x00 when the load was off and 0xFF when it was on. Linked while its load was off, the record held Data 1 to 3 as 0x00 0x1F 0x00; turned on with Light On (cmd1 0x11) first and linked again, 0xFF 0x1F 0x00. Data 2 was 0x1F on these links and 0x00 on an earlier one, whose record held 0xFF 0x00 0x00; a link made over that record later read 0x00 0x00 0x00, and with Data 1 0x00 an On to group 0 from the modem left the load off. With Data 1 0xFF, an On to group 0 from the modem turned the load on and an Off turned it off. None of these links gave 0xFE. The Outdoor ApplianceLinc with RF Developer Notes say to set the on-level to 0xFE and the ramp rate to 0x1F. Read/Write ALL-Link Database (cmd1 0x2F) with D2 0x02, writing that record with Data 0xFE 0x1F 0x00, was acknowledged and read back as written, with only Data 1 to 3 changed; then an On to group 0 from the modem turned the load on and an Off turned it off. Its controller record for group 1, to the Hub, held 0x03 0x00 0x00."
       ],
       "radio": "dual",
       "role": "responder",
@@ -48194,7 +48654,14 @@
         {
           "category": "0x02",
           "commandSet": "applianceLincDualBand",
-          "subcategory": "0x37"
+          "subcategory": "0x37",
+          "verification": {
+            "firmware": [
+              "0x48"
+            ],
+            "note": "Seen on a device running firmware 0x48: the operating flags, the ALL-Link database delta, the extended Get reply's X10 address and LED brightness, Beep and the load's on and off levels behaved as this command set gives; the command set's notes list where Get Operating Flags and the extended Get reply differed.",
+            "status": "observed"
+          }
         }
       ],
       "description": "A plug-in relay module that switches lamps, fans, space heaters, and other small appliances on and off remotely. It handles loads of up to 15 amps or 1,800 W.",
@@ -48210,13 +48677,27 @@
           "name": "Load",
           "number": "0x01",
           "role": "both",
-          "type": "load"
+          "type": "load",
+          "verification": {
+            "firmware": [
+              "0x48"
+            ],
+            "note": "Seen on a device running firmware 0x48: once the modem was a responder of the device's group 1, each tap of the load button (on, on again while on, and off) sent a group 1 broadcast, Light On (cmd1 0x11) or Light Off (cmd1 0x13), then an ALL-Link cleanup to the Hub, then a cleanup status report broadcast (cmd1 0x06). Its controller record for group 1, to the Hub, held Data 1 to 3 as 0x03 0x1C 0x01.",
+            "status": "observed"
+          }
         }
       ],
       "identities": [
         {
           "category": "0x02",
-          "subcategory": "0x37"
+          "subcategory": "0x37",
+          "verification": {
+            "firmware": [
+              "0x48"
+            ],
+            "note": "Seen on a device running firmware 0x48: ID Request answered with category 0x02, subcategory 0x37 and firmware 0x48, and Get Insteon Engine Version (cmd1 0x0D) with cmd2 0x02, i2CS, as the catalog's engine entry gives. Product Data Request (cmd1 0x03) was acknowledged and answered with a direct extended message holding product key 0x00 0x00 0x00 in D2 to D4, category 0x02 in D5, subcategory 0x37 in D6 and firmware 0x48 in D7. A Hub 2245 kept 0x01 0x37 0x48 as Data 1 to 3 of its controller record for the device.",
+            "status": "observed"
+          }
         }
       ],
       "lifecycle": {
@@ -48301,7 +48782,8 @@
             "The first device put into linking mode becomes the controller and the second becomes the responder.",
             "As a responder: put the controller in linking mode (press and hold its SET button until it beeps; on a multi-button controller, tap the desired button first), make sure the module is on, then press and hold the module's SET button until it double-beeps.",
             "With the Hub, select Plug-In Module in the app and, when prompted, press and hold the SET button until the module double-beeps.",
-            "The 3-second hold time comes from the On/Off Module, Dual-Band Developer Notes; software can use the Enter Linking Mode command."
+            "The 3-second hold time comes from the On/Off Module, Dual-Band Developer Notes; software can use the Enter Linking Mode command.",
+            "Seen on a device running firmware 0x48: holding the SET button sent SET Button Pressed (cmd1 0x01) and put the module in linking mode; the first tap afterward took it out of linking mode and also sent a group 1 Light On."
           ],
           "steps": [
             {
@@ -48354,6 +48836,9 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Seen on a device running firmware 0x48: with a Hub 2245's modem, on modem firmware 0xA5, these steps removed every link between the Hub and the module with no SET button press. First the module's group 1 link: Enter Unlinking Mode (cmd1 0x0A) was sent to the module while the modem joined as responder. Then the modem's group 0 link: the modem started ALL-Linking with link code 0xFF while the module was sent Enter Linking Mode (cmd1 0x09)."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -48516,6 +49001,11 @@
       },
       "model": "2635-222",
       "name": "On/Off Plug",
+      "notes": [
+        "Seen on a device running firmware 0x48: when a modem sent Light On or Light Off to group 0 (the modem's Send ALL-Link Command, 0x61), the device neither acted on the cleanup nor acknowledged it, although its responder record for the modem's group 0 held on-level 0xFF. The Outdoor On/Off Plug 2634-222 on firmware 0x42 followed the same group 0 commands. Direct commands, such as Light On and Light Off, controlled it normally.",
+        "Seen on a device running firmware 0x48: after 10 seconds without power, the load, which had been on, came back on, and no message from the device reached the modem in the 15 seconds after it was plugged back in.",
+        "Seen on a device running firmware 0x48: with both of its links to the modem removed, the device didn't answer ID Request; it rejected Ping and Beep; it rejected Light On (cmd1 0x11) with a NAK carrying cmd2 0xFF; it answered Get Insteon Engine Version (cmd1 0x0D) and Get Operating Flags (cmd1 0x1F, cmd2 0x00) with a NAK carrying cmd2 0xFF; and it still answered Light Status Request."
+      ],
       "radio": "dual",
       "role": "both",
       "sources": [
@@ -48735,6 +49225,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as this profile's reset steps give it, clears them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -49126,6 +49620,9 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset should clear them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -49393,6 +49890,9 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset should clear them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -51728,6 +52228,24 @@
           "category": "0x10",
           "commandSet": "hiddenDoorSensor",
           "subcategory": "0x11"
+        },
+        {
+          "category": "0x10",
+          "commandSet": "hiddenDoorSensor",
+          "subcategory": "0x14",
+          "verification": {
+            "note": "The Hidden Door Sensor Developer Notes name no version or subcategory; the catalog reads the version sold in Europe as the same sensor as the US version, 0x10/0x11, with the same commands.",
+            "status": "inferred"
+          }
+        },
+        {
+          "category": "0x10",
+          "commandSet": "hiddenDoorSensor",
+          "subcategory": "0x15",
+          "verification": {
+            "note": "The Hidden Door Sensor Developer Notes name no version or subcategory; the catalog reads the version sold in Australia and New Zealand as the same sensor as the US version, 0x10/0x11, with the same commands.",
+            "status": "inferred"
+          }
         }
       ],
       "description": "A wireless, battery-powered sensor recessed into a door frame that reports when the door opens or closes. It can trigger lights and other Insteon devices.",
@@ -52959,6 +53477,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove the modem's group 0 link with no SET button press: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset should clear them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -53296,6 +53818,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Siren 2868-222 Owner's Manual gives it, clears them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -54108,6 +54634,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09). This applies to the firmware versions this profile's engines give as i2CS.",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as the Smoke Bridge 2982-222 Owner's Manual gives it, clears them. This applies to the firmware versions this profile's engines give as i2CS."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -58645,6 +59175,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as this profile's reset steps give it, should clear them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -59689,6 +60223,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as this profile's reset steps give it, should clear them."
+              ],
               "steps": [
                 {
                   "action": "other",
@@ -59934,6 +60472,10 @@
           "alternatives": [
             {
               "description": "From a Hub",
+              "notes": [
+                "Inferred: seen on three i2CS devices (Outdoor On/Off Plug 2634-222 firmware 0x42, On/Off Plug 2635-222 firmware 0x48, I/O Module 2450 firmware 0x41) linked to a Hub 2245, these steps should remove every link between the Hub and the device with no SET button press. First the device's group 1 link: Enter Unlinking Mode (cmd1 0x0A) is sent to the device while the modem joins as responder. Then the modem's group 0 link: the modem starts ALL-Linking with link code 0xFF while the device is sent Enter Linking Mode (cmd1 0x09).",
+                "Inferred: seen on an i2CS device (I/O Module 2450 firmware 0x41) linked to a Hub 2245: unlinking by the modem's own records left the device's records for the Hub's other groups, and an i2CS device answers a device that's in its ALL-Link database. So a device that still answers the Hub after removal may hold other records for it; a factory reset, as this profile's reset steps give it, should clear them."
+              ],
               "steps": [
                 {
                   "action": "other",
