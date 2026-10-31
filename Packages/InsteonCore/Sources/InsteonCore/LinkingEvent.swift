@@ -55,7 +55,7 @@ public protocol LinkingObserver: Sendable {
   /// the modem can send it the message that keeps it awake before it links, as the catalog's
   /// linking from a Hub says for some devices.
   ///
-  /// The modem isn't in a linking mode yet while this waits.
+  /// The modem isn't in a linking mode while this waits.
   ///
   /// - Parameter prompt: The device, with the catalog's steps to wake it.
   /// - Throws: `CancellationError` when the task is canceled while it waits, or another error

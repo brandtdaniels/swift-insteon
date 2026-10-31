@@ -152,7 +152,7 @@ public struct DeviceGroup: Hashable, Sendable {
 
   /// The modes an alarm group sounds in, or an arming group arms the device in, as the
   /// catalog names them, such as `"home"` and `"away"`, or empty for any other group. They're
-  /// read only: nothing arms a device yet.
+  /// read only: no ``Device`` operation arms a device.
   public var armModes: [String]
 
   /// Creates a group.
