@@ -90,6 +90,15 @@ struct InsteonCommand {
         try await ModemCommands.unlink(modem, options: options, names: names, printsJSON: printsJSON)
 
       }
+    case let .remove(options):
+      // Asked before the modem is opened, so a command that can't ask fails at once.
+      let asks: Bool = try options.asksForConfirmation(readsFromTerminal: Terminal.readsFromTerminal)
+
+      try await withModem(invocation) { modem, names in
+
+        try await ModemCommands.remove(modem, options: options, asks: asks, names: names, printsJSON: printsJSON)
+
+      }
     case let .device(device, action):
       try await withModemAndHub(invocation) { modem, names, hub in
 

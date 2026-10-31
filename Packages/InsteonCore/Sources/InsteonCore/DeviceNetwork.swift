@@ -504,6 +504,49 @@ public actor DeviceNetwork {
 
   }
 
+  /// Forgets a device removed from the network: its identity in the ``registry``, its state,
+  /// the ``cache``'s copy of its ALL-Link database, and the records that name it in the copy of
+  /// the modem's ALL-Link database the snapshot holds.
+  ///
+  /// - Parameter device: The device.
+  /// - Returns: The device as the registry knew it, or `nil` if it didn't.
+  func forget(_ device: InsteonAddress) async -> RegisteredDevice? {
+
+    let known: RegisteredDevice? = await registry.forget(device)
+
+    devices[device] = nil
+    await cache.invalidate(device)
+
+    if let records = modemRecords {
+
+      modemRecords = records.filter { (record: AllLinkRecord) -> Bool in record.address != device }
+
+    }
+
+    return known
+
+  }
+
+  /// Every device the network knows something about: those the ``registry`` knows, those with
+  /// a state, and those whose ALL-Link database the ``cache`` holds a copy of, in address
+  /// order.
+  func knownDevices() async -> [InsteonAddress] {
+
+    let registered: [RegisteredDevice] = await registry.devices
+    let copies: [InsteonAddress: AllLinkDatabaseCopy] = await cache.copies
+    var addresses: Set<InsteonAddress> = Set(devices.keys)
+
+    addresses.formUnion(registered.map(\.address))
+    addresses.formUnion(copies.keys)
+
+    return addresses.sorted { (first: InsteonAddress, second: InsteonAddress) -> Bool in
+
+      first.bytes.lexicographicallyPrecedes(second.bytes)
+
+    }
+
+  }
+
   // MARK: - Changes
 
   // A stream of changes, fed by the modem's replies, belongs here: devices' levels as they

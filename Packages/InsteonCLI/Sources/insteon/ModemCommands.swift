@@ -5,7 +5,7 @@ import InsteonLinking
 import InsteonModem
 import InsteonProtocol
 
-/// The commands about the modem itself: `info`, `links`, `link` and `unlink`.
+/// The commands about the modem itself: `info`, `links`, `link`, `unlink` and `remove`.
 enum ModemCommands {
 
   // MARK: - info
@@ -358,6 +358,67 @@ enum ModemCommands {
     if printsJSON {
 
       try Output.json(LinkingJSON.removedLinks(result.removed))
+
+    }
+
+  }
+
+  // MARK: - remove
+
+  /// Removes a device from the network through the network's coordinator, which says what it
+  /// does as it goes, after asking the person first when `asks` is `true`.
+  static func remove(_ modem: Modem, options: RemoveOptions, asks: Bool, names: ProductNames, printsJSON: Bool) async throws {
+
+    try await IdentityStore.withNetwork(modem: modem, hub: nil, names: names) { (cached: CachedNetwork) async throws -> Void in
+
+      let device: InsteonAddress = options.device
+      let known: RegisteredDevice? = await cached.network.registry.device(device)
+      let label: String = LinkingInstructions.deviceLabel(device, profile: known?.deviceDescription.profile)
+
+      if asks {
+
+        let question: String = RemovalText.question(device: label, forcesModemSide: options.forcesModemSide)
+
+        guard try await Terminal.confirm(question) else {
+
+          throw CommandFailure(description: RemovalText.declined(device: label))
+
+        }
+
+      }
+
+      let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? Linker.defaultRemoteLinkingTimeout
+      let observer = LinkingPrompter(names: names, printsJSON: printsJSON, cached: cached)
+      let result: DeviceRemovalResult
+
+      do {
+
+        result = try await cached.network.linking.remove(
+          device,
+          scan: options.scansOtherDevices,
+          forceModemSide: options.forcesModemSide,
+          timeout: timeout,
+          observer: observer
+        )
+
+      } catch let failure as RemoteUnlinkingError {
+
+        throw CommandFailure(description: RemovalText.notRemoved(device, device: label, reason: Names.message(for: failure.underlying)))
+
+      }
+
+      if printsJSON {
+
+        try Output.json(LinkingJSON.removal(result, message: Names.message(for:)))
+
+      }
+
+      // A device whose links aren't confirmed gone stays in the cache, and the command fails.
+      if let reason = result.keptBecause {
+
+        throw CommandFailure(description: RemovalText.kept(device, device: label, reason: reason, message: Names.message(for:)))
+
+      }
 
     }
 

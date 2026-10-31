@@ -78,6 +78,10 @@ public enum Subcommand: Hashable, Sendable {
   /// Puts the modem into unlinking mode and waits for a device's SET button.
   case unlink(UnlinkOptions)
 
+  /// Removes a device from the network: every link between it and the modem, then what the
+  /// identity cache keeps about it, and shows the catalog's factory reset steps.
+  case remove(RemoveOptions)
+
   /// Sends a device a command, or reads its ALL-Link database.
   case device(InsteonAddress, DeviceAction)
 
@@ -386,6 +390,81 @@ public struct UnlinkOptions: Hashable, Sendable {
     self.role = role
     self.timeoutSeconds = timeoutSeconds
     self.removesAllLinks = removesAllLinks
+
+  }
+
+}
+
+/// How `insteon remove` removes a device from the network.
+public struct RemoveOptions: Hashable, Sendable {
+
+  /// The device to remove.
+  public var device: InsteonAddress
+
+  /// Whether to read the ALL-Link databases of the other devices the identity cache knows,
+  /// and list the records that still name the device, as `--scan` asks.
+  public var scansOtherDevices: Bool
+
+  /// Whether to delete the modem's records for the device directly when its links can't be
+  /// removed through it, because it's gone, as `--force-modem-side` asks.
+  public var forcesModemSide: Bool
+
+  /// Whether to remove the device without asking first, as `--yes` asks.
+  public var assumesYes: Bool
+
+  /// How many seconds to wait for each link to be removed, or `nil` for the library's
+  /// default.
+  public var timeoutSeconds: Int?
+
+  /// Creates removal options.
+  ///
+  /// - Parameters:
+  ///   - device: The device to remove.
+  ///   - scansOtherDevices: Whether to look for records that name the device in other
+  ///     devices' ALL-Link databases. Defaults to `false`.
+  ///   - forcesModemSide: Whether to delete the modem's records for a device that's gone.
+  ///     Defaults to `false`.
+  ///   - assumesYes: Whether to remove the device without asking. Defaults to `false`.
+  ///   - timeoutSeconds: How many seconds to wait for each link, or `nil` for the library's
+  ///     default. Defaults to `nil`.
+  public init(
+    device: InsteonAddress,
+    scansOtherDevices: Bool = false,
+    forcesModemSide: Bool = false,
+    assumesYes: Bool = false,
+    timeoutSeconds: Int? = nil
+  ) {
+
+    self.device = device
+    self.scansOtherDevices = scansOtherDevices
+    self.forcesModemSide = forcesModemSide
+    self.assumesYes = assumesYes
+    self.timeoutSeconds = timeoutSeconds
+
+  }
+
+  /// Whether the command asks the person before it removes the device: unless `--yes` is
+  /// given, it asks at a terminal, and refuses to go on without one.
+  ///
+  /// - Parameter readsFromTerminal: Whether standard input is a terminal.
+  /// - Returns: `true` to ask first, or `false` to remove the device without asking.
+  /// - Throws: ``ArgumentError/confirmationNeeded(subcommand:)`` when standard input isn't a
+  ///   terminal and `--yes` isn't given.
+  public func asksForConfirmation(readsFromTerminal: Bool) throws(ArgumentError) -> Bool {
+
+    if assumesYes {
+
+      return false
+
+    }
+
+    guard readsFromTerminal else {
+
+      throw ArgumentError.confirmationNeeded(subcommand: "remove")
+
+    }
+
+    return true
 
   }
 

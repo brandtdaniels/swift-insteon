@@ -4,9 +4,10 @@ import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonProtocol
 
-/// What `insteon link` and `insteon unlink` show as a `DeviceLinkingCoordinator` works: its
-/// progress and instructions on standard error, worded by `LinkingEventText`, and each link
-/// made or removed on standard output, or as JSON.
+/// What `insteon link`, `insteon unlink` and `insteon remove` show as a
+/// `DeviceLinkingCoordinator` works: its progress and instructions on standard error, worded
+/// by `LinkingEventText`, and each link made or removed, a device forgotten, the records other
+/// devices hold for it and its factory reset steps on standard output, or as JSON.
 ///
 /// When the device goes first, the instructions end by asking for Return when standard input
 /// is a terminal, and the modem joins once it's pressed; Control-C stops the wait.
@@ -57,6 +58,30 @@ struct LinkingPrompter: LinkingObserver {
         report(removed)
 
       }
+    case let .forgotten(forgotten):
+      if !printsJSON {
+
+        lines(RemovalText.forgotten(forgotten))
+
+      }
+    case let .leftoverRecords(scan):
+      if !printsJSON {
+
+        lines(RemovalText.leftoverRecords(scan, message: Names.message(for:)))
+
+      }
+    case let .modemRecordsDeleted(device, records):
+      if !printsJSON {
+
+        lines(RemovalText.modemRecordsDeleted(device, records))
+
+      }
+    case let .factoryReset(reset):
+      if !printsJSON {
+
+        lines(RemovalText.factoryReset(reset))
+
+      }
     default:
       for line in LinkingEventText.notes(for: event, message: Names.message(for:)) {
 
@@ -80,6 +105,17 @@ struct LinkingPrompter: LinkingObserver {
     if waits {
 
       try await Terminal.waitForReturn()
+
+    }
+
+  }
+
+  /// Prints lines on standard output.
+  private func lines(_ lines: [String]) {
+
+    for line in lines {
+
+      Output.line(line)
 
     }
 
