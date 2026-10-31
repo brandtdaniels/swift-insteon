@@ -389,7 +389,7 @@ struct PowerLincControllerTests {
     let connection = StuckConnection()
     let controller = PowerLincController(connection: connection, retryPolicy: policy, clock: clock)
 
-    try await withRunning({ try await controller.run() }) {
+    _ = try await withRunning({ try await controller.run() }) {
 
       await #expect(throws: PowerLincControllerError.timedOut(.getVersion)) {
 
