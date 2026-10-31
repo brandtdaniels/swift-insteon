@@ -253,6 +253,7 @@ enum ModemCommands {
         group: options.group,
         twoWay: twoWay,
         setButtonTimeout: timeout,
+        usesCatalogLegs: options.followsCatalogLegs,
         observer: observer
       )
 
@@ -264,7 +265,13 @@ enum ModemCommands {
 
     if printsJSON {
 
-      try Output.json(LinkingJSON.report(result))
+      try Output.json(LinkingJSON.report(result, message: Names.message(for:)))
+
+    }
+
+    if let incomplete = LinkingEventText.incompleteLegs(result, message: Names.message(for:)) {
+
+      throw CommandFailure(description: incomplete)
 
     }
 

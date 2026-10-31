@@ -134,6 +134,12 @@ actor LinkingRecorder: LinkingObserver {
 
   }
 
+  func waitUntilDeviceIsAwake(_ prompt: WakePrompt) async throws {
+
+    lines.append("wake \(prompt.device) steps \(prompt.steps.count)")
+
+  }
+
   static func direction(_ direction: LinkingDirection) -> String {
 
     direction == .linking ? "linking" : "unlinking"
@@ -143,6 +149,64 @@ actor LinkingRecorder: LinkingObserver {
   static func role(_ role: ModemRole) -> String {
 
     role == .controller ? "controller" : "responder"
+
+  }
+
+  static func leg(_ leg: LinkLeg) -> String {
+
+    switch leg {
+    case .first:
+      return "first"
+    case .linkBack:
+      return "back"
+    case let .hubLinking(index):
+      return "leg \(index + 1)"
+    }
+
+  }
+
+  static func unidentified(_ reason: UnidentifiedReason) -> String {
+
+    switch reason {
+    case .notLinked:
+      return "not linked"
+    case .noIdentity:
+      return "no identity"
+    case .failed:
+      return "failed"
+    }
+
+  }
+
+  static func keepAwake(_ event: KeepAwakeEvent) -> String {
+
+    switch event {
+    case let .sending(device, timing):
+      return "sending \(device) \(timing)"
+    case let .sent(device):
+      return "sent \(device)"
+    case let .notSent(device, _):
+      return "not sent \(device)"
+    case let .releasing(device):
+      return "releasing \(device)"
+    case let .released(device):
+      return "released \(device)"
+    case let .notReleased(device, _):
+      return "not released \(device)"
+    }
+
+  }
+
+  static func join(_ join: HubLinkingJoin) -> String {
+
+    switch join {
+    case .enterLinkingMode:
+      return "Enter Linking Mode"
+    case .setButton:
+      return "SET button"
+    case .deviceFirst:
+      return "device first"
+    }
 
   }
 
@@ -181,6 +245,8 @@ actor LinkingRecorder: LinkingObserver {
     switch event {
     case let .identifying(device):
       return "identifying \(device)"
+    case let .notIdentifiedBeforeLinking(device, reason):
+      return "not identified \(device) \(unidentified(reason))"
     case let .turningOnBeforeLinking(device):
       return "turning on \(device)"
     case let .notTurnedOnBeforeLinking(device, _):
@@ -191,6 +257,8 @@ actor LinkingRecorder: LinkingObserver {
       return "linking remotely \(device) as \(role(modemRole))"
     case let .fallback(.setButtonLinking(device, _)):
       return "fallback: SET button linking \(device)"
+    case let .fallback(.setButtonLeg(leg, _)):
+      return "fallback: SET button linking \(leg.device)\(leg.isRemoteLinkingExpectedToWork ? " expected to work" : "")"
     case let .fallback(.setButtonUnlinking(device, _, steps)):
       return "fallback: SET button unlinking \(device) steps \(steps.count)"
     case let .pressSETButton(prompt):
@@ -200,7 +268,21 @@ actor LinkingRecorder: LinkingObserver {
     case let .linkingBack(device, group):
       return "linking back \(device) group \(group)"
     case let .linked(linked):
-      return "linked \(linked.link.address) group \(linked.link.group) \(linked.link.mode?.name ?? "unknown") \(linked.leg == .first ? "first" : "back")"
+      return "linked \(linked.link.address) group \(linked.link.group) \(linked.link.mode?.name ?? "unknown") \(leg(linked.leg))"
+    case let .hubLinkingLegStarted(leg):
+      return "leg \(leg.index + 1)/\(leg.count) started \(role(leg.modemRole)) \(leg.modemGroup) device group \(leg.deviceGroup)"
+    case let .hubLinkingLegJoined(leg, join):
+      return "leg \(leg.index + 1) joined by \(self.join(join))"
+    case let .hubLinkingLegCompleted(leg, link):
+      return "leg \(leg.index + 1) completed group \(link.group) \(link.mode?.name ?? "unknown")"
+    case let .hubLinkingLegFailed(leg, _, notRun):
+      return "leg \(leg.index + 1) failed, not run \(notRun.count)"
+    case let .hubLinkingStopped(result, _):
+      return "stopped after \(result.links.count) of \(result.legs.count) legs"
+    case let .allGroupsWhen(leg, condition):
+      return "leg \(leg.index + 1) all groups when \(condition.flag) \(condition.isSet)"
+    case let .keepAwake(keepAwake):
+      return "keep awake: \(self.keepAwake(keepAwake))"
     case let .readingModemLinks(device, purpose):
       return "reading modem links \(device) \(purpose == .findingLinksToRemove ? "to remove" : "for group")"
     case let .unlinkGroupChosen(device, group, isFromModemRecords):
@@ -394,16 +476,43 @@ struct DeviceLinkingCoordinatorTests {
 
   }
 
-  @Test(.timeLimit(.minutes(1))) func doesntTurnOnADeviceTheRegistryDoesntKnow() async throws {
+  @Test(.timeLimit(.minutes(1))) func identifiesALightTheRegistryDoesntKnowThenTurnsItOn() async throws {
 
     let modem = InMemoryModem()
     let lamp: InsteonAddress = LinkingExample.lamp
     await modem.setIdentity(pressed(LinkingExample.lampIdentity, of: lamp))
+    let network: DeviceNetwork = self.network(modem)
     let recorder = LinkingRecorder()
 
-    _ = try await self.network(modem).linking.link(lamp, as: .controller, observer: recorder)
+    _ = try await network.linking.link(lamp, as: .controller, observer: recorder)
 
-    #expect(await recorder.lines.first == "not turning on \(lamp)")
+    // ID Request first, so the registry knows the lamp is a light, and Light On follows.
+    #expect(Array(await recorder.lines.prefix(2)) == ["identifying \(lamp)", "turning on \(lamp)"])
+    #expect(await modem.levels[lamp] == 0xFF)
+    #expect(await network.registry.device(lamp)?.identity == LinkingExample.lampIdentity)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func doesntTurnOnADeviceThatDoesntReportItsIdentity() async throws {
+
+    let modem = InMemoryModem()
+    let lamp: InsteonAddress = LinkingExample.lamp
+    // An i2CS device that isn't linked to the modem rejects ID Request.
+    await modem.setUnlinked(lamp)
+    let recorder = LinkingRecorder()
+
+    let result: DeviceLinkingResult = try await self.network(modem).linking.link(lamp, as: .controller, observer: recorder)
+
+    #expect(result.links.map(\.mode) == [.controller])
+    #expect(result.legs.isEmpty)
+    #expect(await recorder.lines == [
+      "identifying \(lamp)",
+      "not identified \(lamp) not linked",
+      "not turning on \(lamp)",
+      "linking remotely \(lamp) as controller",
+      "identifying \(lamp)",
+      "linked \(lamp) group 0 controller first"
+    ])
     #expect(await modem.levels[lamp] == nil)
 
   }

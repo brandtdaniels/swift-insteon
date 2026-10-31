@@ -72,6 +72,33 @@ public actor InMemoryModem: LinkingModem {
   /// The linking steps taken, in order.
   public private(set) var linkingSteps: [LinkingStep] = []
 
+  /// An extended message sent to a device: its command and its user data, integrity bytes
+  /// included.
+  public struct ExtendedRequest: Hashable, Sendable {
+
+    /// The device it was sent to.
+    public let device: InsteonAddress
+
+    /// Its cmd1 and cmd2.
+    public let command: Command
+
+    /// Its user data, D1 through D14.
+    public let userData: UserData
+
+    /// Creates a request.
+    public init(device: InsteonAddress, command: Command, userData: UserData) {
+
+      self.device = device
+      self.command = command
+      self.userData = userData
+
+    }
+
+  }
+
+  /// Every extended message sent to a device, in order, whatever it does.
+  public private(set) var extendedRequests: [ExtendedRequest] = []
+
   /// The engine each device reports. Devices not listed report i2.
   public var engines: [InsteonAddress: InsteonEngine] = [:]
 
@@ -468,6 +495,8 @@ public actor InMemoryModem: LinkingModem {
   public func request(_ message: ExtendedMessage, timeout: Duration) async throws -> ReceivedMessage {
 
     let device = message.destination
+
+    extendedRequests.append(ExtendedRequest(device: device, command: message.command, userData: message.userData))
 
     if [0x09, 0x0A].contains(message.command.command1) {
 

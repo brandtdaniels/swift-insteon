@@ -141,6 +141,20 @@ public struct DeviceGroup: Hashable, Sendable {
   /// or a fan's speeds.
   public var actionLabels: [String]
 
+  /// The parts of the group's load ``Device/turnOn(outputs:group:)`` and
+  /// ``Device/turnOff(outputs:group:)`` switch on their own, such as a ballast dimmer's two
+  /// relays, or empty when it has none.
+  public var outputs: [DeviceOutput]
+
+  /// The operating flag, by its key, and the state it must be in for ``DeviceGroup/outputs``
+  /// to be switched on their own, such as `relayMode` set, or `nil` when they always can be.
+  public var outputsActiveWhen: DeviceFlagCondition?
+
+  /// The modes an alarm group sounds in, or an arming group arms the device in, as the
+  /// catalog names them, such as `"home"` and `"away"`, or empty for any other group. They're
+  /// read only: no ``Device`` operation arms a device.
+  public var armModes: [String]
+
   /// Creates a group.
   ///
   /// - Parameters:
@@ -152,6 +166,11 @@ public struct DeviceGroup: Hashable, Sendable {
   ///   - canTurnOnAndOff: Whether the group can be turned on and off.
   ///   - hasStatus: Whether the group's state can be read.
   ///   - actionLabels: The names of what the group can be told to do.
+  ///   - outputs: The parts of the group's load that can be switched on their own. Defaults to
+  ///     none.
+  ///   - outputsActiveWhen: The flag state under which the outputs can be switched on their
+  ///     own. Defaults to `nil`.
+  ///   - armModes: The modes an alarm or arming group names. Defaults to none.
   public init(
     number: Int,
     name: String,
@@ -160,7 +179,10 @@ public struct DeviceGroup: Hashable, Sendable {
     canDim: Bool,
     canTurnOnAndOff: Bool,
     hasStatus: Bool,
-    actionLabels: [String]
+    actionLabels: [String],
+    outputs: [DeviceOutput] = [],
+    outputsActiveWhen: DeviceFlagCondition? = nil,
+    armModes: [String] = []
   ) {
 
     self.number = number
@@ -171,6 +193,57 @@ public struct DeviceGroup: Hashable, Sendable {
     self.canTurnOnAndOff = canTurnOnAndOff
     self.hasStatus = hasStatus
     self.actionLabels = actionLabels
+    self.outputs = outputs
+    self.outputsActiveWhen = outputsActiveWhen
+    self.armModes = armModes
+
+  }
+
+}
+
+/// An operating flag, by its key, and a state it's in, such as `relayMode` set.
+public struct DeviceFlagCondition: Hashable, Sendable {
+
+  /// The flag's key in the catalog.
+  public var flag: String
+
+  /// Whether the flag is set.
+  public var isSet: Bool
+
+  /// Creates a condition.
+  ///
+  /// - Parameters:
+  ///   - flag: The flag's key in the catalog.
+  ///   - isSet: Whether the flag is set.
+  public init(flag: String, isSet: Bool) {
+
+    self.flag = flag
+    self.isSet = isSet
+
+  }
+
+}
+
+/// A part of a ``DeviceGroup``'s load that one command can switch on its own or with others,
+/// such as one of a ballast dimmer's two relays.
+public struct DeviceOutput: Hashable, Sendable {
+
+  /// The output's key in the catalog, such as `"relay1"`, which
+  /// ``Device/turnOn(outputs:group:)`` takes.
+  public var key: String
+
+  /// What a control calls the output, such as `"Relay 1"`.
+  public var label: String
+
+  /// Creates an output.
+  ///
+  /// - Parameters:
+  ///   - key: The output's key in the catalog.
+  ///   - label: What a control calls the output.
+  public init(key: String, label: String) {
+
+    self.key = key
+    self.label = label
 
   }
 

@@ -143,7 +143,18 @@ public struct Device: Sendable {
         canDim: model.canDim(group),
         canTurnOnAndOff: model.canTurnOnAndOff(group),
         hasStatus: model.canRead(group),
-        actionLabels: group.type.actions.map { (action: GroupType.Action) -> String in action.label }
+        actionLabels: group.type.actions.map { (action: GroupType.Action) -> String in action.label },
+        outputs: (group.type.outputs?.bits ?? []).map { (output: GroupType.Outputs.Output) -> DeviceOutput in
+
+          DeviceOutput(key: output.name.rawValue, label: output.label)
+
+        },
+        outputsActiveWhen: group.type.outputs?.activeWhen.map { (condition: DeviceProfile.Group.Condition) -> DeviceFlagCondition in
+
+          DeviceFlagCondition(flag: condition.flag.rawValue, isSet: condition.isSet)
+
+        },
+        armModes: group.type.armModes.map(\.rawValue)
       )
 
     }
@@ -267,6 +278,121 @@ public struct Device: Sendable {
     try await send(message, for: .turnOff)
 
     await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? 0x00 : nil)
+
+  }
+
+  /// Turns some of a group's outputs on, such as one of a ballast dimmer's two relays, with its
+  /// type's `on` action, and leaves the others as they are.
+  ///
+  /// The catalog's ``DeviceGroup/outputs`` give each output a bit; the bits of the outputs
+  /// named are ORed together into the action's parameter. When the catalog says the outputs
+  /// are the load only while an operating flag is in a state, such as relay mode, the device is
+  /// asked for the flag with Get Operating Flags first, and nothing is switched otherwise.
+  ///
+  /// - Parameters:
+  ///   - outputs: The outputs' keys, such as `"relay1"`, or their labels, in any case.
+  ///   - group: The group, or `nil` for the device's main group. Defaults to `nil`.
+  /// - Returns: What was done. No level is reported.
+  /// - Throws: ``DeviceControlError/noSuchOutput(_:group:product:)`` for an output the group
+  ///   doesn't have, ``DeviceControlError/outputsInactive(group:product:)`` when the flag isn't
+  ///   in its state, the other ``DeviceControlError`` refusals of ``turnOn(level:group:)``,
+  ///   and the modem's errors.
+  @discardableResult
+  public func turnOn(outputs: [String], group: Int? = nil) async throws -> DeviceTurnOnResult {
+
+    let number: Int = try await switchOutputs(outputs, group: group, action: DeviceControlModel.onAction, for: .turnOn)
+
+    return DeviceTurnOnResult(group: number, level: nil, ignoredLevel: nil)
+
+  }
+
+  /// Turns some of a group's outputs off with its type's `off` action, as
+  /// ``turnOn(outputs:group:)`` turns them on, and leaves the others as they are.
+  ///
+  /// - Parameters:
+  ///   - outputs: The outputs' keys or labels.
+  ///   - group: The group, or `nil` for the device's main group. Defaults to `nil`.
+  /// - Throws: The errors of ``turnOn(outputs:group:)``.
+  public func turnOff(outputs: [String], group: Int? = nil) async throws {
+
+    _ = try await switchOutputs(outputs, group: group, action: DeviceControlModel.offAction, for: .turnOff)
+
+  }
+
+  /// Sends a group's action with the named outputs' bits ORed into its parameter, once the
+  /// outputs are the load.
+  ///
+  /// - Returns: The group's number.
+  private func switchOutputs(_ names: [String], group number: Int?, action name: SettingName, for operation: DeviceOperation) async throws -> Int {
+
+    let model: DeviceControlModel = try await controlModel()
+    let target: DeviceControlModel.Group = try controlGroup(number, in: model, for: operation)
+    let groupNumber: Int = Int(target.number.rawValue)
+
+    guard let action = target.type.action(named: name), action.value == nil else {
+
+      throw DeviceControlError.unsupported(operation, product: model.product)
+
+    }
+
+    guard let outputs = target.type.outputs, !names.isEmpty else {
+
+      throw DeviceControlError.noSuchOutput(names.first ?? "", group: groupNumber, product: model.product)
+
+    }
+
+    var mask: UInt8 = 0
+
+    for name in names {
+
+      let wanted: String = name.lowercased()
+
+      guard let output = outputs.bits.first(where: { (output: GroupType.Outputs.Output) -> Bool in
+
+        output.name.rawValue.lowercased() == wanted || output.label.lowercased() == wanted
+
+      }) else {
+
+        throw DeviceControlError.noSuchOutput(name, group: groupNumber, product: model.product)
+
+      }
+
+      mask |= output.mask
+
+    }
+
+    let message: DeviceControlModel.ActionMessage = try model.message(for: action, of: target, value: mask, to: address)
+
+    guard model.canAddress(target, with: name) else {
+
+      throw DeviceControlError.unaddressable(operation, group: groupNumber, product: model.product)
+
+    }
+
+    if let condition = outputs.activeWhen {
+
+      guard let flag = model.commandSet?.operatingFlag(named: condition.flag) else {
+
+        throw DeviceControlError.outputsInactive(group: groupNumber, product: model.product)
+
+      }
+
+      let reply: ReceivedMessage = try await request(StandardMessage(to: address, command: flag.readCommand), timeout: network.requestTimeout, for: .control(operation))
+
+      guard flag.isSet(in: reply) == condition.isSet else {
+
+        throw DeviceControlError.outputsInactive(group: groupNumber, product: model.product)
+
+      }
+
+    }
+
+    try await send(message, for: operation)
+
+    // The level isn't the outputs' mask, so only that the device answered is recorded.
+    await network.recordAnswer(of: address, level: nil)
+
+    return groupNumber
 
   }
 
@@ -789,6 +915,229 @@ public struct Device: Sendable {
 
   }
 
+  /// Sends a message the catalog's linking from a Hub names, such as the one that keeps a
+  /// battery-powered device awake while it links, through the same guards as every other
+  /// message the device is sent.
+  ///
+  /// A command set entry gives the bytes: a flag command, or a standard or extended command,
+  /// with `duration`'s whole seconds, or else its parameter's largest value, for a parameter;
+  /// or an operating flag, set or cleared with Set Operating Flags in the form the device takes.
+  /// A message given by its bytes is sent as given. Nothing else is written: no other flag,
+  /// and never one the catalog or the floor guards, nor a command the catalog never sends.
+  ///
+  /// - Parameters:
+  ///   - message: The message.
+  ///   - duration: How long the message keeps the device awake, if the catalog says.
+  ///   - writableFlags: The operating flags a linking flow may write.
+  /// - Throws: ``DeviceControlError/unsupported(_:product:)`` for a message that's never
+  ///   sent, ``DeviceControlError/missingCommand(_:product:)`` for one the command set
+  ///   doesn't describe, `FieldError` for a parameter that doesn't fit, and the modem's
+  ///   errors.
+  func sendLinkingMessage(_ message: DeviceLifecycle.HubLinking.HubMessage, duration: Duration?, writableFlags: Set<SettingName>) async throws {
+
+    let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription
+    let commands: CommandSet? = description?.commandSet
+    let product: String = description.map { (described: DeviceDescription) -> String in DeviceControlModel.product(of: described) } ?? "this device"
+    let refused = DeviceControlError.unsupported(.keepAwake, product: product)
+    let purpose: SendPurpose = .control(.keepAwake)
+
+    // A linking flow writes only the flags the catalog lets it. The registry can change while
+    // a device links, so a flag outside them is refused rather than asserted.
+    if let written = DeviceLinkingCoordinator.flagWritten(by: message, in: commands) {
+
+      guard writableFlags.contains(written) else {
+
+        throw refused
+
+      }
+
+    }
+
+    switch message {
+    case let .bytes(raw):
+      if raw.isExtended {
+
+        var userData = UserData()
+
+        for byte in raw.fixedBytes {
+
+          userData[byte.position] = byte.value
+
+        }
+
+        _ = try await request(ExtendedMessage(to: address, command: raw.command, userData: userData, integrity: raw.integrity.scheme), timeout: Modem.defaultExtendedRequestTimeout, for: purpose)
+
+      } else {
+
+        _ = try await request(StandardMessage(to: address, command: raw.command), timeout: network.requestTimeout, for: purpose)
+
+      }
+
+    case let .flag(condition):
+      guard let commands, let description, let flag = commands.operatingFlag(named: condition.flag) else {
+
+        throw DeviceControlError.missingCommand(condition.flag.rawValue, product: product)
+
+      }
+
+      // A kept flag is never written, and a never-set flag is only cleared.
+      switch DeviceSettingSafety.rule(for: flag) {
+      case .keep?:
+        throw refused
+      case .neverSet? where condition.isSet:
+        throw refused
+      default:
+        break
+      }
+
+      guard let change = commands.change(for: flag, setting: condition.isSet), !DeviceSettingSafety.sendsNeverSentCommand(change, in: commands) else {
+
+        throw refused
+
+      }
+
+      switch change {
+      case let .setOperatingFlags(command2):
+        try await sendSetOperatingFlags(command2, extendedWhen: flag.extendedWhen, description: description, commands: commands, purpose: purpose)
+      case let .standardCommand(command):
+        _ = try await request(StandardMessage(to: address, command: try command.command()), timeout: network.requestTimeout, for: purpose)
+      }
+
+    case let .command(name):
+      guard let commands, let description else {
+
+        throw DeviceControlError.missingCommand(name.rawValue, product: product)
+
+      }
+
+      if let flagCommand = commands.flagCommands.first(where: { (entry: OperatingFlagCommand) -> Bool in entry.name == name }) {
+
+        guard !DeviceSettingSafety.isNeverSent(flagCommand.sendGuard), !DeviceSettingSafety.neverSentNames.contains(name) else {
+
+          throw refused
+
+        }
+
+        try await sendSetOperatingFlags(
+          flagCommand.command.command.command2,
+          extendedWhen: flagCommand.extendedWhen,
+          description: description,
+          commands: commands,
+          purpose: purpose
+        )
+
+      } else if let standard = commands.standardCommand(named: name) {
+
+        guard DeviceSettingSafety.isSendable(standard, in: commands) else {
+
+          throw refused
+
+        }
+
+        let command: Command
+
+        switch standard.command2 {
+        case .fixed:
+          command = try standard.command()
+        case let .parameter(field):
+          command = try standard.command(Self.durationValue(duration, for: field))
+        }
+
+        _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, for: purpose)
+
+      } else if let extended = commands.extendedCommand(named: name) {
+
+        guard DeviceSettingSafety.isSendable(extended, in: commands) else {
+
+          throw refused
+
+        }
+
+        let takesDuration: MessageField? = Self.durationParameter(of: extended)
+        var values: [SettingName: FieldValue] = [:]
+
+        // Only the parameter that takes the duration gets it; any other is zero.
+        for parameter in extended.parameters {
+
+          values[parameter.name] = parameter == takesDuration ? Self.durationValue(duration, for: parameter) : Self.zeroValue(for: parameter)
+
+        }
+
+        _ = try await request(try extended.message(to: address, values: values), timeout: Modem.defaultExtendedRequestTimeout, for: purpose)
+
+      } else {
+
+        throw DeviceControlError.missingCommand(name.rawValue, product: product)
+
+      }
+    }
+
+    await network.recordAnswer(of: address, level: nil)
+
+  }
+
+  /// The parameter of a keep-awake extended command that takes how long to stay awake: the
+  /// one in seconds, or else its only number, or `nil` when neither says.
+  static func durationParameter(of command: DeviceExtendedCommand) -> MessageField? {
+
+    let numbers: [MessageField] = command.parameters.filter { (field: MessageField) -> Bool in
+
+      if case .number = field.kind {
+
+        return true
+
+      }
+
+      return false
+
+    }
+
+    let seconds: MessageField? = numbers.first { (field: MessageField) -> Bool in
+
+      if case let .number(_, _, unit) = field.kind, unit == .seconds {
+
+        return true
+
+      }
+
+      return false
+
+    }
+
+    return seconds ?? (numbers.count == 1 ? numbers[0] : nil)
+
+  }
+
+  /// A parameter's value whose bits are all zero, for a parameter a keep-awake message leaves
+  /// as it is.
+  static func zeroValue(for field: MessageField) -> FieldValue {
+
+    switch field.kind {
+    case .number:
+      return .number(0)
+    case .buttons:
+      return .buttons([])
+    case .enumeration:
+      return .unnamed(0)
+    case .flags:
+      return .flags([])
+    case .boolean:
+      return .boolean(false)
+    }
+
+  }
+
+  /// The value of a keep-awake command's parameter: `duration`'s whole seconds, or else the
+  /// parameter's largest value, kept within the parameter's range.
+  static func durationValue(_ duration: Duration?, for field: MessageField) -> FieldValue {
+
+    let range: ClosedRange<Double> = field.range ?? 0...255
+    let seconds: Double = duration.map { (duration: Duration) -> Double in Double(duration.components.seconds) } ?? range.upperBound
+
+    return .number(min(max(seconds, range.lowerBound), range.upperBound))
+
+  }
+
   /// The command set's Beep, if the device may be sent it.
   static func sendableBeep(in commands: CommandSet) -> DeviceStandardCommand? {
 
@@ -1232,8 +1581,28 @@ public struct Device: Sendable {
   /// standard otherwise.
   private func sendFlag(_ command2: UInt8, flag: OperatingFlag, description: DeviceDescription, commands: CommandSet) async throws {
 
+    try await sendSetOperatingFlags(
+      command2,
+      extendedWhen: flag.extendedWhen,
+      description: description,
+      commands: commands,
+      purpose: .setting(label: SettingItem(flag: flag).label)
+    )
+
+  }
+
+  /// Sends Set Operating Flags with a cmd2 as the device takes it: extended with a checksum
+  /// for i2CS, extended with the command repeated when the `extendedWhen` flag is set, and
+  /// standard otherwise.
+  private func sendSetOperatingFlags(
+    _ command2: UInt8,
+    extendedWhen: SettingName?,
+    description: DeviceDescription,
+    commands: CommandSet,
+    purpose: SendPurpose
+  ) async throws {
+
     let command = StandardDirectCommand.setOperatingFlags(flag: command2)
-    let purpose: SendPurpose = .setting(label: SettingItem(flag: flag).label)
 
     // An i2CS device gets the extended form with a checksum even when the flag names an
     // extendedWhen flag: i2CS is checked first, so the guarding flag isn't read for it.
@@ -1245,7 +1614,7 @@ public struct Device: Sendable {
 
     }
 
-    if let name = flag.extendedWhen, let guarding = commands.operatingFlag(named: name) {
+    if let name = extendedWhen, let guarding = commands.operatingFlag(named: name) {
 
       let reply: ReceivedMessage? = try await answer(StandardMessage(to: address, command: guarding.readCommand))
 

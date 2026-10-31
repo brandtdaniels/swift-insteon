@@ -316,6 +316,19 @@ public struct LinkOptions: Hashable, Sendable {
   /// How many seconds to wait for the SET button, or `nil` for the library's default.
   public var timeoutSeconds: Int?
 
+  /// Whether `--group` was given, even with the default group, so the device is linked in
+  /// that group rather than by the Insteon device catalog's links to a Hub.
+  public var isGroupGiven: Bool
+
+  /// Whether the Insteon device catalog's links to a Hub may be made: the modem is the
+  /// controller, not in either role, and no group was given. The library still checks the
+  /// other options.
+  public var followsCatalogLegs: Bool {
+
+    role == .controller && !isGroupGiven
+
+  }
+
   /// Creates linking options.
   ///
   /// - Parameters:
@@ -327,12 +340,15 @@ public struct LinkOptions: Hashable, Sendable {
   ///     `TwoWayLinking.whenDeviceControls`.
   ///   - timeoutSeconds: How many seconds to wait, or `nil` for the library's default.
   ///     Defaults to `nil`.
+  ///   - isGroupGiven: Whether `--group` was given, or `nil` for whether `group` isn't the
+  ///     default. Defaults to `nil`.
   public init(
     device: InsteonAddress? = nil,
     group: AllLinkGroupNumber = LinkOptions.defaultGroup,
     role: LinkingRole = .controller,
     twoWay: TwoWayLinking = .whenDeviceControls,
-    timeoutSeconds: Int? = nil
+    timeoutSeconds: Int? = nil,
+    isGroupGiven: Bool? = nil
   ) {
 
     self.device = device
@@ -340,6 +356,7 @@ public struct LinkOptions: Hashable, Sendable {
     self.role = role
     self.twoWay = twoWay
     self.timeoutSeconds = timeoutSeconds
+    self.isGroupGiven = isGroupGiven ?? (group != LinkOptions.defaultGroup)
 
   }
 

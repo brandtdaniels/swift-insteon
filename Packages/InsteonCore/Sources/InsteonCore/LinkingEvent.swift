@@ -51,15 +51,98 @@ public protocol LinkingObserver: Sendable {
   ///   to stop the link or unlink before the modem joins.
   func waitUntilDeviceIsReady(_ prompt: DeviceFirstPrompt) async throws
 
+  /// Asks a person to wake a battery-powered device, and returns once they say it's awake, so
+  /// the modem can send it the message that keeps it awake before it links, as the catalog's
+  /// linking from a Hub says for some devices.
+  ///
+  /// The modem isn't in a linking mode while this waits.
+  ///
+  /// - Parameter prompt: The device, with the catalog's steps to wake it.
+  /// - Throws: `CancellationError` when the task is canceled while it waits, or another error
+  ///   to stop the link before anything is sent.
+  func waitUntilDeviceIsAwake(_ prompt: WakePrompt) async throws
+
+}
+
+extension LinkingObserver {
+
+  /// Returns at once, for an observer that doesn't ask a person to wake a device. The message
+  /// that keeps the device awake is sent anyway, and a device that's asleep doesn't answer it.
+  ///
+  /// - Parameter prompt: The device, with the catalog's steps to wake it.
+  public func waitUntilDeviceIsAwake(_ prompt: WakePrompt) async throws {}
+
+}
+
+/// A battery-powered device to wake before it links, for a front end to ask a person.
+public struct WakePrompt: Hashable, Sendable {
+
+  /// The device.
+  public var device: InsteonAddress
+
+  /// What the catalog says about the device, or `nil` if it isn't known.
+  public var deviceDescription: DeviceDescription?
+
+  /// The catalog's steps on the device itself to wake it, or empty when the catalog doesn't
+  /// have them.
+  public var steps: [DeviceLifecycle.Step]
+
+  /// Creates a prompt.
+  ///
+  /// - Parameters:
+  ///   - device: The device.
+  ///   - deviceDescription: What the catalog says about the device.
+  ///   - steps: The catalog's steps on the device to wake it.
+  public init(device: InsteonAddress, deviceDescription: DeviceDescription?, steps: [DeviceLifecycle.Step]) {
+
+    self.device = device
+    self.deviceDescription = deviceDescription
+    self.steps = steps
+
+  }
+
+}
+
+/// What a ``DeviceLinkingCoordinator`` did to keep a battery-powered device awake while it
+/// links, as the catalog's linking from a Hub says, and to let it sleep again afterward.
+public enum KeepAwakeEvent: Sendable {
+
+  /// The device is being sent the message that keeps it awake, at the time the catalog says:
+  /// before it goes into linking mode, or right after its first link.
+  case sending(InsteonAddress, timing: DeviceLifecycle.HubLinking.KeepAwake.Timing)
+
+  /// The device acknowledged the message that keeps it awake.
+  case sent(InsteonAddress)
+
+  /// The message that keeps the device awake wasn't sent or acknowledged, for the reason
+  /// given, such as a message the catalog never lets an app send. Linking goes on; the device
+  /// may fall asleep before it ends.
+  case notSent(InsteonAddress, reason: any Error)
+
+  /// Linking is done, or stopped, and the device is being sent the message that lets it sleep
+  /// again.
+  case releasing(InsteonAddress)
+
+  /// The device acknowledged the message that lets it sleep again.
+  case released(InsteonAddress)
+
+  /// The message that lets the device sleep again wasn't acknowledged, for the reason given.
+  case notReleased(InsteonAddress, reason: any Error)
+
 }
 
 /// Something that happened while a ``DeviceLinkingCoordinator`` linked or unlinked a device,
 /// for a ``LinkingObserver`` to show.
 public enum LinkingEvent: Sendable {
 
-  /// The device is being asked for its identity with ID Request, after a link that didn't
-  /// report one.
+  /// The device is being asked for its identity with ID Request: before it's linked by its
+  /// address, when the registry doesn't know it, or after a link that didn't report one.
   case identifying(InsteonAddress)
+
+  /// The device didn't report its identity before it was linked by its address, for the
+  /// reason given, so it's linked as a device the catalog doesn't describe: without its legs
+  /// of linking from a Hub, and without being turned on first.
+  case notIdentifiedBeforeLinking(InsteonAddress, because: UnidentifiedReason)
 
   /// The device is being turned fully on with Light On before it links as a responder, so it
   /// records full on as its on-level for the group.
@@ -94,6 +177,41 @@ public enum LinkingEvent: Sendable {
 
   /// The modem reported a link.
   case linked(LinkedDevice)
+
+  /// A leg of the catalog's linking from a Hub is starting: the modem starts ALL-Linking in
+  /// the leg's role and group.
+  case hubLinkingLegStarted(HubLinkingLeg)
+
+  /// The device joined a leg's link: it acknowledged Enter Linking Mode for the leg's device
+  /// group, or, going first, a person said it's in linking mode. A device linked with its SET
+  /// button once the modem started has no event of its own; ``LinkingEvent/pressSETButton(_:)``
+  /// asks for it.
+  case hubLinkingLegJoined(HubLinkingLeg, by: HubLinkingJoin)
+
+  /// The modem reported a leg's link with ALL-Linking Completed, and the next leg can start.
+  /// ``LinkingEvent/linked(_:)`` reports the same link with the device.
+  case hubLinkingLegCompleted(HubLinkingLeg, link: AllLinkingCompleted)
+
+  /// A leg after the first failed without an error being thrown, for the reason given, and the
+  /// legs listed after it aren't run. When the leg is
+  /// ``HubLinkingLeg/isRemoteLinkingExpectedToWork``, the catalog says Enter Linking Mode works
+  /// for the device, so the failure isn't expected. ``HubLinkingLeg/canSucceedOnRetry(after:)``
+  /// says whether linking again may help.
+  case hubLinkingLegFailed(HubLinkingLeg, reason: any Error, notRun: [HubLinkingLeg])
+
+  /// The device is kept awake while it links, or let sleep again afterward.
+  case keepAwake(KeepAwakeEvent)
+
+  /// Linking by the catalog's legs stopped with an error after the first leg linked, for the
+  /// reason given, which is then thrown, such as when it's canceled or another device links.
+  /// The result holds the links made so far and what became of each leg, so they aren't lost
+  /// with the error.
+  case hubLinkingStopped(DeviceLinkingResult, reason: any Error)
+
+  /// The catalog says a leg's one link covers every group the device controls while one of
+  /// its operating flags is in the state given. The flag isn't read or changed; without it,
+  /// each group needs a link of its own.
+  case allGroupsWhen(HubLinkingLeg, condition: DeviceProfile.Group.Condition)
 
   /// The modem's ALL-Link database is being read for the device's links.
   case readingModemLinks(InsteonAddress, purpose: ModemLinksPurpose)
@@ -149,6 +267,20 @@ public enum LinkingEvent: Sendable {
 
 }
 
+/// Why a device didn't report its identity before a ``DeviceLinkingCoordinator`` linked it.
+public enum UnidentifiedReason: Sendable {
+
+  /// The device rejected the modem, as an i2CS device does until it's linked to it.
+  case notLinked
+
+  /// The device acknowledged ID Request but didn't broadcast its identity in time.
+  case noIdentity
+
+  /// Asking the device failed, such as when it didn't acknowledge.
+  case failed(any Error)
+
+}
+
 /// Why a ``DeviceLinkingCoordinator`` reads the modem's ALL-Link database for a device's
 /// links.
 public enum ModemLinksPurpose: Hashable, Sendable {
@@ -167,6 +299,12 @@ public enum LinkingFallback: Sendable {
   /// The device didn't link without its SET button, so it's linked with its SET button
   /// instead, and only its link is accepted.
   case setButtonLinking(InsteonAddress, reason: any Error)
+
+  /// The first leg of the catalog's linking from a Hub didn't link without the device's SET
+  /// button, so it's linked with its SET button instead, with the catalog's steps, and only
+  /// its link is accepted. When the leg is ``HubLinkingLeg/isRemoteLinkingExpectedToWork``,
+  /// the catalog says Enter Linking Mode works for the device, so the failure wasn't expected.
+  case setButtonLeg(HubLinkingLeg, reason: any Error)
 
   /// The device's links couldn't all be removed without its SET button. The links left are
   /// removed with its SET button, in unlinking mode, with the catalog's steps for it, which are
@@ -199,6 +337,13 @@ public struct SETButtonPrompt: Hashable, Sendable {
   /// linking steps apply when a link is removed too.
   public var steps: [DeviceLifecycle.Step]
 
+  /// The modem's role, for a leg of the catalog's linking from a Hub, or `nil` otherwise.
+  public var modemRole: ModemRole?
+
+  /// The device's group the link is for, for a leg of the catalog's linking from a Hub, or
+  /// `nil` otherwise.
+  public var deviceGroup: AllLinkGroupNumber?
+
   /// Creates a prompt.
   ///
   /// - Parameters:
@@ -208,13 +353,18 @@ public struct SETButtonPrompt: Hashable, Sendable {
   ///   - device: The device asked for, or `nil` for any device.
   ///   - deviceDescription: What the catalog says about the device.
   ///   - steps: The catalog's steps on the device.
+  ///   - modemRole: The modem's role, for a leg of the catalog's linking from a Hub. Defaults
+  ///     to `nil`.
+  ///   - deviceGroup: The device's group the link is for, for a leg. Defaults to `nil`.
   public init(
     direction: LinkingDirection,
     group: AllLinkGroupNumber,
     timeout: Duration,
     device: InsteonAddress?,
     deviceDescription: DeviceDescription?,
-    steps: [DeviceLifecycle.Step]
+    steps: [DeviceLifecycle.Step],
+    modemRole: ModemRole? = nil,
+    deviceGroup: AllLinkGroupNumber? = nil
   ) {
 
     self.direction = direction
@@ -223,6 +373,8 @@ public struct SETButtonPrompt: Hashable, Sendable {
     self.device = device
     self.deviceDescription = deviceDescription
     self.steps = steps
+    self.modemRole = modemRole
+    self.deviceGroup = deviceGroup
 
   }
 
@@ -271,6 +423,10 @@ public enum LinkLeg: Hashable, Sendable {
 
   /// The link back that follows, in which the device controls and the modem responds.
   case linkBack
+
+  /// A leg after the first of the catalog's linking from a Hub, by its place in the catalog's
+  /// order, from 0. The first leg is ``LinkLeg/first``.
+  case hubLinking(Int)
 
 }
 
@@ -374,7 +530,7 @@ public enum TwoWayLinking: Hashable, Sendable {
 public struct DeviceLinkingResult: Sendable {
 
   /// The links the modem reported, in order: the link asked for, then the link back if there
-  /// was one.
+  /// was one, or each leg's link of the catalog's linking from a Hub.
   public var links: [AllLinkingCompleted]
 
   /// The device, as the registry knows it after the link, or `nil` if its identity isn't
@@ -385,17 +541,31 @@ public struct DeviceLinkingResult: Sendable {
   /// made; the device can be linked back with its SET button, the modem as the responder.
   public var linkBackFailure: (any Error)?
 
+  /// Each leg of the catalog's linking from a Hub and what became of it, in the catalog's
+  /// order, or empty when the device was linked without them.
+  public var legs: [HubLinkingLegOutcome]
+
   /// Creates a result.
   ///
   /// - Parameters:
   ///   - links: The links the modem reported.
   ///   - device: The device as the registry knows it.
   ///   - linkBackFailure: Why the link back failed.
-  public init(links: [AllLinkingCompleted], device: RegisteredDevice?, linkBackFailure: (any Error)?) {
+  ///   - legs: Each leg of the catalog's linking from a Hub and what became of it. Defaults to
+  ///     none.
+  public init(links: [AllLinkingCompleted], device: RegisteredDevice?, linkBackFailure: (any Error)?, legs: [HubLinkingLegOutcome] = []) {
 
     self.links = links
     self.device = device
     self.linkBackFailure = linkBackFailure
+    self.legs = legs
+
+  }
+
+  /// The leg that failed, so the legs after it weren't run, or `nil` if none did.
+  public var failedLeg: HubLinkingLegOutcome? {
+
+    legs.first { (outcome: HubLinkingLegOutcome) -> Bool in outcome.failure != nil }
 
   }
 

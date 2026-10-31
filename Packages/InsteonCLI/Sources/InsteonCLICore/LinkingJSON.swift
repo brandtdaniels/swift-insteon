@@ -36,32 +36,45 @@ public enum LinkingJSON {
 
   }
 
-  /// What `insteon link --json` prints: the link alone, or every link when the device was
-  /// linked back.
-  public enum LinkReport: Encodable, Hashable, Sendable {
+  /// What `insteon link --json` prints, always an object of the same shape: every link the
+  /// modem reported, in order, and each leg of the catalog's linking from a Hub, empty when the
+  /// device wasn't linked by legs.
+  ///
+  /// ```json
+  /// {"legs":[],"links":[{"address":"1A.2B.3C","group":0,"modemRole":"controller"}]}
+  /// ```
+  public struct LinkReport: Encodable, Hashable, Sendable {
 
-    /// The one link made.
-    case link(Link)
+    /// Every link the modem reported, in order: the link asked for, then the link back, or
+    /// each leg's link.
+    public let links: [Link]
 
-    /// The link asked for, then the link back.
-    case links([Link])
+    /// Each leg of the catalog's linking from a Hub, in the catalog's order, or empty.
+    public let legs: [Leg]
 
-    /// Encodes the link as an object, or the links as an array.
-    ///
-    /// - Parameter encoder: The encoder.
-    /// - Throws: The encoder's errors.
-    public func encode(to encoder: any Encoder) throws {
+  }
 
-      var container: any SingleValueEncodingContainer = encoder.singleValueContainer()
+  /// A leg of the catalog's linking from a Hub, and what became of it.
+  public struct Leg: Encodable, Hashable, Sendable {
 
-      switch self {
-      case let .link(link):
-        try container.encode(link)
-      case let .links(links):
-        try container.encode(links)
-      }
+    /// The modem's role in the leg, `"controller"` or `"responder"`.
+    public let modemRole: String
 
-    }
+    /// The group Start ALL-Linking named.
+    public let modemGroup: Int
+
+    /// The device's group, which Enter Linking Mode named.
+    public let deviceGroup: Int
+
+    /// `"linked"`, `"failed"`, or `"notRun"` for a leg after one that failed.
+    public let status: String
+
+    /// How the device joined a linked leg: `"enterLinkingMode"`, `"setButton"` or
+    /// `"deviceFirst"`.
+    public let joinedBy: String?
+
+    /// Why a failed leg didn't link.
+    public let error: String?
 
   }
 
@@ -327,23 +340,70 @@ public enum LinkingJSON {
 
   }
 
-  /// What `insteon link --json` prints for a link: an object for one link, or an array when
-  /// the device was linked back.
+  /// What `insteon link --json` prints for a link: every link, and each leg, whose errors are
+  /// described as `String(describing:)` gives them; ``LinkingJSON/report(_:message:)`` words
+  /// them.
   ///
   /// - Parameter result: What the coordinator linked.
   /// - Returns: The report.
   public static func report(_ result: DeviceLinkingResult) -> LinkReport {
 
+    report(result) { (error: any Error) -> String in String(describing: error) }
+
+  }
+
+  /// What `insteon link --json` prints for a link: every link the modem reported, and each leg
+  /// of the catalog's linking from a Hub, empty when the device wasn't linked by legs.
+  ///
+  /// - Parameters:
+  ///   - result: What the coordinator linked.
+  ///   - message: The sentence that describes an error, ending with a period.
+  /// - Returns: The report.
+  public static func report(_ result: DeviceLinkingResult, message: (any Error) -> String) -> LinkReport {
+
     let known: DeviceDescription? = result.device?.deviceDescription
-    let links: [Link] = result.links.map { (made: AllLinkingCompleted) -> Link in link(made, known: known) }
 
-    if links.count == 1 {
+    return LinkReport(
+      links: result.links.map { (made: AllLinkingCompleted) -> Link in link(made, known: known) },
+      legs: result.legs.map { (outcome: HubLinkingLegOutcome) -> Leg in leg(outcome, message: message) }
+    )
 
-      return .link(links[0])
+  }
 
+  /// A leg and what became of it.
+  private static func leg(_ outcome: HubLinkingLegOutcome, message: (any Error) -> String) -> Leg {
+
+    let status: String
+    var joinedBy: String?
+    var error: String?
+
+    switch outcome.status {
+    case let .linked(_, join):
+      status = "linked"
+
+      switch join {
+      case .enterLinkingMode:
+        joinedBy = "enterLinkingMode"
+      case .setButton:
+        joinedBy = "setButton"
+      case .deviceFirst:
+        joinedBy = "deviceFirst"
+      }
+    case let .failed(reason):
+      status = "failed"
+      error = message(reason)
+    case .notRun:
+      status = "notRun"
     }
 
-    return .links(links)
+    return Leg(
+      modemRole: outcome.leg.modemRole == .controller ? "controller" : "responder",
+      modemGroup: Int(outcome.leg.modemGroup.rawValue),
+      deviceGroup: Int(outcome.leg.deviceGroup.rawValue),
+      status: status,
+      joinedBy: joinedBy,
+      error: error
+    )
 
   }
 

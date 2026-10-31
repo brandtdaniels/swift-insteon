@@ -76,6 +76,27 @@ struct LinkingPrompter: LinkingObserver {
         lines(RemovalText.modemRecordsDeleted(device, records))
 
       }
+    case let .hubLinkingStopped(result, _):
+      // The links made before linking stopped, so --json shows them with the error.
+      if printsJSON {
+
+        do {
+
+          try Output.json(LinkingJSON.report(result, message: Names.message(for:)))
+
+        } catch {
+
+          Output.note(Names.message(for: error))
+
+        }
+
+      }
+
+      for line in LinkingEventText.notes(for: event, message: Names.message(for:)) {
+
+        Output.note(line)
+
+      }
     case let .factoryReset(reset):
       if !printsJSON {
 
@@ -97,6 +118,24 @@ struct LinkingPrompter: LinkingObserver {
     let waits: Bool = Terminal.readsFromTerminal
 
     for line in LinkingEventText.deviceFirst(prompt, waitsForReturn: waits) {
+
+      Output.note(line)
+
+    }
+
+    if waits {
+
+      try await Terminal.waitForReturn()
+
+    }
+
+  }
+
+  func waitUntilDeviceIsAwake(_ prompt: WakePrompt) async throws {
+
+    let waits: Bool = Terminal.readsFromTerminal
+
+    for line in LinkingEventText.wake(prompt, waitsForReturn: waits) {
 
       Output.note(line)
 

@@ -95,6 +95,14 @@ if try await lamp.capabilities().canDim {
 }
 ```
 
+A group whose state shares a command with other groups, such as each of an EZFlora's zones in
+its valve status, is on only when the reply's bits match the pattern the catalog gives it, so
+each zone reads on its own. A load made of outputs, such as a ballast dimmer's two relays in
+relay mode, lists them in ``DeviceGroup/outputs``, and
+``Device/turnOn(outputs:group:)`` and ``Device/turnOff(outputs:group:)`` switch them by their
+bits, once the device reports the operating flag state the catalog names. An alarm or arming
+group lists its ``DeviceGroup/armModes``.
+
 ``DeviceCapabilities`` says what to show for a device: its groups, whether it dims or beeps,
 and its settings with their controls. ``Device/readSettings(includingAdvanced:beforeReading:)``
 reads the settings, and ``Device/writeSetting(_:to:button:)`` changes one and reads it back.
@@ -171,6 +179,23 @@ if let failure = result.linkBackFailure {
 }
 ```
 
+When the catalog gives a device's linking from a Hub as legs, linking it by its address makes
+each leg's link in the catalog's order, as a ``HubLinkingLeg``: the modem starts ALL-Linking
+first in the leg's role and group, the device joins with Enter Linking Mode for its group or
+with its SET button, as the catalog says, and the coordinator waits for ALL-Linking Completed
+before the next leg. ``DeviceLinkingResult/legs`` says what became of each:
+
+A battery-powered device the catalog says how to keep awake is sent that message through the
+device's guarded send path, before linking or after its first link, and the message that lets
+it sleep again once linking ends, even when it fails or is canceled. A
+``LinkingObserver`` asks a person to wake it first when the message goes before linking.
+
+```swift
+for outcome in result.legs {
+  print(outcome.leg.modemRole, outcome.leg.modemGroup, outcome.link != nil)
+}
+```
+
 ``DeviceLinkingCoordinator/remove(_:scan:forceModemSide:timeout:observer:)`` removes a device
 from the network: every link between it and the modem, with the modem's group 0 last, then,
 once the modem's ALL-Link database has no links with it, the network forgets it. A device
@@ -195,6 +220,8 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 - ``DeviceCapabilities``
 - ``DeviceGroup``
 - ``DeviceGroupKind``
+- ``DeviceOutput``
+- ``DeviceFlagCondition``
 - ``DeviceStatus``
 - ``DeviceTurnOnResult``
 - ``DeviceTurnOffResult``
@@ -244,6 +271,12 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 - ``SETButtonPrompt``
 - ``DeviceFirstPrompt``
 - ``LinkLeg``
+- ``HubLinkingLeg``
+- ``HubLinkingJoin``
+- ``HubLinkingLegStatus``
+- ``HubLinkingLegOutcome``
+- ``KeepAwakeEvent``
+- ``WakePrompt``
 - ``LinkedDevice``
 - ``UnlinkedLink``
 - ``RemovedLinks``

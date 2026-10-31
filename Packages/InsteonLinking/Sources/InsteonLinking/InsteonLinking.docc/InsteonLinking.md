@@ -36,6 +36,10 @@ try await Modem.withConnection(SerialPort(path: "/dev/ttyUSB0")) { modem in
 | Remote | ``Linker/linkRemotely(_:modemRole:modemGroup:deviceGroup:timeout:)`` puts the modem and the device into linking mode, as their SET buttons would | i2 and i2CS |
 | Manual | ``Linker/linkManually(modemRole:group:timeout:)`` puts the modem into linking mode and waits for someone to press a device's SET button | Every engine |
 
+``Linker/linkModemFirst(_:modemRole:modemGroup:deviceGroup:timeout:deviceAcknowledged:)`` links
+remotely with the modem starting ALL-Linking first in either role, as each leg of the Insteon
+device catalog's linking from a Hub does.
+
 Remote and manual linking work between the modem and one device, and the device memorizes
 its current state as its link data. Database linking works between any two devices, and sets
 the link data exactly. ``Unlinker`` has the same three ways, and

@@ -94,4 +94,174 @@ struct LinkingEventTextTests {
 
   }
 
+  @Test func saysWhatEachLegDoes() {
+
+    let leg = HubLinkingLeg(device: lamp, index: 1, count: 3, modemRole: .responder, modemGroup: 2, deviceGroup: 2)
+    let link = AllLinkingCompleted(linkCode: 0x00, group: 2, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+
+    #expect(notes(.hubLinkingLegStarted(leg)) == [
+      "Leg 2 of 3: the modem starts ALL-Linking as responder of group 2, for 1A.2B.3C's group 2..."
+    ])
+    #expect(notes(.hubLinkingLegJoined(leg, by: .enterLinkingMode)) == [
+      "1A.2B.3C took Enter Linking Mode for its group 2; waiting for the modem to report the link..."
+    ])
+    #expect(notes(.hubLinkingLegJoined(leg, by: .deviceFirst)) == ["1A.2B.3C is in linking mode."])
+    #expect(notes(.hubLinkingLegJoined(leg, by: .setButton)).isEmpty)
+    #expect(notes(.hubLinkingLegCompleted(leg, link: link)).isEmpty)
+    #expect(notes(.allGroupsWhen(leg, condition: DeviceProfile.Group.Condition(flag: "linkToAllGroups", isSet: true))) == [
+      "Leg 2 of 3 links every group 1A.2B.3C controls while its linkToAllGroups setting is on. "
+        + "The setting isn't read or changed here; with it off, each group needs a link of its own."
+    ])
+
+  }
+
+  @Test func saysClearlyWhenALegTheCatalogPromisesFails() {
+
+    let promised = HubLinkingLeg(device: lamp, index: 0, count: 2, modemRole: .controller, modemGroup: 0, deviceGroup: 1, remoteEnterLinkingMode: .yes)
+    let unknown = HubLinkingLeg(device: lamp, index: 1, count: 2, modemRole: .responder, modemGroup: 1, deviceGroup: 1, remoteEnterLinkingMode: .unknown)
+
+    #expect(notes(.hubLinkingLegFailed(promised, reason: Failure(), notRun: [unknown])) == [
+      "Leg 1 of 2 didn't link: It failed. The Insteon device catalog says 1A.2B.3C takes Enter Linking Mode, "
+        + "so check that it's powered and in range, and that no other device is in linking mode.",
+      "The leg after it wasn't run."
+    ])
+    #expect(notes(.hubLinkingLegFailed(unknown, reason: Failure(), notRun: [])) == ["Leg 2 of 2 didn't link: It failed."])
+    // Linking again is suggested only for a failure it may fix, such as a timeout.
+    #expect(notes(.hubLinkingLegFailed(promised, reason: LinkingError.linkingTimedOut, notRun: [unknown])).last
+      == "The leg after it wasn't run; run 'insteon link 1A.2B.3C' again to link it.")
+
+  }
+
+  @Test func explainsALinkWhoseLaterLegFailed() {
+
+    let first = HubLinkingLeg(device: lamp, index: 0, count: 2, modemRole: .controller, modemGroup: 0, deviceGroup: 1)
+    let second = HubLinkingLeg(device: lamp, index: 1, count: 2, modemRole: .responder, modemGroup: 1, deviceGroup: 1)
+    let made = AllLinkingCompleted(linkCode: 0x01, group: 0, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let result = DeviceLinkingResult(
+      links: [made],
+      device: nil,
+      linkBackFailure: nil,
+      legs: [
+        HubLinkingLegOutcome(leg: first, status: .linked(made, by: .enterLinkingMode)),
+        HubLinkingLegOutcome(leg: second, status: .failed(Failure()))
+      ]
+    )
+    let message: (any Error) -> String = { (_: any Error) -> String in "It failed." }
+
+    #expect(LinkingEventText.incompleteLegs(result, message: message) == "1A.2B.3C linked 1 of its 2 legs; leg 2 of 2 didn't link: It failed.")
+
+    let timedOut = DeviceLinkingResult(
+      links: [made],
+      device: nil,
+      linkBackFailure: nil,
+      legs: [
+        HubLinkingLegOutcome(leg: first, status: .linked(made, by: .enterLinkingMode)),
+        HubLinkingLegOutcome(leg: second, status: .failed(LinkingError.linkingTimedOut))
+      ]
+    )
+
+    #expect(LinkingEventText.incompleteLegs(timedOut, message: message)
+      == "1A.2B.3C linked 1 of its 2 legs; leg 2 of 2 didn't link: It failed. Run 'insteon link 1A.2B.3C' again to link the rest.")
+    #expect(LinkingEventText.incompleteLegs(DeviceLinkingResult(links: [made], device: nil, linkBackFailure: nil), message: message) == nil)
+
+  }
+
+  @Test func saysHowTheDeviceIsKeptAwakeAndLetSleep() {
+
+    #expect(notes(.keepAwake(.sending(lamp, timing: .afterLinked))) == ["Keeping 1A.2B.3C awake while it links, as the Insteon device catalog says..."])
+    #expect(notes(.keepAwake(.sent(lamp))).isEmpty)
+    #expect(notes(.keepAwake(.notSent(lamp, reason: Failure()))) == [
+      "1A.2B.3C wasn't kept awake: It failed. Linking goes on; if it falls asleep, wake it and run the command again."
+    ])
+    #expect(notes(.keepAwake(.releasing(lamp))) == ["Letting 1A.2B.3C sleep again..."])
+    #expect(notes(.keepAwake(.released(lamp))).isEmpty)
+    #expect(notes(.keepAwake(.notReleased(lamp, reason: Failure()))) == [
+      "1A.2B.3C wasn't let sleep again: It failed. It may stay awake and use its batteries until it sleeps on its own "
+        + "or is woken and linked again."
+    ])
+
+  }
+
+  @Test func asksForTheDeviceToBeWokenWithTheCatalogsSteps() {
+
+    let steps: [DeviceLifecycle.Step] = [DeviceLifecycle.Step(text: "Press the Program button.")]
+
+    #expect(LinkingEventText.wake(WakePrompt(device: lamp, deviceDescription: nil, steps: steps), waitsForReturn: true) == [
+      "First wake 1A.2B.3C:",
+      "  1. Press the Program button.",
+      "Then press Return, and the modem keeps it awake while it links."
+    ])
+    #expect(LinkingEventText.wake(WakePrompt(device: lamp, deviceDescription: nil, steps: []), waitsForReturn: false) == [
+      "First wake 1A.2B.3C; its manual says how, such as by pressing one of its buttons.",
+      "The modem keeps it awake while it links now."
+    ])
+
+  }
+
+  @Test func saysWhenALegFallsBackToTheSETButtonThoughEnterLinkingModeWasExpectedToWork() {
+
+    let promised = HubLinkingLeg(device: lamp, index: 0, count: 2, modemRole: .controller, modemGroup: 0, deviceGroup: 1, remoteEnterLinkingMode: .yes)
+    let unknown = HubLinkingLeg(device: lamp, index: 0, count: 2, modemRole: .controller, modemGroup: 0, deviceGroup: 1, remoteEnterLinkingMode: .unknown)
+
+    #expect(notes(.fallback(.setButtonLeg(promised, reason: Failure()))) == [
+      "1A.2B.3C didn't link remotely, though the Insteon device catalog says it takes Enter Linking Mode: It failed. "
+        + "Link it with its SET button instead."
+    ])
+    #expect(notes(.fallback(.setButtonLeg(unknown, reason: Failure()))) == [
+      "1A.2B.3C didn't link remotely: It failed. Link it with its SET button instead."
+    ])
+
+  }
+
+  @Test func saysWhyADeviceWasntIdentifiedBeforeLinking() {
+
+    #expect(notes(.notIdentifiedBeforeLinking(lamp, because: .notLinked)) == [
+      "1A.2B.3C won't say what it is until it's linked to the modem, as an i2CS device does, "
+        + "so it's linked as a device the Insteon device catalog doesn't describe."
+    ])
+    #expect(notes(.notIdentifiedBeforeLinking(lamp, because: .noIdentity)) == [
+      "1A.2B.3C didn't report its identity, so it's linked as a device the Insteon device catalog doesn't describe."
+    ])
+    #expect(notes(.notIdentifiedBeforeLinking(lamp, because: .failed(Failure()))) == [
+      "1A.2B.3C couldn't be asked for its identity: It failed, so it's linked as a device the Insteon device catalog doesn't describe."
+    ])
+
+  }
+
+  @Test func saysHowFarLinkingGotBeforeItStopped() {
+
+    let first = HubLinkingLeg(device: lamp, index: 0, count: 2, modemRole: .controller, modemGroup: 0, deviceGroup: 1)
+    let second = HubLinkingLeg(device: lamp, index: 1, count: 2, modemRole: .responder, modemGroup: 1, deviceGroup: 1)
+    let made = AllLinkingCompleted(linkCode: 0x01, group: 0, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let result = DeviceLinkingResult(
+      links: [made],
+      device: nil,
+      linkBackFailure: nil,
+      legs: [
+        HubLinkingLegOutcome(leg: first, status: .linked(made, by: .enterLinkingMode)),
+        HubLinkingLegOutcome(leg: second, status: .failed(Failure()))
+      ]
+    )
+
+    #expect(notes(.hubLinkingStopped(result, reason: Failure())) == ["Linking stopped after 1 of 2 legs: It failed. The links made stay made."])
+
+  }
+
+  @Test func namesALegsRoleAndGroupsWhenItsSETButtonIsPressed() {
+
+    let prompt = SETButtonPrompt(
+      direction: .linking,
+      group: 2,
+      timeout: .seconds(240),
+      device: lamp,
+      deviceDescription: nil,
+      steps: [],
+      modemRole: .responder,
+      deviceGroup: 2
+    )
+
+    #expect(notes(.pressSETButton(prompt)).first == "The modem is in linking mode as responder of group 2, for the device's group 2.")
+
+  }
+
 }

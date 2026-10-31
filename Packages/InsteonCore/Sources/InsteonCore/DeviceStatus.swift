@@ -245,6 +245,9 @@ public enum DeviceOperation: String, Hashable, Sendable {
   /// Reading or writing settings.
   case settings
 
+  /// Keeping a battery-powered device awake while it links, or letting it sleep again.
+  case keepAwake
+
 }
 
 /// Why a ``Device`` couldn't do what it was asked.
@@ -277,5 +280,14 @@ public enum DeviceControlError: Error, Hashable, Sendable {
   /// reaches the main group, or no message at all. The associated values are the operation,
   /// the group and the product.
   case unaddressable(DeviceOperation, group: Int, product: String)
+
+  /// The group has no output by the name given, or its type names none. The associated values
+  /// are the name asked for, the group and the product.
+  case noSuchOutput(String, group: Int, product: String)
+
+  /// The group's load isn't its outputs while the operating flag its type names isn't in the
+  /// state it names, such as a ballast dimmer that's not in relay mode, so an output can't be
+  /// switched on its own. The associated values are the group and the product.
+  case outputsInactive(group: Int, product: String)
 
 }
