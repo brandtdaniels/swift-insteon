@@ -173,7 +173,7 @@ public struct Device: Sendable {
       source: source,
       groups: groups,
       mainGroupNumber: model.mainGroupNumber.map { (number: AllLinkGroupNumber) -> Int in Int(number.rawValue) },
-      canBeep: commands?.standardCommand(named: Self.beepCommand) != nil,
+      canBeep: commands.map { (commands: CommandSet) -> Bool in Self.sendableBeep(in: commands) != nil } ?? false,
       settings: settings
     )
 
@@ -225,7 +225,7 @@ public struct Device: Sendable {
 
     }
 
-    try await send(message)
+    try await send(message, for: .turnOn)
 
     let sent: UInt8 = message.command.command2
 
@@ -264,7 +264,7 @@ public struct Device: Sendable {
 
     }
 
-    try await send(message)
+    try await send(message, for: .turnOff)
 
     await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? 0x00 : nil)
 
@@ -307,7 +307,7 @@ public struct Device: Sendable {
 
     }
 
-    _ = try await modem.request(StandardMessage(to: address, command: command), timeout: network.requestTimeout)
+    _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, for: .control(.turnOnFast))
 
     await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? command.command2 : nil)
 
@@ -346,7 +346,7 @@ public struct Device: Sendable {
 
     }
 
-    _ = try await modem.request(StandardMessage(to: address, command: command), timeout: network.requestTimeout)
+    _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, for: .control(.turnOffFast))
 
     await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? 0x00 : nil)
 
@@ -414,7 +414,7 @@ public struct Device: Sendable {
 
     }
 
-    _ = try await modem.request(StandardMessage(to: address, command: command), timeout: network.requestTimeout)
+    _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, for: .control(.instantChange))
 
     await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? command.command2 : nil)
 
@@ -479,9 +479,10 @@ public struct Device: Sendable {
 
     }
 
-    let acknowledgment: ReceivedMessage = try await modem.request(
+    let acknowledgment: ReceivedMessage = try await request(
       StandardMessage(to: address, command: try command.command()),
-      timeout: network.requestTimeout
+      timeout: network.requestTimeout,
+      for: .control(.status)
     )
     let value: UInt8 = acknowledgment.command.command2
     let reading: (reading: DeviceStatus.Reading, isOn: Bool) = Self.reading(of: value, group: target, in: model, reply: command.reply)
@@ -504,7 +505,7 @@ public struct Device: Sendable {
   ///   answer.
   public func ping() async throws {
 
-    _ = try await modem.request(StandardMessage(to: address, command: StandardDirectCommand.ping), timeout: network.requestTimeout)
+    _ = try await request(StandardMessage(to: address, command: StandardDirectCommand.ping), timeout: network.requestTimeout, for: .control(.status))
 
     await network.recordAnswer(of: address, level: nil)
 
@@ -515,30 +516,41 @@ public struct Device: Sendable {
   /// Beep is harmless, and the catalog doesn't list it for every device that beeps, so it's
   /// sent whatever the catalog says: the Beep the device's command set lists, or else the one
   /// the Insteon protocol defines, even to a device whose identity isn't known. The result
-  /// says whether the command set lists it.
+  /// says whether the command set lists it. A Beep the catalog marks as never sent, or whose
+  /// bytes are ones never sent to the device, such as Set Operating Flags that turns the radio
+  /// off, isn't sent.
   ///
   /// - Returns: Whether the device's command set lists Beep.
-  /// - Throws: The modem's errors, such as `ModemError.deviceRejected` from a device that
+  /// - Throws: ``DeviceControlError/unsupported(_:product:)`` for a Beep that's never sent;
+  ///   the modem's errors, such as `ModemError.deviceRejected` from a device that
   ///   isn't linked to the modem, and the errors of the modem and the connection to it while
   ///   the device is asked for its identity.
   @discardableResult
   public func beep() async throws -> DeviceBeepResult {
 
-    let commands: CommandSet?
+    let description: DeviceDescription?
 
     do {
 
-      commands = try await deviceDescription()?.commandSet
+      description = try await deviceDescription()
 
     } catch DeviceControlError.notLinked {
 
       // Beep is sent anyway, and the device's answer says why it didn't beep.
-      commands = nil
+      description = nil
 
     }
 
+    let commands: CommandSet? = description?.commandSet
     let listed: DeviceStandardCommand? = commands?.standardCommand(named: Self.beepCommand)
     let command: Command
+
+    // A Beep the catalog lists but never sends isn't sent, nor is the protocol's in its place.
+    if let description, let commands, listed != nil, Self.sendableBeep(in: commands) == nil {
+
+      throw DeviceControlError.unsupported(.beep, product: DeviceControlModel.product(of: description))
+
+    }
 
     if let listed {
 
@@ -550,7 +562,7 @@ public struct Device: Sendable {
 
     }
 
-    _ = try await modem.request(StandardMessage(to: address, command: command), timeout: network.requestTimeout)
+    _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, for: .control(.beep))
 
     await network.recordAnswer(of: address, level: nil)
 
@@ -625,13 +637,19 @@ public struct Device: Sendable {
 
   /// Changes one of the device's settings, and reads it back to confirm the change.
   ///
-  /// Some settings are never written, whatever the catalog says: turning off the device's
-  /// radio or powerline, and requiring a checksum in every message, any of which can cut the
-  /// device off from the modem. The programming lock is only turned off, never on, so a
-  /// device is never left locked. Both are refused before anything is sent. A value whose
-  /// byte holds operating flags, such as an open/close sensor's configuration byte, is refused
-  /// before it's written when it would set the programming lock's bit, or change the bit of a
-  /// flag that's never written; the device is asked for the byte first, to compare.
+  /// Some settings are never written: turning off the device's radio or powerline, and
+  /// requiring a checksum in every message, any of which can cut the device off from the
+  /// modem, and any other flag the catalog guards with `FlagGuard.keep`. The programming lock,
+  /// and any flag the catalog guards with `FlagGuard.neverSet`, is only turned off, never on,
+  /// so a device is never left locked. A command the catalog guards with `CommandGuard.never`
+  /// is never sent, nor is a Set Operating Flags command with the same bytes. All of these are
+  /// refused before anything is sent, and the radio, powerline, checksum and programming lock
+  /// flags are refused even when the catalog gives no guard. A value whose byte holds
+  /// operating flags, which the catalog marks with `SettingValue.flagsQuery`, such as an
+  /// open/close sensor's configuration byte, is refused before it's written when it would set
+  /// a bit that's never set, or change a bit that's kept; the device is asked for the byte
+  /// first, to compare. The guarded bits of an extended command's flags parameter are checked
+  /// the same way.
   ///
   /// A flag is changed with Set Operating Flags, in the form the device takes: extended with a
   /// checksum for an i2CS device, extended with the command repeated while the flag the
@@ -664,7 +682,7 @@ public struct Device: Sendable {
     }
 
     // Refused before anything is sent, whatever the catalog says about writing it.
-    if DeviceSettingSafety.isNeverWritten(item) {
+    if DeviceSettingSafety.isNeverWritten(item, in: commands) {
 
       throw DeviceSettingError.neverWritten(label: item.label)
 
@@ -758,15 +776,82 @@ public struct Device: Sendable {
 
   }
 
+  // MARK: - Sending
+
+  /// What a message is sent for, which says how a refusal to send it is reported.
+  private enum SendPurpose {
+
+    /// An operation, refused with ``DeviceControlError/unsupported(_:product:)``.
+    case control(DeviceOperation)
+
+    /// Writing a setting, refused with ``DeviceSettingError/neverWritten(label:)``.
+    case setting(label: String)
+
+  }
+
+  /// The command set's Beep, if the device may be sent it.
+  static func sendableBeep(in commands: CommandSet) -> DeviceStandardCommand? {
+
+    guard let beep = commands.standardCommand(named: beepCommand), DeviceSettingSafety.isSendable(beep, in: commands) else {
+
+      return nil
+
+    }
+
+    return beep
+
+  }
+
+  /// Refuses a command whose bytes are never sent to the device, as
+  /// `DeviceSettingSafety.isNeverSent(_:in:)` says from its command set. Every message the
+  /// device sends is checked here, with the bytes it actually carries, so a command filled in
+  /// with a value, or listed under another name, can't send them.
+  private func refuseIfNeverSent(_ command: Command, for purpose: SendPurpose) async throws {
+
+    let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription
+
+    guard DeviceSettingSafety.isNeverSent(command, in: description?.commandSet) else {
+
+      return
+
+    }
+
+    switch purpose {
+    case let .control(operation):
+      throw DeviceControlError.unsupported(operation, product: description.map { (described: DeviceDescription) -> String in DeviceControlModel.product(of: described) } ?? "this device")
+    case let .setting(label):
+      throw DeviceSettingError.neverWritten(label: label)
+    }
+
+  }
+
+  /// Sends a standard message once ``refuseIfNeverSent(_:for:)`` allows it.
+  private func request(_ message: StandardMessage, timeout: Duration, for purpose: SendPurpose) async throws -> ReceivedMessage {
+
+    try await refuseIfNeverSent(message.command, for: purpose)
+
+    return try await modem.request(message, timeout: timeout)
+
+  }
+
+  /// Sends an extended message once ``refuseIfNeverSent(_:for:)`` allows it.
+  private func request(_ message: ExtendedMessage, timeout: Duration, for purpose: SendPurpose) async throws -> ReceivedMessage {
+
+    try await refuseIfNeverSent(message.command, for: purpose)
+
+    return try await modem.request(message, timeout: timeout)
+
+  }
+
   /// Sends an action's message, a standard one with the network's timeout and an extended one
   /// with the timeout for extended requests.
-  private func send(_ message: DeviceControlModel.ActionMessage) async throws {
+  private func send(_ message: DeviceControlModel.ActionMessage, for operation: DeviceOperation) async throws {
 
     switch message {
     case let .standard(standard):
-      _ = try await modem.request(standard, timeout: network.requestTimeout)
+      _ = try await request(standard, timeout: network.requestTimeout, for: .control(operation))
     case let .extended(extended):
-      _ = try await modem.request(extended, timeout: Modem.defaultExtendedRequestTimeout)
+      _ = try await request(extended, timeout: Modem.defaultExtendedRequestTimeout, for: .control(operation))
     }
 
   }
@@ -792,7 +877,7 @@ public struct Device: Sendable {
 
     }
 
-    guard let command = commands.standardCommand(named: name) else {
+    guard let command = commands.standardCommand(named: name), DeviceSettingSafety.isSendable(command, in: commands) else {
 
       throw DeviceControlError.unsupported(operation, product: model.product)
 
@@ -818,9 +903,10 @@ public struct Device: Sendable {
   /// the device's level, so only when the device answered is recorded.
   private func rawStatus(group: Int?) async throws -> DeviceStatus {
 
-    let acknowledgment: ReceivedMessage = try await modem.request(
+    let acknowledgment: ReceivedMessage = try await request(
       StandardMessage(to: address, command: StandardDirectCommand.statusRequest()),
-      timeout: network.requestTimeout
+      timeout: network.requestTimeout,
+      for: .control(.status)
     )
     let value: UInt8 = acknowledgment.command.command2
 
@@ -919,7 +1005,7 @@ public struct Device: Sendable {
 
     do {
 
-      return try await modem.request(message, timeout: network.requestTimeout)
+      return try await request(message, timeout: network.requestTimeout, for: .control(.settings))
 
     } catch let error as ModemError {
 
@@ -942,6 +1028,8 @@ public struct Device: Sendable {
     let modem: any LinkingModem = self.modem
     let message = ExtendedMessage(to: device, command: ExtendedDirectCommand.getSet(), userData: settings.getUserData(button: button))
     let isPerButton: Bool = settings.isPerButton
+
+    try await refuseIfNeverSent(message.command, for: .control(.settings))
 
     do {
 
@@ -1076,7 +1164,7 @@ public struct Device: Sendable {
 
     }
 
-    if DeviceSettingSafety.locksProgramming(item, state: state) {
+    if DeviceSettingSafety.setsNeverSetFlag(item, state: state) {
 
       throw DeviceSettingError.leavesProgrammingLocked(label: item.label)
 
@@ -1088,6 +1176,13 @@ public struct Device: Sendable {
 
     }
 
+    // The same bytes as a command the catalog never sends are refused by any route.
+    if DeviceSettingSafety.sendsNeverSentCommand(change, in: commands) {
+
+      throw DeviceSettingError.neverWritten(label: item.label)
+
+    }
+
     let read = StandardMessage(to: address, command: flag.readCommand)
     let before: UInt8? = try await answer(read)?.command.command2
 
@@ -1095,7 +1190,7 @@ public struct Device: Sendable {
     case let .setOperatingFlags(command2):
       try await sendFlag(command2, flag: flag, description: description, commands: commands)
     case let .standardCommand(command):
-      _ = try await modem.request(StandardMessage(to: address, command: try command.command()), timeout: network.requestTimeout)
+      _ = try await request(StandardMessage(to: address, command: try command.command()), timeout: network.requestTimeout, for: .setting(label: item.label))
     }
 
     let after: UInt8? = try await answer(read)?.command.command2
@@ -1127,12 +1222,13 @@ public struct Device: Sendable {
   private func sendFlag(_ command2: UInt8, flag: OperatingFlag, description: DeviceDescription, commands: CommandSet) async throws {
 
     let command = StandardDirectCommand.setOperatingFlags(flag: command2)
+    let purpose: SendPurpose = .setting(label: SettingItem(flag: flag).label)
 
     // An i2CS device gets the extended form with a checksum even when the flag names an
     // extendedWhen flag: i2CS is checked first, so the guarding flag isn't read for it.
     if try await engine(description) == .i2cs {
 
-      _ = try await modem.request(ExtendedMessage(to: address, command: command), timeout: Modem.defaultExtendedRequestTimeout)
+      _ = try await request(ExtendedMessage(to: address, command: command), timeout: Modem.defaultExtendedRequestTimeout, for: purpose)
 
       return
 
@@ -1147,7 +1243,7 @@ public struct Device: Sendable {
         let userData: UserData = DeviceStandardCommand.protectedUserData(for: command.command)
         let message = ExtendedMessage(to: address, command: command, userData: userData, integrity: UnprotectedIntegrity())
 
-        _ = try await modem.request(message, timeout: Modem.defaultExtendedRequestTimeout)
+        _ = try await request(message, timeout: Modem.defaultExtendedRequestTimeout, for: purpose)
 
         return
 
@@ -1155,7 +1251,7 @@ public struct Device: Sendable {
 
     }
 
-    _ = try await modem.request(StandardMessage(to: address, command: command), timeout: network.requestTimeout)
+    _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, for: purpose)
 
   }
 
@@ -1172,7 +1268,7 @@ public struct Device: Sendable {
 
     do {
 
-      acknowledgment = try await modem.request(StandardMessage(to: address, command: StandardDirectCommand.getEngineVersion), timeout: network.requestTimeout)
+      acknowledgment = try await request(StandardMessage(to: address, command: StandardDirectCommand.getEngineVersion), timeout: network.requestTimeout, for: .control(.settings))
 
     } catch let error as ModemError {
 
@@ -1233,23 +1329,23 @@ public struct Device: Sendable {
 
     }
 
-    // A byte that holds operating flags writes them all, so it never turns the programming
-    // lock on, and never changes a flag that's never written.
-    let guardedFlags: [OperatingFlag] = DeviceSettingSafety.guardedFlags(in: value, of: commands)
+    // A byte that holds operating flags writes them all, so it never sets a bit that's never
+    // set, such as the programming lock's, and never changes a bit that's kept.
+    let guardedBits: [DeviceSettingSafety.GuardedBit] = DeviceSettingSafety.guardedBits(in: value, of: commands)
 
-    if let lock = guardedFlags.first(where: { (flag: OperatingFlag) -> Bool in flag.name == DeviceSettingSafety.programmingLock }), raw & lock.bit != 0 {
+    for bit in guardedBits where bit.rule == .neverSet && raw & bit.mask != 0 {
 
-      throw DeviceSettingError.leavesProgrammingLocked(label: SettingItem(flag: lock).label)
+      throw DeviceSettingError.leavesProgrammingLocked(label: bit.label)
 
     }
 
     let before: [SettingName: UInt8]? = try await readValues(settings: settings, button: target)
 
-    for flag in guardedFlags where DeviceSettingSafety.neverWritten.contains(flag.name) {
+    for bit in guardedBits where bit.rule == .keep {
 
-      guard let current = before?[value.name], current & flag.bit == raw & flag.bit else {
+      guard let current = before?[value.name], current & bit.mask == raw & bit.mask else {
 
-        throw DeviceSettingError.neverWritten(label: SettingItem(flag: flag).label)
+        throw DeviceSettingError.neverWritten(label: bit.label)
 
       }
 
@@ -1270,7 +1366,7 @@ public struct Device: Sendable {
 
     }
 
-    _ = try await modem.request(message, timeout: Modem.defaultExtendedRequestTimeout)
+    _ = try await request(message, timeout: Modem.defaultExtendedRequestTimeout, for: .setting(label: item.label))
 
     let after: [SettingName: UInt8]? = try await readValues(settings: settings, button: target)
     let changedButton: Int? = isPerButton ? Int(target) : nil

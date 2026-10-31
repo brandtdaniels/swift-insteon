@@ -174,6 +174,12 @@ public struct SettingValue: Hashable, Sendable {
   /// the value, for a value no extended Set write sets.
   public var write: SettingName?
 
+  /// For a value whose byte is an operating flags byte, the Get Operating Flags query whose
+  /// reply it is, such as `0x00`, or `nil` for any other value. The command set's operating
+  /// flags with that query name its bits, as ``CommandSet/flagsHeld(by:)`` gives
+  /// them, and say which a write must guard.
+  public var flagsQuery: OperatingFlagsRequest?
+
   /// Creates a value.
   ///
   /// - Parameters:
@@ -192,6 +198,7 @@ public struct SettingValue: Hashable, Sendable {
   ///   - scale: What one count is worth in the unit. Defaults to 1.
   ///   - table: The value table that names each value. Defaults to `nil`.
   ///   - write: The extended command that sets the value. Defaults to `nil`.
+  ///   - flagsQuery: The Get Operating Flags query whose reply the byte is. Defaults to `nil`.
   public init(
     name: SettingName,
     summary: String,
@@ -206,7 +213,8 @@ public struct SettingValue: Hashable, Sendable {
     unit: FieldUnit? = nil,
     scale: Double = 1,
     table: SettingName? = nil,
-    write: SettingName? = nil
+    write: SettingName? = nil,
+    flagsQuery: OperatingFlagsRequest? = nil
   ) {
 
     precondition((3...14).contains(position), "A setting's value is in D3 through D14.")
@@ -225,6 +233,7 @@ public struct SettingValue: Hashable, Sendable {
     self.scale = scale
     self.table = table
     self.write = write
+    self.flagsQuery = flagsQuery
 
   }
 

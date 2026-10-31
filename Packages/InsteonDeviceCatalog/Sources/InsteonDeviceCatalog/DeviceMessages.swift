@@ -50,6 +50,10 @@ public struct DeviceStandardCommand: Hashable, Sendable {
   /// ``DeviceStandardCommand/protectedUserData(for:)``.
   public var extendedWhen: SettingName?
 
+  /// Whether an app may send the command, or `nil` if the catalog gives no guard.
+  /// ``CommandGuard/never`` marks one an app never sends.
+  public var sendGuard: CommandGuard?
+
   /// Creates a standard command.
   ///
   /// - Parameters:
@@ -61,6 +65,7 @@ public struct DeviceStandardCommand: Hashable, Sendable {
   ///   - followUp: A value one more message with the same cmd1 may carry.
   ///   - extendedWhen: The operating flag that has the command sent as an extended message.
   ///   - verification: How sure the catalog is of the command. Defaults to ``Verification/documented``.
+  ///   - sendGuard: Whether an app may send the command. Defaults to `nil`.
   public init(
     name: SettingName,
     summary: String,
@@ -69,7 +74,8 @@ public struct DeviceStandardCommand: Hashable, Sendable {
     reply: MessageField? = nil,
     followUp: MessageField? = nil,
     extendedWhen: SettingName? = nil,
-    verification: Verification = .documented
+    verification: Verification = .documented,
+    sendGuard: CommandGuard? = nil
   ) {
 
     self.name = name
@@ -80,6 +86,7 @@ public struct DeviceStandardCommand: Hashable, Sendable {
     self.reply = reply
     self.followUp = followUp
     self.extendedWhen = extendedWhen
+    self.sendGuard = sendGuard
 
   }
 
@@ -285,6 +292,10 @@ public struct DeviceExtendedCommand: Hashable, Sendable {
   /// The extended reply that answers the command, if any.
   public var reply: DeviceExtendedReply?
 
+  /// Whether an app may send the command, or `nil` if the catalog gives no guard.
+  /// ``CommandGuard/never`` marks one an app never sends.
+  public var sendGuard: CommandGuard?
+
   /// Creates an extended command.
   ///
   /// - Parameters:
@@ -297,6 +308,7 @@ public struct DeviceExtendedCommand: Hashable, Sendable {
   ///   - integrity: How the command's user data is protected.
   ///   - reply: The extended reply that answers the command.
   ///   - verification: How sure the catalog is of the command. Defaults to ``Verification/documented``.
+  ///   - sendGuard: Whether an app may send the command. Defaults to `nil`.
   public init(
     name: SettingName,
     summary: String,
@@ -306,7 +318,8 @@ public struct DeviceExtendedCommand: Hashable, Sendable {
     parameters: [MessageField] = [],
     integrity: MessageIntegrity = .unprotected,
     reply: DeviceExtendedReply? = nil,
-    verification: Verification = .documented
+    verification: Verification = .documented,
+    sendGuard: CommandGuard? = nil
   ) {
 
     self.name = name
@@ -318,6 +331,7 @@ public struct DeviceExtendedCommand: Hashable, Sendable {
     self.parameters = parameters
     self.integrity = integrity
     self.reply = reply
+    self.sendGuard = sendGuard
 
   }
 

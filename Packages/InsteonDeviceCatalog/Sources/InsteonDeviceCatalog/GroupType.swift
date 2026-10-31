@@ -50,13 +50,152 @@ public struct GroupType: Hashable, Sendable {
     /// A button that controls other devices.
     public static let button = Kind(rawValue: "button")
 
+    /// A window covering or other motorized cover that opens and closes.
+    public static let windowCovering = Kind(rawValue: "windowCovering")
+
+    /// An alarm that sounds when a linked device triggers it while the device is armed in one
+    /// of the group type's ``GroupType/armModes``.
+    public static let alarm = Kind(rawValue: "alarm")
+
+    /// A group that arms the device in all of the group type's ``GroupType/armModes``.
+    public static let arming = Kind(rawValue: "arming")
+
     /// The kind as the catalog writes it.
     public var description: String { rawValue }
 
   }
 
+  /// A mode a device can be armed in, for an ``GroupType/Kind/alarm`` or
+  /// ``GroupType/Kind/arming`` group.
+  public struct ArmMode: RawRepresentable, Hashable, Sendable, CustomStringConvertible {
+
+    /// The mode as the catalog writes it, such as `"away"`.
+    public let rawValue: String
+
+    /// Creates a mode from the catalog's name for it.
+    ///
+    /// - Parameter rawValue: The mode as the catalog writes it.
+    public init(rawValue: String) {
+
+      self.rawValue = rawValue
+
+    }
+
+    /// Armed while someone is home.
+    public static let home = ArmMode(rawValue: "home")
+
+    /// Armed while everyone is away.
+    public static let away = ArmMode(rawValue: "away")
+
+    /// The mode as the catalog writes it.
+    public var description: String { rawValue }
+
+  }
+
+  /// Parts of a group's load that one command can switch together, such as a ballast dimmer's
+  /// two relays.
+  ///
+  /// Each action whose command takes a parameter, and gives no fixed value, selects outputs by
+  /// their bits in it, so the bits of several outputs ORed together switch them all at once.
+  public struct Outputs: Hashable, Sendable {
+
+    /// One output, selected by its bit.
+    public struct Output: Hashable, Sendable {
+
+      /// The output's bit in the action's parameter.
+      public var mask: UInt8
+
+      /// The output's name, such as `"relay1"`.
+      public var name: SettingName
+
+      /// What a control calls the output, such as `"Relay 1"`.
+      public var label: String
+
+      /// Creates an output.
+      ///
+      /// - Parameters:
+      ///   - mask: The output's bit in the action's parameter.
+      ///   - name: The output's name.
+      ///   - label: What a control calls the output.
+      public init(mask: UInt8, name: SettingName, label: String) {
+
+        self.mask = mask
+        self.name = name
+        self.label = label
+
+      }
+
+    }
+
+    /// The operating flag state under which the load is these outputs, such as relay mode, or
+    /// `nil` if it always is.
+    public var activeWhen: DeviceProfile.Group.Condition?
+
+    /// The outputs.
+    public var bits: [Output]
+
+    /// How sure the catalog is of the outputs.
+    public var verification: Verification
+
+    /// Creates outputs.
+    ///
+    /// - Parameters:
+    ///   - activeWhen: The operating flag state under which the load is these outputs.
+    ///   - bits: The outputs.
+    ///   - verification: How sure the catalog is of the outputs. Defaults to ``Verification/documented``.
+    public init(activeWhen: DeviceProfile.Group.Condition? = nil, bits: [Output], verification: Verification = .documented) {
+
+      self.activeWhen = activeWhen
+      self.bits = bits
+      self.verification = verification
+
+    }
+
+  }
+
   /// How to read a group's state.
   public struct State: Hashable, Sendable {
+
+    /// A pattern of bits in a status byte the device's groups share, which says the group is
+    /// on, such as an EZFlora zone's.
+    public struct OnWhen: Hashable, Sendable {
+
+      /// The bits of cmd2 to look at.
+      public var mask: UInt8
+
+      /// What the bits are while the group is on.
+      public var value: UInt8
+
+      /// How sure the catalog is of the pattern.
+      public var verification: Verification
+
+      /// Creates a pattern.
+      ///
+      /// - Parameters:
+      ///   - mask: The bits of cmd2 to look at.
+      ///   - value: What the bits are while the group is on.
+      ///   - verification: How sure the catalog is of the pattern. Defaults to ``Verification/documented``.
+      public init(mask: UInt8, value: UInt8, verification: Verification = .documented) {
+
+        self.mask = mask
+        self.value = value
+        self.verification = verification
+
+      }
+
+      /// Whether the group is on, given the cmd2 of the state command's acknowledgment: whether
+      /// cmd2 ANDed with ``GroupType/State/OnWhen/mask`` equals
+      /// ``GroupType/State/OnWhen/value``.
+      ///
+      /// - Parameter command2: The acknowledgment's cmd2.
+      /// - Returns: `true` if the group is on.
+      public func isOn(command2: UInt8) -> Bool {
+
+        command2 & mask == value
+
+      }
+
+    }
 
     /// A name for a range of the state's value, such as a fan speed.
     public struct Range: Hashable, Sendable {
@@ -92,17 +231,24 @@ public struct GroupType: Hashable, Sendable {
     /// Names for ranges of the reply's value, such as a fan's speeds.
     public var ranges: [Range]
 
+    /// The pattern of the reply's bits that says the group is on, for a group whose state is
+    /// part of a status byte the device's groups share, or `nil` if the reply isn't read that
+    /// way.
+    public var onWhen: OnWhen?
+
     /// Creates a way to read a group's state.
     ///
     /// - Parameters:
     ///   - command: The standard command whose acknowledgment carries the state.
     ///   - isBitPerGroup: Whether the reply holds one bit per group. Defaults to `false`.
     ///   - ranges: Names for ranges of the reply's value.
-    public init(command: SettingName, isBitPerGroup: Bool = false, ranges: [Range] = []) {
+    ///   - onWhen: The pattern of the reply's bits that says the group is on. Defaults to `nil`.
+    public init(command: SettingName, isBitPerGroup: Bool = false, ranges: [Range] = [], onWhen: OnWhen? = nil) {
 
       self.command = command
       self.isBitPerGroup = isBitPerGroup
       self.ranges = ranges
+      self.onWhen = onWhen
 
     }
 
@@ -186,6 +332,16 @@ public struct GroupType: Hashable, Sendable {
   /// What an app can tell the group to do. A group whose type has actions is a responder.
   public var actions: [Action]
 
+  /// The parts of the group's load that one action can switch together, or `nil` if the
+  /// command set doesn't divide the load.
+  public var outputs: Outputs?
+
+  /// For an ``GroupType/Kind/alarm`` group, the modes in any of which a trigger from a linked
+  /// device sounds it; for an ``GroupType/Kind/arming`` group, the modes a group On from its
+  /// controller arms the device in, all together. Empty for other groups. A mode from a later
+  /// version of the catalog keeps its name.
+  public var armModes: [ArmMode]
+
   /// What an ALL-Link database record's data bytes hold for the group. Empty if the command
   /// set doesn't say.
   public var linkData: LinkData
@@ -203,6 +359,8 @@ public struct GroupType: Hashable, Sendable {
   ///   - actions: What an app can tell the group to do.
   ///   - linkData: What an ALL-Link database record's data bytes hold for the group.
   ///   - verification: How sure the catalog is of the group type. Defaults to ``Verification/documented``.
+  ///   - outputs: The parts of the group's load one action can switch together. Defaults to `nil`.
+  ///   - armModes: The modes an alarm sounds in or an arming group arms. Defaults to none.
   public init(
     name: SettingName,
     label: String,
@@ -210,7 +368,9 @@ public struct GroupType: Hashable, Sendable {
     state: State? = nil,
     actions: [Action] = [],
     linkData: LinkData = LinkData(),
-    verification: Verification = .documented
+    verification: Verification = .documented,
+    outputs: Outputs? = nil,
+    armModes: [ArmMode] = []
   ) {
 
     self.name = name
@@ -220,6 +380,8 @@ public struct GroupType: Hashable, Sendable {
     self.actions = actions
     self.linkData = linkData
     self.verification = verification
+    self.outputs = outputs
+    self.armModes = armModes
 
   }
 
@@ -422,6 +584,46 @@ extension GroupType: Decodable {
     case actions
     case linkData
     case verification
+    case outputs
+    case armModes
+
+  }
+
+  private struct ConditionEntry: Decodable {
+
+    let flag: String
+
+    let set: Bool
+
+  }
+
+  private struct OnWhenEntry: Decodable {
+
+    let mask: ProfileByte
+
+    let value: ProfileByte
+
+    let verification: Verification?
+
+  }
+
+  private struct OutputsEntry: Decodable {
+
+    struct Bit: Decodable {
+
+      let mask: ProfileByte
+
+      let name: String
+
+      let label: String
+
+    }
+
+    let activeWhen: ConditionEntry?
+
+    let bits: [Bit]
+
+    let verification: Verification?
 
   }
 
@@ -442,6 +644,8 @@ extension GroupType: Decodable {
     let bitPerGroup: Bool?
 
     let ranges: [RangeEntry]?
+
+    let onWhen: OnWhenEntry?
 
   }
 
@@ -469,7 +673,7 @@ extension GroupType: Decodable {
 
   /// Decodes a group type from a command set's `groupTypes`.
   ///
-  /// A kind from a later version of the catalog keeps its name.
+  /// A kind or arm mode from a later version of the catalog keeps its name.
   ///
   /// - Parameter decoder: The decoder to read from.
   /// - Throws: `DecodingError` if the JSON isn't a group type, a byte isn't written as `0x`
@@ -494,12 +698,27 @@ extension GroupType: Decodable {
 
           return State.Range(values: range.from.value...range.through.value, label: range.label)
 
+        },
+        onWhen: entry.onWhen.map { onWhen in
+
+          State.OnWhen(mask: onWhen.mask.value, value: onWhen.value.value, verification: onWhen.verification ?? .documented)
+
         }
       )
 
     }
 
     let linkData = try container.decodeIfPresent(LinkDataEntry.self, forKey: .linkData)
+
+    let outputs = try container.decodeIfPresent(OutputsEntry.self, forKey: .outputs).map { entry in
+
+      Outputs(
+        activeWhen: entry.activeWhen.map { DeviceProfile.Group.Condition(flag: SettingName(rawValue: $0.flag), isSet: $0.set) },
+        bits: entry.bits.map { Outputs.Output(mask: $0.mask.value, name: SettingName(rawValue: $0.name), label: $0.label) },
+        verification: entry.verification ?? .documented
+      )
+
+    }
 
     self.init(
       name: SettingName(rawValue: try container.decode(String.self, forKey: .name)),
@@ -518,7 +737,9 @@ extension GroupType: Decodable {
 
       },
       linkData: LinkData(responder: linkData?.responder ?? [], controller: linkData?.controller ?? []),
-      verification: try container.decodeIfPresent(Verification.self, forKey: .verification) ?? .documented
+      verification: try container.decodeIfPresent(Verification.self, forKey: .verification) ?? .documented,
+      outputs: outputs,
+      armModes: (try container.decodeIfPresent([String].self, forKey: .armModes) ?? []).map(ArmMode.init(rawValue:))
     )
 
   }

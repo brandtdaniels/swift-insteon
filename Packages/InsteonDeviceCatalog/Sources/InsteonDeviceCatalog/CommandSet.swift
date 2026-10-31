@@ -83,6 +83,11 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
   /// rates, which ``LinkDataByte/table`` names.
   public var valueTables: [ValueTable]
 
+  /// The operating flags linking can change on its own, which a linking flow may read before
+  /// it links and set back afterward. It's an allowlist: a flow changes and restores no other
+  /// flag. Empty when the catalog names none.
+  public var linkingChanges: [LinkingChange]
+
   /// Where Insteon's documents disagree, and which one the command set follows.
   public var notes: [String]
 
@@ -105,6 +110,7 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
   ///   - celsiusIndicator: The flag, value or bit that's true when the device displays Celsius.
   ///   - groupTypes: What the products' ALL-Link groups are.
   ///   - valueTables: Names for the values of settings.
+  ///   - linkingChanges: The operating flags linking can change on its own. Defaults to none.
   ///   - notes: Where Insteon's documents disagree.
   ///   - sources: The documents the command set comes from.
   public init(
@@ -121,6 +127,7 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
     celsiusIndicator: SettingName? = nil,
     groupTypes: [GroupType] = [],
     valueTables: [ValueTable] = [],
+    linkingChanges: [LinkingChange] = [],
     notes: [String] = [],
     sources: [String] = []
   ) {
@@ -138,6 +145,7 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
     self.celsiusIndicator = celsiusIndicator
     self.groupTypes = groupTypes
     self.valueTables = valueTables
+    self.linkingChanges = linkingChanges
     self.notes = notes
     self.sources = sources
 
@@ -326,6 +334,10 @@ public struct OperatingFlag: Hashable, Sendable {
   /// the bit.
   public var offCommand: SettingName?
 
+  /// How an app writing the flag treats its bit, or `nil` if the catalog gives no guard. A
+  /// guard from a later version of the catalog keeps its name.
+  public var writeGuard: FlagGuard?
+
   /// Creates an operating flag.
   ///
   /// - Parameters:
@@ -345,6 +357,7 @@ public struct OperatingFlag: Hashable, Sendable {
   ///   - defaultValue: Whether the bit is 1 as the device leaves the factory. Defaults to `nil`.
   ///   - onCommand: The standard command that sets the bit. Defaults to `nil`.
   ///   - offCommand: The standard command that clears the bit. Defaults to `nil`.
+  ///   - writeGuard: How an app writing the flag treats its bit. Defaults to `nil`.
   public init(
     name: SettingName,
     summary: String,
@@ -359,7 +372,8 @@ public struct OperatingFlag: Hashable, Sendable {
     isAdvanced: Bool = false,
     defaultValue: Bool? = nil,
     onCommand: SettingName? = nil,
-    offCommand: SettingName? = nil
+    offCommand: SettingName? = nil,
+    writeGuard: FlagGuard? = nil
   ) {
 
     self.name = name
@@ -376,6 +390,7 @@ public struct OperatingFlag: Hashable, Sendable {
     self.defaultValue = defaultValue
     self.onCommand = onCommand
     self.offCommand = offCommand
+    self.writeGuard = writeGuard
 
   }
 
@@ -493,6 +508,10 @@ public struct OperatingFlagCommand: Hashable, Sendable {
   /// ``DeviceStandardCommand/protectedUserData(for:)``.
   public var extendedWhen: SettingName?
 
+  /// Whether an app may send the command, or `nil` if the catalog gives no guard.
+  /// ``CommandGuard/never`` marks one an app never sends.
+  public var sendGuard: CommandGuard?
+
   /// Creates a flag command.
   ///
   /// - Parameters:
@@ -501,13 +520,22 @@ public struct OperatingFlagCommand: Hashable, Sendable {
   ///   - command2: The Set Operating Flags cmd2.
   ///   - extendedWhen: The operating flag that has the command sent as an extended message.
   ///   - verification: How sure the catalog is of the command. Defaults to ``Verification/documented``.
-  public init(name: SettingName, summary: String, command2: UInt8, extendedWhen: SettingName? = nil, verification: Verification = .documented) {
+  ///   - sendGuard: Whether an app may send the command. Defaults to `nil`.
+  public init(
+    name: SettingName,
+    summary: String,
+    command2: UInt8,
+    extendedWhen: SettingName? = nil,
+    verification: Verification = .documented,
+    sendGuard: CommandGuard? = nil
+  ) {
 
     self.name = name
     self.summary = summary
     self.verification = verification
     self.command = .setOperatingFlags(flag: command2)
     self.extendedWhen = extendedWhen
+    self.sendGuard = sendGuard
 
   }
 

@@ -409,15 +409,21 @@ public struct FieldBit: Hashable, Sendable {
   /// What the bit means when it's 1.
   public var name: SettingName
 
+  /// For a flags parameter an app writes, how the write treats the bit, the same as the guard
+  /// of the operating flag the bit mirrors, or `nil` if the catalog gives none.
+  public var writeGuard: FlagGuard?
+
   /// Creates a named bit.
   ///
   /// - Parameters:
   ///   - mask: The bit's mask.
   ///   - name: What the bit means when it's 1.
-  public init(mask: UInt8, name: SettingName) {
+  ///   - writeGuard: How a write treats the bit. Defaults to `nil`.
+  public init(mask: UInt8, name: SettingName, writeGuard: FlagGuard? = nil) {
 
     self.mask = mask
     self.name = name
+    self.writeGuard = writeGuard
 
   }
 

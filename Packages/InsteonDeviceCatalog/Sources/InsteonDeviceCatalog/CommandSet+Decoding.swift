@@ -18,6 +18,7 @@ extension CommandSet: Decodable {
     case displayScale
     case groupTypes
     case valueTables
+    case linkingChanges
     case notes
     case sources
 
@@ -53,6 +54,8 @@ extension CommandSet: Decodable {
 
     let offCommand: String?
 
+    let `guard`: String?
+
   }
 
   private struct Reading: Decodable {
@@ -84,6 +87,8 @@ extension CommandSet: Decodable {
     let extendedWhen: String?
 
     let verification: Verification?
+
+    let `guard`: String?
 
   }
 
@@ -135,6 +140,8 @@ extension CommandSet: Decodable {
 
     let write: String?
 
+    let flagsQuery: ProfileByte?
+
   }
 
   private struct Write: Decodable {
@@ -182,6 +189,8 @@ extension CommandSet: Decodable {
     let mask: ProfileByte
 
     let name: String
+
+    let `guard`: String?
 
   }
 
@@ -251,6 +260,8 @@ extension CommandSet: Decodable {
 
     let verification: Verification?
 
+    let `guard`: String?
+
   }
 
   private struct ExtendedReply: Decodable {
@@ -289,6 +300,8 @@ extension CommandSet: Decodable {
 
     let verification: Verification?
 
+    let `guard`: String?
+
   }
 
   private struct DirectMessage: Decodable {
@@ -311,12 +324,21 @@ extension CommandSet: Decodable {
 
   }
 
+  private struct LinkingChangeEntry: Decodable {
+
+    let flag: String
+
+    let verification: Verification?
+
+  }
+
   /// Decodes a command set from the catalog's JSON.
   ///
   /// A value of a kind from a later version of the catalog reads as
   /// ``SettingValue/Kind/number``, and a field's as a ``FieldKind/number(isSigned:scale:unit:)``.
   /// A unit or settings section from a later version reads as none, and an extended command
-  /// whose integrity scheme is from a later version is left out.
+  /// whose integrity scheme is from a later version is left out. A flag or command guard from a
+  /// later version keeps its name.
   ///
   /// - Parameter decoder: The decoder to read from.
   /// - Throws: `DecodingError` if the JSON isn't a command set, a byte isn't written as `0x`
@@ -348,7 +370,8 @@ extension CommandSet: Decodable {
           isAdvanced: flag.advanced ?? false,
           defaultValue: flag.default,
           onCommand: flag.onCommand.map(SettingName.init(rawValue:)),
-          offCommand: flag.offCommand.map(SettingName.init(rawValue:))
+          offCommand: flag.offCommand.map(SettingName.init(rawValue:)),
+          writeGuard: flag.guard.map(FlagGuard.init(rawValue:))
         )
 
       },
@@ -372,7 +395,8 @@ extension CommandSet: Decodable {
           summary: command.description,
           command2: command.command2.value,
           extendedWhen: command.extendedWhen.map(SettingName.init(rawValue:)),
-          verification: command.verification ?? .documented
+          verification: command.verification ?? .documented,
+          sendGuard: command.guard.map(CommandGuard.init(rawValue:))
         )
 
       },
@@ -383,6 +407,11 @@ extension CommandSet: Decodable {
       },
       groupTypes: try container.decodeIfPresent([GroupType].self, forKey: .groupTypes) ?? [],
       valueTables: try container.decodeIfPresent([ValueTable].self, forKey: .valueTables) ?? [],
+      linkingChanges: try (container.decodeIfPresent([LinkingChangeEntry].self, forKey: .linkingChanges) ?? []).map { entry in
+
+        LinkingChange(flag: SettingName(rawValue: entry.flag), verification: entry.verification ?? .documented)
+
+      },
       notes: try container.decodeIfPresent([String].self, forKey: .notes) ?? [],
       sources: try container.decode([String].self, forKey: .sources)
     )
@@ -439,7 +468,11 @@ extension CommandSet: Decodable {
 
         kind = .enumeration(enumeration)
       case "flags":
-        kind = .flags((field.bits ?? []).map { FieldBit(mask: $0.mask.value, name: SettingName(rawValue: $0.name)) })
+        kind = .flags((field.bits ?? []).map { bit in
+
+          FieldBit(mask: bit.mask.value, name: SettingName(rawValue: bit.name), writeGuard: bit.guard.map(FlagGuard.init(rawValue:)))
+
+        })
       case "boolean":
         kind = .boolean
       default:
@@ -518,7 +551,8 @@ extension CommandSet: Decodable {
         reply: try command.reply.map { try field($0, in: .standardCommands, extended: false) },
         followUp: try command.followUp.map { try field($0, in: .standardCommands, extended: false) },
         extendedWhen: command.extendedWhen.map(SettingName.init(rawValue:)),
-        verification: command.verification ?? .documented
+        verification: command.verification ?? .documented,
+        sendGuard: command.guard.map(CommandGuard.init(rawValue:))
       )
 
     }
@@ -559,7 +593,8 @@ extension CommandSet: Decodable {
         parameters: try (command.parameters ?? []).map { try field($0, in: .extendedCommands, extended: true) },
         integrity: commandIntegrity,
         reply: reply,
-        verification: command.verification ?? .documented
+        verification: command.verification ?? .documented,
+        sendGuard: command.guard.map(CommandGuard.init(rawValue:))
       )
 
     }
@@ -632,7 +667,8 @@ extension CommandSet: Decodable {
         unit: value.unit.flatMap(FieldUnit.init(rawValue:)),
         scale: value.scale ?? 1,
         table: value.table.map(SettingName.init(rawValue:)),
-        write: value.write.map(SettingName.init(rawValue:))
+        write: value.write.map(SettingName.init(rawValue:)),
+        flagsQuery: value.flagsQuery.map { OperatingFlagsRequest(rawValue: $0.value) }
       )
 
     }

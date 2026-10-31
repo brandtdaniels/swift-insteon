@@ -49,7 +49,9 @@ public struct DeviceCapabilities: Hashable, Sendable {
   /// there are no groups.
   public var mainGroupNumber: Int?
 
-  /// Whether the device's command set lists Beep. ``Device/beep()`` sends Beep either way.
+  /// Whether the device's command set lists a Beep the device may be sent. ``Device/beep()``
+  /// sends the protocol's Beep when the command set lists none, and refuses one it lists but
+  /// never sends.
   public var canBeep: Bool
 
   /// The settings the catalog describes, in the order a settings page shows them. Empty when
@@ -64,7 +66,7 @@ public struct DeviceCapabilities: Hashable, Sendable {
   ///   - source: Where the capabilities come from.
   ///   - groups: The groups that can be controlled or read.
   ///   - mainGroupNumber: The group an operation controls when it isn't given one.
-  ///   - canBeep: Whether the command set lists Beep.
+  ///   - canBeep: Whether the command set lists a Beep the device may be sent.
   ///   - settings: The settings the catalog describes.
   public init(
     productName: String?,
@@ -203,6 +205,15 @@ public struct DeviceGroupKind: RawRepresentable, Hashable, Sendable, CustomStrin
 
   /// A button that controls other devices.
   public static let button = DeviceGroupKind(rawValue: "button")
+
+  /// A window covering or other motorized cover that opens and closes.
+  public static let windowCovering = DeviceGroupKind(rawValue: "windowCovering")
+
+  /// An alarm that sounds when a linked device triggers it while the device is armed.
+  public static let alarm = DeviceGroupKind(rawValue: "alarm")
+
+  /// A group that arms the device.
+  public static let arming = DeviceGroupKind(rawValue: "arming")
 
   /// The kind as the catalog writes it.
   public var description: String { rawValue }
