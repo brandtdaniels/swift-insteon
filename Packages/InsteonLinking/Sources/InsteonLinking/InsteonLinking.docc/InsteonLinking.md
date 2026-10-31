@@ -92,6 +92,10 @@ The modem's own database is changed with its Manage ALL-Link Record command. Its
 matches a record's group and address but not its role, so ``Unlinker`` finds every matching
 record first, deletes them all, and adds back the ones it's keeping.
 
+For a device that's gone, such as one thrown away, ``Unlinker/deleteModemRecords(of:)``
+deletes every record of the modem's that names it, without sending the device anything. The
+device's own records stay, so it's for a device that won't come back.
+
 ### Reading databases less often
 
 Reading a device's database takes a request for every record, so a linker reads each
