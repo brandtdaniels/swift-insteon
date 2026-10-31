@@ -10,6 +10,10 @@ import InsteonProtocol
 ///
 /// When the device goes first, the instructions end by asking for Return when standard input
 /// is a terminal, and the modem joins once it's pressed; Control-C stops the wait.
+///
+/// The identity a link reports is saved to the cache as soon as the link asked for is made,
+/// as `insteon links --identify` saves each identity it learns, so a second Control-C during
+/// the link back, which ends the command at once, doesn't lose it.
 struct LinkingPrompter: LinkingObserver {
 
   /// The catalog's product names, for the identity printed with a link made.
@@ -19,10 +23,19 @@ struct LinkingPrompter: LinkingObserver {
   /// both legs are done; a removed link's as it's reported.
   let printsJSON: Bool
 
+  /// The network whose cache keeps the identities devices report.
+  let cached: CachedNetwork
+
   func linking(_ event: LinkingEvent) async {
 
     switch event {
     case let .linked(linked):
+      if linked.leg == .first {
+
+        await cached.save()
+
+      }
+
       guard !printsJSON else {
 
         return

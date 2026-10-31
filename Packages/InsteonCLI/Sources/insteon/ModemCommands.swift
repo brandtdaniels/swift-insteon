@@ -247,7 +247,7 @@ enum ModemCommands {
 
     try await IdentityStore.withNetwork(modem: modem, hub: nil, names: names) { (cached: CachedNetwork) async throws -> Void in
 
-      try await link(cached.network, options: options, names: names, printsJSON: printsJSON)
+      try await link(cached, options: options, names: names, printsJSON: printsJSON)
 
     }
 
@@ -255,11 +255,11 @@ enum ModemCommands {
 
   /// Links a device by its address, or whichever device's SET button is pressed, through the
   /// network's coordinator, which says what to do as it goes.
-  private static func link(_ network: DeviceNetwork, options: LinkOptions, names: ProductNames, printsJSON: Bool) async throws {
+  private static func link(_ cached: CachedNetwork, options: LinkOptions, names: ProductNames, printsJSON: Bool) async throws {
 
     let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? Linker.defaultManualLinkingTimeout
-    let observer = LinkingPrompter(names: names, printsJSON: printsJSON)
-    let coordinator: DeviceLinkingCoordinator = network.linking
+    let observer = LinkingPrompter(names: names, printsJSON: printsJSON, cached: cached)
+    let coordinator: DeviceLinkingCoordinator = cached.network.linking
     // Linked back when the catalog says the device controls, by default, whether it's linked
     // by its address or its SET button.
     let twoWay: TwoWayLinking = options.twoWay
@@ -355,7 +355,7 @@ enum ModemCommands {
     try await IdentityStore.withNetwork(modem: modem, hub: nil, names: names) { (cached: CachedNetwork) async throws -> Void in
 
       let coordinator: DeviceLinkingCoordinator = cached.network.linking
-      let observer = LinkingPrompter(names: names, printsJSON: printsJSON)
+      let observer = LinkingPrompter(names: names, printsJSON: printsJSON, cached: cached)
 
       if options.removesAllLinks, let device = options.device {
 
