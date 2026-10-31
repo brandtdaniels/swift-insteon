@@ -1,7 +1,4 @@
 import InsteonCore
-import InsteonDeviceCatalog
-import InsteonLinking
-import InsteonProtocol
 
 /// What `insteon remove` asks and prints, from what a `DeviceLinkingCoordinator` reports as it
 /// removes a device.

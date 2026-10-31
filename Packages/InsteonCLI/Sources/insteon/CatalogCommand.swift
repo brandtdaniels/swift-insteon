@@ -1,10 +1,6 @@
 import Foundation
-#if canImport(FoundationNetworking)
-import FoundationNetworking
-#endif
 import InsteonCLISupport
-import InsteonDeviceCatalog
-import InsteonNetworking
+import InsteonCore
 
 /// The command's two copies of the Insteon device catalog: the one bundled next to the
 /// command, and the one `insteon catalog update` keeps in the cache directory, described by
@@ -19,7 +15,7 @@ enum CatalogStore {
   struct Loaded {
 
     /// The catalog.
-    let catalog: DeviceCatalog
+    let catalog: ProductCatalog
 
     /// Which copy it was read from.
     let source: CatalogSource
@@ -44,7 +40,7 @@ enum CatalogStore {
   /// The bundled copy's version, or `nil` if the bundle or its manifest isn't there.
   static func bundledVersion() -> DeviceCatalogVersion? {
 
-    try? DeviceCatalog.bundledVersion()
+    try? ProductCatalog.bundledVersion()
 
   }
 
@@ -107,7 +103,7 @@ enum CatalogStore {
 
     if CatalogCache.source(bundled: bundled, cached: cached) == .cached {
 
-      if let json = cachedJSON(), let catalog = try? DeviceCatalog(json: json) {
+      if let json = cachedJSON(), let catalog = try? ProductCatalog(json: json) {
 
         return Loaded(catalog: catalog, source: .cached)
 
@@ -132,18 +128,18 @@ enum CatalogStore {
 
   /// The catalog the package ships with, or `nil` after a one-line warning if it isn't beside
   /// the command, as when only the executable was copied, or can't be read.
-  private static func bundledCatalog() -> DeviceCatalog? {
+  private static func bundledCatalog() -> ProductCatalog? {
 
     let url: URL
 
     do {
 
-      url = try DeviceCatalog.bundledCatalogURL()
+      url = try ProductCatalog.bundledCatalogURL()
 
     } catch {
 
       Output.note(
-        "insteon: warning: the Insteon device catalog (\(DeviceCatalog.bundleNames[0])) isn't next to the command, "
+        "insteon: warning: the Insteon device catalog (\(ProductCatalog.bundleName)) isn't next to the command, "
           + "so products aren't named. Scripts/install-insteon.sh installs the command with it."
       )
 
@@ -153,7 +149,7 @@ enum CatalogStore {
 
     do {
 
-      return try DeviceCatalog.load(contentsOf: url)
+      return try ProductCatalog.load(contentsOf: url)
 
     } catch {
 
@@ -235,12 +231,12 @@ enum CatalogCommand {
 
     do {
 
-      bundled = try DeviceCatalog.bundledVersion()
+      bundled = try ProductCatalog.bundledVersion()
 
     } catch {
 
       throw CommandFailure(
-        description: "The Insteon device catalog (\(DeviceCatalog.bundleNames[0])) isn't next to the command, "
+        description: "The Insteon device catalog (\(ProductCatalog.bundleName)) isn't next to the command, "
           + "so there's no version to update from. Scripts/install-insteon.sh installs the command with it."
       )
 
@@ -266,7 +262,7 @@ enum CatalogCommand {
 
     }
 
-    let location: URL = DeviceCatalogUpdater.defaultLocation
+    let location: URL = ProductCatalog.updateLocation
 
     guard location.scheme == "https" else {
 
@@ -276,52 +272,23 @@ enum CatalogCommand {
 
     Output.note("Checking \(location.absoluteString) for a newer Insteon device catalog...")
 
-    // An ephemeral session keeps no cookies, credentials or cache between requests.
-    let configuration: URLSessionConfiguration = URLSessionConfiguration.ephemeral
-    configuration.timeoutIntervalForRequest = requestTimeout
-    // A limit on the whole download too, so a slow server can't hold the command, or the
-    // install script, for long.
-    configuration.timeoutIntervalForResource = 120
-    let session: URLSession = URLSession(configuration: configuration)
-
-    defer {
-
-      session.finishTasksAndInvalidate()
-
-    }
-
-    // Redirects are followed only to HTTPS on the catalog's own host, decided before each one.
-    let client: URLSessionHTTPClient = URLSessionHTTPClient(session: session, redirectPolicy: DeviceCatalogUpdater.redirectPolicy)
-    let updater: DeviceCatalogUpdater = DeviceCatalogUpdater(client: client, location: location)
-    let result: DeviceCatalogUpdate
+    let result: ProductCatalogUpdate
 
     do {
 
-      result = try await updater.update(replacing: current)
+      // Only the catalog's site is asked, with a session that keeps no cookies or
+      // credentials, and redirects only to HTTPS on its own host.
+      result = try await ProductCatalog.update(replacing: current, from: location, requestTimeout: requestTimeout)
 
     } catch let error as CancellationError {
 
       throw error
 
-    } catch let error as DeviceCatalogUpdateError {
+    } catch let error as ProductCatalogUpdateError {
 
       try report(error, bundled: bundled, current: currentVersion)
 
       return
-
-    } catch HTTPClientError.insecureRedirect {
-
-      throw CommandFailure(description: "The Insteon device catalog's site redirected to an address that isn't HTTPS, so nothing was used and the current copy, \(currentVersion), stays.")
-
-    } catch HTTPClientError.redirectRefused {
-
-      throw CommandFailure(
-        description: "The Insteon device catalog's site redirected to another host or port, so the redirect wasn't followed, nothing was used, and the current copy, \(currentVersion), stays."
-      )
-
-    } catch is DecodingError {
-
-      throw CommandFailure(description: "The published Insteon device catalog couldn't be read, so the current copy, \(currentVersion), stays.")
 
     } catch {
 
@@ -334,7 +301,7 @@ enum CatalogCommand {
     switch result {
     case .unchanged:
       Output.line(CatalogText.upToDate(currentVersion))
-    case let .updated(json, _, version):
+    case let .updated(json, version):
       guard CatalogCache.source(bundled: bundled, cached: version) == .cached else {
 
         Output.line(CatalogText.bundledIsNewer(published: version, bundled: bundled))
@@ -353,7 +320,7 @@ enum CatalogCommand {
   /// which isn't a failure, or by throwing.
   ///
   /// - Throws: `CommandFailure` for an error other than an incompatible version.
-  private static func report(_ error: DeviceCatalogUpdateError, bundled: DeviceCatalogVersion, current: DeviceCatalogVersion) throws {
+  private static func report(_ error: ProductCatalogUpdateError, bundled: DeviceCatalogVersion, current: DeviceCatalogVersion) throws {
 
     switch error {
     case let .incompatibleVersion(published):
@@ -368,6 +335,14 @@ enum CatalogCommand {
       throw CommandFailure(
         description: "The downloaded Insteon device catalog didn't match its manifest's SHA-256, so the current copy, \(current), stays. Try again later."
       )
+    case .insecureRedirect:
+      throw CommandFailure(description: "The Insteon device catalog's site redirected to an address that isn't HTTPS, so nothing was used and the current copy, \(current), stays.")
+    case .redirectRefused:
+      throw CommandFailure(
+        description: "The Insteon device catalog's site redirected to another host or port, so the redirect wasn't followed, nothing was used, and the current copy, \(current), stays."
+      )
+    case .unreadableCatalog:
+      throw CommandFailure(description: "The published Insteon device catalog couldn't be read, so the current copy, \(current), stays.")
     }
 
   }

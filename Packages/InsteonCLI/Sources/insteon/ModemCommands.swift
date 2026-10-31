@@ -1,9 +1,5 @@
 import InsteonCLISupport
 import InsteonCore
-import InsteonDeviceCatalog
-import InsteonLinking
-import InsteonModem
-import InsteonProtocol
 
 /// The commands about the modem itself: `info`, `links`, `link`, `unlink` and `remove`.
 enum ModemCommands {
@@ -27,9 +23,9 @@ enum ModemCommands {
 
   }
 
-  static func info(_ modem: Modem, names: ProductNames, printsJSON: Bool) async throws {
+  static func info(_ modem: ModemSession, names: ProductNames, printsJSON: Bool) async throws {
 
-    let info = try await modem.modemInfo()
+    let info = try await modem.info()
     let product = names.name(category: info.category, subcategory: info.subcategory, firmwareVersion: info.firmwareVersion)
 
     if printsJSON {
@@ -90,7 +86,7 @@ enum ModemCommands {
 
   }
 
-  static func links(_ modem: Modem, hub: HubLocation?, options: LinksOptions, names: ProductNames, printsJSON: Bool) async throws {
+  static func links(_ modem: ModemSession, hub: HubLocation?, options: LinksOptions, names: ProductNames, printsJSON: Bool) async throws {
 
     Output.note("Reading the modem's ALL-Link database...")
 
@@ -195,7 +191,7 @@ enum ModemCommands {
 
     do {
 
-      let identification: DeviceIdentification = try await network.identify(device)
+      let identification = try await network.identify(device)
 
       guard identification.identity == nil else {
 
@@ -223,7 +219,7 @@ enum ModemCommands {
 
   // MARK: - link
 
-  static func link(_ modem: Modem, options: LinkOptions, names: ProductNames, printsJSON: Bool) async throws {
+  static func link(_ modem: ModemSession, options: LinkOptions, names: ProductNames, printsJSON: Bool) async throws {
 
     try await IdentityStore.withNetwork(modem: modem, hub: nil, names: names) { (cached: CachedNetwork) async throws -> Void in
 
@@ -237,7 +233,7 @@ enum ModemCommands {
   /// network's coordinator, which says what to do as it goes.
   private static func link(_ cached: CachedNetwork, options: LinkOptions, names: ProductNames, printsJSON: Bool) async throws {
 
-    let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? Linker.defaultManualLinkingTimeout
+    let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? DeviceLinkingCoordinator.defaultSETButtonTimeout
     let observer = LinkingPrompter(names: names, printsJSON: printsJSON, cached: cached)
     let coordinator: DeviceLinkingCoordinator = cached.network.linking
     // Linked back when the catalog says the device controls, by default, whether it's linked
@@ -302,7 +298,7 @@ enum ModemCommands {
 
   // MARK: - unlink
 
-  static func unlink(_ modem: Modem, options: UnlinkOptions, names: ProductNames, printsJSON: Bool) async throws {
+  static func unlink(_ modem: ModemSession, options: UnlinkOptions, names: ProductNames, printsJSON: Bool) async throws {
 
     try await IdentityStore.withNetwork(modem: modem, hub: nil, names: names) { (cached: CachedNetwork) async throws -> Void in
 
@@ -317,7 +313,7 @@ enum ModemCommands {
 
       }
 
-      let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? Linker.defaultManualLinkingTimeout
+      let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? DeviceLinkingCoordinator.defaultSETButtonTimeout
 
       let result: DeviceUnlinkingResult = try await coordinator.unlink(
         options.device,
@@ -347,7 +343,7 @@ enum ModemCommands {
     printsJSON: Bool
   ) async throws {
 
-    let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? Linker.defaultRemoteLinkingTimeout
+    let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? DeviceLinkingCoordinator.defaultRemoteTimeout
     let result: DeviceUnlinkingAllResult
 
     do {
@@ -374,7 +370,7 @@ enum ModemCommands {
 
   /// Removes a device from the network through the network's coordinator, which says what it
   /// does as it goes, after asking the person first when `asks` is `true`.
-  static func remove(_ modem: Modem, options: RemoveOptions, asks: Bool, names: ProductNames, printsJSON: Bool) async throws {
+  static func remove(_ modem: ModemSession, options: RemoveOptions, asks: Bool, names: ProductNames, printsJSON: Bool) async throws {
 
     try await IdentityStore.withNetwork(modem: modem, hub: nil, names: names) { (cached: CachedNetwork) async throws -> Void in
 
@@ -394,7 +390,7 @@ enum ModemCommands {
 
       }
 
-      let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? Linker.defaultRemoteLinkingTimeout
+      let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? DeviceLinkingCoordinator.defaultRemoteTimeout
       let observer = LinkingPrompter(names: names, printsJSON: printsJSON, cached: cached)
       let result: DeviceRemovalResult
 
@@ -431,9 +427,9 @@ enum ModemCommands {
 
   }
 
-  static func cancelLinking(_ modem: Modem) async throws {
+  static func cancelLinking(_ modem: ModemSession) async throws {
 
-    try await modem.send(.cancelAllLinking)
+    try await modem.cancelLinking()
 
     Output.line("The modem has left linking mode.")
 

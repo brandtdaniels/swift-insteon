@@ -6,10 +6,6 @@ import Glibc
 #endif
 import InsteonCLISupport
 import InsteonCore
-import InsteonDeviceCatalog
-import InsteonLinking
-import InsteonModem
-import InsteonProtocol
 
 /// Reads and writes the per-user cache of the identities devices reported, at the path
 /// `IdentityCache` gives, through InsteonCore's `DeviceRegistry`, `DeviceNetwork` and
@@ -28,12 +24,12 @@ enum IdentityStore {
   /// sooner with `CachedNetwork.save()`, such as after each device it identifies.
   ///
   /// - Parameters:
-  ///   - modem: The modem the devices are reached through.
+  ///   - modem: The session whose modem the devices are reached through.
   ///   - hub: The Hub's host and port, or `nil` for a serial modem.
   ///   - names: The catalog's product names, which describe the devices.
   ///   - body: The work to do with the network.
   static func withNetwork(
-    modem: Modem,
+    modem: ModemSession,
     hub: HubLocation?,
     names: ProductNames,
     _ body: (CachedNetwork) async throws -> Void
@@ -41,7 +37,7 @@ enum IdentityStore {
 
     let start: NetworkSnapshot = loadNetwork()
     let network = CachedNetwork(
-      network: DeviceNetwork(modem: modem, catalog: names.catalog, snapshot: start, hub: hub),
+      network: modem.network(catalog: names.catalog, snapshot: start, hub: hub),
       start: start
     )
 

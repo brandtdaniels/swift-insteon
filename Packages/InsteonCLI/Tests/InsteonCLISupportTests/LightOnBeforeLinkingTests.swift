@@ -1,6 +1,6 @@
 import Testing
 import InsteonCLISupport
-import InsteonProtocol
+import InsteonCore
 
 struct LightOnBeforeLinkingTests {
 

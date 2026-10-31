@@ -1,39 +1,51 @@
 import InsteonCLISupport
 import InsteonCore
-import InsteonModem
-import InsteonProtocol
 
 /// `insteon device ADDRESS send` and `insteon modem send`: messages and serial commands sent
-/// as given, for exploring what the Insteon device catalog doesn't describe yet.
+/// as given, for exploring what the Insteon device catalog doesn't describe yet, through
+/// InsteonCore's `ModemSession`.
 enum ExploreCommands {
 
   // MARK: - device ADDRESS send
 
-  static func send(_ request: DirectMessageRequest, to device: InsteonAddress, modem: Modem) async throws {
+  static func send(_ request: DirectMessageRequest, to device: InsteonAddress, modem: ModemSession) async throws {
 
-    let command = Command(command1: request.command1, command2: request.command2)
+    let message = DirectMessage(
+      to: device,
+      command1: request.command1,
+      command2: request.command2,
+      data: request.userData,
+      hasChecksum: request.hasChecksum
+    )
 
-    // Listening starts before the message, so nothing the device sends is missed.
-    let replies = await modem.replies()
-    let acknowledgment: ReceivedMessage
+    if let data = message.userData {
+
+      Output.note("Sending \(device) extended cmd1 \(Hex.byte(message.command1)) cmd2 \(Hex.byte(message.command2)), data \(Hex.pairs(data))")
+
+    } else {
+
+      Output.note("Sending \(device) cmd1 \(Hex.byte(message.command1)) cmd2 \(Hex.byte(message.command2))")
+
+    }
+
+    let messages: [ReceivedFrame]
 
     do {
 
-      if let data = request.userData {
+      // Listening starts before the message, so nothing the device sends is missed.
+      messages = try await modem.send(message, collectingFor: .seconds(request.waitSeconds)) { (acknowledgment: ReceivedFrame) -> Void in
 
-        let message = extendedMessage(to: device, command: command, data: data, hasChecksum: request.hasChecksum)
-
-        Output.note("Sending \(device) extended cmd1 \(Hex.byte(command.command1)) cmd2 \(Hex.byte(command.command2)), data \(Hex.pairs(message.userData.bytes))")
-        acknowledgment = try await modem.request(message)
-
-      } else {
-
-        Output.note("Sending \(device) cmd1 \(Hex.byte(command.command1)) cmd2 \(Hex.byte(command.command2))")
-        acknowledgment = try await modem.request(StandardMessage(to: device, command: command))
+        Output.line("ACK: \(text(of: acknowledgment))")
 
       }
 
-    } catch ModemError.deviceRejected(_, let reason) {
+    } catch {
+
+      guard case let .deviceRejected(_, reason)? = SendFailure(error) else {
+
+        throw error
+
+      }
 
       Output.line("NAK: \(reason.summary) (cmd2 \(Hex.byte(reason.rawValue)))")
 
@@ -41,34 +53,13 @@ enum ExploreCommands {
 
     }
 
-    Output.line("ACK: \(RawFrame.text(of: acknowledgment.modemFrame))  \(WatchText.message(DeviceMessageSummary(acknowledgment)))")
+    for frame in messages {
 
-    let messages: [ModemReply] = await Replies.all(in: replies, within: .seconds(request.waitSeconds))
-    var skippedAcknowledgment = false
-    var count = 0
-
-    for reply in messages {
-
-      guard case let .messageReceived(message) = reply, message.sender == device else {
-
-        continue
-
-      }
-
-      // The acknowledgment already printed comes through the stream too.
-      if !skippedAcknowledgment, message == acknowledgment {
-
-        skippedAcknowledgment = true
-        continue
-
-      }
-
-      count += 1
-      Output.line("\(RawFrame.text(of: message.modemFrame))  \(WatchText.message(DeviceMessageSummary(message)))")
+      Output.line(text(of: frame))
 
     }
 
-    if count == 0 {
+    if messages.isEmpty {
 
       Output.line("No other messages from \(device) in \(request.waitSeconds) s.")
 
@@ -76,37 +67,13 @@ enum ExploreCommands {
 
   }
 
-  private static func extendedMessage(to device: InsteonAddress, command: Command, data: [UInt8], hasChecksum: Bool) -> ExtendedMessage {
-
-    var userData = UserData()
-
-    for (offset, byte) in data.prefix(UserData.count).enumerated() {
-
-      userData[offset + 1] = byte
-
-    }
-
-    if hasChecksum {
-
-      return ExtendedMessage(to: device, command: command, userData: userData)
-
-    }
-
-    return ExtendedMessage(to: device, command: command, userData: userData, integrity: UnprotectedIntegrity())
-
-  }
-
   // MARK: - modem send
 
-  static func send(_ request: RawSerialRequest, modem: Modem) async throws {
-
-    let replies = await modem.replies()
+  static func send(_ request: RawSerialRequest, modem: ModemSession) async throws {
 
     Output.note("Writing \(Hex.pairs(request.bytes)) to the modem")
 
-    try await modem.write(rawCommand: request.bytes)
-
-    let received: [ModemReply] = await Replies.all(in: replies, within: .seconds(request.waitSeconds))
+    let received: [RawModemReply] = try await modem.write(rawCommand: request.bytes, collectingFor: .seconds(request.waitSeconds))
 
     for reply in received {
 
@@ -122,57 +89,26 @@ enum ExploreCommands {
 
   }
 
-  /// A reply in hexadecimal where its bytes are known, and as the package reads it.
-  private static func text(of reply: ModemReply) -> String {
+  /// A message from a device: its frame in hexadecimal, and what it says.
+  private static func text(of frame: ReceivedFrame) -> String {
 
-    switch reply {
-    case let .echo(echo):
-      let bytes: [UInt8] = [0x02, echo.number.rawValue] + echo.parameters + [echo.isAccepted ? 0x06 : 0x15]
-
-      return "\(Hex.pairs(bytes))  \(Names.replyKind(reply))"
-    case let .messageReceived(message):
-      return "\(RawFrame.text(of: message.modemFrame))  \(WatchText.message(DeviceMessageSummary(message)))"
-    case .negativeAcknowledgment:
-      return "15  NAK"
-    default:
-      return "\(Names.replyKind(reply)): \(reply)"
-    }
+    "\(RawFrame.text(of: frame.frame))  \(WatchText.message(frame.summary))"
 
   }
 
-}
+  /// A reply in hexadecimal where its bytes are known, and as the package reads it.
+  private static func text(of reply: RawModemReply) -> String {
 
-/// Collects replies from the modem.
-enum Replies {
-
-  /// Everything that arrives within a time, in order. The time is waited out in full unless
-  /// the modem closes first.
-  static func all(in replies: AsyncStream<ModemReply>, within duration: Duration) async -> [ModemReply] {
-
-    let collector = Task { () -> [ModemReply] in
-
-      var collected: [ModemReply] = []
-
-      for await reply in replies {
-
-        collected.append(reply)
-
-        if Task.isCancelled {
-
-          break
-
-        }
-
-      }
-
-      return collected
-
+    switch reply {
+    case let .echo(bytes, kind):
+      return "\(Hex.pairs(bytes))  \(kind)"
+    case let .message(frame):
+      return text(of: frame)
+    case .negativeAcknowledgment:
+      return "15  NAK"
+    case let .other(kind, description):
+      return "\(kind): \(description)"
     }
-
-    try? await Task.sleep(for: duration)
-    collector.cancel()
-
-    return await collector.value
 
   }
 

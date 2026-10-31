@@ -1,4 +1,4 @@
-import InsteonProtocol
+import InsteonCore
 
 /// What the command says when a request to the Hub gets no answer. Neither message carries
 /// the Hub's credentials.
@@ -15,10 +15,6 @@ public enum HubText {
     "The Hub at \(host):\(port) didn't answer. If its address changed, 'insteon discover' finds it."
 
   }
-
-  /// For a Hub that answered earlier requests and then stopped, where the command reports the
-  /// failure as part of a longer message and the Hub's address and device are given elsewhere.
-  public static let stoppedAnsweringInline: String = "the Hub stopped answering, most likely while a device that's out of range didn't answer; try again"
 
   /// For a Hub that answered earlier requests and then stopped, as when its modem is still
   /// sending a message to a device that doesn't answer.

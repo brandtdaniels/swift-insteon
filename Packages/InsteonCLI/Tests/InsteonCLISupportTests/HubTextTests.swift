@@ -1,6 +1,6 @@
 import Testing
 import InsteonCLISupport
-import InsteonProtocol
+import InsteonCore
 
 struct HubTextTests {
 
@@ -26,16 +26,6 @@ struct HubTextTests {
     let message: String = HubText.stoppedAnswering(host: "hub.example", port: 25105, device: nil)
 
     #expect(message == "The Hub at hub.example:25105 stopped answering partway through the command. Try again.")
-    #expect(!message.contains("insteon discover"))
-
-  }
-
-  @Test func theInlineTextFollowsAColonWithoutTheDiscoverHint() {
-
-    let message: String = HubText.stoppedAnsweringInline
-
-    #expect(message.first == "t")
-    #expect(message.contains("stopped answering"))
     #expect(!message.contains("insteon discover"))
 
   }

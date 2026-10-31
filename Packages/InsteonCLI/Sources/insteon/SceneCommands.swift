@@ -1,14 +1,12 @@
 import InsteonCLISupport
 import InsteonCore
-import InsteonModem
-import InsteonProtocol
 
 /// `insteon scene` and `insteon beep`: what the modem does itself.
 enum SceneCommands {
 
   // MARK: - scene
 
-  static func scene(_ group: AllLinkGroupNumber, isOn: Bool, modem: Modem) async throws {
+  static func scene(_ group: AllLinkGroupNumber, isOn: Bool, modem: ModemSession) async throws {
 
     Output.note("Reading the modem's ALL-Link database...")
 
@@ -29,7 +27,7 @@ enum SceneCommands {
 
       report = try await scene.send(turningOn: isOn, responderCount: responders.count, through: modem)
 
-    } catch ModemError.rejected {
+    } catch where SendFailure(error) == .modemRejected {
 
       throw CommandFailure(description: "The modem rejected \(commandName) for group \(group); it does that for a group it has no records for.")
 
@@ -54,19 +52,21 @@ enum SceneCommands {
 
   // MARK: - beep
 
-  static func beep(isDouble: Bool, modem: Modem) async throws {
+  static func beep(isDouble: Bool, modem: ModemSession) async throws {
 
     let name: String = isDouble ? "a double beep" : "Beep"
 
     do {
 
-      try await modem.send(isDouble ? .doubleBeep : .beep)
+      try await modem.beep(isDouble: isDouble)
 
-    } catch let error as ModemError {
+    } catch {
 
-      switch error {
-      case .rejected, .timedOut:
-        throw CommandFailure(description: "The modem doesn't support \(name): it \(isRejection(error) ? "rejected it" : "didn't answer").")
+      switch SendFailure(error) {
+      case .modemRejected?:
+        throw CommandFailure(description: "The modem doesn't support \(name): it rejected it.")
+      case .modemUnanswered?:
+        throw CommandFailure(description: "The modem doesn't support \(name): it didn't answer.")
       default:
         throw error
       }
@@ -74,18 +74,6 @@ enum SceneCommands {
     }
 
     Output.line(isDouble ? "The modem beeped twice." : "The modem beeped.")
-
-  }
-
-  private static func isRejection(_ error: ModemError) -> Bool {
-
-    if case .rejected = error {
-
-      return true
-
-    }
-
-    return false
 
   }
 

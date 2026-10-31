@@ -1,7 +1,6 @@
 import Testing
 import InsteonCLISupport
-import InsteonLinking
-import InsteonProtocol
+import InsteonCore
 
 /// What `insteon link` and `insteon unlink` say about a link that isn't the one asked for.
 struct LinkOutcomeTests {
@@ -61,14 +60,6 @@ struct LinkOutcomeTests {
       + "Run the command again, and hold its SET button only until it first beeps."
 
     #expect(LinkOutcome.mismatch(link(.delete, with: lamp), mode: .linking, device: nil) == expected)
-
-  }
-
-  @Test func explainsAMismatchTheLibraryFound() {
-
-    let mismatch = LinkMismatch(link: link(.delete, with: lamp), reason: .unlinkedInsteadOfLinking)
-
-    #expect(LinkOutcome.explanation(of: mismatch) == LinkOutcome.mismatch(link(.delete, with: lamp), mode: .linking, device: nil))
 
   }
 

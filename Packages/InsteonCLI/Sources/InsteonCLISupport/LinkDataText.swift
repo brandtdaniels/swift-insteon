@@ -1,5 +1,4 @@
-import InsteonDeviceCatalog
-import InsteonProtocol
+import InsteonCore
 
 /// Writes what the data bytes of an ALL-Link database record hold, as the MEANING column of
 /// `insteon device ADDRESS links` prints them.

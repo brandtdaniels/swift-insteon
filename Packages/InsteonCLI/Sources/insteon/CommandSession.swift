@@ -6,12 +6,10 @@ import Glibc
 #endif
 import InsteonCLISupport
 import InsteonCore
-import InsteonHubClient
-import InsteonModem
-import InsteonProtocol
 
-/// Opens the modem a command line names, and runs a command with it.
-enum ModemSession {
+/// Opens the modem a command line names, through InsteonCore's `ModemSession`, and runs a
+/// command with it.
+enum CommandSession {
 
   /// The process's environment, with the variables of the environment file merged in: the
   /// file `--env-file` names, or else `$XDG_CONFIG_HOME/insteon/env` or
@@ -127,25 +125,9 @@ enum ModemSession {
   ///
   /// - Parameters:
   ///   - invocation: The command line, which names the modem with `--hub` or `--serial`.
-  ///   - body: The work to do with the modem.
-  static func run(_ invocation: Invocation, _ body: @escaping @Sendable (Modem) async throws -> Void) async throws {
-
-    try await run(invocation, reachingHub: { (modem: Modem, _: HubLocation?) async throws -> Void in
-
-      try await body(modem)
-
-    })
-
-  }
-
-  /// Opens the modem, runs `body` with it and the Hub it's reached through, in a task that
-  /// Control-C cancels, and closes the modem.
-  ///
-  /// - Parameters:
-  ///   - invocation: The command line, which names the modem with `--hub` or `--serial`.
-  ///   - body: The work to do with the modem, given the Hub's host and port, or `nil` for a
-  ///     serial modem. The Hub's credentials aren't part of it.
-  static func run(_ invocation: Invocation, reachingHub body: @escaping @Sendable (Modem, HubLocation?) async throws -> Void) async throws {
+  ///   - body: The work to do with the modem. The session's `hub` is the Hub's host and port,
+  ///     or `nil` for a serial modem; the Hub's credentials aren't part of it.
+  static func run(_ invocation: Invocation, _ body: @escaping @Sendable (ModemSession) async throws -> Void) async throws {
 
     let environment = try loadEnvironment(explicitPath: invocation.envFilePath)
     let target = try ModemTarget.resolve(hub: invocation.hub, serialPath: invocation.serialPath, environment: environment)
@@ -153,48 +135,48 @@ enum ModemSession {
     switch target {
     case let .hub(host, port):
       let credentials = try HubCredentials(environment: environment)
-      let endpoint = HubEndpoint(host: host, port: port ?? HubEndpoint.defaultPort)
-      let hub = Hub(endpoint: endpoint, user: credentials.user, password: credentials.password)
+      let hubPort: Int = port ?? HubLocation.defaultPort
 
       // The address can come from the environment file, so say where the password is going.
-      Output.note("Connecting to the Hub at \(endpoint.host):\(endpoint.port)")
+      Output.note("Connecting to the Hub at \(host):\(hubPort)")
 
       do {
 
-        let location = HubLocation(host: endpoint.host, port: endpoint.port)
+        try await ModemSession.withHub(host: host, port: hubPort, user: credentials.user, password: credentials.password) { (session: ModemSession) async throws -> Void in
 
-        try await withModem(HubConnection(hub: hub)) { (modem: Modem) async throws -> Void in
+          try await Interrupt.cancellingOnInterrupt {
 
-          try await body(modem, location)
+            try await body(session)
+
+          }
 
         }
-
-      } catch is HubStoppedAnswering {
-
-        // The Hub answered earlier in the run, so it's busy rather than gone, most likely with
-        // a device that doesn't answer; 'insteon discover' wouldn't help.
-        throw CommandFailure(description: HubText.stoppedAnswering(host: endpoint.host, port: endpoint.port, device: device(of: invocation)))
 
       } catch {
 
-        // URLSession's own message, such as "The request timed out.", doesn't say it was the Hub.
-        if let message = Names.hubUnanswered(error, endpoint: endpoint) {
-
-          throw CommandFailure(description: message)
-
+        switch HubFailure(error) {
+        case .stoppedAnswering?:
+          // The Hub answered earlier in the run, so it's busy rather than gone, most likely
+          // with a device that doesn't answer; 'insteon discover' wouldn't help.
+          throw CommandFailure(description: HubText.stoppedAnswering(host: host, port: hubPort, device: device(of: invocation)))
+        case .unanswered?:
+          // URLSession's own message, such as "The request timed out.", doesn't say it was the
+          // Hub.
+          throw CommandFailure(description: HubText.unanswered(host: host, port: hubPort))
+        case nil:
+          throw error
         }
-
-        throw error
 
       }
     case let .serial(path):
       #if os(macOS) || os(Linux)
-      let port = try SerialPort(path: path)
-      defer { port.close() }
+      try await ModemSession.withSerialPort(path: path) { (session: ModemSession) async throws -> Void in
 
-      try await withModem(port) { (modem: Modem) async throws -> Void in
+        try await Interrupt.cancellingOnInterrupt {
 
-        try await body(modem, nil)
+          try await body(session)
+
+        }
 
       }
       #else
@@ -220,20 +202,6 @@ enum ModemSession {
       return options.device
     default:
       return nil
-    }
-
-  }
-
-  private static func withModem(_ connection: any ModemConnection, _ body: @escaping @Sendable (Modem) async throws -> Void) async throws {
-
-    try await Modem.withConnection(connection) { modem in
-
-      try await Interrupt.cancellingOnInterrupt {
-
-        try await body(modem)
-
-      }
-
     }
 
   }

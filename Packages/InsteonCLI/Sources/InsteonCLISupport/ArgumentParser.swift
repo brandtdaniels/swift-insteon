@@ -1,5 +1,4 @@
 import InsteonCore
-import InsteonProtocol
 
 extension Invocation {
 

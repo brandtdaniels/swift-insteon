@@ -1,7 +1,4 @@
 import InsteonCore
-import InsteonDeviceCatalog
-import InsteonLinking
-import InsteonProtocol
 
 /// What `insteon link`, `insteon unlink` and `insteon remove` print with `--json`, built from
 /// what a `DeviceLinkingCoordinator` returns.

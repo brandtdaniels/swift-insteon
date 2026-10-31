@@ -6,7 +6,6 @@ import Glibc
 #endif
 import InsteonCLISupport
 import InsteonCore
-import InsteonModem
 
 /// The `insteon` command: drives an Insteon Hub or modem, and its devices, from the terminal.
 ///
@@ -148,14 +147,14 @@ struct InsteonCommand {
   /// product names.
   private static func withModem(
     _ invocation: Invocation,
-    _ body: @escaping @Sendable (Modem, ProductNames) async throws -> Void
+    _ body: @escaping @Sendable (ModemSession, ProductNames) async throws -> Void
   ) async throws {
 
     let names = ProductNames()
 
-    try await ModemSession.run(invocation) { modem in
+    try await CommandSession.run(invocation) { (session: ModemSession) async throws -> Void in
 
-      try await body(modem, names)
+      try await body(session, names)
 
     }
 
@@ -165,16 +164,16 @@ struct InsteonCommand {
   /// names, and the Hub's host and port, or `nil` for a serial modem.
   private static func withModemAndHub(
     _ invocation: Invocation,
-    _ body: @escaping @Sendable (Modem, ProductNames, HubLocation?) async throws -> Void
+    _ body: @escaping @Sendable (ModemSession, ProductNames, HubLocation?) async throws -> Void
   ) async throws {
 
     let names = ProductNames()
 
-    try await ModemSession.run(invocation, reachingHub: { (modem: Modem, hub: HubLocation?) async throws -> Void in
+    try await CommandSession.run(invocation) { (session: ModemSession) async throws -> Void in
 
-      try await body(modem, names, hub)
+      try await body(session, names, session.hub)
 
-    })
+    }
 
   }
 

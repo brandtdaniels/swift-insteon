@@ -1,8 +1,5 @@
 import InsteonCLISupport
 import InsteonCore
-import InsteonDeviceCatalog
-import InsteonLinking
-import InsteonProtocol
 
 /// What `insteon link`, `insteon unlink` and `insteon remove` show as a
 /// `DeviceLinkingCoordinator` works: its progress and instructions on standard error, worded

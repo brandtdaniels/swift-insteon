@@ -1,7 +1,6 @@
 import Testing
 import InsteonCLISupport
 import InsteonCore
-import InsteonProtocol
 
 struct ArgumentParserTests {
 
