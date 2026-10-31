@@ -156,36 +156,9 @@ public struct ProductCatalog: Sendable {
 
       result = try await updater.update(replacing: current, currentVersion: currentVersion)
 
-    } catch let error as CancellationError {
+    } catch {
 
-      throw error
-
-    } catch let error as DeviceCatalogUpdateError {
-
-      switch error {
-      case let .incompatibleVersion(published):
-        throw ProductCatalogUpdateError.incompatibleVersion(published)
-      case let .olderThanCurrent(published):
-        throw ProductCatalogUpdateError.olderThanCurrent(published)
-      case let .unexpectedStatus(status):
-        throw ProductCatalogUpdateError.unexpectedStatus(status)
-      case .malformedManifest:
-        throw ProductCatalogUpdateError.malformedManifest
-      case .checksumMismatch:
-        throw ProductCatalogUpdateError.checksumMismatch
-      }
-
-    } catch HTTPClientError.insecureRedirect {
-
-      throw ProductCatalogUpdateError.insecureRedirect
-
-    } catch HTTPClientError.redirectRefused {
-
-      throw ProductCatalogUpdateError.redirectRefused
-
-    } catch is DecodingError {
-
-      throw ProductCatalogUpdateError.unreadableCatalog
+      throw updateError(for: error)
 
     }
 
@@ -195,6 +168,51 @@ public struct ProductCatalog: Sendable {
     case let .updated(json, _, version):
       return .updated(json: json, version: version)
     }
+
+  }
+
+  /// The error ``update(replacing:currentVersion:from:requestTimeout:resourceTimeout:)``
+  /// throws for one from the updater: the ``ProductCatalogUpdateError`` that means the same,
+  /// or else the error itself, such as `CancellationError` or the network's error.
+  static func updateError(for error: any Error) -> any Error {
+
+    if let error = error as? DeviceCatalogUpdateError {
+
+      switch error {
+      case let .incompatibleVersion(published):
+        return ProductCatalogUpdateError.incompatibleVersion(published)
+      case let .olderThanCurrent(published):
+        return ProductCatalogUpdateError.olderThanCurrent(published)
+      case let .unexpectedStatus(status):
+        return ProductCatalogUpdateError.unexpectedStatus(status)
+      case .malformedManifest:
+        return ProductCatalogUpdateError.malformedManifest
+      case .checksumMismatch:
+        return ProductCatalogUpdateError.checksumMismatch
+      }
+
+    }
+
+    if let error = error as? HTTPClientError {
+
+      switch error {
+      case .insecureRedirect:
+        return ProductCatalogUpdateError.insecureRedirect
+      case .redirectRefused:
+        return ProductCatalogUpdateError.redirectRefused
+      case .nonHTTPResponse, .responseTooLarge, .proxyConfigured, .credentialsRefused:
+        return error
+      }
+
+    }
+
+    if error is DecodingError {
+
+      return ProductCatalogUpdateError.unreadableCatalog
+
+    }
+
+    return error
 
   }
 

@@ -4,6 +4,12 @@ import Foundation
 ///
 /// Sleeping until a deadline that has already passed returns at once; any other sleep waits
 /// for ``advance(by:)`` to reach its deadline, or for its task to be canceled.
+///
+/// A test waits for the code it runs to start sleeping with ``waitForSleeper(until:after:)``
+/// before it advances the clock. When an earlier sleep may still be waiting at the same
+/// deadline, such as an earlier exchange's timeout, the test takes a ``mark()`` first and waits
+/// for a sleep that starts after it, or waits for a number of sleepers with
+/// ``waitForSleepers(_:until:)``.
 public final class TestClock: Clock, @unchecked Sendable {
 
   /// A point in time, measured from the clock's start.
@@ -44,9 +50,20 @@ public final class TestClock: Clock, @unchecked Sendable {
 
   }
 
+  /// A point in the order sleeps start in, from ``mark()``.
+  public struct Mark: Hashable, Sendable {
+
+    /// How many sleeps had started waiting when the mark was taken.
+    fileprivate let started: Int
+
+  }
+
   private struct Sleeper {
 
     let id: Int
+
+    /// Its place in the order sleeps started waiting in, from 0.
+    let order: Int
 
     let deadline: Instant
 
@@ -63,13 +80,32 @@ public final class TestClock: Clock, @unchecked Sendable {
 
   private var sleepers: [Sleeper] = []
 
+  /// How many sleeps have started waiting, so far.
+  private var started = 0
+
   /// Sleeps and waits that have been issued an ID and haven't finished.
   private var pendingIDs: Set<Int> = []
 
   /// Pending sleeps and waits canceled before they started waiting.
   private var canceledIDs: Set<Int> = []
 
-  private var sleeperWaiters: [(id: Int, deadline: Instant, continuation: CheckedContinuation<Void, Never>)] = []
+  private struct SleeperWaiter {
+
+    let id: Int
+
+    let deadline: Instant
+
+    /// The order from which a sleep counts.
+    let startedFrom: Int
+
+    /// How many sleepers it waits for.
+    let count: Int
+
+    let continuation: CheckedContinuation<Void, Never>
+
+  }
+
+  private var sleeperWaiters: [SleeperWaiter] = []
 
   /// Creates a clock at its start.
   public init() {}
@@ -109,7 +145,8 @@ public final class TestClock: Clock, @unchecked Sendable {
 
           }
 
-          sleepers.append(Sleeper(id: id, deadline: deadline, continuation: continuation))
+          sleepers.append(Sleeper(id: id, order: started, deadline: deadline, continuation: continuation))
+          started += 1
 
           return takeSatisfiedWaiters()
 
@@ -168,9 +205,59 @@ public final class TestClock: Clock, @unchecked Sendable {
 
   }
 
+  /// Returns how many tasks are sleeping until `offset` past the clock's start.
+  ///
+  /// - Parameter offset: The deadline, as a duration past the clock's start.
+  /// - Returns: The number of sleepers.
+  public func sleeperCount(until offset: Duration) -> Int {
+
+    let deadline = Instant(offset: offset)
+
+    return lock.withLock { sleepers.filter { $0.deadline == deadline }.count }
+
+  }
+
+  /// Marks the point in the order sleeps start in, for ``waitForSleeper(until:after:)``.
+  ///
+  /// Take the mark before starting what should sleep, so its sleep comes after the mark.
+  ///
+  /// - Returns: The mark.
+  public func mark() -> Mark {
+
+    lock.withLock { Mark(started: started) }
+
+  }
+
   /// Waits until a task is sleeping until `offset` past the clock's start, or until the waiting
   /// task is canceled, for example by a test's time limit.
-  public func waitForSleeper(until offset: Duration) async {
+  ///
+  /// Any task sleeping until the deadline counts, even one that started sleeping before the
+  /// call. To wait for a sleep that starts later, while an earlier one may still be waiting at
+  /// the same deadline, pass a mark taken before the later sleep could start.
+  ///
+  /// - Parameters:
+  ///   - offset: The deadline, as a duration past the clock's start.
+  ///   - mark: A mark from ``mark()``, after which the sleep must have started, or `nil` for
+  ///     any sleep. Defaults to `nil`.
+  public func waitForSleeper(until offset: Duration, after mark: Mark? = nil) async {
+
+    await waitForSleepers(1, until: offset, startedFrom: mark?.started ?? 0)
+
+  }
+
+  /// Waits until at least `count` tasks are sleeping until `offset` past the clock's start, or
+  /// until the waiting task is canceled, for example by a test's time limit.
+  ///
+  /// - Parameters:
+  ///   - count: How many sleepers to wait for.
+  ///   - offset: The deadline, as a duration past the clock's start.
+  public func waitForSleepers(_ count: Int, until offset: Duration) async {
+
+    await waitForSleepers(count, until: offset, startedFrom: 0)
+
+  }
+
+  private func waitForSleepers(_ count: Int, until offset: Duration, startedFrom: Int) async {
 
     let deadline = Instant(offset: offset)
     let id = makeID()
@@ -181,10 +268,15 @@ public final class TestClock: Clock, @unchecked Sendable {
 
         let ready = lock.withLock {
 
-          guard
-            canceledIDs.remove(id) == nil,
-            !sleepers.contains(where: { $0.deadline == deadline })
-          else {
+          let waiter = SleeperWaiter(
+            id: id,
+            deadline: deadline,
+            startedFrom: startedFrom,
+            count: count,
+            continuation: continuation
+          )
+
+          guard canceledIDs.remove(id) == nil, !isSatisfied(waiter) else {
 
             pendingIDs.remove(id)
 
@@ -192,7 +284,7 @@ public final class TestClock: Clock, @unchecked Sendable {
 
           }
 
-          sleeperWaiters.append((id, deadline, continuation))
+          sleeperWaiters.append(waiter)
 
           return false
 
@@ -249,12 +341,21 @@ public final class TestClock: Clock, @unchecked Sendable {
   }
 
   // Call while holding `lock`.
+  private func isSatisfied(_ waiter: SleeperWaiter) -> Bool {
+
+    let matching = sleepers.filter { $0.deadline == waiter.deadline && $0.order >= waiter.startedFrom }
+
+    return matching.count >= waiter.count
+
+  }
+
+  // Call while holding `lock`.
   private func takeSatisfiedWaiters() -> [CheckedContinuation<Void, Never>] {
 
-    let deadlines = Set(sleepers.map(\.deadline))
-    let satisfied = sleeperWaiters.filter { deadlines.contains($0.deadline) }
-    sleeperWaiters.removeAll { deadlines.contains($0.deadline) }
-    pendingIDs.subtract(satisfied.map(\.id))
+    let satisfied = sleeperWaiters.filter { isSatisfied($0) }
+    let satisfiedIDs = Set(satisfied.map(\.id))
+    sleeperWaiters.removeAll { satisfiedIDs.contains($0.id) }
+    pendingIDs.subtract(satisfiedIDs)
 
     return satisfied.map(\.continuation)
 

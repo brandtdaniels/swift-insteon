@@ -5,7 +5,7 @@ import InsteonProtocol
 ///
 /// A device's records are written the way the Insteon Developer's Guide describes for a linear
 /// database: records that already link the same device in the same group and role are updated
-/// in place, otherwise the first record no longer in use is reused, otherwise the record goes
+/// in place, otherwise the first record not in use is reused, otherwise the record goes
 /// at the end and the record after it becomes the new end. Each write is read back to check
 /// it. Each device's database is read once, then kept up to date as records are written. With
 /// a cache, databases are read through it, and a device's copy is forgotten once its database

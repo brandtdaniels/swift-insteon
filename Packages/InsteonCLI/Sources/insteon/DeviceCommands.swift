@@ -375,7 +375,7 @@ enum DeviceCommands {
 
     // The network reads the database only if the device's delta changed since the copy it
     // holds, and says so only then. The last record marks the end of the database, and
-    // deleted records are no longer in use.
+    // deleted records aren't in use.
     let database = try await network.allLinkDatabase(of: device, beforeReading: { () -> Void in
 
       Output.note("Reading the ALL-Link database of \(device), one record at a time...")

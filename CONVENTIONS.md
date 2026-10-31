@@ -54,3 +54,7 @@ Cite each document by its own title, never as "the guide" alone.
 ## Spelling and style
 
 American English. Name no third-party projects. Every public declaration has a DocC comment.
+
+Say what's true, not when it became true: no "now", "currently", "previously", "no longer",
+"newly", or "new" for a change, such as "a new option". The prose outlives the change it
+would date.

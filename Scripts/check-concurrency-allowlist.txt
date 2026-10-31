@@ -1,0 +1,28 @@
+# Lines of the libraries that Scripts/check-concurrency.py knows break its rules, each with a
+# reason. Each entry is a path under Packages, the rule, the line's code without comments or
+# strings, and why it's needed, separated by tabs. Entries only go: CI fails a pull request
+# that adds one.
+InsteonCLI/Sources/InsteonCLISupport/LineReader.swift	unchecked-sendable	public final class LineReader: @unchecked Sendable {	NSLock guards its state; a blocking readLine can't be awaited or canceled, so callers hand off through it.
+InsteonCLI/Sources/InsteonCLISupport/OrderedSaver.swift	unstructured-task	let saving = Task { () async -> Void in	Chains each save after the one before, whichever task asked; the next save awaits it.
+InsteonCore/Sources/InsteonCore/DeviceLinkingCoordinator+HubLinking.swift	unstructured-task	await Task { await send() }.value	Awaited at once; shields the keep-awake release from cancellation, so the device isn't left awake.
+InsteonCore/Sources/InsteonCore/DeviceMonitor.swift	unchecked-sendable	final class MonitorFeed<C: Clock>: @unchecked Sendable where C.Duration == Duration {	NSLock guards isReading; a precondition keeps the iterator to one reading task at a time.
+InsteonCore/Sources/InsteonCore/DeviceNetwork.swift	unstructured-task	let task = Task<DeviceIdentification, any Error> {	A shared identification that several callers join; the last caller to cancel cancels it.
+InsteonCore/Sources/InsteonCore/DeviceNetwork.swift	unchecked-sendable	final class IdentificationWaiters: @unchecked Sendable {	NSLock guards the waiter count, which cancellation handlers outside the actor change.
+InsteonCore/Sources/InsteonCore/LinkingTurns.swift	unstructured-task	Task { () async -> Void in	A cancellation handler can't await the actor, so it hands the ticket's cancellation to a task.
+InsteonCore/Sources/InsteonCore/ModemSession.swift	unstructured-task	let collector = Task { () -> [ModemReply] in	Collects replies for a fixed time; cancelled once the clock's wait ends and its value awaited.
+InsteonHubClient/Sources/InsteonHubClient/HubConnection.swift	unchecked-sendable	private final class StreamCounter: @unchecked Sendable {	NSLock guards the counter, read synchronously to tell the newest stream apart.
+InsteonHubDiscovery/Sources/InsteonHubDiscovery/HubFinder.swift	unstructured-task	let search = Task {	The local search; to move into a task group (review #38, catalog M7).
+InsteonHubDiscovery/Sources/InsteonHubDiscovery/HubIdentifier.swift	unstructured-task	let request = Task {	The request to a candidate, raced against the timer; to move into a task group with an injected clock (catalog M7).
+InsteonHubDiscovery/Sources/InsteonHubDiscovery/HubIdentifier.swift	unstructured-task	let timer = Task {	The candidate's timeout, raced against the request; to move to an injected clock (catalog M7).
+InsteonHubDiscovery/Sources/InsteonHubDiscovery/HubIdentifier.swift	task-sleep	try? await Task.sleep(for: timeout)	The candidate's timeout on the real clock; to move to an injected clock (catalog M7).
+InsteonHubDiscovery/Sources/InsteonHubDiscovery/OneShot.swift	unchecked-sendable	final class OneShot<Value: Sendable>: @unchecked Sendable {	NSLock guards the result and continuation, which resume outside the lock.
+InsteonLinking/Sources/InsteonLinking/DatabaseEditor.swift	unstructured-task	let missing: [AllLinkRecord] = await Task { () async -> [AllLinkRecord] in	Awaited at once; shields restoring a removed record from cancellation, so no link is lost.
+InsteonLinking/Sources/InsteonLinking/LinkingSession.swift	unstructured-task	await Task { () async -> Void in	Awaited at once; shields leaving linking mode from cancellation, so the modem doesn't stay open to linking.
+InsteonModem/Sources/InsteonModem/ModemDiscovery.swift	real-clock	clock: ContinuousClock()	The convenience initializer that opens real serial ports; the designated one takes a clock.
+InsteonModem/Sources/InsteonModem/SerialPort.swift	unchecked-sendable	public final class SerialPort: ModemConnection, @unchecked Sendable {	Its state is in DescriptorOwner, behind a lock.
+InsteonModem/Sources/InsteonModem/SerialPort.swift	unchecked-sendable	private final class ReadSource: @unchecked Sendable {	Holds a dispatch source, which is thread-safe.
+InsteonModem/Sources/InsteonModem/SerialPort.swift	unchecked-sendable	private final class WriteWait: @unchecked Sendable {	NSLock guards the wait's state, which ends once whichever way comes first.
+InsteonModem/Sources/InsteonModem/SerialPort.swift	unchecked-sendable	private final class DescriptorOwner: @unchecked Sendable {	NSLock guards the descriptor's users; the descriptor itself never changes.
+InsteonNetworking/Sources/InsteonNetworking/URLSessionHTTPClient.swift	unchecked-sendable	public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {	URLSession is thread-safe but isn't marked Sendable on every platform.
+InsteonNetworking/Sources/InsteonNetworking/URLSessionHTTPClient.swift	unchecked-sendable	final class RedirectRefusal: NSObject, URLSessionTaskDelegate, @unchecked Sendable {	A URLSession task delegate, an NSObject; its policy is immutable and its record is behind a lock.
+InsteonNetworking/Sources/InsteonNetworking/URLSessionHTTPClient.swift	unchecked-sendable	private final class DataTaskCancellation: @unchecked Sendable {	NSLock guards the task and whether it was canceled.

@@ -67,7 +67,7 @@ public struct Unlinker: Sendable {
     for responder in group.responders {
 
       // The controller's record goes first, so the controller stops cleaning up with a
-      // responder that no longer answers to the group.
+      // responder that doesn't answer to the group.
       try await editor.delete(
         group: group.number,
         address: addresses.address(of: responder.endpoint),

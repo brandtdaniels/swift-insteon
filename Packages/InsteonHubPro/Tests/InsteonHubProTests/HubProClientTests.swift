@@ -8,6 +8,7 @@ import InsteonNetworking
 import InsteonProtocol
 import InsteonTestSupport
 
+@Suite(.timeLimit(.minutes(1)))
 struct HubProClientTests {
 
   let lamp = InsteonAddress(0x1A, 0x2B, 0x3C)

@@ -3,6 +3,7 @@ import Testing
 @testable import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
+import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
 import InsteonTestSupport
@@ -484,11 +485,14 @@ struct HubLinkingTests {
 
     })
 
-    await #expect(throws: LinkMismatch.self) {
+    let mismatch: LinkMismatch? = await #expect(throws: LinkMismatch.self) {
 
       _ = try await network.linking.link(keypad, as: .controller, observer: recorder)
 
     }
+
+    #expect(mismatch?.reason == .otherDevice(expected: keypad))
+    #expect(mismatch?.link.address == other)
 
     let lines: [String] = await recorder.lines
 
@@ -509,11 +513,14 @@ struct HubLinkingTests {
     let network: DeviceNetwork = self.network(modem, identities: [module: HubLinkingExample.moduleIdentity])
     let recorder = LinkingRecorder()
 
-    await #expect(throws: LinkMismatch.self) {
+    let mismatch: LinkMismatch? = await #expect(throws: LinkMismatch.self) {
 
       _ = try await network.linking.link(module, as: .controller, observer: recorder)
 
     }
+
+    #expect(mismatch?.reason == .otherDevice(expected: module))
+    #expect(mismatch?.link.address == other)
 
     // The device took Enter Linking Mode, but the modem reported the other device's link.
     #expect(await recorder.lines == [

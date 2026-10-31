@@ -4,7 +4,7 @@ import InsteonModem
 // `#expect` and `#require` can't call mutating methods, so each call to the queue is made first.
 struct TurnQueueTests {
 
-  @Test func handsTurnsOutInOrder() async throws {
+  @Test(.timeLimit(.minutes(1))) func handsTurnsOutInOrder() async throws {
 
     var turns = TurnQueue()
 

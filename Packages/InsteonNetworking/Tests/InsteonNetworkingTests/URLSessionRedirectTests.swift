@@ -11,7 +11,7 @@ import InsteonNetworking
 /// target is never asked. The check after the response would also refuse the target's answer,
 /// since it comes from another address, but only the delegate keeps the request from reaching
 /// the target, so the tests check which addresses the stub was asked to load.
-@Suite(.serialized)
+@Suite(.serialized, .timeLimit(.minutes(1)))
 struct URLSessionRedirectTests {
 
   // Made-up credentials and addresses: a Hub on a private network, and a redirect target in a

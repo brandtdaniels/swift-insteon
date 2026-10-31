@@ -10,6 +10,7 @@ import InsteonProtocol
 
 /// ``HubFinder`` runs the local search and the Insteon Connect lookup against stubbed HTTP
 /// clients, with made-up private addresses, and never a real one.
+@Suite(.timeLimit(.minutes(1)))
 struct HubFinderTests {
 
   let hubChallenge = HTTPResponse(statusCode: 401, headers: ["WWW-Authenticate": "Basic realm=\"Insteon Hub\""])

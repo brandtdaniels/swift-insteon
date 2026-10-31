@@ -72,7 +72,7 @@ extension NetworkSnapshot {
   /// It's how a process that started a ``DeviceNetwork`` from a store's snapshot saves what the
   /// network learned without undoing what another process saved in the meantime: read the
   /// store again, and save its snapshot merged with the changes from the snapshot the network
-  /// started from to the network's snapshot now.
+  /// started from to the network's latest snapshot.
   ///
   /// ```swift
   /// let start = try store.loadNetwork()
@@ -85,7 +85,7 @@ extension NetworkSnapshot {
   /// ```
   ///
   /// Each value is compared between `start` and `end` on its own. A value that differs is
-  /// taken from `end`, and one that `end` no longer has is removed; a value that's the same in
+  /// taken from `end`, and one that `end` doesn't have is removed; a value that's the same in
   /// both is left as this snapshot has it, even when this snapshot's differs from both. The
   /// values are:
   ///
@@ -100,7 +100,7 @@ extension NetworkSnapshot {
   ///
   /// - Parameters:
   ///   - start: The snapshot the changes are from, such as the one a network started from.
-  ///   - end: The snapshot the changes are to, such as the network's snapshot now.
+  ///   - end: The snapshot the changes are to, such as the network's latest snapshot.
   /// - Returns: This snapshot with the changes applied.
   public func merging(changesFrom start: NetworkSnapshot, to end: NetworkSnapshot) -> NetworkSnapshot {
 

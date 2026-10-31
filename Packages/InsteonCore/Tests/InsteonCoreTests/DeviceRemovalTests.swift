@@ -3,6 +3,7 @@ import Testing
 @testable import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
+import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
 import InsteonTestSupport

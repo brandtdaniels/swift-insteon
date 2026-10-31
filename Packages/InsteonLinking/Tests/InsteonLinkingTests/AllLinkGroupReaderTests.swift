@@ -1,9 +1,10 @@
 import Testing
 import InsteonLinking
+import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
-import InsteonTestSupport
 
+@Suite(.timeLimit(.minutes(1)))
 struct AllLinkGroupReaderTests {
 
   let lamp = InsteonAddress(0x1A, 0x2B, 0x3C)

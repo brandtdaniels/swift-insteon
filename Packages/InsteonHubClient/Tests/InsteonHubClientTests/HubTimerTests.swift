@@ -8,6 +8,7 @@ import InsteonNetworking
 import InsteonProtocol
 import InsteonTestSupport
 
+@Suite(.timeLimit(.minutes(1)))
 struct HubTimerTests {
 
   let endpoint = HubEndpoint(host: "hub.local")

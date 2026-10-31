@@ -135,8 +135,11 @@ struct LocalNetworkClientTests {
 
     let environment: ProxyEnvironment = ProxyEnvironment(["https_proxy": "http://127.0.0.1:9", "no_proxy": ".example.com"])
 
-    #expect(!environment.proxies(try #require(URL(string: "https://hub.example.com/"))))
-    #expect(environment.proxies(try #require(URL(string: "https://example.org/"))))
+    let hub: URL = try #require(URL(string: "https://hub.example.com/"))
+    let elsewhere: URL = try #require(URL(string: "https://example.org/"))
+
+    #expect(!environment.proxies(hub))
+    #expect(environment.proxies(elsewhere))
 
   }
 

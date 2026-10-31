@@ -1,5 +1,6 @@
 import Testing
 import InsteonLinking
+import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
 import InsteonTestSupport
@@ -20,6 +21,7 @@ actor Recorder<Value: Sendable> {
 /// Waiting for replies, manual linking with a ready callback, link mismatches, the modem's
 /// links with a device, responder state and remote unlinking, on a ``TestClock`` that moves
 /// only when a test advances it.
+@Suite(.timeLimit(.minutes(1)))
 struct LinkingPrimitivesTests {
 
   let lamp = InsteonAddress(0x1A, 0x2B, 0x3C)
@@ -320,7 +322,7 @@ struct LinkingPrimitivesTests {
     let modem = InMemoryModem()
     await modem.setUnlinked(lamp)
 
-    await #expect(throws: ModemError.self) {
+    await #expect(throws: ModemError.deviceRejected(lamp, .notLinked)) {
 
       try await linker(modem).prepareResponder(lamp)
 
@@ -443,7 +445,7 @@ struct LinkingPrimitivesTests {
 
   }
 
-  // A cache that still lists a record the modem no longer has can't make an unreported
+  // A cache that still lists a record the modem doesn't have can't make an unreported
   // unlink count as removed: the modem itself is read before the unlink.
   @Test func doesntCountAnUnreportedUnlinkFromAStaleCache() async throws {
 

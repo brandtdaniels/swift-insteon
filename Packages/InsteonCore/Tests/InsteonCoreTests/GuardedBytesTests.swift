@@ -3,6 +3,7 @@ import Testing
 @testable import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
+import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
 import InsteonTestSupport
@@ -331,9 +332,17 @@ struct GuardedBytesTests {
       integrity: .checksum
     )
 
-    await #expect(throws: DeviceControlError.self) {
+    let error: DeviceControlError? = await #expect(throws: DeviceControlError.self) {
 
       try await device.sendLinkingMessage(.bytes(set), duration: nil, writableFlags: [])
+
+    }
+
+    guard case .unsupported(.keepAwake, _)? = error else {
+
+      Issue.record("Expected unsupported, got \(String(describing: error)).")
+
+      return
 
     }
 
@@ -714,9 +723,17 @@ struct GuardedBytesTests {
       let session = ModemSession(modem: modem, hub: nil)
 
       // Any other Set Operating Flags is refused only unless it's forced.
-      await #expect(throws: SendRefusal.self) {
+      let refusal: SendRefusal? = await #expect(throws: SendRefusal.self) {
 
         _ = try await session.write(rawCommand: radioOn, collectingFor: .zero)
+
+      }
+
+      guard case .serialCommand? = refusal else {
+
+        Issue.record("Expected serialCommand, got \(String(describing: refusal)).")
+
+        return
 
       }
 

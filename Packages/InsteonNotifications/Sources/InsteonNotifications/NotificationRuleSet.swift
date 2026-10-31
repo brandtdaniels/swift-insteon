@@ -3,7 +3,7 @@ import InsteonProtocol
 
 /// A home's notification rules, and the notifications its devices set off.
 ///
-/// Give the rule set each event a `DeviceEventInterpreter` reads, and now and then the
+/// Give the rule set each event a `DeviceEventInterpreter` reads, and from time to time the
 /// devices a `HeartbeatMonitor` finds silent. It returns the notifications to deliver, in the
 /// order of its rules, leaving out disabled rules and rules still in their cooldown.
 ///

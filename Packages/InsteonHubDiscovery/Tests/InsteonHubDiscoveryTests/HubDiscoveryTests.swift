@@ -50,6 +50,7 @@ actor ScriptedHTTPClient: HTTPClient {
 
 }
 
+@Suite(.timeLimit(.minutes(1)))
 struct HubDiscoveryTests {
 
   let hubChallenge = HTTPResponse(statusCode: 401, headers: ["WWW-Authenticate": "Basic realm=\"Insteon Hub\""])

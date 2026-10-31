@@ -8,17 +8,34 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request supersedes the run for the older one. Each push to main
+# gets a group of its own, so no run on main is cancelled, running or waiting.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   terms:
     name: Terms
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           # The whole history, so a pull request's base branch is there to compare with.
           fetch-depth: 0
       - name: Check the docs and comments for ruled-out terms
         run: python3 Scripts/check-terms.py
+      - name: Check that the workflows pin their actions and images and limit their jobs
+        run: python3 Scripts/check-workflows.py
+      # ubuntu-latest has ShellCheck; install it if an image ever doesn't.
+      - name: Check the shell scripts
+        run: |
+          command -v shellcheck > /dev/null || { sudo apt-get update && sudo apt-get install -y shellcheck; }
+          shellcheck --version
+          shellcheck Scripts/*.sh
+      - name: Check that every async test has a time limit
+        run: python3 Scripts/check-time-limits.py
       - name: Check that the insteon command leaves device behavior to the libraries
         run: python3 Scripts/check-cli-thin.py
       # The allow-list only shrinks: a pull request may remove entries but not add them.
@@ -40,34 +57,61 @@ jobs:
             exit 1
           fi
           echo "The allow-list didn't grow."
-      - name: Test the check
+      - name: Check the libraries for unstructured tasks, unchecked Sendable types and real clocks
+        run: python3 Scripts/check-concurrency.py
+      # This allow-list only shrinks too. An entry is its path, rule and code; its reason may
+      # be reworded.
+      - name: Check that the concurrency allow-list doesn't grow
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          list=Scripts/check-concurrency-allowlist.txt
+          if ! git cat-file -e "origin/${BASE_REF}:${list}" 2>/dev/null; then
+            echo "The base branch has no allow-list yet, so there's nothing to compare."
+            exit 0
+          fi
+          entries() { grep -v -e '^#' -e '^$' | cut -f1-3 | sort; }
+          added=$(comm -13 <(git show "origin/${BASE_REF}:${list}" | entries) <(entries < "$list"))
+          if [ -n "$added" ]; then
+            echo "These entries were added to $list, which may only lose entries:"
+            echo "$added"
+            echo "Keep the work structured and the clock injected instead of allowing it."
+            exit 1
+          fi
+          echo "The allow-list didn't grow."
+      - name: Test the checks
         run: python3 -m unittest discover -s Scripts/tests -v
 
   macos:
     name: macOS
     runs-on: macos-latest
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       # Use the runner's newest Xcode, and so its newest Swift, rather than its default.
       - name: Select Xcode
         run: sudo xcode-select --switch "$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -n 1)"
       - name: Show the Swift version
         run: swift --version
       # Warnings fail the build here rather than in Package.swift, so they don't affect apps
-      # that depend on the package. An import of a module a target doesn't depend on fails
-      # too, so the insteon command can't reach past InsteonCore.
+      # that depend on the package. The tests are built too, so a warning in a test fails as
+      # well. An import of a module a target doesn't depend on fails too, so the insteon
+      # command can't reach past InsteonCore.
       - name: Build
-        run: swift build --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
+        run: swift build --build-tests --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
+      # The tests built in the step before, with the same flags.
       - name: Test
-        run: swift test --explicit-target-dependency-import-check error
+        run: swift test --skip-build
       - name: Build documentation
         run: Scripts/build-docs.sh
 
   ios:
     name: iOS
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       # Use the runner's newest Xcode, and so its newest Swift, rather than its default.
       - name: Select Xcode
         run: sudo xcode-select --switch "$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -n 1)"
@@ -82,12 +126,14 @@ jobs:
   linux:
     name: Linux
     runs-on: ubuntu-latest
-    container: swift:6.3.3
+    timeout-minutes: 45
+    # The image by digest, so a retagged image can't change what runs. The tag says which it is.
+    container: swift:6.3.3@sha256:1038d54c80063f5cdfabc4560990c30af64b5de8ebf28161deb22ca4ad5db866
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Build
-        run: swift build --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
+        run: swift build --build-tests --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
       - name: Test
-        run: swift test --explicit-target-dependency-import-check error
+        run: swift test --skip-build
       - name: Build documentation
         run: Scripts/build-docs.sh

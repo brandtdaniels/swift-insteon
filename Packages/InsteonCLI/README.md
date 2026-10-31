@@ -109,7 +109,7 @@ The command names a device only from the identity it reported: its category, sub
 
 ### Updating the catalog
 
-The command names products and events from the Insteon device catalog. A copy ships in the bundle next to the command; `insteon catalog update` brings newer catalog data without a new release of the package:
+The command names products and events from the Insteon device catalog. A copy ships in the bundle next to the command; `insteon catalog update` brings newer catalog data without another release of the package:
 
 ```text
 $ insteon catalog update

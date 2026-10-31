@@ -3,12 +3,14 @@ import Testing
 @testable import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
+import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
 import InsteonTestSupport
 
 /// Devices of ``ControlExample``'s made-up catalog, controlled through ``Device`` on an
 /// in-memory modem, a ``TestClock`` and fixed times.
+@Suite(.timeLimit(.minutes(1)))
 struct DeviceTests {
 
   let clock: TestClock = TestClock()

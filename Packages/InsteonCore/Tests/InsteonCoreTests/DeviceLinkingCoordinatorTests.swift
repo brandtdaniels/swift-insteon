@@ -3,6 +3,7 @@ import Testing
 @testable import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
+import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
 import InsteonTestSupport
@@ -685,11 +686,14 @@ struct DeviceLinkingCoordinatorTests {
     // The lamp is waiting in linking mode when the modem starts.
     await modem.pressSetButton(of: lamp)
 
-    await #expect(throws: LinkMismatch.self) {
+    let mismatch: LinkMismatch? = await #expect(throws: LinkMismatch.self) {
 
       _ = try await network.linking.link(module, as: .controller, observer: LinkingRecorder())
 
     }
+
+    #expect(mismatch?.reason == .otherDevice(expected: module))
+    #expect(mismatch?.link.address == lamp)
 
   }
 

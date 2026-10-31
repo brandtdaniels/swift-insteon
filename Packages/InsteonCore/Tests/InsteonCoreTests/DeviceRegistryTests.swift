@@ -38,6 +38,7 @@ enum Example {
 
 }
 
+@Suite(.timeLimit(.minutes(1)))
 struct DeviceRegistryTests {
 
   @Test func recordsADeviceAndDescribesItWithTheCatalog() async {

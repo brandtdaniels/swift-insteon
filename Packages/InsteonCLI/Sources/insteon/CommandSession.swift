@@ -1,9 +1,4 @@
 import Foundation
-#if canImport(Darwin)
-import Darwin
-#elseif canImport(Glibc)
-import Glibc
-#endif
 import InsteonCLISupport
 import InsteonCore
 
@@ -11,109 +6,16 @@ import InsteonCore
 /// command with it.
 enum CommandSession {
 
-  /// The process's environment, with the variables of the environment file merged in: the
-  /// file `--env-file` names, or else `$XDG_CONFIG_HOME/insteon/env` or
-  /// `~/.config/insteon/env`, if it exists. A variable set in the environment wins over the
-  /// file.
-  ///
-  /// The file is read only if it's a regular file the current user owns and no one else can
-  /// write to, and a warning is printed if others can read it. Its contents are never printed.
+  /// The process's environment, with the variables of the environment file merged in, as
+  /// `EnvironmentFile.load(explicitPath:environment:warn:)` reads them; its warnings go to
+  /// standard error.
   ///
   /// - Parameter explicitPath: The path given with `--env-file`, if any.
   /// - Throws: `EnvironmentFileError` if the file can't or mustn't be read, or `DotEnvError`
   ///   if it has a malformed line.
   static func loadEnvironment(explicitPath: String?) throws -> [String: String] {
 
-    let environment = ProcessInfo.processInfo.environment
-
-    guard let path = EnvironmentFile.path(explicit: explicitPath, environment: environment) else {
-
-      return environment
-
-    }
-
-    guard FileManager.default.fileExists(atPath: path) else {
-
-      // The default file is optional; one named on the command line isn't.
-      if explicitPath != nil {
-
-        throw EnvironmentFileError.notFound(path: path)
-
-      }
-
-      return environment
-
-    }
-
-    let contents = try readEnvironmentFile(at: path)
-
-    return try DotEnv.merging(DotEnv.parse(contents), into: environment)
-
-  }
-
-  /// Checks the file's type, owner and permissions, opens it, checks them again on the open
-  /// file, so it can't be swapped between the check and the read, and reads it as UTF-8.
-  ///
-  /// The first check keeps the command from opening something that isn't a regular file, such
-  /// as a named pipe, which could block.
-  private static func readEnvironmentFile(at path: String) throws(EnvironmentFileError) -> String {
-
-    var pathInfo = stat()
-
-    guard stat(path, &pathInfo) == 0 else {
-
-      throw EnvironmentFileError.unreadable(path: path)
-
-    }
-
-    if case let .refuse(refusal) = verdict(of: pathInfo) {
-
-      throw EnvironmentFileError.refused(path: path, refusal)
-
-    }
-
-    guard let handle = FileHandle(forReadingAtPath: path) else {
-
-      throw EnvironmentFileError.unreadable(path: path)
-
-    }
-
-    defer { try? handle.close() }
-
-    var info = stat()
-
-    guard fstat(handle.fileDescriptor, &info) == 0 else {
-
-      throw EnvironmentFileError.unreadable(path: path)
-
-    }
-
-    switch verdict(of: info) {
-    case .read:
-      break
-    case .readWithWarning:
-      Output.note("insteon: warning: others can read the environment file \(path). Make it readable only by you: chmod 600 \(path)")
-    case let .refuse(refusal):
-      throw EnvironmentFileError.refused(path: path, refusal)
-    }
-
-    guard
-      let data = try? handle.readToEnd() ?? Data(),
-      let contents = String(data: data, encoding: .utf8)
-    else {
-
-      throw EnvironmentFileError.unreadable(path: path)
-
-    }
-
-    return contents
-
-  }
-
-  /// Whether to read a file, from what `stat` or `fstat` says about it.
-  private static func verdict(of info: stat) -> EnvironmentFile.Verdict {
-
-    EnvironmentFile.verdict(mode: Int(info.st_mode), ownerID: Int(info.st_uid), currentUserID: Int(getuid()))
+    try EnvironmentFile.load(explicitPath: explicitPath, environment: ProcessInfo.processInfo.environment, warn: Output.note)
 
   }
 

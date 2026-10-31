@@ -26,6 +26,7 @@ final class ClosedDevices: @unchecked Sendable {
 
 }
 
+@Suite(.timeLimit(.minutes(1)))
 struct ModemDiscoveryTests {
 
   let clock = TestClock()

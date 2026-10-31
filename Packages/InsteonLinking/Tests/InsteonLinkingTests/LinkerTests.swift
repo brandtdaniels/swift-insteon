@@ -1,9 +1,10 @@
 import Testing
 import InsteonLinking
+import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
-import InsteonTestSupport
 
+@Suite(.timeLimit(.minutes(1)))
 struct LinkerTests {
 
   let lamp = InsteonAddress(0x1A, 0x2B, 0x3C)
@@ -82,7 +83,7 @@ struct LinkerTests {
 
     let modem = InMemoryModem()
     let other = InsteonAddress(0x44, 0x55, 0x66)
-    // A deleted record: used before, but no longer in use.
+    // A deleted record: used before, and not in use.
     let deleted = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0x22), group: 0x01, address: other)
     await modem.setDatabase([0x0FFF: deleted, 0x0FF7: responderRecord(of: other)], of: lamp)
 

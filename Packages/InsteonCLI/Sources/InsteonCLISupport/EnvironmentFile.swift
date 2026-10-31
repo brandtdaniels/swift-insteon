@@ -1,3 +1,12 @@
+import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#endif
+
 /// The per-user file the `insteon` command reads environment variables from, such as the Hub's
 /// credentials, and the checks it makes before reading it.
 ///
@@ -126,6 +135,122 @@ public enum EnvironmentFile {
     }
 
     return mode & readableByGroupOrOthers == 0 ? .read : .readWithWarning
+
+  }
+
+  /// The process's environment, with the variables of the environment file merged in: the
+  /// file `--env-file` names, or else the per-user default, if it exists. A variable set in the
+  /// environment wins over the file.
+  ///
+  /// The file is read by ``read(at:warn:)``, so only if it's a regular file the current user
+  /// owns and no one else can write to. Its contents are never shown.
+  ///
+  /// - Parameters:
+  ///   - explicitPath: The path given with `--env-file`, if any.
+  ///   - environment: The process's environment.
+  ///   - warn: Shows a warning, such as that others can read the file.
+  /// - Returns: The environment, with the file's variables added.
+  /// - Throws: ``EnvironmentFileError`` if the file named with `--env-file` doesn't exist, or
+  ///   the file can't or mustn't be read, or `DotEnvError` if it has a malformed line.
+  public static func load(explicitPath: String?, environment: [String: String], warn: (String) -> Void) throws -> [String: String] {
+
+    guard let path = path(explicit: explicitPath, environment: environment) else {
+
+      return environment
+
+    }
+
+    guard FileManager.default.fileExists(atPath: path) else {
+
+      // The default file is optional; one named on the command line isn't.
+      if explicitPath != nil {
+
+        throw EnvironmentFileError.notFound(path: path)
+
+      }
+
+      return environment
+
+    }
+
+    let contents: String = try read(at: path, warn: warn)
+
+    return try DotEnv.merging(DotEnv.parse(contents), into: environment)
+
+  }
+
+  /// Reads the file as UTF-8, after checking its type, owner and permissions, then checking
+  /// them again on the open file, so it can't be swapped between the check and the read.
+  ///
+  /// The first check keeps the command from opening something that isn't a regular file, such
+  /// as a named pipe, which could block.
+  ///
+  /// - Parameters:
+  ///   - path: The file.
+  ///   - warn: Shows a warning when others can read the file. The warning names the file,
+  ///     never its contents.
+  /// - Returns: The file's contents.
+  /// - Throws: ``EnvironmentFileError/refused(path:_:)`` if the file's type, owner or
+  ///   permissions make it unsafe to read, or ``EnvironmentFileError/unreadable(path:)`` if it
+  ///   can't be opened or isn't UTF-8.
+  public static func read(at path: String, warn: (String) -> Void) throws(EnvironmentFileError) -> String {
+
+    var pathInfo = stat()
+
+    guard stat(path, &pathInfo) == 0 else {
+
+      throw EnvironmentFileError.unreadable(path: path)
+
+    }
+
+    if case let .refuse(refusal) = verdict(of: pathInfo) {
+
+      throw EnvironmentFileError.refused(path: path, refusal)
+
+    }
+
+    guard let handle = FileHandle(forReadingAtPath: path) else {
+
+      throw EnvironmentFileError.unreadable(path: path)
+
+    }
+
+    defer { try? handle.close() }
+
+    var info = stat()
+
+    guard fstat(handle.fileDescriptor, &info) == 0 else {
+
+      throw EnvironmentFileError.unreadable(path: path)
+
+    }
+
+    switch verdict(of: info) {
+    case .read:
+      break
+    case .readWithWarning:
+      warn("insteon: warning: others can read the environment file \(path). Make it readable only by you: chmod 600 \(path)")
+    case let .refuse(refusal):
+      throw EnvironmentFileError.refused(path: path, refusal)
+    }
+
+    guard
+      let data = try? handle.readToEnd() ?? Data(),
+      let contents = String(data: data, encoding: .utf8)
+    else {
+
+      throw EnvironmentFileError.unreadable(path: path)
+
+    }
+
+    return contents
+
+  }
+
+  /// Whether to read a file, from what `stat` or `fstat` says about it.
+  private static func verdict(of info: stat) -> Verdict {
+
+    verdict(mode: Int(info.st_mode), ownerID: Int(info.st_uid), currentUserID: Int(getuid()))
 
   }
 
