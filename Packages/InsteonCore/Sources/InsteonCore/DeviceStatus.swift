@@ -245,6 +245,9 @@ public enum DeviceOperation: String, Hashable, Sendable {
   /// Reading or writing settings.
   case settings
 
+  /// Keeping a battery-powered device awake while it links, or letting it sleep again.
+  case keepAwake
+
 }
 
 /// Why a ``Device`` couldn't do what it was asked.

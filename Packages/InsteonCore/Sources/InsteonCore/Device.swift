@@ -789,6 +789,177 @@ public struct Device: Sendable {
 
   }
 
+  /// Sends a message the catalog's linking from a Hub names, such as the one that keeps a
+  /// battery-powered device awake while it links, through the same guards as every other
+  /// message the device is sent.
+  ///
+  /// A command set entry gives the bytes: a flag command, or a standard or extended command,
+  /// with `duration`'s whole seconds, or else its parameter's largest value, for a parameter;
+  /// or an operating flag, set or cleared with Set Operating Flags in the form the device takes.
+  /// A message given by its bytes is sent as given. Nothing else is written: no other flag,
+  /// and never one the catalog or the floor guards, nor a command the catalog never sends.
+  ///
+  /// - Parameters:
+  ///   - message: The message.
+  ///   - duration: How long the message keeps the device awake, if the catalog says.
+  ///   - writableFlags: The operating flags a linking flow may write.
+  /// - Throws: ``DeviceControlError/unsupported(_:product:)`` for a message that's never
+  ///   sent, ``DeviceControlError/missingCommand(_:product:)`` for one the command set
+  ///   doesn't describe, `FieldError` for a parameter that doesn't fit, and the modem's
+  ///   errors.
+  func sendLinkingMessage(_ message: DeviceLifecycle.HubLinking.HubMessage, duration: Duration?, writableFlags: Set<SettingName>) async throws {
+
+    let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription
+    let commands: CommandSet? = description?.commandSet
+    let product: String = description.map { (described: DeviceDescription) -> String in DeviceControlModel.product(of: described) } ?? "this device"
+    let refused = DeviceControlError.unsupported(.keepAwake, product: product)
+    let purpose: SendPurpose = .control(.keepAwake)
+
+    if let written = DeviceLinkingCoordinator.flagWritten(by: message, in: commands) {
+
+      // A linking flow writes only the flags the catalog lets it.
+      assert(writableFlags.contains(written), "A linking flow wrote the operating flag \(written), which the catalog doesn't let it write.")
+
+      guard writableFlags.contains(written) else {
+
+        throw refused
+
+      }
+
+    }
+
+    switch message {
+    case let .bytes(raw):
+      if raw.isExtended {
+
+        var userData = UserData()
+
+        for byte in raw.fixedBytes {
+
+          userData[byte.position] = byte.value
+
+        }
+
+        _ = try await request(ExtendedMessage(to: address, command: raw.command, userData: userData, integrity: raw.integrity.scheme), timeout: Modem.defaultExtendedRequestTimeout, for: purpose)
+
+      } else {
+
+        _ = try await request(StandardMessage(to: address, command: raw.command), timeout: network.requestTimeout, for: purpose)
+
+      }
+
+    case let .flag(condition):
+      guard let commands, let description, let flag = commands.operatingFlag(named: condition.flag) else {
+
+        throw DeviceControlError.missingCommand(condition.flag.rawValue, product: product)
+
+      }
+
+      // A kept flag is never written, and a never-set flag is only cleared.
+      switch DeviceSettingSafety.rule(for: flag) {
+      case .keep?:
+        throw refused
+      case .neverSet? where condition.isSet:
+        throw refused
+      default:
+        break
+      }
+
+      guard let change = commands.change(for: flag, setting: condition.isSet), !DeviceSettingSafety.sendsNeverSentCommand(change, in: commands) else {
+
+        throw refused
+
+      }
+
+      switch change {
+      case let .setOperatingFlags(command2):
+        try await sendSetOperatingFlags(command2, extendedWhen: flag.extendedWhen, description: description, commands: commands, purpose: purpose)
+      case let .standardCommand(command):
+        _ = try await request(StandardMessage(to: address, command: try command.command()), timeout: network.requestTimeout, for: purpose)
+      }
+
+    case let .command(name):
+      guard let commands, let description else {
+
+        throw DeviceControlError.missingCommand(name.rawValue, product: product)
+
+      }
+
+      if let flagCommand = commands.flagCommands.first(where: { (entry: OperatingFlagCommand) -> Bool in entry.name == name }) {
+
+        guard !DeviceSettingSafety.isNeverSent(flagCommand.sendGuard), !DeviceSettingSafety.neverSentNames.contains(name) else {
+
+          throw refused
+
+        }
+
+        try await sendSetOperatingFlags(
+          flagCommand.command.command.command2,
+          extendedWhen: flagCommand.extendedWhen,
+          description: description,
+          commands: commands,
+          purpose: purpose
+        )
+
+      } else if let standard = commands.standardCommand(named: name) {
+
+        guard DeviceSettingSafety.isSendable(standard, in: commands) else {
+
+          throw refused
+
+        }
+
+        let command: Command
+
+        switch standard.command2 {
+        case .fixed:
+          command = try standard.command()
+        case let .parameter(field):
+          command = try standard.command(Self.durationValue(duration, for: field))
+        }
+
+        _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, for: purpose)
+
+      } else if let extended = commands.extendedCommand(named: name) {
+
+        guard DeviceSettingSafety.isSendable(extended, in: commands) else {
+
+          throw refused
+
+        }
+
+        var values: [SettingName: FieldValue] = [:]
+
+        for parameter in extended.parameters {
+
+          values[parameter.name] = Self.durationValue(duration, for: parameter)
+
+        }
+
+        _ = try await request(try extended.message(to: address, values: values), timeout: Modem.defaultExtendedRequestTimeout, for: purpose)
+
+      } else {
+
+        throw DeviceControlError.missingCommand(name.rawValue, product: product)
+
+      }
+    }
+
+    await network.recordAnswer(of: address, level: nil)
+
+  }
+
+  /// The value of a keep-awake command's parameter: `duration`'s whole seconds, or else the
+  /// parameter's largest value, kept within the parameter's range.
+  static func durationValue(_ duration: Duration?, for field: MessageField) -> FieldValue {
+
+    let range: ClosedRange<Double> = field.range ?? 0...255
+    let seconds: Double = duration.map { (duration: Duration) -> Double in Double(duration.components.seconds) } ?? range.upperBound
+
+    return .number(min(max(seconds, range.lowerBound), range.upperBound))
+
+  }
+
   /// The command set's Beep, if the device may be sent it.
   static func sendableBeep(in commands: CommandSet) -> DeviceStandardCommand? {
 
@@ -1232,8 +1403,28 @@ public struct Device: Sendable {
   /// standard otherwise.
   private func sendFlag(_ command2: UInt8, flag: OperatingFlag, description: DeviceDescription, commands: CommandSet) async throws {
 
+    try await sendSetOperatingFlags(
+      command2,
+      extendedWhen: flag.extendedWhen,
+      description: description,
+      commands: commands,
+      purpose: .setting(label: SettingItem(flag: flag).label)
+    )
+
+  }
+
+  /// Sends Set Operating Flags with a cmd2 as the device takes it: extended with a checksum
+  /// for i2CS, extended with the command repeated when the `extendedWhen` flag is set, and
+  /// standard otherwise.
+  private func sendSetOperatingFlags(
+    _ command2: UInt8,
+    extendedWhen: SettingName?,
+    description: DeviceDescription,
+    commands: CommandSet,
+    purpose: SendPurpose
+  ) async throws {
+
     let command = StandardDirectCommand.setOperatingFlags(flag: command2)
-    let purpose: SendPurpose = .setting(label: SettingItem(flag: flag).label)
 
     // An i2CS device gets the extended form with a checksum even when the flag names an
     // extendedWhen flag: i2CS is checked first, so the guarding flag isn't read for it.
@@ -1245,7 +1436,7 @@ public struct Device: Sendable {
 
     }
 
-    if let name = flag.extendedWhen, let guarding = commands.operatingFlag(named: name) {
+    if let name = extendedWhen, let guarding = commands.operatingFlag(named: name) {
 
       let reply: ReceivedMessage? = try await answer(StandardMessage(to: address, command: guarding.readCommand))
 

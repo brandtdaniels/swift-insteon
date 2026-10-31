@@ -110,6 +110,24 @@ struct LinkingPrompter: LinkingObserver {
 
   }
 
+  func waitUntilDeviceIsAwake(_ prompt: WakePrompt) async throws {
+
+    let waits: Bool = Terminal.readsFromTerminal
+
+    for line in LinkingEventText.wake(prompt, waitsForReturn: waits) {
+
+      Output.note(line)
+
+    }
+
+    if waits {
+
+      try await Terminal.waitForReturn()
+
+    }
+
+  }
+
   /// Prints lines on standard output.
   private func lines(_ lines: [String]) {
 

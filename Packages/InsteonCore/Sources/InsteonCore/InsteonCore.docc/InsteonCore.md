@@ -177,6 +177,11 @@ first in the leg's role and group, the device joins with Enter Linking Mode for 
 with its SET button, as the catalog says, and the coordinator waits for ALL-Linking Completed
 before the next leg. ``DeviceLinkingResult/legs`` says what became of each:
 
+A battery-powered device the catalog says how to keep awake is sent that message through the
+device's guarded send path, before linking or after its first link, and the message that lets
+it sleep again once linking ends, even when it fails or is canceled. A
+``LinkingObserver`` asks a person to wake it first when the message goes before linking.
+
 ```swift
 for outcome in result.legs {
   print(outcome.leg.modemRole, outcome.leg.modemGroup, outcome.link != nil)
@@ -260,6 +265,8 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 - ``HubLinkingJoin``
 - ``HubLinkingLegStatus``
 - ``HubLinkingLegOutcome``
+- ``KeepAwakeEvent``
+- ``WakePrompt``
 - ``LinkedDevice``
 - ``UnlinkedLink``
 - ``RemovedLinks``

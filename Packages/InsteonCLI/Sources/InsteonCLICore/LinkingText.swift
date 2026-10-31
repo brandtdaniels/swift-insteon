@@ -336,6 +336,8 @@ public enum LinkingEventText {
       return []
     case let .hubLinkingLegFailed(leg, reason, notRun):
       return legFailed(leg, reason: message(reason), notRun: notRun.count)
+    case let .keepAwake(keepAwake):
+      return keepAwakeNotes(keepAwake, message: message)
     case let .allGroupsWhen(leg, condition):
       let state: String = condition.isSet ? "on" : "off"
       let otherState: String = condition.isSet ? "off" : "on"
@@ -440,6 +442,63 @@ public enum LinkingEventText {
 
     return "\(failed.leg.device) linked \(linked) of its \(failed.leg.count) legs; \(legName(failed.leg).lowercased()) didn't link: "
       + "\(message(reason)) Run 'insteon link \(failed.leg.device)' again to link the rest."
+
+  }
+
+  /// The notes for keeping a battery-powered device awake while it links, and letting it sleep
+  /// again.
+  private static func keepAwakeNotes(_ event: KeepAwakeEvent, message: (any Error) -> String) -> [String] {
+
+    switch event {
+    case let .sending(device, _):
+      return ["Keeping \(device) awake while it links, as the Insteon device catalog says..."]
+    case .sent, .released:
+      return []
+    case let .notSent(device, reason):
+      return ["\(device) wasn't kept awake: \(message(reason)) Linking goes on; if it falls asleep, wake it and run the command again."]
+    case let .releasing(device):
+      return ["Letting \(device) sleep again..."]
+    case let .notReleased(device, reason):
+      return [
+        "\(device) wasn't let sleep again: \(message(reason)) It may stay awake and use its batteries until it sleeps on its own "
+          + "or is woken and linked again."
+      ]
+    }
+
+  }
+
+  /// What to tell the person before the modem keeps a battery-powered device awake: wake it,
+  /// then press Return.
+  ///
+  /// - Parameters:
+  ///   - prompt: The device, with the catalog's steps to wake it.
+  ///   - waitsForReturn: Whether the command waits for Return, which it does when it reads
+  ///     from a terminal.
+  /// - Returns: The lines, in order.
+  public static func wake(_ prompt: WakePrompt, waitsForReturn: Bool) -> [String] {
+
+    let target: String = LinkingInstructions.deviceLabel(prompt.device, profile: prompt.deviceDescription?.profile)
+    let steps: [String] = LinkingInstructions.steps(prompt.steps)
+    var lines: [String]
+
+    if steps.isEmpty {
+
+      lines = ["First wake \(target); its manual says how, such as by pressing one of its buttons."]
+
+    } else {
+
+      lines = ["First wake \(target):"]
+      lines += steps.enumerated().map { "  \($0.offset + 1). \($0.element)" }
+
+    }
+
+    lines.append(
+      waitsForReturn
+        ? "Then press Return, and the modem keeps it awake while it links."
+        : "The modem keeps it awake while it links now."
+    )
+
+    return lines
 
   }
 

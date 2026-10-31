@@ -151,4 +151,36 @@ struct LinkingEventTextTests {
 
   }
 
+  @Test func saysHowTheDeviceIsKeptAwakeAndLetSleep() {
+
+    #expect(notes(.keepAwake(.sending(lamp, timing: .afterLinked))) == ["Keeping 1A.2B.3C awake while it links, as the Insteon device catalog says..."])
+    #expect(notes(.keepAwake(.sent(lamp))).isEmpty)
+    #expect(notes(.keepAwake(.notSent(lamp, reason: Failure()))) == [
+      "1A.2B.3C wasn't kept awake: It failed. Linking goes on; if it falls asleep, wake it and run the command again."
+    ])
+    #expect(notes(.keepAwake(.releasing(lamp))) == ["Letting 1A.2B.3C sleep again..."])
+    #expect(notes(.keepAwake(.released(lamp))).isEmpty)
+    #expect(notes(.keepAwake(.notReleased(lamp, reason: Failure()))) == [
+      "1A.2B.3C wasn't let sleep again: It failed. It may stay awake and use its batteries until it sleeps on its own "
+        + "or is woken and linked again."
+    ])
+
+  }
+
+  @Test func asksForTheDeviceToBeWokenWithTheCatalogsSteps() {
+
+    let steps: [DeviceLifecycle.Step] = [DeviceLifecycle.Step(text: "Press the Program button.")]
+
+    #expect(LinkingEventText.wake(WakePrompt(device: lamp, deviceDescription: nil, steps: steps), waitsForReturn: true) == [
+      "First wake 1A.2B.3C:",
+      "  1. Press the Program button.",
+      "Then press Return, and the modem keeps it awake while it links."
+    ])
+    #expect(LinkingEventText.wake(WakePrompt(device: lamp, deviceDescription: nil, steps: []), waitsForReturn: false) == [
+      "First wake 1A.2B.3C; its manual says how, such as by pressing one of its buttons.",
+      "The modem keeps it awake while it links now."
+    ])
+
+  }
+
 }

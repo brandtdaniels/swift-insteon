@@ -51,6 +51,84 @@ public protocol LinkingObserver: Sendable {
   ///   to stop the link or unlink before the modem joins.
   func waitUntilDeviceIsReady(_ prompt: DeviceFirstPrompt) async throws
 
+  /// Asks a person to wake a battery-powered device, and returns once they say it's awake, so
+  /// the modem can send it the message that keeps it awake before it links, as the catalog's
+  /// linking from a Hub says for some devices.
+  ///
+  /// The modem isn't in a linking mode yet while this waits.
+  ///
+  /// - Parameter prompt: The device, with the catalog's steps to wake it.
+  /// - Throws: `CancellationError` when the task is canceled while it waits, or another error
+  ///   to stop the link before anything is sent.
+  func waitUntilDeviceIsAwake(_ prompt: WakePrompt) async throws
+
+}
+
+extension LinkingObserver {
+
+  /// Returns at once, for an observer that doesn't ask a person to wake a device. The message
+  /// that keeps the device awake is sent anyway, and a device that's asleep doesn't answer it.
+  ///
+  /// - Parameter prompt: The device, with the catalog's steps to wake it.
+  public func waitUntilDeviceIsAwake(_ prompt: WakePrompt) async throws {}
+
+}
+
+/// A battery-powered device to wake before it links, for a front end to ask a person.
+public struct WakePrompt: Hashable, Sendable {
+
+  /// The device.
+  public var device: InsteonAddress
+
+  /// What the catalog says about the device, or `nil` if it isn't known.
+  public var deviceDescription: DeviceDescription?
+
+  /// The catalog's steps on the device itself to wake it, or empty when the catalog doesn't
+  /// have them.
+  public var steps: [DeviceLifecycle.Step]
+
+  /// Creates a prompt.
+  ///
+  /// - Parameters:
+  ///   - device: The device.
+  ///   - deviceDescription: What the catalog says about the device.
+  ///   - steps: The catalog's steps on the device to wake it.
+  public init(device: InsteonAddress, deviceDescription: DeviceDescription?, steps: [DeviceLifecycle.Step]) {
+
+    self.device = device
+    self.deviceDescription = deviceDescription
+    self.steps = steps
+
+  }
+
+}
+
+/// What a ``DeviceLinkingCoordinator`` did to keep a battery-powered device awake while it
+/// links, as the catalog's linking from a Hub says, and to let it sleep again afterward.
+public enum KeepAwakeEvent: Sendable {
+
+  /// The device is being sent the message that keeps it awake, at the time the catalog says:
+  /// before it goes into linking mode, or right after its first link.
+  case sending(InsteonAddress, timing: DeviceLifecycle.HubLinking.KeepAwake.Timing)
+
+  /// The device acknowledged the message that keeps it awake.
+  case sent(InsteonAddress)
+
+  /// The message that keeps the device awake wasn't sent or acknowledged, for the reason
+  /// given, such as a message the catalog never lets an app send. Linking goes on; the device
+  /// may fall asleep before it ends.
+  case notSent(InsteonAddress, reason: any Error)
+
+  /// Linking is done, or stopped, and the device is being sent the message that lets it sleep
+  /// again.
+  case releasing(InsteonAddress)
+
+  /// The device acknowledged the message that lets it sleep again.
+  case released(InsteonAddress)
+
+  /// The message that lets the device sleep again wasn't acknowledged, for the reason given.
+  case notReleased(InsteonAddress, reason: any Error)
+
 }
 
 /// Something that happened while a ``DeviceLinkingCoordinator`` linked or unlinked a device,
@@ -113,6 +191,9 @@ public enum LinkingEvent: Sendable {
   /// leg is ``HubLinkingLeg/isRemoteLinkingExpectedToWork``, the catalog says Enter Linking
   /// Mode works for the device, so the failure isn't expected.
   case hubLinkingLegFailed(HubLinkingLeg, reason: any Error, notRun: [HubLinkingLeg])
+
+  /// The device is kept awake while it links, or let sleep again afterward.
+  case keepAwake(KeepAwakeEvent)
 
   /// The catalog says a leg's one link covers every group the device controls while one of
   /// its operating flags is in the state given. The flag isn't read or changed; without it,

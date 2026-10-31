@@ -33,6 +33,15 @@ extension DeviceLinkingCoordinator {
   /// is reported the same way, and stops the legs after it; the links made stay made, and the
   /// result's ``DeviceLinkingResult/legs`` say which leg failed and which weren't run.
   ///
+  /// When the catalog says how to keep a battery-powered device awake, the coordinator sends
+  /// that message through the device's guarded send path, as ``KeepAwakeEvent`` reports:
+  /// before the first leg, once the observer says a person has woken the device, or right
+  /// after the first leg's link, as the catalog's timing says. A timing this package doesn't
+  /// know isn't sent. Once the legs are done, or stopped by an error or cancellation, the
+  /// catalog's message that lets the device sleep again is sent, when it gives one and the
+  /// first message may have reached the device. No operating flag is written but the ones
+  /// these messages name, and the command set's ``CommandSet/linkingChanges``.
+  ///
   /// - Parameters:
   ///   - device: The device.
   ///   - legs: The catalog's legs, in order.
@@ -51,8 +60,71 @@ extension DeviceLinkingCoordinator {
     observer: any LinkingObserver
   ) async throws -> DeviceLinkingResult {
 
+    let keepAwake: DeviceLifecycle.HubLinking.KeepAwake? = description?.hubLinking?.keepAwake
+    let writableFlags: Set<SettingName> = Self.writableLinkingFlags(of: description)
+    var isKeptAwake: Bool = false
+
+    do {
+
+      let result: DeviceLinkingResult = try await linkEachLeg(
+        device,
+        legs: legs,
+        description: description,
+        setButtonTimeout: setButtonTimeout,
+        writableFlags: writableFlags,
+        observer: observer,
+        isKeptAwake: &isKeptAwake
+      )
+
+      if isKeptAwake {
+
+        await releaseKeepAwake(keepAwake, of: device, writableFlags: writableFlags, observer: observer)
+
+      }
+
+      return result
+
+    } catch {
+
+      if isKeptAwake {
+
+        await releaseKeepAwake(keepAwake, of: device, writableFlags: writableFlags, observer: observer)
+
+      }
+
+      throw error
+
+    }
+
+  }
+
+  /// Links each leg, keeping the device awake as the catalog says, and sets `isKeptAwake` once
+  /// the message that keeps it awake may have reached it.
+  private func linkEachLeg(
+    _ device: InsteonAddress,
+    legs: [HubLinkingLeg],
+    description: DeviceDescription?,
+    setButtonTimeout: Duration,
+    writableFlags: Set<SettingName>,
+    observer: any LinkingObserver,
+    isKeptAwake: inout Bool
+  ) async throws -> DeviceLinkingResult {
+
     let hubLinking: DeviceLifecycle.HubLinking? = description?.hubLinking
     let isDeviceFirst: Bool = hubLinking?.isDeviceFirst ?? false
+    let keepAwake: DeviceLifecycle.HubLinking.KeepAwake? = hubLinking?.keepAwake
+
+    if let keepAwake, keepAwake.timing == .beforeLinking {
+
+      let steps: [DeviceLifecycle.Step] = Self.deviceSteps(of: description?.profile?.lifecycle?.waking)
+
+      try await observer.waitUntilDeviceIsAwake(WakePrompt(device: device, deviceDescription: description, steps: steps))
+
+      // Set first, so a cancellation while it's sent still lets the device sleep again.
+      isKeptAwake = true
+      isKeptAwake = try await sendKeepAwake(keepAwake, to: device, writableFlags: writableFlags, observer: observer)
+
+    }
 
     if let first = legs.first, first.modemRole == .controller, !isDeviceFirst {
 
@@ -109,6 +181,14 @@ extension DeviceLinkingCoordinator {
       }
 
       await network.recordLinkChange(of: device, answered: true)
+
+      // Right after the first link, while the device is still awake.
+      if leg.isFirst, let keepAwake, keepAwake.timing == .afterLinked {
+
+        isKeptAwake = true
+        isKeptAwake = try await sendKeepAwake(keepAwake, to: device, writableFlags: writableFlags, observer: observer)
+
+      }
 
       if leg.isFirst {
 
@@ -267,6 +347,182 @@ extension DeviceLinkingCoordinator {
 
       }
     )
+
+  }
+
+  // MARK: - Keeping a device awake
+
+  /// The operating flags a linking flow may write: those the catalog's messages that keep the
+  /// device awake and let it sleep again name, and the command set's
+  /// ``CommandSet/linkingChanges``. Every flag a linking flow writes is checked against them.
+  ///
+  /// - Parameter description: What the catalog says about the device, if it's known.
+  /// - Returns: The flags' names.
+  static func writableLinkingFlags(of description: DeviceDescription?) -> Set<SettingName> {
+
+    let commands: CommandSet? = description?.commandSet
+    var flags = Set<SettingName>(commands?.linkingChanges.map(\.flag) ?? [])
+
+    if let keepAwake = description?.hubLinking?.keepAwake {
+
+      for message in [keepAwake.send, keepAwake.release].compactMap({ $0 }) {
+
+        if let flag = flagWritten(by: message, in: commands) {
+
+          flags.insert(flag)
+
+        }
+
+      }
+
+    }
+
+    return flags
+
+  }
+
+  /// The operating flag a message writes, if it writes one: the flag it names, or the flag
+  /// whose Set Operating Flags cmd2 it sends.
+  ///
+  /// - Parameters:
+  ///   - message: The message.
+  ///   - commands: The device's command set, if the catalog gives one.
+  /// - Returns: The flag's name, or `nil` for a message that writes no flag the command set
+  ///   names.
+  static func flagWritten(by message: DeviceLifecycle.HubLinking.HubMessage, in commands: CommandSet?) -> SettingName? {
+
+    let setOperatingFlags: UInt8 = DeviceSettingSafety.setOperatingFlagsCommand1
+    let command: Command?
+
+    switch message {
+    case let .flag(condition):
+      return condition.flag
+    case let .bytes(raw):
+      command = raw.command
+    case let .command(name):
+      if let flagCommand = commands?.flagCommands.first(where: { (entry: OperatingFlagCommand) -> Bool in entry.name == name }) {
+
+        command = flagCommand.command.command
+
+      } else if let standard = commands?.standardCommand(named: name), case let .fixed(command2) = standard.command2 {
+
+        command = Command(command1: standard.command1, command2: command2)
+
+      } else {
+
+        command = nil
+
+      }
+    }
+
+    guard let command, command.command1 == setOperatingFlags else {
+
+      return nil
+
+    }
+
+    return commands?.operatingFlags.first { (flag: OperatingFlag) -> Bool in
+
+      flag.on == command.command2 || flag.off == command.command2
+
+    }?.name
+
+  }
+
+  /// Sends the message that keeps a device awake through its guarded send path, and tells the
+  /// observer.
+  ///
+  /// - Returns: Whether the message may have reached the device, so it's to be let sleep again:
+  ///   `false` only when it was refused before anything was sent.
+  /// - Throws: `CancellationError` if the task is canceled.
+  private func sendKeepAwake(
+    _ keepAwake: DeviceLifecycle.HubLinking.KeepAwake,
+    to device: InsteonAddress,
+    writableFlags: Set<SettingName>,
+    observer: any LinkingObserver
+  ) async throws -> Bool {
+
+    await observer.linking(.keepAwake(.sending(device, timing: keepAwake.timing)))
+
+    do {
+
+      try await network.device(device).sendLinkingMessage(keepAwake.send, duration: keepAwake.duration, writableFlags: writableFlags)
+      await observer.linking(.keepAwake(.sent(device)))
+
+      return true
+
+    } catch let error as CancellationError {
+
+      throw error
+
+    } catch let error as DeviceControlError {
+
+      // Refused before anything was sent.
+      await observer.linking(.keepAwake(.notSent(device, reason: error)))
+
+      return false
+
+    } catch let error as FieldError {
+
+      await observer.linking(.keepAwake(.notSent(device, reason: error)))
+
+      return false
+
+    } catch {
+
+      await observer.linking(.keepAwake(.notSent(device, reason: error)))
+
+      return true
+
+    }
+
+  }
+
+  /// Sends the message that lets a device sleep again, when the catalog gives one, through its
+  /// guarded send path, and tells the observer. It never throws: linking is over either way.
+  ///
+  /// A canceled task can't send anything, so then a task of its own sends it while this one
+  /// waits, rather than leaving the device awake and draining its batteries.
+  private func releaseKeepAwake(
+    _ keepAwake: DeviceLifecycle.HubLinking.KeepAwake?,
+    of device: InsteonAddress,
+    writableFlags: Set<SettingName>,
+    observer: any LinkingObserver
+  ) async {
+
+    guard let release = keepAwake?.release else {
+
+      return
+
+    }
+
+    let network: DeviceNetwork = self.network
+    let send: @Sendable () async -> Void = { () async -> Void in
+
+      await observer.linking(.keepAwake(.releasing(device)))
+
+      do {
+
+        try await network.device(device).sendLinkingMessage(release, duration: nil, writableFlags: writableFlags)
+        await observer.linking(.keepAwake(.released(device)))
+
+      } catch {
+
+        await observer.linking(.keepAwake(.notReleased(device, reason: error)))
+
+      }
+
+    }
+
+    if Task.isCancelled {
+
+      await Task { await send() }.value
+
+    } else {
+
+      await send()
+
+    }
 
   }
 

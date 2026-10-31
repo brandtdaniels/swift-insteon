@@ -186,7 +186,7 @@ public enum DeviceText {
       "Light Instant Change"
     case .beep:
       "Beep"
-    case .turnOn, .turnOff, .status, .settings:
+    case .turnOn, .turnOff, .status, .settings, .keepAwake:
       nil
     }
 
@@ -208,6 +208,8 @@ public enum DeviceText {
       "make it beep"
     case .settings:
       "read its settings"
+    case .keepAwake:
+      "keep it awake"
     }
 
   }
@@ -228,6 +230,8 @@ public enum DeviceText {
       "beep"
     case .settings:
       "read the settings of"
+    case .keepAwake:
+      "keep awake"
     }
 
   }

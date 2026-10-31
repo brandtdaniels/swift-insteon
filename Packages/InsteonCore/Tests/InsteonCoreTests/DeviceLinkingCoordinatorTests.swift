@@ -134,6 +134,12 @@ actor LinkingRecorder: LinkingObserver {
 
   }
 
+  func waitUntilDeviceIsAwake(_ prompt: WakePrompt) async throws {
+
+    lines.append("wake \(prompt.device) steps \(prompt.steps.count)")
+
+  }
+
   static func direction(_ direction: LinkingDirection) -> String {
 
     direction == .linking ? "linking" : "unlinking"
@@ -155,6 +161,25 @@ actor LinkingRecorder: LinkingObserver {
       return "back"
     case let .hubLinking(index):
       return "leg \(index + 1)"
+    }
+
+  }
+
+  static func keepAwake(_ event: KeepAwakeEvent) -> String {
+
+    switch event {
+    case let .sending(device, timing):
+      return "sending \(device) \(timing)"
+    case let .sent(device):
+      return "sent \(device)"
+    case let .notSent(device, _):
+      return "not sent \(device)"
+    case let .releasing(device):
+      return "releasing \(device)"
+    case let .released(device):
+      return "released \(device)"
+    case let .notReleased(device, _):
+      return "not released \(device)"
     }
 
   }
@@ -237,6 +262,8 @@ actor LinkingRecorder: LinkingObserver {
       return "leg \(leg.index + 1) failed, not run \(notRun.count)"
     case let .allGroupsWhen(leg, condition):
       return "leg \(leg.index + 1) all groups when \(condition.flag) \(condition.isSet)"
+    case let .keepAwake(keepAwake):
+      return "keep awake: \(self.keepAwake(keepAwake))"
     case let .readingModemLinks(device, purpose):
       return "reading modem links \(device) \(purpose == .findingLinksToRemove ? "to remove" : "for group")"
     case let .unlinkGroupChosen(device, group, isFromModemRecords):
