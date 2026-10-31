@@ -3,7 +3,3 @@
 # and the line's code without comments or strings, separated by tabs. Entries only go: a
 # change that moves code into the libraries removes them, with --update, and CI fails a pull
 # request that adds one.
-insteon/DeviceCommands.swift	hex-literal	let productKey = productData.map(\.productKey).flatMap { $0 == ProductKey(0x00, 0x00, 0x00) ? nil : $0 }
-insteon/DeviceCommands.swift	protocol-command	_ = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.productDataRequest))
-insteon/SceneCommands.swift	hex-literal	let command: Command = isOn ? StandardDirectCommand.on(level: 0xFF).command : StandardDirectCommand.off.command
-insteon/SceneCommands.swift	protocol-command	let command: Command = isOn ? StandardDirectCommand.on(level: 0xFF).command : StandardDirectCommand.off.command

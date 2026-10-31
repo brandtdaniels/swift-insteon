@@ -1,4 +1,5 @@
 import InsteonCLISupport
+import InsteonCore
 import InsteonModem
 import InsteonProtocol
 
@@ -12,9 +13,8 @@ enum SceneCommands {
     Output.note("Reading the modem's ALL-Link database...")
 
     // The modem controls the group's devices, each of which keeps a responder record for it.
-    let records: [AllLinkRecord] = try await modem.allLinkRecords()
-    let members: [InsteonAddress] = records.filter { $0.flags.contains(.controller) && $0.group == group }.map(\.address)
-    let responders: [InsteonAddress] = Array(Set(members)).sorted { $0.description < $1.description }
+    let scene: ModemScene = ModemScene(group: group)
+    let responders: [InsteonAddress] = try await scene.responders(in: modem)
     let commandName: String = isOn ? "Light On" : "Light Off"
 
     if responders.isEmpty {
@@ -23,15 +23,11 @@ enum SceneCommands {
 
     }
 
-    let command: Command = isOn ? StandardDirectCommand.on(level: 0xFF).command : StandardDirectCommand.off.command
-    // The Insteon Developer's Guide gives up to 2.150 seconds to the first cleanup and 1.550
-    // seconds to each one after.
-    let seconds: Int = max(10, 3 + 2 * responders.count)
     let report: AllLinkCleanupReport
 
     do {
 
-      report = try await modem.sendAllLinkCommand(group: group, command: command, timeout: .seconds(seconds))
+      report = try await scene.send(turningOn: isOn, responderCount: responders.count, through: modem)
 
     } catch ModemError.rejected {
 

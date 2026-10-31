@@ -14,7 +14,7 @@ enum DeviceCommands {
     case .id:
       try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (cached: CachedNetwork) async throws -> Void in
 
-        try await identify(device, network: cached.network, modem: modem, names: names, printsJSON: printsJSON)
+        try await identify(device, network: cached.network, names: names, printsJSON: printsJSON)
 
       }
     case .ping:
@@ -210,15 +210,15 @@ enum DeviceCommands {
 
   }
 
-  private static func identify(_ device: InsteonAddress, network: DeviceNetwork, modem: Modem, names: ProductNames, printsJSON: Bool) async throws {
+  private static func identify(_ device: InsteonAddress, network: DeviceNetwork, names: ProductNames, printsJSON: Bool) async throws {
 
     // The network records the identity the device reports.
     let identification = try await network.identify(device)
-    var productData: ProductData?
+    var productData: DeviceProductData?
 
     if identification.acceptsModem {
 
-      productData = try await requestProductData(device, modem: modem)
+      productData = try await network.productData(of: device)
 
     }
 
@@ -237,7 +237,7 @@ enum DeviceCommands {
     let catalogKey: DeviceIdentity.ProductKeyEntry? = await network.registry.device(device)?.deviceDescription.productKey
 
     // Newer devices leave the product key out, or report zeros; that's expected, not a failure.
-    let productKey = productData.map(\.productKey).flatMap { $0 == ProductKey(0x00, 0x00, 0x00) ? nil : $0 }
+    let productKey = productData?.productKey
 
     if printsJSON {
 
@@ -288,58 +288,6 @@ enum DeviceCommands {
     }
 
   }
-
-  /// Sends Product Data Request and waits for the device's Product Data Response, or returns
-  /// `nil` if the device doesn't send one.
-  private static func requestProductData(_ device: InsteonAddress, modem: Modem) async throws -> ProductData? {
-
-    do {
-
-      // Listening starts before the request, so the response can't be missed.
-      return try await modem.firstReply(
-        within: Modem.defaultExtendedRequestTimeout,
-        after: {
-
-          do {
-
-            _ = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.productDataRequest))
-
-          } catch let error as ModemError {
-
-            // Not every device answers Product Data Request.
-            switch error {
-            case .deviceRejected, .deviceTimedOut:
-              throw NoProductData()
-            default:
-              throw error
-            }
-
-          }
-
-        },
-        matching: { (reply: ModemReply) -> ProductData? in
-
-          guard case let .messageReceived(message) = reply, message.sender == device else {
-
-            return nil
-
-          }
-
-          return ProductData(message)
-
-        }
-      )
-
-    } catch is NoProductData {
-
-      return nil
-
-    }
-
-  }
-
-  /// A device didn't answer Product Data Request.
-  private struct NoProductData: Error {}
 
   // MARK: - ping
 
