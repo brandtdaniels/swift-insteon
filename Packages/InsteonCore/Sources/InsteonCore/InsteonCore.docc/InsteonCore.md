@@ -137,8 +137,8 @@ are guarded even where the catalog gives no guard; the catalog adds guards, and 
 these. Under every guard is a floor of bytes, the ``ProtectedCommand``s. Set Operating Flags
 with cmd2 `0x0C`, `0x0E`, `0x19` or `0x00` is refused for a device the catalog doesn't know
 or gives no command set, and for a command set that doesn't name the cmd2; it's sent only
-where the command set names it for a flag it doesn't guard, such as an i3 Keypad's lock
-buttons flag, turned on with `0x19`. Poke is never sent. A flag is shown as writable when at
+where the command set names it for a flag or command it doesn't guard, under a name that
+doesn't mean a guarded flag, such as an i3 Keypad's lock buttons flag, turned on with `0x19`. Poke is never sent. A flag is shown as writable when at
 least one of its states is sent. A catalog that names a flags byte's query differently from the floor is checked against
 both. Every message a ``Device`` sends is checked by the bytes it carries, after any value is
 filled in: the Set Operating Flags bytes that turn a kept flag on or off or a never-set flag on,

@@ -435,10 +435,11 @@ public actor DeviceNetwork {
   /// The message passes the same guards as every message a ``Device`` sends, checked by its
   /// bytes before anything is sent. Poke is never sent, and a ``ProtectedCommand``'s Set
   /// Operating Flags bytes are sent only to a device the ``registry`` knows whose command set
-  /// names the cmd2 for a flag it doesn't guard. Nor are the bytes the device's command set
-  /// never sends, or an extended message that writes a byte holding a flag the catalog
-  /// guards, which only ``Device/writeSetting(_:to:button:)`` writes. The device isn't asked
-  /// for its identity first.
+  /// names the cmd2 for a flag or command it doesn't guard. Nor are the bytes the device's
+  /// command set never sends, or an extended message that writes a byte holding a flag the
+  /// catalog guards, which only ``Device/writeSetting(_:to:button:)`` writes. An extended Set
+  /// to a device with no command set isn't sent either, since which bits it writes can't be
+  /// told. The device isn't asked for its identity first.
   ///
   /// Listening starts before the message, so nothing the device sends is missed. The
   /// device's acknowledgment is handed to `onAcknowledgment` as soon as it arrives, and isn't

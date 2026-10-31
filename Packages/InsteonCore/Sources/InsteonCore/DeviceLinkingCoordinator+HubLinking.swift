@@ -485,7 +485,7 @@ extension DeviceLinkingCoordinator {
       let target: Device = network.device(device)
 
       // A device that couldn't be let sleep again isn't kept awake.
-      try await target.refuseKeepAwakeWithoutRelease(keepAwake)
+      try await target.refuseKeepAwakeWithoutRelease(keepAwake, writableFlags: writableFlags)
       try await target.sendLinkingMessage(keepAwake.send, duration: keepAwake.duration, writableFlags: writableFlags)
       await observer.linking(.keepAwake(.sent(device)))
 

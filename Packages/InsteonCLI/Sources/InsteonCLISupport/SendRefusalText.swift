@@ -17,6 +17,8 @@ public enum SendRefusalText {
       return "The Insteon device catalog marks this message as one never sent to \(product); insteon never sends it."
     case let .writesGuardedFlags(label):
       return "This message writes the byte that holds \(label), which only 'insteon device ADDRESS set' changes, once it has read the byte; insteon never sends it as given."
+    case .extendedSetWithoutCommandSet:
+      return "Without the device's catalog entry, insteon can't tell which bits an extended Set writes, such as a programming lock's, so it doesn't send one as given; run 'insteon device ADDRESS id' first, so the identity cache knows the device."
     case .notSerialCommand:
       return "A serial command starts with 02."
     case .incompleteMessage:

@@ -313,11 +313,13 @@ public enum HelpText {
                           cmd2 0C, 0E, 19 or 00, which turn most devices' radio or
                           powerline off, require a checksum or turn the programming lock
                           on, is sent only to a device the identity cache knows whose
-                          catalog entry names that cmd2 for a flag it doesn't guard, such
-                          as an i3 Keypad's lock buttons (19). Poke (29) is never sent. Nor
-                          is a message the device's catalog entry never sends, or an
-                          extended message that writes a byte holding a guarded flag,
-                          which only 'set' writes. Nothing forces them.
+                          catalog entry names that cmd2 for a flag or command it doesn't
+                          guard, such as an i3 Keypad's lock buttons (19). Poke (29) is
+                          never sent. Nor is a message the device's catalog entry never
+                          sends, an extended message that writes a byte holding a guarded
+                          flag, which only 'set' writes, or an extended Set (2E with D2
+                          other than 00) to a device the catalog doesn't describe, since
+                          which bits it writes can't be told. Nothing forces them.
 
     'on', 'off', 'instant', 'status', 'beep', 'links', 'settings' and 'set' use the device's
     identity, from the identity cache or, for a device the cache doesn't know, an ID Request

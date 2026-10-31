@@ -932,6 +932,21 @@ public struct Device: Sendable {
 
   }
 
+  /// A message the catalog's linking from a Hub names, resolved to what's sent, once every
+  /// guard allows it.
+  private enum LinkingSend {
+
+    /// A standard message.
+    case standard(StandardMessage)
+
+    /// An extended message.
+    case extended(ExtendedMessage)
+
+    /// Set Operating Flags with a cmd2, in the form the device takes.
+    case setOperatingFlags(UInt8, extendedWhen: SettingName?, description: DeviceDescription, commands: CommandSet)
+
+  }
+
   /// Sends a message the catalog's linking from a Hub names, such as the one that keeps a
   /// battery-powered device awake while it links, through the same guards as every other
   /// message the device is sent.
@@ -952,6 +967,46 @@ public struct Device: Sendable {
   ///   errors.
   func sendLinkingMessage(_ message: DeviceLifecycle.HubLinking.HubMessage, duration: Duration?, writableFlags: Set<SettingName>) async throws {
 
+    let purpose: SendPurpose = .control(.keepAwake)
+
+    switch try await resolveLinkingMessage(message, duration: duration, writableFlags: writableFlags) {
+    case let .standard(standard):
+      _ = try await request(standard, timeout: network.requestTimeout, for: purpose)
+    case let .extended(extended):
+      _ = try await request(extended, timeout: Modem.defaultExtendedRequestTimeout, for: purpose)
+    case let .setOperatingFlags(command2, extendedWhen, description, commands):
+      try await sendSetOperatingFlags(command2, extendedWhen: extendedWhen, description: description, commands: commands, purpose: purpose)
+    }
+
+    await network.recordAnswer(of: address, level: nil)
+
+  }
+
+  /// Refuses to keep a device awake when the message that lets it sleep again would be
+  /// refused, for any reason ``sendLinkingMessage(_:duration:writableFlags:)`` refuses one, so
+  /// it isn't left awake, draining its batteries. Nothing is sent.
+  ///
+  /// - Parameters:
+  ///   - keepAwake: How the catalog keeps the device awake.
+  ///   - writableFlags: The operating flags a linking flow may write.
+  /// - Throws: The refusal the release would get: ``DeviceControlError`` or `FieldError`.
+  func refuseKeepAwakeWithoutRelease(_ keepAwake: DeviceLifecycle.HubLinking.KeepAwake, writableFlags: Set<SettingName>) async throws {
+
+    guard let release = keepAwake.release else {
+
+      return
+
+    }
+
+    _ = try await resolveLinkingMessage(release, duration: nil, writableFlags: writableFlags)
+
+  }
+
+  /// What a message the catalog's linking from a Hub names sends, once every guard allows it,
+  /// without sending anything: the flags a linking flow may write, the command set's guards
+  /// and the byte floor, by the bytes the message carries.
+  private func resolveLinkingMessage(_ message: DeviceLifecycle.HubLinking.HubMessage, duration: Duration?, writableFlags: Set<SettingName>) async throws -> LinkingSend {
+
     let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription
     let commands: CommandSet? = description?.commandSet
     let product: String = description.map { (described: DeviceDescription) -> String in DeviceControlModel.product(of: described) } ?? "this device"
@@ -969,6 +1024,8 @@ public struct Device: Sendable {
       }
 
     }
+
+    let resolved: LinkingSend
 
     switch message {
     case let .bytes(raw):
@@ -990,11 +1047,11 @@ public struct Device: Sendable {
 
         }
 
-        _ = try await request(ExtendedMessage(to: address, command: raw.command, userData: userData, integrity: raw.integrity.scheme), timeout: Modem.defaultExtendedRequestTimeout, for: purpose)
+        resolved = .extended(ExtendedMessage(to: address, command: raw.command, userData: userData, integrity: raw.integrity.scheme))
 
       } else {
 
-        _ = try await request(StandardMessage(to: address, command: raw.command), timeout: network.requestTimeout, for: purpose)
+        resolved = .standard(StandardMessage(to: address, command: raw.command))
 
       }
 
@@ -1023,9 +1080,9 @@ public struct Device: Sendable {
 
       switch change {
       case let .setOperatingFlags(command2):
-        try await sendSetOperatingFlags(command2, extendedWhen: flag.extendedWhen, description: description, commands: commands, purpose: purpose)
+        resolved = .setOperatingFlags(command2, extendedWhen: flag.extendedWhen, description: description, commands: commands)
       case let .standardCommand(command):
-        _ = try await request(StandardMessage(to: address, command: try command.command()), timeout: network.requestTimeout, for: purpose)
+        resolved = .standard(StandardMessage(to: address, command: try command.command()))
       }
 
     case let .command(name):
@@ -1043,13 +1100,7 @@ public struct Device: Sendable {
 
         }
 
-        try await sendSetOperatingFlags(
-          flagCommand.command.command.command2,
-          extendedWhen: flagCommand.extendedWhen,
-          description: description,
-          commands: commands,
-          purpose: purpose
-        )
+        resolved = .setOperatingFlags(flagCommand.command.command.command2, extendedWhen: flagCommand.extendedWhen, description: description, commands: commands)
 
       } else if let standard = commands.standardCommand(named: name) {
 
@@ -1068,7 +1119,7 @@ public struct Device: Sendable {
           command = try standard.command(Self.durationValue(duration, for: field))
         }
 
-        _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, for: purpose)
+        resolved = .standard(StandardMessage(to: address, command: command))
 
       } else if let extended = commands.extendedCommand(named: name) {
 
@@ -1088,7 +1139,7 @@ public struct Device: Sendable {
 
         }
 
-        _ = try await request(try extended.message(to: address, values: values), timeout: Modem.defaultExtendedRequestTimeout, for: purpose)
+        resolved = .extended(try extended.message(to: address, values: values))
 
       } else {
 
@@ -1097,72 +1148,17 @@ public struct Device: Sendable {
       }
     }
 
-    await network.recordAnswer(of: address, level: nil)
-
-  }
-
-  /// Refuses to keep a device awake when the message that lets it sleep again is never sent
-  /// to it, so it isn't left awake, draining its batteries: a ``ProtectedCommand`` its
-  /// command set doesn't name, or bytes its command set never sends.
-  ///
-  /// - Parameter keepAwake: How the catalog keeps the device awake.
-  /// - Throws: ``DeviceControlError/unsupported(_:product:)`` when the release is never sent.
-  func refuseKeepAwakeWithoutRelease(_ keepAwake: DeviceLifecycle.HubLinking.KeepAwake) async throws {
-
-    guard let release = keepAwake.release else {
-
-      return
-
+    // The bytes the message carries pass the same check as every message the device is sent.
+    switch resolved {
+    case let .standard(standard):
+      try await refuseIfNeverSent(standard.command, for: purpose)
+    case let .extended(extended):
+      try await refuseIfNeverSent(extended.command, userData: extended.userData, for: purpose)
+    case let .setOperatingFlags(command2, _, _, _):
+      try await refuseIfNeverSent(Command(command1: DeviceSettingSafety.setOperatingFlagsCommand1, command2: command2), for: purpose)
     }
 
-    let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription
-    let commands: CommandSet? = description?.commandSet
-
-    guard let command = Self.command(of: release, in: commands), DeviceSettingSafety.isNeverSent(command, in: commands) else {
-
-      return
-
-    }
-
-    throw DeviceControlError.unsupported(.keepAwake, product: description.map { (described: DeviceDescription) -> String in DeviceControlModel.product(of: described) } ?? "this device")
-
-  }
-
-  /// The cmd1 and cmd2 a message the catalog's linking from a Hub names sends, when its bytes
-  /// or the command set say what they are.
-  static func command(of message: DeviceLifecycle.HubLinking.HubMessage, in commands: CommandSet?) -> Command? {
-
-    switch message {
-    case let .bytes(raw):
-      return raw.command
-    case let .flag(condition):
-      guard let commands, let flag = commands.operatingFlag(named: condition.flag), let change = commands.change(for: flag, setting: condition.isSet) else {
-
-        return nil
-
-      }
-
-      switch change {
-      case let .setOperatingFlags(command2):
-        return Command(command1: DeviceSettingSafety.setOperatingFlagsCommand1, command2: command2)
-      case let .standardCommand(standard):
-        return try? standard.command()
-      }
-    case let .command(name):
-      if let flagCommand = commands?.flagCommands.first(where: { (entry: OperatingFlagCommand) -> Bool in entry.name == name }) {
-
-        return flagCommand.command.command
-
-      }
-
-      if let standard = commands?.standardCommand(named: name), case let .fixed(command2) = standard.command2 {
-
-        return Command(command1: standard.command1, command2: command2)
-
-      }
-
-      return commands?.extendedCommand(named: name)?.command
-    }
+    return resolved
 
   }
 
@@ -1301,7 +1297,8 @@ public struct Device: Sendable {
   /// ``ProtectedCommand`` the command set doesn't name for a flag it doesn't guard, and the
   /// bytes the catalog's guards add; and, for a
   /// message sent as it's given, an extended message that writes a byte holding a guarded
-  /// flag, as `DeviceSettingSafety.guardedFlagWritten(by:userData:in:)` finds it. Every
+  /// flag, as `DeviceSettingSafety.guardedFlagWritten(by:userData:in:)` finds it, or any
+  /// extended Set to a device with no command set. Every
   /// message the device is sent is checked here, with the bytes it actually carries, so a
   /// command filled in with a value, or listed under another name, can't send them.
   private func refuseIfNeverSent(_ command: Command, userData: UserData? = nil, for purpose: SendPurpose) async throws {
@@ -1324,6 +1321,12 @@ public struct Device: Sendable {
     } else if purpose.sendsBytesAsGiven, let userData, let commands, let label = DeviceSettingSafety.guardedFlagWritten(by: command, userData: userData, in: commands) {
 
       refusal = .writesGuardedFlags(label: label)
+
+    } else if purpose.sendsBytesAsGiven, commands == nil, let userData, DeviceSettingSafety.isExtendedSet(command, userData: userData) {
+
+      // Without a command set, which bits an extended Set writes, such as the programming
+      // lock's in an open/close sensor's configuration byte, can't be told.
+      refusal = .extendedSetWithoutCommandSet
 
     } else {
 

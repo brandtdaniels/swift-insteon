@@ -535,6 +535,7 @@ struct ExploringArgumentTests {
     let refusals: [SendRefusal] = ProtectedCommand.allCases.map { (command: ProtectedCommand) -> SendRefusal in .protected(command) } + [
       .neverSentToDevice(product: "Example"),
       .writesGuardedFlags(label: "Programming lock"),
+      .extendedSetWithoutCommandSet,
       .notSerialCommand,
       .incompleteMessage,
       .serialCommand("Reset the IM (0x67) erases the modem's ALL-Link database and configuration.")

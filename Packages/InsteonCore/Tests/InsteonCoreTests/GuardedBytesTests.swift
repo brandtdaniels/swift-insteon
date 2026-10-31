@@ -341,17 +341,33 @@ struct GuardedBytesTests {
 
   }
 
-  @Test(.timeLimit(.minutes(1))) func doesntKeepADeviceAwakeThatCantBeLetSleepAgain() async throws {
+  @Test(
+    .timeLimit(.minutes(1)),
+    arguments: [
+      // Checksum on's bytes, which a command set with no flags doesn't name.
+      DeviceLifecycle.HubLinking.HubMessage.bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x19))),
+      // A command the command set doesn't describe.
+      DeviceLifecycle.HubLinking.HubMessage.command("noSuchCommand"),
+      // An extended Set given by its bytes, which never writes settings.
+      DeviceLifecycle.HubLinking.HubMessage.bytes(DeviceLifecycle.HubLinking.RawMessage(
+        command: Command(command1: 0x2E, command2: 0x00),
+        isExtended: true,
+        fixedBytes: [FixedUserDataByte(position: 1, value: 0x01), FixedUserDataByte(position: 2, value: 0x05)],
+        integrity: .checksum
+      ))
+    ]
+  )
+  func doesntKeepADeviceAwakeThatCantBeLetSleepAgain(_ release: DeviceLifecycle.HubLinking.HubMessage) async throws {
 
     let modem = InMemoryModem()
     let sensor = InsteonAddress(0x5A, 0x6B, 0x05)
     let identity = ReportedIdentity(category: 0x10, subcategory: 0x7A, firmwareVersion: 0x41)
 
-    // Stay awake is allowed, but letting it sleep again is checksum on's bytes.
+    // Stay awake is allowed, but the release would be refused, each for its own reason.
     let keepAwake = DeviceLifecycle.HubLinking.KeepAwake(
       timing: .afterLinked,
       send: .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x18))),
-      release: .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x19)))
+      release: release
     )
     let catalog = DeviceCatalog(
       profiles: [
@@ -384,6 +400,7 @@ struct GuardedBytesTests {
 
     // Linking goes on, but neither message reaches the sensor.
     #expect(result.links.count == 1)
+    #expect(await modem.extendedRequests.isEmpty)
     #expect(await modem.linkingSteps.allSatisfy { (step: InMemoryModem.LinkingStep) -> Bool in
 
       guard case let .device(_, command, _) = step else {
@@ -444,6 +461,49 @@ struct GuardedBytesTests {
 
   }
 
+  @Test func countsAnUnguardedSetOperatingFlagsCommandAsNamingItsCmd2() throws {
+
+    let tempLinc: CommandSet = try #require(try DeviceCatalog.bundled().commandSet(id: "tempLinc"))
+
+    // TempLinc's heatCoolLedOn is Set Operating Flags 0x0C, an extended command with no guard.
+    #expect(tempLinc.extendedCommand(named: "heatCoolLedOn")?.command == Command(command1: 0x20, command2: 0x0C))
+    #expect(!DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x0C), in: tempLinc))
+    // Its programmingLockOn, 0x00, is guarded, and it names neither 0x0E nor 0x19.
+    #expect(DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x00), in: tempLinc))
+    #expect(DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x0E), in: tempLinc))
+    #expect(DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x19), in: tempLinc))
+
+  }
+
+  @Test func neverUnlocksAByteForANameThatMeansAGuardedFlag() {
+
+    // A catalog that forgets the guard on a checksum flag, under a name the floor doesn't list.
+    let commands = CommandSet(
+      id: "exampleMisguarded",
+      name: "Example",
+      summary: "A checksum flag without its guard.",
+      operatingFlags: [
+        OperatingFlag(name: "checksumRequired2", summary: "Requires a checksum.", query: .operatingFlags, bit: 0x01, on: 0x19, off: 0x18),
+        OperatingFlag(name: "PowerLineOffToo", summary: "Turns the powerline off.", query: .operatingFlags, bit: 0x02, on: 0x0E, off: 0x0F),
+        OperatingFlag(name: "lockButtons", summary: "Locks the buttons.", query: .operatingFlags, bit: 0x04, on: 0x0C, off: 0x0D)
+      ]
+    )
+
+    #expect(DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x19), in: commands))
+    #expect(DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x0E), in: commands))
+    // A name with no guarded meaning still unlocks its byte.
+    #expect(!DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x0C), in: commands))
+
+    #expect(DeviceSettingSafety.namesGuardedMeaning("checksumRequired2"))
+    #expect(DeviceSettingSafety.namesGuardedMeaning("PowerLineOffToo"))
+    #expect(DeviceSettingSafety.namesGuardedMeaning("powerlineOff"))
+    #expect(DeviceSettingSafety.namesGuardedMeaning("RADIOOFF"))
+    #expect(DeviceSettingSafety.namesGuardedMeaning("programmingLockOn"))
+    #expect(!DeviceSettingSafety.namesGuardedMeaning("lockButtons"))
+    #expect(!DeviceSettingSafety.namesGuardedMeaning("stayAwakeOff"))
+
+  }
+
   @Test(.timeLimit(.minutes(1))) func sendsAnI3KeypadsLockButtonsOnAsGiven() async throws {
 
     let modem = SettingsModem(device: Self.i3Keypad.address, flags: 0x00, values: [:])
@@ -481,7 +541,7 @@ struct GuardedBytesTests {
     let writableFlags: Set<SettingName> = DeviceLinkingCoordinator.writableLinkingFlags(of: description)
 
     // Its release, stayAwakeOff, is 0x19, which its command set names for a flag command.
-    try await device.refuseKeepAwakeWithoutRelease(keepAwake)
+    try await device.refuseKeepAwakeWithoutRelease(keepAwake, writableFlags: writableFlags)
     try await device.sendLinkingMessage(keepAwake.send, duration: keepAwake.duration, writableFlags: writableFlags)
     try await device.sendLinkingMessage(release, duration: nil, writableFlags: writableFlags)
 
@@ -489,6 +549,33 @@ struct GuardedBytesTests {
       + modem.extendedMessages.map(\.command)
 
     #expect(sent == [Command(command1: 0x20, command2: 0x18), Command(command1: 0x20, command2: 0x19)])
+
+  }
+
+  @Test(.timeLimit(.minutes(1)), arguments: [Knowledge.unknownDevice, .noCatalog])
+  func refusesAnExtendedSetAsGivenWithoutACommandSet(_ knowledge: Knowledge) async throws {
+
+    let modem: SettingsModem = Self.modem()
+    let network: DeviceNetwork = try self.network(modem, knowing: knowledge)
+
+    // An Open/Close Sensor's selector 0x05 writes its configuration byte, whose bit 0x80 is
+    // its programming lock; without the catalog, nothing says so.
+    let set = DirectMessage(to: Self.address, command1: 0x2E, command2: 0x00, data: [0x01, 0x05, 0x80], hasChecksum: true)
+
+    await #expect(throws: SendRefusal.extendedSetWithoutCommandSet) {
+
+      _ = try await network.send(set, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+
+    }
+
+    #expect(await modem.extendedMessages.isEmpty)
+
+    // An extended Get writes nothing, so it's sent.
+    let get = DirectMessage(to: Self.address, command1: 0x2E, command2: 0x00, data: [0x01, 0x00], hasChecksum: true)
+
+    _ = try await network.send(get, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+
+    #expect(await modem.extendedMessages.count == 1)
 
   }
 

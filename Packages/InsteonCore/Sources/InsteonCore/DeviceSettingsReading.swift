@@ -629,13 +629,14 @@ enum DeviceSettingSafety {
   }
 
   /// The Set Operating Flags cmd2s a command set names for a flag it doesn't guard: an
-  /// operating flag's on or off with no guard and a name the floor doesn't hold, and a flag
-  /// command with no guard and a name that isn't never sent.
+  /// operating flag's on or off, a flag command, and a standard or extended command with Set
+  /// Operating Flags' cmd1 and a fixed cmd2, each with no guard and a name that neither the
+  /// floor holds nor ``namesGuardedMeaning(_:)`` matches.
   static func unguardedSetOperatingFlags(in commands: CommandSet) -> Set<UInt8> {
 
     var named: Set<UInt8> = []
 
-    for flag in commands.operatingFlags where rule(for: flag) == nil {
+    for flag in commands.operatingFlags where rule(for: flag) == nil && !namesGuardedMeaning(flag.name) {
 
       if let on = flag.on {
 
@@ -651,7 +652,7 @@ enum DeviceSettingSafety {
 
     }
 
-    for flagCommand in commands.flagCommands where !isNeverSent(flagCommand.sendGuard) && !neverSentNames.contains(flagCommand.name) {
+    for flagCommand in commands.flagCommands where isUnguardedCommand(flagCommand.name, sendGuard: flagCommand.sendGuard) {
 
       let command: Command = flagCommand.command.command
 
@@ -663,7 +664,46 @@ enum DeviceSettingSafety {
 
     }
 
+    for standard in commands.standardCommands where standard.command1 == setOperatingFlagsCommand1 && isUnguardedCommand(standard.name, sendGuard: standard.sendGuard) {
+
+      if case let .fixed(command2) = standard.command2 {
+
+        named.insert(command2)
+
+      }
+
+    }
+
+    for extended in commands.extendedCommands where extended.command.command1 == setOperatingFlagsCommand1 && isUnguardedCommand(extended.name, sendGuard: extended.sendGuard) {
+
+      named.insert(extended.command.command2)
+
+    }
+
     return named
+
+  }
+
+  /// Whether a command is one the command set doesn't guard: it has no guard, and its name is
+  /// neither one the floor never sends nor one ``namesGuardedMeaning(_:)`` matches.
+  private static func isUnguardedCommand(_ name: SettingName, sendGuard: CommandGuard?) -> Bool {
+
+    !isNeverSent(sendGuard) && !neverSentNames.contains(name) && !namesGuardedMeaning(name)
+
+  }
+
+  /// The parts of a name that mean a guarded flag, in lowercase: the radio, the powerline,
+  /// checksums and the programming lock.
+  static let guardedMeanings: [String] = ["radiooff", "powerlineoff", "checksum", "programminglock"]
+
+  /// Whether a name, in any case, means a guarded flag, such as `checksumRequired2` or
+  /// `PowerLineOff`. A flag or command so named never unlocks a protected cmd2, even with no
+  /// guard, so a catalog entry that gets its guard wrong stays refused.
+  static func namesGuardedMeaning(_ name: SettingName) -> Bool {
+
+    let lowercased: String = name.rawValue.lowercased()
+
+    return guardedMeanings.contains { (meaning: String) -> Bool in lowercased.contains(meaning) }
 
   }
 
@@ -913,6 +953,14 @@ enum DeviceSettingSafety {
     }
 
     return nil
+
+  }
+
+  /// Whether a message is an extended Set: cmd1 `0x2E` and cmd2 `0x00` with a selector other
+  /// than `0x00` in D2, which writes whatever bytes the device's selector names.
+  static func isExtendedSet(_ command: Command, userData: UserData) -> Bool {
+
+    command == Command(command1: 0x2E, command2: 0x00) && userData[2] != 0x00
 
   }
 

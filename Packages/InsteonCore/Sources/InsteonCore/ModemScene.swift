@@ -61,9 +61,6 @@ public struct ModemScene: Hashable, Sendable {
   /// Sends the group Light On at full level, or Light Off, and waits for the modem's ALL-Link
   /// cleanups.
   ///
-  /// The command is checked like every message InsteonCore sends, so a ``ProtectedCommand``
-  /// never reaches the group.
-  ///
   /// - Parameters:
   ///   - isOn: Whether to turn the group's responders on, or off.
   ///   - responderCount: How many responders the group has, such as `responders(in:)`
@@ -77,12 +74,6 @@ public struct ModemScene: Hashable, Sendable {
   func send(turningOn isOn: Bool, responderCount: Int, through modem: Modem) async throws -> AllLinkCleanupReport {
 
     let command: Command = isOn ? StandardDirectCommand.on(level: .max).command : StandardDirectCommand.off.command
-
-    if let protected = ProtectedCommand(command) {
-
-      throw SendRefusal.protected(protected)
-
-    }
 
     return try await modem.sendAllLinkCommand(group: group, command: command, timeout: Self.cleanupTimeout(responderCount: responderCount))
 
