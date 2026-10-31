@@ -758,7 +758,12 @@ struct ArgumentParserTests {
     }
 
     #expect(try options(["link", "1A.2B.3C"])?.followsCatalogLegs == true)
-    #expect(try options(["link", "1A.2B.3C", "--either"])?.followsCatalogLegs == false)
+    // --either takes no address: it links whichever device has its SET button pressed.
+    #expect(throws: ArgumentError.conflictingOptions("--either", "1A.2B.3C")) {
+
+      try Invocation.parse(["link", "1A.2B.3C", "--either"])
+
+    }
     #expect(try options(["link", "1A.2B.3C", "--responder"])?.followsCatalogLegs == false)
     // Group 0 given explicitly is a group of its own, though it's the default.
     #expect(try options(["link", "1A.2B.3C", "--group", "0"])?.followsCatalogLegs == false)
