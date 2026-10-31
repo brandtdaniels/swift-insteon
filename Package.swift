@@ -150,12 +150,29 @@ let package = Package(
     // The library a front end, such as an app or the `insteon` command, depends on.
     .target(
       name: "InsteonCore",
-      dependencies: ["InsteonDeviceCatalog", "InsteonLinking", "InsteonModem", "InsteonProtocol"],
+      dependencies: [
+        "InsteonDeviceCatalog",
+        "InsteonHubClient",
+        "InsteonHubDiscovery",
+        "InsteonLinking",
+        "InsteonModem",
+        "InsteonNetworking",
+        "InsteonProtocol"
+      ],
       path: "Packages/InsteonCore/Sources/InsteonCore"
     ),
     .testTarget(
       name: "InsteonCoreTests",
-      dependencies: ["InsteonCore", "InsteonDeviceCatalog", "InsteonLinking", "InsteonModem", "InsteonProtocol", "InsteonTestSupport"],
+      dependencies: [
+        "InsteonCore",
+        "InsteonDeviceCatalog",
+        "InsteonHubClient",
+        "InsteonHubDiscovery",
+        "InsteonLinking",
+        "InsteonModem",
+        "InsteonProtocol",
+        "InsteonTestSupport"
+      ],
       path: "Packages/InsteonCore/Tests/InsteonCoreTests"
     ),
 

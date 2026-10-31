@@ -1307,3 +1307,15 @@ struct RemovedAllLinks: Sendable {
   let left: ModemLinksLeft
 
 }
+
+extension DeviceLinkingCoordinator {
+
+  /// How long linking or unlinking with a device's SET button waits for it by default: 240
+  /// seconds.
+  public static let defaultSETButtonTimeout: Duration = Linker.defaultManualLinkingTimeout
+
+  /// How long linking or unlinking without a device's SET button waits for each step by
+  /// default: 30 seconds.
+  public static let defaultRemoteTimeout: Duration = Linker.defaultRemoteLinkingTimeout
+
+}

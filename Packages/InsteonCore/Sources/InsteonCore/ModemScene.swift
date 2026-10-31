@@ -63,7 +63,7 @@ public struct ModemScene: Hashable, Sendable {
   ///
   /// - Parameters:
   ///   - isOn: Whether to turn the group's responders on, or off.
-  ///   - responderCount: How many responders the group has, such as ``responders(in:)``
+  ///   - responderCount: How many responders the group has, such as `responders(in:)`
   ///     gives, which sets how long to wait with ``cleanupTimeout(responderCount:)``.
   ///   - modem: The modem that sends the command.
   /// - Returns: Which responders acknowledged their cleanup, which didn't, and whether the
@@ -76,6 +76,37 @@ public struct ModemScene: Hashable, Sendable {
     let command: Command = isOn ? StandardDirectCommand.on(level: .max).command : StandardDirectCommand.off.command
 
     return try await modem.sendAllLinkCommand(group: group, command: command, timeout: Self.cleanupTimeout(responderCount: responderCount))
+
+  }
+
+  /// The devices the modem's ALL-Link database lists as the group's responders, as
+  /// `responders(in:)` with the modem reads them.
+  ///
+  /// - Parameter session: The session whose modem's ALL-Link database is read.
+  /// - Returns: The responders' addresses.
+  /// - Throws: The modem's error, or `CancellationError` if the task is canceled.
+  public func responders(in session: ModemSession) async throws -> [InsteonAddress] {
+
+    try await responders(in: session.modem)
+
+  }
+
+  /// Sends the group Light On at full level, or Light Off, through a session's modem, and
+  /// waits for the modem's ALL-Link cleanups.
+  ///
+  /// - Parameters:
+  ///   - isOn: Whether to turn the group's responders on, or off.
+  ///   - responderCount: How many responders the group has, which sets how long to wait with
+  ///     ``cleanupTimeout(responderCount:)``.
+  ///   - session: The session whose modem sends the command.
+  /// - Returns: Which responders acknowledged their cleanup, which didn't, and whether the
+  ///   modem reached them all.
+  /// - Throws: The modem's error, which ``SendFailure`` reads as
+  ///   ``SendFailure/modemRejected`` for a group the modem has no records for, or
+  ///   `CancellationError`.
+  public func send(turningOn isOn: Bool, responderCount: Int, through session: ModemSession) async throws -> AllLinkCleanupReport {
+
+    try await send(turningOn: isOn, responderCount: responderCount, through: session.modem)
 
   }
 
