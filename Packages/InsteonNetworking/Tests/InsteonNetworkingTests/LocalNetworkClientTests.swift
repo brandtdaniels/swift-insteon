@@ -289,10 +289,9 @@ struct UnauthenticatedHTTPClientTests {
   @Test(.timeLimit(.minutes(1))) func refusesEveryRequestWhenTheSessionStoresCredentials() async throws {
 
     let configuration: URLSessionConfiguration = URLSessionConfiguration.ephemeral
+    configuration.urlCredentialStorage = URLCredentialStorage.shared
     let client: UnauthenticatedHTTPClient = UnauthenticatedHTTPClient(URLSessionHTTPClient(session: URLSession(configuration: configuration)))
     let request: URLRequest = URLRequest(url: try #require(URL(string: "http://192.168.1.20:25105/buffstatus.xml")))
-
-    try #require(configuration.urlCredentialStorage != nil)
 
     await #expect(throws: HTTPClientError.credentialsRefused) {
 
