@@ -141,6 +141,15 @@ Each library lives in `Packages/<Name>`, with its sources, tests and DocC catalo
 
 [CONVENTIONS.md](CONVENTIONS.md) says how the docs name Insteon's products, commands and documents, and `python3 Scripts/check-terms.py` checks the forms it rules out.
 
+CI also runs these checks, each a Python script with tests in `Scripts/tests`:
+
+- `Scripts/check-time-limits.py`: every async test has a `.timeLimit`, on itself or its suite.
+- `Scripts/check-concurrency.py`: the libraries add no unstructured task, `@unchecked Sendable`, `Task.sleep` or real clock outside a default argument; `Scripts/check-concurrency-allowlist.txt` lists the known ones, each with a reason, and only shrinks.
+- `Scripts/check-cli-thin.py`: the `insteon` command leaves device behavior to the libraries.
+- `Scripts/check-workflows.py`: the workflows pin each action to a commit and each image to a digest, and give each job a time limit.
+
+`python3 -m unittest discover -s Scripts/tests` runs the scripts' tests.
+
 ## License
 
 The code in this repository is available under the MIT License. See [LICENSE](LICENSE).
