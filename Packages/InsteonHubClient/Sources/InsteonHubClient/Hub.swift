@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import InsteonNetworking
 
 /// The local HTTP interface of a Hub 2245 or Hub 2242.
@@ -9,9 +12,9 @@ import InsteonNetworking
 /// runs timers, which ``Hub/setTimer(_:for:)`` and the methods beside it write.
 ///
 /// The Hub requires HTTP basic authentication with the user name and password printed on it.
-/// ``Hub/init(endpoint:user:password:httpClient:requestTimeout:)`` adds it for you; to
+/// ``Hub/init(endpoint:user:password:httpClient:requestTimeout:clock:)`` adds it for you; to
 /// authenticate another way, pass an already-authenticated client to
-/// ``Hub/init(endpoint:httpClient:requestTimeout:)``. The Hub's interface is plain HTTP, so the
+/// ``Hub/init(endpoint:httpClient:requestTimeout:clock:)``. The Hub's interface is plain HTTP, so the
 /// credentials are readable on the network: keep the Hub on a network you trust.
 ///
 /// A Hub never redirects its own requests. With the default `URLSessionHTTPClient`, a request
@@ -19,8 +22,19 @@ import InsteonNetworking
 /// `HTTPClientError.redirectRefused`, so the credentials reach only the Hub's address. A client
 /// of your own must refuse redirects for these requests too.
 ///
-/// Each request gives up after ``Hub/requestTimeout``, so a Hub that doesn't answer fails in
-/// seconds rather than after `URLRequest`'s default of a minute.
+/// The default client is `URLSessionHTTPClient.localNetwork()`, whose session goes to the Hub
+/// directly rather than through a proxy, which would read the credentials, and keeps no
+/// cookies, credentials or cache. On Linux, where the environment's proxy can't be turned off,
+/// it refuses a request a proxy would carry with `HTTPClientError.proxyConfigured`.
+///
+/// Each request gives up after ``Hub/requestTimeout`` in all, so a Hub that doesn't answer, or
+/// answers a byte at a time, fails in seconds rather than after `URLRequest`'s default of a
+/// minute between bytes. A page larger than ``Hub/maximumResponseSize`` fails with
+/// `HTTPClientError.responseTooLarge(limit:)`.
+///
+/// `Hub` sends the credentials to whatever address its endpoint names. A front end that takes
+/// the address from a person should check it first, as `ModemSession.withHub` in InsteonCore
+/// does, sending them only to a private IPv4 address.
 public struct Hub: Sendable {
 
   /// How long each request waits for the Hub by default: 5 seconds.
@@ -30,12 +44,19 @@ public struct Hub: Sendable {
   /// device: the modem's replies arrive in the buffer later.
   public static let defaultRequestTimeout: Duration = .seconds(5)
 
-  /// How long each request waits for the Hub before it fails.
+  /// The largest page the Hub's answer may be: 64 KiB.
+  ///
+  /// The buffer page is under 1 KiB, and a Hub 2242's slot page a few KiB.
+  public static let maximumResponseSize: Int = 64 * 1024
+
+  /// How long each request may take in all before it fails.
   public let requestTimeout: Duration
 
   private let endpoint: HubEndpoint
 
   private let httpClient: any HTTPClient
+
+  private let clock: any Clock<Duration>
 
   /// Creates a Hub interface that sends requests through a client as-is.
   ///
@@ -44,13 +65,21 @@ public struct Hub: Sendable {
   ///   - httpClient: The client to send requests with. It must authenticate them, and must
   ///     not follow redirects for them, as `URLSessionHTTPClient` doesn't for a request with
   ///     an `Authorization` header.
-  ///   - requestTimeout: How long each request waits for the Hub before it fails. Defaults to
+  ///   - requestTimeout: How long each request may take in all before it fails. Defaults to
   ///     ``Hub/defaultRequestTimeout``.
-  public init(endpoint: HubEndpoint, httpClient: any HTTPClient, requestTimeout: Duration = Hub.defaultRequestTimeout) {
+  ///   - clock: The clock that times each request. Defaults to a `ContinuousClock`; tests can
+  ///     pass a clock they control.
+  public init(
+    endpoint: HubEndpoint,
+    httpClient: any HTTPClient,
+    requestTimeout: Duration = Hub.defaultRequestTimeout,
+    clock: any Clock<Duration> = ContinuousClock()
+  ) {
 
     self.endpoint = endpoint
     self.httpClient = httpClient
     self.requestTimeout = requestTimeout
+    self.clock = clock
 
   }
 
@@ -61,22 +90,26 @@ public struct Hub: Sendable {
   ///   - user: The Hub's user name.
   ///   - password: The Hub's password.
   ///   - httpClient: The client to send requests with, before the credentials are added.
-  ///     Defaults to `URLSessionHTTPClient`, which refuses redirects for these requests and
-  ///     throws `HTTPClientError.redirectRefused`. Another client must refuse them too.
-  ///   - requestTimeout: How long each request waits for the Hub before it fails. Defaults to
+  ///     Defaults to `URLSessionHTTPClient.localNetwork()`, which uses no proxy, keeps
+  ///     nothing between requests, and refuses redirects for these requests, throwing
+  ///     `HTTPClientError.redirectRefused`. Another client must refuse them too.
+  ///   - requestTimeout: How long each request may take in all before it fails. Defaults to
   ///     ``Hub/defaultRequestTimeout``.
+  ///   - clock: The clock that times each request. Defaults to a `ContinuousClock`.
   public init(
     endpoint: HubEndpoint,
     user: String,
     password: String,
-    httpClient: any HTTPClient = URLSessionHTTPClient(),
-    requestTimeout: Duration = Hub.defaultRequestTimeout
+    httpClient: any HTTPClient = URLSessionHTTPClient.localNetwork(),
+    requestTimeout: Duration = Hub.defaultRequestTimeout,
+    clock: any Clock<Duration> = ContinuousClock()
   ) {
 
     self.init(
       endpoint: endpoint,
       httpClient: BasicAuthenticationHTTPClient(httpClient, user: user, password: password),
-      requestTimeout: requestTimeout
+      requestTimeout: requestTimeout,
+      clock: clock
     )
 
   }
@@ -131,9 +164,31 @@ public struct Hub: Sendable {
 
   }
 
+  /// Sends a request and checks the answer.
+  ///
+  /// - Throws: `URLError(.timedOut)` if the request takes longer than
+  ///   ``Hub/requestTimeout`` in all, `HTTPClientError.responseTooLarge(limit:)` for a page
+  ///   larger than ``Hub/maximumResponseSize``, ``HubError/unexpectedStatus(_:)`` for a
+  ///   status that isn't 2xx, or the HTTP client's error.
   func perform(_ request: HubRequest) async throws -> HTTPResponse {
 
-    let response = try await httpClient.send(request.urlRequest(for: endpoint, timeout: requestTimeout))
+    let urlRequest: URLRequest = try request.urlRequest(for: endpoint, timeout: requestTimeout)
+    let httpClient: any HTTPClient = httpClient
+
+    // The request's own timeout limits only the wait between bytes, so the whole request is
+    // limited too.
+    let response: HTTPResponse = try await withDeadline(requestTimeout, clock: clock) {
+
+      try await httpClient.send(urlRequest)
+
+    }
+
+    // Whatever the client, a page larger than a Hub's isn't read.
+    guard response.body.count <= Self.maximumResponseSize else {
+
+      throw HTTPClientError.responseTooLarge(limit: Self.maximumResponseSize)
+
+    }
 
     guard response.isSuccess else {
 

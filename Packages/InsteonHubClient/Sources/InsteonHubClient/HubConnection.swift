@@ -1,5 +1,6 @@
 import Foundation
 import InsteonModem
+import InsteonNetworking
 import InsteonProtocol
 
 /// A `ModemConnection` to the modem inside a Hub 2245 or Hub 2242.
@@ -34,6 +35,11 @@ import InsteonProtocol
 /// fails with ``HubStoppedAnswering``, which keeps the HTTP client's error, since a Hub that
 /// answered is busy rather than gone. Until then, such a request fails with the HTTP client's
 /// error itself.
+///
+/// The first time the Hub answers `401 Unauthorized` or `403 Forbidden`, which means it
+/// rejected the credentials, the connection stops sending: every later write and poll fails
+/// with the same ``HubError/unexpectedStatus(_:)`` without a request, so the rejected
+/// credentials go to the Hub only once.
 public actor HubConnection: ModemConnection {
 
   /// How often the Hub's buffer is read by default: every half second.
@@ -56,6 +62,10 @@ public actor HubConnection: ModemConnection {
 
   /// Whether the Hub has answered a request on this connection.
   private var hasAnswered = false
+
+  /// The status the Hub rejected the credentials with, `401` or `403`, once it has; no
+  /// request is sent after that.
+  private var rejectedStatus: Int?
 
   /// Bytes read before a write that the stream hasn't delivered yet.
   private var unreadBytes: [UInt8] = []
@@ -106,14 +116,25 @@ public actor HubConnection: ModemConnection {
 
     do {
 
+      try checkNotRejected()
       try await clearBufferIfNeeded()
 
       // The Hub starts its buffer over for each command, so keep what arrived since the last
-      // poll. If the buffer can't be read, the command still goes out.
-      if let buffer = try? await hub.readBuffer() {
+      // poll. If the buffer can't be read, the command still goes out, unless the Hub rejected
+      // the credentials.
+      do {
 
+        let buffer: HubBuffer = try await hub.readBuffer()
         hasAnswered = true
         unreadBytes += Self.collapsingNAKRun(cursor.advance(to: buffer))
+
+      } catch {
+
+        if Self.isRejection(error) {
+
+          throw error
+
+        }
 
       }
 
@@ -129,6 +150,8 @@ public actor HubConnection: ModemConnection {
       hasAnswered = true
 
     } catch {
+
+      noteRejection(error)
 
       throw classified(error)
 
@@ -248,6 +271,7 @@ public actor HubConnection: ModemConnection {
 
     do {
 
+      try checkNotRejected()
       try await clearBufferIfNeeded()
 
       let buffer: HubBuffer = try await hub.readBuffer()
@@ -259,6 +283,8 @@ public actor HubConnection: ModemConnection {
       return received
 
     } catch {
+
+      noteRejection(error)
 
       throw classified(error)
 
@@ -280,12 +306,49 @@ public actor HubConnection: ModemConnection {
 
   }
 
+  /// Throws the status the Hub rejected the credentials with, if it has, so no request is
+  /// sent after a rejection.
+  private func checkNotRejected() throws(HubError) {
+
+    if let rejectedStatus {
+
+      throw .unexpectedStatus(rejectedStatus)
+
+    }
+
+  }
+
+  /// Remembers the Hub rejecting the credentials, the first time it does.
+  private func noteRejection(_ error: any Error) {
+
+    if rejectedStatus == nil, let hubError = error as? HubError, case let .unexpectedStatus(status) = hubError, status == 401 || status == 403 {
+
+      rejectedStatus = status
+
+    }
+
+  }
+
+  /// Whether an error is the Hub rejecting the credentials: `401 Unauthorized` or
+  /// `403 Forbidden`.
+  private static func isRejection(_ error: any Error) -> Bool {
+
+    switch error {
+    case HubError.unexpectedStatus(401), HubError.unexpectedStatus(403):
+      true
+    default:
+      false
+    }
+
+  }
+
   /// Whether a failed poll is worth trying again: anything but an answer from the Hub that it
-  /// won't serve the request, or cancellation.
+  /// won't serve the request, a request the HTTP client refused, such as one a proxy would
+  /// carry, or cancellation.
   private static func isTransient(_ error: any Error) -> Bool {
 
     switch error {
-    case HubError.unexpectedStatus, HubError.invalidEndpoint, is CancellationError:
+    case HubError.unexpectedStatus, HubError.invalidEndpoint, is HTTPClientError, is CancellationError:
       false
     default:
       true

@@ -19,6 +19,11 @@ import InsteonProtocol
 ///
 /// The Hub Pro restarts its bridge after adding or removing a device, so it may not answer for
 /// a while after. Send one request at a time.
+///
+/// The default client goes to the Hub Pro directly rather than through a proxy, keeps nothing
+/// between requests, follows no redirects, and reads at most
+/// ``HubProClient/maximumResponseSize`` bytes of an answer. Each request may take
+/// ``HubProClient/timeout`` in all.
 public struct HubProClient: Sendable {
 
   /// The port of the Hub Pro's local HTTP interface: `80`.
@@ -27,6 +32,9 @@ public struct HubProClient: Sendable {
   /// How long to wait for an answer by default: 90 seconds, since adding a device waits for
   /// the device to answer the Hub Pro.
   public static let defaultTimeout: Duration = .seconds(90)
+
+  /// The largest answer that's read: 64 KiB.
+  public static let maximumResponseSize: Int = 64 * 1024
 
   /// The Hub Pro's host name or IP address.
   public let host: String
@@ -37,7 +45,7 @@ public struct HubProClient: Sendable {
   /// The client requests are sent with.
   public let httpClient: any HTTPClient
 
-  /// How long to wait for an answer.
+  /// How long to wait for an answer, in all.
   public let timeout: Duration
 
   /// Creates a client for a Hub Pro.
@@ -45,13 +53,15 @@ public struct HubProClient: Sendable {
   /// - Parameters:
   ///   - host: The Hub Pro's host name or IP address.
   ///   - port: The port of its HTTP interface. Defaults to ``HubProClient/defaultPort``.
-  ///   - httpClient: The client to send requests with. Defaults to a `URLSessionHTTPClient`.
-  ///   - timeout: How long to wait for an answer. Defaults to
+  ///   - httpClient: The client to send requests with. Defaults to
+  ///     `URLSessionHTTPClient.localNetwork()`, whose session also stops any request after
+  ///     `URLSessionHTTPClient.localNetworkResourceTimeout`.
+  ///   - timeout: How long to wait for an answer, in all. Defaults to
   ///     ``HubProClient/defaultTimeout``.
   public init(
     host: String,
     port: Int = HubProClient.defaultPort,
-    httpClient: any HTTPClient = URLSessionHTTPClient(),
+    httpClient: any HTTPClient = URLSessionHTTPClient.localNetwork(),
     timeout: Duration = HubProClient.defaultTimeout
   ) {
 
@@ -158,7 +168,22 @@ public struct HubProClient: Sendable {
     request.httpMethod = "POST"
     request.timeoutInterval = TimeInterval(timeout.components.seconds) + TimeInterval(timeout.components.attoseconds) / 1e18
 
-    let response = try await httpClient.send(request)
+    let httpClient: any HTTPClient = httpClient
+    let sent: URLRequest = request
+
+    // The request's own timeout limits only the wait between bytes, so the whole request is
+    // limited too.
+    let response: HTTPResponse = try await withDeadline(timeout) {
+
+      try await httpClient.send(sent)
+
+    }
+
+    guard response.body.count <= Self.maximumResponseSize else {
+
+      throw HTTPClientError.responseTooLarge(limit: Self.maximumResponseSize)
+
+    }
 
     guard response.statusCode == 200 else {
 
