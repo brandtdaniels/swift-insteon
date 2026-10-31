@@ -10,7 +10,7 @@ import InsteonProtocol
 /// address:
 ///
 /// ```swift
-/// let registry = DeviceRegistry(catalog: try DeviceCatalog.bundled())
+/// let registry = network.registry
 /// let lamp = InsteonAddress(0x1A, 0x2B, 0x3C)
 ///
 /// await registry.record(ReportedIdentity(category: 0x01, subcategory: 0x20, firmwareVersion: 0x45), for: lamp)

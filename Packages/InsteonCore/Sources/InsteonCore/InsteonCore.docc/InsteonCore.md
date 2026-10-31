@@ -42,10 +42,7 @@ changes. The registry never sends anything to a modem or a device; record what a
 reports, and look it up later by its address:
 
 ```swift
-import InsteonCore
-import InsteonDeviceCatalog
-
-let registry = DeviceRegistry(catalog: try DeviceCatalog.bundled())
+let registry = network.registry
 
 await registry.record(identity, for: lamp)
 
@@ -86,7 +83,7 @@ last answered, the modem's ALL-Link database, and the Hub's host, port and Inste
 
 ```swift
 let store = JSONFileDeviceRegistryStore(fileURL: url)
-let network = DeviceNetwork(modem: modem, catalog: catalog, snapshot: try store.loadNetwork())
+let network = session.network(catalog: catalog, snapshot: try store.loadNetwork(), hub: session.hub)
 
 let database = try await network.allLinkDatabase(of: lamp)
 try store.saveNetwork(await network.snapshot())

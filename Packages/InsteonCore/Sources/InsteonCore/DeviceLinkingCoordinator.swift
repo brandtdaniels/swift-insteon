@@ -84,7 +84,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   ///   - twoWay: Whether to link the device back when the modem is its controller. Defaults to
   ///     ``TwoWayLinking/whenDeviceControls``.
   ///   - timeout: How long the modem waits for the SET button. Defaults to
-  ///     `Linker.defaultManualLinkingTimeout`.
+  ///     ``defaultSETButtonTimeout``.
   ///   - observer: What a person is told and asked.
   /// - Returns: The links made and the device.
   /// - Throws: `LinkingError.linkingTimedOut` if no device links in time, `LinkMismatch` if
@@ -167,7 +167,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   ///   - twoWay: Whether to link the device back when the modem is its controller. Defaults to
   ///     ``TwoWayLinking/whenDeviceControls``.
   ///   - setButtonTimeout: How long the modem waits for the SET button when the device is
-  ///     linked with it. Defaults to `Linker.defaultManualLinkingTimeout`.
+  ///     linked with it. Defaults to ``defaultSETButtonTimeout``.
   ///   - usesCatalogLegs: Whether the catalog's legs may be linked, when the other options are
   ///     the defaults. Pass `false` when a person asked for a role or group of their own, even
   ///     one equal to the default, such as the modem in either role or group 0 given
@@ -347,7 +347,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   ///     for the device in its role, or ``DeviceLinkingCoordinator/defaultModemGroup`` when there's no device or it has
   ///     none.
   ///   - timeout: How long the modem waits for the SET button. Defaults to
-  ///     `Linker.defaultManualLinkingTimeout`.
+  ///     ``defaultSETButtonTimeout``.
   ///   - observer: What a person is told and asked.
   /// - Returns: The removed link and the links left.
   /// - Throws: `LinkingError.linkingTimedOut` if no device unlinks in time, `LinkMismatch` if
@@ -433,7 +433,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   /// - Parameters:
   ///   - device: The device.
   ///   - timeout: How long to wait for the modem to report each link removed. Defaults to
-  ///     `Linker.defaultRemoteLinkingTimeout`.
+  ///     ``defaultRemoteTimeout``.
   ///   - observer: What a person is told.
   /// - Returns: The links removed and the links left.
   /// - Throws: ``RemoteUnlinkingError`` when a link can't be removed, and `CancellationError` if
@@ -505,7 +505,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   ///     when its links can't be removed through it, because a person confirmed it's gone.
   ///     Defaults to `false`.
   ///   - timeout: How long to wait for the modem to report each link removed. Defaults to
-  ///     `Linker.defaultRemoteLinkingTimeout`.
+  ///     ``defaultRemoteTimeout``.
   ///   - observer: What a person is told.
   /// - Returns: What was removed, and either the device forgotten, what other devices still
   ///   hold and the reset steps, or why the device was kept.

@@ -8,4 +8,6 @@ Add Insteon devices to a Hub Pro 2243 and manage it through its local HTTP inter
 
 The Hub Pro's modem is driven with `HubConnection` in InsteonHubClient, like the other Hubs; this library covers the requests only the Hub Pro has.
 
+None of it has been run against a Hub Pro, and neither InsteonCore nor the `insteon` command uses it.
+
 See the DocC catalog in `Sources/InsteonHubPro/InsteonHubPro.docc` for the full documentation.

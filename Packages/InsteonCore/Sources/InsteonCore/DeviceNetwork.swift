@@ -15,7 +15,7 @@ import InsteonProtocol
 ///
 /// ```swift
 /// let store = JSONFileDeviceRegistryStore(fileURL: url)
-/// let network = DeviceNetwork(modem: modem, catalog: try? DeviceCatalog.bundled(), snapshot: try store.loadNetwork())
+/// let network = session.network(catalog: catalog, snapshot: try store.loadNetwork(), hub: session.hub)
 ///
 /// for entry in try await network.modemDatabase() {
 ///   print(entry.record.address, entry.device?.info.displayName ?? "unknown")

@@ -115,8 +115,7 @@ public enum SerialCommandPolicy {
   /// ALL-Linking (`0x64`) with the link code `0xFF`, which deletes links, and a message to a
   /// device that writes its ALL-Link database (Read/Write ALL-Link Database, `0x2F`), its
   /// operating flags (Set Operating Flags, `0x20`) or its settings (Extended Set/Get, `0x2E`
-  /// with D2 other than `0x00`). `insteon device ADDRESS set` and `insteon device ADDRESS send`
-  /// send those to a device, checked against its command set.
+  /// with D2 other than `0x00`). A ``Device`` sends those, checked against its command set.
   ///
   /// - Parameter bytes: The command's bytes, starting with `0x02`.
   /// - Returns: The reason, as a sentence.
