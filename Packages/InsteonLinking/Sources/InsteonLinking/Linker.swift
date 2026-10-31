@@ -168,6 +168,55 @@ public struct Linker: Sendable {
 
   }
 
+  /// Links a device to the modem without anyone pressing its SET button, with the modem
+  /// starting ALL-Linking first in either role, as each leg of the Insteon device catalog's
+  /// linking from a Hub does.
+  ///
+  /// The linker asks the device for its engine, then the modem starts ALL-Linking with the
+  /// link code for its role, `0x01` as controller or `0x00` as responder, and the device is
+  /// sent Enter Linking Mode with `deviceGroup` in cmd2: standard to an i2 device, and
+  /// extended with a checksum to an i2CS device. The linker then waits for the modem to report
+  /// the link with ALL-Linking Completed (`0x53`). Unlike
+  /// ``Linker/linkRemotely(_:modemRole:modemGroup:deviceGroup:timeout:)``, the device never
+  /// goes first, even when the modem is the responder.
+  ///
+  /// - Parameters:
+  ///   - device: The device to link.
+  ///   - modemRole: Whether the modem controls the device or responds to it.
+  ///   - modemGroup: The group Start ALL-Linking names.
+  ///   - deviceGroup: The device's group, which Enter Linking Mode names in cmd2.
+  ///   - linkingTimeout: How long to wait for the modem to report the link. Defaults to
+  ///     ``Linker/defaultRemoteLinkingTimeout``.
+  ///   - deviceAcknowledged: Called once the device acknowledges Enter Linking Mode, while the
+  ///     modem waits for the link. Defaults to doing nothing.
+  /// - Returns: The link the modem reports.
+  /// - Throws: ``LinkingError/remoteLinkingUnsupported(_:)`` for an i1 device,
+  ///   ``LinkingError/linkingTimedOut`` if the modem doesn't report the link in time,
+  ///   ``LinkingError/unexpectedLink(_:)`` if it reports a different link, or the modem's
+  ///   errors. When the link fails, the modem and the device are taken out of linking mode.
+  @discardableResult
+  public func linkModemFirst(
+    _ device: InsteonAddress,
+    modemRole: ModemRole,
+    modemGroup: AllLinkGroupNumber,
+    deviceGroup: AllLinkGroupNumber,
+    timeout linkingTimeout: Duration = Linker.defaultRemoteLinkingTimeout,
+    deviceAcknowledged: @escaping @Sendable () async -> Void = {}
+  ) async throws -> AllLinkingCompleted {
+
+    try await LinkingSession(modem: modem, timeout: timeout, clock: clock, cache: cache).remote(
+      device,
+      deviceCommand: .enterLinkingMode(group: deviceGroup),
+      modemMode: modemRole.linkingMode,
+      modemGroup: modemGroup,
+      deviceFirst: false,
+      expecting: modemRole.linkingMode,
+      within: linkingTimeout,
+      deviceAcknowledged: deviceAcknowledged
+    )
+
+  }
+
   /// Puts the modem into linking mode and waits for someone to press a device's SET button.
   ///
   /// This works with devices of every engine, and is how an i1 device is linked. When the

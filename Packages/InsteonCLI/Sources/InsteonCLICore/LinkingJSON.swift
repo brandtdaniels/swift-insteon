@@ -46,7 +46,11 @@ public enum LinkingJSON {
     /// The link asked for, then the link back.
     case links([Link])
 
-    /// Encodes the link as an object, or the links as an array.
+    /// Each leg's link of the catalog's linking from a Hub, and what became of each leg.
+    case legs(LegsReport)
+
+    /// Encodes the link as an object, the links as an array, or the legs as an object with
+    /// `links` and `legs`.
     ///
     /// - Parameter encoder: The encoder.
     /// - Throws: The encoder's errors.
@@ -59,9 +63,46 @@ public enum LinkingJSON {
         try container.encode(link)
       case let .links(links):
         try container.encode(links)
+      case let .legs(report):
+        try container.encode(report)
       }
 
     }
+
+  }
+
+  /// A leg of the catalog's linking from a Hub, and what became of it.
+  public struct Leg: Encodable, Hashable, Sendable {
+
+    /// The modem's role in the leg, `"controller"` or `"responder"`.
+    public let modemRole: String
+
+    /// The group Start ALL-Linking named.
+    public let modemGroup: Int
+
+    /// The device's group, which Enter Linking Mode named.
+    public let deviceGroup: Int
+
+    /// `"linked"`, `"failed"`, or `"notRun"` for a leg after one that failed.
+    public let status: String
+
+    /// How the device joined a linked leg: `"enterLinkingMode"`, `"setButton"` or
+    /// `"deviceFirst"`.
+    public let joinedBy: String?
+
+    /// Why a failed leg didn't link.
+    public let error: String?
+
+  }
+
+  /// What `insteon link --json` prints for a device linked by the catalog's legs.
+  public struct LegsReport: Encodable, Hashable, Sendable {
+
+    /// Each leg's link, in order.
+    public let links: [Link]
+
+    /// Each leg, in the catalog's order.
+    public let legs: [Leg]
 
   }
 
@@ -328,14 +369,36 @@ public enum LinkingJSON {
   }
 
   /// What `insteon link --json` prints for a link: an object for one link, or an array when
-  /// the device was linked back.
+  /// the device was linked back. A device linked by the catalog's legs gets an object with
+  /// its links and its legs, whose errors are described as `String(describing:)` gives them;
+  /// ``LinkingJSON/report(_:message:)`` words them.
   ///
   /// - Parameter result: What the coordinator linked.
   /// - Returns: The report.
   public static func report(_ result: DeviceLinkingResult) -> LinkReport {
 
+    report(result) { (error: any Error) -> String in String(describing: error) }
+
+  }
+
+  /// What `insteon link --json` prints for a link: an object for one link, an array when the
+  /// device was linked back, or, for a device linked by the catalog's legs, an object with its
+  /// links and its legs.
+  ///
+  /// - Parameters:
+  ///   - result: What the coordinator linked.
+  ///   - message: The sentence that describes an error, ending with a period.
+  /// - Returns: The report.
+  public static func report(_ result: DeviceLinkingResult, message: (any Error) -> String) -> LinkReport {
+
     let known: DeviceDescription? = result.device?.deviceDescription
     let links: [Link] = result.links.map { (made: AllLinkingCompleted) -> Link in link(made, known: known) }
+
+    if !result.legs.isEmpty {
+
+      return .legs(LegsReport(links: links, legs: result.legs.map { (outcome: HubLinkingLegOutcome) -> Leg in leg(outcome, message: message) }))
+
+    }
 
     if links.count == 1 {
 
@@ -344,6 +407,43 @@ public enum LinkingJSON {
     }
 
     return .links(links)
+
+  }
+
+  /// A leg and what became of it.
+  private static func leg(_ outcome: HubLinkingLegOutcome, message: (any Error) -> String) -> Leg {
+
+    let status: String
+    var joinedBy: String?
+    var error: String?
+
+    switch outcome.status {
+    case let .linked(_, join):
+      status = "linked"
+
+      switch join {
+      case .enterLinkingMode:
+        joinedBy = "enterLinkingMode"
+      case .setButton:
+        joinedBy = "setButton"
+      case .deviceFirst:
+        joinedBy = "deviceFirst"
+      }
+    case let .failed(reason):
+      status = "failed"
+      error = message(reason)
+    case .notRun:
+      status = "notRun"
+    }
+
+    return Leg(
+      modemRole: outcome.leg.modemRole == .controller ? "controller" : "responder",
+      modemGroup: Int(outcome.leg.modemGroup.rawValue),
+      deviceGroup: Int(outcome.leg.deviceGroup.rawValue),
+      status: status,
+      joinedBy: joinedBy,
+      error: error
+    )
 
   }
 

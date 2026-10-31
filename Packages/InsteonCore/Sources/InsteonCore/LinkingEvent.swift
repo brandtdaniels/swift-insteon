@@ -95,6 +95,30 @@ public enum LinkingEvent: Sendable {
   /// The modem reported a link.
   case linked(LinkedDevice)
 
+  /// A leg of the catalog's linking from a Hub is starting: the modem starts ALL-Linking in
+  /// the leg's role and group.
+  case hubLinkingLegStarted(HubLinkingLeg)
+
+  /// The device joined a leg's link: it acknowledged Enter Linking Mode for the leg's device
+  /// group, or, going first, a person said it's in linking mode. A device linked with its SET
+  /// button once the modem started has no event of its own; ``LinkingEvent/pressSETButton(_:)``
+  /// asks for it.
+  case hubLinkingLegJoined(HubLinkingLeg, by: HubLinkingJoin)
+
+  /// The modem reported a leg's link with ALL-Linking Completed, and the next leg can start.
+  /// ``LinkingEvent/linked(_:)`` reports the same link with the device.
+  case hubLinkingLegCompleted(HubLinkingLeg, link: AllLinkingCompleted)
+
+  /// A leg failed, for the reason given, and the legs listed after it aren't run. When the
+  /// leg is ``HubLinkingLeg/isRemoteLinkingExpectedToWork``, the catalog says Enter Linking
+  /// Mode works for the device, so the failure isn't expected.
+  case hubLinkingLegFailed(HubLinkingLeg, reason: any Error, notRun: [HubLinkingLeg])
+
+  /// The catalog says a leg's one link covers every group the device controls while one of
+  /// its operating flags is in the state given. The flag isn't read or changed; without it,
+  /// each group needs a link of its own.
+  case allGroupsWhen(HubLinkingLeg, condition: DeviceProfile.Group.Condition)
+
   /// The modem's ALL-Link database is being read for the device's links.
   case readingModemLinks(InsteonAddress, purpose: ModemLinksPurpose)
 
@@ -272,6 +296,10 @@ public enum LinkLeg: Hashable, Sendable {
   /// The link back that follows, in which the device controls and the modem responds.
   case linkBack
 
+  /// A leg after the first of the catalog's linking from a Hub, by its place in the catalog's
+  /// order, from 0. The first leg is ``LinkLeg/first``.
+  case hubLinking(Int)
+
 }
 
 /// A link the modem reported, with the device as the registry knows it.
@@ -374,7 +402,7 @@ public enum TwoWayLinking: Hashable, Sendable {
 public struct DeviceLinkingResult: Sendable {
 
   /// The links the modem reported, in order: the link asked for, then the link back if there
-  /// was one.
+  /// was one, or each leg's link of the catalog's linking from a Hub.
   public var links: [AllLinkingCompleted]
 
   /// The device, as the registry knows it after the link, or `nil` if its identity isn't
@@ -385,17 +413,31 @@ public struct DeviceLinkingResult: Sendable {
   /// made; the device can be linked back with its SET button, the modem as the responder.
   public var linkBackFailure: (any Error)?
 
+  /// Each leg of the catalog's linking from a Hub and what became of it, in the catalog's
+  /// order, or empty when the device was linked without them.
+  public var legs: [HubLinkingLegOutcome]
+
   /// Creates a result.
   ///
   /// - Parameters:
   ///   - links: The links the modem reported.
   ///   - device: The device as the registry knows it.
   ///   - linkBackFailure: Why the link back failed.
-  public init(links: [AllLinkingCompleted], device: RegisteredDevice?, linkBackFailure: (any Error)?) {
+  ///   - legs: Each leg of the catalog's linking from a Hub and what became of it. Defaults to
+  ///     none.
+  public init(links: [AllLinkingCompleted], device: RegisteredDevice?, linkBackFailure: (any Error)?, legs: [HubLinkingLegOutcome] = []) {
 
     self.links = links
     self.device = device
     self.linkBackFailure = linkBackFailure
+    self.legs = legs
+
+  }
+
+  /// The leg that failed, so the legs after it weren't run, or `nil` if none did.
+  public var failedLeg: HubLinkingLegOutcome? {
+
+    legs.first { (outcome: HubLinkingLegOutcome) -> Bool in outcome.failure != nil }
 
   }
 

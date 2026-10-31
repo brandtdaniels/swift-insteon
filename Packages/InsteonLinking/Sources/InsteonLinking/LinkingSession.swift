@@ -32,6 +32,8 @@ struct LinkingSession: Sendable {
   ///   - linkingTimeout: How long to wait for the modem's report.
   ///   - extendsForI2cs: Whether an i2CS device is sent the command extended, with a
   ///     checksum, rather than standard.
+  ///   - deviceAcknowledged: Called once the device acknowledges its command, while the modem
+  ///     waits for the link.
   func remote(
     _ device: InsteonAddress,
     deviceCommand: StandardDirectCommand,
@@ -40,7 +42,8 @@ struct LinkingSession: Sendable {
     deviceFirst: Bool,
     expecting expectedMode: AllLinkMode,
     within linkingTimeout: Duration,
-    extendsForI2cs: Bool = true
+    extendsForI2cs: Bool = true,
+    deviceAcknowledged: @escaping @Sendable () async -> Void = {}
   ) async throws -> AllLinkingCompleted {
 
     let engine = try await engine(of: device)
@@ -74,12 +77,14 @@ struct LinkingSession: Sendable {
         if deviceFirst {
 
           try await send(deviceCommand, to: device, engine: commandEngine)
+          await deviceAcknowledged()
           try await modem.send(.startAllLinking(mode: modemMode, group: modemGroup))
 
         } else {
 
           try await modem.send(.startAllLinking(mode: modemMode, group: modemGroup))
           try await send(deviceCommand, to: device, engine: commandEngine)
+          await deviceAcknowledged()
 
         }
 

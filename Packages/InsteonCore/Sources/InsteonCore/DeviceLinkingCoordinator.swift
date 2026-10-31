@@ -29,8 +29,10 @@ import InsteonProtocol
 /// - which of the device's groups the modem joins when it links by the device's address as
 ///   the responder: the same group a link back uses, rather than the modem's group, since
 ///   the device is the controller and the group is its own;
+/// - the links made when a device is linked by its address, from its linking from a Hub:
+///   its legs, in order, whether Enter Linking Mode works for it, and whether it goes first;
 /// - how a device is sent Enter Unlinking Mode when its links are removed without its SET
-///   button: extended for a battery-powered i2CS device.
+///   button: extended for a battery-powered i2CS device;
 /// - the steps to restore a removed device's factory settings, which a person follows.
 ///
 /// Operating flags aren't read or written around a link or unlink: a device keeps whatever
@@ -126,6 +128,22 @@ public struct DeviceLinkingCoordinator: Sendable {
 
   /// Links a device by its address, without its SET button, or with it when that fails.
   ///
+  /// When the registry knows the device, the catalog gives its linking from a Hub, and the
+  /// caller asks for the defaults, the modem as controller in
+  /// ``DeviceLinkingCoordinator/defaultModemGroup`` with ``TwoWayLinking/whenDeviceControls``,
+  /// the catalog's legs are linked instead, in the catalog's order, one ALL-Linking session
+  /// each: the modem starts ALL-Linking first in the leg's role and group, the device joins
+  /// with Enter Linking Mode for the leg's device group, or with its SET button when the
+  /// catalog says Enter Linking Mode doesn't work for it, and the coordinator waits for
+  /// ALL-Linking Completed (`0x53`) before the next leg. A device the catalog says goes first
+  /// is put in linking mode by a person, with the catalog's steps, before the first leg. When
+  /// Enter Linking Mode fails for the first leg, the device is linked with its SET button
+  /// instead, unless the catalog says Enter Linking Mode works for it, when the failure is
+  /// thrown. A later leg that fails stops the legs after it without throwing; the result's
+  /// ``DeviceLinkingResult/legs`` say what became of each.
+  ///
+  /// Otherwise the device is linked as follows.
+  ///
   /// When the modem is the controller, a light or switched load the registry knows is turned
   /// fully on with Light On first, so it records full on as its on-level. The modem starts
   /// ALL-Linking in its role and the device is sent Enter Linking Mode, extended for i2CS. A
@@ -149,8 +167,9 @@ public struct DeviceLinkingCoordinator: Sendable {
   /// - Throws: `LinkMismatch` when the modem reports another device's link or a removed link,
   ///   `LinkingError.unexpectedLink(_:)` when it reports another kind of link,
   ///   `LinkingError.linkingTimedOut` if the device isn't linked in time, the observer's
-  ///   errors, the modem's errors, and `CancellationError` if the task is canceled. A link back
-  ///   that fails doesn't throw; the result says why.
+  ///   errors, the modem's errors, and `CancellationError` if the task is canceled. A first
+  ///   leg of the catalog's linking from a Hub that fails throws its error. A link back, or a
+  ///   later leg, that fails doesn't throw; the result says why.
   public func link(
     _ device: InsteonAddress,
     as role: ModemRole,
@@ -164,6 +183,13 @@ public struct DeviceLinkingCoordinator: Sendable {
 
       let linker: Linker = makeLinker()
       let description: DeviceDescription? = await network.registry.device(device)?.deviceDescription
+
+      if role == .controller, group == Self.defaultModemGroup, twoWay == .whenDeviceControls, let legs = HubLinkingLeg.legs(of: description, device: device) {
+
+        return try await linkByLegs(device, legs: legs, description: description, setButtonTimeout: setButtonTimeout, observer: observer)
+
+      }
+
       let deviceGroup: AllLinkGroupNumber = role == .responder ? Self.controllingGroup(of: description) : Self.respondingDeviceGroup
       let modemGroup: AllLinkGroupNumber = role == .responder ? deviceGroup : group
 
@@ -696,7 +722,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   /// - Parameters:
   ///   - device: The device asked for, or `nil` for whichever device's SET button is pressed.
   ///   - body: The link or unlink.
-  private func inTurn<Value: Sendable>(changing device: InsteonAddress?, _ body: () async throws -> Value) async throws -> Value {
+  func inTurn<Value: Sendable>(changing device: InsteonAddress?, _ body: () async throws -> Value) async throws -> Value {
 
     let turns: LinkingTurns = network.linkingTurns
 
@@ -756,7 +782,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   }
 
   /// A linker that waits on the network's clock and keeps the network's cache.
-  private func makeLinker() -> Linker {
+  func makeLinker() -> Linker {
 
     Linker(modem: network.modem, clock: network.clock, cache: network.cache)
 
@@ -772,7 +798,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   /// Turns a light or switched load fully on before it links as a responder, so it records full
   /// on as its on-level for the group, rather than off. A device that doesn't turn on links in
   /// whatever state it's in.
-  private func turnOnBeforeLinking(
+  func turnOnBeforeLinking(
     _ device: InsteonAddress,
     description: DeviceDescription?,
     linker: Linker,
@@ -885,7 +911,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   /// - Returns: The device as the registry knows it, or `nil` if its identity isn't known and it
   ///   didn't report one.
   /// - Throws: `CancellationError` if the task is canceled while the device is asked.
-  private func learnIdentity(from link: AllLinkingCompleted, observer: any LinkingObserver) async throws -> RegisteredDevice? {
+  func learnIdentity(from link: AllLinkingCompleted, observer: any LinkingObserver) async throws -> RegisteredDevice? {
 
     let device: InsteonAddress = link.address
 

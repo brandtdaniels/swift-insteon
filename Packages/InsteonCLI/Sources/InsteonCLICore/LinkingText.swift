@@ -318,6 +318,32 @@ public enum LinkingEventText {
       return ["Linking back: sending \(device) Enter Linking Mode for its group \(group), so the modem becomes its responder..."]
     case .linked, .unlinked, .unlinkedAll:
       return []
+    case let .hubLinkingLegStarted(leg):
+      return [
+        "\(legName(leg)): the modem starts ALL-Linking as \(role(leg.modemRole)) of group \(leg.modemGroup), "
+          + "for \(leg.device)'s group \(leg.deviceGroup)..."
+      ]
+    case let .hubLinkingLegJoined(leg, join):
+      switch join {
+      case .enterLinkingMode:
+        return ["\(leg.device) took Enter Linking Mode for its group \(leg.deviceGroup); waiting for the modem to report the link..."]
+      case .deviceFirst:
+        return ["\(leg.device) is in linking mode."]
+      case .setButton:
+        return []
+      }
+    case .hubLinkingLegCompleted:
+      return []
+    case let .hubLinkingLegFailed(leg, reason, notRun):
+      return legFailed(leg, reason: message(reason), notRun: notRun.count)
+    case let .allGroupsWhen(leg, condition):
+      let state: String = condition.isSet ? "on" : "off"
+      let otherState: String = condition.isSet ? "off" : "on"
+
+      return [
+        "\(legName(leg)) links every group \(leg.device) controls while its \(condition.flag) setting is \(state). "
+          + "The setting isn't read or changed here; with it \(otherState), each group needs a link of its own."
+      ]
     case let .readingModemLinks(device, purpose):
       switch purpose {
       case .findingLinksToRemove:
@@ -359,6 +385,71 @@ public enum LinkingEventText {
     case .forgotten, .leftoverRecords, .factoryReset, .modemRecordsDeleted, .kept:
       return []
     }
+
+  }
+
+  /// What to tell the person when a leg of the catalog's linking from a Hub didn't link.
+  ///
+  /// - Parameters:
+  ///   - leg: The leg.
+  ///   - reason: Why it didn't link, as a sentence that ends with a period.
+  ///   - notRun: How many legs after it weren't run.
+  /// - Returns: The lines, in order.
+  public static func legFailed(_ leg: HubLinkingLeg, reason: String, notRun: Int) -> [String] {
+
+    var line: String = "\(legName(leg)) didn't link: \(reason)"
+
+    if leg.isRemoteLinkingExpectedToWork {
+
+      line += " The Insteon device catalog says \(leg.device) takes Enter Linking Mode, so check that it's powered and in range, "
+        + "and that no other device is in linking mode."
+
+    }
+
+    var lines: [String] = [line]
+
+    if notRun > 0 {
+
+      lines.append(
+        "\(notRun == 1 ? "The leg" : "The \(notRun) legs") after it \(notRun == 1 ? "wasn't" : "weren't") run; "
+          + "run 'insteon link \(leg.device)' again to link \(notRun == 1 ? "it" : "them")."
+      )
+
+    }
+
+    return lines
+
+  }
+
+  /// Why `insteon link` fails after linking some of a device's legs of the catalog's linking
+  /// from a Hub, or `nil` when every leg linked or there were none.
+  ///
+  /// - Parameters:
+  ///   - result: What the coordinator linked.
+  ///   - message: The sentence that describes an error, ending with a period.
+  /// - Returns: The message.
+  public static func incompleteLegs(_ result: DeviceLinkingResult, message: (any Error) -> String) -> String? {
+
+    guard let failed = result.failedLeg, let reason = failed.failure else {
+
+      return nil
+
+    }
+
+    let linked: Int = result.legs.filter { (outcome: HubLinkingLegOutcome) -> Bool in outcome.link != nil }.count
+
+    return "\(failed.leg.device) linked \(linked) of its \(failed.leg.count) legs; \(legName(failed.leg).lowercased()) didn't link: "
+      + "\(message(reason)) Run 'insteon link \(failed.leg.device)' again to link the rest."
+
+  }
+
+  /// A leg's name in a sentence, such as `"Leg 2 of 3"`.
+  ///
+  /// - Parameter leg: The leg.
+  /// - Returns: The name.
+  public static func legName(_ leg: HubLinkingLeg) -> String {
+
+    "Leg \(leg.index + 1) of \(leg.count)"
 
   }
 

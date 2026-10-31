@@ -106,4 +106,32 @@ struct LinkingJSONTests {
 
   }
 
+  @Test func printsTheLegsWithTheirLinks() throws {
+
+    let made = AllLinkingCompleted(linkCode: 0x01, group: 0, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let first = HubLinkingLeg(device: lamp, index: 0, count: 3, modemRole: .controller, modemGroup: 0, deviceGroup: 1)
+    let second = HubLinkingLeg(device: lamp, index: 1, count: 3, modemRole: .responder, modemGroup: 1, deviceGroup: 1)
+    let third = HubLinkingLeg(device: lamp, index: 2, count: 3, modemRole: .responder, modemGroup: 2, deviceGroup: 2)
+    let result = DeviceLinkingResult(
+      links: [made],
+      device: nil,
+      linkBackFailure: nil,
+      legs: [
+        HubLinkingLegOutcome(leg: first, status: .linked(made, by: .enterLinkingMode)),
+        HubLinkingLegOutcome(leg: second, status: .failed(LinkingError.linkingTimedOut)),
+        HubLinkingLegOutcome(leg: third, status: .notRun)
+      ]
+    )
+
+    let report: LinkingJSON.LinkReport = LinkingJSON.report(result, message: { (_: any Error) -> String in "It failed." })
+
+    #expect(try encoded(report) == """
+      {"legs":[{"deviceGroup":1,"joinedBy":"enterLinkingMode","modemGroup":0,"modemRole":"controller","status":"linked"},\
+      {"deviceGroup":1,"error":"It failed.","modemGroup":1,"modemRole":"responder","status":"failed"},\
+      {"deviceGroup":2,"modemGroup":2,"modemRole":"responder","status":"notRun"}],\
+      "links":[{"address":"1A.2B.3C","group":0,"modemRole":"controller"}]}
+      """)
+
+  }
+
 }

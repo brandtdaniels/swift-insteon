@@ -146,6 +146,32 @@ actor LinkingRecorder: LinkingObserver {
 
   }
 
+  static func leg(_ leg: LinkLeg) -> String {
+
+    switch leg {
+    case .first:
+      return "first"
+    case .linkBack:
+      return "back"
+    case let .hubLinking(index):
+      return "leg \(index + 1)"
+    }
+
+  }
+
+  static func join(_ join: HubLinkingJoin) -> String {
+
+    switch join {
+    case .enterLinkingMode:
+      return "Enter Linking Mode"
+    case .setButton:
+      return "SET button"
+    case .deviceFirst:
+      return "device first"
+    }
+
+  }
+
   static func deletionReason(_ reason: ModemRecordDeletionReason) -> String {
 
     switch reason {
@@ -200,7 +226,17 @@ actor LinkingRecorder: LinkingObserver {
     case let .linkingBack(device, group):
       return "linking back \(device) group \(group)"
     case let .linked(linked):
-      return "linked \(linked.link.address) group \(linked.link.group) \(linked.link.mode?.name ?? "unknown") \(linked.leg == .first ? "first" : "back")"
+      return "linked \(linked.link.address) group \(linked.link.group) \(linked.link.mode?.name ?? "unknown") \(leg(linked.leg))"
+    case let .hubLinkingLegStarted(leg):
+      return "leg \(leg.index + 1)/\(leg.count) started \(role(leg.modemRole)) \(leg.modemGroup) device group \(leg.deviceGroup)"
+    case let .hubLinkingLegJoined(leg, join):
+      return "leg \(leg.index + 1) joined by \(self.join(join))"
+    case let .hubLinkingLegCompleted(leg, link):
+      return "leg \(leg.index + 1) completed group \(link.group) \(link.mode?.name ?? "unknown")"
+    case let .hubLinkingLegFailed(leg, _, notRun):
+      return "leg \(leg.index + 1) failed, not run \(notRun.count)"
+    case let .allGroupsWhen(leg, condition):
+      return "leg \(leg.index + 1) all groups when \(condition.flag) \(condition.isSet)"
     case let .readingModemLinks(device, purpose):
       return "reading modem links \(device) \(purpose == .findingLinksToRemove ? "to remove" : "for group")"
     case let .unlinkGroupChosen(device, group, isFromModemRecords):

@@ -171,6 +171,18 @@ if let failure = result.linkBackFailure {
 }
 ```
 
+When the catalog gives a device's linking from a Hub as legs, linking it by its address makes
+each leg's link in the catalog's order, as a ``HubLinkingLeg``: the modem starts ALL-Linking
+first in the leg's role and group, the device joins with Enter Linking Mode for its group or
+with its SET button, as the catalog says, and the coordinator waits for ALL-Linking Completed
+before the next leg. ``DeviceLinkingResult/legs`` says what became of each:
+
+```swift
+for outcome in result.legs {
+  print(outcome.leg.modemRole, outcome.leg.modemGroup, outcome.link != nil)
+}
+```
+
 ``DeviceLinkingCoordinator/remove(_:scan:forceModemSide:timeout:observer:)`` removes a device
 from the network: every link between it and the modem, with the modem's group 0 last, then,
 once the modem's ALL-Link database has no links with it, the network forgets it. A device
@@ -244,6 +256,10 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 - ``SETButtonPrompt``
 - ``DeviceFirstPrompt``
 - ``LinkLeg``
+- ``HubLinkingLeg``
+- ``HubLinkingJoin``
+- ``HubLinkingLegStatus``
+- ``HubLinkingLegOutcome``
 - ``LinkedDevice``
 - ``UnlinkedLink``
 - ``RemovedLinks``
