@@ -5,3 +5,5 @@
 xcuserdata/
 Package.resolved
 .env
+__pycache__/
+*.pyc

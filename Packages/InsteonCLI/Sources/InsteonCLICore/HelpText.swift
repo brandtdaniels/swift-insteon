@@ -218,13 +218,18 @@ public enum HelpText {
       ping                Check that the device answers (Ping).
       on [LEVEL] [--fast] Turn the device on (Light On), fully or to LEVEL percent, such as 50%.
                           A device the Insteon device catalog says is on/off only turns on.
-                          --fast ignores the ramp rate (Light On Fast).
+                          --fast ignores the ramp rate (Light On Fast), and needs the
+                          device's catalog entry to list it, when there is one.
       off [--fast]        Turn the device off (Light Off, or Light Off Fast).
       instant LEVEL       Change the device to LEVEL percent at once (Light Instant Change).
                           An on/off device turns on, or off for 0%.
-      status              Ask for the device's level (Light Status Request); on or off for a
-                          device that's on/off only.
-      beep                Make the device beep (Beep).
+      status              Ask for the device's state with the command its main group's type
+                          in the catalog names, and read it as the type says: a level for a
+                          dimmer, on or off for a device that's on/off only, or the name the
+                          catalog gives the value. Any other device is asked with Light
+                          Status Request.
+      beep                Make the device beep (Beep). It's sent even when the catalog doesn't
+                          list Beep for the device, with a note saying so.
       links               Read the device's ALL-Link database, with what each record's data
                           means when the device is known.
       settings [--advanced]
@@ -248,9 +253,11 @@ public enum HelpText {
                           0x00 after; unless all 14 are given or --no-checksum is, D14 holds
                           the checksum i2CS devices require.
 
-    'on LEVEL', 'instant', 'status', 'beep', 'links', 'settings' and 'set' use the device's
-    identity, from the identity cache or an ID Request, to look it up in the Insteon device
-    catalog. What 'send' finds is worth adding to the catalog, marked as observed.
+    'on', 'off', 'instant', 'status', 'beep', 'links', 'settings' and 'set' use the device's
+    identity, from the identity cache or, for a device the cache doesn't know, an ID Request
+    sent first, to look it up in the Insteon device catalog. 'on' and 'off' refuse a device
+    that doesn't report its identity; 'beep' is sent anyway. What 'send' finds is worth adding
+    to the catalog, marked as observed.
     """
 
   /// The help for `insteon scene`.

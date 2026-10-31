@@ -1,0 +1,31 @@
+# Lines of the `insteon` command that Scripts/check-cli-thin.py knows break its rules, waiting
+# to move into the libraries. Each entry is a path under Packages/InsteonCLI/Sources, the rule,
+# and the line's code without comments or strings, separated by tabs. Entries only go: a
+# change that moves code into the libraries removes them, with --update, and CI fails a pull
+# request that adds one.
+insteon/DeviceCommands.swift	hex-literal	let productKey = productData.map(\.productKey).flatMap { $0 == ProductKey(0x00, 0x00, 0x00) ? nil : $0 }
+insteon/DeviceCommands.swift	protocol-command	_ = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.productDataRequest))
+insteon/SceneCommands.swift	hex-literal	let command: Command = isOn ? StandardDirectCommand.on(level: 0xFF).command : StandardDirectCommand.off.command
+insteon/SceneCommands.swift	protocol-command	let command: Command = isOn ? StandardDirectCommand.on(level: 0xFF).command : StandardDirectCommand.off.command
+insteon/WatchCommand.swift	protocol-command	let name = StandardDirectCommand.name(command1: command.command1).map { ""$0 } ?? ""
+insteon/WatchCommand.swift	protocol-command	let name = StandardDirectCommand.name(command1: message.command.command1).map { ""$0 } ?? ""
+InsteonCLICore/ArgumentParser.swift	hex-literal	guard bytes[0] == 0x02 else {
+InsteonCLICore/RawInput.swift	hex-literal	case 0x66:
+InsteonCLICore/RawInput.swift	hex-literal	case 0x67:
+InsteonCLICore/RawInput.swift	hex-literal	case 0x6B:
+InsteonCLICore/RawInput.swift	hex-literal	case 0x6F:
+InsteonCLICore/RawInput.swift	hex-literal	case 0x72:
+InsteonCLICore/RawInput.swift	hex-literal	case 0x76:
+InsteonCLICore/RawInput.swift	hex-literal	case 0x7D:
+InsteonCLICore/RawInput.swift	hex-literal	case 0x82:
+InsteonCLICore/RawInput.swift	hex-literal	let isExtended: Bool = bytes[5] & 0x10 != 0
+InsteonCLICore/RawInput.swift	hex-literal	guard bytes[2] == 0xFF else {
+InsteonCLICore/RawInput.swift	hex-literal	if command1 == 0x2F {
+InsteonCLICore/RawInput.swift	hex-literal	if command1 == 0x20 {
+InsteonCLICore/RawInput.swift	hex-literal	if command1 == 0x2E && isExtended && bytes[9] != 0x00 {
+InsteonCLICore/SettingsText.swift	hex-literal	public func raw(for item: SettingItem, button: UInt8 = 0x01) -> UInt8? {
+InsteonCLICore/SettingsText.swift	group-kind	} else if value.kind == .buttons {
+InsteonCLICore/SettingsText.swift	hex-literal	let lowest: UInt8 = value.range?.lowerBound ?? 0x00
+InsteonCLICore/SettingsText.swift	hex-literal	let highest: UInt8 = value.range?.upperBound ?? 0xFF
+InsteonCLICore/SettingsText.swift	hex-literal	public static func lines(for commands: CommandSet, reported: ReportedSettings, buttons: [UInt8] = [0x01], showsAdvanced: Bool) -> [SettingLine] {
+InsteonCLICore/SettingsText.swift	hex-literal	let raw: UInt8? = reported.raw(for: item, button: button ?? 0x01)

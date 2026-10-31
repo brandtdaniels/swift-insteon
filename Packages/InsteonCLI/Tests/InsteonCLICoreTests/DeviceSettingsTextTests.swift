@@ -124,19 +124,6 @@ struct DeviceSettingsTextTests {
 
   }
 
-  // MARK: - Instant change
-
-  @Test func changesARelayOnOrOffInstantly() {
-
-    #expect(ControlText.instantLevel(percent: 50, kind: .dimmer) == 0x80)
-    #expect(ControlText.instantLevel(percent: 50, kind: .relay) == 0xFF)
-    #expect(ControlText.instantLevel(percent: 0, kind: .relay) == 0x00)
-    #expect(ControlText.changedInstantly(lamp, percent: 50, kind: nil) == "Changed 1A.2B.3C to 50% at once.")
-    #expect(ControlText.changedInstantly(lamp, percent: 0, kind: .relay) == "Turned 1A.2B.3C off.")
-    #expect(ControlText.changedInstantly(lamp, percent: 40, kind: .relay) == "1A.2B.3C is on/off only; turned it on.")
-
-  }
-
   // MARK: - Bytes typed in
 
   @Test func readsAByteWithOrWithout0x() {

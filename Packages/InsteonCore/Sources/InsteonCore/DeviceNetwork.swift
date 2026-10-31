@@ -56,6 +56,12 @@ public actor DeviceNetwork {
 
   private let now: @Sendable () -> Date
 
+  /// How long to wait for each request to a device that a standard message answers.
+  nonisolated let requestTimeout: Duration
+
+  /// The clock that times waits for what a device sends after a request.
+  nonisolated let clock: any Clock<Duration>
+
   private var devices: [InsteonAddress: NetworkDeviceState]
 
   private var modemRecords: [AllLinkRecord]?
@@ -143,6 +149,8 @@ public actor DeviceNetwork {
     self.cache = AllLinkDatabaseCache(modem: modem, statusTimeout: timeout, copies: copies)
     self.identifier = DeviceIdentifier(modem: modem, timeout: timeout, clock: clock)
     self.now = now
+    self.requestTimeout = timeout
+    self.clock = clock
     self.devices = snapshot.devices
     self.modemRecords = snapshot.modemDatabase
     self.hub = location
@@ -388,6 +396,48 @@ public actor DeviceNetwork {
     }
 
     return info
+
+  }
+
+  // MARK: - Devices
+
+  /// A device on the network, to control through the Insteon device catalog's description of
+  /// it.
+  ///
+  /// Creating one sends nothing. The first operation that needs to know what the device is
+  /// asks it with ID Request through ``identify(_:)`` when the ``registry`` doesn't know it.
+  ///
+  /// ```swift
+  /// let lamp = network.device(InsteonAddress(0x1A, 0x2B, 0x3C))
+  /// let result = try await lamp.turnOn(level: 50)
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - address: The device's address.
+  ///   - beforeIdentifying: Called before the device is asked for its identity, so an app can
+  ///     say why it's waiting. Defaults to doing nothing.
+  /// - Returns: The device.
+  public nonisolated func device(_ address: InsteonAddress, beforeIdentifying: @escaping @Sendable () -> Void = {}) -> Device {
+
+    Device(address: address, network: self, beforeIdentifying: beforeIdentifying)
+
+  }
+
+  /// Records that a device answered, and the level it's at when it's known.
+  ///
+  /// - Parameters:
+  ///   - device: The device.
+  ///   - level: The level its status request would report, from `0x00` for off to `0xFF` for
+  ///     fully on, or `nil` to leave the level as it is.
+  func recordAnswer(of device: InsteonAddress, level: UInt8?) {
+
+    if let level {
+
+      devices[device, default: NetworkDeviceState()].level = level
+
+    }
+
+    markSeen(device)
 
   }
 
