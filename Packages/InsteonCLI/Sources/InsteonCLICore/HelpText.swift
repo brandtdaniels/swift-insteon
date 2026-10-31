@@ -149,7 +149,14 @@ public enum HelpText {
            insteon [--hub HOST[:PORT] | --serial PATH] link --cancel
 
     With ADDRESS, the device's Insteon address from its label, links the device without its
-    SET button: the modem starts ALL-Linking and sends the device Enter Linking Mode. When
+    SET button: the modem starts ALL-Linking and sends the device Enter Linking Mode. A device
+    the command hasn't identified is asked for its identity with ID Request first, so the
+    Insteon device catalog can say how to link it; one that doesn't answer, as an i2CS device
+    may not until it's linked, is linked as a device the catalog doesn't describe. When the
+    catalog gives the device's links to a Hub, and no --group, --responder, --either,
+    --two-way or --one-way is given, the command makes those links in the catalog's order,
+    one at a time: the modem starts ALL-Linking in each link's role and group, and the device
+    joins with Enter Linking Mode, or with its SET button where the catalog says so. When
     the modem is the controller and the Insteon device catalog says the device is a light or
     switched load, it's first turned fully on with Light On, so it links with full on as its
     on-level; any other device, such as an I/O module or a lock, links with whatever on-level

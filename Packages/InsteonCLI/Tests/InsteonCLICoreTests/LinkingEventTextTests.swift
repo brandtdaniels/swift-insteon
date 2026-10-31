@@ -198,4 +198,19 @@ struct LinkingEventTextTests {
 
   }
 
+  @Test func saysWhyADeviceWasntIdentifiedBeforeLinking() {
+
+    #expect(notes(.notIdentifiedBeforeLinking(lamp, because: .notLinked)) == [
+      "1A.2B.3C won't say what it is until it's linked to the modem, as an i2CS device does, "
+        + "so it's linked as a device the Insteon device catalog doesn't describe."
+    ])
+    #expect(notes(.notIdentifiedBeforeLinking(lamp, because: .noIdentity)) == [
+      "1A.2B.3C didn't report its identity, so it's linked as a device the Insteon device catalog doesn't describe."
+    ])
+    #expect(notes(.notIdentifiedBeforeLinking(lamp, because: .failed(Failure()))) == [
+      "1A.2B.3C couldn't be asked for its identity: It failed, so it's linked as a device the Insteon device catalog doesn't describe."
+    ])
+
+  }
+
 }

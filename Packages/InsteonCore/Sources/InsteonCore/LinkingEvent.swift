@@ -135,9 +135,14 @@ public enum KeepAwakeEvent: Sendable {
 /// for a ``LinkingObserver`` to show.
 public enum LinkingEvent: Sendable {
 
-  /// The device is being asked for its identity with ID Request, after a link that didn't
-  /// report one.
+  /// The device is being asked for its identity with ID Request: before it's linked by its
+  /// address, when the registry doesn't know it, or after a link that didn't report one.
   case identifying(InsteonAddress)
+
+  /// The device didn't report its identity before it was linked by its address, for the
+  /// reason given, so it's linked as a device the catalog doesn't describe: without its legs
+  /// of linking from a Hub, and without being turned on first.
+  case notIdentifiedBeforeLinking(InsteonAddress, because: UnidentifiedReason)
 
   /// The device is being turned fully on with Light On before it links as a responder, so it
   /// records full on as its on-level for the group.
@@ -251,6 +256,20 @@ public enum LinkingEvent: Sendable {
   /// How to restore a removed device's factory settings, from the catalog, for a person to
   /// follow. The coordinator doesn't reset the device.
   case factoryReset(FactoryResetSteps)
+
+}
+
+/// Why a device didn't report its identity before a ``DeviceLinkingCoordinator`` linked it.
+public enum UnidentifiedReason: Sendable {
+
+  /// The device rejected the modem, as an i2CS device does until it's linked to it.
+  case notLinked
+
+  /// The device acknowledged ID Request but didn't broadcast its identity in time.
+  case noIdentity
+
+  /// Asking the device failed, such as when it didn't acknowledge.
+  case failed(any Error)
 
 }
 

@@ -128,6 +128,12 @@ public struct DeviceLinkingCoordinator: Sendable {
 
   /// Links a device by its address, without its SET button, or with it when that fails.
   ///
+  /// A device the registry doesn't know is asked for its identity with ID Request first, as
+  /// ``DeviceNetwork/identify(_:)`` does, so the catalog can describe it. When it doesn't
+  /// report one, as an i2CS device that isn't linked to the modem doesn't, the observer gets
+  /// ``LinkingEvent/notIdentifiedBeforeLinking(_:because:)`` and the device is linked as one
+  /// the catalog doesn't describe.
+  ///
   /// When the registry knows the device, the catalog gives its linking from a Hub, and the
   /// caller asks for the defaults, the modem as controller in
   /// ``DeviceLinkingCoordinator/defaultModemGroup`` with ``TwoWayLinking/whenDeviceControls``,
@@ -182,7 +188,13 @@ public struct DeviceLinkingCoordinator: Sendable {
     try await inTurn(changing: device) { () async throws -> DeviceLinkingResult in
 
       let linker: Linker = makeLinker()
-      let description: DeviceDescription? = await network.registry.device(device)?.deviceDescription
+      var description: DeviceDescription? = await network.registry.device(device)?.deviceDescription
+
+      if description == nil {
+
+        description = try await identifyBeforeLinking(device, observer: observer)
+
+      }
 
       if role == .controller, group == Self.defaultModemGroup, twoWay == .whenDeviceControls, let legs = HubLinkingLeg.legs(of: description, device: device) {
 
@@ -269,6 +281,46 @@ public struct DeviceLinkingCoordinator: Sendable {
       return try await finishLink(made, twoWay: twoWay, observer: observer)
 
     }
+
+  }
+
+  /// Asks a device the registry doesn't know for its identity before it's linked by its
+  /// address, and tells the observer when it doesn't report one.
+  ///
+  /// - Returns: What the catalog says about the device, or `nil` if it didn't report an
+  ///   identity.
+  /// - Throws: `CancellationError` if the task is canceled while the device is asked.
+  private func identifyBeforeLinking(_ device: InsteonAddress, observer: any LinkingObserver) async throws -> DeviceDescription? {
+
+    await observer.linking(.identifying(device))
+
+    let reason: UnidentifiedReason
+
+    do {
+
+      let identification: DeviceIdentification = try await network.identify(device)
+
+      if let known = await network.registry.device(device) {
+
+        return known.deviceDescription
+
+      }
+
+      reason = identification.acceptsModem ? .noIdentity : .notLinked
+
+    } catch let error as CancellationError {
+
+      throw error
+
+    } catch {
+
+      reason = .failed(error)
+
+    }
+
+    await observer.linking(.notIdentifiedBeforeLinking(device, because: reason))
+
+    return nil
 
   }
 

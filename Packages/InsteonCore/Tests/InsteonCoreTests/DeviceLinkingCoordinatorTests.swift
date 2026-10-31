@@ -165,6 +165,19 @@ actor LinkingRecorder: LinkingObserver {
 
   }
 
+  static func unidentified(_ reason: UnidentifiedReason) -> String {
+
+    switch reason {
+    case .notLinked:
+      return "not linked"
+    case .noIdentity:
+      return "no identity"
+    case .failed:
+      return "failed"
+    }
+
+  }
+
   static func keepAwake(_ event: KeepAwakeEvent) -> String {
 
     switch event {
@@ -232,6 +245,8 @@ actor LinkingRecorder: LinkingObserver {
     switch event {
     case let .identifying(device):
       return "identifying \(device)"
+    case let .notIdentifiedBeforeLinking(device, reason):
+      return "not identified \(device) \(unidentified(reason))"
     case let .turningOnBeforeLinking(device):
       return "turning on \(device)"
     case let .notTurnedOnBeforeLinking(device, _):
@@ -459,16 +474,43 @@ struct DeviceLinkingCoordinatorTests {
 
   }
 
-  @Test(.timeLimit(.minutes(1))) func doesntTurnOnADeviceTheRegistryDoesntKnow() async throws {
+  @Test(.timeLimit(.minutes(1))) func identifiesALightTheRegistryDoesntKnowThenTurnsItOn() async throws {
 
     let modem = InMemoryModem()
     let lamp: InsteonAddress = LinkingExample.lamp
     await modem.setIdentity(pressed(LinkingExample.lampIdentity, of: lamp))
+    let network: DeviceNetwork = self.network(modem)
     let recorder = LinkingRecorder()
 
-    _ = try await self.network(modem).linking.link(lamp, as: .controller, observer: recorder)
+    _ = try await network.linking.link(lamp, as: .controller, observer: recorder)
 
-    #expect(await recorder.lines.first == "not turning on \(lamp)")
+    // ID Request first, so the registry knows the lamp is a light, and Light On follows.
+    #expect(Array(await recorder.lines.prefix(2)) == ["identifying \(lamp)", "turning on \(lamp)"])
+    #expect(await modem.levels[lamp] == 0xFF)
+    #expect(await network.registry.device(lamp)?.identity == LinkingExample.lampIdentity)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func doesntTurnOnADeviceThatDoesntReportItsIdentity() async throws {
+
+    let modem = InMemoryModem()
+    let lamp: InsteonAddress = LinkingExample.lamp
+    // An i2CS device that isn't linked to the modem rejects ID Request.
+    await modem.setUnlinked(lamp)
+    let recorder = LinkingRecorder()
+
+    let result: DeviceLinkingResult = try await self.network(modem).linking.link(lamp, as: .controller, observer: recorder)
+
+    #expect(result.links.map(\.mode) == [.controller])
+    #expect(result.legs.isEmpty)
+    #expect(await recorder.lines == [
+      "identifying \(lamp)",
+      "not identified \(lamp) not linked",
+      "not turning on \(lamp)",
+      "linking remotely \(lamp) as controller",
+      "identifying \(lamp)",
+      "linked \(lamp) group 0 controller first"
+    ])
     #expect(await modem.levels[lamp] == nil)
 
   }

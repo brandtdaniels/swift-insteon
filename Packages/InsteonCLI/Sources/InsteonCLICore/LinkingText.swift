@@ -279,6 +279,19 @@ public enum LinkingEventText {
     switch event {
     case let .identifying(device):
       return ["Asking \(device) for its identity with ID Request..."]
+    case let .notIdentifiedBeforeLinking(device, reason):
+      let why: String
+
+      switch reason {
+      case .notLinked:
+        why = "\(device) won't say what it is until it's linked to the modem, as an i2CS device does"
+      case .noIdentity:
+        why = "\(device) didn't report its identity"
+      case let .failed(error):
+        why = "\(device) couldn't be asked for its identity: \(message(error).dropLast())"
+      }
+
+      return ["\(why), so it's linked as a device the Insteon device catalog doesn't describe."]
     case let .turningOnBeforeLinking(device):
       return ["Turning \(device) on with Light On first, so it links with full on as its on-level..."]
     case let .notTurnedOnBeforeLinking(device, reason):

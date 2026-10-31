@@ -438,6 +438,67 @@ struct HubLinkingTests {
 
   }
 
+  // MARK: - A device the registry doesn't know
+
+  @Test(.timeLimit(.minutes(1))) func identifiesADeviceTheRegistryDoesntKnowThenLinksItsLegs() async throws {
+
+    let modem = InMemoryModem()
+    let module: InsteonAddress = HubLinkingExample.module
+    let identity: ReportedIdentity = HubLinkingExample.moduleIdentity
+    await modem.setIdentity(SetButtonPressed(
+      sender: module,
+      role: .responder,
+      category: identity.category,
+      subcategory: identity.subcategory,
+      firmwareVersion: identity.firmwareVersion
+    ))
+    let network: DeviceNetwork = self.network(modem, identities: [:])
+    let recorder = LinkingRecorder()
+
+    let result: DeviceLinkingResult = try await network.linking.link(module, as: .controller, observer: recorder)
+
+    // Get Insteon Engine Version and ID Request identify it, then its legs run.
+    #expect(await modem.linkingSteps == [
+      Self.engineRequest(module),
+      Self.engineRequest(module),
+      .modem(.controller, 0x00),
+      Self.enterLinkingMode(module, group: 0x01, isExtended: false),
+      Self.engineRequest(module),
+      .modem(.responder, 0x01),
+      Self.enterLinkingMode(module, group: 0x01, isExtended: false)
+    ])
+    #expect(Self.statuses(result) == ["linked by Enter Linking Mode", "linked by Enter Linking Mode"])
+    #expect(Array(await recorder.lines.prefix(3)) == [
+      "identifying \(module)",
+      "not turning on \(module)",
+      "leg 1/2 started controller 0 device group 1"
+    ])
+    #expect(await network.registry.device(module)?.identity == identity)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func linksAsBeforeWhenADeviceTheRegistryDoesntKnowIsntIdentified() async throws {
+
+    let modem = InMemoryModem()
+    let module: InsteonAddress = HubLinkingExample.module
+    // Unlinked, it rejects the requests that identify it, though its catalog gives legs.
+    await modem.setUnlinked(module)
+    let network: DeviceNetwork = self.network(modem, identities: [:])
+    let recorder = LinkingRecorder()
+
+    let result: DeviceLinkingResult = try await network.linking.link(module, as: .controller, observer: recorder)
+
+    #expect(result.legs.isEmpty)
+    #expect(result.links.map(\.mode) == [.controller])
+    #expect(Array(await recorder.lines.prefix(4)) == [
+      "identifying \(module)",
+      "not identified \(module) not linked",
+      "not turning on \(module)",
+      "linking remotely \(module) as controller"
+    ])
+
+  }
+
   // MARK: - Without legs
 
   @Test(.timeLimit(.minutes(1))) func linksAsBeforeWithoutLegs() async throws {
