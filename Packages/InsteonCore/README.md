@@ -16,6 +16,9 @@ Keep track of the Insteon devices on a network: the library an app or a command 
 - `NetworkDeviceState`: what a network learned about one device besides its identity
 - `HubLocation`: the Hub's host, port and Insteon ID
 - `NetworkSnapshotStore`: somewhere an app keeps a network's snapshot; `JSONFileDeviceRegistryStore` is one
+- `Device`: one device on a network, controlled as the Insteon device catalog describes it; reads its settings and changes them, never writing the flags that turn off its radio or powerline or require a checksum, and only turning its programming lock off
+- `DeviceSetting`, `DeviceSettingsReading`, `DeviceSettingChange`: a setting with what a settings page shows for it, the settings a device reported, and what a write changed
+- `DeviceSettingError`, `DeviceSettingInput`: why a setting couldn't be read or written, and what a value setting takes
 
 The store never holds credentials, the Hub's MAC address, names or rooms.
 

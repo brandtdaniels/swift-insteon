@@ -29,6 +29,8 @@ enum ControlExample {
 
   static let buttons = InsteonAddress(0x3A, 0x4B, 0x0A)
 
+  static let guarded = InsteonAddress(0x3A, 0x4B, 0x0B)
+
   // MARK: - Identities
 
   static let dimmerIdentity = ReportedIdentity(category: 0x01, subcategory: 0x7C, firmwareVersion: 0x45)
@@ -48,6 +50,9 @@ enum ControlExample {
   static let keypadIdentity = ReportedIdentity(category: 0x01, subcategory: 0x7B, firmwareVersion: 0x45)
 
   static let buttonsIdentity = ReportedIdentity(category: 0x01, subcategory: 0x79, firmwareVersion: 0x45)
+
+  /// Not in ``identities``; tests of the guarded flags give it on its own.
+  static let guardedIdentity = ReportedIdentity(category: 0x01, subcategory: 0x78, firmwareVersion: 0x45)
 
   /// Every device but the unidentified one, as a network's snapshot would hold them.
   static let identities: [InsteonAddress: ReportedIdentity] = [
@@ -332,6 +337,23 @@ enum ControlExample {
     groupTypes: [light]
   )
 
+  /// The flags that are never written, or only turned off, each with the Set Operating Flags
+  /// commands a catalog could give them. The programming lock is bit `0x02`, which
+  /// ``SettingsModem`` sets with `0x0A` and clears with `0x0B`.
+  static let guardedCommands = CommandSet(
+    id: "exampleGuarded",
+    name: "Example guarded",
+    summary: "Flags that cut a device off from the modem, and a programming lock.",
+    operatingFlags: [
+      OperatingFlag(name: "programmingLock", summary: "Locks the device's programming.", query: .operatingFlags, bit: 0x02, on: 0x0A, off: 0x0B, label: "Programming lock"),
+      OperatingFlag(name: "radioOff", summary: "Turns the radio off.", query: .operatingFlags, bit: 0x10, on: 0x0C, off: 0x0D, label: "Radio off"),
+      OperatingFlag(name: "powerLineOff", summary: "Turns the powerline off.", query: .operatingFlags, bit: 0x20, on: 0x0E, off: 0x0F, label: "Powerline off"),
+      OperatingFlag(name: "checksumRequired", summary: "Requires a checksum.", query: .operatingFlags, bit: 0x40, on: 0x10, off: 0x11, label: "Checksum required")
+    ],
+    standardCommands: [lightOn, lightOff, readLevel],
+    groupTypes: [light]
+  )
+
   // MARK: - Profiles
 
   static func profile(model: String, name: String, identity: ReportedIdentity, commands: CommandSet, groups: [DeviceProfile.Group]) -> DeviceProfile {
@@ -370,9 +392,12 @@ enum ControlExample {
         DeviceProfile.Group(number: 1, name: "Button 1", role: .both, type: "light"),
         DeviceProfile.Group(number: 2, name: "Button 2", role: .controller),
         DeviceProfile.Group(number: 3, name: "Button 3", role: .controller)
+      ]),
+      profile(model: "9107", name: "Example Guarded", identity: guardedIdentity, commands: guardedCommands, groups: [
+        DeviceProfile.Group(number: 1, name: "Load", role: .both, type: "light")
       ])
     ],
-    commandSets: [dimmerCommands, relayCommands, fanCommands, outletCommands, keypadCommands, buttonsCommands]
+    commandSets: [dimmerCommands, relayCommands, fanCommands, outletCommands, keypadCommands, buttonsCommands, guardedCommands]
   )
 
 }

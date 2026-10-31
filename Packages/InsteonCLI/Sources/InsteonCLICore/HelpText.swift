@@ -252,6 +252,8 @@ public enum HelpText {
                           as 0.5s, a number in the setting's unit such as 50%, or a byte such
                           as 0x1C. --button picks the button or group of a per-button
                           setting; it defaults to 1. The setting is read back afterward.
+                          Turning off the radio or the powerline, and requiring a checksum,
+                          are never written, and the programming lock is only turned off.
       send CMD1 CMD2 [--extended [D1 ... D14]] [--no-checksum] [--wait SECONDS]
                           Send the device a direct message as given, for exploring, and print
                           its ACK or NAK and the messages it sends in the next SECONDS,

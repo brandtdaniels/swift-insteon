@@ -121,6 +121,14 @@ public struct DeviceSettingsReading: Hashable, Sendable {
 
   }
 
+  /// How many of the settings the catalog describes were left out of the reading because
+  /// they're advanced and the reading didn't include them.
+  public var advancedSettingsLeftOut: Int {
+
+    commandSet.settingItems.count - items.count
+
+  }
+
   /// Each item's value, with a value that's per button once for each button asked about when
   /// there was more than one.
   public var entries: [Entry] {
@@ -245,17 +253,30 @@ public enum DeviceSettingError: Error, Sendable {
   /// The catalog gives no command that writes the value. The associated value is its label.
   case readOnly(label: String)
 
-  /// The text isn't a value the setting takes. The associated values are why, the setting,
-  /// its label, and its command set, which says what it takes.
-  case unreadableValue(SettingInputError, value: SettingValue, label: String, commandSet: CommandSet)
+  /// The text isn't a value the setting takes. The associated values are the text, the
+  /// setting's label, and what the setting takes.
+  case unreadableValue(String, label: String, accepts: DeviceSettingInput)
+
+  /// The value is outside what the setting takes, or doesn't fit a byte. The associated values
+  /// are the text, the setting's label, and what the setting takes.
+  case valueOutOfRange(String, label: String, accepts: DeviceSettingInput)
 
   /// Writing the value also writes another the device didn't report, so nothing was written.
-  /// The associated values are the setting's label and the other value's name.
-  case missingValue(label: String, other: SettingName)
+  /// The associated values are the setting's label and the other value's key.
+  case missingValue(label: String, other: String)
 
   /// The catalog's command for the setting can't take the value, so nothing was written. The
   /// associated values are why, the setting's label and the value as a settings page shows it.
-  case unwritableValue(FieldError, label: String, value: String)
+  case unwritableValue(DeviceSettingFieldProblem, label: String, value: String)
+
+  /// The setting is one that's never written, because a wrong value can cut the device off
+  /// from the modem: turning its radio or its powerline off, or requiring a checksum in every
+  /// message. The associated value is its label.
+  case neverWritten(label: String)
+
+  /// The setting is the programming lock, which is never turned on, so a device is never left
+  /// locked. Turning it off is allowed. The associated value is its label.
+  case leavesProgrammingLocked(label: String)
 
   /// The device rejected Get Insteon Engine Version, as an i2CS device does when it isn't
   /// linked to the modem, so the form of Set Operating Flags it takes isn't known.
@@ -265,6 +286,131 @@ public enum DeviceSettingError: Error, Sendable {
   /// setting's title, with its button for a setting that's per button, the value asked for and
   /// the value the device reports.
   case notChanged(title: String, requested: String, reported: String)
+
+}
+
+/// What a setting that holds a value takes, for saying what to give it when a value isn't
+/// one it takes.
+///
+/// ```swift
+/// do {
+///   _ = try await lamp.writeSetting("rampRate", to: "fast")
+/// } catch let DeviceSettingError.unreadableValue(text, label, accepts) {
+///   if case let .label(examples, _) = accepts.form {
+///     print("'\(text)' isn't a value \(label) takes, such as \(examples.joined(separator: ", ")).")
+///   }
+/// }
+/// ```
+public struct DeviceSettingInput: Hashable, Sendable {
+
+  /// The form a value takes besides a byte.
+  public enum Form: Hashable, Sendable {
+
+    /// A label from the setting's value table, such as `"0.5 s"`. The associated values are
+    /// up to three of the labels, in the table's order, and, when the table's entries stand
+    /// for durations, the first duration written as someone could type it, such as `"2s"`.
+    case label(examples: [String], durationExample: String?)
+
+    /// Buttons, such as `"1,3"`, or `"none"`.
+    case buttons
+
+    /// A number in a unit. The associated values are the unit's name, such as `"percent"`,
+    /// and the symbol a settings page writes after a number, such as `"%"`.
+    case number(unit: String, symbol: String)
+
+    /// A number between the bounds the catalog gives.
+    case range(ClosedRange<UInt8>)
+
+    /// Only a byte.
+    case byte
+
+  }
+
+  /// The form a value takes besides a byte.
+  public var form: Form
+
+  /// The bytes the setting takes, which is every byte when the catalog gives no bounds.
+  public var bytes: ClosedRange<UInt8>
+
+  /// Creates what a setting takes.
+  ///
+  /// - Parameters:
+  ///   - form: The form a value takes besides a byte.
+  ///   - bytes: The bytes the setting takes.
+  public init(form: Form, bytes: ClosedRange<UInt8>) {
+
+    self.form = form
+    self.bytes = bytes
+
+  }
+
+}
+
+/// Why the catalog's command for a setting can't take a value.
+public enum DeviceSettingFieldProblem: Hashable, Sendable {
+
+  /// The value isn't the kind the command's parameter takes, such as a name for a number. The
+  /// associated value is the parameter's name.
+  case mismatchedKind(String)
+
+  /// The value is outside what the command's parameter takes. The associated value is the
+  /// parameter's name.
+  case outOfRange(String)
+
+  /// The command's parameter has no value by the name. The associated value is the
+  /// parameter's name.
+  case unknownName(String)
+
+  /// The command has no parameter for the value. The associated value is the parameter's
+  /// name.
+  case missingValue(String)
+
+  /// The problem a catalog's field error names.
+  init(_ error: FieldError) {
+
+    switch error {
+    case let .mismatchedKind(name):
+      self = .mismatchedKind(name.rawValue)
+    case let .outOfRange(name):
+      self = .outOfRange(name.rawValue)
+    case let .unknownName(name):
+      self = .unknownName(name.rawValue)
+    case let .missingValue(name):
+      self = .missingValue(name.rawValue)
+    }
+
+  }
+
+}
+
+/// The settings that are never written, whatever the catalog says, so no device is cut off
+/// from the modem or left locked.
+///
+/// They're named here rather than in the catalog: these flags stop a device hearing the modem
+/// at all, which no settings page should offer. Other flags are written as the catalog
+/// describes them.
+enum DeviceSettingSafety {
+
+  /// The settings never written: turning off the radio or the powerline, and requiring a
+  /// checksum in every message, which a modem that doesn't send one can't undo.
+  static let neverWritten: Set<SettingName> = ["radioOff", "powerLineOff", "powerlineOff", "checksumRequired"]
+
+  /// The programming lock, which is only ever turned off.
+  static let programmingLock: SettingName = "programmingLock"
+
+  /// Whether an item is never written.
+  static func isNeverWritten(_ item: SettingItem) -> Bool {
+
+    neverWritten.contains(item.name)
+
+  }
+
+  /// Whether giving an item a state would leave the device's programming locked.
+  static func locksProgramming(_ item: SettingItem, state: Bool) -> Bool {
+
+    state && item.name == programmingLock
+
+  }
 
 }
 
@@ -300,7 +446,7 @@ enum SettingPresentation {
       section: item.section?.rawValue,
       summary: item.summary,
       isAdvanced: item.isAdvanced,
-      isWritable: commands.isWritable(item),
+      isWritable: commands.isWritable(item) && !DeviceSettingSafety.isNeverWritten(item),
       isPerButton: isPerButton,
       control: control
     )
@@ -356,6 +502,65 @@ enum SettingPresentation {
     case let .value(value):
       commands.text(for: value, raw: raw)
     }
+
+  }
+
+  /// What an extended settings value takes: a label from its value table, buttons, a number
+  /// in its unit, or a number in its range, in that order of preference, and a byte.
+  static func input(for value: SettingValue, in commands: CommandSet) -> DeviceSettingInput {
+
+    let bytes: ClosedRange<UInt8> = value.range ?? UInt8.min...UInt8.max
+
+    if let name = value.table, let table = commands.valueTable(named: name), !table.entries.isEmpty {
+
+      let examples: [String] = table.entries.prefix(3).map { (entry: ValueTable.Entry) -> String in entry.label }
+
+      return DeviceSettingInput(form: .label(examples: examples, durationExample: durationExample(in: table)), bytes: bytes)
+
+    }
+
+    if value.kind == .buttons {
+
+      return DeviceSettingInput(form: .buttons, bytes: bytes)
+
+    }
+
+    if let unit = value.unit {
+
+      return DeviceSettingInput(form: .number(unit: unit.rawValue, symbol: unit.symbol), bytes: bytes)
+
+    }
+
+    if let range = value.range {
+
+      return DeviceSettingInput(form: .range(range), bytes: bytes)
+
+    }
+
+    return DeviceSettingInput(form: .byte, bytes: bytes)
+
+  }
+
+  /// The first duration a value table has, written as someone could type it, such as `2s` or
+  /// `0.5s`.
+  static func durationExample(in table: ValueTable) -> String? {
+
+    guard let duration: Duration = table.entries.lazy.compactMap({ (entry: ValueTable.Entry) -> Duration? in entry.duration }).first else {
+
+      return nil
+
+    }
+
+    let components = duration.components
+    let milliseconds: Int64 = components.seconds * 1_000 + components.attoseconds / 1_000_000_000_000_000
+
+    if milliseconds % 1_000 == 0 {
+
+      return String(milliseconds / 1_000) + "s"
+
+    }
+
+    return String(Double(milliseconds) / 1_000) + "s"
 
   }
 

@@ -98,6 +98,25 @@ if try await lamp.capabilities().canDim {
 ``DeviceCapabilities`` says what to show for a device: its groups, whether it dims or beeps,
 and its settings with their controls. ``Device/readSettings(includingAdvanced:beforeReading:)``
 reads the settings, and ``Device/writeSetting(_:to:button:)`` changes one and reads it back.
+Each ``DeviceSetting`` carries what a settings page needs from the catalog: its label,
+section, whether it's advanced, its control, and its default as each reading's entry shows it.
+
+Some settings are never written, whatever the catalog says: turning off a device's radio or
+powerline, and requiring a checksum in every message, any of which can cut the device off from
+the modem. They're shown as read-only, and writing one throws
+``DeviceSettingError/neverWritten(label:)``. The programming lock is only ever turned off, so
+a device is never left locked; turning it on throws
+``DeviceSettingError/leavesProgrammingLocked(label:)``. A value a setting doesn't take throws
+an error with a ``DeviceSettingInput`` that says what it takes:
+
+```swift
+do {
+  let change = try await lamp.writeSetting("rampRate", to: "0.5 s")
+  print("\(change.title): \(change.before ?? "?") to \(change.after ?? "not confirmed")")
+} catch DeviceSettingError.neverWritten(let label) {
+  print("\(label) can't be changed.")
+}
+```
 
 ### Linking devices
 
@@ -139,6 +158,8 @@ if let failure = result.linkBackFailure {
 - ``DeviceSettingsReading``
 - ``DeviceSettingChange``
 - ``DeviceSettingError``
+- ``DeviceSettingInput``
+- ``DeviceSettingFieldProblem``
 
 ### Devices
 
