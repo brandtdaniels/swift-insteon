@@ -370,7 +370,7 @@ struct DatabaseEditor {
 
   }
 
-  /// Adds back the records that are no longer in the modem's database.
+  /// Adds back the records that are missing from the modem's database.
   ///
   /// - Returns: The records that are still missing, or all of them if the modem's database
   ///   can't be read.

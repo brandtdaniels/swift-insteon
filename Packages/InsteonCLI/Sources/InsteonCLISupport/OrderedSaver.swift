@@ -33,7 +33,7 @@ public actor OrderedSaver<Snapshot: Sendable> {
   /// Reads the value and writes it, once every save asked for earlier has finished.
   ///
   /// - Parameters:
-  ///   - read: Reads the value as it is now.
+  ///   - read: Reads the value.
   ///   - write: Writes what was read, given what was last saved, and returns whether it was
   ///     written. What wasn't written is written with the next save.
   public func save(
