@@ -524,6 +524,23 @@ struct HubLinkingTests {
 
   }
 
+  // MARK: - Asking for something else
+
+  @Test(.timeLimit(.minutes(1))) func linksAsBeforeWhenTheCallerDoesntUseTheCatalogsLegs() async throws {
+
+    let modem = InMemoryModem()
+    let module: InsteonAddress = HubLinkingExample.module
+    let network: DeviceNetwork = self.network(modem, identities: [module: HubLinkingExample.moduleIdentity])
+    let recorder = LinkingRecorder()
+
+    // As for --either or an explicit --group 0, whose role and group equal the defaults.
+    let result: DeviceLinkingResult = try await network.linking.link(module, as: .controller, usesCatalogLegs: false, observer: recorder)
+
+    #expect(result.legs.isEmpty)
+    #expect(Array(await recorder.lines.prefix(2)) == ["not turning on \(module)", "linking remotely \(module) as controller"])
+
+  }
+
   // MARK: - A device the registry doesn't know
 
   @Test(.timeLimit(.minutes(1))) func identifiesADeviceTheRegistryDoesntKnowThenLinksItsLegs() async throws {

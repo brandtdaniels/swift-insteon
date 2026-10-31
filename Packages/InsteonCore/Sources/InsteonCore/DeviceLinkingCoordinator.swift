@@ -134,10 +134,10 @@ public struct DeviceLinkingCoordinator: Sendable {
   /// ``LinkingEvent/notIdentifiedBeforeLinking(_:because:)`` and the device is linked as one
   /// the catalog doesn't describe.
   ///
-  /// When the registry knows the device, the catalog gives its linking from a Hub, and the
-  /// caller asks for the defaults, the modem as controller in
+  /// When the registry knows the device, the catalog gives its linking from a Hub, the caller
+  /// asks for the defaults, the modem as controller in
   /// ``DeviceLinkingCoordinator/defaultModemGroup`` with ``TwoWayLinking/whenDeviceControls``,
-  /// the catalog's legs are linked instead, in the catalog's order, one ALL-Linking session
+  /// and `usesCatalogLegs` is `true`, the catalog's legs are linked instead, in the catalog's order, one ALL-Linking session
   /// each: the modem starts ALL-Linking first in the leg's role and group, the device joins
   /// with Enter Linking Mode for the leg's device group, or with its SET button when the
   /// catalog says Enter Linking Mode doesn't work for it, and the coordinator waits for
@@ -168,6 +168,10 @@ public struct DeviceLinkingCoordinator: Sendable {
   ///     ``TwoWayLinking/whenDeviceControls``.
   ///   - setButtonTimeout: How long the modem waits for the SET button when the device is
   ///     linked with it. Defaults to `Linker.defaultManualLinkingTimeout`.
+  ///   - usesCatalogLegs: Whether the catalog's legs may be linked, when the other options are
+  ///     the defaults. Pass `false` when a person asked for a role or group of their own, even
+  ///     one equal to the default, such as the modem in either role or group 0 given
+  ///     explicitly. Defaults to `true`.
   ///   - observer: What a person is told and asked.
   /// - Returns: The links made and the device.
   /// - Throws: `LinkMismatch` when the modem reports another device's link or a removed link,
@@ -182,6 +186,7 @@ public struct DeviceLinkingCoordinator: Sendable {
     group: AllLinkGroupNumber = DeviceLinkingCoordinator.defaultModemGroup,
     twoWay: TwoWayLinking = .whenDeviceControls,
     setButtonTimeout: Duration = Linker.defaultManualLinkingTimeout,
+    usesCatalogLegs: Bool = true,
     observer: any LinkingObserver
   ) async throws -> DeviceLinkingResult {
 
@@ -196,7 +201,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
       }
 
-      if role == .controller, group == Self.defaultModemGroup, twoWay == .whenDeviceControls, let legs = HubLinkingLeg.legs(of: description, device: device) {
+      if usesCatalogLegs, role == .controller, group == Self.defaultModemGroup, twoWay == .whenDeviceControls, let legs = HubLinkingLeg.legs(of: description, device: device) {
 
         return try await linkByLegs(device, legs: legs, description: description, setButtonTimeout: setButtonTimeout, observer: observer)
 

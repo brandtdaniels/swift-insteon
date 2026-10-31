@@ -253,6 +253,7 @@ enum ModemCommands {
         group: options.group,
         twoWay: twoWay,
         setButtonTimeout: timeout,
+        usesCatalogLegs: options.followsCatalogLegs,
         observer: observer
       )
 

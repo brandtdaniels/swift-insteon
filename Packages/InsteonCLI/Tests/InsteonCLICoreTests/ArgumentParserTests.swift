@@ -743,4 +743,27 @@ struct ArgumentParserTests {
 
   }
 
+  @Test func followsTheCatalogsLegsOnlyWithoutARoleOrGroupOfItsOwn() throws {
+
+    func options(_ arguments: [String]) throws -> LinkOptions? {
+
+      guard case let .link(options) = try Invocation.parse(arguments).subcommand else {
+
+        return nil
+
+      }
+
+      return options
+
+    }
+
+    #expect(try options(["link", "1A.2B.3C"])?.followsCatalogLegs == true)
+    #expect(try options(["link", "1A.2B.3C", "--either"])?.followsCatalogLegs == false)
+    #expect(try options(["link", "1A.2B.3C", "--responder"])?.followsCatalogLegs == false)
+    // Group 0 given explicitly is a group of its own, though it's the default.
+    #expect(try options(["link", "1A.2B.3C", "--group", "0"])?.followsCatalogLegs == false)
+    #expect(try options(["link", "1A.2B.3C", "--group", "0"]) == LinkOptions(device: InsteonAddress(0x1A, 0x2B, 0x3C), isGroupGiven: true))
+
+  }
+
 }

@@ -280,6 +280,7 @@ extension Invocation {
       switch name {
       case "--group":
         options.group = try group(value(of: name, inline: inlineValue, in: arguments, at: &index), option: name)
+        options.isGroupGiven = true
         otherOption = name
       case "--timeout":
         options.timeoutSeconds = try seconds(value(of: name, inline: inlineValue, in: arguments, at: &index), option: name)
