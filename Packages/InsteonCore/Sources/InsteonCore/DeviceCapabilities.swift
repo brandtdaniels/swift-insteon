@@ -49,7 +49,9 @@ public struct DeviceCapabilities: Hashable, Sendable {
   /// there are no groups.
   public var mainGroupNumber: Int?
 
-  /// Whether the device's command set lists Beep. ``Device/beep()`` sends Beep either way.
+  /// Whether the device's command set lists a Beep the device may be sent. ``Device/beep()``
+  /// sends the protocol's Beep when the command set lists none, and refuses one it lists but
+  /// never sends.
   public var canBeep: Bool
 
   /// The settings the catalog describes, in the order a settings page shows them. Empty when
@@ -64,7 +66,7 @@ public struct DeviceCapabilities: Hashable, Sendable {
   ///   - source: Where the capabilities come from.
   ///   - groups: The groups that can be controlled or read.
   ///   - mainGroupNumber: The group an operation controls when it isn't given one.
-  ///   - canBeep: Whether the command set lists Beep.
+  ///   - canBeep: Whether the command set lists a Beep the device may be sent.
   ///   - settings: The settings the catalog describes.
   public init(
     productName: String?,

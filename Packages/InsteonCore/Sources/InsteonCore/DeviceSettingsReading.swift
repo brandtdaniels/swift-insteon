@@ -475,11 +475,22 @@ enum DeviceSettingSafety {
 
   }
 
-  /// Whether a standard command may be sent: it has no guard, and isn't a Set Operating Flags
-  /// command with the bytes of one the command set never sends.
+  /// Commands never sent, whatever the catalog says, by their names in a command set: those
+  /// that turn the programming lock on, the radio or the powerline off, or checksums on.
+  static let neverSentNames: Set<SettingName> = [
+    "programmingLockOn",
+    "radioOff",
+    "powerLineOff",
+    "powerlineOff",
+    "checksumOn",
+    "checksumRequiredOn"
+  ]
+
+  /// Whether a standard command may be sent: it has no guard, isn't named as a command that's
+  /// never sent, and, with a fixed cmd2, doesn't have the bytes of one.
   static func isSendable(_ command: DeviceStandardCommand, in commands: CommandSet?) -> Bool {
 
-    guard !isNeverSent(command.sendGuard) else {
+    guard !isNeverSent(command.sendGuard), !neverSentNames.contains(command.name) else {
 
       return false
 
@@ -491,56 +502,108 @@ enum DeviceSettingSafety {
 
     }
 
-    return !isNeverSentSetOperatingFlags(Command(command1: command.command1, command2: command2), in: commands)
+    return !isNeverSent(Command(command1: command.command1, command2: command2), in: commands)
 
   }
 
-  /// Whether an extended command may be sent: it has no guard, and isn't a Set Operating Flags
-  /// command with the bytes of one the command set never sends.
+  /// Whether an extended command may be sent: it has no guard, isn't named as a command that's
+  /// never sent, and doesn't have the bytes of one.
   static func isSendable(_ command: DeviceExtendedCommand, in commands: CommandSet?) -> Bool {
 
-    !isNeverSent(command.sendGuard) && !isNeverSentSetOperatingFlags(command.command, in: commands)
+    !isNeverSent(command.sendGuard) && !neverSentNames.contains(command.name) && !isNeverSent(command.command, in: commands)
 
   }
 
-  /// Whether a command is Set Operating Flags (cmd1 `0x20`) with the cmd2 of a flag, standard
-  /// or extended command the command set never sends.
+  /// The bytes never sent to a device that uses a command set, by whatever route or name.
   ///
-  /// The catalog marks such a command wherever it lists it, so the same bytes sent by another
-  /// route, such as a flag's own Set Operating Flags, are refused too.
-  static func isNeverSentSetOperatingFlags(_ command: Command, in commands: CommandSet?) -> Bool {
+  /// They're derived from the flags a write guards, whether the catalog guards them or the
+  /// floor names them: Set Operating Flags (cmd1 `0x20`) with a kept flag's on or off cmd2,
+  /// or a never-set flag's on cmd2, and the fixed bytes of the standard commands such a flag
+  /// names to change it. Added to them are the Set Operating Flags bytes of every flag,
+  /// standard or extended command the catalog guards, or the floor names in
+  /// ``neverSentNames``. So a command set with no guards at all, such as one with only a
+  /// programming lock flag or a `programmingLockOn` command, still never sends those bytes
+  /// under another name.
+  static func neverSentCommands(in commands: CommandSet?) -> Set<Command> {
 
-    guard command.command1 == setOperatingFlagsCommand1, let commands else {
+    guard let commands else {
 
-      return false
+      return []
 
     }
 
-    let flagCommands: Bool = commands.flagCommands.contains { (flagCommand: OperatingFlagCommand) -> Bool in
+    var never: Set<Command> = []
 
-      isNeverSent(flagCommand.sendGuard) && flagCommand.command.command == command
+    func insertSetOperatingFlags(_ command2: UInt8?) {
 
-    }
+      if let command2 {
 
-    let standardCommands: Bool = commands.standardCommands.contains { (standard: DeviceStandardCommand) -> Bool in
-
-      guard isNeverSent(standard.sendGuard), standard.command1 == command.command1, case let .fixed(command2) = standard.command2 else {
-
-        return false
+        never.insert(Command(command1: setOperatingFlagsCommand1, command2: command2))
 
       }
 
-      return command2 == command.command2
+    }
+
+    func insertStandardCommand(named name: SettingName?) {
+
+      guard let name, let command = commands.standardCommand(named: name), case let .fixed(command2) = command.command2 else {
+
+        return
+
+      }
+
+      never.insert(Command(command1: command.command1, command2: command2))
 
     }
 
-    let extendedCommands: Bool = commands.extendedCommands.contains { (extended: DeviceExtendedCommand) -> Bool in
+    for flag in commands.operatingFlags {
 
-      isNeverSent(extended.sendGuard) && extended.command == command
+      switch rule(for: flag) {
+      case .keep?:
+        insertSetOperatingFlags(flag.on)
+        insertSetOperatingFlags(flag.off)
+        insertStandardCommand(named: flag.onCommand)
+        insertStandardCommand(named: flag.offCommand)
+      case .neverSet?:
+        insertSetOperatingFlags(flag.on)
+        insertStandardCommand(named: flag.onCommand)
+      case nil:
+        break
+      }
 
     }
 
-    return flagCommands || standardCommands || extendedCommands
+    for flagCommand in commands.flagCommands where isNeverSent(flagCommand.sendGuard) || neverSentNames.contains(flagCommand.name) {
+
+      never.insert(flagCommand.command.command)
+
+    }
+
+    for standard in commands.standardCommands where standard.command1 == setOperatingFlagsCommand1 && (isNeverSent(standard.sendGuard) || neverSentNames.contains(standard.name)) {
+
+      if case let .fixed(command2) = standard.command2 {
+
+        never.insert(Command(command1: standard.command1, command2: command2))
+
+      }
+
+    }
+
+    for extended in commands.extendedCommands where extended.command.command1 == setOperatingFlagsCommand1 && (isNeverSent(extended.sendGuard) || neverSentNames.contains(extended.name)) {
+
+      never.insert(extended.command)
+
+    }
+
+    return never
+
+  }
+
+  /// Whether a command's bytes are ones never sent to a device that uses a command set, as
+  /// ``neverSentCommands(in:)`` gives them. Every message a ``Device`` sends is checked.
+  static func isNeverSent(_ command: Command, in commands: CommandSet?) -> Bool {
+
+    neverSentCommands(in: commands).contains(command)
 
   }
 
@@ -589,7 +652,7 @@ enum DeviceSettingSafety {
 
     switch change {
     case let .setOperatingFlags(command2):
-      return isNeverSentSetOperatingFlags(Command(command1: setOperatingFlagsCommand1, command2: command2), in: commands)
+      return isNeverSent(Command(command1: setOperatingFlagsCommand1, command2: command2), in: commands)
     case let .standardCommand(command):
       return !isSendable(command, in: commands)
     }
@@ -608,23 +671,32 @@ enum DeviceSettingSafety {
   /// The value name that holds Get Operating Flags `0x00`'s byte in any command set.
   static let operatingFlagsValue: SettingName = "operatingFlags"
 
-  /// The Get Operating Flags query whose reply a value's byte is: the catalog's
-  /// `SettingValue.flagsQuery`, or else the floor's.
-  static func flagsQuery(of value: SettingValue, in commands: CommandSet) -> OperatingFlagsRequest? {
+  /// The Get Operating Flags queries whose reply a value's byte may be: the catalog's
+  /// `SettingValue.flagsQuery` and the floor's, both, so a catalog that names another query
+  /// for a byte the floor lists never unguards it.
+  static func flagsQueries(of value: SettingValue, in commands: CommandSet) -> Set<OperatingFlagsRequest> {
+
+    var queries: Set<OperatingFlagsRequest> = []
 
     if let query = value.flagsQuery {
 
-      return query
+      queries.insert(query)
 
     }
 
     if let listed = operatingFlagsValues[commands.id]?[value.name] {
 
-      return listed
+      queries.insert(listed)
 
     }
 
-    return value.name == operatingFlagsValue ? .operatingFlags : nil
+    if value.name == operatingFlagsValue {
+
+      queries.insert(.operatingFlags)
+
+    }
+
+    return queries
 
   }
 
@@ -643,9 +715,11 @@ enum DeviceSettingSafety {
 
     var bits: [GuardedBit] = []
 
-    if let query = flagsQuery(of: value, in: commands) {
+    let queries: Set<OperatingFlagsRequest> = flagsQueries(of: value, in: commands)
 
-      for flag in commands.operatingFlags where flag.query == query {
+    if !queries.isEmpty {
+
+      for flag in commands.operatingFlags where queries.contains(flag.query) {
 
         if let flagRule = rule(for: flag) {
 

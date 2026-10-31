@@ -113,7 +113,12 @@ the catalog marks with `SettingValue.flagsQuery`, and for the guarded bits of an
 command's flags parameter: it's refused before it's written when it would set a bit that's
 never set or change one that's kept. The radio, powerline, checksum and programming lock flags
 are guarded even where the catalog gives no guard; the catalog adds guards, and never removes
-these. A device's actions never send a command the catalog guards. A value a setting doesn't
+these. A catalog that names a flags byte's query differently from the floor is checked against
+both. Every message a ``Device`` sends is checked by the bytes it carries, after any value is
+filled in: the Set Operating Flags bytes that turn a kept flag on or off or a never-set flag on,
+those of a command the catalog guards, and those of a command named for one of these, such as
+`programmingLockOn`, are never sent under any name, and the operation throws
+``DeviceControlError/unsupported(_:product:)``. A value a setting doesn't
 take throws an error with a ``DeviceSettingInput`` that says what it takes:
 
 ```swift

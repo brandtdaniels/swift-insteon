@@ -367,4 +367,66 @@ struct CatalogGuardTests {
 
   }
 
+  // MARK: - A catalog that names the wrong query
+
+  /// An open/close sensor whose catalog names the wrong Get Operating Flags query for its
+  /// configuration byte, which holds the programming lock in bit `0x80`.
+  static let wrongQueryJSON = #"""
+    {
+      "devices": [{
+        "model": "9202",
+        "name": "Example Open/Close Sensor",
+        "identities": [{ "category": "0x10", "subcategory": "0x7E" }],
+        "commandSets": [{ "commandSet": "openCloseSensor", "category": "0x10", "subcategory": "0x7E" }],
+        "capabilities": [],
+        "sources": ["A"]
+      }],
+      "commandSets": [{
+        "id": "openCloseSensor",
+        "name": "Example open/close sensor",
+        "description": "A configuration byte whose query the catalog gives wrongly.",
+        "operatingFlags": [
+          { "name": "programmingLock", "description": "Locks programming.", "query": "0x00", "bit": "0x80", "label": "Programming lock" },
+          { "name": "other", "description": "Another query's.", "query": "0x05", "bit": "0x01" }
+        ],
+        "extendedSettings": {
+          "perButton": false,
+          "values": [
+            { "name": "configuration", "description": "The operating flags byte.", "byte": 7, "flagsQuery": "0x05" }
+          ],
+          "writes": [
+            { "name": "configuration", "description": "Sets the configuration.", "selector": "0x05", "perButton": false,
+              "bytes": [{ "position": 3, "value": "configuration" }] }
+          ]
+        },
+        "sources": ["A"]
+      }]
+    }
+    """#
+
+  @Test(.timeLimit(.minutes(1))) func keepsTheFloorsQueryWhenTheCatalogNamesAnother() async throws {
+
+    let sensor = InsteonAddress(0x3A, 0x4B, 0x22)
+    let modem = SettingsModem(device: sensor, flags: 0x00, values: [7: 0x00])
+    let network = DeviceNetwork(
+      modem: modem,
+      catalog: try DeviceCatalog(json: Data(Self.wrongQueryJSON.utf8)),
+      snapshot: NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: [sensor: ReportedIdentity(category: 0x10, subcategory: 0x7E, firmwareVersion: 0x45)])),
+      clock: clock,
+      now: { () -> Date in Date(timeIntervalSince1970: 1_800_000_000) }
+    )
+    let device: Device = network.device(sensor)
+
+    let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
+
+      _ = try await device.writeSetting("configuration", to: "0x80")
+
+    }
+
+    #expect(Self.lockedLabel(error) == "Programming lock")
+    #expect(await modem.extendedMessages.isEmpty)
+    #expect(await modem.values[7] == 0x00)
+
+  }
+
 }
