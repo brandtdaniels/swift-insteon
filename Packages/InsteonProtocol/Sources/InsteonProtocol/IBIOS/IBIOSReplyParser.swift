@@ -14,7 +14,9 @@
 /// A text report (`0x43`) longer than ``IBIOSReplyParser/longestText`` bytes isn't one, so its
 /// start byte is skipped rather than every reply after it waited on for an End of Text byte.
 /// An upload's echo is as long as its header says, up to 65,544 bytes, since IBIOS returns
-/// what was asked for.
+/// what was asked for. Once ``IBIOSReplyParser/willWrite(_:)`` tells the parser what's written,
+/// only an upload echo whose address and length match the upload written is read as one, so
+/// line noise that looks like an upload's header can't take the replies after it as its data.
 public struct IBIOSReplyParser: ReplyParser, Hashable, Sendable {
 
   /// The most bytes of text a text report (`0x43`) holds before its End of Text byte: 256.
@@ -53,19 +55,43 @@ public struct IBIOSReplyParser: ReplyParser, Hashable, Sendable {
 
   }
 
+  /// Tells the parser the command about to be written, so an upload echo is read only if it
+  /// answers the upload written last.
+  ///
+  /// - Parameter command: The command's bytes.
+  /// - Returns: The replies the pending bytes complete, read as answers to this command, such
+  ///   as those after a made-up upload header that doesn't count as one.
+  public mutating func willWrite(_ command: [UInt8]) -> [IBIOSReply] {
+
+    reader.willWrite(command)
+
+  }
+
   /// Discards the pending bytes of a frame that stopped arriving before it was complete, such
   /// as an upload whose header line noise made up, which would otherwise take every reply
   /// after it as its data.
   ///
-  /// Call this only once no bytes at all have arrived for a while: a frame still arriving,
-  /// such as a long upload, is never cut short. Its bytes are discarded whole rather than read
-  /// again as frames, so data inside it can't pass for a reply.
+  /// Call this only once the frame has stalled, such as when no bytes at all have arrived for
+  /// a while, or when it was already pending before a command that has since timed out: a
+  /// frame still arriving, such as a long upload, is never cut short. Its bytes are discarded
+  /// whole rather than read again as frames, so data inside it can't pass for a reply.
   ///
   /// - Returns: Whether any bytes were discarded.
   @discardableResult
   public mutating func discardStalledFrame() -> Bool {
 
     reader.discardStalledFrame()
+
+  }
+
+  /// Where the frame the parser is waiting on starts, as a count of the bytes received before
+  /// it, or `nil` if it isn't waiting on one.
+  ///
+  /// The same position later means the same frame is still incomplete, such as one that was
+  /// pending before a command was written and is still pending when its answer times out.
+  public var pendingFrameStart: Int? {
+
+    reader.pendingFrameStart
 
   }
 
@@ -83,7 +109,7 @@ private enum IBIOSFraming: Framing {
   private static let frameNumbers = echoedCommands.union([0x41, 0x43, 0x45, 0x49, 0x4A, 0x4F])
 
   /// The length of the frame at the start of `bytes`, which starts with `0x02`.
-  static func frameLength(of bytes: [UInt8]) -> FrameLength {
+  static func frameLength(of bytes: [UInt8], after written: [UInt8]?) -> FrameLength {
 
     guard bytes.count >= 2 else {
 
@@ -111,6 +137,20 @@ private enum IBIOSFraming: Framing {
     guard let length = echoLength(of: bytes) else {
 
       return .needMoreBytes
+
+    }
+
+    // An upload's echo repeats the address and length asked for, so a header that doesn't, such
+    // as one line noise made up, isn't one: its length could be anything up to 65,535 bytes.
+    if number == IBIOSCommandNumber.upload.rawValue, let written, bytes[2] != ControlByte.negativeAcknowledgment {
+
+      let isAsked: Bool = written.count >= 6 && written[1] == number && Array(written[2..<6]) == Array(bytes[2..<6])
+
+      guard isAsked else {
+
+        return .unrecognized
+
+      }
 
     }
 

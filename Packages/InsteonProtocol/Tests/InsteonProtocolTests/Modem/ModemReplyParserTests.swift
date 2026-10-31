@@ -400,6 +400,22 @@ struct ModemReplyParserTests {
 
   }
 
+  // A stray byte starts skipping, which ends at the next start byte or once a wait ends with
+  // nothing pending, so a later NAK isn't skipped for good.
+  @Test func stopsSkippingOnceAWaitEnds() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("AA")).isEmpty)
+    #expect(parser.parse(bytes("15")).isEmpty)
+
+    let discarded: Bool = parser.discardStalledFrame()
+
+    #expect(!discarded)
+    #expect(parser.parse(bytes("15")) == [.negativeAcknowledgment])
+
+  }
+
   @Test func finishesARejectedInfoRequestWhenNoMoreBytesCome() {
 
     var parser = ModemReplyParser()
@@ -473,6 +489,28 @@ struct ModemReplyParserTests {
       command: Command(command1: 0x2E, command2: 0x00),
       userData: try UserData(userData)
     ))])
+
+  }
+
+  @Test func keepsNegativeAcknowledgmentInsideAnEcho() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("026D15")) == [.echo(CommandEcho(number: .ledOn, parameters: [], isAccepted: false))])
+
+  }
+
+  // The counter-case for ending a NAK at the next frame: `15 AA` isn't a NAK followed by a
+  // frame, so the whole reply is read as the modem's information.
+  @Test func parsesModemInfoForAnAddressStartingWithNAK() {
+
+    var parser = ModemReplyParser()
+
+    let replies = parser.parse(bytes("0260" + "15AABB" + "03" + "21" + "93" + "06"))
+
+    #expect(replies == [
+      .modemInfo(ModemInfo(address: InsteonAddress(0x15, 0xAA, 0xBB), category: 0x03, subcategory: 0x21, firmwareVersion: 0x93))
+    ])
 
   }
 

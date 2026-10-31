@@ -199,6 +199,33 @@ struct IBIOSTests {
 
   }
 
+  // Once the parser knows what's written, an upload header that answers no upload asked for
+  // isn't one, so it can't take the replies after it as its data.
+  @Test func skipsAnUploadHeaderThatAnswersNoUploadAskedFor() {
+
+    var parser = IBIOSReplyParser()
+
+    #expect(parser.parse(bytes("02420000FFFF")).isEmpty)
+    #expect(parser.willWrite(IBIOSCommand.getVersion.bytes).isEmpty)
+    #expect(parser.parse(bytes("02450A")) == [.eventReport(.buttonTapped)])
+
+  }
+
+  @Test func readsTheUploadAskedFor() {
+
+    var parser = IBIOSReplyParser()
+    let data: [UInt8] = [0x02, 0x45, 0x0A, 0x06]
+    let header: [UInt8] = [0x03, 0x00, 0x00, 0x04]
+    let checksum: UInt16 = IBIOSCommand.checksum(of: header + data)
+
+    #expect(parser.willWrite(IBIOSCommand.upload(address: 0x0300, length: 4).bytes).isEmpty)
+    #expect(parser.parse(bytes("02420000FFFF")).isEmpty)
+    #expect(parser.parse([0x02, 0x42] + header + data + [UInt8(checksum >> 8), UInt8(checksum & 0xFF), 0x06]) == [
+      .memory(address: 0x0300, data: data, isIntact: true)
+    ])
+
+  }
+
   @Test func skipsTextLongerThanATextReport() {
 
     var parser = IBIOSReplyParser()

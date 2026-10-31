@@ -77,15 +77,27 @@ public struct ModemReplyParser: ReplyParser, Hashable, Sendable {
   /// as one begun by line noise or missing bytes from its middle, which would otherwise take
   /// the replies after it as the rest of its bytes.
   ///
-  /// Call this only once no bytes at all have arrived for a while: a frame still arriving is
-  /// never cut short. Its bytes are discarded whole rather than read again as frames, so data
-  /// inside it can't pass for a reply.
+  /// Call this only once the frame has stalled, such as when no bytes at all have arrived for
+  /// a while, or when it was already pending before a command that has since timed out: a
+  /// frame still arriving is never cut short. Its bytes are discarded whole rather than read
+  /// again as frames, so data inside it can't pass for a reply.
   ///
   /// - Returns: Whether any bytes were discarded.
   @discardableResult
   public mutating func discardStalledFrame() -> Bool {
 
     reader.discardStalledFrame()
+
+  }
+
+  /// Where the frame the parser is waiting on starts, as a count of the bytes received before
+  /// it, or `nil` if it isn't waiting on one.
+  ///
+  /// The same position later means the same frame is still incomplete, such as one that was
+  /// pending before a command was written and is still pending when its answer times out.
+  public var pendingFrameStart: Int? {
+
+    reader.pendingFrameStart
 
   }
 
@@ -114,7 +126,7 @@ private enum ModemFraming: Framing {
   }
 
   /// The total length of the frame at the start of `bytes`, which starts with `0x02`.
-  static func frameLength(of bytes: [UInt8]) -> FrameLength {
+  static func frameLength(of bytes: [UInt8], after written: [UInt8]?) -> FrameLength {
 
     guard bytes.count >= 2 else {
 
