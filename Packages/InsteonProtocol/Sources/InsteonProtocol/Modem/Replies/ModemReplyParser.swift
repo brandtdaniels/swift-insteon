@@ -8,8 +8,9 @@
 ///
 /// A NAK to ``SerialCommand/getModemInfo``, ``SerialCommand/getModemConfiguration`` or
 /// ``SerialCommand/readRadioStatus`` is reported once more bytes arrive, since until then it
-/// can't be told apart from a reply whose data starts with `0x15`. If no more bytes are coming, ``ModemReplyParser/finishPendingReply()``
-/// reports it.
+/// can't be told apart from a reply whose data starts with `0x15`. A frame that starts right
+/// after the NAK ends it, so the frame's bytes are never read as the reply's data. If no more
+/// bytes are coming, ``ModemReplyParser/finishPendingReply()`` reports it.
 ///
 /// ```swift
 /// var parser = ModemReplyParser()
@@ -138,6 +139,16 @@ private enum ModemFraming: Framing {
       // a full-length reply that ends in an ACK or NAK takes precedence.
       let dataLength = number == .getModemConfiguration ? 6 : 9
 
+      // Unless the next frame starts right after the NAK: reading on would take that frame's
+      // bytes as the reply's data, and its ACK-like byte as the reply's ACK. A reply whose
+      // data happens to start the same way is then read as a NAK, so the command is sent
+      // again rather than a made-up reply accepted.
+      if bytes.count >= 5, bytes[2] == ControlByte.negativeAcknowledgment, bytes[3] == ControlByte.startOfText, startsFrame(bytes[4]) {
+
+        return .complete(3)
+
+      }
+
       guard bytes.count >= dataLength else {
 
         return bytes.count >= 3 && bytes[2] != ControlByte.negativeAcknowledgment ? .complete(dataLength) : .needMoreBytes
@@ -168,6 +179,14 @@ private enum ModemFraming: Framing {
       // Only 0x62 and 0x77 have no single length, and both are handled above.
       return .complete((number.commandLength ?? 2) + 1)
     }
+
+  }
+
+  /// Whether a number after a start byte begins a frame the modem sends: a report of its own,
+  /// `0x50` through `0x5B`, or the reply to a host command.
+  private static func startsFrame(_ number: UInt8) -> Bool {
+
+    (0x50...0x5B).contains(number) || SerialCommandNumber(rawValue: number) != nil
 
   }
 

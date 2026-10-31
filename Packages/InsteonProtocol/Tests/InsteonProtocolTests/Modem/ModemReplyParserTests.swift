@@ -388,6 +388,18 @@ struct ModemReplyParserTests {
 
   }
 
+  // Skipping lasts until the next start byte, however the bytes arrive.
+  @Test func ignoresANegativeAcknowledgmentAmongSkippedBytesThatArriveLater() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("0299")).isEmpty)
+    #expect(parser.parse(bytes("15")).isEmpty)
+    #expect(parser.parse(bytes("AA")).isEmpty)
+    #expect(parser.parse(bytes("15" + "0255" + "15")) == [.userReset, .negativeAcknowledgment])
+
+  }
+
   @Test func finishesARejectedInfoRequestWhenNoMoreBytesCome() {
 
     var parser = ModemReplyParser()
@@ -475,6 +487,66 @@ struct ModemReplyParserTests {
       .userReset,
       .userReset
     ])
+
+  }
+
+  // A busy modem NAKs Get IM Configuration, then reports a message from a device whose
+  // address starts with 0x06. Read on, `02 73 15 02 50 06` would be a configuration of 0x15.
+  @Test func endsARejectedConfigurationRequestAtAMessageFromADeviceStartingWithAnACKByte() {
+
+    var parser = ModemReplyParser()
+    let sender = InsteonAddress(0x06, 0xBB, 0xCC)
+
+    #expect(parser.parse(bytes("027315" + "0250" + "06BBCC" + "112233" + "2B" + "11FF")) == [
+      .echo(CommandEcho(number: .getModemConfiguration, parameters: [], isAccepted: false)),
+      .messageReceived(ReceivedMessage(
+        sender: sender,
+        destination: Self.modem,
+        flags: MessageFlags(rawValue: 0x2B),
+        command: Command(command1: 0x11, command2: 0xFF)
+      ))
+    ])
+
+  }
+
+  // The same for Get IM Info, followed by a direct message to a modem whose address starts
+  // with 0x06: read on, the destination's first byte would be the reply's ACK.
+  @Test func endsARejectedInfoRequestAtAMessageToAModemStartingWithAnACKByte() {
+
+    var parser = ModemReplyParser()
+    let modem = InsteonAddress(0x06, 0x22, 0x33)
+
+    #expect(parser.parse(bytes("026015" + "0250" + "AABBCC" + "062233" + "2B" + "11FF")) == [
+      .echo(CommandEcho(number: .getModemInfo, parameters: [], isAccepted: false)),
+      .messageReceived(ReceivedMessage(
+        sender: Self.device,
+        destination: modem,
+        flags: MessageFlags(rawValue: 0x2B),
+        command: Command(command1: 0x11, command2: 0xFF)
+      ))
+    ])
+
+  }
+
+  @Test func endsARejectedRadioStatusRequestAtTheNextReply() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("027E15" + "025806" + "0255")) == [
+      .echo(CommandEcho(number: .readRadioStatus, parameters: [], isAccepted: false)),
+      .allLinkCleanupStatus(isComplete: true),
+      .userReset
+    ])
+
+  }
+
+  // A reply whose data starts the way a NAK and the next frame would is read as the NAK, so
+  // the command is sent again rather than a made-up configuration accepted.
+  @Test func readsAnAmbiguousConfigurationAsARejection() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("027315" + "025006")).first == .echo(CommandEcho(number: .getModemConfiguration, parameters: [], isAccepted: false)))
 
   }
 

@@ -78,6 +78,11 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
   /// Bytes received that haven't made a complete frame yet.
   private(set) var pending: [UInt8] = []
 
+  /// Whether bytes are being skipped up to the next start byte, so a NAK byte among them isn't
+  /// reported. It lasts from one read to the next, so how the bytes are split doesn't change
+  /// what's reported.
+  private var isSkipping = false
+
   /// Adds received bytes and returns every reply they complete, oldest first.
   mutating func read(_ bytes: some Sequence<UInt8>) -> [Format.Reply] {
 
@@ -114,6 +119,7 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
     }
 
     pending.removeFirst(3)
+    isSkipping = false
 
     return number
 
@@ -122,8 +128,6 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
   private mutating func nextReply() -> Format.Reply? {
 
     // A NAK counts only where a frame can start, not among bytes being skipped.
-    var isSkipping = false
-
     while true {
 
       // A device sometimes answers a command with a lone NAK instead of an echo.
@@ -137,6 +141,8 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
 
       guard let start = pending.firstIndex(of: ControlByte.startOfText) else {
 
+        // These bytes start no frame, and neither do the bytes up to the next start byte.
+        isSkipping = isSkipping || !pending.isEmpty
         pending.removeAll()
 
         return nil
@@ -144,6 +150,7 @@ struct FrameReader<Format: Framing>: Hashable, Sendable {
       }
 
       pending.removeFirst(start)
+      isSkipping = false
 
       switch Format.frameLength(of: pending) {
       case .needMoreBytes:
