@@ -21,10 +21,33 @@ public enum LinkingError: Error, Hashable, Sendable {
   /// another kind, such as a new link where an unlink was asked for.
   case unexpectedLink(AllLinkingCompleted)
 
-  /// Removing a record from the modem's ALL-Link database also removed these records, which
-  /// link the same device in the same group in the other role, and they couldn't be added
-  /// back. The modem deletes the first record that matches a group and address whatever its
-  /// role, so a record of the other role is deleted and then added back.
-  case modemRecordsLost([AllLinkRecord])
+}
+
+/// Removing a record from the modem's ALL-Link database also removed records that link the
+/// same device in the same group in the other role, and these couldn't be added back.
+///
+/// The modem deletes the first record that matches a group and address whatever its role, so
+/// a record of the other role is deleted and then added back. When something fails in between,
+/// each one is added back once more; this lists those that couldn't be, which may be missing
+/// from the modem's database, along with what failed first.
+public struct ModemRecordsNotRestored: Error, Sendable {
+
+  /// The records of the other role that may be missing from the modem's database.
+  public let records: [AllLinkRecord]
+
+  /// What failed first, such as the modem's error or `CancellationError`.
+  public let cause: any Error
+
+  /// Creates the error.
+  ///
+  /// - Parameters:
+  ///   - records: The records that may be missing.
+  ///   - cause: What failed first.
+  public init(records: [AllLinkRecord], cause: any Error) {
+
+    self.records = records
+    self.cause = cause
+
+  }
 
 }

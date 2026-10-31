@@ -40,6 +40,8 @@ public enum InsteonErrorDescription {
       return describe(error)
     case let error as ModemStoppedEchoing:
       return didntConfirmSending(to: error.device)
+    case let error as ModemRecordsNotRestored:
+      return describe(error)
     case let error as HubError:
       return describe(error)
     case let error as LinkingError:
@@ -185,6 +187,14 @@ public enum InsteonErrorDescription {
 
   }
 
+  private static func describe(_ error: ModemRecordsNotRestored) -> String {
+
+    let records: String = error.records.map { (record: AllLinkRecord) -> String in "\(record.address), group \(record.group)" }.joined(separator: "; ")
+
+    return "Removing a link also removed the modem's \(error.records.count == 1 ? "record" : "records") of \(records), which couldn't be added back. Link them again."
+
+  }
+
   private static func describe(_ error: LinkingError) -> String {
 
     switch error {
@@ -198,10 +208,6 @@ public enum InsteonErrorDescription {
       "The ALL-Link database of \(device) is full."
     case let .recordNotWritten(device, address):
       "A record written to the ALL-Link database of \(device) at \(hexAddress(address)) didn't read back as written."
-    case let .modemRecordsLost(records):
-      "Removing a link also removed the modem's \(records.count == 1 ? "record" : "records") of "
-        + records.map { (record: AllLinkRecord) -> String in "\(record.address), group \(record.group)" }.joined(separator: "; ")
-        + ", which couldn't be added back. Link them again."
     }
 
   }

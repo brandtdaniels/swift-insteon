@@ -299,13 +299,75 @@ struct LinkerTests {
     await modem.setModemRecords([responder, controller])
     await modem.setBeforeOperation(Self.failing(adds: Int.max))
 
-    await #expect(throws: LinkingError.modemRecordsLost([responder])) {
+    let error: ModemRecordsNotRestored? = await #expect(throws: ModemRecordsNotRestored.self) {
 
       try await Unlinker(modem: modem).unlink(group(responder: .device(lamp)))
 
     }
 
+    #expect(error?.records == [responder])
+    #expect(error?.cause as? ModemError == .timedOut(.manageAllLinkRecord))
     #expect(await modem.modemRecords.isEmpty)
+
+  }
+
+  // The unlink is canceled while the record of the other role is being added back, and adding
+  // it back once more fails too: both the record and the cancellation are reported.
+  @Test(.timeLimit(.minutes(1)))
+  func reportsTheCancellationWithTheRecordItLost() async throws {
+
+    let modem = InMemoryModem()
+    let responder = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 0x05, address: lamp, data1: 0x01)
+    let controller = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0x05, address: lamp)
+    await modem.setModemRecords([responder, controller])
+
+    let (reached, reachedSignal) = AsyncStream<Void>.makeStream()
+    let (release, releaseSignal) = AsyncStream<Void>.makeStream()
+    let pauses = Countdown(1)
+
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      guard case let .send(.manageAllLinkRecord(action, _)) = operation, action == .modifyFirstResponderOrAdd else {
+
+        return
+
+      }
+
+      guard await pauses.take() else {
+
+        throw ModemError.timedOut(.manageAllLinkRecord)
+
+      }
+
+      reachedSignal.yield()
+
+      // Ends at once when the unlink is canceled, and the modem then throws CancellationError.
+      for await _ in release {
+
+        break
+
+      }
+
+    }
+
+    let unlinker = Unlinker(modem: modem)
+    let linked: AllLinkGroup = group(responder: .device(lamp))
+    let unlinking = Task { try await unlinker.unlink(linked) }
+
+    var reachedAdd = reached.makeAsyncIterator()
+    _ = await reachedAdd.next()
+
+    unlinking.cancel()
+    releaseSignal.yield()
+
+    let error: ModemRecordsNotRestored? = await #expect(throws: ModemRecordsNotRestored.self) {
+
+      try await unlinking.value
+
+    }
+
+    #expect(error?.records == [responder])
+    #expect(error?.cause is CancellationError)
 
   }
 

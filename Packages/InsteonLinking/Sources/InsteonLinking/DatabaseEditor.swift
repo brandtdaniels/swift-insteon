@@ -337,21 +337,22 @@ struct DatabaseEditor {
 
     } catch {
 
-      // Some records may have changed before the failure.
-      await cache?.invalidateModem()
-
       // A record of the other role that's gone is a link the caller didn't ask to remove, so
-      // it's added back once more, in a task of its own that canceling this one doesn't reach.
+      // each one that's gone is added back once more, in a task of its own that canceling this
+      // one doesn't reach.
       let modem: any LinkingModem = modem
-      let lost: [AllLinkRecord] = await Task { () async -> [AllLinkRecord] in
+      let missing: [AllLinkRecord] = await Task { () async -> [AllLinkRecord] in
 
         await Self.restore(otherRole, group: group, address: address, on: modem)
 
       }.value
 
-      if !lost.isEmpty {
+      // Some records changed, before the failure and since.
+      await cache?.invalidateModem()
 
-        throw LinkingError.modemRecordsLost(lost)
+      if !missing.isEmpty {
+
+        throw ModemRecordsNotRestored(records: missing, cause: error)
 
       }
 
@@ -370,16 +371,11 @@ struct DatabaseEditor {
 
   }
 
-  /// Adds back the records that are missing from the modem's database.
+  /// Adds back each record that isn't in the modem's database as it was. If the database
+  /// can't be read, each one is added: adding updates a record of the same role in place.
   ///
-  /// - Returns: The records that are still missing, or all of them if the modem's database
-  ///   can't be read.
-  private static func restore(
-    _ records: [AllLinkRecord],
-    group: AllLinkGroupNumber,
-    address: InsteonAddress,
-    on modem: any LinkingModem
-  ) async -> [AllLinkRecord] {
+  /// - Returns: The records that couldn't be added back.
+  private static func restore(_ records: [AllLinkRecord], group: AllLinkGroupNumber, address: InsteonAddress, on modem: any LinkingModem) async -> [AllLinkRecord] {
 
     guard !records.isEmpty else {
 
@@ -387,23 +383,10 @@ struct DatabaseEditor {
 
     }
 
-    guard let remaining = try? await modem.allLinkRecords(group: group, device: address) else {
+    let remaining: [AllLinkRecord]? = try? await modem.allLinkRecords(group: group, device: address)
+    var missing: [AllLinkRecord] = []
 
-      return records
-
-    }
-
-    var lost: [AllLinkRecord] = []
-
-    for record in records {
-
-      let isController: Bool = record.flags.contains(.controller)
-
-      guard !remaining.contains(where: { (stored: AllLinkRecord) -> Bool in stored.flags.contains(.controller) == isController }) else {
-
-        continue
-
-      }
+    for record in records where !(remaining?.contains(record) ?? false) {
 
       do {
 
@@ -411,13 +394,13 @@ struct DatabaseEditor {
 
       } catch {
 
-        lost.append(record)
+        missing.append(record)
 
       }
 
     }
 
-    return lost
+    return missing
 
   }
 
