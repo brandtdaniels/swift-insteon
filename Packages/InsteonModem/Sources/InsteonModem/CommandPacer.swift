@@ -24,6 +24,11 @@ struct AnswerStep<Reply>: Sendable {
   /// The error to throw if the step isn't completed in time.
   let timedOut: any Error
 
+  /// The error to throw in place of `timedOut` if the device has sent anything since the pacer
+  /// started reading, so it was connected and powered and is more likely busy than gone, or
+  /// `nil` to throw `timedOut` either way.
+  var timedOutAfterReplies: (any Error)? = nil
+
 }
 
 /// A command for ``CommandPacer`` to write, and how to recognize the answer to it.
@@ -166,6 +171,10 @@ actor CommandPacer<Parser: ReplyParser> {
   private var isRunning = false
 
   private var isClosed = false
+
+  /// Whether the device has sent anything since the pacer started reading or since the last
+  /// command it didn't answer at all.
+  private var hasReceivedReplies = false
 
   private var nextID = 0
 
@@ -550,7 +559,7 @@ actor CommandPacer<Parser: ReplyParser> {
 
     }
 
-    let timedOut: any Error = pending.steps[pending.step].timedOut
+    let step: AnswerStep<Reply> = pending.steps[pending.step]
 
     deliver(parser.finishPendingReply())
 
@@ -561,7 +570,19 @@ actor CommandPacer<Parser: ReplyParser> {
 
     }
 
+    // A device that has sent something since its last unanswered command is connected and
+    // powered, so a step with an error for that case reports it. A second unanswered command with
+    // nothing heard in between reports the step's own error, since the device may have stopped
+    // working.
+    let timedOut: any Error = hasReceivedReplies ? (step.timedOutAfterReplies ?? step.timedOut) : step.timedOut
+
     let isUnanswered: Bool = pending.step == 0
+
+    if isUnanswered {
+
+      hasReceivedReplies = false
+
+    }
 
     completePendingAnswer(.success(.timedOut(timedOut, isUnanswered: isUnanswered)))
 
@@ -642,6 +663,12 @@ actor CommandPacer<Parser: ReplyParser> {
   // MARK: - Receiving
 
   private func deliver(_ replies: [Reply]) {
+
+    if !replies.isEmpty {
+
+      hasReceivedReplies = true
+
+    }
 
     for reply in replies {
 

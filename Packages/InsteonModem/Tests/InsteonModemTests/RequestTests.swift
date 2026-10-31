@@ -282,6 +282,139 @@ struct RequestTests {
 
   }
 
+  @Test(.timeLimit(.minutes(1))) func reportsAModemThatStopsEchoingAfterAnsweringAsBusyWithTheDevice() async throws {
+
+    // The modem echoes the first request and the device acknowledges it; then the modem goes
+    // quiet, as a Hub's modem does while it's still retrying a message to a device.
+    let acknowledgment: [UInt8] = received(
+      from: device,
+      .directAcknowledgment,
+      command1: engineVersionRequest.command.command1,
+      command2: 0x02
+    )
+    let connection = ScriptedConnection { (written: [UInt8], index: Int) -> [UInt8] in
+
+      index == 0 ? written + [0x06] + acknowledgment : []
+
+    }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      try await modem.request(engineVersionRequest)
+
+      await #expect(throws: ModemStoppedEchoing(device: device, command: .sendMessage)) {
+
+        async let answer = modem.request(engineVersionRequest)
+        // The earlier exchange's timeout had the same deadline, so wait for this one's message first.
+        while connection.written.count < 2 {
+
+          await Task.yield()
+
+        }
+        await clock.waitForSleeper(until: .seconds(3))
+        clock.advance(by: .seconds(3))
+        _ = try await answer
+
+      }
+
+    }
+
+    // The message isn't sent again, since the modem may still send it once it's free.
+    #expect(connection.written.count == 2)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func reportsAModemThatMissesTwoEchoesInARowAsNotAnswering() async throws {
+
+    // The modem echoes the first request and the device acknowledges it; then the modem sends
+    // nothing more, so the second missed echo blames the modem rather than a busy device.
+    let acknowledgment: [UInt8] = received(
+      from: device,
+      .directAcknowledgment,
+      command1: engineVersionRequest.command.command1,
+      command2: 0x02
+    )
+    let connection = ScriptedConnection { (written: [UInt8], index: Int) -> [UInt8] in
+
+      index == 0 ? written + [0x06] + acknowledgment : []
+
+    }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      try await modem.request(engineVersionRequest)
+
+      await #expect(throws: ModemStoppedEchoing(device: device, command: .sendMessage)) {
+
+        async let answer = modem.request(engineVersionRequest)
+        // The earlier exchange's timeout had the same deadline, so wait for this one's message first.
+        while connection.written.count < 2 {
+
+          await Task.yield()
+
+        }
+        await clock.waitForSleeper(until: .seconds(3))
+        clock.advance(by: .seconds(3))
+        _ = try await answer
+
+      }
+
+      await #expect(throws: ModemError.self) {
+
+        async let answer = modem.request(engineVersionRequest)
+        while connection.written.count < 3 {
+
+          await Task.yield()
+
+        }
+        await clock.waitForSleeper(until: .seconds(6))
+        clock.advance(by: .seconds(3))
+        _ = try await answer
+
+      }
+
+    }
+
+    #expect(connection.written.count == 3)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func reportsAModemThatStopsEchoingPartwayThroughADatabaseReadAsBusyWithTheDevice() async throws {
+
+    let acknowledgment: [UInt8] = received(from: device, .directAcknowledgment, command1: 0x2F, command2: 0x00)
+    let first: [UInt8] = recordResponse(at: 0x0FFF, [0xE2, 0x04, 0x00, 0x5E, 0x5D, 0x00, 0x00, 0x04])
+    let connection = ScriptedConnection { (written: [UInt8], index: Int) -> [UInt8] in
+
+      index == 0 ? written + [0x06] + acknowledgment + first : []
+
+    }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      await #expect(throws: ModemStoppedEchoing(device: device, command: .sendMessage)) {
+
+        async let records = modem.readAllLinkDatabase(of: device)
+        // The earlier exchange's timeout had the same deadline, so wait for this one's message first.
+        while connection.written.count < 2 {
+
+          await Task.yield()
+
+        }
+        await clock.waitForSleeper(until: .milliseconds(4_170))
+        clock.advance(by: .milliseconds(4_170))
+        _ = try await records
+
+      }
+
+    }
+
+    #expect(connection.written.count == 2)
+
+  }
+
   @Test func returnsTheAcknowledgmentOfAnExtendedMessage() async throws {
 
     let message = ExtendedMessage(to: device, command: ExtendedDirectCommand.getSet())
@@ -373,6 +506,45 @@ struct RequestTests {
       clock.advance(by: Modem.defaultExtendedRequestTimeout)
 
       let read = try await responses
+
+      #expect(read.map(\.address) == [0x0FFF])
+
+    }
+
+    #expect(connection.written.count == 2)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func waitsTheRetryDelayBeforeAskingForARecordAgain() async throws {
+
+    let acknowledgment: [UInt8] = received(from: device, .directAcknowledgment, command1: 0x2F, command2: 0x00)
+    let end: [UInt8] = recordResponse(at: 0x0FFF, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    // The first record response is lost.
+    let connection = ScriptedConnection { (written: [UInt8], index: Int) -> [UInt8] in
+
+      let record: [UInt8] = index == 0 ? [] : end
+
+      return written + [0x06] + acknowledgment + record
+
+    }
+    let modem = Modem(
+      connection: connection,
+      retryPolicy: RetryPolicy(attempts: 3, delay: .milliseconds(500), answerTimeout: .seconds(2)),
+      clock: clock
+    )
+
+    try await run(modem) {
+
+      async let responses = modem.readAllLinkDatabase(of: device)
+      await clock.waitForSleeper(until: Modem.defaultExtendedRequestTimeout)
+      clock.advance(by: Modem.defaultExtendedRequestTimeout)
+
+      // The request is asked for again only once the retry delay has passed.
+      await clock.waitForSleeper(until: Modem.defaultExtendedRequestTimeout + .milliseconds(500))
+      #expect(connection.written.count == 1)
+      clock.advance(by: .milliseconds(500))
+
+      let read: [AllLinkRecordResponse] = try await responses
 
       #expect(read.map(\.address) == [0x0FFF])
 
