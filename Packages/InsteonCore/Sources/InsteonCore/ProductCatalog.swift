@@ -97,7 +97,7 @@ public struct ProductCatalog: Sendable {
   /// Downloads the published catalog when it's in the format the package reads and differs
   /// from a copy.
   ///
-  /// Only the catalog's site is asked, with a session that keeps no cookies, credentials or
+  /// Only an HTTPS address is asked, and only the catalog's site, with a session that keeps no cookies, credentials or
   /// cache, so nothing about a Hub is ever sent. A redirect is followed only to HTTPS on the
   /// same host and port. The published catalog is checked against its manifest's SHA-256.
   ///
@@ -116,6 +116,13 @@ public struct ProductCatalog: Sendable {
     requestTimeout: TimeInterval = 30,
     resourceTimeout: TimeInterval = 120
   ) async throws -> ProductCatalogUpdate {
+
+    // Only HTTPS is asked, so the catalog can't be read or changed on its way.
+    guard location.scheme?.lowercased() == "https" else {
+
+      throw ProductCatalogUpdateError.insecureLocation
+
+    }
 
     // An ephemeral session keeps no cookies, credentials or cache between requests.
     let configuration: URLSessionConfiguration = URLSessionConfiguration.ephemeral
@@ -207,6 +214,9 @@ public enum ProductCatalogUpdateError: Error, Hashable, Sendable {
 
   /// The downloaded catalog didn't match its manifest's SHA-256.
   case checksumMismatch
+
+  /// The catalog's address isn't HTTPS, so it isn't asked.
+  case insecureLocation
 
   /// The catalog's site redirected to an address that isn't HTTPS.
   case insecureRedirect

@@ -19,7 +19,7 @@ import InsteonProtocol
 ///
 /// ```swift
 /// do {
-///   try await ModemSession.withHub(host: host, port: nil, user: user, password: password) { session in
+///   try await ModemSession.withHub(host: host, port: HubLocation.defaultPort, user: user, password: password) { session in
 ///     print(try await session.info())
 ///   }
 /// } catch {

@@ -335,6 +335,8 @@ enum CatalogCommand {
       throw CommandFailure(
         description: "The downloaded Insteon device catalog didn't match its manifest's SHA-256, so the current copy, \(current), stays. Try again later."
       )
+    case .insecureLocation:
+      throw CommandFailure(description: "The Insteon device catalog's address isn't HTTPS, so it isn't asked, and the current copy, \(current), stays.")
     case .insecureRedirect:
       throw CommandFailure(description: "The Insteon device catalog's site redirected to an address that isn't HTTPS, so nothing was used and the current copy, \(current), stays.")
     case .redirectRefused:
