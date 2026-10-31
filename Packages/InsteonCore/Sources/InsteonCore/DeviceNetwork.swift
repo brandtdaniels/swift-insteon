@@ -490,7 +490,7 @@ public actor DeviceNetwork {
   // MARK: - Linking
 
   /// The coordinator that links devices to the modem and unlinks them, and keeps the
-  /// ``registry``, the ``cache`` and the network's ``snapshot()`` up to date as it does.
+  /// ``registry``, the cache of ALL-Link databases and the network's ``snapshot()`` up to date as it does.
   ///
   /// Every coordinator a network hands out takes turns with the others, so one link or unlink
   /// runs at a time and the modem is in one linking mode at a time.
@@ -525,7 +525,7 @@ public actor DeviceNetwork {
 
   }
 
-  /// The modem's records in use for a device, read through the ``cache``, which reads the
+  /// The modem's records in use for a device, read through the cache of ALL-Link databases, which reads the
   /// modem's ALL-Link database when it has no copy. The records read are kept for the
   /// snapshot.
   ///
@@ -547,7 +547,7 @@ public actor DeviceNetwork {
   }
 
   /// Forgets a device removed from the network: its identity in the ``registry``, its state,
-  /// the ``cache``'s copy of its ALL-Link database, and the records that name it in the copy of
+  /// the cached copy of its ALL-Link database, and the records that name it in the copy of
   /// the modem's ALL-Link database the snapshot holds.
   ///
   /// - Parameter device: The device.
@@ -570,7 +570,7 @@ public actor DeviceNetwork {
   }
 
   /// Every device the network knows something about: those the ``registry`` knows, those with
-  /// a state, and those whose ALL-Link database the ``cache`` holds a copy of, in address
+  /// a state, and those whose ALL-Link database the network holds a cached copy of, in address
   /// order.
   func knownDevices() async -> [InsteonAddress] {
 
