@@ -136,7 +136,7 @@ extension DeviceCatalog {
   /// ``DeviceCatalogUpdater`` uses a downloaded catalog only if its version is compatible with
   /// this one.
   ///
-  /// - Returns: The version, such as 0.5.11.
+  /// - Returns: The version, such as 0.6.11.
   /// - Throws: ``DeviceCatalogError/missingBundledCatalog`` if the manifest isn't found, or the
   ///   error reading it.
   public static func bundledVersion() throws -> DeviceCatalogVersion {

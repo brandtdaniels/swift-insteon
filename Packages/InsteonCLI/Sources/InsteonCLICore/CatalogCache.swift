@@ -17,7 +17,7 @@ public enum CatalogSource: Hashable, Sendable {
 /// release of the package.
 ///
 /// The copy is `$XDG_CACHE_HOME/insteon/catalog.json`, or `~/.cache/insteon/catalog.json`,
-/// with its version, such as `"0.5.26"`, in `catalog-version.json` beside it. Both hold only
+/// with its version, such as `"0.6.26"`, in `catalog-version.json` beside it. Both hold only
 /// the public catalog.
 public enum CatalogCache {
 
@@ -56,11 +56,11 @@ public enum CatalogCache {
   /// copy, the bundled one is.
   ///
   /// ```swift
-  /// let bundled = DeviceCatalogVersion(major: 0, minor: 5, patch: 25)
+  /// let bundled = DeviceCatalogVersion(major: 0, minor: 6, patch: 25)
   ///
-  /// CatalogCache.source(bundled: bundled, cached: DeviceCatalogVersion("0.5.26"))   // .cached
-  /// CatalogCache.source(bundled: bundled, cached: DeviceCatalogVersion("0.5.24"))   // .bundled
-  /// CatalogCache.source(bundled: bundled, cached: DeviceCatalogVersion("0.6.0"))    // .bundled
+  /// CatalogCache.source(bundled: bundled, cached: DeviceCatalogVersion("0.6.26"))   // .cached
+  /// CatalogCache.source(bundled: bundled, cached: DeviceCatalogVersion("0.6.24"))   // .bundled
+  /// CatalogCache.source(bundled: bundled, cached: DeviceCatalogVersion("0.7.0"))    // .bundled
   /// ```
   ///
   /// - Parameters:
@@ -91,7 +91,7 @@ public enum CatalogCache {
 
   }
 
-  /// Reads the cached catalog's version from its file's JSON, a string such as `"0.5.26"`.
+  /// Reads the cached catalog's version from its file's JSON, a string such as `"0.6.26"`.
   ///
   /// - Parameter json: The file's contents.
   /// - Returns: The version, or `nil` if the contents aren't a version.
@@ -101,7 +101,7 @@ public enum CatalogCache {
 
   }
 
-  /// The cached catalog's version as its file's JSON, a string such as `"0.5.26"`.
+  /// The cached catalog's version as its file's JSON, a string such as `"0.6.26"`.
   ///
   /// - Parameter version: The version.
   /// - Returns: The JSON.
@@ -167,7 +167,7 @@ public enum CatalogText {
   }
 
   /// What `insteon catalog update` says after saving a newer copy, such as
-  /// "Updated the Insteon device catalog to 0.5.26."
+  /// "Updated the Insteon device catalog to 0.6.26."
   ///
   /// - Parameter version: The saved copy's version.
   /// - Returns: The message.
@@ -178,7 +178,7 @@ public enum CatalogText {
   }
 
   /// What `insteon catalog update` says when the copy in use is the published one, such as
-  /// "The Insteon device catalog is up to date (0.5.26)."
+  /// "The Insteon device catalog is up to date (0.6.26)."
   ///
   /// - Parameter version: The version of the copy in use.
   /// - Returns: The message.
