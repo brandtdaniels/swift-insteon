@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import InsteonCLISupport
-import InsteonCore
+@_spi(Catalog) import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonProtocol
@@ -30,7 +30,7 @@ struct LinkingJSONTests {
     RegisteredDevice(
       address: lamp,
       identity: identity,
-      deviceDescription: catalog.describe(category: 0x01, subcategory: 0x5A, firmwareVersion: 0x41)
+      info: DeviceInfo(catalogDescription: catalog.describe(category: 0x01, subcategory: 0x5A, firmwareVersion: 0x41))
     )
 
   }
@@ -38,7 +38,7 @@ struct LinkingJSONTests {
   /// The product's name, as the catalog writes it.
   var product: String {
 
-    registered.deviceDescription.displayName ?? ""
+    registered.info.displayName ?? ""
 
   }
 

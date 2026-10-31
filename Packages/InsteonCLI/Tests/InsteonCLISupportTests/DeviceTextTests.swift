@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import InsteonCLISupport
-import InsteonCore
+@_spi(Catalog) import InsteonCore
 import InsteonDeviceCatalog
 import InsteonProtocol
 
@@ -157,17 +157,14 @@ struct DeviceTextTests {
   @Test func writesARecordsMeaning() throws {
 
     let identity = ExampleCatalog.identity
-    let device: DeviceDescription = ExampleCatalog.catalog.describe(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion)
-    let record = AllLinkRecord(flags: [.inUse], group: 0, address: plug, data1: 0xFF, data2: 0x1F, data3: 0x01)
-    let explanation = try #require(device.explain(record, isController: false))
+    let device = DeviceInfo(catalogDescription: ExampleCatalog.catalog.describe(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion))
+    let record = LinkRecord(isController: false, isInUse: true, group: 0, address: plug, data: [0xFF, 0x1F, 0x01])
+    let explanation = try #require(device.meaning(of: record))
 
     #expect(LinkDataText.meaning(of: explanation) == "On-level 0xFF (On), Ramp rate 0x1F")
 
     // A byte without a label goes by its name, and the responder's own group says so.
-    let perGroup = RecordDataExplanation(
-      groupType: ExampleCatalog.load,
-      bytes: [RecordDataExplanation.DataByte(position: 3, name: "button", value: 0x03, isPerGroup: true)]
-    )
+    let perGroup = LinkDataMeaning(bytes: [LinkDataField(position: 3, name: "button", value: 0x03, isPerGroup: true)])
 
     #expect(LinkDataText.meaning(of: perGroup) == "button 0x03 (its group 3)")
 
@@ -176,19 +173,16 @@ struct DeviceTextTests {
   @Test func saysWhenARecordsByteDiffersFromTheDocuments() throws {
 
     let identity = ExampleCatalog.identity
-    let device: DeviceDescription = ExampleCatalog.catalog.describe(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion)
-    let record = AllLinkRecord(flags: [.inUse], group: 0, address: plug, data1: 0x00, data2: 0x1F, data3: 0x01)
-    let explanation: RecordDataExplanation = try #require(device.explain(record, isController: false))
+    let device = DeviceInfo(catalogDescription: ExampleCatalog.catalog.describe(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion))
+    let record = LinkRecord(isController: false, isInUse: true, group: 0, address: plug, data: [0x00, 0x1F, 0x01])
+    let explanation: LinkDataMeaning = try #require(device.meaning(of: record))
 
     #expect(explanation.bytes[0].documentedValue == 0xFF)
     #expect(explanation.bytes[1].documentedValue == nil)
     #expect(LinkDataText.meaning(of: explanation) == "On-level 0x00 (Off; the catalog gives 0xFF), Ramp rate 0x1F")
 
     // A byte without a table gives the documented value alone.
-    let untabled = RecordDataExplanation(
-      groupType: ExampleCatalog.load,
-      bytes: [RecordDataExplanation.DataByte(position: 1, name: "onLevel", label: "On-level", value: 0x00, documentedValue: 0xFE)]
-    )
+    let untabled = LinkDataMeaning(bytes: [LinkDataField(position: 1, name: "onLevel", label: "On-level", value: 0x00, documentedValue: 0xFE)])
 
     #expect(LinkDataText.meaning(of: untabled) == "On-level 0x00 (the catalog gives 0xFE)")
 
@@ -234,9 +228,13 @@ struct DeviceTextTests {
 
   // MARK: - Linking instructions
 
-  @Test func givesTheDevicesOwnStepsOnly() throws {
+  @Test func givesTheDevicesOwnStepsOnly() {
 
-    let unlinking = try #require(ExampleCatalog.plug.lifecycle?.unlinking)
+    let unlinking = Instructions(steps: [
+      InstructionStep(text: "Press the Hub's button.", isOnOtherDevice: true),
+      InstructionStep(text: "Hold the SET button until it beeps."),
+      InstructionStep(text: "Hold it again until it beeps again.", expectation: "LED blinks red"),
+    ])
 
     #expect(LinkingInstructions.steps(of: unlinking) == [
       "Hold the SET button until it beeps.",
@@ -273,14 +271,16 @@ struct DeviceTextTests {
 
   @Test func namesADeviceByItsProductsNameAndModel() {
 
-    #expect(LinkingInstructions.deviceLabel(plug, profile: ExampleCatalog.plug) == "1A.2B.3C (Example Plug 9001)")
-    #expect(LinkingInstructions.deviceLabel(plug, profile: nil) == "1A.2B.3C")
+    let info = DeviceInfo(catalogDescription: ExampleCatalog.catalog.describe(category: 0x02, subcategory: 0x7A, firmwareVersion: nil))
+
+    #expect(LinkingInstructions.deviceLabel(plug, info: info) == "1A.2B.3C (Example Plug 9001)")
+    #expect(LinkingInstructions.deviceLabel(plug, info: nil) == "1A.2B.3C")
 
     let lines: [String] = LinkingInstructions.modemFirst(
       .unlinking,
       group: 1,
       seconds: 240,
-      device: LinkingInstructions.deviceLabel(plug, profile: ExampleCatalog.plug),
+      device: LinkingInstructions.deviceLabel(plug, info: info),
       steps: ["Hold the SET button until it beeps."]
     )
 

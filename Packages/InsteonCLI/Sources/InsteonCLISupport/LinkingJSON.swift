@@ -224,7 +224,7 @@ public enum LinkingJSON {
 
     if let reset = result.factoryReset {
 
-      let steps: [String]? = reset.procedure.map { (procedure: LifecycleProcedure) -> [String] in
+      let steps: [String]? = reset.procedure.map { (procedure: Instructions) -> [String] in
 
         LinkingInstructions.steps(procedure.steps)
 
@@ -279,7 +279,7 @@ public enum LinkingJSON {
 
     return Removal(
       address: "\(result.address)",
-      product: result.removed.device?.deviceDescription.displayName,
+      product: result.removed.device?.info.displayName,
       removedLinks: result.removed.links.map(modemLink),
       remoteUnlinkingFailure: failure,
       deletedModemRecords: deleted,
@@ -306,7 +306,7 @@ public enum LinkingJSON {
 
     }
 
-    return LeftoverHolder(address: "\(holder.address)", product: holder.device?.deviceDescription.displayName, records: records)
+    return LeftoverHolder(address: "\(holder.address)", product: holder.device?.info.displayName, records: records)
 
   }
 
@@ -323,14 +323,14 @@ public enum LinkingJSON {
   ///   - link: The link.
   ///   - known: What the catalog says about the device, or `nil` if its identity isn't known.
   /// - Returns: The link as JSON prints it.
-  public static func link(_ link: AllLinkingCompleted, known: DeviceDescription?) -> Link {
+  public static func link(_ link: AllLinkingCompleted, known: DeviceInfo?) -> Link {
 
     Link(
       address: "\(link.address)",
       group: Int(link.group.rawValue),
       modemRole: link.mode?.name ?? "unknown",
-      category: known.map { (description: DeviceDescription) -> String in "\(description.category)" },
-      subcategory: known.map { (description: DeviceDescription) -> String in "\(description.subcategory)" },
+      category: known.map { (info: DeviceInfo) -> String in "\(info.category)" },
+      subcategory: known.map { (info: DeviceInfo) -> String in "\(info.subcategory)" },
       firmwareVersion: known?.firmwareVersion.map { (version: FirmwareVersion) -> String in "\(version)" },
       product: known?.displayName
     )
@@ -358,7 +358,7 @@ public enum LinkingJSON {
   /// - Returns: The report.
   public static func report(_ result: DeviceLinkingResult, message: (any Error) -> String) -> LinkReport {
 
-    let known: DeviceDescription? = result.device?.deviceDescription
+    let known: DeviceInfo? = result.device?.info
 
     return LinkReport(
       links: result.links.map { (made: AllLinkingCompleted) -> Link in link(made, known: known) },
@@ -413,7 +413,7 @@ public enum LinkingJSON {
     Unlink(
       address: "\(unlinked.link.address)",
       group: Int(unlinked.link.group.rawValue),
-      product: unlinked.device?.deviceDescription.displayName
+      product: unlinked.device?.info.displayName
     )
 
   }
@@ -424,7 +424,7 @@ public enum LinkingJSON {
   /// - Returns: The links as JSON prints them, empty if the modem had none with the device.
   public static func removedLinks(_ removed: RemovedLinks) -> [RemovedLink] {
 
-    let product: String? = removed.device?.deviceDescription.displayName
+    let product: String? = removed.device?.info.displayName
 
     return removed.links.map { (link: ModemLink) -> RemovedLink in
 

@@ -245,11 +245,11 @@ enum Identities {
   /// - Returns: What the catalog says about the device, or `nil` if its identity isn't known
   ///   and it didn't report one.
   /// - Throws: `CancellationError` if the task was canceled.
-  static func known(_ device: InsteonAddress, network: DeviceNetwork, asking: Bool) async throws -> DeviceDescription? {
+  static func known(_ device: InsteonAddress, network: DeviceNetwork, asking: Bool) async throws -> DeviceInfo? {
 
     if let known = await network.registry.device(device) {
 
-      return known.deviceDescription
+      return known.info
 
     }
 
@@ -275,7 +275,7 @@ enum Identities {
 
     }
 
-    return await network.registry.device(device)?.deviceDescription
+    return await network.registry.device(device)?.info
 
   }
 

@@ -75,13 +75,22 @@ public struct Device: Sendable {
   /// What the catalog says about the device, from the network's registry, or else from the
   /// identity the device reports to ID Request.
   ///
-  /// - Returns: The description, or `nil` if the registry doesn't know the device and it
-  ///   didn't report an identity, such as when it didn't answer or rejected a request.
+  /// - Returns: What the catalog says, or `nil` if the registry doesn't know the device and
+  ///   it didn't report an identity, such as when it didn't answer or rejected a request.
   /// - Throws: ``DeviceControlError/notLinked`` when the device rejects the modem as an i2CS
   ///   device does before it's linked; `CancellationError` if the task is canceled while the
   ///   device is asked; and the errors of the modem and the connection to it, such as
   ///   `ModemError.connectionClosed`.
-  public func deviceDescription() async throws -> DeviceDescription? {
+  public func info() async throws -> DeviceInfo? {
+
+    let description: DeviceDescription? = try await deviceDescription()
+
+    return description.map { (description: DeviceDescription) -> DeviceInfo in DeviceInfo(description) }
+
+  }
+
+  /// The catalog's description of the device, the way ``info()`` finds it.
+  func deviceDescription() async throws -> DeviceDescription? {
 
     if let known = await network.registry.device(address) {
 
@@ -127,7 +136,7 @@ public struct Device: Sendable {
   ///
   /// - Returns: The device's groups, whether it dims and beeps, and its settings with their
   ///   controls.
-  /// - Throws: The errors of ``deviceDescription()``.
+  /// - Throws: The errors of ``info()``.
   public func capabilities() async throws -> DeviceCapabilities {
 
     let model: DeviceControlModel = try await controlModel()

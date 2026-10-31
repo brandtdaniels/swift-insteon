@@ -63,34 +63,5 @@ public typealias LinkingDirection = InsteonLinking.LinkingDirection
 
 // MARK: - The Insteon device catalog's data
 
-/// What the Insteon device catalog says about a device with a reported identity.
-public typealias DeviceDescription = InsteonDeviceCatalog.DeviceDescription
-
-/// A product's entry in the Insteon device catalog.
-public typealias DeviceProfile = InsteonDeviceCatalog.DeviceProfile
-
-/// What the Insteon device catalog says about linking, unlinking and resetting a product.
-public typealias DeviceLifecycle = InsteonDeviceCatalog.DeviceLifecycle
-
-/// A procedure in a product's lifecycle, such as linking or a factory reset: its steps, in order.
-///
-/// Named on its own so a module that reaches the catalog only through InsteonCore can name it.
-public typealias LifecycleProcedure = InsteonDeviceCatalog.DeviceLifecycle.Procedure
-
-/// A step of a lifecycle procedure, done on a device, with what the device does in answer.
-public typealias LifecycleStep = InsteonDeviceCatalog.DeviceLifecycle.Step
-
-/// Something a factory reset erases, as the Insteon device catalog gives it.
-public typealias LifecycleErasure = InsteonDeviceCatalog.DeviceLifecycle.Erasure
-
-/// What one data byte of an ALL-Link record means, as the Insteon device catalog gives it.
-public typealias RecordDataByte = InsteonDeviceCatalog.RecordDataExplanation.DataByte
-
-/// The product key the Insteon device catalog gives a product, or that it reports none.
-public typealias ProductKeyEntry = InsteonDeviceCatalog.DeviceIdentity.ProductKeyEntry
-
-/// What the data bytes of an ALL-Link record mean, as the Insteon device catalog gives them.
-public typealias RecordDataExplanation = InsteonDeviceCatalog.RecordDataExplanation
-
 /// A version of the Insteon device catalog, such as `0.6.26`.
 public typealias DeviceCatalogVersion = InsteonDeviceCatalog.DeviceCatalogVersion

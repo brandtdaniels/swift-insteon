@@ -20,7 +20,7 @@ extension Device {
   ///     them, so an app can say that a reading has begun. Defaults to doing nothing.
   /// - Returns: The settings and what the device reported.
   /// - Throws: ``DeviceSettingError/notIdentified`` or ``DeviceSettingError/noSettings(product:)``
-  ///   when the settings aren't known, the errors of ``deviceDescription()``, and the modem's
+  ///   when the settings aren't known, the errors of ``info()``, and the modem's
   ///   errors.
   public func readSettings(includingAdvanced: Bool = true, beforeReading: @Sendable () -> Void = {}) async throws -> DeviceSettingsReading {
 

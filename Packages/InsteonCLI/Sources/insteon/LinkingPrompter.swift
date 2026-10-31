@@ -42,7 +42,7 @@ struct LinkingPrompter: LinkingObserver {
       }
 
       // The first leg prints the device's identity, and the link back the link alone.
-      ModemCommands.report(linked.link, known: linked.leg == .first ? linked.device?.deviceDescription : nil, names: names)
+      ModemCommands.report(linked.link, known: linked.leg == .first ? linked.device?.info : nil, names: names)
     case let .unlinked(unlinked):
       if !printsJSON {
 
@@ -162,17 +162,17 @@ struct LinkingPrompter: LinkingObserver {
   private func report(_ unlinked: UnlinkedLink) {
 
     let link: AllLinkingCompleted = unlinked.link
-    let known: DeviceDescription? = unlinked.device?.deviceDescription
+    let known: DeviceInfo? = unlinked.device?.info
 
-    Output.line("Unlinked \(LinkingInstructions.deviceLabel(link.address, profile: known?.profile)) from group \(link.group).")
+    Output.line("Unlinked \(LinkingInstructions.deviceLabel(link.address, info: known)) from group \(link.group).")
 
   }
 
   /// Prints the links removed without the device's SET button.
   private func report(_ removed: RemovedLinks) {
 
-    let known: DeviceDescription? = removed.device?.deviceDescription
-    let label: String = LinkingInstructions.deviceLabel(removed.address, profile: known?.profile)
+    let known: DeviceInfo? = removed.device?.info
+    let label: String = LinkingInstructions.deviceLabel(removed.address, info: known)
     let reports: [LinkingJSON.RemovedLink] = LinkingJSON.removedLinks(removed)
 
     guard !reports.isEmpty else {

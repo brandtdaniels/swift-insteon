@@ -18,7 +18,7 @@ import InsteonProtocol
 /// let network = DeviceNetwork(modem: modem, catalog: try? DeviceCatalog.bundled(), snapshot: try store.loadNetwork())
 ///
 /// for entry in try await network.modemDatabase() {
-///   print(entry.record.address, entry.device?.deviceDescription.displayName ?? "unknown")
+///   print(entry.record.address, entry.device?.info.displayName ?? "unknown")
 /// }
 ///
 /// let database = try await network.allLinkDatabase(of: lamp)   // Read only if it changed.
@@ -671,7 +671,7 @@ public actor DeviceNetwork {
 /// ```swift
 /// for entry in try await network.modemDatabase() {
 ///   let role = entry.record.isController ? "controller" : "responder"
-///   print(role, entry.record.group, entry.device?.deviceDescription.displayName ?? "")
+///   print(role, entry.record.group, entry.device?.info.displayName ?? "")
 /// }
 /// ```
 public struct ModemDatabaseEntry: Hashable, Sendable {

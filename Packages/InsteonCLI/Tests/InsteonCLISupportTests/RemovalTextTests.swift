@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import InsteonCLISupport
-import InsteonCore
+@_spi(Catalog) import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonProtocol
@@ -43,14 +43,14 @@ struct RemovalTextTests {
     RegisteredDevice(
       address: lamp,
       identity: ReportedIdentity(category: 0x01, subcategory: 0x7A, firmwareVersion: 0x41),
-      deviceDescription: catalog.describe(category: 0x01, subcategory: 0x7A, firmwareVersion: 0x41)
+      info: DeviceInfo(catalogDescription: catalog.describe(category: 0x01, subcategory: 0x7A, firmwareVersion: 0x41))
     )
 
   }
 
   var label: String {
 
-    LinkingInstructions.deviceLabel(lamp, profile: registered.deviceDescription.profile)
+    LinkingInstructions.deviceLabel(lamp, info: registered.info)
 
   }
 
@@ -58,8 +58,14 @@ struct RemovalTextTests {
 
     FactoryResetSteps(
       address: lamp,
-      deviceDescription: registered.deviceDescription,
-      procedure: registered.deviceDescription.profile?.lifecycle?.reset,
+      info: registered.info,
+      procedure: Instructions(
+        steps: [
+          InstructionStep(text: "Pull the air gap out for 10 seconds."),
+          InstructionStep(text: "Push it in and hold the paddle down.", expectation: "A long beep")
+        ],
+        notes: ["The LED blinks while it resets."]
+      ),
       erases: [.links, .settings]
     )
 
@@ -144,7 +150,7 @@ struct RemovalTextTests {
       "Note: The LED blinks while it resets."
     ])
 
-    let unknown = FactoryResetSteps(address: lamp, deviceDescription: nil, procedure: nil, erases: [])
+    let unknown = FactoryResetSteps(address: lamp, info: nil, procedure: nil, erases: [])
 
     #expect(RemovalText.factoryReset(unknown) == [
       "The Insteon device catalog has no factory reset steps for 1A.2B.3C; its owner's manual has them. "
@@ -245,7 +251,7 @@ struct RemovalTextTests {
       ),
       factoryReset: reset
     )
-    let product: String = registered.deviceDescription.displayName ?? ""
+    let product: String = registered.info.displayName ?? ""
 
     #expect(try encoded(LinkingJSON.removal(result, message: message)) == """
       {"address":"1A.2B.3C","deletedModemRecords":[],\
@@ -273,7 +279,7 @@ struct RemovalTextTests {
       forgotten: ForgottenDevice(address: lamp, device: nil),
       keptBecause: nil,
       leftoverRecords: nil,
-      factoryReset: FactoryResetSteps(address: lamp, deviceDescription: nil, procedure: nil, erases: [])
+      factoryReset: FactoryResetSteps(address: lamp, info: nil, procedure: nil, erases: [])
     )
 
     #expect(try encoded(LinkingJSON.removal(result, message: message)) == """

@@ -1030,6 +1030,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   ) async throws -> RemovedAllLinks {
 
     let known: RegisteredDevice? = await network.registry.device(device)
+    let info: DeviceInfo? = known?.info
     let description: DeviceDescription? = known?.deviceDescription
     // Battery-powered i2CS devices take Enter Unlinking Mode extended.
     let isBatteryPowered: Bool = description?.profile?.isBatteryPowered ?? false
@@ -1046,7 +1047,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
       removed = try await makeUnlinker().unlinkAllRemotely(device, unlinkingMode: unlinkingMode, timeout: timeout) { (link: ModemLink) async -> Void in
 
-        await observer.linking(.unlinkingRemotely(device, deviceDescription: description, link: link))
+        await observer.linking(.unlinkingRemotely(device, info: info, link: link))
 
       }
 
@@ -1065,11 +1066,11 @@ public struct DeviceLinkingCoordinator: Sendable {
 
         let steps: [DeviceLifecycle.Step] = Self.deviceSteps(of: description?.profile?.lifecycle?.unlinking)
 
-        await observer.linking(.fallback(.setButtonUnlinking(device, deviceDescription: description, steps: steps)))
+        await observer.linking(.fallback(.setButtonUnlinking(device, info: info, steps: steps.map { (step: DeviceLifecycle.Step) -> InstructionStep in InstructionStep(step) })))
 
       }
 
-      throw RemoteUnlinkingError(device: device, deviceDescription: description, underlying: error)
+      throw RemoteUnlinkingError(device: device, info: info, underlying: error)
 
     }
 

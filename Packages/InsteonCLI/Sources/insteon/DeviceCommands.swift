@@ -239,7 +239,7 @@ enum DeviceCommands {
     }
 
     // What the catalog says the product reports explains a key that's missing.
-    let catalogKey: ProductKeyEntry? = await network.registry.device(device)?.deviceDescription.productKey
+    let catalogKey: ExpectedProductKey? = await network.registry.device(device)?.info.expectedProductKey
 
     // Newer devices leave the product key out, or report zeros; that's expected, not a failure.
     let productKey = productData?.productKey
@@ -385,7 +385,7 @@ enum DeviceCommands {
       .filter { $0.isInUse }
       .map { record in
 
-        let explanation: RecordDataExplanation? = known?.explain(record)
+        let explanation: LinkDataMeaning? = known?.meaning(of: record)
 
         return Record(
           memoryAddress: record.memoryAddress.map(Hex.address) ?? "",
@@ -415,7 +415,7 @@ enum DeviceCommands {
     }
 
     let explains = records.contains { $0.meaning != nil }
-    let isDeviceInCatalog: Bool = known?.profile != nil
+    let isDeviceInCatalog: Bool = known?.isInCatalog ?? false
     let rows: [[String]] = records.map { (record: Record) -> [String] in
 
       let meaning: String = LinkDataText.column(

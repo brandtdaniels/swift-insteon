@@ -16,7 +16,7 @@ import InsteonProtocol
 /// await registry.record(ReportedIdentity(category: 0x01, subcategory: 0x20, firmwareVersion: 0x45), for: lamp)
 ///
 /// let known = await registry.device(lamp)
-/// print(known?.deviceDescription.displayName ?? "unknown product")
+/// print(known?.info.displayName ?? "unknown product")
 /// ```
 ///
 /// Each device's description comes from the registry's catalog. Setting a newer catalog with

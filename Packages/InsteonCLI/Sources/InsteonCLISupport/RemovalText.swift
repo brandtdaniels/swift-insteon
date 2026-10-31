@@ -7,7 +7,7 @@ public enum RemovalText {
   /// The question asked before a device is removed.
   ///
   /// - Parameters:
-  ///   - device: The device, as `LinkingInstructions.deviceLabel(_:profile:)` writes it.
+  ///   - device: The device, as `LinkingInstructions.deviceLabel(_:info:)` writes it.
   ///   - forcesModemSide: Whether `--force-modem-side` was given.
   /// - Returns: The question, ending with its choices.
   public static func question(device: String, forcesModemSide: Bool) -> String {
@@ -27,7 +27,7 @@ public enum RemovalText {
 
   /// What to say when the person answers no.
   ///
-  /// - Parameter device: The device, as `LinkingInstructions.deviceLabel(_:profile:)` writes it.
+  /// - Parameter device: The device, as `LinkingInstructions.deviceLabel(_:info:)` writes it.
   /// - Returns: The message.
   public static func declined(device: String) -> String {
 
@@ -39,7 +39,7 @@ public enum RemovalText {
   ///
   /// - Parameters:
   ///   - address: The device's address.
-  ///   - device: The device, as `LinkingInstructions.deviceLabel(_:profile:)` writes it.
+  ///   - device: The device, as `LinkingInstructions.deviceLabel(_:info:)` writes it.
   ///   - reason: Why a link couldn't be removed, as a sentence that ends with a period.
   /// - Returns: The message.
   public static func notRemoved(_ address: InsteonAddress, device: String, reason: String) -> String {
@@ -122,7 +122,7 @@ public enum RemovalText {
   ///
   /// - Parameters:
   ///   - address: The device's address.
-  ///   - device: The device, as `LinkingInstructions.deviceLabel(_:profile:)` writes it.
+  ///   - device: The device, as `LinkingInstructions.deviceLabel(_:info:)` writes it.
   ///   - reason: Why it was kept.
   ///   - message: The sentence that describes an error, ending with a period.
   /// - Returns: The message.
@@ -225,7 +225,7 @@ public enum RemovalText {
   /// - Returns: The lines.
   public static func factoryReset(_ reset: FactoryResetSteps) -> [String] {
 
-    let device: String = LinkingInstructions.deviceLabel(reset.address, profile: reset.deviceDescription?.profile)
+    let device: String = LinkingInstructions.deviceLabel(reset.address, info: reset.info)
 
     guard let procedure = reset.procedure, !procedure.steps.isEmpty else {
 
@@ -263,18 +263,18 @@ public enum RemovalText {
   ///
   /// - Parameter erases: What the catalog says a reset erases.
   /// - Returns: The phrases.
-  public static func erasures(_ erases: Set<LifecycleErasure>) -> [String] {
+  public static func erasures(_ erases: Set<ResetErasure>) -> [String] {
 
-    let phrases: [(erasure: LifecycleErasure, phrase: String)] = [
+    let phrases: [(erasure: ResetErasure, phrase: String)] = [
       (erasure: .links, phrase: "its ALL-Link database"),
       (erasure: .settings, phrase: "its settings")
     ]
 
-    return phrases.filter { (entry: (erasure: LifecycleErasure, phrase: String)) -> Bool in
+    return phrases.filter { (entry: (erasure: ResetErasure, phrase: String)) -> Bool in
 
       erases.contains(entry.erasure)
 
-    }.map { (entry: (erasure: LifecycleErasure, phrase: String)) -> String in
+    }.map { (entry: (erasure: ResetErasure, phrase: String)) -> String in
 
       entry.phrase
 
@@ -285,7 +285,7 @@ public enum RemovalText {
   /// A device's address, with its product when it's known.
   private static func label(_ address: InsteonAddress, _ device: RegisteredDevice?) -> String {
 
-    LinkingInstructions.deviceLabel(address, profile: device?.deviceDescription.profile)
+    LinkingInstructions.deviceLabel(address, info: device?.info)
 
   }
 

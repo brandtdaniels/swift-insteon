@@ -14,15 +14,15 @@ public enum LinkDataText {
   ///
   /// - Parameter explanation: What the catalog says the record's bytes hold.
   /// - Returns: The text.
-  public static func meaning(of explanation: RecordDataExplanation) -> String {
+  public static func meaning(of explanation: LinkDataMeaning) -> String {
 
-    let parts: [String] = explanation.bytes.map { (byte: RecordDataByte) -> String in
+    let parts: [String] = explanation.bytes.map { (byte: LinkDataField) -> String in
 
       var notes: [String] = []
 
-      if let entry = byte.tableEntry {
+      if let valueName = byte.valueName {
 
-        notes.append(entry.label)
+        notes.append(valueName)
 
       } else if byte.isPerGroup {
 
@@ -36,7 +36,7 @@ public enum LinkDataText {
 
       }
 
-      let name: String = byte.label ?? byte.name.rawValue
+      let name: String = byte.label ?? byte.name
       let text: String = "\(name) \(Hex.byte(byte.value))"
 
       return notes.isEmpty ? text : "\(text) (\(notes.joined(separator: "; ")))"

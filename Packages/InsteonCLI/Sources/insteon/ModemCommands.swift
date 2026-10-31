@@ -126,7 +126,7 @@ enum ModemCommands {
       let record: LinkRecord = entry.record
       // A device identified above is described from the registry.
       let registered: RegisteredDevice? = options.identifiesDevices ? await network.registry.device(record.address) : entry.device
-      let known: DeviceDescription? = registered?.deviceDescription
+      let known: DeviceInfo? = registered?.info
 
       rows.append(Record(
         role: record.isController ? "controller" : "responder",
@@ -352,7 +352,7 @@ enum ModemCommands {
 
     } catch let failure as RemoteUnlinkingError {
 
-      let label: String = LinkingInstructions.deviceLabel(device, profile: failure.deviceDescription?.profile)
+      let label: String = LinkingInstructions.deviceLabel(device, info: failure.info)
 
       throw CommandFailure(description: "\(label) wasn't unlinked without its SET button: \(Names.message(for: failure.underlying))")
 
@@ -376,7 +376,7 @@ enum ModemCommands {
 
       let device: InsteonAddress = options.device
       let known: RegisteredDevice? = await cached.network.registry.device(device)
-      let label: String = LinkingInstructions.deviceLabel(device, profile: known?.deviceDescription.profile)
+      let label: String = LinkingInstructions.deviceLabel(device, info: known?.info)
 
       if asks {
 
@@ -439,7 +439,7 @@ enum ModemCommands {
 
   /// Prints a new link, with the device's identity when it's known. Pass `nil` for `known` to
   /// print the link alone.
-  static func report(_ link: AllLinkingCompleted, known: DeviceDescription?, names: ProductNames) {
+  static func report(_ link: AllLinkingCompleted, known: DeviceInfo?, names: ProductNames) {
 
     Output.line("Linked \(link.address) in group \(link.group), modem as \(Names.mode(link.mode)).")
 

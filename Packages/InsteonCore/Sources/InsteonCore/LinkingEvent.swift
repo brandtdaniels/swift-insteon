@@ -81,23 +81,37 @@ public struct WakePrompt: Hashable, Sendable {
   public var device: InsteonAddress
 
   /// What the catalog says about the device, or `nil` if it isn't known.
-  public var deviceDescription: DeviceDescription?
+  public var info: DeviceInfo?
 
   /// The catalog's steps on the device itself to wake it, or empty when the catalog doesn't
   /// have them.
-  public var steps: [DeviceLifecycle.Step]
+  public var steps: [InstructionStep]
 
   /// Creates a prompt.
   ///
   /// - Parameters:
   ///   - device: The device.
-  ///   - deviceDescription: What the catalog says about the device.
+  ///   - info: What the catalog says about the device.
   ///   - steps: The catalog's steps on the device to wake it.
-  public init(device: InsteonAddress, deviceDescription: DeviceDescription?, steps: [DeviceLifecycle.Step]) {
+  public init(device: InsteonAddress, info: DeviceInfo?, steps: [InstructionStep]) {
 
     self.device = device
-    self.deviceDescription = deviceDescription
+    self.info = info
     self.steps = steps
+
+  }
+
+  /// Creates a prompt from the catalog's description and steps.
+  init(device: InsteonAddress, deviceDescription: DeviceDescription?, steps: [DeviceLifecycle.Step]) {
+
+    self.init(device: device, info: deviceDescription.map { (description: DeviceDescription) -> DeviceInfo in DeviceInfo(description) }, steps: steps.map { (step: DeviceLifecycle.Step) -> InstructionStep in InstructionStep(step) })
+
+  }
+
+  /// The catalog's description of the device.
+  var deviceDescription: DeviceDescription? {
+
+    info?.catalogDescription
 
   }
 
@@ -221,7 +235,7 @@ public enum LinkingEvent: Sendable {
   case unlinkGroupChosen(InsteonAddress, group: AllLinkGroupNumber, isFromModemRecords: Bool)
 
   /// One link between the modem and the device is being removed without its SET button.
-  case unlinkingRemotely(InsteonAddress, deviceDescription: DeviceDescription?, link: ModemLink)
+  case unlinkingRemotely(InsteonAddress, info: DeviceInfo?, link: ModemLink)
 
   /// The modem reported a removed link.
   case unlinked(UnlinkedLink)
@@ -309,7 +323,7 @@ public enum LinkingFallback: Sendable {
   /// The device's links couldn't all be removed without its SET button. The links left are
   /// removed with its SET button, in unlinking mode, with the catalog's steps for it, which are
   /// empty when the catalog doesn't have them.
-  case setButtonUnlinking(InsteonAddress, deviceDescription: DeviceDescription?, steps: [DeviceLifecycle.Step])
+  case setButtonUnlinking(InsteonAddress, info: DeviceInfo?, steps: [InstructionStep])
 
 }
 
@@ -330,12 +344,12 @@ public struct SETButtonPrompt: Hashable, Sendable {
   public var device: InsteonAddress?
 
   /// What the catalog says about the device, or `nil` if it isn't known.
-  public var deviceDescription: DeviceDescription?
+  public var info: DeviceInfo?
 
   /// The catalog's steps on the device itself to make the link, or empty when the catalog
   /// doesn't have them. A responder leaves a controller's group the way it joins one, so the
   /// linking steps apply when a link is removed too.
-  public var steps: [DeviceLifecycle.Step]
+  public var steps: [InstructionStep]
 
   /// The modem's role, for a leg of the catalog's linking from a Hub, or `nil` otherwise.
   public var modemRole: ModemRole?
@@ -351,12 +365,35 @@ public struct SETButtonPrompt: Hashable, Sendable {
   ///   - group: The modem's group.
   ///   - timeout: How long the modem waits.
   ///   - device: The device asked for, or `nil` for any device.
-  ///   - deviceDescription: What the catalog says about the device.
+  ///   - info: What the catalog says about the device.
   ///   - steps: The catalog's steps on the device.
   ///   - modemRole: The modem's role, for a leg of the catalog's linking from a Hub. Defaults
   ///     to `nil`.
   ///   - deviceGroup: The device's group the link is for, for a leg. Defaults to `nil`.
   public init(
+    direction: LinkingDirection,
+    group: AllLinkGroupNumber,
+    timeout: Duration,
+    device: InsteonAddress?,
+    info: DeviceInfo?,
+    steps: [InstructionStep],
+    modemRole: ModemRole? = nil,
+    deviceGroup: AllLinkGroupNumber? = nil
+  ) {
+
+    self.direction = direction
+    self.group = group
+    self.timeout = timeout
+    self.device = device
+    self.info = info
+    self.steps = steps
+    self.modemRole = modemRole
+    self.deviceGroup = deviceGroup
+
+  }
+
+  /// Creates a prompt from the catalog's description and steps.
+  init(
     direction: LinkingDirection,
     group: AllLinkGroupNumber,
     timeout: Duration,
@@ -367,14 +404,23 @@ public struct SETButtonPrompt: Hashable, Sendable {
     deviceGroup: AllLinkGroupNumber? = nil
   ) {
 
-    self.direction = direction
-    self.group = group
-    self.timeout = timeout
-    self.device = device
-    self.deviceDescription = deviceDescription
-    self.steps = steps
-    self.modemRole = modemRole
-    self.deviceGroup = deviceGroup
+    self.init(
+      direction: direction,
+      group: group,
+      timeout: timeout,
+      device: device,
+      info: deviceDescription.map { (description: DeviceDescription) -> DeviceInfo in DeviceInfo(description) },
+      steps: steps.map { (step: DeviceLifecycle.Step) -> InstructionStep in InstructionStep(step) },
+      modemRole: modemRole,
+      deviceGroup: deviceGroup
+    )
+
+  }
+
+  /// The catalog's description of the device.
+  var deviceDescription: DeviceDescription? {
+
+    info?.catalogDescription
 
   }
 
@@ -391,25 +437,39 @@ public struct DeviceFirstPrompt: Hashable, Sendable {
   public var device: InsteonAddress?
 
   /// What the catalog says about the device, or `nil` if it isn't known.
-  public var deviceDescription: DeviceDescription?
+  public var info: DeviceInfo?
 
   /// The catalog's steps on the device itself for its mode, or empty when the catalog doesn't
   /// have them.
-  public var steps: [DeviceLifecycle.Step]
+  public var steps: [InstructionStep]
 
   /// Creates a prompt.
   ///
   /// - Parameters:
   ///   - direction: Whether the device is to link or unlink.
   ///   - device: The device asked for, or `nil` for any device.
-  ///   - deviceDescription: What the catalog says about the device.
+  ///   - info: What the catalog says about the device.
   ///   - steps: The catalog's steps on the device.
-  public init(direction: LinkingDirection, device: InsteonAddress?, deviceDescription: DeviceDescription?, steps: [DeviceLifecycle.Step]) {
+  public init(direction: LinkingDirection, device: InsteonAddress?, info: DeviceInfo?, steps: [InstructionStep]) {
 
     self.direction = direction
     self.device = device
-    self.deviceDescription = deviceDescription
+    self.info = info
     self.steps = steps
+
+  }
+
+  /// Creates a prompt from the catalog's description and steps.
+  init(direction: LinkingDirection, device: InsteonAddress?, deviceDescription: DeviceDescription?, steps: [DeviceLifecycle.Step]) {
+
+    self.init(direction: direction, device: device, info: deviceDescription.map { (description: DeviceDescription) -> DeviceInfo in DeviceInfo(description) }, steps: steps.map { (step: DeviceLifecycle.Step) -> InstructionStep in InstructionStep(step) })
+
+  }
+
+  /// The catalog's description of the device.
+  var deviceDescription: DeviceDescription? {
+
+    info?.catalogDescription
 
   }
 
@@ -621,14 +681,14 @@ public struct DeviceUnlinkingAllResult: Sendable {
 ///
 /// The links removed before the failure stay removed. The coordinator has already said which
 /// are left, with ``LinkingEvent/linksRemaining(_:_:)``, and how to remove them with the SET
-/// button, with ``LinkingFallback/setButtonUnlinking(_:deviceDescription:steps:)``.
+/// button, with ``LinkingFallback/setButtonUnlinking(_:info:steps:)``.
 public struct RemoteUnlinkingError: Error {
 
   /// The device.
   public var device: InsteonAddress
 
   /// What the catalog says about the device, or `nil` if it isn't known.
-  public var deviceDescription: DeviceDescription?
+  public var info: DeviceInfo?
 
   /// Why removing a link failed, such as `LinkingError.linkingTimedOut`.
   public var underlying: any Error
@@ -637,13 +697,20 @@ public struct RemoteUnlinkingError: Error {
   ///
   /// - Parameters:
   ///   - device: The device.
-  ///   - deviceDescription: What the catalog says about the device.
+  ///   - info: What the catalog says about the device.
   ///   - underlying: Why removing a link failed.
-  public init(device: InsteonAddress, deviceDescription: DeviceDescription?, underlying: any Error) {
+  public init(device: InsteonAddress, info: DeviceInfo?, underlying: any Error) {
 
     self.device = device
-    self.deviceDescription = deviceDescription
+    self.info = info
     self.underlying = underlying
+
+  }
+
+  /// The catalog's description of the device.
+  var deviceDescription: DeviceDescription? {
+
+    info?.catalogDescription
 
   }
 

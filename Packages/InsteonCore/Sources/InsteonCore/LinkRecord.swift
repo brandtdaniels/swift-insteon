@@ -1,4 +1,3 @@
-import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonProtocol
 
@@ -149,21 +148,6 @@ public struct LinkDatabase: Hashable, Sendable {
   init(_ copy: AllLinkDatabaseCopy) {
 
     self.init(delta: copy.delta, records: copy.records.map { (response: AllLinkRecordResponse) -> LinkRecord in LinkRecord(response) })
-
-  }
-
-}
-
-extension DeviceDescription {
-
-  /// What a record's data bytes mean for the device, as the Insteon device catalog gives
-  /// them.
-  ///
-  /// - Parameter record: The record, from the device's ALL-Link database.
-  /// - Returns: The explanation, or `nil` if the catalog doesn't describe the record's bytes.
-  public func explain(_ record: LinkRecord) -> RecordDataExplanation? {
-
-    explain(record.allLinkRecord, isController: record.isController)
 
   }
 

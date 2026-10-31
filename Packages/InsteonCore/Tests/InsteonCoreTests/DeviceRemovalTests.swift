@@ -547,7 +547,7 @@ struct DeviceRemovalTests {
     let result: DeviceRemovalResult = try await network.linking.remove(lamp, observer: recorder)
 
     #expect(result.factoryReset?.address == lamp)
-    #expect(result.factoryReset?.procedure?.steps == RemovalExample.resetSteps)
+    #expect(result.factoryReset?.procedure?.steps == RemovalExample.resetSteps.map { (step: DeviceLifecycle.Step) -> InstructionStep in InstructionStep(step) })
     #expect(result.factoryReset?.erases == [.links, .settings])
     #expect(result.factoryReset?.deviceDescription?.profile?.model == "9301")
     #expect(await recorder.lines.last == "factory reset \(lamp) steps 2")

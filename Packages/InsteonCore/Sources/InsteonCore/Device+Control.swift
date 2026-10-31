@@ -21,7 +21,7 @@ extension Device {
   /// - Returns: What was done.
   /// - Throws: ``DeviceControlError`` when nothing says how to turn the group on, or its
   ///   command doesn't reach it apart from the device's other groups; the errors of
-  ///   ``deviceDescription()``; and the modem's errors.
+  ///   ``info()``; and the modem's errors.
   public func turnOn(level: Int? = nil, group: Int? = nil) async throws -> DeviceTurnOnResult {
 
     let model: DeviceControlModel = try await controlModel()
@@ -69,7 +69,7 @@ extension Device {
   /// - Parameter group: The group, or `nil` for the device's main group. Defaults to `nil`.
   /// - Throws: ``DeviceControlError`` when nothing says how to turn the group off, or its
   ///   command doesn't reach it apart from the device's other groups; the errors of
-  ///   ``deviceDescription()``; and the modem's errors.
+  ///   ``info()``; and the modem's errors.
   public func turnOff(group: Int? = nil) async throws {
 
     let model: DeviceControlModel = try await controlModel()
@@ -222,7 +222,7 @@ extension Device {
   /// - Returns: What was done.
   /// - Throws: ``DeviceControlError/unsupported(_:product:)`` when the command set doesn't list
   ///   Light On Fast, the other ``DeviceControlError`` refusals of ``turnOn(level:group:)``,
-  ///   the errors of ``deviceDescription()``, and the modem's errors.
+  ///   the errors of ``info()``, and the modem's errors.
   public func turnOnFast(level: Int? = nil) async throws -> DeviceTurnOnResult {
 
     let (model, target, listed): (DeviceControlModel, DeviceControlModel.Group, DeviceStandardCommand?) = try await mainGroupCommand(Self.lightOnFastCommand, for: .turnOnFast)
@@ -269,7 +269,7 @@ extension Device {
   /// - Returns: What was done.
   /// - Throws: ``DeviceControlError/unsupported(_:product:)`` when the command set doesn't list
   ///   Light Off Fast, the other ``DeviceControlError`` refusals of ``turnOff(group:)``, the
-  ///   errors of ``deviceDescription()``, and the modem's errors.
+  ///   errors of ``info()``, and the modem's errors.
   @discardableResult
   public func turnOffFast() async throws -> DeviceTurnOffResult {
 
@@ -307,7 +307,7 @@ extension Device {
   /// - Returns: What was done.
   /// - Throws: ``DeviceControlError/unsupported(_:product:)`` when the command set doesn't list
   ///   Light Instant Change for a group that dims, the other ``DeviceControlError`` refusals
-  ///   of ``turnOn(level:group:)``, the errors of ``deviceDescription()``, and the modem's
+  ///   of ``turnOn(level:group:)``, the errors of ``info()``, and the modem's
   ///   errors.
   @discardableResult
   public func changeInstantly(to level: Int) async throws -> DeviceInstantChangeResult {
@@ -375,7 +375,7 @@ extension Device {
   /// - Returns: The status.
   /// - Throws: ``DeviceControlError`` for a group the device doesn't have, or one whose state
   ///   command doesn't reach it apart from the device's other groups; the errors of
-  ///   ``deviceDescription()``; and the modem's errors.
+  ///   ``info()``; and the modem's errors.
   public func status(group: Int? = nil) async throws -> DeviceStatus {
 
     let model: DeviceControlModel = try await controlModel()

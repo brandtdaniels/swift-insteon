@@ -40,8 +40,8 @@ struct LinkingEventTextTests {
 
   @Test func tellsThePersonToPressTheSETButtonWithTheCatalogsSteps() {
 
-    let steps: [DeviceLifecycle.Step] = [DeviceLifecycle.Step(text: "Hold the SET button.", expectation: "Beeps")]
-    let prompt = SETButtonPrompt(direction: .linking, group: 0, timeout: .seconds(240), device: lamp, deviceDescription: nil, steps: steps)
+    let steps: [InstructionStep] = [InstructionStep(text: "Hold the SET button.", expectation: "Beeps")]
+    let prompt = SETButtonPrompt(direction: .linking, group: 0, timeout: .seconds(240), device: lamp, info: nil, steps: steps)
 
     #expect(notes(.pressSETButton(prompt)) == [
       "The modem is in linking mode for group 0.",
@@ -55,7 +55,7 @@ struct LinkingEventTextTests {
 
   @Test func asksForTheDeviceFirst() {
 
-    let prompt = DeviceFirstPrompt(direction: .unlinking, device: nil, deviceDescription: nil, steps: [])
+    let prompt = DeviceFirstPrompt(direction: .unlinking, device: nil, info: nil, steps: [])
 
     #expect(LinkingEventText.deviceFirst(prompt, waitsForReturn: true) == [
       "First put the device into unlinking mode. On most devices, press and hold the SET button until it beeps, "
@@ -184,14 +184,14 @@ struct LinkingEventTextTests {
 
   @Test func asksForTheDeviceToBeWokenWithTheCatalogsSteps() {
 
-    let steps: [DeviceLifecycle.Step] = [DeviceLifecycle.Step(text: "Press the Program button.")]
+    let steps: [InstructionStep] = [InstructionStep(text: "Press the Program button.")]
 
-    #expect(LinkingEventText.wake(WakePrompt(device: lamp, deviceDescription: nil, steps: steps), waitsForReturn: true) == [
+    #expect(LinkingEventText.wake(WakePrompt(device: lamp, info: nil, steps: steps), waitsForReturn: true) == [
       "First wake 1A.2B.3C:",
       "  1. Press the Program button.",
       "Then press Return, and the modem keeps it awake while it links."
     ])
-    #expect(LinkingEventText.wake(WakePrompt(device: lamp, deviceDescription: nil, steps: []), waitsForReturn: false) == [
+    #expect(LinkingEventText.wake(WakePrompt(device: lamp, info: nil, steps: []), waitsForReturn: false) == [
       "First wake 1A.2B.3C; its manual says how, such as by pressing one of its buttons.",
       "The modem keeps it awake while it links now."
     ])
@@ -254,7 +254,7 @@ struct LinkingEventTextTests {
       group: 2,
       timeout: .seconds(240),
       device: lamp,
-      deviceDescription: nil,
+      info: nil,
       steps: [],
       modemRole: .responder,
       deviceGroup: 2

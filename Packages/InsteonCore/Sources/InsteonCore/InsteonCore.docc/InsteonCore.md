@@ -9,11 +9,14 @@ It keeps the devices an app knows and what the Insteon device catalog says about
 
 A front end needs no other module. ``ModemSession`` opens a Hub's modem or a PowerLinc Modem,
 ``HubSearch`` finds Hubs, ``ProductCatalog`` loads and updates the Insteon device catalog, and
-``InsteonErrorDescription`` describes the lower-level modules' errors. Values that are pure
-data, such as `InsteonAddress`, `AllLinkRecord` and `DeviceDescription`, are the lower-level
-modules' types under the same names, declared in InsteonCore. Some initializers for an app that
-brings its own modem or catalog, such as ``DeviceNetwork``'s, take lower-level types, such as
-`LinkingModem` from InsteonLinking and `DeviceCatalog` from InsteonDeviceCatalog.
+``InsteonErrorDescription`` describes the lower-level modules' errors. Links and what the
+catalog says are InsteonCore's own types, such as ``LinkRecord``, ``DeviceInfo`` and
+``Instructions``, so a front end doesn't decode record flags or read the catalog's schema.
+Values that are only data, such as `InsteonAddress` and `ReportedIdentity`, are the
+lower-level modules' types under the same names, declared in InsteonCore. Some initializers
+for an app that brings its own modem or catalog, such as ``DeviceNetwork``'s, take lower-level
+types, such as `LinkingModem` from InsteonLinking and `DeviceCatalog` from
+InsteonDeviceCatalog.
 
 ```swift
 import InsteonCore
@@ -47,7 +50,7 @@ let registry = DeviceRegistry(catalog: try DeviceCatalog.bundled())
 await registry.record(identity, for: lamp)
 
 if let known = await registry.device(lamp) {
-  print(known.deviceDescription.displayName ?? "unknown product")
+  print(known.info.displayName ?? "unknown product")
 }
 ```
 
@@ -404,13 +407,11 @@ do {
 - ``ModemRole``
 - ``ManualLinkingRole``
 - ``LinkingDirection``
-- ``DeviceDescription``
-- ``DeviceProfile``
-- ``DeviceLifecycle``
-- ``LifecycleProcedure``
-- ``LifecycleStep``
-- ``LifecycleErasure``
-- ``ProductKeyEntry``
-- ``RecordDataExplanation``
-- ``RecordDataByte``
+- ``DeviceInfo``
+- ``ExpectedProductKey``
+- ``LinkDataMeaning``
+- ``LinkDataField``
+- ``Instructions``
+- ``InstructionStep``
+- ``ResetErasure``
 - ``DeviceCatalogVersion``
