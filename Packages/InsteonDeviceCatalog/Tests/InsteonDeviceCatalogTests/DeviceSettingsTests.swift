@@ -128,14 +128,17 @@ struct DeviceSettingsTests {
 
   }
 
-  @Test(arguments: ["-1", "1e309"])
+  // JSON has no infinity, so the decoder reads one from text.
+  @Test(arguments: ["-1", #""inf""#])
   func refusesAScaleThatIsntAFiniteNumberAboveZero(_ scale: String) {
 
     let json = Self.dimmerSet.replacingOccurrences(of: #""scale": 0.392157"#, with: #""scale": "# + scale)
+    let decoder = JSONDecoder()
+    decoder.nonConformingFloatDecodingStrategy = .convertFromString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
 
     #expect(throws: DecodingError.self) {
 
-      try JSONDecoder().decode(CommandSet.self, from: Data(json.utf8))
+      try decoder.decode(CommandSet.self, from: Data(json.utf8))
 
     }
 
