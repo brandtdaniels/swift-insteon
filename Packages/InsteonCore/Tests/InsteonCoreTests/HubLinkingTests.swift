@@ -322,7 +322,7 @@ struct HubLinkingTests {
 
   }
 
-  @Test(.timeLimit(.minutes(1))) func fallsBackToTheSETButtonEvenWhereTheCatalogSaysEnterLinkingModeWorks() async throws {
+  @Test(.timeLimit(.minutes(1))) func linksBothLegsOfAnI1DeviceBySETButtonWhereTheCatalogSaysEnterLinkingModeWorks() async throws {
 
     let modem = InMemoryModem()
     let module: InsteonAddress = HubLinkingExample.module
@@ -337,11 +337,16 @@ struct HubLinkingTests {
 
     let result: DeviceLinkingResult = try await network.linking.link(module, as: .controller, observer: recorder)
 
-    // The first leg falls back, saying the catalog expected Enter Linking Mode to work; the
-    // second, a later leg, stops and reports, as it does when the catalog doesn't know.
-    #expect(Self.statuses(result) == ["linked by SET button", "failed"])
-    #expect(result.failedLeg?.leg.index == 1)
-    #expect((result.failedLeg?.failure as? LinkingError) == .remoteLinkingUnsupported(module))
+    // The first leg falls back, saying the catalog expected Enter Linking Mode to work, and the
+    // second goes straight to the SET button, with its own prompt, role and groups.
+    #expect(Self.statuses(result) == ["linked by SET button", "linked by SET button"])
+    #expect(result.failedLeg == nil)
+    #expect(await modem.linkingSteps == [Self.engineRequest(module), .modem(.controller, 0x00), .modem(.responder, 0x01)])
+    #expect(await recorder.prompts.map { (prompt: SETButtonPrompt) -> String in
+
+      "\(prompt.modemRole.map(LinkingRecorder.role) ?? "none") \(prompt.group) \(prompt.deviceGroup.map { "\($0)" } ?? "none")"
+
+    } == ["controller 0 1", "responder 1 1"])
     #expect(await recorder.lines == [
       "not turning on \(module)",
       "leg 1/2 started controller 0 device group 1",
@@ -350,7 +355,9 @@ struct HubLinkingTests {
       "linked \(module) group 0 controller first",
       "leg 1 completed group 0 controller",
       "leg 2/2 started responder 1 device group 1",
-      "leg 2 failed, not run 0"
+      "press SET: linking group 1 \(module) steps 1",
+      "linked \(module) group 1 responder leg 2",
+      "leg 2 completed group 1 responder"
     ])
 
   }
@@ -360,11 +367,12 @@ struct HubLinkingTests {
     let modem = InMemoryModem()
     let module: InsteonAddress = HubLinkingExample.module
     let network: DeviceNetwork = self.network(modem, identities: [module: HubLinkingExample.moduleIdentity])
+    // The module stops answering once the second leg starts.
     let recorder = LinkingRecorder(reacting: { (event: LinkingEvent) async -> Void in
 
       if case let .hubLinkingLegStarted(leg) = event, leg.index == 1 {
 
-        await modem.setEngine(.i1, of: module)
+        await modem.setUnanswering(module)
 
       }
 
@@ -372,14 +380,16 @@ struct HubLinkingTests {
 
     let result: DeviceLinkingResult = try await network.linking.link(module, as: .controller, observer: recorder)
 
-    // No SET button for a later leg, and no error thrown: the result reports it.
+    // No SET button for a later leg that fails this way, and no error thrown: the result
+    // reports it, as a failure linking again may fix.
     #expect(Self.statuses(result) == ["linked by Enter Linking Mode", "failed"])
+    #expect(HubLinkingLeg.canSucceedOnRetry(after: try #require(result.failedLeg?.failure)))
     #expect(await recorder.prompts.isEmpty)
     #expect(await recorder.lines.last == "leg 2 failed, not run 0")
 
   }
 
-  @Test(.timeLimit(.minutes(1))) func fallsBackToTheSETButtonWhenTheCatalogDoesntKnow() async throws {
+  @Test(.timeLimit(.minutes(1))) func linksEveryLegBySETButtonAfterTheFirstFallsBack() async throws {
 
     let modem = InMemoryModem()
     let keypad: InsteonAddress = HubLinkingExample.keypad
@@ -393,23 +403,41 @@ struct HubLinkingTests {
 
     let result: DeviceLinkingResult = try await network.linking.link(keypad, as: .controller, observer: recorder)
 
-    // The first leg falls back to the SET button; the second, still an i1 device, fails and
-    // stops the third, without throwing.
-    #expect(Self.statuses(result) == ["linked by SET button", "failed", "not run"])
-    #expect(result.links.map(\.group) == [0x00])
-    #expect(result.failedLeg?.leg.index == 1)
-    #expect((result.failedLeg?.failure as? LinkingError) == .remoteLinkingUnsupported(keypad))
-    #expect(await recorder.lines == [
-      "not turning on \(keypad)",
-      "leg 1/3 started controller 0 device group 1",
-      "fallback: SET button linking \(keypad)",
-      "press SET: linking group 0 \(keypad) steps 1",
-      "linked \(keypad) group 0 controller first",
-      "leg 1 completed group 0 controller",
-      "leg 2 all groups when linkToAllGroups true",
-      "leg 2/3 started responder 2 device group 2",
-      "leg 2 failed, not run 1"
-    ])
+    #expect(Self.statuses(result) == ["linked by SET button", "linked by SET button", "linked by SET button"])
+    #expect(result.links.map(\.group) == [0x00, 0x02, 0x03])
+    // Enter Linking Mode was tried once, for the first leg.
+    #expect(await modem.linkingSteps.filter { (step: InMemoryModem.LinkingStep) -> Bool in step == Self.engineRequest(keypad) }.count == 1)
+    #expect(await recorder.prompts.map(\.group) == [0x00, 0x02, 0x03])
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func fallsBackToTheSETButtonForALaterLegThatCantTakeEnterLinkingMode() async throws {
+
+    let modem = InMemoryModem()
+    let keypad: InsteonAddress = HubLinkingExample.keypad
+    let network: DeviceNetwork = self.network(modem, identities: [keypad: HubLinkingExample.keypadIdentity])
+    // The keypad answers as an i1 device once the second leg starts.
+    let recorder = LinkingRecorder(
+      pressing: { (prompt: SETButtonPrompt) async -> Void in
+
+        await modem.pressSetButton(of: prompt.device ?? keypad)
+
+      },
+      reacting: { (event: LinkingEvent) async -> Void in
+
+        if case let .hubLinkingLegStarted(leg) = event, leg.index == 1 {
+
+          await modem.setEngine(.i1, of: keypad)
+
+        }
+
+      }
+    )
+
+    let result: DeviceLinkingResult = try await network.linking.link(keypad, as: .controller, observer: recorder)
+
+    #expect(Self.statuses(result) == ["linked by Enter Linking Mode", "linked by SET button", "linked by SET button"])
+    #expect(await recorder.lines.contains("fallback: SET button linking \(keypad)"))
 
   }
 
@@ -418,12 +446,12 @@ struct HubLinkingTests {
     let modem = InMemoryModem()
     let keypad: InsteonAddress = HubLinkingExample.keypad
     let network: DeviceNetwork = self.network(modem, identities: [keypad: HubLinkingExample.keypadIdentity])
-    // The keypad stops answering linking once the second leg starts.
+    // The keypad stops answering once the second leg starts.
     let recorder = LinkingRecorder(reacting: { (event: LinkingEvent) async -> Void in
 
       if case let .hubLinkingLegStarted(leg) = event, leg.index == 1 {
 
-        await modem.setEngine(.i1, of: keypad)
+        await modem.setUnanswering(keypad)
 
       }
 
@@ -435,6 +463,64 @@ struct HubLinkingTests {
     // The third leg's modem group was never started.
     #expect(await !modem.linkingSteps.contains(.modem(.responder, 0x03)))
     #expect(await network.registry.device(keypad)?.identity == HubLinkingExample.keypadIdentity)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func reportsTheLegsLinkedBeforeALaterLegThrows() async throws {
+
+    let modem = InMemoryModem()
+    let keypad: InsteonAddress = HubLinkingExample.keypad
+    let other = InsteonAddress(0x3C, 0x4D, 0x7F)
+    let network: DeviceNetwork = self.network(modem, identities: [keypad: HubLinkingExample.keypadIdentity])
+    // Another device is waiting in linking mode when the second leg starts, so the modem
+    // reports its link instead.
+    let recorder = LinkingRecorder(reacting: { (event: LinkingEvent) async -> Void in
+
+      if case let .hubLinkingLegStarted(leg) = event, leg.index == 1 {
+
+        await modem.pressSetButton(of: other)
+
+      }
+
+    })
+
+    await #expect(throws: LinkMismatch.self) {
+
+      _ = try await network.linking.link(keypad, as: .controller, observer: recorder)
+
+    }
+
+    let lines: [String] = await recorder.lines
+
+    // The first leg's link is reported with the legs, before the error is thrown, and no leg
+    // failure suggests linking again.
+    #expect(lines.last == "stopped after 1 of 3 legs")
+    #expect(!lines.contains { (line: String) -> Bool in line.contains("failed") })
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func reportsNoLegFailureForAFirstLegThatThrows() async throws {
+
+    let modem = InMemoryModem()
+    let module: InsteonAddress = HubLinkingExample.module
+    let other = InsteonAddress(0x3C, 0x4D, 0x7E)
+    // Another device is waiting in linking mode, so the first leg's link is another's.
+    await modem.pressSetButton(of: other)
+    let network: DeviceNetwork = self.network(modem, identities: [module: HubLinkingExample.moduleIdentity])
+    let recorder = LinkingRecorder()
+
+    await #expect(throws: LinkMismatch.self) {
+
+      _ = try await network.linking.link(module, as: .controller, observer: recorder)
+
+    }
+
+    // The device took Enter Linking Mode, but the modem reported the other device's link.
+    #expect(await recorder.lines == [
+      "not turning on \(module)",
+      "leg 1/2 started controller 0 device group 1",
+      "leg 1 joined by Enter Linking Mode"
+    ])
 
   }
 

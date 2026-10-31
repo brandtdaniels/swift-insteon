@@ -277,6 +277,8 @@ actor LinkingRecorder: LinkingObserver {
       return "leg \(leg.index + 1) completed group \(link.group) \(link.mode?.name ?? "unknown")"
     case let .hubLinkingLegFailed(leg, _, notRun):
       return "leg \(leg.index + 1) failed, not run \(notRun.count)"
+    case let .hubLinkingStopped(result, _):
+      return "stopped after \(result.links.count) of \(result.legs.count) legs"
     case let .allGroupsWhen(leg, condition):
       return "leg \(leg.index + 1) all groups when \(condition.flag) \(condition.isSet)"
     case let .keepAwake(keepAwake):

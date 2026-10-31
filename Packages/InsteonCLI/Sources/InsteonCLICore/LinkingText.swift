@@ -120,12 +120,31 @@ public enum LinkingInstructions {
   ///   - device: The device, or `nil` for any device.
   ///   - steps: The device's own steps to link, from ``steps(of:)``, or empty if the catalog
   ///     doesn't have them. A responder unlinks with its linking steps too.
+  ///   - modemRole: The modem's role, for a leg of the catalog's linking from a Hub. Defaults
+  ///     to `nil`.
+  ///   - deviceGroup: The device's group the leg links. Defaults to `nil`.
   /// - Returns: The lines, in order.
-  public static func modemFirst(_ mode: Mode, group: AllLinkGroupNumber, seconds: Int64, device: String?, steps: [String]) -> [String] {
+  public static func modemFirst(
+    _ mode: Mode,
+    group: AllLinkGroupNumber,
+    seconds: Int64,
+    device: String?,
+    steps: [String],
+    modemRole: ModemRole? = nil,
+    deviceGroup: AllLinkGroupNumber? = nil
+  ) -> [String] {
 
     let target = device ?? "the device"
     let modemMode = mode == .linking ? "linking" : "unlinking"
     var lines = ["The modem is in \(modemMode) mode for group \(group)."]
+
+    if let modemRole, let deviceGroup {
+
+      let role: String = modemRole == .controller ? "controller" : "responder"
+
+      lines = ["The modem is in \(modemMode) mode as \(role) of group \(group), for the device's group \(deviceGroup)."]
+
+    }
 
     if steps.isEmpty {
 
@@ -334,7 +353,9 @@ public enum LinkingEventText {
           LinkingInstructions.deviceLabel(device, profile: prompt.deviceDescription?.profile)
 
         },
-        steps: LinkingInstructions.steps(prompt.steps)
+        steps: LinkingInstructions.steps(prompt.steps),
+        modemRole: prompt.modemRole,
+        deviceGroup: prompt.deviceGroup
       )
     case let .modemJoining(timeout):
       return ["The modem is joining as responder. Waiting up to \(timeout.components.seconds) seconds; Control-C stops."]
@@ -359,7 +380,12 @@ public enum LinkingEventText {
     case .hubLinkingLegCompleted:
       return []
     case let .hubLinkingLegFailed(leg, reason, notRun):
-      return legFailed(leg, reason: message(reason), notRun: notRun.count)
+      return legFailed(leg, reason: message(reason), notRun: notRun.count, canRetry: HubLinkingLeg.canSucceedOnRetry(after: reason))
+    case let .hubLinkingStopped(result, reason):
+      let linked: Int = result.legs.filter { (outcome: HubLinkingLegOutcome) -> Bool in outcome.link != nil }.count
+      let count: Int = result.legs.count
+
+      return ["Linking stopped after \(linked) of \(count) legs: \(message(reason)) The links made stay made."]
     case let .keepAwake(keepAwake):
       return keepAwakeNotes(keepAwake, message: message)
     case let .allGroupsWhen(leg, condition):
@@ -420,8 +446,10 @@ public enum LinkingEventText {
   ///   - leg: The leg.
   ///   - reason: Why it didn't link, as a sentence that ends with a period.
   ///   - notRun: How many legs after it weren't run.
+  ///   - canRetry: Whether linking again may help, as
+  ///     `HubLinkingLeg.canSucceedOnRetry(after:)` says, so the person is told to.
   /// - Returns: The lines, in order.
-  public static func legFailed(_ leg: HubLinkingLeg, reason: String, notRun: Int) -> [String] {
+  public static func legFailed(_ leg: HubLinkingLeg, reason: String, notRun: Int, canRetry: Bool) -> [String] {
 
     var line: String = "\(legName(leg)) didn't link: \(reason)"
 
@@ -436,9 +464,12 @@ public enum LinkingEventText {
 
     if notRun > 0 {
 
+      let notRunText: String = "\(notRun == 1 ? "The leg" : "The \(notRun) legs") after it \(notRun == 1 ? "wasn't" : "weren't") run"
+
       lines.append(
-        "\(notRun == 1 ? "The leg" : "The \(notRun) legs") after it \(notRun == 1 ? "wasn't" : "weren't") run; "
-          + "run 'insteon link \(leg.device)' again to link \(notRun == 1 ? "it" : "them")."
+        canRetry
+          ? notRunText + "; run 'insteon link \(leg.device)' again to link \(notRun == 1 ? "it" : "them")."
+          : notRunText + "."
       )
 
     }
@@ -464,8 +495,17 @@ public enum LinkingEventText {
 
     let linked: Int = result.legs.filter { (outcome: HubLinkingLegOutcome) -> Bool in outcome.link != nil }.count
 
-    return "\(failed.leg.device) linked \(linked) of its \(failed.leg.count) legs; \(legName(failed.leg).lowercased()) didn't link: "
-      + "\(message(reason)) Run 'insteon link \(failed.leg.device)' again to link the rest."
+    let summary: String = "\(failed.leg.device) linked \(linked) of its \(failed.leg.count) legs; \(legName(failed.leg).lowercased()) didn't link: "
+      + message(reason)
+
+    // Advise linking again only where it may help, such as after a timeout.
+    guard HubLinkingLeg.canSucceedOnRetry(after: reason) else {
+
+      return summary
+
+    }
+
+    return summary + " Run 'insteon link \(failed.leg.device)' again to link the rest."
 
   }
 

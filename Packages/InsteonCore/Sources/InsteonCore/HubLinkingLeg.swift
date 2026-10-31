@@ -1,5 +1,6 @@
 import InsteonDeviceCatalog
 import InsteonLinking
+import InsteonModem
 import InsteonProtocol
 
 /// One link of the Insteon device catalog's linking from a Hub, as a
@@ -85,6 +86,31 @@ public struct HubLinkingLeg: Hashable, Sendable {
   public var isRemoteLinkingExpectedToWork: Bool {
 
     remoteEnterLinkingMode == .yes
+
+  }
+
+  /// Whether linking a leg again may succeed after it failed with an error: when its link
+  /// timed out, or the device didn't answer, as may happen once and not the next time. A
+  /// device that can't take Enter Linking Mode, or one that rejects the modem, fails the same
+  /// way again.
+  ///
+  /// - Parameter error: Why the leg failed.
+  /// - Returns: Whether running the link again may help.
+  public static func canSucceedOnRetry(after error: any Error) -> Bool {
+
+    if let linkingError = error as? LinkingError, case .linkingTimedOut = linkingError {
+
+      return true
+
+    }
+
+    if let modemError = error as? ModemError, case .deviceTimedOut = modemError {
+
+      return true
+
+    }
+
+    return false
 
   }
 

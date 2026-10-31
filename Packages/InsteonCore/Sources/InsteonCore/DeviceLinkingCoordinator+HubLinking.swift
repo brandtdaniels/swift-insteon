@@ -28,10 +28,15 @@ extension DeviceLinkingCoordinator {
   ///
   /// When Enter Linking Mode fails for the first leg, the device is linked with its SET button
   /// instead, as for a device without legs, and ``LinkingFallback/setButtonLeg(_:reason:)``
-  /// says whether the catalog expected Enter Linking Mode to work. A later leg that fails is
-  /// reported with ``LinkingEvent/hubLinkingLegFailed(_:reason:notRun:)``, the same whatever
-  /// the catalog says, and stops the legs after it; the links made stay made, and the result's
-  /// ``DeviceLinkingResult/legs`` say which leg failed and which weren't run.
+  /// says whether the catalog expected Enter Linking Mode to work. A later leg falls back the
+  /// same way when the device can't take Enter Linking Mode at all, and once a leg is linked
+  /// with the SET button, every leg after it is too, each with its own prompt. A later leg that
+  /// fails otherwise, such as when its link times out, is reported with
+  /// ``LinkingEvent/hubLinkingLegFailed(_:reason:notRun:)``, the same whatever the catalog
+  /// says, and stops the legs after it; the links made stay made, and the result's
+  /// ``DeviceLinkingResult/legs`` say which leg failed and which weren't run. When a later leg
+  /// throws, as when it's canceled or another device links, the observer gets
+  /// ``LinkingEvent/hubLinkingStopped(_:reason:)`` with the legs linked so far first.
   ///
   /// When the catalog says how to keep a battery-powered device awake, the coordinator sends
   /// that message through the device's guarded send path, as ``KeepAwakeEvent`` reports:
@@ -135,6 +140,8 @@ extension DeviceLinkingCoordinator {
     var outcomes: [HubLinkingLegOutcome] = []
     var links: [AllLinkingCompleted] = []
     var registered: RegisteredDevice?
+    // Once Enter Linking Mode doesn't work for one leg, it won't for the rest either.
+    var usesSETButton: Bool = false
 
     for leg in legs {
 
@@ -150,33 +157,53 @@ extension DeviceLinkingCoordinator {
 
       do {
 
-        made = try await link(leg, goesFirst: leg.isFirst && isDeviceFirst, description: description, setButtonTimeout: setButtonTimeout, observer: observer)
-
-      } catch let error as CancellationError {
-
-        // The turn records the change on the way out.
-        throw error
+        made = try await link(
+          leg,
+          goesFirst: leg.isFirst && isDeviceFirst,
+          usesSETButton: usesSETButton,
+          description: description,
+          setButtonTimeout: setButtonTimeout,
+          observer: observer
+        )
 
       } catch {
 
         let notRun: [HubLinkingLeg] = Array(legs.dropFirst(leg.index + 1))
+        let stopped: [HubLinkingLegOutcome] = outcomes
+          + [HubLinkingLegOutcome(leg: leg, status: .failed(error))]
+          + notRun.map { (skipped: HubLinkingLeg) -> HubLinkingLegOutcome in HubLinkingLegOutcome(leg: skipped, status: .notRun) }
 
-        await observer.linking(.hubLinkingLegFailed(leg, reason: error, notRun: notRun))
+        // A canceled link, a link the modem reported for another device or of another kind,
+        // and a first leg that made no link at all are the caller's to handle. Legs already
+        // linked are reported first, so they aren't lost with the error.
+        if error is CancellationError || leg.isFirst || Self.reportedLink(in: error) != nil {
 
-        // A link the modem reported for another device, or of another kind, is the caller's
-        // to handle, as is a first leg that made no link at all.
-        guard !leg.isFirst, Self.reportedLink(in: error) == nil else {
+          if !leg.isFirst {
 
+            await observer.linking(.hubLinkingStopped(
+              DeviceLinkingResult(links: links, device: registered, linkBackFailure: nil, legs: stopped),
+              reason: error
+            ))
+
+          }
+
+          // The turn records the change on the way out.
           throw error
 
         }
 
+        await observer.linking(.hubLinkingLegFailed(leg, reason: error, notRun: notRun))
         await network.recordLinkChange(of: device, answered: true)
 
-        outcomes.append(HubLinkingLegOutcome(leg: leg, status: .failed(error)))
-        outcomes += notRun.map { (skipped: HubLinkingLeg) -> HubLinkingLegOutcome in HubLinkingLegOutcome(leg: skipped, status: .notRun) }
+        outcomes = stopped
 
         break
+
+      }
+
+      if made.join == .setButton {
+
+        usesSETButton = true
 
       }
 
@@ -225,6 +252,8 @@ extension DeviceLinkingCoordinator {
   /// - Parameters:
   ///   - leg: The leg.
   ///   - goesFirst: Whether a person puts the device in linking mode before the modem starts.
+  ///   - usesSETButton: Whether an earlier leg showed Enter Linking Mode doesn't work for the
+  ///     device, so the leg is linked with its SET button.
   ///   - description: What the catalog says about the device.
   ///   - setButtonTimeout: How long the modem waits for a device linked with its SET button.
   ///   - observer: What a person is told and asked.
@@ -232,6 +261,7 @@ extension DeviceLinkingCoordinator {
   private func link(
     _ leg: HubLinkingLeg,
     goesFirst: Bool,
+    usesSETButton: Bool,
     description: DeviceDescription?,
     setButtonTimeout: Duration,
     observer: any LinkingObserver
@@ -258,7 +288,7 @@ extension DeviceLinkingCoordinator {
 
     }
 
-    if leg.remoteEnterLinkingMode == .no {
+    if usesSETButton || leg.remoteEnterLinkingMode == .no {
 
       let link: AllLinkingCompleted = try await linkBySETButton(leg, steps: steps, description: description, timeout: setButtonTimeout, observer: observer)
 
@@ -299,9 +329,12 @@ extension DeviceLinkingCoordinator {
     } catch {
 
       // A first leg falls back to the SET button, as a device without legs does, even when
-      // the catalog says Enter Linking Mode works, which the fallback says; a later leg
-      // reports its failure, since the device is linked to the modem by then.
-      guard leg.isFirst else {
+      // the catalog says Enter Linking Mode works, which the fallback says, and so does a later
+      // leg of a device that can't take Enter Linking Mode at all. Any other failure of a later
+      // leg is reported, since the device is linked to the modem by then.
+      let isUnsupported: Bool = (error as? LinkingError) == .remoteLinkingUnsupported(device)
+
+      guard leg.isFirst || isUnsupported else {
 
         throw error
 
@@ -334,7 +367,9 @@ extension DeviceLinkingCoordinator {
       timeout: timeout,
       device: leg.device,
       deviceDescription: description,
-      steps: steps
+      steps: steps,
+      modemRole: leg.modemRole,
+      deviceGroup: leg.deviceGroup
     )
 
     return try await makeLinker().linkManually(

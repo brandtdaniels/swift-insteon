@@ -192,13 +192,21 @@ public enum LinkingEvent: Sendable {
   /// ``LinkingEvent/linked(_:)`` reports the same link with the device.
   case hubLinkingLegCompleted(HubLinkingLeg, link: AllLinkingCompleted)
 
-  /// A leg failed, for the reason given, and the legs listed after it aren't run. When the
-  /// leg is ``HubLinkingLeg/isRemoteLinkingExpectedToWork``, the catalog says Enter Linking
-  /// Mode works for the device, so the failure isn't expected.
+  /// A leg after the first failed without an error being thrown, for the reason given, and the
+  /// legs listed after it aren't run. When the leg is
+  /// ``HubLinkingLeg/isRemoteLinkingExpectedToWork``, the catalog says Enter Linking Mode works
+  /// for the device, so the failure isn't expected. ``HubLinkingLeg/canSucceedOnRetry(after:)``
+  /// says whether linking again may help.
   case hubLinkingLegFailed(HubLinkingLeg, reason: any Error, notRun: [HubLinkingLeg])
 
   /// The device is kept awake while it links, or let sleep again afterward.
   case keepAwake(KeepAwakeEvent)
+
+  /// Linking by the catalog's legs stopped with an error after the first leg linked, for the
+  /// reason given, which is then thrown, such as when it's canceled or another device links.
+  /// The result holds the links made so far and what became of each leg, so they aren't lost
+  /// with the error.
+  case hubLinkingStopped(DeviceLinkingResult, reason: any Error)
 
   /// The catalog says a leg's one link covers every group the device controls while one of
   /// its operating flags is in the state given. The flag isn't read or changed; without it,
@@ -329,6 +337,13 @@ public struct SETButtonPrompt: Hashable, Sendable {
   /// linking steps apply when a link is removed too.
   public var steps: [DeviceLifecycle.Step]
 
+  /// The modem's role, for a leg of the catalog's linking from a Hub, or `nil` otherwise.
+  public var modemRole: ModemRole?
+
+  /// The device's group the link is for, for a leg of the catalog's linking from a Hub, or
+  /// `nil` otherwise.
+  public var deviceGroup: AllLinkGroupNumber?
+
   /// Creates a prompt.
   ///
   /// - Parameters:
@@ -338,13 +353,18 @@ public struct SETButtonPrompt: Hashable, Sendable {
   ///   - device: The device asked for, or `nil` for any device.
   ///   - deviceDescription: What the catalog says about the device.
   ///   - steps: The catalog's steps on the device.
+  ///   - modemRole: The modem's role, for a leg of the catalog's linking from a Hub. Defaults
+  ///     to `nil`.
+  ///   - deviceGroup: The device's group the link is for, for a leg. Defaults to `nil`.
   public init(
     direction: LinkingDirection,
     group: AllLinkGroupNumber,
     timeout: Duration,
     device: InsteonAddress?,
     deviceDescription: DeviceDescription?,
-    steps: [DeviceLifecycle.Step]
+    steps: [DeviceLifecycle.Step],
+    modemRole: ModemRole? = nil,
+    deviceGroup: AllLinkGroupNumber? = nil
   ) {
 
     self.direction = direction
@@ -353,6 +373,8 @@ public struct SETButtonPrompt: Hashable, Sendable {
     self.device = device
     self.deviceDescription = deviceDescription
     self.steps = steps
+    self.modemRole = modemRole
+    self.deviceGroup = deviceGroup
 
   }
 

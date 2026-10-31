@@ -153,7 +153,7 @@ struct KeepAwakeTests {
 
         if case let .hubLinkingLegStarted(leg) = event, leg.index == 1 {
 
-          await modem.setEngine(.i1, of: thermostat)
+          await modem.setUnanswering(thermostat)
 
         }
 
@@ -190,6 +190,8 @@ struct KeepAwakeTests {
 
     #expect(await extendedCommands(to: thermostat, on: modem) == [Command(command1: 0x20, command2: 0x06), Command(command1: 0x20, command2: 0x07)])
     #expect(await modem.linkingSteps.isEmpty)
+    // A first leg that throws reports no leg failure, so nothing suggests linking again.
+    #expect(await !recorder.lines.contains { (line: String) -> Bool in line.contains("failed") })
 
   }
 
