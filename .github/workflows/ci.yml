@@ -8,9 +8,10 @@ on:
 permissions:
   contents: read
 
-# A newer push to a pull request supersedes the run for the older one.
+# A newer push to a pull request supersedes the run for the older one. Each push to main
+# gets a group of its own, so no run on main is cancelled, running or waiting.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -19,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           # The whole history, so a pull request's base branch is there to compare with.
           fetch-depth: 0
@@ -87,7 +88,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       # Use the runner's newest Xcode, and so its newest Swift, rather than its default.
       - name: Select Xcode
         run: sudo xcode-select --switch "$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -n 1)"
@@ -110,7 +111,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       # Use the runner's newest Xcode, and so its newest Swift, rather than its default.
       - name: Select Xcode
         run: sudo xcode-select --switch "$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -n 1)"
@@ -129,7 +130,7 @@ jobs:
     # The image by digest, so a retagged image can't change what runs. The tag says which it is.
     container: swift:6.3.3@sha256:1038d54c80063f5cdfabc4560990c30af64b5de8ebf28161deb22ca4ad5db866
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Build
         run: swift build --build-tests --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
       - name: Test
