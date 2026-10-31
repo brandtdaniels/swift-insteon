@@ -18,10 +18,19 @@ import Glibc
 /// bytes. On macOS, USB modems appear as `/dev/cu.usbserial-*`; on
 /// Linux, as `/dev/ttyUSB*`.
 ///
+/// Writing never blocks a thread: while the port can't take more bytes, such as when an
+/// adapter has stopped sending, a write waits without holding one, and it ends when its task
+/// is canceled, when the port closes, or when the port has taken nothing for
+/// ``SerialPort/longestWriteStall``.
+///
 /// Available on macOS and Linux.
 public final class SerialPort: ModemConnection, @unchecked Sendable {
 
   private let owner: DescriptorOwner
+
+  /// How long a write waits for the port to take more bytes before it fails with `ETIMEDOUT`:
+  /// 30 seconds, longer than a full output buffer takes to drain at 4800 baud.
+  public static let longestWriteStall: Duration = .seconds(30)
 
   /// The speed of a serial connection.
   public enum BaudRate: Hashable, Sendable {
@@ -77,11 +86,9 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
     // Raw mode leaves these as the port last had them.
     options.c_cflag &= ~(tcflag_t(CSTOPB) | tcflag_t(CRTSCTS))
 
-    // Writes block until the bytes are accepted; reads are driven by a dispatch source.
-    guard
-      tcsetattr(descriptor, TCSANOW, &options) == 0,
-      fcntl(descriptor, F_SETFL, fcntl(descriptor, F_GETFL) & ~O_NONBLOCK) == 0
-    else {
+    // The descriptor stays nonblocking: reads are driven by a dispatch source, and a write
+    // that the port can't take yet waits on one, so a stuck write can be canceled.
+    guard tcsetattr(descriptor, TCSANOW, &options) == 0 else {
 
       let code = errno
       closeDescriptor(descriptor)
@@ -101,9 +108,14 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
 
   /// Writes bytes to the modem, returning once they've all been handed to the port.
   ///
+  /// While the port can't take more bytes, the write waits without blocking a thread. Some
+  /// bytes may have been written when it throws.
+  ///
   /// - Parameter bytes: The bytes to send.
-  /// - Throws: ``SerialPortError/closed`` if the port is closed, or
-  ///   ``SerialPortError/writeFailed(code:)`` if the port rejects the write.
+  /// - Throws: ``SerialPortError/closed`` if the port is closed, or closes while the write
+  ///   waits; ``SerialPortError/writeFailed(code:)`` if the port rejects the write, with
+  ///   `ETIMEDOUT` if it takes nothing for ``SerialPort/longestWriteStall``; or
+  ///   `CancellationError` if the task is canceled first.
   public func write(_ bytes: [UInt8]) async throws {
 
     // The descriptor stays open until this write finishes, even if the port closes meanwhile.
@@ -116,30 +128,41 @@ public final class SerialPort: ModemConnection, @unchecked Sendable {
     defer { owner.endUse() }
 
     let descriptor = owner.descriptor
+    var offset = 0
 
-    try bytes.withUnsafeBytes { buffer in
+    while offset < bytes.count {
 
-      var offset = 0
+      try Task.checkCancellation()
 
-      while offset < buffer.count {
+      let (written, code): (Int, Int32) = bytes.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> (Int, Int32) in
 
         let written = writeDescriptor(descriptor, buffer.baseAddress! + offset, buffer.count - offset)
 
-        if written < 0 {
+        return (written, errno)
 
-          if errno == EINTR {
+      }
 
-            continue
-
-          }
-
-          throw SerialPortError.writeFailed(code: errno)
-
-        }
+      if written >= 0 {
 
         offset += written
 
+        continue
+
       }
+
+      if code == EINTR {
+
+        continue
+
+      }
+
+      guard code == EAGAIN || code == EWOULDBLOCK else {
+
+        throw SerialPortError.writeFailed(code: code)
+
+      }
+
+      try await owner.waitUntilWritable(within: Self.longestWriteStall)
 
     }
 
@@ -260,6 +283,76 @@ private final class ReadSource: @unchecked Sendable {
 
 }
 
+/// A write's wait for the port to take more bytes, which ends once, whichever comes first: the
+/// port can take more, the task is canceled, the port closes or the wait runs too long.
+private final class WriteWait: @unchecked Sendable {
+
+  // `lock` guards everything below it.
+  private let lock = NSLock()
+
+  private var continuation: CheckedContinuation<Void, any Error>?
+
+  private var source: (any DispatchSourceWrite)?
+
+  /// How the wait ended, once it has.
+  private var result: Result<Void, any Error>?
+
+  /// Starts waiting on a source that's already resumed, or ends the wait at once if it already
+  /// ended.
+  func start(_ continuation: CheckedContinuation<Void, any Error>, source: any DispatchSourceWrite) {
+
+    let ended: Result<Void, any Error>? = lock.withLock {
+
+      if result == nil {
+
+        self.continuation = continuation
+        self.source = source
+
+      }
+
+      return result
+
+    }
+
+    if let ended {
+
+      source.cancel()
+      continuation.resume(with: ended)
+
+    }
+
+  }
+
+  /// Ends the wait, if it hasn't ended.
+  func finish(_ outcome: Result<Void, any Error>) {
+
+    let (continuation, source): (CheckedContinuation<Void, any Error>?, (any DispatchSourceWrite)?) = lock.withLock {
+
+      guard result == nil else {
+
+        return (nil, nil)
+
+      }
+
+      result = outcome
+      defer {
+
+        self.continuation = nil
+        self.source = nil
+
+      }
+
+      return (self.continuation, self.source)
+
+    }
+
+    source?.cancel()
+    continuation?.resume(with: outcome)
+
+  }
+
+}
+
 /// Owns a port's descriptor, and closes it only once the port is closed and nothing is
 /// reading from or writing to it: a closed descriptor's number can be reused by another file,
 /// and dispatch requires a descriptor to stay open until every source on it has stopped.
@@ -272,14 +365,98 @@ private final class DescriptorOwner: @unchecked Sendable {
 
   private var isClosed = false
 
-  /// Sources that haven't stopped, and writes in progress.
+  /// Sources that haven't stopped, reading or waiting to write, and writes in progress.
   private var users = 0
 
   private var reader: ReadSource?
 
+  /// Writes waiting for the port to take more bytes, which closing the port ends.
+  private var writeWaits: [ObjectIdentifier: WriteWait] = [:]
+
+  /// The queue that write sources and their time limits run on.
+  private let writeQueue = DispatchQueue(label: "InsteonModem.SerialPort.write")
+
   init(_ descriptor: Int32) {
 
     self.descriptor = descriptor
+
+  }
+
+  /// Waits until the descriptor can take more bytes. The caller is using the descriptor.
+  ///
+  /// - Parameter limit: How long to wait before failing with `ETIMEDOUT`.
+  /// - Throws: ``SerialPortError/closed`` if the port closes first,
+  ///   ``SerialPortError/writeFailed(code:)`` once `limit` passes, or `CancellationError` if
+  ///   the task is canceled first.
+  func waitUntilWritable(within limit: Duration) async throws {
+
+    let wait = WriteWait()
+    let key = ObjectIdentifier(wait)
+
+    let isOpen: Bool = lock.withLock {
+
+      guard !isClosed else {
+
+        return false
+
+      }
+
+      writeWaits[key] = wait
+      // The wait's source uses the descriptor until dispatch has stopped it.
+      users += 1
+
+      return true
+
+    }
+
+    guard isOpen else {
+
+      throw SerialPortError.closed
+
+    }
+
+    defer { lock.withLock { writeWaits[key] = nil } }
+
+    let descriptor = descriptor
+    let queue = writeQueue
+    let milliseconds = Int(limit.components.seconds) * 1_000 + Int(limit.components.attoseconds / 1_000_000_000_000_000)
+
+    try await withTaskCancellationHandler {
+
+      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+
+        let source = DispatchSource.makeWriteSource(fileDescriptor: descriptor, queue: queue)
+
+        source.setEventHandler {
+
+          wait.finish(.success(()))
+
+        }
+
+        // Dispatch calls this once the source has stopped.
+        source.setCancelHandler { [self] in
+
+          endUse()
+
+        }
+
+        // A source is resumed before it's handed over, so it can always be released.
+        source.resume()
+        wait.start(continuation, source: source)
+
+        queue.asyncAfter(deadline: .now() + .milliseconds(milliseconds)) {
+
+          wait.finish(.failure(SerialPortError.writeFailed(code: ETIMEDOUT)))
+
+        }
+
+      }
+
+    } onCancel: {
+
+      wait.finish(.failure(CancellationError()))
+
+    }
 
   }
 
@@ -349,22 +526,33 @@ private final class DescriptorOwner: @unchecked Sendable {
   /// uses it.
   func close() {
 
-    let (source, isUnused): (ReadSource?, Bool) = lock.withLock {
+    let (source, waits, isUnused): (ReadSource?, [WriteWait], Bool) = lock.withLock {
 
       guard !isClosed else {
 
-        return (nil, false)
+        return (nil, [], false)
 
       }
 
       isClosed = true
-      defer { reader = nil }
+      defer {
 
-      return (reader, users == 0)
+        reader = nil
+        writeWaits = [:]
+
+      }
+
+      return (reader, Array(writeWaits.values), users == 0)
 
     }
 
     source?.dispatchSource.cancel()
+
+    for wait in waits {
+
+      wait.finish(.failure(SerialPortError.closed))
+
+    }
 
     if isUnused {
 

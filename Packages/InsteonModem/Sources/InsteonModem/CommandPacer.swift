@@ -495,6 +495,10 @@ actor CommandPacer<Parser: ReplyParser> {
   }
 
   /// Runs `write`, then waits for the pending answer's result, the timeout or cancellation.
+  ///
+  /// The timeout counts from the start of the write, so a slow write leaves less time for
+  /// the answer. A write that never finishes ends when the task is canceled, since a
+  /// ``ModemConnection`` returns from a canceled write promptly.
   private func awaitAnswer(
     _ id: Int,
     timeout: Duration,
@@ -508,9 +512,15 @@ actor CommandPacer<Parser: ReplyParser> {
       // child as soon as the answer arrives, so a timeout never outlives its command.
       group.addTask { [clock] in
 
+        let writing: Duration
+
         do {
 
-          try await write()
+          writing = try await clock.measure {
+
+            try await write()
+
+          }
 
         } catch {
 
@@ -522,7 +532,7 @@ actor CommandPacer<Parser: ReplyParser> {
 
         do {
 
-          try await clock.sleep(for: timeout)
+          try await clock.sleep(for: max(timeout - writing, .zero))
 
         } catch {
 

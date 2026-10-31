@@ -119,6 +119,63 @@ struct SerialPortTests {
 
   }
 
+  // Nothing reads the pseudo-terminal's other end, so the port stops taking bytes and the
+  // write waits until it's canceled.
+  @Test(.timeLimit(.minutes(1)))
+  func cancelingAWriteThePortStoppedTakingEndsIt() async throws {
+
+    let (controller, path) = try #require(openPseudoTerminal())
+    defer { _ = close(controller) }
+
+    let port = try SerialPort(path: path)
+    defer { port.close() }
+
+    let writing = Task { () async throws -> Void in
+
+      try await port.write([UInt8](repeating: 0x55, count: 1 << 20))
+
+    }
+
+    // A byte arriving means the write has started.
+    var first: UInt8 = 0
+    try #require(read(controller, &first, 1) == 1)
+
+    writing.cancel()
+
+    await #expect(throws: CancellationError.self) {
+
+      try await writing.value
+
+    }
+
+  }
+
+  @Test(.timeLimit(.minutes(1)))
+  func closingThePortEndsAWriteItStoppedTaking() async throws {
+
+    let (controller, path) = try #require(openPseudoTerminal())
+    defer { _ = close(controller) }
+
+    let port = try SerialPort(path: path)
+    let writing = Task { () async throws -> Void in
+
+      try await port.write([UInt8](repeating: 0x55, count: 1 << 20))
+
+    }
+
+    var first: UInt8 = 0
+    try #require(read(controller, &first, 1) == 1)
+
+    port.close()
+
+    await #expect(throws: SerialPortError.closed) {
+
+      try await writing.value
+
+    }
+
+  }
+
   @Test func reportsAMissingDevice() {
 
     #expect(throws: SerialPortError.self) {
