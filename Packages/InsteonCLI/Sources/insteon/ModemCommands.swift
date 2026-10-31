@@ -260,9 +260,9 @@ enum ModemCommands {
     let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? Linker.defaultManualLinkingTimeout
     let observer = LinkingPrompter(names: names, printsJSON: printsJSON)
     let coordinator: DeviceLinkingCoordinator = network.linking
-    // A SET button link is linked back only when asked; a link by address also when the
-    // catalog says the device controls.
-    let twoWay: TwoWayLinking = options.isTwoWay ? .always : (options.device == nil ? .never : .whenDeviceControls)
+    // Linked back when the catalog says the device controls, by default, whether it's linked
+    // by its address or its SET button.
+    let twoWay: TwoWayLinking = options.twoWay
     let result: DeviceLinkingResult
 
     if let device = options.device {

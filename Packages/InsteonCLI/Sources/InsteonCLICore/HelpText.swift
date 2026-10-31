@@ -141,7 +141,8 @@ public enum HelpText {
   /// The help for `insteon link`.
   public static let link = """
     Usage: insteon [--hub HOST[:PORT] | --serial PATH] link [ADDRESS] [--group N]
-                   [--controller | --responder | --either] [--two-way] [--timeout SECONDS] [--json]
+                   [--controller | --responder | --either] [--two-way | --one-way]
+                   [--timeout SECONDS] [--json]
            insteon [--hub HOST[:PORT] | --serial PATH] link --cancel
 
     With ADDRESS, the device's Insteon address from its label, links the device without its
@@ -150,11 +151,15 @@ public enum HelpText {
     switched load, it's first turned fully on with Light On, so it links with full on as its
     on-level; any other device, such as an I/O module or a lock, links with whatever on-level
     it captures. If the device doesn't answer, as an i2CS device may not until it's linked,
-    the command falls back to its SET button. A device the catalog says can control is then
-    linked back, with the modem as its responder.
+    the command falls back to its SET button.
 
     Without ADDRESS, puts the modem into linking mode with Start ALL-Linking, then waits for
     someone to press and hold a device's SET button, and prints the linked device.
+
+    Either way, when the modem is the controller and the catalog says the device can
+    control, the device is then linked back without a second SET press, with the modem as
+    its responder, so the modem hears the device's buttons. It's linked back in the first
+    group the catalog says it controls, group 1 when it controls that.
 
       --group N           The modem's ALL-Link group, from 0 to 254. Defaults to 0, as
                           Insteon's Hub app links devices.
@@ -163,8 +168,9 @@ public enum HelpText {
                           goes into linking mode first: the command says how, and waits for
                           Return before starting the modem.
       --either            The modem controls the device or responds to it, as the device asks.
-      --two-way           Link the modem as controller, then as the device's responder, by
-                          sending the device Enter Linking Mode, with no second SET press.
+      --two-way           Link the device back even when the catalog doesn't say it can
+                          control, or doesn't have it.
+      --one-way           Don't link the device back: the modem only controls it.
       --timeout SECONDS   How long to wait for the SET button. Defaults to 240, the time the
                           modem stays in linking mode.
       --cancel            Take the modem out of linking mode with Cancel ALL-Linking.
