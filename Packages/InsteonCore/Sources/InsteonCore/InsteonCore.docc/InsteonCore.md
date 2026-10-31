@@ -73,7 +73,52 @@ When another process can save to the same store while a network runs, read the s
 and save it merged with only what the network changed since it started, with
 ``NetworkSnapshot/merging(changesFrom:to:)``, so the other process's newer values are kept.
 
+### Controlling devices
+
+A ``Device`` from ``DeviceNetwork/device(_:beforeIdentifying:)`` is the one way a front end
+controls a device. What it can do comes from the Insteon device catalog's group types for the
+device: whether a level means anything to a group, which command turns it on or off, and how
+to read its state, as a level in percent, the name of a range such as a fan speed, or on or
+off. A device the catalog doesn't describe is controlled by its category, as a dimmer or a
+relay, and any other one can only be pinged and have its status read as a raw byte. Status,
+and turning a device on or off, record its level and when it answered in the network's
+snapshot:
+
+```swift
+let lamp = network.device(InsteonAddress(0x1A, 0x2B, 0x3C))
+
+let result = try await lamp.turnOn(level: 50)
+let status = try await lamp.status()
+
+if try await lamp.capabilities().canDim {
+  print("Dims, and is at \(status.percent ?? 0)%.")
+}
+```
+
+``DeviceCapabilities`` says what to show for a device: its groups, whether it dims or beeps,
+and its settings with their controls. ``Device/readSettings(includingAdvanced:beforeReading:)``
+reads the settings, and ``Device/writeSetting(_:to:button:)`` changes one and reads it back.
+
 ## Topics
+
+### Controlling devices
+
+- ``Device``
+- ``DeviceCapabilities``
+- ``DeviceGroup``
+- ``DeviceGroupKind``
+- ``DeviceStatus``
+- ``DeviceTurnOnResult``
+- ``DeviceOperation``
+- ``DeviceControlError``
+
+### Device settings
+
+- ``DeviceSetting``
+- ``DeviceSettingControl``
+- ``DeviceSettingsReading``
+- ``DeviceSettingChange``
+- ``DeviceSettingError``
 
 ### Devices
 
