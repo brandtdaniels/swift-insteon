@@ -83,15 +83,21 @@ struct TestClockTests {
 
   @Test func aSleepCanceledBeforeItStartsEndsAtOnce() async throws {
 
+    let (gate, opening) = AsyncStream<Void>.makeStream()
     let sleep = Task { [clock] in
 
-      withUnsafeCurrentTask { (task: UnsafeCurrentTask?) -> Void in task?.cancel() }
+      // Waits until it's canceled, so the sleep starts in a canceled task.
+      for await _ in gate {}
       try await clock.sleep(until: TestClock.Instant(offset: .seconds(5)))
 
     }
 
+    sleep.cancel()
+
     await #expect(throws: CancellationError.self) { try await sleep.value }
     #expect(clock.sleeperCount(until: .seconds(5)) == 0)
+
+    opening.finish()
 
   }
 
