@@ -6,6 +6,8 @@ import InsteonProtocol
 /// ``ControlExample/dimmerCommands`` describes them: Get Operating Flags reports the flags, Set
 /// Operating Flags `0x0A` and `0x0B` set and clear bit `0x02`, an extended Get replies with the
 /// values, and an extended Set with selector `0x05` or `0x06` writes D3 to the value at D7 or D8.
+/// Get Insteon Engine Version reports i2 unless told otherwise, and an extended Get for a
+/// button whose values are set apart replies with that button's values.
 actor SettingsModem: LinkingModem {
 
   /// The modem's own address.
@@ -20,8 +22,17 @@ actor SettingsModem: LinkingModem {
   /// The device's values, by the user data byte an extended Get's reply holds them in.
   private(set) var values: [Int: UInt8]
 
+  /// The values of buttons whose values differ from the device's, by button.
+  private(set) var buttonValues: [UInt8: [Int: UInt8]] = [:]
+
   /// Whether the device acknowledges writes without changing anything.
   private var ignoresWrites: Bool = false
+
+  /// The engine the device reports to Get Insteon Engine Version.
+  private var engine: InsteonEngine = .i2
+
+  /// Whether the device rejects Get Insteon Engine Version.
+  private var rejectsEngineRequests: Bool = false
 
   /// Every standard command sent, in order.
   private(set) var standardCommands: [Command] = []
@@ -64,6 +75,28 @@ actor SettingsModem: LinkingModem {
 
   }
 
+  /// Sets the engine the device reports.
+  func setEngine(_ engine: InsteonEngine) {
+
+    self.engine = engine
+
+  }
+
+  /// Makes the device reject Get Insteon Engine Version, as an i2CS device does when it isn't
+  /// linked to the modem.
+  func rejectEngineRequests() {
+
+    rejectsEngineRequests = true
+
+  }
+
+  /// Sets the values one button reports, by the user data byte that holds them.
+  func setValues(_ values: [Int: UInt8], ofButton button: UInt8) {
+
+    buttonValues[button] = values
+
+  }
+
   // MARK: - LinkingModem
 
   func send(_ command: SerialCommand) async throws {}
@@ -84,7 +117,13 @@ actor SettingsModem: LinkingModem {
     case 0x1F:
       command2 = flags
     case 0x0D:
-      command2 = InsteonEngine.i2.rawValue
+      if rejectsEngineRequests {
+
+        throw ModemError.deviceRejected(device, .notLinked)
+
+      }
+
+      command2 = engine.rawValue
     case 0x20:
       apply(message.command.command2)
     default:
@@ -109,7 +148,7 @@ actor SettingsModem: LinkingModem {
         reply[1] = data[1]
         reply[2] = 0x01
 
-        for (position, value) in values {
+        for (position, value) in buttonValues[data[1]] ?? values {
 
           reply[position] = value
 
@@ -131,7 +170,15 @@ actor SettingsModem: LinkingModem {
 
       } else if !ignoresWrites, let position = Self.positions[data[2]] {
 
-        values[position] = data[3]
+        if buttonValues[data[1]] != nil {
+
+          buttonValues[data[1]]?[position] = data[3]
+
+        } else {
+
+          values[position] = data[3]
+
+        }
 
       }
 

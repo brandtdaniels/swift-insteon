@@ -76,9 +76,11 @@ public struct Device: Sendable {
   /// identity the device reports to ID Request.
   ///
   /// - Returns: The description, or `nil` if the registry doesn't know the device and it
-  ///   didn't report an identity.
-  /// - Throws: `CancellationError` if the task is canceled while the device is asked. A device
-  ///   that doesn't answer isn't an error.
+  ///   didn't report an identity, such as when it didn't answer or rejected a request.
+  /// - Throws: ``DeviceControlError/notLinked`` when the device rejects the modem as an i2CS
+  ///   device does before it's linked; `CancellationError` if the task is canceled while the
+  ///   device is asked; and the errors of the modem and the connection to it, such as
+  ///   `ModemError.connectionClosed`.
   public func deviceDescription() async throws -> DeviceDescription? {
 
     if let known = await network.registry.device(address) {
@@ -89,17 +91,28 @@ public struct Device: Sendable {
 
     beforeIdentifying()
 
+    let identification: DeviceIdentification
+
     do {
 
-      _ = try await network.identify(address)
+      identification = try await network.identify(address)
 
-    } catch let error as CancellationError {
+    } catch let error as ModemError {
 
-      throw error
+      // Only what the device itself did means its identity isn't known; the modem's and the
+      // connection's errors are the caller's to handle.
+      switch error {
+      case .deviceRejected, .deviceTimedOut:
+        return nil
+      default:
+        throw error
+      }
 
-    } catch {
+    }
 
-      return nil
+    guard identification.acceptsModem else {
+
+      throw DeviceControlError.notLinked
 
     }
 
@@ -109,10 +122,12 @@ public struct Device: Sendable {
 
   /// What the device can do, for a front end to decide what to show.
   ///
+  /// A group can be turned on and off, or has a status, only when its commands reach it apart
+  /// from the device's other groups.
+  ///
   /// - Returns: The device's groups, whether it dims and beeps, and its settings with their
   ///   controls.
-  /// - Throws: `CancellationError` if the task is canceled while the device is asked for its
-  ///   identity.
+  /// - Throws: The errors of ``deviceDescription()``.
   public func capabilities() async throws -> DeviceCapabilities {
 
     let model: DeviceControlModel = try await controlModel()
@@ -126,8 +141,8 @@ public struct Device: Sendable {
         typeLabel: group.type.label,
         kind: DeviceGroupKind(rawValue: group.type.kind.rawValue),
         canDim: model.canDim(group),
-        canTurnOnAndOff: model.turnsOnAndOff(group),
-        hasStatus: group.type.state != nil,
+        canTurnOnAndOff: model.canTurnOnAndOff(group),
+        hasStatus: model.canRead(group),
         actionLabels: group.type.actions.map { (action: GroupType.Action) -> String in action.label }
       )
 
@@ -170,7 +185,8 @@ public struct Device: Sendable {
   ///
   /// A level is sent only to a group that dims, whose `on` action takes its level from the
   /// caller. A group that only turns on and off is turned fully on, and the result's
-  /// ``DeviceTurnOnResult/ignoredLevel`` says the level wasn't used.
+  /// ``DeviceTurnOnResult/ignoredLevel`` says the level wasn't used. The action's command is a
+  /// standard or an extended one, which is sent with its fixed user data and integrity bytes.
   ///
   /// - Parameters:
   ///   - level: The level, from 0 through 100 percent, or `nil` for fully on. Defaults to
@@ -178,9 +194,9 @@ public struct Device: Sendable {
   ///   - group: The group, or `nil` for the device's main group: group 1 when the catalog
   ///     gives its type, or else the first group whose type it gives. Defaults to `nil`.
   /// - Returns: What was done.
-  /// - Throws: ``DeviceControlError`` when nothing says how to turn the group on, and the
-  ///   modem's errors, such as `ModemError.deviceRejected` from an i2CS device that isn't linked
-  ///   to the modem.
+  /// - Throws: ``DeviceControlError`` when nothing says how to turn the group on, or its
+  ///   command doesn't reach it apart from the device's other groups; the errors of
+  ///   ``deviceDescription()``; and the modem's errors.
   public func turnOn(level: Int? = nil, group: Int? = nil) async throws -> DeviceTurnOnResult {
 
     let model: DeviceControlModel = try await controlModel()
@@ -193,23 +209,31 @@ public struct Device: Sendable {
     }
 
     let dims: Bool = model.canDim(target)
-    var sent: UInt8 = 0xFF
+    var value: UInt8 = 0xFF
 
     if dims, let level {
 
-      sent = LightLevel.level(percent: level)
+      value = LightLevel.level(percent: level)
 
     }
 
-    let command: Command = try actionCommand(on, value: sent, in: model)
+    let message: DeviceControlModel.ActionMessage = try model.message(for: on, of: target, value: value, to: address)
 
-    _ = try await modem.request(StandardMessage(to: address, command: command), timeout: network.requestTimeout)
+    guard model.canAddress(target, with: DeviceControlModel.onAction) else {
+
+      throw DeviceControlError.unaddressable(.turnOn, group: Int(target.number.rawValue), product: model.product)
+
+    }
+
+    try await send(message)
+
+    let sent: UInt8 = message.command.command2
 
     await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? sent : nil)
 
     return DeviceTurnOnResult(
       group: Int(target.number.rawValue),
-      level: dims ? level : nil,
+      level: dims && level != nil ? LightLevel.percent(level: sent) : nil,
       ignoredLevel: dims ? nil : level
     )
 
@@ -218,8 +242,9 @@ public struct Device: Sendable {
   /// Turns one of the device's groups off with its type's `off` action.
   ///
   /// - Parameter group: The group, or `nil` for the device's main group. Defaults to `nil`.
-  /// - Throws: ``DeviceControlError`` when nothing says how to turn the group off, and the
-  ///   modem's errors.
+  /// - Throws: ``DeviceControlError`` when nothing says how to turn the group off, or its
+  ///   command doesn't reach it apart from the device's other groups; the errors of
+  ///   ``deviceDescription()``; and the modem's errors.
   public func turnOff(group: Int? = nil) async throws {
 
     let model: DeviceControlModel = try await controlModel()
@@ -231,11 +256,169 @@ public struct Device: Sendable {
 
     }
 
-    let command: Command = try actionCommand(off, value: 0x00, in: model)
+    let message: DeviceControlModel.ActionMessage = try model.message(for: off, of: target, value: 0x00, to: address)
+
+    guard model.canAddress(target, with: DeviceControlModel.offAction) else {
+
+      throw DeviceControlError.unaddressable(.turnOff, group: Int(target.number.rawValue), product: model.product)
+
+    }
+
+    try await send(message)
+
+    await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? 0x00 : nil)
+
+  }
+
+  /// Turns the device's main group on with Light On Fast, which ignores the ramp rate.
+  ///
+  /// The level follows the rules of ``turnOn(level:group:)``: it's sent only to a group that
+  /// dims, and a group that only turns on and off is turned fully on. Light On Fast is the one
+  /// the device's command set lists; a device whose commands the catalog doesn't describe is
+  /// sent the one the Insteon protocol defines, and the result says so.
+  ///
+  /// - Parameter level: The level, from 0 through 100 percent, or `nil` for fully on.
+  ///   Defaults to `nil`.
+  /// - Returns: What was done.
+  /// - Throws: ``DeviceControlError/unsupported(_:product:)`` when the command set doesn't list
+  ///   Light On Fast, the other ``DeviceControlError`` refusals of ``turnOn(level:group:)``,
+  ///   the errors of ``deviceDescription()``, and the modem's errors.
+  public func turnOnFast(level: Int? = nil) async throws -> DeviceTurnOnResult {
+
+    let (model, target, listed): (DeviceControlModel, DeviceControlModel.Group, DeviceStandardCommand?) = try await mainGroupCommand(Self.lightOnFastCommand, for: .turnOnFast)
+    let dims: Bool = model.canDim(target)
+    var value: UInt8 = 0xFF
+
+    if dims, let level {
+
+      value = LightLevel.level(percent: level)
+
+    }
+
+    let command: Command
+
+    if let listed {
+
+      command = try Self.command(listed, value: value)
+
+    } else {
+
+      command = StandardDirectCommand.fastOn(level: value).command
+
+    }
+
+    _ = try await modem.request(StandardMessage(to: address, command: command), timeout: network.requestTimeout)
+
+    await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? command.command2 : nil)
+
+    return DeviceTurnOnResult(
+      group: Int(target.number.rawValue),
+      level: dims && level != nil ? LightLevel.percent(level: command.command2) : nil,
+      ignoredLevel: dims ? nil : level,
+      isCommandDescribed: listed != nil
+    )
+
+  }
+
+  /// Turns the device's main group off with Light Off Fast, which ignores the ramp rate.
+  ///
+  /// Light Off Fast is the one the device's command set lists; a device whose commands the
+  /// catalog doesn't describe is sent the one the Insteon protocol defines, and the result says
+  /// so.
+  ///
+  /// - Returns: What was done.
+  /// - Throws: ``DeviceControlError/unsupported(_:product:)`` when the command set doesn't list
+  ///   Light Off Fast, the other ``DeviceControlError`` refusals of ``turnOff(group:)``, the
+  ///   errors of ``deviceDescription()``, and the modem's errors.
+  @discardableResult
+  public func turnOffFast() async throws -> DeviceTurnOffResult {
+
+    let (model, target, listed): (DeviceControlModel, DeviceControlModel.Group, DeviceStandardCommand?) = try await mainGroupCommand(Self.lightOffFastCommand, for: .turnOffFast)
+    let command: Command
+
+    if let listed {
+
+      command = try Self.command(listed, value: 0x00)
+
+    } else {
+
+      command = StandardDirectCommand.fastOff.command
+
+    }
 
     _ = try await modem.request(StandardMessage(to: address, command: command), timeout: network.requestTimeout)
 
     await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? 0x00 : nil)
+
+    return DeviceTurnOffResult(group: Int(target.number.rawValue), isCommandDescribed: listed != nil)
+
+  }
+
+  /// Changes the device's main group to a level at once, with Light Instant Change.
+  ///
+  /// A group that dims goes to the level. A group that only turns on and off is sent Light
+  /// Instant Change for off at 0% and fully on otherwise, or, when its command set doesn't
+  /// list Light Instant Change, its type's `off` action at 0% and `on` action otherwise. Light
+  /// Instant Change is the one the device's command set lists; a device whose commands the
+  /// catalog doesn't describe is sent the one the Insteon protocol defines, and the result
+  /// says so.
+  ///
+  /// - Parameter level: The level, from 0 through 100 percent.
+  /// - Returns: What was done.
+  /// - Throws: ``DeviceControlError/unsupported(_:product:)`` when the command set doesn't list
+  ///   Light Instant Change for a group that dims, the other ``DeviceControlError`` refusals
+  ///   of ``turnOn(level:group:)``, the errors of ``deviceDescription()``, and the modem's
+  ///   errors.
+  @discardableResult
+  public func changeInstantly(to level: Int) async throws -> DeviceInstantChangeResult {
+
+    let model: DeviceControlModel = try await controlModel()
+    let target: DeviceControlModel.Group = try controlGroup(nil, in: model, for: .instantChange)
+    let dims: Bool = model.canDim(target)
+    let percent: Int = min(max(level, 0), 100)
+    let listed: DeviceStandardCommand? = model.commandSet?.standardCommand(named: Self.instantChangeCommand)
+    let group: Int = Int(target.number.rawValue)
+
+    if !dims, listed == nil {
+
+      if percent == 0 {
+
+        try await turnOff()
+
+      } else {
+
+        _ = try await turnOn()
+
+      }
+
+      return DeviceInstantChangeResult(group: group, level: percent, isOnOffOnly: true, isCommandDescribed: true)
+
+    }
+
+    if listed == nil, model.commandSet != nil {
+
+      throw DeviceControlError.unsupported(.instantChange, product: model.product)
+
+    }
+
+    let value: UInt8 = dims ? LightLevel.level(percent: percent) : (percent == 0 ? 0x00 : 0xFF)
+    let command: Command
+
+    if let listed {
+
+      command = try Self.command(listed, value: value)
+
+    } else {
+
+      command = StandardDirectCommand.instantChange(level: value).command
+
+    }
+
+    _ = try await modem.request(StandardMessage(to: address, command: command), timeout: network.requestTimeout)
+
+    await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? command.command2 : nil)
+
+    return DeviceInstantChangeResult(group: group, level: percent, isOnOffOnly: !dims, isCommandDescribed: listed != nil)
 
   }
 
@@ -243,13 +426,16 @@ public struct Device: Sendable {
   /// reply as the type says: a level in percent for a group that dims, the name of the range
   /// the value is in, or on or off.
   ///
-  /// A device nothing says how to read, or a group whose type gives no state, is sent Light
-  /// Status Request, and its reply is ``DeviceStatus/Reading/raw``.
+  /// A device nothing says how to read, or a main group whose type gives no state, is sent
+  /// Light Status Request, and its reply is ``DeviceStatus/Reading/raw``. Only the main
+  /// group's state, when it's the whole reply to Light Status Request, is recorded as the
+  /// device's level.
   ///
   /// - Parameter group: The group, or `nil` for the device's main group. Defaults to `nil`.
   /// - Returns: The status.
-  /// - Throws: ``DeviceControlError`` for a group the device doesn't have, and the modem's
-  ///   errors.
+  /// - Throws: ``DeviceControlError`` for a group the device doesn't have, or one whose state
+  ///   command doesn't reach it apart from the device's other groups; the errors of
+  ///   ``deviceDescription()``; and the modem's errors.
   public func status(group: Int? = nil) async throws -> DeviceStatus {
 
     let model: DeviceControlModel = try await controlModel()
@@ -267,16 +453,29 @@ public struct Device: Sendable {
     }
 
     let target: DeviceControlModel.Group = try controlGroup(group, in: model, for: .status)
+    let number: Int = Int(target.number.rawValue)
 
     guard let state = target.type.state else {
 
-      return try await rawStatus(group: Int(target.number.rawValue))
+      guard target.number == model.mainGroupNumber else {
+
+        throw DeviceControlError.unaddressable(.status, group: number, product: model.product)
+
+      }
+
+      return try await rawStatus(group: number)
 
     }
 
     guard let command = model.standardCommand(named: state.command) else {
 
       throw DeviceControlError.missingCommand(state.command.rawValue, product: model.product)
+
+    }
+
+    guard model.canRead(target) else {
+
+      throw DeviceControlError.unaddressable(.status, group: number, product: model.product)
 
     }
 
@@ -290,7 +489,7 @@ public struct Device: Sendable {
     await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? value : nil)
 
     return DeviceStatus(
-      group: Int(target.number.rawValue),
+      group: number,
       value: value,
       allLinkDatabaseDelta: acknowledgment.command.command1,
       reading: reading.reading,
@@ -311,29 +510,51 @@ public struct Device: Sendable {
 
   }
 
-  /// Makes the device beep, with the Beep its command set lists.
+  /// Makes the device beep.
   ///
-  /// - Throws: ``DeviceControlError`` when the device's command set doesn't list Beep, and the
-  ///   modem's errors, such as `ModemError.deviceRejected`.
-  public func beep() async throws {
+  /// Beep is harmless, and the catalog doesn't list it for every device that beeps, so it's
+  /// sent whatever the catalog says: the Beep the device's command set lists, or else the one
+  /// the Insteon protocol defines, even to a device whose identity isn't known. The result
+  /// says whether the command set lists it.
+  ///
+  /// - Returns: Whether the device's command set lists Beep.
+  /// - Throws: The modem's errors, such as `ModemError.deviceRejected` from a device that
+  ///   isn't linked to the modem, and the errors of the modem and the connection to it while
+  ///   the device is asked for its identity.
+  @discardableResult
+  public func beep() async throws -> DeviceBeepResult {
 
-    let model: DeviceControlModel = try await controlModel()
+    let commands: CommandSet?
 
-    guard model.description != nil else {
+    do {
 
-      throw DeviceControlError.notIdentified(.beep)
+      commands = try await deviceDescription()?.commandSet
+
+    } catch DeviceControlError.notLinked {
+
+      // Beep is sent anyway, and the device's answer says why it didn't beep.
+      commands = nil
 
     }
 
-    guard let beep = model.commandSet?.standardCommand(named: Self.beepCommand) else {
+    let listed: DeviceStandardCommand? = commands?.standardCommand(named: Self.beepCommand)
+    let command: Command
 
-      throw DeviceControlError.unsupported(.beep, product: model.product)
+    if let listed {
+
+      command = try listed.command()
+
+    } else {
+
+      command = StandardDirectCommand.beep.command
 
     }
 
-    _ = try await modem.request(StandardMessage(to: address, command: try beep.command()), timeout: network.requestTimeout)
+    _ = try await modem.request(StandardMessage(to: address, command: command), timeout: network.requestTimeout)
 
     await network.recordAnswer(of: address, level: nil)
+
+    return DeviceBeepResult(isListed: listed != nil)
 
   }
 
@@ -353,8 +574,9 @@ public struct Device: Sendable {
   ///     them, so an app can say that a reading has begun. Defaults to doing nothing.
   /// - Returns: The settings and what the device reported.
   /// - Throws: ``DeviceSettingError/notIdentified`` or ``DeviceSettingError/noSettings(product:)``
-  ///   when the settings aren't known, and the modem's errors.
-  public func readSettings(includingAdvanced: Bool = true, beforeReading: () -> Void = {}) async throws -> DeviceSettingsReading {
+  ///   when the settings aren't known, the errors of ``deviceDescription()``, and the modem's
+  ///   errors.
+  public func readSettings(includingAdvanced: Bool = true, beforeReading: @Sendable () -> Void = {}) async throws -> DeviceSettingsReading {
 
     let (description, commands): (DeviceDescription, CommandSet) = try await describedSettings()
     let items: [SettingItem] = commands.settingItems.filter { (item: SettingItem) -> Bool in includingAdvanced || !item.isAdvanced }
@@ -472,6 +694,15 @@ public struct Device: Sendable {
   /// The name of Beep in a command set.
   static let beepCommand: SettingName = "beep"
 
+  /// The name of Light On Fast in a command set.
+  static let lightOnFastCommand: SettingName = "lightOnFast"
+
+  /// The name of Light Off Fast in a command set.
+  static let lightOffFastCommand: SettingName = "lightOffFast"
+
+  /// The name of Light Instant Change in a command set.
+  static let instantChangeCommand: SettingName = "instantChange"
+
   /// The model of what the device can do, from its description.
   func controlModel() async throws -> DeviceControlModel {
 
@@ -510,27 +741,64 @@ public struct Device: Sendable {
 
   }
 
-  /// The command an action sends: its command's fixed cmd2, or else the action's value, or
-  /// else `value`.
-  private func actionCommand(_ action: GroupType.Action, value: UInt8, in model: DeviceControlModel) throws -> Command {
+  /// Sends an action's message, a standard one with the network's timeout and an extended one
+  /// with the timeout for extended requests.
+  private func send(_ message: DeviceControlModel.ActionMessage) async throws {
 
-    guard let command = model.standardCommand(named: action.command) else {
+    switch message {
+    case let .standard(standard):
+      _ = try await modem.request(standard, timeout: network.requestTimeout)
+    case let .extended(extended):
+      _ = try await modem.request(extended, timeout: Modem.defaultExtendedRequestTimeout)
+    }
 
-      throw DeviceControlError.missingCommand(action.command.rawValue, product: model.product)
+  }
+
+  /// The device's model, its main group, and the command a command set lists by a name, for a
+  /// command sent to the main group, such as Light On Fast.
+  ///
+  /// - Returns: The command, or `nil` when the catalog doesn't describe the device's commands,
+  ///   so the one the Insteon protocol defines is sent.
+  /// - Throws: ``DeviceControlError/unsupported(_:product:)`` when the command set doesn't list
+  ///   the command, and the refusals of choosing the main group.
+  private func mainGroupCommand(
+    _ name: SettingName,
+    for operation: DeviceOperation
+  ) async throws -> (DeviceControlModel, DeviceControlModel.Group, DeviceStandardCommand?) {
+
+    let model: DeviceControlModel = try await controlModel()
+    let target: DeviceControlModel.Group = try controlGroup(nil, in: model, for: operation)
+
+    guard let commands = model.commandSet else {
+
+      return (model, target, nil)
 
     }
+
+    guard let command = commands.standardCommand(named: name) else {
+
+      throw DeviceControlError.unsupported(operation, product: model.product)
+
+    }
+
+    return (model, target, command)
+
+  }
+
+  /// A standard command's cmd1 and cmd2: its fixed cmd2, or else `value`.
+  private static func command(_ command: DeviceStandardCommand, value: UInt8) throws -> Command {
 
     switch command.command2 {
     case .fixed:
       return try command.command()
     case .parameter:
-      return try command.command(.unnamed(Int(action.value ?? value)))
+      return try command.command(.unnamed(Int(value)))
     }
 
   }
 
-  /// Sends Light Status Request and returns its reply as a raw byte, and records it as the
-  /// device's level.
+  /// Sends Light Status Request and returns its reply as a raw byte. Nothing says the byte is
+  /// the device's level, so only when the device answered is recorded.
   private func rawStatus(group: Int?) async throws -> DeviceStatus {
 
     let acknowledgment: ReceivedMessage = try await modem.request(
@@ -539,7 +807,7 @@ public struct Device: Sendable {
     )
     let value: UInt8 = acknowledgment.command.command2
 
-    await network.recordAnswer(of: address, level: value)
+    await network.recordAnswer(of: address, level: nil)
 
     return DeviceStatus(group: group, value: value, allLinkDatabaseDelta: acknowledgment.command.command1, reading: .raw, isOn: value != 0)
 

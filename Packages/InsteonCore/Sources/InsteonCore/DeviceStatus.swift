@@ -87,7 +87,7 @@ public struct DeviceStatus: Hashable, Sendable {
 
 }
 
-/// What ``Device/turnOn(level:group:)`` did.
+/// What ``Device/turnOn(level:group:)`` or ``Device/turnOnFast(level:)`` did.
 ///
 /// A level means something only to a group that dims. A group that only turns on and off is
 /// turned fully on, and the level asked for is in ``DeviceTurnOnResult/ignoredLevel``:
@@ -104,13 +104,17 @@ public struct DeviceTurnOnResult: Hashable, Sendable {
   /// The group that was turned on.
   public var group: Int
 
-  /// The level the group was turned on at, from 0 through 100 percent, when a level was asked
-  /// for and the group dims; `nil` when it was turned fully on.
+  /// The level the group was turned on at, from 0 through 100 percent, as the command sent
+  /// it, when a level was asked for and the group dims; `nil` when it was turned fully on.
   public var level: Int?
 
-  /// The level asked for, from 0 through 100 percent, when the group doesn't dim, so it was
-  /// turned fully on instead; otherwise `nil`.
+  /// The level asked for when the group doesn't dim, so it was turned fully on instead;
+  /// otherwise `nil`.
   public var ignoredLevel: Int?
+
+  /// Whether the Insteon device catalog describes the command that was sent. When it doesn't
+  /// describe the device's commands at all, the command the Insteon protocol defines was sent.
+  public var isCommandDescribed: Bool
 
   /// Creates a result.
   ///
@@ -118,11 +122,97 @@ public struct DeviceTurnOnResult: Hashable, Sendable {
   ///   - group: The group that was turned on.
   ///   - level: The level the group was turned on at.
   ///   - ignoredLevel: The level asked for that the group couldn't take.
-  public init(group: Int, level: Int?, ignoredLevel: Int?) {
+  ///   - isCommandDescribed: Whether the catalog describes the command that was sent.
+  ///     Defaults to `true`.
+  public init(group: Int, level: Int?, ignoredLevel: Int?, isCommandDescribed: Bool = true) {
 
     self.group = group
     self.level = level
     self.ignoredLevel = ignoredLevel
+    self.isCommandDescribed = isCommandDescribed
+
+  }
+
+}
+
+/// What ``Device/turnOffFast()`` did.
+public struct DeviceTurnOffResult: Hashable, Sendable {
+
+  /// The group that was turned off.
+  public var group: Int
+
+  /// Whether the Insteon device catalog describes the command that was sent. When it doesn't
+  /// describe the device's commands at all, the command the Insteon protocol defines was sent.
+  public var isCommandDescribed: Bool
+
+  /// Creates a result.
+  ///
+  /// - Parameters:
+  ///   - group: The group that was turned off.
+  ///   - isCommandDescribed: Whether the catalog describes the command that was sent.
+  public init(group: Int, isCommandDescribed: Bool) {
+
+    self.group = group
+    self.isCommandDescribed = isCommandDescribed
+
+  }
+
+}
+
+/// What ``Device/changeInstantly(to:)`` did.
+///
+/// A group that dims goes to the level at once. A group that only turns on and off is turned
+/// off for 0% and fully on for any other level.
+public struct DeviceInstantChangeResult: Hashable, Sendable {
+
+  /// The group that was changed.
+  public var group: Int
+
+  /// The level asked for, from 0 through 100 percent.
+  public var level: Int
+
+  /// Whether the group only turns on and off, so it was turned off for 0% and otherwise fully
+  /// on.
+  public var isOnOffOnly: Bool
+
+  /// Whether the Insteon device catalog describes the command that was sent. When it doesn't
+  /// describe the device's commands at all, the command the Insteon protocol defines was sent.
+  public var isCommandDescribed: Bool
+
+  /// Creates a result.
+  ///
+  /// - Parameters:
+  ///   - group: The group that was changed.
+  ///   - level: The level asked for.
+  ///   - isOnOffOnly: Whether the group only turns on and off.
+  ///   - isCommandDescribed: Whether the catalog describes the command that was sent.
+  public init(group: Int, level: Int, isOnOffOnly: Bool, isCommandDescribed: Bool) {
+
+    self.group = group
+    self.level = level
+    self.isOnOffOnly = isOnOffOnly
+    self.isCommandDescribed = isCommandDescribed
+
+  }
+
+}
+
+/// What ``Device/beep()`` did.
+///
+/// Beep is sent whether or not the Insteon device catalog lists it for the device, since it's
+/// harmless and the catalog doesn't list it for every device that beeps.
+public struct DeviceBeepResult: Hashable, Sendable {
+
+  /// Whether the device's command set lists Beep. When it doesn't, the Beep the Insteon
+  /// protocol defines was sent.
+  public var isListed: Bool
+
+  /// Creates a result.
+  ///
+  /// - Parameter isListed: Whether the device's command set lists Beep.
+  public init(isListed: Bool) {
+
+    self.isListed = isListed
 
   }
 
@@ -136,6 +226,15 @@ public enum DeviceOperation: String, Hashable, Sendable {
 
   /// Turning a group off.
   case turnOff
+
+  /// Turning the main group on with Light On Fast.
+  case turnOnFast
+
+  /// Turning the main group off with Light Off Fast.
+  case turnOffFast
+
+  /// Changing the main group's level at once, with Light Instant Change.
+  case instantChange
 
   /// Reading a group's state.
   case status
@@ -155,6 +254,10 @@ public enum DeviceControlError: Error, Hashable, Sendable {
   /// how to do the operation. It can still be pinged, and its status read as a raw byte.
   case notIdentified(DeviceOperation)
 
+  /// The device rejected the modem when asked for its identity, as an i2CS device does when it
+  /// isn't linked to the modem, so it can't be asked or controlled until it's linked.
+  case notLinked
+
   /// Neither the Insteon device catalog nor the device's category gives a way to do the
   /// operation. The associated values are the operation and the product, as a sentence names
   /// it, such as `"Dimmer Switch 2477D (SwitchLinc Dimmer)"` or
@@ -168,5 +271,11 @@ public enum DeviceControlError: Error, Hashable, Sendable {
   /// The group's type names a command its command set doesn't describe. The associated values
   /// are the command's name and the product.
   case missingCommand(String, product: String)
+
+  /// The group's command doesn't reach the group apart from the device's other groups: it
+  /// sends the same message as another group's, such as Light On without a group, which
+  /// reaches the main group, or no message at all. The associated values are the operation,
+  /// the group and the product.
+  case unaddressable(DeviceOperation, group: Int, product: String)
 
 }

@@ -109,6 +109,9 @@ reads the settings, and ``Device/writeSetting(_:to:button:)`` changes one and re
 - ``DeviceGroupKind``
 - ``DeviceStatus``
 - ``DeviceTurnOnResult``
+- ``DeviceTurnOffResult``
+- ``DeviceInstantChangeResult``
+- ``DeviceBeepResult``
 - ``DeviceOperation``
 - ``DeviceControlError``
 

@@ -52,6 +52,10 @@ struct DeviceControlModel: Sendable {
   /// The standard commands the group types' actions and states name.
   let standardCommands: [DeviceStandardCommand]
 
+  /// The extended commands the group types' actions may name, such as a fan's speeds, sent
+  /// with a group in D1.
+  let extendedCommands: [DeviceExtendedCommand]
+
   /// The device's command set, if the catalog gives one.
   var commandSet: CommandSet? {
 
@@ -63,6 +67,13 @@ struct DeviceControlModel: Sendable {
   func standardCommand(named name: SettingName) -> DeviceStandardCommand? {
 
     standardCommands.first { (command: DeviceStandardCommand) -> Bool in command.name == name }
+
+  }
+
+  /// The extended command with a name.
+  func extendedCommand(named name: SettingName) -> DeviceExtendedCommand? {
+
+    extendedCommands.first { (command: DeviceExtendedCommand) -> Bool in command.name == name }
 
   }
 
@@ -102,21 +113,178 @@ struct DeviceControlModel: Sendable {
 
   }
 
+  // MARK: - Messages
+
+  /// A message an action sends: a standard one, or an extended one with its user data and
+  /// integrity bytes.
+  enum ActionMessage: Hashable, Sendable {
+
+    /// A standard direct message.
+    case standard(StandardMessage)
+
+    /// An extended direct message.
+    case extended(ExtendedMessage)
+
+    /// The message's cmd1 and cmd2.
+    var command: Command {
+
+      switch self {
+      case let .standard(message):
+        message.command
+      case let .extended(message):
+        message.command
+      }
+
+    }
+
+  }
+
+  /// The message an action of a group sends, from the standard or extended command it names.
+  ///
+  /// A command that takes a value in cmd2 gets the action's value, or else `value`. An
+  /// extended command gets its fixed user data bytes, the group in D1 when it's per button,
+  /// and its integrity bytes.
+  ///
+  /// - Parameters:
+  ///   - action: The action.
+  ///   - group: The group.
+  ///   - value: The value for cmd2 when the action leaves it to the caller.
+  ///   - device: The device to send it to.
+  /// - Returns: The message.
+  /// - Throws: ``DeviceControlError/missingCommand(_:product:)`` when the command set describes
+  ///   no command by the action's name that can be sent, and `FieldError` for a value that
+  ///   doesn't fit.
+  func message(for action: GroupType.Action, of group: Group, value: UInt8, to device: InsteonAddress) throws -> ActionMessage {
+
+    let byte: UInt8 = action.value ?? value
+
+    if let command = standardCommand(named: action.command) {
+
+      switch command.command2 {
+      case .fixed:
+        return .standard(StandardMessage(to: device, command: try command.command()))
+      case .parameter:
+        return .standard(StandardMessage(to: device, command: try command.command(.unnamed(Int(byte)))))
+      }
+
+    }
+
+    if let command = extendedCommand(named: action.command), let userData = Self.userData(of: command, group: group) {
+
+      let takesValue: Bool = Self.takesValueInCommand2(command)
+      let bytes = Command(command1: command.command.command1, command2: takesValue ? byte : command.command.command2)
+
+      return .extended(ExtendedMessage(to: device, command: bytes, userData: userData, integrity: command.integrity.scheme))
+
+    }
+
+    throw DeviceControlError.missingCommand(action.command.rawValue, product: product)
+
+  }
+
+  /// An extended command's user data for a group, before its integrity bytes: its fixed bytes,
+  /// and the group in D1 when it's per button; or `nil` when it takes a value in its user
+  /// data, which an action doesn't give.
+  static func userData(of command: DeviceExtendedCommand, group: Group) -> UserData? {
+
+    guard command.parameters.allSatisfy({ (field: MessageField) -> Bool in field.location == .command2 }) else {
+
+      return nil
+
+    }
+
+    var userData = UserData()
+
+    for byte in command.fixedBytes {
+
+      userData[byte.position] = byte.value
+
+    }
+
+    if command.isPerButton {
+
+      userData[1] = group.number.rawValue
+
+    }
+
+    return userData
+
+  }
+
+  /// Whether an extended command takes a value in cmd2.
+  static func takesValueInCommand2(_ command: DeviceExtendedCommand) -> Bool {
+
+    command.parameters.contains { (field: MessageField) -> Bool in field.location == .command2 }
+
+  }
+
+  /// An address that stands for the device when messages are compared, since every message
+  /// compared goes to the same device.
+  private static let comparedDevice = InsteonAddress(0x00, 0x00, 0x00)
+
   // MARK: - Capabilities of a group
 
-  /// Whether a group's On takes a level: its `on` action leaves the value to the caller, and
-  /// the command it names takes one in cmd2.
-  func canDim(_ group: Group) -> Bool {
+  /// Whether an action of a group sends a message that reaches the group: the group is the
+  /// main group, or no other group's action of the same name sends the same message.
+  ///
+  /// A KeypadLinc's detached load, whose `on` action names Light On without a group, sends
+  /// the main group's message, so it can't be reached on its own.
+  func canAddress(_ group: Group, with name: SettingName) -> Bool {
 
-    guard let on = group.type.action(named: Self.onAction), on.value == nil, let command = standardCommand(named: on.command) else {
+    guard
+      let action = group.type.action(named: name),
+      let sent = try? message(for: action, of: group, value: 0xFF, to: Self.comparedDevice)
+    else {
 
       return false
 
     }
 
-    if case .parameter = command.command2 {
+    if group.number == mainGroupNumber {
 
       return true
+
+    }
+
+    return !groups.contains { (other: Group) -> Bool in
+
+      guard other.number != group.number, let otherAction = other.type.action(named: name) else {
+
+        return false
+
+      }
+
+      return (try? message(for: otherAction, of: other, value: 0xFF, to: Self.comparedDevice)) == sent
+
+    }
+
+  }
+
+  /// Whether a group's On takes a level: its `on` action leaves the value to the caller, the
+  /// command it names takes one in cmd2, and the action reaches the group.
+  func canDim(_ group: Group) -> Bool {
+
+    guard let on = group.type.action(named: Self.onAction), on.value == nil, canAddress(group, with: Self.onAction) else {
+
+      return false
+
+    }
+
+    if let command = standardCommand(named: on.command) {
+
+      if case .parameter = command.command2 {
+
+        return true
+
+      }
+
+      return false
+
+    }
+
+    if let command = extendedCommand(named: on.command) {
+
+      return Self.takesValueInCommand2(command)
 
     }
 
@@ -128,6 +296,61 @@ struct DeviceControlModel: Sendable {
   func turnsOnAndOff(_ group: Group) -> Bool {
 
     group.type.action(named: Self.onAction) != nil && group.type.action(named: Self.offAction) != nil
+
+  }
+
+  /// Whether a group can be turned on and off: it has both actions, and each sends a message
+  /// that reaches it.
+  func canTurnOnAndOff(_ group: Group) -> Bool {
+
+    turnsOnAndOff(group) && canAddress(group, with: Self.onAction) && canAddress(group, with: Self.offAction)
+
+  }
+
+  /// Whether a group's state can be read as its type says: its state command is a standard
+  /// command the command set describes, and its reply is about the group. A reply with a bit
+  /// per group is about groups 1 through 8; any other reply is about the main group, or about
+  /// a group whose state command no other group's state shares.
+  func canRead(_ group: Group) -> Bool {
+
+    guard
+      let state = group.type.state,
+      let command = standardCommand(named: state.command),
+      let sent = try? command.command()
+    else {
+
+      return false
+
+    }
+
+    if state.isBitPerGroup {
+
+      return (1...8).contains(Int(group.number.rawValue))
+
+    }
+
+    if group.number == mainGroupNumber {
+
+      return true
+
+    }
+
+    return !groups.contains { (other: Group) -> Bool in
+
+      guard
+        other.number != group.number,
+        let otherState = other.type.state,
+        !otherState.isBitPerGroup,
+        let otherCommand = standardCommand(named: otherState.command)
+      else {
+
+        return false
+
+      }
+
+      return (try? otherCommand.command()) == sent
+
+    }
 
   }
 
@@ -164,7 +387,7 @@ struct DeviceControlModel: Sendable {
 
     guard let description else {
 
-      return DeviceControlModel(description: nil, source: .uncontrolled, groups: [], mainGroupNumber: nil, standardCommands: [])
+      return DeviceControlModel(description: nil, source: .uncontrolled, groups: [], mainGroupNumber: nil, standardCommands: [], extendedCommands: [])
 
     }
 
@@ -191,14 +414,15 @@ struct DeviceControlModel: Sendable {
         source: .catalog,
         groups: groups,
         mainGroupNumber: main,
-        standardCommands: description.commandSet?.standardCommands ?? []
+        standardCommands: description.commandSet?.standardCommands ?? [],
+        extendedCommands: description.commandSet?.extendedCommands ?? []
       )
 
     }
 
     guard let kind = GroupType.Kind.fallback(for: description.category) else {
 
-      return DeviceControlModel(description: description, source: .uncontrolled, groups: [], mainGroupNumber: nil, standardCommands: [])
+      return DeviceControlModel(description: description, source: .uncontrolled, groups: [], mainGroupNumber: nil, standardCommands: [], extendedCommands: [])
 
     }
 
@@ -211,7 +435,8 @@ struct DeviceControlModel: Sendable {
       source: .categoryFallback,
       groups: [group],
       mainGroupNumber: group.number,
-      standardCommands: isDimmer ? Fallback.dimmerCommands : Fallback.relayCommands
+      standardCommands: isDimmer ? Fallback.dimmerCommands : Fallback.relayCommands,
+      extendedCommands: []
     )
 
   }

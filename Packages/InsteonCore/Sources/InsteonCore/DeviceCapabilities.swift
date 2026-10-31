@@ -49,7 +49,7 @@ public struct DeviceCapabilities: Hashable, Sendable {
   /// there are no groups.
   public var mainGroupNumber: Int?
 
-  /// Whether the device's command set lists Beep.
+  /// Whether the device's command set lists Beep. ``Device/beep()`` sends Beep either way.
   public var canBeep: Bool
 
   /// The settings the catalog describes, in the order a settings page shows them. Empty when
@@ -127,10 +127,12 @@ public struct DeviceGroup: Hashable, Sendable {
   /// Whether the group takes a level when it's turned on.
   public var canDim: Bool
 
-  /// Whether the group can be turned on and off.
+  /// Whether the group can be turned on and off: its type has both actions, and each sends a
+  /// message that reaches the group apart from the device's other groups.
   public var canTurnOnAndOff: Bool
 
-  /// Whether the group's state can be read.
+  /// Whether the group's state can be read as its type says, with a command whose reply is
+  /// about the group.
   public var hasStatus: Bool
 
   /// The names a control gives what the group can be told to do, such as `"On"` and `"Off"`,

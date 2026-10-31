@@ -2,7 +2,9 @@ import InsteonDeviceCatalog
 import InsteonProtocol
 
 /// A made-up catalog of devices to control: a dimmer with settings, a relay, a fan with a
-/// light, and a dual outlet whose outlets report one bit each.
+/// light whose speeds are extended commands, a dual outlet whose outlets report one bit each
+/// and whose second outlet takes an extended command with a checksum, and a keypad whose
+/// detached load takes the main load's Light On.
 enum ControlExample {
 
   // MARK: - Addresses
@@ -23,6 +25,10 @@ enum ControlExample {
 
   static let unidentified = InsteonAddress(0x3A, 0x4B, 0x08)
 
+  static let keypad = InsteonAddress(0x3A, 0x4B, 0x09)
+
+  static let buttons = InsteonAddress(0x3A, 0x4B, 0x0A)
+
   // MARK: - Identities
 
   static let dimmerIdentity = ReportedIdentity(category: 0x01, subcategory: 0x7C, firmwareVersion: 0x45)
@@ -39,6 +45,10 @@ enum ControlExample {
 
   static let unknownOtherIdentity = ReportedIdentity(category: 0x07, subcategory: 0x55, firmwareVersion: 0x45)
 
+  static let keypadIdentity = ReportedIdentity(category: 0x01, subcategory: 0x7B, firmwareVersion: 0x45)
+
+  static let buttonsIdentity = ReportedIdentity(category: 0x01, subcategory: 0x79, firmwareVersion: 0x45)
+
   /// Every device but the unidentified one, as a network's snapshot would hold them.
   static let identities: [InsteonAddress: ReportedIdentity] = [
     dimmer: dimmerIdentity,
@@ -47,7 +57,9 @@ enum ControlExample {
     outlet: outletIdentity,
     unknownDimmer: unknownDimmerIdentity,
     unknownRelay: unknownRelayIdentity,
-    unknownOther: unknownOtherIdentity
+    unknownOther: unknownOtherIdentity,
+    keypad: keypadIdentity,
+    buttons: buttonsIdentity
   ]
 
   // MARK: - Commands
@@ -78,6 +90,22 @@ enum ControlExample {
   )
 
   static let beep = DeviceStandardCommand(name: "beep", summary: "Beeps.", command1: 0x30, command2: .fixed(0x00))
+
+  static let lightOnFast = DeviceStandardCommand(
+    name: "lightOnFast",
+    summary: "Turns the load on to the level in cmd2 at once.",
+    command1: 0x12,
+    command2: .parameter(MessageField(name: "onLevel", summary: "The level.", location: .command2, range: 0...255))
+  )
+
+  static let lightOffFast = DeviceStandardCommand(name: "lightOffFast", summary: "Turns the load off at once.", command1: 0x14, command2: .fixed(0x00))
+
+  static let instantChange = DeviceStandardCommand(
+    name: "instantChange",
+    summary: "Changes the load to the level in cmd2 at once.",
+    command1: 0x21,
+    command2: .parameter(MessageField(name: "onLevel", summary: "The level.", location: .command2, range: 0...255))
+  )
 
   // MARK: - Group types
 
@@ -139,7 +167,7 @@ enum ControlExample {
         SettingWrite(name: "onLevel", summary: "Sets the on-level.", selector: 0x06, isPerButton: false, bytes: [SettingWrite.Byte(position: 3, value: "onLevel")])
       ]
     ),
-    standardCommands: [lightOn, lightOff, readLevel, beep],
+    standardCommands: [lightOn, lightOff, readLevel, beep, lightOnFast, lightOffFast, instantChange],
     groupTypes: [light],
     valueTables: [
       ValueTable(name: "rampRate", entries: [
@@ -160,14 +188,26 @@ enum ControlExample {
   static let fanCommands = CommandSet(
     id: "exampleFan",
     name: "Example fan",
-    summary: "A fan with a light.",
+    summary: "A fan with a light, whose speeds are extended commands with the fan's group in D1.",
     standardCommands: [
       lightOn,
       lightOff,
       readLevel,
-      DeviceStandardCommand(name: "readFanSpeed", summary: "Reads the fan speed.", command1: 0x19, command2: .fixed(0x03)),
-      DeviceStandardCommand(name: "fanOff", summary: "Turns the fan off.", command1: 0x13, command2: .fixed(0x02)),
-      DeviceStandardCommand(name: "fanHigh", summary: "Turns the fan to high.", command1: 0x11, command2: .fixed(0x02))
+      DeviceStandardCommand(name: "readFanSpeed", summary: "Reads the fan speed.", command1: 0x19, command2: .fixed(0x03))
+    ],
+    extendedCommands: [
+      DeviceExtendedCommand(
+        name: "fanOff",
+        summary: "Turns the fan off.",
+        command: Command(command1: 0x13, command2: 0x00),
+        fixedBytes: [FixedUserDataByte(position: 1, value: 0x02)]
+      ),
+      DeviceExtendedCommand(
+        name: "fanHigh",
+        summary: "Turns the fan to high.",
+        command: Command(command1: 0x11, command2: 0xFF),
+        fixedBytes: [FixedUserDataByte(position: 1, value: 0x02)]
+      )
     ],
     groupTypes: [
       light,
@@ -210,9 +250,23 @@ enum ControlExample {
           location: .command2,
           kind: .flags([FieldBit(mask: 0x01, name: "topOn"), FieldBit(mask: 0x02, name: "bottomOn")])
         )
+      )
+    ],
+    extendedCommands: [
+      DeviceExtendedCommand(
+        name: "bottomOn",
+        summary: "Turns the bottom outlet on.",
+        command: Command(command1: 0x11, command2: 0xFF),
+        fixedBytes: [FixedUserDataByte(position: 1, value: 0x02)],
+        integrity: .checksum
       ),
-      DeviceStandardCommand(name: "bottomOn", summary: "Turns the bottom outlet on.", command1: 0x32, command2: .fixed(0x02)),
-      DeviceStandardCommand(name: "bottomOff", summary: "Turns the bottom outlet off.", command1: 0x33, command2: .fixed(0x02))
+      DeviceExtendedCommand(
+        name: "bottomOff",
+        summary: "Turns the bottom outlet off.",
+        command: Command(command1: 0x13, command2: 0x00),
+        fixedBytes: [FixedUserDataByte(position: 1, value: 0x02)],
+        integrity: .checksum
+      )
     ],
     groupTypes: [
       GroupType(
@@ -236,6 +290,46 @@ enum ControlExample {
         ]
       )
     ]
+  )
+
+  static let keypadCommands = CommandSet(
+    id: "exampleKeypad",
+    name: "Example keypad",
+    summary: "A load on button 1 and a detached load whose Light On has no group.",
+    standardCommands: [lightOn, lightOff, readLevel],
+    groupTypes: [light]
+  )
+
+  /// Three buttons, each with its own on-level, and a key beep that's set with an extended
+  /// message while the program lock is on.
+  static let buttonsCommands = CommandSet(
+    id: "exampleButtons",
+    name: "Example buttons",
+    summary: "Per-button on-levels and a guarded key beep.",
+    operatingFlags: [
+      OperatingFlag(
+        name: "keyBeep",
+        summary: "Beeps on every button press.",
+        query: .operatingFlags,
+        bit: 0x02,
+        on: 0x0A,
+        off: 0x0B,
+        extendedWhen: "programLock",
+        label: "Key beep"
+      ),
+      OperatingFlag(name: "programLock", summary: "Locks the buttons' programming.", query: .operatingFlags, bit: 0x01, label: "Program lock")
+    ],
+    extendedSettings: ExtendedSettings(
+      isPerButton: true,
+      values: [
+        SettingValue(name: "onLevel", summary: "The level a press turns on to.", position: 8, label: "On-level", unit: .percent, scale: 0.392157)
+      ],
+      writes: [
+        SettingWrite(name: "onLevel", summary: "Sets a button's on-level.", selector: 0x06, isPerButton: true, bytes: [SettingWrite.Byte(position: 3, value: "onLevel")])
+      ]
+    ),
+    standardCommands: [lightOn, lightOff, readLevel],
+    groupTypes: [light]
   )
 
   // MARK: - Profiles
@@ -267,9 +361,18 @@ enum ControlExample {
       profile(model: "9104", name: "Example Outlet", identity: outletIdentity, commands: outletCommands, groups: [
         DeviceProfile.Group(number: 1, name: "Top outlet", role: .both, type: "top"),
         DeviceProfile.Group(number: 2, name: "Bottom outlet", role: .both, type: "bottom")
+      ]),
+      profile(model: "9105", name: "Example Keypad", identity: keypadIdentity, commands: keypadCommands, groups: [
+        DeviceProfile.Group(number: 1, name: "Button A", role: .both, type: "light"),
+        DeviceProfile.Group(number: 2, name: "Detached load", role: .both, type: "light")
+      ]),
+      profile(model: "9106", name: "Example Buttons", identity: buttonsIdentity, commands: buttonsCommands, groups: [
+        DeviceProfile.Group(number: 1, name: "Button 1", role: .both, type: "light"),
+        DeviceProfile.Group(number: 2, name: "Button 2", role: .controller),
+        DeviceProfile.Group(number: 3, name: "Button 3", role: .controller)
       ])
     ],
-    commandSets: [dimmerCommands, relayCommands, fanCommands, outletCommands]
+    commandSets: [dimmerCommands, relayCommands, fanCommands, outletCommands, keypadCommands, buttonsCommands]
   )
 
 }
