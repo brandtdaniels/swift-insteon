@@ -117,7 +117,13 @@ struct InsteonCommand {
     case let .watch(options):
       try await withModem(invocation) { modem, names in
 
-        await WatchCommand.run(options, modem: modem, names: names)
+        // The network starts from the identity cache, so devices known from earlier commands
+        // are named, and saves the identities and last-heard times the monitor records.
+        try await IdentityStore.withNetwork(modem: modem, hub: nil, names: names) { (cached: CachedNetwork) async throws -> Void in
+
+          await WatchCommand.run(options, network: cached.network)
+
+        }
 
       }
     case .catalog:

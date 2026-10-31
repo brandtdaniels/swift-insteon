@@ -118,6 +118,28 @@ do {
 }
 ```
 
+### Watching what the modem hears
+
+``DeviceNetwork/monitor`` hands out a ``DeviceMonitor``, whose
+``DeviceMonitor/changes(includingRaw:)`` stream reads what the modem hears as
+``DeviceMonitorEvent``s: which device sent a command to which group, what the device's profile
+in the Insteon device catalog says it means, whether it turns the group on or off, and the
+product's name. A device is known from the identities the network's registry holds and from
+any identity a device reports while the stream runs, which the monitor records in the
+registry, along with when each device was last heard. The stream runs in its reader's task,
+and ends when that task is canceled or the modem's replies finish:
+
+```swift
+for await event in await network.monitor.changes() {
+  if case let .groupCommand(command) = event, command.event == "wet" {
+    print("\(command.device) detected water")
+  }
+}
+```
+
+A front end that shows the modem's bytes asks for them with `includingRaw`, which adds each
+message's bytes before its events and the kind of each reply that isn't otherwise reported.
+
 ### Linking devices
 
 ``DeviceNetwork/linking`` hands out a ``DeviceLinkingCoordinator``, which links devices to the
@@ -172,6 +194,15 @@ if let failure = result.linkBackFailure {
 - ``ModemDatabaseEntry``
 - ``NetworkDeviceState``
 - ``HubLocation``
+
+### Watching devices
+
+- ``DeviceMonitor``
+- ``DeviceMonitorEvent``
+- ``DeviceGroupCommand``
+- ``DeviceSetButtonPress``
+- ``DeviceMessageSummary``
+- ``ModemNotice``
 
 ### Linking devices
 

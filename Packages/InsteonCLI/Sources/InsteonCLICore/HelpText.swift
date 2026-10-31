@@ -317,8 +317,9 @@ public enum HelpText {
 
     Prints what the modem hears until Control-C: devices' group commands, read as named
     events, such as a leak sensor's wet, when the Insteon device catalog knows the device,
-    and other messages as they are. A device becomes known when it reports its identity,
-    such as when its SET button is pressed.
+    and other messages as they are. A device is known when an earlier command learned its
+    identity, or when it reports one, such as when its SET button is pressed; the identities
+    devices report are kept in the identity cache.
 
     Only messages sent to the modem, and group broadcasts from devices it has responder
     records for, reach it. To hear a device's buttons, link the modem as its responder

@@ -7,8 +7,6 @@ insteon/DeviceCommands.swift	hex-literal	let productKey = productData.map(\.prod
 insteon/DeviceCommands.swift	protocol-command	_ = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.productDataRequest))
 insteon/SceneCommands.swift	hex-literal	let command: Command = isOn ? StandardDirectCommand.on(level: 0xFF).command : StandardDirectCommand.off.command
 insteon/SceneCommands.swift	protocol-command	let command: Command = isOn ? StandardDirectCommand.on(level: 0xFF).command : StandardDirectCommand.off.command
-insteon/WatchCommand.swift	protocol-command	let name = StandardDirectCommand.name(command1: command.command1).map { ""$0 } ?? ""
-insteon/WatchCommand.swift	protocol-command	let name = StandardDirectCommand.name(command1: message.command.command1).map { ""$0 } ?? ""
 InsteonCLICore/ArgumentParser.swift	hex-literal	guard bytes[0] == 0x02 else {
 InsteonCLICore/RawInput.swift	hex-literal	case 0x66:
 InsteonCLICore/RawInput.swift	hex-literal	case 0x67:

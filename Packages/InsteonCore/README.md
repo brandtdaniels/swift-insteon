@@ -19,6 +19,7 @@ Keep track of the Insteon devices on a network: the library an app or a command 
 - `Device`: one device on a network, controlled as the Insteon device catalog describes it; reads its settings and changes them, never writing the flags that turn off its radio or powerline or require a checksum, and only turning its programming lock off
 - `DeviceSetting`, `DeviceSettingsReading`, `DeviceSettingChange`: a setting with what a settings page shows for it, the settings a device reported, and what a write changed
 - `DeviceSettingError`, `DeviceSettingInput`: why a setting couldn't be read or written, and what a value setting takes
+- `DeviceMonitor`: reads what the modem hears as `DeviceMonitorEvent`s, such as a device's group command with what the catalog says it means, in a stream that runs in its reader's task; it records the identities devices report and when each was last heard in the network
 
 The store never holds credentials, the Hub's MAC address, names or rooms.
 
