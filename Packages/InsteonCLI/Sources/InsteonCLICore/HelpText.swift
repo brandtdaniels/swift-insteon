@@ -19,6 +19,7 @@ public enum HelpText {
     case "links": links
     case "link": link
     case "unlink": unlink
+    case "remove": remove
     case "device": device
     case "scene", "group": scene
     case "beep": beep
@@ -43,6 +44,8 @@ public enum HelpText {
       link [ADDRESS]      Link a device to the modem, by its address or its SET button
       unlink [ADDRESS]    Unlink a device from the modem, with its SET button or, with
                           --all, by its address
+      remove ADDRESS      Remove a device from the network: unlink it from the modem,
+                          forget it and show its factory reset steps
       device ADDRESS ...  Control a device, read and change its settings, or read its
                           ALL-Link database
       scene GROUP on|off  Turn the devices in one of the modem's groups on or off
@@ -210,6 +213,37 @@ public enum HelpText {
                           Not with --group, --controller or --responder.
       --timeout SECONDS   How long to wait. Defaults to 240, or with --all, 30 for each
                           link.
+    """
+
+  /// The help for `insteon remove`.
+  public static let remove = """
+    Usage: insteon [--hub HOST[:PORT] | --serial PATH] remove ADDRESS [--scan]
+                   [--force-modem-side] [--yes] [--timeout SECONDS] [--json]
+
+    Removes a device from the network. First it removes every link between the modem and the
+    device without its SET button, as 'unlink ADDRESS --all' does: the links the device
+    controls first, and the modem's group 0 last. Then the identity cache forgets the device:
+    its identity, its state and the modem's records for it. Last, it shows the Insteon device
+    catalog's steps to restore the device's factory settings, which erases the links the
+    device itself keeps; the command never resets a device.
+
+    If a link can't be removed that way, the command says which links are left and how to
+    remove them with the device's SET button, and keeps the device.
+
+    It asks before it starts. Without a terminal to ask at, it needs --yes.
+
+      --scan              Also read the ALL-Link databases of the other devices the identity
+                          cache knows, and list each record that still names the device, such
+                          as a scene's. Those records are only listed, never changed.
+      --force-modem-side  For a device that's gone, such as one thrown away or one whose
+                          batteries are dead: when its links can't be removed through it,
+                          delete the modem's records for it directly with Manage ALL-Link
+                          Record, and remove it anyway. The device's own records stay, so
+                          only use it for a device that won't come back.
+      -y, --yes           Don't ask first.
+      --timeout SECONDS   How long to wait for each link to be removed. Defaults to 30.
+
+    'unlink ADDRESS --all' removes the links and keeps the device in the identity cache.
     """
 
   /// The help for `insteon device`.
