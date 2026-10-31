@@ -277,6 +277,26 @@ struct MessageFieldTests {
 
   }
 
+  // A scale of zero would read every value as 0, and a negative one would read them inverted.
+  @Test(arguments: ["0", "-0.5", "1e309"])
+  func refusesAFieldScaleThatIsntAFiniteNumberAboveZero(_ scale: String) {
+
+    let json = #"""
+      { "devices": [], "commandSets": [{
+        "id": "a", "name": "A", "description": "A.", "sources": ["A"],
+        "directMessages": [{ "name": "levelReport", "description": "Level.", "command1": "0x70",
+          "value": { "name": "level", "description": "Level.", "scale": \#(scale) } }]
+      }] }
+      """#
+
+    #expect(throws: DecodingError.self) {
+
+      try DeviceCatalog(json: Data(json.utf8))
+
+    }
+
+  }
+
   @Test func refusesAFieldWithAnEnumerationItDoesntHave() {
 
     let json = #"""

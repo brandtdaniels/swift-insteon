@@ -900,16 +900,17 @@ enum SettingPresentation {
 
     }
 
+    // Whole seconds and milliseconds apart, so a duration of any length can't overflow.
     let components = duration.components
-    let milliseconds: Int64 = components.seconds * 1_000 + components.attoseconds / 1_000_000_000_000_000
+    let milliseconds: Int64 = components.attoseconds / 1_000_000_000_000_000
 
-    if milliseconds % 1_000 == 0 {
+    if milliseconds == 0 {
 
-      return String(milliseconds / 1_000) + "s"
+      return String(components.seconds) + "s"
 
     }
 
-    return String(Double(milliseconds) / 1_000) + "s"
+    return String(Double(components.seconds) + Double(milliseconds) / 1_000) + "s"
 
   }
 

@@ -128,6 +128,66 @@ struct DeviceSettingsTests {
 
   }
 
+  @Test(arguments: ["-1", "1e309"])
+  func refusesAScaleThatIsntAFiniteNumberAboveZero(_ scale: String) {
+
+    let json = Self.dimmerSet.replacingOccurrences(of: #""scale": 0.392157"#, with: #""scale": "# + scale)
+
+    #expect(throws: DecodingError.self) {
+
+      try JSONDecoder().decode(CommandSet.self, from: Data(json.utf8))
+
+    }
+
+  }
+
+  // Durations far longer than any table's, or digits too many for a number, are refused
+  // rather than trapping when converted.
+  @Test(arguments: [
+    "99999999999999999 h",
+    "10000000000000000 s",
+    String(repeating: "9", count: 400) + " s",
+  ])
+  func refusesADurationOrNumberTooLarge(text: String) throws {
+
+    let commands = try commands()
+    let rampRate = try value("rampRate")
+
+    #expect(throws: SettingInputError.outOfRange("rampRate")) {
+
+      try commands.raw(for: rampRate, parsing: text)
+
+    }
+
+  }
+
+  @Test(arguments: ["-", ".", "-."])
+  func refusesADurationThatIsntANumber(text: String) throws {
+
+    let commands = try commands()
+    let rampRate = try value("rampRate")
+
+    #expect(throws: SettingInputError.unreadable("rampRate", text)) {
+
+      try commands.raw(for: rampRate, parsing: text)
+
+    }
+
+  }
+
+  @Test func refusesAPercentageTooLargeForANumber() throws {
+
+    let commands = try commands()
+    let onLevel = try value("onLevel")
+
+    #expect(throws: SettingInputError.outOfRange("onLevel")) {
+
+      try commands.raw(for: onLevel, parsing: String(repeating: "9", count: 400) + "%")
+
+    }
+
+  }
+
   // MARK: - Items
 
   @Test func ordersItemsBySectionThenTheCommandSetsOrder() throws {

@@ -771,7 +771,7 @@ extension LinkDataByte: Decodable {
   /// - Parameter decoder: The decoder to read from.
   /// - Throws: `DecodingError` if the JSON isn't a data byte, it isn't Data 1 through Data 3,
   ///   a byte isn't written as `0x` and two hexadecimal digits, its range ends before it
-  ///   starts, or its scale isn't above 0.
+  ///   starts, or its scale isn't a finite number above 0.
   public init(from decoder: any Decoder) throws {
 
     let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -799,9 +799,9 @@ extension LinkDataByte: Decodable {
 
     let scale = try container.decodeIfPresent(Double.self, forKey: .scale) ?? 1
 
-    guard scale > 0 else {
+    guard scale > 0, scale.isFinite else {
 
-      throw DecodingError.dataCorruptedError(forKey: .scale, in: container, debugDescription: "A scale is above 0.")
+      throw DecodingError.dataCorruptedError(forKey: .scale, in: container, debugDescription: "A scale is a finite number above 0.")
 
     }
 
