@@ -133,10 +133,13 @@ struct GuardedSendTests {
 
     let commands: CommandSet = try #require(try DeviceCatalog(json: Data(Self.json.utf8)).commandSet(id: "exampleUnguarded"))
 
+    // The byte floor's powerline off and checksum on are there too, with no flag to name them.
     #expect(DeviceSettingSafety.neverSentCommands(in: commands) == [
       Command(command1: 0x20, command2: 0x00),
       Command(command1: 0x20, command2: 0x0C),
-      Command(command1: 0x20, command2: 0x0D)
+      Command(command1: 0x20, command2: 0x0D),
+      Command(command1: 0x20, command2: 0x0E),
+      Command(command1: 0x20, command2: 0x19)
     ])
     // The programming lock is still turned off.
     #expect(!DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x01), in: commands))

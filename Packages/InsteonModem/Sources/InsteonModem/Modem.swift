@@ -149,9 +149,14 @@ public actor Modem: SerialCommandSender {
   /// try await modem.write(rawCommand: [0x02, 0x77, 0x01])
   /// ```
   ///
+  /// It's SPI, `Raw`, since nothing checks the bytes: call it with
+  /// `@_spi(Raw) import InsteonModem`. InsteonCore's `ModemSession` writes raw commands through
+  /// it once its policy allows them.
+  ///
   /// - Parameter bytes: The bytes to write, starting with `0x02`.
   /// - Throws: ``ModemError/connectionClosed`` if the modem is closed, `CancellationError` if
   ///   the task is canceled, or the connection's error.
+  @_spi(Raw)
   public func write(rawCommand bytes: [UInt8]) async throws {
 
     let number: UInt8? = bytes.count >= 2 ? bytes[1] : nil

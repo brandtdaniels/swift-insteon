@@ -1,7 +1,7 @@
 import Foundation
 import InsteonHubClient
 import InsteonLinking
-import InsteonModem
+@_spi(Raw) import InsteonModem
 import InsteonProtocol
 
 /// An open modem: a Hub's, reached over the local network with its user name and password, or
@@ -157,24 +157,44 @@ public struct ModemSession: Sendable {
 
   // MARK: - Raw passthroughs
 
-  /// Writes a serial command's bytes to the modem as they're given, and collects everything
-  /// the modem sends for a time.
+  /// Writes a serial command's bytes to the modem as they're given, once
+  /// ``SerialCommandPolicy`` allows them, and collects everything the modem sends for a time.
+  ///
+  /// ``SerialCommandPolicy/refusal(of:forcing:)`` checks the bytes before anything is
+  /// written. `forcing` writes a command the policy refuses only unless it's forced, such as
+  /// one whose number the package doesn't know; nothing forces a message that carries a
+  /// ``ProtectedCommand``, such as Set Operating Flags turning a device's radio off or Poke.
+  /// A message to a device is better sent with ``DeviceNetwork/send(_:collectingFor:onAcknowledgment:)``,
+  /// which also checks it against the device's command set.
   ///
   /// Listening starts before the command is written, so nothing the modem sends is missed.
-  /// The time is waited out in full unless the modem closes first. Check the bytes with
-  /// ``SerialCommandPolicy`` before writing them.
+  /// The time is waited out in full unless the modem closes first.
+  ///
+  /// ```swift
+  /// let replies = try await session.write(rawCommand: [0x02, 0x77], collectingFor: .seconds(3))
+  /// ```
   ///
   /// - Parameters:
   ///   - bytes: The command's bytes, starting with `0x02`.
+  ///   - forcing: Whether to write a command the policy refuses unless it's forced. Defaults
+  ///     to `false`.
   ///   - duration: How long to collect what the modem sends.
   ///   - clock: The clock that times the wait. Defaults to a `ContinuousClock`.
   /// - Returns: What the modem sent, in order.
-  /// - Throws: The modem's error if the command isn't accepted, or `CancellationError`.
+  /// - Throws: ``SendRefusal`` before anything is written, the modem's error if the command
+  ///   isn't accepted, or `CancellationError`.
   public func write(
     rawCommand bytes: [UInt8],
+    forcing: Bool = false,
     collectingFor duration: Duration,
     clock: any Clock<Duration> = ContinuousClock()
   ) async throws -> [RawModemReply] {
+
+    if let refusal = SerialCommandPolicy.refusal(of: bytes, forcing: forcing) {
+
+      throw refusal
+
+    }
 
     let replies: AsyncStream<ModemReply> = await modem.replies()
 
@@ -183,72 +203,6 @@ public struct ModemSession: Sendable {
     let received: [ModemReply] = await Self.collect(replies, within: duration, clock: clock)
 
     return received.map { (reply: ModemReply) -> RawModemReply in RawModemReply(reply) }
-
-  }
-
-  /// Sends a device a message as it's given, then collects the other messages the device
-  /// sends for a time.
-  ///
-  /// Listening starts before the message, so nothing the device sends is missed. The
-  /// device's acknowledgment is handed to `onAcknowledgment` as soon as it arrives, and isn't
-  /// among the messages returned.
-  ///
-  /// - Parameters:
-  ///   - message: The message.
-  ///   - duration: How long to collect what the device sends after its acknowledgment.
-  ///   - clock: The clock that times the wait. Defaults to a `ContinuousClock`.
-  ///   - onAcknowledgment: Called with the device's acknowledgment.
-  /// - Returns: The other messages from the device, in order.
-  /// - Throws: The modem's error, which ``SendFailure`` reads as the device rejecting the
-  ///   message or not answering, or `CancellationError`.
-  public func send(
-    _ message: DirectMessage,
-    collectingFor duration: Duration,
-    clock: any Clock<Duration> = ContinuousClock(),
-    onAcknowledgment: (ReceivedFrame) -> Void
-  ) async throws -> [ReceivedFrame] {
-
-    let device: InsteonAddress = message.device
-    let replies: AsyncStream<ModemReply> = await modem.replies()
-    let acknowledgment: ReceivedMessage
-
-    if let extended = message.extended {
-
-      acknowledgment = try await modem.request(extended)
-
-    } else {
-
-      acknowledgment = try await modem.request(StandardMessage(to: device, command: message.command))
-
-    }
-
-    onAcknowledgment(ReceivedFrame(acknowledgment))
-
-    let received: [ModemReply] = await Self.collect(replies, within: duration, clock: clock)
-    var skippedAcknowledgment = false
-    var frames: [ReceivedFrame] = []
-
-    for reply in received {
-
-      guard case let .messageReceived(incoming) = reply, incoming.sender == device else {
-
-        continue
-
-      }
-
-      // The acknowledgment comes through the stream too.
-      if !skippedAcknowledgment, incoming == acknowledgment {
-
-        skippedAcknowledgment = true
-        continue
-
-      }
-
-      frames.append(ReceivedFrame(incoming))
-
-    }
-
-    return frames
 
   }
 
