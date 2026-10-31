@@ -166,7 +166,8 @@ public enum HelpText {
       --controller        The modem controls the device. The default.
       --responder         The modem responds to the device, which is the controller, so it
                           goes into linking mode first: the command says how, and waits for
-                          Return before starting the modem.
+                          Return before starting the modem. With ADDRESS, the modem joins the
+                          device's group a link back uses, not the --group one.
       --either            The modem controls the device or responds to it, as the device asks.
       --two-way           Link the device back even when the catalog doesn't say it can
                           control, or doesn't have it.

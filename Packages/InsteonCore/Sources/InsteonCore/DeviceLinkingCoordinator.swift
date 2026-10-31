@@ -21,8 +21,13 @@ import InsteonProtocol
 /// - whether a device is turned fully on with Light On before it links as a responder, so it
 ///   records full on as its on-level: only a light or switched load the registry knows;
 /// - the steps a person takes on the device when it's linked or unlinked with its SET button;
-/// - whether a device is linked back after the modem links as its controller, and in which of
-///   its groups: the first group it controls, group 1 when it controls that;
+/// - whether a device is linked back after the modem links as its controller, by its address
+///   or its SET button, and in which of its groups: group 1 when the catalog says the device
+///   controls it, or else the first group the catalog lists that the device controls, so a
+///   device whose group 1 only responds is linked back in a group the modem can hear;
+/// - which of the device's groups the modem joins when it links by the device's address as
+///   the responder: the same group a link back uses, rather than the modem's group, since
+///   the device is the controller and the group is its own;
 /// - how a device is sent Enter Unlinking Mode when its links are removed without its SET
 ///   button: extended for a battery-powered i2CS device.
 ///
@@ -130,7 +135,9 @@ public struct DeviceLinkingCoordinator: Sendable {
   ///   - device: The device.
   ///   - role: The modem's role.
   ///   - group: The modem's group when it's the controller. As the responder, the modem joins
-  ///     the device's group the catalog says it controls. Defaults to ``DeviceLinkingCoordinator/defaultModemGroup``.
+  ///     the device's group a link back uses instead: group 1 when the catalog says the device
+  ///     controls it, or else the first group the catalog lists that it controls. Defaults to
+  ///     ``DeviceLinkingCoordinator/defaultModemGroup``.
   ///   - twoWay: Whether to link the device back when the modem is its controller. Defaults to
   ///     ``TwoWayLinking/whenDeviceControls``.
   ///   - setButtonTimeout: How long the modem waits for the SET button when the device is
@@ -410,8 +417,10 @@ public struct DeviceLinkingCoordinator: Sendable {
 
   // MARK: - Catalog decisions
 
-  /// The device's group that links back to the modem: group 1 when the catalog says the device
-  /// controls it, or else the first group it controls, or group 1 when the catalog names none.
+  /// The device's group that links back to the modem, and that the modem joins when it links
+  /// by the device's address as the responder: group 1 when the catalog says the device
+  /// controls it, or else the first group the catalog lists that it controls, or group 1 when
+  /// the catalog names none.
   ///
   /// - Parameter description: What the catalog says about the device, if it's known.
   /// - Returns: The group.
