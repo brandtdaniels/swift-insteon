@@ -506,8 +506,8 @@ public actor DeviceNetwork {
 
   // MARK: - Changes
 
-  /// The monitor that reads what the modem hears as events, and records in the network the
-  /// identities devices report and when each device was last heard.
+  /// The monitor that reads what the modem hears as events, and records in the ``registry``
+  /// the identities devices report. It doesn't record when a device was heard.
   ///
   /// ```swift
   /// for await event in await network.monitor.changes() {
@@ -520,21 +520,16 @@ public actor DeviceNetwork {
 
   }
 
-  /// Records that the modem heard a device, at the current time, and the identity it
-  /// reported, if any, in the ``registry``.
+  /// Records the identity a device reported, such as in a broadcast the monitor heard, in the
+  /// ``registry``. When the device was heard isn't recorded: a device's last-seen time is the
+  /// time it last answered a command.
   ///
   /// - Parameters:
+  ///   - identity: The identity the device reported.
   ///   - device: The device.
-  ///   - identity: The identity it reported, or `nil` if the message reported none.
-  func recordHeard(from device: InsteonAddress, identity: ReportedIdentity?) async {
+  func recordReportedIdentity(_ identity: ReportedIdentity, of device: InsteonAddress) async {
 
-    markSeen(device)
-
-    if let identity {
-
-      await registry.record(identity, for: device)
-
-    }
+    await registry.record(identity, for: device)
 
   }
 

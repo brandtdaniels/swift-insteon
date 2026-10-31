@@ -271,11 +271,15 @@ public enum DeviceSettingError: Error, Sendable {
 
   /// The setting is one that's never written, because a wrong value can cut the device off
   /// from the modem: turning its radio or its powerline off, or requiring a checksum in every
-  /// message. The associated value is its label.
+  /// message. The associated value is its label. A value whose byte holds one of these flags
+  /// is refused with the flag's label when writing it would change the flag, or when the
+  /// device didn't report the byte before.
   case neverWritten(label: String)
 
   /// The setting is the programming lock, which is never turned on, so a device is never left
-  /// locked. Turning it off is allowed. The associated value is its label.
+  /// locked. Turning it off is allowed. The associated value is its label. A value whose byte
+  /// holds the programming lock is refused with the lock's label when it would set the lock's
+  /// bit.
   case leavesProgrammingLocked(label: String)
 
   /// The device rejected Get Insteon Engine Version, as an i2CS device does when it isn't
@@ -388,7 +392,7 @@ public enum DeviceSettingFieldProblem: Hashable, Sendable {
 ///
 /// They're named here rather than in the catalog: these flags stop a device hearing the modem
 /// at all, which no settings page should offer. Other flags are written as the catalog
-/// describes them.
+/// describes them. A value whose byte holds operating flags is checked against them too.
 enum DeviceSettingSafety {
 
   /// The settings never written: turning off the radio or the powerline, and requiring a
@@ -409,6 +413,56 @@ enum DeviceSettingSafety {
   static func locksProgramming(_ item: SettingItem, state: Bool) -> Bool {
 
     state && item.name == programmingLock
+
+  }
+
+  // TODO: Catalog schema 0.6 should mark a value whose byte holds operating flags, with the
+  // request it mirrors, so this list can be read from the catalog and removed.
+
+  /// Extended settings values whose byte is a Get Operating Flags reply's cmd2, by command set
+  /// and value, with the request whose reply it is. A value named `operatingFlags` in any
+  /// command set is taken to be Get Operating Flags `0x00`'s byte too.
+  ///
+  /// Writing such a value writes every flag in its byte, so it's checked against the flags
+  /// above: an open/close sensor's configuration byte holds its programming lock in bit
+  /// `0x80`. The catalog says so only in the value's description today.
+  static let operatingFlagsValues: [CommandSetID: [SettingName: OperatingFlagsRequest]] = [
+    "openCloseSensor": ["configuration": .operatingFlags],
+    "hiddenDoorSensor": ["operatingFlags": .operatingFlags]
+  ]
+
+  /// The value name that holds Get Operating Flags `0x00`'s byte in any command set.
+  static let operatingFlagsValue: SettingName = "operatingFlags"
+
+  /// The flags that are never written, and the programming lock, that a value's byte holds.
+  ///
+  /// - Parameters:
+  ///   - value: The value.
+  ///   - commands: Its command set.
+  /// - Returns: The flags, or none if the value's byte isn't a Get Operating Flags reply's.
+  static func guardedFlags(in value: SettingValue, of commands: CommandSet) -> [OperatingFlag] {
+
+    let query: OperatingFlagsRequest
+
+    if let listed = operatingFlagsValues[commands.id]?[value.name] {
+
+      query = listed
+
+    } else if value.name == operatingFlagsValue {
+
+      query = .operatingFlags
+
+    } else {
+
+      return []
+
+    }
+
+    return commands.operatingFlags.filter { (flag: OperatingFlag) -> Bool in
+
+      flag.query == query && (neverWritten.contains(flag.name) || flag.name == programmingLock)
+
+    }
 
   }
 

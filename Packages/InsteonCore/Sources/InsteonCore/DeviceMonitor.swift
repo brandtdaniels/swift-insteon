@@ -1,3 +1,4 @@
+import Foundation
 import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonProtocol
@@ -23,9 +24,10 @@ import InsteonProtocol
 /// A device's group commands carry what its profile says they mean once the device is known:
 /// from the identities the network's registry holds when the stream starts, and from any
 /// identity a device reports while it runs, such as when its SET button is pressed. The
-/// monitor records those identities in the registry, and that each device that sent a message
-/// answered at the network's current time, so the network's ``DeviceNetwork/snapshot()``
-/// keeps them.
+/// monitor records those identities in the registry, so the network's
+/// ``DeviceNetwork/snapshot()`` keeps them. It records nothing else: not when a device was
+/// heard, which for a sensor would be a record of what happens in a home. A device's
+/// ``NetworkDeviceState/lastSeen`` stays the time it last answered a command.
 public struct DeviceMonitor: Sendable {
 
   /// The network whose modem is watched.
@@ -42,7 +44,8 @@ public struct DeviceMonitor: Sendable {
   /// modem's replies finish.
   ///
   /// The modem's replies are subscribed to before this returns, so nothing the modem hears
-  /// after is missed. Read the stream from one task.
+  /// after is missed. Read the stream from one task at a time; a second task that reads it
+  /// while another is waiting stops with a precondition failure.
   ///
   /// A repeat of a group command, or its cleanup, is reported once, as the catalog's
   /// `DeviceEventInterpreter` does, and so is a repeat of a broadcast that reports an
@@ -539,9 +542,17 @@ extension DeviceMonitorInterpreter.Interpretation {
 
 /// Reads the modem's replies for one stream, as its reader asks for events.
 ///
-/// The stream calls ``next()`` once at a time, from its reader's task, so the iterator and the
-/// interpreter are only ever used by one task at a time.
+/// The stream calls ``next()`` from its reader's task. Only one call runs at a time: a call
+/// made while another is still waiting, as when two tasks read the same stream, stops with a
+/// precondition failure, so the iterator and the interpreter are only ever used by one task
+/// at a time.
 final class MonitorFeed<C: Clock>: @unchecked Sendable where C.Duration == Duration {
+
+  /// Guards ``isReading``.
+  private let lock: NSLock = NSLock()
+
+  /// Whether a call to ``next()`` is running.
+  private var isReading: Bool = false
 
   private var replies: AsyncStream<ModemReply>.Iterator
 
@@ -566,6 +577,14 @@ final class MonitorFeed<C: Clock>: @unchecked Sendable where C.Duration == Durat
   /// canceled.
   func next() async -> DeviceMonitorEvent? {
 
+    precondition(claim(), "A DeviceMonitor stream is read by one task at a time.")
+
+    defer {
+
+      release()
+
+    }
+
     while pending.isEmpty {
 
       guard let reply: ModemReply = await replies.next() else {
@@ -576,9 +595,9 @@ final class MonitorFeed<C: Clock>: @unchecked Sendable where C.Duration == Durat
 
       let interpretation = interpreter.interpret(reply, at: clock.now)
 
-      if let sender = interpretation.sender {
+      if let sender = interpretation.sender, let identity = interpretation.identity {
 
-        await network.recordHeard(from: sender, identity: interpretation.identity)
+        await network.recordReportedIdentity(identity, of: sender)
 
       }
 
@@ -587,6 +606,36 @@ final class MonitorFeed<C: Clock>: @unchecked Sendable where C.Duration == Durat
     }
 
     return pending.removeFirst()
+
+  }
+
+  /// Marks a call to ``next()`` as running.
+  ///
+  /// - Returns: `false` if another call is already running.
+  private func claim() -> Bool {
+
+    lock.lock()
+    defer { lock.unlock() }
+
+    guard !isReading else {
+
+      return false
+
+    }
+
+    isReading = true
+
+    return true
+
+  }
+
+  /// Marks the call to ``next()`` as finished.
+  private func release() {
+
+    lock.lock()
+    defer { lock.unlock() }
+
+    isReading = false
 
   }
 

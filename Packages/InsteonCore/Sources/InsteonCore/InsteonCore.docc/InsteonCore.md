@@ -106,7 +106,10 @@ powerline, and requiring a checksum in every message, any of which can cut the d
 the modem. They're shown as read-only, and writing one throws
 ``DeviceSettingError/neverWritten(label:)``. The programming lock is only ever turned off, so
 a device is never left locked; turning it on throws
-``DeviceSettingError/leavesProgrammingLocked(label:)``. A value a setting doesn't take throws
+``DeviceSettingError/leavesProgrammingLocked(label:)``. The same holds for a value whose byte
+holds those flags, such as an open/close sensor's configuration byte: it's refused before it's
+written when it would set the programming lock's bit or change another of them. A value a
+setting doesn't take throws
 an error with a ``DeviceSettingInput`` that says what it takes:
 
 ```swift
@@ -126,8 +129,10 @@ do {
 in the Insteon device catalog says it means, whether it turns the group on or off, and the
 product's name. A device is known from the identities the network's registry holds and from
 any identity a device reports while the stream runs, which the monitor records in the
-registry, along with when each device was last heard. The stream runs in its reader's task,
-and ends when that task is canceled or the modem's replies finish:
+registry. It records nothing else: not when a device was heard, which for a sensor would be a
+record of what happens in a home, so a device's last-seen time stays the time it last
+answered a command. The stream runs in its reader's task, one task at a time, and ends when
+that task is canceled or the modem's replies finish:
 
 ```swift
 for await event in await network.monitor.changes() {

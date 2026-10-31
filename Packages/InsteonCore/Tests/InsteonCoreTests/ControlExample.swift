@@ -339,7 +339,9 @@ enum ControlExample {
 
   /// The flags that are never written, or only turned off, each with the Set Operating Flags
   /// commands a catalog could give them. The programming lock is bit `0x02`, which
-  /// ``SettingsModem`` sets with `0x0A` and clears with `0x0B`.
+  /// ``SettingsModem`` sets with `0x0A` and clears with `0x0B`. An extended settings value,
+  /// `operatingFlags`, holds the same byte, at D7, which the extended Set with selector `0x05`
+  /// writes.
   static let guardedCommands = CommandSet(
     id: "exampleGuarded",
     name: "Example guarded",
@@ -350,6 +352,15 @@ enum ControlExample {
       OperatingFlag(name: "powerLineOff", summary: "Turns the powerline off.", query: .operatingFlags, bit: 0x20, on: 0x0E, off: 0x0F, label: "Powerline off"),
       OperatingFlag(name: "checksumRequired", summary: "Requires a checksum.", query: .operatingFlags, bit: 0x40, on: 0x10, off: 0x11, label: "Checksum required")
     ],
+    extendedSettings: ExtendedSettings(
+      isPerButton: false,
+      values: [
+        SettingValue(name: "operatingFlags", summary: "The operating flags, as Get Operating Flags reads them.", position: 7, label: "Operating flags")
+      ],
+      writes: [
+        SettingWrite(name: "operatingFlags", summary: "Sets the operating flags.", selector: 0x05, isPerButton: false, bytes: [SettingWrite.Byte(position: 3, value: "operatingFlags")])
+      ]
+    ),
     standardCommands: [lightOn, lightOff, readLevel],
     groupTypes: [light]
   )

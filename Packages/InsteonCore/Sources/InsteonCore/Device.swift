@@ -628,7 +628,10 @@ public struct Device: Sendable {
   /// Some settings are never written, whatever the catalog says: turning off the device's
   /// radio or powerline, and requiring a checksum in every message, any of which can cut the
   /// device off from the modem. The programming lock is only turned off, never on, so a
-  /// device is never left locked. Both are refused before anything is sent.
+  /// device is never left locked. Both are refused before anything is sent. A value whose
+  /// byte holds operating flags, such as an open/close sensor's configuration byte, is refused
+  /// before it's written when it would set the programming lock's bit, or change the bit of a
+  /// flag that's never written; the device is asked for the byte first, to compare.
   ///
   /// A flag is changed with Set Operating Flags, in the form the device takes: extended with a
   /// checksum for an i2CS device, extended with the command repeated while the flag the
@@ -1230,7 +1233,27 @@ public struct Device: Sendable {
 
     }
 
+    // A byte that holds operating flags writes them all, so it never turns the programming
+    // lock on, and never changes a flag that's never written.
+    let guardedFlags: [OperatingFlag] = DeviceSettingSafety.guardedFlags(in: value, of: commands)
+
+    if let lock = guardedFlags.first(where: { (flag: OperatingFlag) -> Bool in flag.name == DeviceSettingSafety.programmingLock }), raw & lock.bit != 0 {
+
+      throw DeviceSettingError.leavesProgrammingLocked(label: SettingItem(flag: lock).label)
+
+    }
+
     let before: [SettingName: UInt8]? = try await readValues(settings: settings, button: target)
+
+    for flag in guardedFlags where DeviceSettingSafety.neverWritten.contains(flag.name) {
+
+      guard let current = before?[value.name], current & flag.bit == raw & flag.bit else {
+
+        throw DeviceSettingError.neverWritten(label: SettingItem(flag: flag).label)
+
+      }
+
+    }
     let message: ExtendedMessage
 
     do {

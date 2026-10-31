@@ -225,7 +225,7 @@ struct DeviceMonitorTests {
   @Test(.timeLimit(.minutes(1))) func readsAKnownDevicesGroupCommandAsItsEventOnce() async throws {
 
     let modem = MonitorModem()
-    let network: DeviceNetwork = network(modem, knowing: [MonitorExample.sensor: MonitorExample.sensorIdentity])
+    let network: DeviceNetwork = self.network(modem, knowing: [MonitorExample.sensor: MonitorExample.sensorIdentity])
     var changes = await network.monitor.changes().makeAsyncIterator()
 
     await modem.receive(MonitorExample.broadcast(from: MonitorExample.sensor, group: 2, command1: 0x11))
@@ -246,14 +246,15 @@ struct DeviceMonitorTests {
       productName: "Example Leak Sensor 9201"
     )))
     #expect(acknowledgment == .message(DeviceMessageSummary(MonitorExample.acknowledgment(from: MonitorExample.sensor))))
-    #expect(await network.state(of: MonitorExample.sensor)?.lastSeen != nil)
+    // Hearing a device isn't recorded: its last-seen time is when it last answered a command.
+    #expect(await network.state(of: MonitorExample.sensor)?.lastSeen == nil)
 
   }
 
   @Test(.timeLimit(.minutes(1))) func readsAHeartbeatToTheProfilesHeartbeatGroup() async throws {
 
     let modem = MonitorModem()
-    let network: DeviceNetwork = network(modem, knowing: [MonitorExample.sensor: MonitorExample.sensorIdentity])
+    let network: DeviceNetwork = self.network(modem, knowing: [MonitorExample.sensor: MonitorExample.sensorIdentity])
     var changes = await network.monitor.changes().makeAsyncIterator()
 
     await modem.receive(MonitorExample.broadcast(from: MonitorExample.sensor, group: 4, command1: 0x13))
@@ -267,7 +268,7 @@ struct DeviceMonitorTests {
   @Test(.timeLimit(.minutes(1))) func learnsAnIdentityFromTheSETButtonAndRecordsIt() async throws {
 
     let modem = MonitorModem()
-    let network: DeviceNetwork = network(modem)
+    let network: DeviceNetwork = self.network(modem)
     var changes = await network.monitor.changes().makeAsyncIterator()
 
     await modem.receive(.messageReceived(MonitorExample.setButtonPressed))
@@ -294,13 +295,14 @@ struct DeviceMonitorTests {
     #expect(command.event == "dry")
     #expect(await network.registry.device(MonitorExample.sensor)?.identity == MonitorExample.sensorIdentity)
     #expect(await network.snapshot().registry.identities[MonitorExample.sensor] == MonitorExample.sensorIdentity)
+    #expect(await network.snapshot().devices[MonitorExample.sensor]?.lastSeen == nil)
 
   }
 
   @Test(.timeLimit(.minutes(1))) func readsAnUnknownDevicesGroupCommandWithoutAnEvent() async throws {
 
     let modem = MonitorModem()
-    let network: DeviceNetwork = network(modem)
+    let network: DeviceNetwork = self.network(modem)
     var changes = await network.monitor.changes().makeAsyncIterator()
 
     await modem.receive(MonitorExample.broadcast(from: MonitorExample.stranger, group: 1, command1: 0x13))
@@ -323,7 +325,7 @@ struct DeviceMonitorTests {
   @Test(.timeLimit(.minutes(1))) func addsRawBytesAndRepliesWhenAsked() async throws {
 
     let modem = MonitorModem()
-    let network: DeviceNetwork = network(modem)
+    let network: DeviceNetwork = self.network(modem)
     let acknowledgment: ReceivedMessage = MonitorExample.acknowledgment(from: MonitorExample.stranger)
     var changes = await network.monitor.changes(includingRaw: true).makeAsyncIterator()
 
@@ -385,7 +387,7 @@ struct DeviceMonitorTests {
   @Test(.timeLimit(.minutes(1))) func endsTheStreamWhenTheReadersTaskIsCanceled() async throws {
 
     let modem = MonitorModem()
-    let network: DeviceNetwork = network(modem)
+    let network: DeviceNetwork = self.network(modem)
     let changes: AsyncStream<DeviceMonitorEvent> = await network.monitor.changes()
 
     let reader = Task { () -> Int in
@@ -412,7 +414,7 @@ struct DeviceMonitorTests {
   @Test(.timeLimit(.minutes(1))) func endsTheStreamWhenTheModemsRepliesFinish() async throws {
 
     let modem = MonitorModem()
-    let network: DeviceNetwork = network(modem, knowing: [MonitorExample.sensor: MonitorExample.sensorIdentity])
+    let network: DeviceNetwork = self.network(modem, knowing: [MonitorExample.sensor: MonitorExample.sensorIdentity])
     let changes: AsyncStream<DeviceMonitorEvent> = await network.monitor.changes()
 
     await modem.receive(MonitorExample.broadcast(from: MonitorExample.sensor, group: 2, command1: 0x11))
