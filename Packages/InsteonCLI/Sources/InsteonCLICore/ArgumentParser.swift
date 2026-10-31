@@ -4,7 +4,7 @@ import InsteonProtocol
 extension Invocation {
 
   /// The subcommands, in the order the help lists them.
-  public static let subcommandNames = ["discover", "info", "links", "link", "unlink", "device", "scene", "beep", "modem", "watch", "catalog"]
+  public static let subcommandNames = ["discover", "info", "links", "link", "unlink", "remove", "device", "scene", "beep", "modem", "watch", "catalog"]
 
   /// Other names for subcommands: `group` for `scene`.
   public static let subcommandAliases = ["group": "scene"]
@@ -153,6 +153,8 @@ extension Invocation {
       return try parseLink(rest)
     case "unlink":
       return try .unlink(parseUnlink(rest))
+    case "remove":
+      return try .remove(parseRemove(rest))
     case "device":
       return try parseDevice(rest)
     case "scene":
@@ -410,6 +412,64 @@ extension Invocation {
     }
 
     return options
+
+  }
+
+  private static func parseRemove(_ arguments: [String]) throws(ArgumentError) -> RemoveOptions {
+
+    var device: InsteonAddress?
+    var deviceArgument: String?
+    var scansOtherDevices = false
+    var forcesModemSide = false
+    var assumesYes = false
+    var timeoutSeconds: Int?
+    var index = 0
+
+    while index < arguments.count {
+
+      let argument = arguments[index]
+      let (name, inlineValue) = split(argument)
+      index += 1
+
+      if !argument.hasPrefix("-") {
+
+        device = try address(argument, after: deviceArgument, subcommand: "remove")
+        deviceArgument = argument
+        continue
+
+      }
+
+      switch name {
+      case "--scan":
+        try expectNoValue(name, inlineValue)
+        scansOtherDevices = true
+      case "--force-modem-side":
+        try expectNoValue(name, inlineValue)
+        forcesModemSide = true
+      case "-y", "--yes":
+        try expectNoValue(name, inlineValue)
+        assumesYes = true
+      case "--timeout":
+        timeoutSeconds = try seconds(value(of: name, inline: inlineValue, in: arguments, at: &index), option: name)
+      default:
+        throw unexpected(argument, subcommand: "remove")
+      }
+
+    }
+
+    guard let device else {
+
+      throw ArgumentError.missingArgument("a device's ADDRESS, such as 1A.2B.3C", subcommand: "remove")
+
+    }
+
+    return RemoveOptions(
+      device: device,
+      scansOtherDevices: scansOtherDevices,
+      forcesModemSide: forcesModemSide,
+      assumesYes: assumesYes,
+      timeoutSeconds: timeoutSeconds
+    )
 
   }
 

@@ -646,6 +646,79 @@ struct ArgumentParserTests {
 
   }
 
+  // MARK: - remove
+
+  @Test func removesADeviceByItsAddress() throws {
+
+    #expect(try Invocation.parse(["remove", "1A.2B.3C"]).subcommand == .remove(RemoveOptions(device: lamp)))
+    #expect(
+      try Invocation.parse(["remove", "--scan", "1A.2B.3C", "--force-modem-side", "--yes", "--timeout", "10"]).subcommand
+        == .remove(RemoveOptions(device: lamp, scansOtherDevices: true, forcesModemSide: true, assumesYes: true, timeoutSeconds: 10))
+    )
+    #expect(try Invocation.parse(["remove", "1A.2B.3C", "-y"]).subcommand == .remove(RemoveOptions(device: lamp, assumesYes: true)))
+    #expect(try Invocation.parse(["--json", "remove", "1A.2B.3C"]).printsJSON)
+
+  }
+
+  @Test func needsOneAddressToRemove() {
+
+    #expect(throws: ArgumentError.missingArgument("a device's ADDRESS, such as 1A.2B.3C", subcommand: "remove")) {
+
+      try Invocation.parse(["remove", "--scan"])
+
+    }
+
+    #expect(throws: ArgumentError.unexpectedArgument("4E.5F.01", subcommand: "remove")) {
+
+      try Invocation.parse(["remove", "1A.2B.3C", "4E.5F.01"])
+
+    }
+
+    #expect(throws: ArgumentError.unknownOption("--all", subcommand: "remove")) {
+
+      try Invocation.parse(["remove", "1A.2B.3C", "--all"])
+
+    }
+
+    #expect(throws: ArgumentError.unexpectedValue(option: "--yes")) {
+
+      try Invocation.parse(["remove", "1A.2B.3C", "--yes=no"])
+
+    }
+
+  }
+
+  @Test func printsRemovesHelp() throws {
+
+    #expect(try Invocation.parse(["remove", "--help"]).subcommand == .help(topic: "remove"))
+    #expect(HelpText.text(for: "remove") == HelpText.remove)
+    #expect(HelpText.overview.contains("remove ADDRESS"))
+
+  }
+
+  @Test func asksBeforeRemovingAtATerminalUnlessToldYes() throws {
+
+    let asking = RemoveOptions(device: lamp)
+    let yes = RemoveOptions(device: lamp, assumesYes: true)
+
+    #expect(try asking.asksForConfirmation(readsFromTerminal: true))
+    #expect(try !yes.asksForConfirmation(readsFromTerminal: true))
+    #expect(try !yes.asksForConfirmation(readsFromTerminal: false))
+
+  }
+
+  @Test func needsYesToRemoveWithoutATerminal() {
+
+    #expect(throws: ArgumentError.confirmationNeeded(subcommand: "remove")) {
+
+      try RemoveOptions(device: lamp).asksForConfirmation(readsFromTerminal: false)
+
+    }
+
+    #expect(ArgumentError.confirmationNeeded(subcommand: "remove").description.contains("--yes"))
+
+  }
+
   // MARK: - Messages
 
   @Test func explainsErrorsInOneLine() {
@@ -657,7 +730,8 @@ struct ArgumentParserTests {
       .conflictingOptions("--controller", "--responder"),
       .invalidAddress("1A.2B"),
       .missingDeviceAction,
-      .credentialsInHub
+      .credentialsInHub,
+      .confirmationNeeded(subcommand: "remove")
     ]
 
     for error in errors {

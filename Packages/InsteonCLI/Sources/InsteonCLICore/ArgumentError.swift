@@ -49,6 +49,10 @@ public enum ArgumentError: Error, Hashable, Sendable {
   /// `insteon modem send` refuses a serial command without `--force`; the value says why.
   case refusedSerialCommand(String)
 
+  /// The subcommand asks before it changes something, and standard input isn't a terminal to
+  /// ask at, so it needs `--yes`.
+  case confirmationNeeded(subcommand: String)
+
 }
 
 extension ArgumentError: CustomStringConvertible {
@@ -91,6 +95,8 @@ extension ArgumentError: CustomStringConvertible {
       "'insteon \(subcommand)' needs \(argument). Run 'insteon \(subcommand) --help' for its usage."
     case let .refusedSerialCommand(reason):
       "\(reason) Pass --force to send it anyway."
+    case let .confirmationNeeded(subcommand):
+      "'insteon \(subcommand)' asks before it goes on, and standard input isn't a terminal to ask at. Pass --yes to go on without asking."
     }
 
   }

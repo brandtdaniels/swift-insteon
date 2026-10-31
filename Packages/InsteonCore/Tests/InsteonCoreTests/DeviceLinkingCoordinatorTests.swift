@@ -146,6 +146,36 @@ actor LinkingRecorder: LinkingObserver {
 
   }
 
+  static func deletionReason(_ reason: ModemRecordDeletionReason) -> String {
+
+    switch reason {
+    case .noAnswer:
+      return "no answer"
+    case .remoteLinkingUnsupported:
+      return "unsupported"
+    case .remoteUnlinkingFailed:
+      return "failed"
+    case let .linksLeft(links):
+      return "links left \(links.count)"
+    case .modemLinksUnreadable:
+      return "unreadable"
+    }
+
+  }
+
+  static func keptReason(_ reason: DeviceKeptReason) -> String {
+
+    switch reason {
+    case let .linksRemain(links):
+      return "links remain \(links.map { "\(role($0.modemRole)) \($0.group)" })"
+    case .modemLinksUnreadable:
+      return "unreadable"
+    case .modemRecordsNotDeleted:
+      return "records not deleted"
+    }
+
+  }
+
   static func line(for event: LinkingEvent) -> String {
 
     switch event {
@@ -185,6 +215,20 @@ actor LinkingRecorder: LinkingObserver {
       return "remaining \(device) \(links.map { "\(role($0.modemRole)) \($0.group)" })"
     case let .remainingLinksUnknown(device, _):
       return "remaining unknown \(device)"
+    case let .deletingModemRecords(device, reason):
+      return "deleting modem records \(device) \(deletionReason(reason))"
+    case let .modemRecordsDeleted(device, records):
+      return "modem records deleted \(device) \(records.count)"
+    case let .kept(device, reason):
+      return "kept \(device) \(keptReason(reason))"
+    case let .forgotten(forgotten):
+      return "forgot \(forgotten.address) \(forgotten.device == nil ? "unknown" : "known")"
+    case let .scanningDatabase(device, removedDevice):
+      return "scanning \(device) for \(removedDevice)"
+    case let .leftoverRecords(scan):
+      return "leftovers for \(scan.removedDevice) \(scan.holders.map { "\($0.address) \($0.records.count)" }) unread \(scan.unread.map { "\($0.address)" })"
+    case let .factoryReset(reset):
+      return "factory reset \(reset.address) steps \(reset.procedure?.steps.count ?? 0)"
     }
 
   }
