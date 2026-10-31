@@ -71,8 +71,8 @@ the first time discovery runs, and until they do, every probe fails as if no Hub
 
 A found Hub is a candidate until it answers Get IM Info with the user name and password printed
 on it. ``HubIdentifier`` asks for that, but sends the credentials only where a Hub on the local
-network is: to a candidate at a private address on the Hub's port, stopping at the first
-candidate that rejects them. The per-candidate decision to send them stays with the caller, so a
+network is: to a candidate at a private address on the Hub's port, as ``HubAddressPolicy``
+decides, stopping at the first candidate that rejects them. The per-candidate decision to send them stays with the caller, so a
 command-line tool can ask in a terminal and an app can show a prompt.
 
 ```swift
@@ -97,6 +97,7 @@ let results = try await HubIdentifier().identify(result.hubs) { candidate in
 ### Confirming a Hub
 
 - ``HubIdentifier``
+- ``HubAddressPolicy``
 
 ### The local network
 

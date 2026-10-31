@@ -15,7 +15,7 @@ import InsteonProtocol
 /// Asking for Get IM Info confirms a candidate really is a Hub and reads its Insteon ID,
 /// category, subcategory and firmware version. It needs the user name and password printed on
 /// the Hub, which the Hub's interface sends unencrypted, so the credentials go only where a Hub
-/// on the local network is:
+/// on the local network is, at a private address as ``HubAddressPolicy`` decides:
 ///
 /// - ``HubIdentifier/identify(_:provideCredentials:onResult:)``, which identifies several
 ///   candidates, sends them only to a candidate at a private address on the Hub's
@@ -322,10 +322,11 @@ public struct HubIdentifier: Sendable {
 
   }
 
-  /// Whether a host is a private IPv4 address, where a Hub on the local network is.
+  /// Whether a host is a private IPv4 address, where a Hub on the local network is, as
+  /// ``HubAddressPolicy`` decides.
   private static func isPrivate(_ host: String) -> Bool {
 
-    IPv4Subnet(address: host, prefixLength: 32)?.isPrivate == true
+    HubAddressPolicy.allowsCredentials(to: host)
 
   }
 

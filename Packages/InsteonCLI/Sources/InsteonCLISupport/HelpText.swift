@@ -56,7 +56,8 @@ public enum HelpText {
                           compatible one
 
     Options:
-      --hub HOST[:PORT]   The Hub to use. Defaults to INSTEON_HUB_HOST and INSTEON_HUB_PORT.
+      --hub HOST[:PORT]   The Hub to use, by its private IPv4 address, such as 192.168.1.20.
+                          Defaults to INSTEON_HUB_HOST and INSTEON_HUB_PORT.
       --serial PATH       A modem on a serial or USB port, such as /dev/ttyUSB0 (macOS and Linux).
       --env-file PATH     Read environment variables from PATH instead of the default file.
       --json              Print JSON, where the command supports it.
@@ -68,7 +69,16 @@ public enum HelpText {
                           from the environment or the environment file, never from the
                           command line.
       INSTEON_HUB_HOST, INSTEON_HUB_PORT
-                          The Hub to use when --hub isn't given.
+                          The Hub to use when --hub isn't given, by its private IPv4
+                          address.
+
+    The Hub's address:
+      The Hub's user name and password go only to an IPv4 address in 10.0.0.0/8,
+      172.16.0.0/12 or 192.168.0.0/16, where a Hub on a home network is. A host name, an IPv6,
+      loopback or link-local address, and a public address are refused before anything is
+      sent; through a VPN, give the Hub's address on the home network. Requests go to the Hub
+      directly, never through a proxy. On Linux, where http_proxy or all_proxy sets one, add
+      the Hub's address to no_proxy.
 
     Environment file:
       $XDG_CONFIG_HOME/insteon/env, or ~/.config/insteon/env, or the file --env-file names,

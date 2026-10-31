@@ -17,7 +17,7 @@ The script, run from the package's root, builds the command for release and copi
 
 ## Connecting
 
-- `--hub HOST[:PORT]`: a Hub 2245 or Hub 2242 on the local network. Without `--hub`, the host comes from `INSTEON_HUB_HOST`, and a host without a port takes it from `INSTEON_HUB_PORT`, or else uses the Hub's port, 25105.
+- `--hub HOST[:PORT]`: a Hub 2245 or Hub 2242 on the local network, by its private IPv4 address, as described below. Without `--hub`, the host comes from `INSTEON_HUB_HOST`, and a host without a port takes it from `INSTEON_HUB_PORT`, or else uses the Hub's port, 25105.
 - `--serial PATH`: a PowerLinc Modem or USB Adapter on a serial or USB port, such as `/dev/ttyUSB0`, on macOS and Linux.
 - `--env-file PATH`: the environment file to read in place of the default one, described below.
 
@@ -33,6 +33,8 @@ INSTEON_HUB_HOST=192.168.1.20
 Make it readable only by you with `chmod 600 ~/.config/insteon/env`. The command reads the file only if you own it and no one else can write to it, and warns if others can read it. It never reads a file from the current directory, so a project you clone can't point the command, and your password, at another Hub. `--env-file PATH` reads another file, with the same checks.
 
 Each line is `KEY=VALUE`, optionally after `export`; lines starting with `#` are comments. A value can be wrapped in single or double quotes, and nothing in it is expanded. A variable set in the environment wins over the file.
+
+The command sends the Hub's user name and password only to an IPv4 address in `10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16`, where a Hub on a home network is, whether the address comes from `--hub` or `INSTEON_HUB_HOST`. A host name, an IPv6, loopback or link-local address, and a public address, such as a mistyped one, are refused before anything is sent, and there's no option to allow them. Through a VPN, give the Hub's address on the home network. Requests go to the Hub directly, never through a proxy, which would read the password. On Linux, where `http_proxy` or `all_proxy` can name a proxy the command can't turn off, it refuses to connect unless `no_proxy` names the Hub's address.
 
 Before it connects, the command prints the Hub's address to standard error, as `Connecting to the Hub at HOST:PORT`, so you can see where the password is going.
 

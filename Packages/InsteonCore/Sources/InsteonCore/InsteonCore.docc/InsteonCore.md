@@ -25,6 +25,13 @@ try await ModemSession.withHub(host: host, port: HubLocation.defaultPort, user: 
 }
 ```
 
+``ModemSession/withHub(host:port:user:password:_:)`` sends the Hub's user name and password,
+which the Hub's plain HTTP carries readably, only to an IPv4 address in `10.0.0.0/8`,
+`172.16.0.0/12` or `192.168.0.0/16`. A host name, an IPv6, loopback or link-local address, and
+a public address are refused with ``HubAddressRefused`` before anything is sent, and
+``HubLocation/acceptsCredentials`` checks a host as it's entered. Requests go to the Hub
+directly, never through a proxy.
+
 A ``DeviceRegistry`` holds each device's address and the identity it reported: its category,
 subcategory and firmware version. It describes every device with the catalog, and describes
 them all again when it's given a newer catalog, so no device is lost when the catalog
@@ -326,6 +333,7 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 - ``ModemSession``
 - ``SendFailure``
 - ``HubFailure``
+- ``HubAddressRefused``
 - ``InsteonErrorDescription``
 
 ### Finding Hubs
