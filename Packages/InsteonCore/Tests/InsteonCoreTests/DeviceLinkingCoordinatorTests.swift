@@ -757,6 +757,256 @@ struct DeviceLinkingCoordinatorTests {
 
   }
 
+  // MARK: - What the network keeps when a link or unlink throws
+
+  /// A record of the modem's that the network's snapshot holds until a link changes it.
+  static let staleRecord = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0x05, address: LinkingExample.module)
+
+  /// A network whose snapshot holds the modem's records, with copies of the devices' ALL-Link
+  /// databases in its cache.
+  func networkWithCopies(
+    _ modem: InMemoryModem,
+    of devices: [InsteonAddress],
+    identities: [InsteonAddress: ReportedIdentity] = [:]
+  ) async throws -> DeviceNetwork {
+
+    let network: DeviceNetwork = self.network(modem, identities: identities, modemDatabase: [Self.staleRecord])
+
+    for device in devices {
+
+      _ = try await network.allLinkDatabase(of: device)
+
+    }
+
+    return network
+
+  }
+
+  /// Whether the network forgot its copy of a device's ALL-Link database and the modem's
+  /// records its snapshot held.
+  func forgot(_ device: InsteonAddress, in network: DeviceNetwork) async -> Bool {
+
+    let hasCopy: Bool = await network.cache.copies[device] != nil
+    let snapshot: NetworkSnapshot = await network.snapshot()
+
+    return !hasCopy && snapshot.modemDatabase == nil
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func recordsALinkCanceledWhileTheDeviceIsIdentified() async throws {
+
+    let modem = InMemoryModem()
+    let lamp: InsteonAddress = LinkingExample.lamp
+    let network: DeviceNetwork = try await networkWithCopies(modem, of: [lamp])
+    // The lamp sends no identity broadcast, so ID Request waits on the clock. Its database is
+    // read again as it's asked, so only the canceled link can forget the copy.
+    let recorder = LinkingRecorder(
+      pressing: { (_: SETButtonPrompt) async -> Void in
+
+        await modem.pressSetButton(of: lamp)
+
+      },
+      reacting: { (event: LinkingEvent) async -> Void in
+
+        if case .identifying = event {
+
+          _ = try? await network.allLinkDatabase(of: lamp)
+
+        }
+
+      }
+    )
+    let linking = Task { () async throws -> DeviceLinkingResult in
+
+      try await network.linking.linkBySETButton(as: .controller, observer: recorder)
+
+    }
+
+    await clock.waitForSleeper(until: Modem.defaultRequestTimeout)
+    linking.cancel()
+
+    await #expect(throws: CancellationError.self) {
+
+      _ = try await linking.value
+
+    }
+
+    #expect(await forgot(lamp, in: network))
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func recordsALinkCanceledDuringTheLinkBack() async throws {
+
+    let modem = InMemoryModem()
+    let sensor: InsteonAddress = LinkingExample.sensor
+    let network: DeviceNetwork = try await networkWithCopies(modem, of: [sensor], identities: [sensor: LinkingExample.sensorIdentity])
+    let (linkingBack, signal): (AsyncStream<Void>, AsyncStream<Void>.Continuation) = AsyncStream<Void>.makeStream()
+    // The sensor links as the modem's responder, then never links back. Its database is read
+    // again before the link back, so only the canceled link back can forget the copy.
+    let recorder = LinkingRecorder(reacting: { (event: LinkingEvent) async -> Void in
+
+      if case .linkingBack = event {
+
+        _ = try? await network.allLinkDatabase(of: sensor)
+        await modem.setSilent(sensor)
+        signal.yield()
+
+      }
+
+    })
+    let linking = Task { () async throws -> DeviceLinkingResult in
+
+      try await network.linking.link(sensor, as: .controller, observer: recorder)
+
+    }
+
+    var events: AsyncStream<Void>.Iterator = linkingBack.makeAsyncIterator()
+
+    _ = await events.next()
+    linking.cancel()
+
+    await #expect(throws: CancellationError.self) {
+
+      _ = try await linking.value
+
+    }
+
+    #expect(await forgot(sensor, in: network))
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func recordsTheDeviceThatUnlinkedInsteadOfLinkingBySETButton() async throws {
+
+    let modem = InMemoryModem()
+    let lamp: InsteonAddress = LinkingExample.lamp
+    let network: DeviceNetwork = try await networkWithCopies(modem, of: [lamp])
+    let recorder = LinkingRecorder(pressing: { (_: SETButtonPrompt) async -> Void in
+
+      await modem.pressSetButton(of: lamp, unlinking: true)
+
+    })
+
+    do {
+
+      _ = try await network.linking.linkBySETButton(as: .controller, observer: recorder)
+      Issue.record("Expected a mismatch.")
+
+    } catch let mismatch as LinkMismatch {
+
+      #expect(mismatch.reason == .unlinkedInsteadOfLinking)
+
+    }
+
+    #expect(await forgot(lamp, in: network))
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func recordsALinkInAnotherGroupThanAskedBySETButton() async throws {
+
+    let modem = InMemoryModem()
+    let lamp: InsteonAddress = LinkingExample.lamp
+    await modem.setReportedGroup(0x05, of: lamp)
+    let network: DeviceNetwork = try await networkWithCopies(modem, of: [lamp])
+
+    do {
+
+      _ = try await network.linking.linkBySETButton(as: .controller, observer: pressing(lamp, on: modem))
+      Issue.record("Expected an unexpected link.")
+
+    } catch let LinkingError.unexpectedLink(link) {
+
+      #expect(link.address == lamp)
+      #expect(link.group == 0x05)
+
+    }
+
+    #expect(await forgot(lamp, in: network))
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func recordsTheOtherDeviceThatLinkedInsteadOfTheOneAskedFor() async throws {
+
+    let modem = InMemoryModem()
+    let module: InsteonAddress = LinkingExample.module
+    let lamp: InsteonAddress = LinkingExample.lamp
+    let network: DeviceNetwork = try await networkWithCopies(modem, of: [module, lamp], identities: [module: LinkingExample.moduleIdentity])
+    // The module can't be linked remotely, and the lamp's SET button is pressed instead.
+    await modem.setEngine(.i1, of: module)
+    let recorder = LinkingRecorder(pressing: { (_: SETButtonPrompt) async -> Void in
+
+      await modem.pressSetButton(of: lamp)
+
+    })
+
+    do {
+
+      _ = try await network.linking.link(module, as: .controller, observer: recorder)
+      Issue.record("Expected a mismatch.")
+
+    } catch let mismatch as LinkMismatch {
+
+      #expect(mismatch.link.address == lamp)
+      #expect(mismatch.reason == .otherDevice(expected: module))
+
+    }
+
+    #expect(await forgot(lamp, in: network))
+    #expect(await forgot(module, in: network))
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func recordsTheOtherDeviceThatUnlinkedInsteadOfTheOneAskedFor() async throws {
+
+    let modem = InMemoryModem()
+    let module: InsteonAddress = LinkingExample.module
+    let lamp: InsteonAddress = LinkingExample.lamp
+    let network: DeviceNetwork = try await networkWithCopies(modem, of: [module, lamp], identities: [lamp: LinkingExample.lampIdentity])
+    let recorder = LinkingRecorder(pressing: { (_: SETButtonPrompt) async -> Void in
+
+      await modem.pressSetButton(of: module)
+
+    })
+
+    do {
+
+      _ = try await network.linking.unlink(lamp, as: .controller, group: 0x00, observer: recorder)
+      Issue.record("Expected a mismatch.")
+
+    } catch let mismatch as LinkMismatch {
+
+      #expect(mismatch.link.address == module)
+      #expect(mismatch.reason == .otherDevice(expected: lamp))
+
+    }
+
+    #expect(await forgot(module, in: network))
+    #expect(await forgot(lamp, in: network))
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func recordsAnUnlinkInAnotherGroupThanAsked() async throws {
+
+    let modem = InMemoryModem()
+    let lamp: InsteonAddress = LinkingExample.lamp
+    await modem.setReportedGroup(0x03, of: lamp)
+    let network: DeviceNetwork = try await networkWithCopies(modem, of: [lamp], identities: [lamp: LinkingExample.lampIdentity])
+
+    do {
+
+      _ = try await network.linking.unlink(nil, as: .controller, group: 0x00, observer: pressing(lamp, on: modem))
+      Issue.record("Expected an unexpected link.")
+
+    } catch let LinkingError.unexpectedLink(link) {
+
+      #expect(link.address == lamp)
+      #expect(link.group == 0x03)
+
+    }
+
+    #expect(await forgot(lamp, in: network))
+
+  }
+
   // MARK: - Taking turns
 
   @Test(.timeLimit(.minutes(1))) func takesTurnsInOrder() async throws {

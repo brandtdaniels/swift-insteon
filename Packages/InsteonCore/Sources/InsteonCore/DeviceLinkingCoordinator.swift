@@ -12,7 +12,9 @@ import InsteonProtocol
 /// network's ``DeviceNetwork/registry`` holds the identity the device reported, the copies of
 /// the device's and the modem's ALL-Link databases are forgotten, since both changed, and the
 /// modem's records are read again when the coordinator needs them, so the network's
-/// ``DeviceNetwork/snapshot()`` holds them.
+/// ``DeviceNetwork/snapshot()`` holds them. A link or unlink that throws forgets them too: the
+/// device's, and those of another device the modem reported instead, such as one whose SET
+/// button was pressed by mistake.
 ///
 /// The catalog decides:
 ///
@@ -88,7 +90,7 @@ public struct DeviceLinkingCoordinator: Sendable {
     observer: any LinkingObserver
   ) async throws -> DeviceLinkingResult {
 
-    try await inTurn { () async throws -> DeviceLinkingResult in
+    try await inTurn(changing: nil) { () async throws -> DeviceLinkingResult in
 
       let linker: Linker = makeLinker()
       let first: AllLinkingCompleted
@@ -149,7 +151,7 @@ public struct DeviceLinkingCoordinator: Sendable {
     observer: any LinkingObserver
   ) async throws -> DeviceLinkingResult {
 
-    try await inTurn { () async throws -> DeviceLinkingResult in
+    try await inTurn(changing: device) { () async throws -> DeviceLinkingResult in
 
       let linker: Linker = makeLinker()
       let description: DeviceDescription? = await network.registry.device(device)?.deviceDescription
@@ -172,13 +174,10 @@ public struct DeviceLinkingCoordinator: Sendable {
 
       } catch let error as CancellationError {
 
-        await network.recordLinkChange(of: device, answered: false)
-
+        // The turn records the change on the way out.
         throw error
 
       } catch let LinkingError.unexpectedLink(link) {
-
-        await network.recordLinkChange(of: link.address, answered: true)
 
         if let mismatch = LinkMismatch(link, direction: .linking, device: device) {
 
@@ -270,7 +269,7 @@ public struct DeviceLinkingCoordinator: Sendable {
     observer: any LinkingObserver
   ) async throws -> DeviceUnlinkingResult {
 
-    try await inTurn { () async throws -> DeviceUnlinkingResult in
+    try await inTurn(changing: device) { () async throws -> DeviceUnlinkingResult in
 
       var known: RegisteredDevice?
 
@@ -353,7 +352,7 @@ public struct DeviceLinkingCoordinator: Sendable {
     observer: any LinkingObserver
   ) async throws -> DeviceUnlinkingAllResult {
 
-    try await inTurn { () async throws -> DeviceUnlinkingAllResult in
+    try await inTurn(changing: device) { () async throws -> DeviceUnlinkingAllResult in
 
       let known: RegisteredDevice? = await network.registry.device(device)
       let description: DeviceDescription? = known?.deviceDescription
@@ -378,8 +377,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
       } catch let error as CancellationError {
 
-        await network.recordLinkChange(of: device, answered: false)
-
+        // The turn records the change on the way out.
         throw error
 
       } catch {
@@ -464,7 +462,16 @@ public struct DeviceLinkingCoordinator: Sendable {
   // MARK: - Helpers
 
   /// Runs `body` in the network's turn for linking, so it runs alone.
-  private func inTurn<Value: Sendable>(_ body: () async throws -> Value) async throws -> Value {
+  ///
+  /// When `body` throws, the links it may have changed are recorded before the error is
+  /// rethrown, so the network's copies of ALL-Link databases aren't stale: those of the device
+  /// asked for, and those of the device of a link the modem reported in a `LinkMismatch` or
+  /// `LinkingError.unexpectedLink(_:)`, which did take part.
+  ///
+  /// - Parameters:
+  ///   - device: The device asked for, or `nil` for whichever device's SET button is pressed.
+  ///   - body: The link or unlink.
+  private func inTurn<Value: Sendable>(changing device: InsteonAddress?, _ body: () async throws -> Value) async throws -> Value {
 
     let turns: LinkingTurns = network.linkingTurns
 
@@ -480,11 +487,46 @@ public struct DeviceLinkingCoordinator: Sendable {
 
     } catch {
 
+      if let reported = Self.reportedLink(in: error) {
+
+        await network.recordLinkChange(of: reported.address, answered: true)
+
+      }
+
+      if let device {
+
+        await network.recordLinkChange(of: device, answered: false)
+
+      }
+
       await turns.end()
 
       throw error
 
     }
+
+  }
+
+  /// The link the modem reported that an error carries, from a `LinkMismatch` or
+  /// `LinkingError.unexpectedLink(_:)`, or `nil` for any other error.
+  ///
+  /// - Parameter error: The error.
+  /// - Returns: The link.
+  static func reportedLink(in error: any Error) -> AllLinkingCompleted? {
+
+    if let mismatch = error as? LinkMismatch {
+
+      return mismatch.link
+
+    }
+
+    if let linkingError = error as? LinkingError, case let .unexpectedLink(link) = linkingError {
+
+      return link
+
+    }
+
+    return nil
 
   }
 
