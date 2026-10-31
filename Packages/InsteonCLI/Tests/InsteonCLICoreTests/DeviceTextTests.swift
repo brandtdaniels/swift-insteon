@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import InsteonCLICore
+import InsteonCore
 import InsteonDeviceCatalog
 import InsteonProtocol
 
@@ -94,26 +95,60 @@ struct DeviceTextTests {
 
   // MARK: - Control
 
-  @Test func turnsARelayFullyOnWhateverLevelIsAsked() {
+  // These pin the command's wording, which people and scripts read.
 
-    #expect(ControlText.level(percent: 50, kind: .relay) == 0xFF)
-    #expect(ControlText.level(percent: 50, kind: .dimmer) == 0x80)
-    #expect(ControlText.level(percent: 50, kind: nil) == 0x80)
-    #expect(ControlText.level(percent: nil, kind: nil) == 0xFF)
+  @Test func pinsTheWordingOfTurningOn() {
 
-    #expect(ControlText.turnedOn(plug, percent: 50, kind: .relay) == "1A.2B.3C is on/off only; turned it on.")
-    #expect(ControlText.turnedOn(plug, percent: 100, kind: .relay) == "Turned 1A.2B.3C on.")
-    #expect(ControlText.turnedOn(plug, percent: nil, kind: .dimmer) == "Turned 1A.2B.3C on.")
-    #expect(ControlText.turnedOn(plug, percent: 50, kind: nil) == "Turned 1A.2B.3C on at 50%.")
+    #expect(DeviceText.turnedOn(plug, result: DeviceTurnOnResult(group: 1, level: nil, ignoredLevel: 50)) == "1A.2B.3C is on/off only; turned it on.")
+    #expect(DeviceText.turnedOn(plug, result: DeviceTurnOnResult(group: 1, level: nil, ignoredLevel: 100)) == "Turned 1A.2B.3C on.")
+    #expect(DeviceText.turnedOn(plug, result: DeviceTurnOnResult(group: 1, level: nil, ignoredLevel: nil)) == "Turned 1A.2B.3C on.")
+    #expect(DeviceText.turnedOn(plug, result: DeviceTurnOnResult(group: 1, level: 50, ignoredLevel: nil)) == "Turned 1A.2B.3C on at 50%.")
 
   }
 
-  @Test func readsARelaysStatusAsOnOrOff() {
+  @Test func pinsTheWordingOfTurningOff() {
 
-    #expect(ControlText.status(plug, level: 0xFF, kind: .relay) == "1A.2B.3C is on.")
-    #expect(ControlText.status(plug, level: 0x00, kind: .relay) == "1A.2B.3C is off.")
-    #expect(ControlText.status(plug, level: 0x80, kind: nil) == "1A.2B.3C is on at 50% (level 0x80).")
-    #expect(ControlText.status(plug, level: 0x00, kind: .dimmer) == "1A.2B.3C is off (level 0x00).")
+    #expect(DeviceText.turnedOff(plug) == "Turned 1A.2B.3C off.")
+
+  }
+
+  @Test func pinsTheWordingOfAnInstantChange() {
+
+    #expect(DeviceText.changedInstantly(plug, result: DeviceInstantChangeResult(group: 1, level: 50, isOnOffOnly: false, isCommandDescribed: true)) == "Changed 1A.2B.3C to 50% at once.")
+    #expect(DeviceText.changedInstantly(plug, result: DeviceInstantChangeResult(group: 1, level: 0, isOnOffOnly: true, isCommandDescribed: true)) == "Turned 1A.2B.3C off.")
+    #expect(DeviceText.changedInstantly(plug, result: DeviceInstantChangeResult(group: 1, level: 100, isOnOffOnly: true, isCommandDescribed: true)) == "Turned 1A.2B.3C on.")
+    #expect(DeviceText.changedInstantly(plug, result: DeviceInstantChangeResult(group: 1, level: 40, isOnOffOnly: true, isCommandDescribed: true)) == "1A.2B.3C is on/off only; turned it on.")
+    #expect(DeviceText.undescribedCommandNote("Light On Fast") == "The Insteon device catalog doesn't describe this device's commands; sending Light On Fast anyway.")
+
+  }
+
+  @Test func pinsTheWordingOfStatus() {
+
+    let on = DeviceStatus(group: 1, value: 0xFF, allLinkDatabaseDelta: 0x00, reading: .onOff(true), isOn: true)
+    let off = DeviceStatus(group: 1, value: 0x00, allLinkDatabaseDelta: 0x00, reading: .onOff(false), isOn: false)
+    let half = DeviceStatus(group: 1, value: 0x80, allLinkDatabaseDelta: 0x00, reading: .percent(50), isOn: true)
+    let dark = DeviceStatus(group: 1, value: 0x00, allLinkDatabaseDelta: 0x00, reading: .percent(0), isOn: false)
+
+    #expect(DeviceText.status(plug, status: on) == "1A.2B.3C is on.")
+    #expect(DeviceText.status(plug, status: off) == "1A.2B.3C is off.")
+    #expect(DeviceText.status(plug, status: half) == "1A.2B.3C is on at 50% (level 0x80).")
+    #expect(DeviceText.status(plug, status: dark) == "1A.2B.3C is off (level 0x00).")
+
+  }
+
+  @Test func pinsTheWordingOfBeep() {
+
+    #expect(DeviceText.beeped(plug) == "1A.2B.3C beeped.")
+    #expect(DeviceText.unlistedBeepNote == "The Insteon device catalog doesn't list Beep for this device; sending anyway.")
+    #expect(DeviceText.beepRejected(plug, reason: .notLinked) == "1A.2B.3C rejected Beep (NAK): it isn't linked to the modem.")
+    #expect(DeviceText.beepUnanswered(plug) == "1A.2B.3C didn't answer Beep. Check that it's powered and in range.")
+
+  }
+
+  @Test func wordsADeviceThatIsntLinkedAsTheModemsNAKIs() {
+
+    #expect(DeviceText.failure(.notLinked, device: plug) == "Device 1A.2B.3C rejected the command: it isn't linked to the modem.")
+    #expect(DeviceText.failure(.unsupported(.turnOnFast, product: "Example Plug 9001"), device: plug) == "The Insteon device catalog doesn't list Light On Fast for Example Plug 9001.")
 
   }
 
