@@ -41,16 +41,18 @@ import InsteonProtocol
 /// created with, so a test can give fixed times.
 public actor DeviceNetwork {
 
-  /// The modem the devices are reached through.
-  public nonisolated let modem: any LinkingModem
+  /// The modem the devices are reached through. It's internal, so every message a front end
+  /// sends a device goes through the guards of ``Device`` and ``send(_:collectingFor:onAcknowledgment:)``.
+  nonisolated let modem: any LinkingModem
 
   /// The identities devices reported, described with the Insteon device catalog.
   public nonisolated let registry: DeviceRegistry
 
   /// The copies of devices' ALL-Link databases, the only cache that reads them through the
-  /// modem. Give it to a linker or unlinker that changes databases, so it forgets the copies
-  /// they change.
-  public nonisolated let cache: AllLinkDatabaseCache
+  /// modem. The network's ``linking`` coordinator gives it to the linkers and unlinkers that
+  /// change databases, so it forgets the copies they change; it's internal, so it has no other
+  /// writer.
+  nonisolated let cache: AllLinkDatabaseCache
 
   private let identifier: DeviceIdentifier
 

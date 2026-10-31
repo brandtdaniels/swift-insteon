@@ -7,8 +7,8 @@ import InsteonProtocol
 ///
 /// ```swift
 /// let scene = ModemScene(group: group)
-/// let responders = try await scene.responders(in: modem)
-/// let report = try await scene.send(turningOn: true, responderCount: responders.count, through: modem)
+/// let responders = try await scene.responders(in: session)
+/// let report = try await scene.send(turningOn: true, responderCount: responders.count, through: session)
 ///
 /// print(report.acknowledged.count, "of", responders.count, "acknowledged")
 /// ```
@@ -35,7 +35,7 @@ public struct ModemScene: Hashable, Sendable {
   /// - Parameter modem: The modem, whose ALL-Link database is read.
   /// - Returns: The responders' addresses.
   /// - Throws: The modem's error, or `CancellationError` if the task is canceled.
-  public func responders(in modem: any LinkingModem) async throws -> [InsteonAddress] {
+  func responders(in modem: any LinkingModem) async throws -> [InsteonAddress] {
 
     let records: [AllLinkRecord] = try await modem.allLinkRecords()
     let members: [InsteonAddress] = records.filter { $0.flags.contains(.controller) && $0.group == group }.map(\.address)
@@ -61,6 +61,9 @@ public struct ModemScene: Hashable, Sendable {
   /// Sends the group Light On at full level, or Light Off, and waits for the modem's ALL-Link
   /// cleanups.
   ///
+  /// The command is checked like every message InsteonCore sends, so a ``ProtectedCommand``
+  /// never reaches the group.
+  ///
   /// - Parameters:
   ///   - isOn: Whether to turn the group's responders on, or off.
   ///   - responderCount: How many responders the group has, such as `responders(in:)`
@@ -71,16 +74,25 @@ public struct ModemScene: Hashable, Sendable {
   /// - Throws: `ModemError.rejected` if the modem rejects the command, as it does for a group
   ///   it has no records for, the modem's other errors, or `CancellationError` if the task is
   ///   canceled.
-  public func send(turningOn isOn: Bool, responderCount: Int, through modem: Modem) async throws -> AllLinkCleanupReport {
+  func send(turningOn isOn: Bool, responderCount: Int, through modem: Modem) async throws -> AllLinkCleanupReport {
 
     let command: Command = isOn ? StandardDirectCommand.on(level: .max).command : StandardDirectCommand.off.command
+
+    if let protected = ProtectedCommand(command) {
+
+      throw SendRefusal.protected(protected)
+
+    }
 
     return try await modem.sendAllLinkCommand(group: group, command: command, timeout: Self.cleanupTimeout(responderCount: responderCount))
 
   }
 
-  /// The devices the modem's ALL-Link database lists as the group's responders, as
-  /// `responders(in:)` with the modem reads them.
+  /// The devices the modem's ALL-Link database lists as the group's responders, each once,
+  /// in the order of their addresses as text.
+  ///
+  /// The modem controls each of the group's devices, so it keeps a controller record for each
+  /// in the group, and each device keeps a responder record for it.
   ///
   /// - Parameter session: The session whose modem's ALL-Link database is read.
   /// - Returns: The responders' addresses.

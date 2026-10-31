@@ -1,7 +1,7 @@
 import Foundation
 import InsteonHubClient
 import InsteonLinking
-import InsteonModem
+@_spi(Raw) import InsteonModem
 import InsteonProtocol
 
 /// An open modem: a Hub's, reached over the local network with its user name and password, or

@@ -129,11 +129,17 @@ public actor PowerLincController: SerialCommandSender {
   /// it, and the next send waits for a canceled command that was written, as with
   /// ``Modem/send(_:)``.
   ///
+  /// It's SPI, `Raw`, since a command such as `IBIOSCommand.download(address:data:)` writes
+  /// any bytes to any address in the controller's memory: call it with
+  /// `@_spi(Raw) import InsteonModem`. Sending a `SerialCommand` sends the modem commands the
+  /// controller carries.
+  ///
   /// - Parameter command: The command to send.
   /// - Throws: ``PowerLincControllerError/rejected(_:)`` if the controller NAKs every attempt,
   ///   ``PowerLincControllerError/timedOut(_:)`` if it doesn't answer,
   ///   ``PowerLincControllerError/connectionClosed`` if the controller is closed,
   ///   `CancellationError` if the task is canceled, or the connection's error.
+  @_spi(Raw)
   public func send(_ command: IBIOSCommand) async throws {
 
     try await pacer.send([Self.exchange(for: command)])
