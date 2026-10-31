@@ -23,69 +23,6 @@ import InsteonProtocol
 /// can't be remembered is printed at most once a run.
 enum IdentityStore {
 
-  /// The devices in the cache, described with the catalog, or none if there's no cache or it
-  /// can't be read.
-  static func registry(names: ProductNames) -> DeviceRegistry {
-
-    DeviceRegistry(catalog: names.catalog, snapshot: load())
-
-  }
-
-  /// What the catalog says about a device whose identity is in the cache.
-  ///
-  /// - Returns: The description, or `nil` if the device's identity isn't in the cache.
-  static func known(_ device: InsteonAddress, names: ProductNames) async -> DeviceDescription? {
-
-    await registry(names: names).device(device)?.deviceDescription
-
-  }
-
-  /// Remembers the identity a device reported, if it isn't already remembered.
-  ///
-  /// The cache is read again first, so an identity another command remembered in the meantime
-  /// is kept. A cache that can't be read isn't written, so it isn't lost.
-  ///
-  /// - Returns: What the catalog says about the device.
-  @discardableResult
-  static func remember(_ identity: ReportedIdentity, for device: InsteonAddress, names: ProductNames? = nil) async -> DeviceDescription {
-
-    guard let path = path() else {
-
-      return await DeviceRegistry(catalog: names?.catalog).record(identity, for: device).deviceDescription
-
-    }
-
-    let store = JSONFileDeviceRegistryStore(fileURL: URL(fileURLWithPath: path))
-    let snapshot: DeviceRegistrySnapshot
-    let isReadable: Bool
-
-    do {
-
-      snapshot = try store.load()
-      isReadable = true
-
-    } catch {
-
-      snapshot = DeviceRegistrySnapshot()
-      isReadable = false
-      warn(about: error, path: path)
-
-    }
-
-    let registry = DeviceRegistry(catalog: names?.catalog, snapshot: snapshot)
-    let isRemembered: Bool = await registry.device(device)?.identity == identity
-    let registered: RegisteredDevice = await registry.record(identity, for: device)
-
-    if isReadable, !isRemembered {
-
-      await save(registry, to: store, path: path)
-
-    }
-
-    return registered.deviceDescription
-
-  }
-
   /// Runs `body` with a network that starts from what the cache holds, then saves what the
   /// network learned, even when `body` throws, such as after Control-C. `body` can save
   /// sooner with `CachedNetwork.save()`, such as after each device it identifies.
@@ -127,19 +64,6 @@ enum IdentityStore {
   private static func path() -> String? {
 
     IdentityCache.path(environment: ProcessInfo.processInfo.environment)
-
-  }
-
-  /// The identities in the cache, or none if there's no cache or it can't be read.
-  private static func load() -> DeviceRegistrySnapshot {
-
-    guard let path = path(), let snapshot = try? JSONFileDeviceRegistryStore(fileURL: URL(fileURLWithPath: path)).load() else {
-
-      return DeviceRegistrySnapshot()
-
-    }
-
-    return snapshot
 
   }
 
@@ -215,27 +139,6 @@ enum IdentityStore {
       warn(about: error, path: path)
 
       return false
-
-    }
-
-  }
-
-  /// Writes the cache readable only by the current user, replacing the file whole.
-  ///
-  /// Two commands that save at the same time each write the cache as they read it, so the
-  /// entry one of them added can be lost. The device's identity is then learned again the next
-  /// time it's asked. A cache that can't be read isn't replaced, so it isn't lost.
-  private static func save(_ registry: DeviceRegistry, to store: JSONFileDeviceRegistryStore, path: String) async {
-
-    let snapshot: DeviceRegistrySnapshot = await registry.snapshot
-
-    do {
-
-      try store.save(snapshot)
-
-    } catch {
-
-      warn(about: error, path: path)
 
     }
 
@@ -377,79 +280,6 @@ enum Identities {
     }
 
     return await network.registry.device(device)?.deviceDescription
-
-  }
-
-  /// A device's identity from the cache, or else, when `asking`, from an ID Request, which is
-  /// then remembered.
-  ///
-  /// A device that doesn't answer is only left unnamed, but cancellation, such as by
-  /// Control-C, stops the command.
-  ///
-  /// - Returns: The device and what the catalog says about it, or `nil` if its identity isn't
-  ///   known and it didn't report one.
-  /// - Throws: `CancellationError` if the task was canceled.
-  static func known(_ device: InsteonAddress, modem: Modem, names: ProductNames, asking: Bool) async throws -> DeviceDescription? {
-
-    if let known = await IdentityStore.known(device, names: names) {
-
-      return known
-
-    }
-
-    guard asking else {
-
-      return nil
-
-    }
-
-    Output.note("Asking \(device) for its identity with ID Request...")
-
-    let reported: SetButtonPressed?
-
-    do {
-
-      reported = try await DeviceIdentifier(modem: modem).identify(device).identity
-
-    } catch let error as CancellationError {
-
-      throw error
-
-    } catch {
-
-      return nil
-
-    }
-
-    guard let pressed = reported else {
-
-      return nil
-
-    }
-
-    return await IdentityStore.remember(ReportedIdentity(pressed), for: device, names: names)
-
-  }
-
-  /// The identity a link reported, or else, for a new link, the one the device reports to an
-  /// ID Request. Either is remembered.
-  ///
-  /// - Throws: `CancellationError` if the task was canceled while asking.
-  static func learn(from link: AllLinkingCompleted, modem: Modem, names: ProductNames) async throws -> DeviceDescription? {
-
-    if let identity = ReportedIdentity(link) {
-
-      return await IdentityStore.remember(identity, for: link.address, names: names)
-
-    }
-
-    guard link.mode != .delete else {
-
-      return await IdentityStore.known(link.address, names: names)
-
-    }
-
-    return try await known(link.address, modem: modem, names: names, asking: true)
 
   }
 
