@@ -7,8 +7,9 @@ import InsteonModem
 import InsteonProtocol
 import InsteonTestSupport
 
-/// Made-up devices to link: a lamp, which is a dimmer; a sensor, which controls; and a module
-/// whose relay isn't a light, so it isn't turned on before linking.
+/// Made-up devices to link: a lamp, which is a dimmer; a sensor, which controls; a module
+/// whose relay isn't a light, so it isn't turned on before linking; and a keypad, which
+/// controls in groups 3 and 4 but not group 1.
 enum LinkingExample {
 
   static let lamp = InsteonAddress(0x2A, 0x3B, 0x01)
@@ -22,6 +23,10 @@ enum LinkingExample {
   static let sensorIdentity = ReportedIdentity(category: 0x10, subcategory: 0x5B, firmwareVersion: 0x41)
 
   static let moduleIdentity = ReportedIdentity(category: 0x07, subcategory: 0x5C, firmwareVersion: 0x41)
+
+  static let keypad = InsteonAddress(0x2A, 0x3B, 0x04)
+
+  static let keypadIdentity = ReportedIdentity(category: 0x00, subcategory: 0x5D, firmwareVersion: 0x41)
 
   /// A step on the device, and one on the other device that's left out of the device's steps.
   static let linkingSteps: [DeviceLifecycle.Step] = [
@@ -59,6 +64,17 @@ enum LinkingExample {
       name: "Example Module",
       identities: [DeviceIdentity(category: 0x07, subcategory: 0x5C)],
       groups: [DeviceProfile.Group(number: 1, name: "Relay", role: .responder)],
+      lifecycle: lifecycle
+    ),
+    DeviceProfile(
+      model: "9204",
+      name: "Example Keypad",
+      identities: [DeviceIdentity(category: 0x00, subcategory: 0x5D)],
+      groups: [
+        DeviceProfile.Group(number: 1, name: "Load", role: .responder),
+        DeviceProfile.Group(number: 3, name: "Button C", role: .controller),
+        DeviceProfile.Group(number: 4, name: "Button D", role: .controller)
+      ],
       lifecycle: lifecycle
     )
   ])
@@ -276,7 +292,7 @@ struct DeviceLinkingCoordinatorTests {
 
   }
 
-  @Test(.timeLimit(.minutes(1))) func linksBackOnlyWhenAskedAfterASETButtonLink() async throws {
+  @Test(.timeLimit(.minutes(1))) func doesntLinkBackASETButtonLinkWhenToldNever() async throws {
 
     let modem = InMemoryModem()
     let sensor: InsteonAddress = LinkingExample.sensor
@@ -418,6 +434,54 @@ struct DeviceLinkingCoordinatorTests {
       "linked \(sensor) group 1 responder back"
     ])
     #expect(await modem.linkingSteps.contains(.modem(.responder, 0x01)))
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func linksBackInTheFirstGroupTheCatalogSaysTheDeviceControls() async throws {
+
+    let modem = InMemoryModem()
+    let keypad: InsteonAddress = LinkingExample.keypad
+    let network: DeviceNetwork = self.network(modem, identities: [keypad: LinkingExample.keypadIdentity])
+    let recorder = LinkingRecorder()
+
+    let result: DeviceLinkingResult = try await network.linking.link(keypad, as: .controller, observer: recorder)
+
+    // The keypad doesn't control group 1, so it links back in group 3, the first in the
+    // catalog's order that it controls.
+    #expect(result.links.map(\.mode) == [.controller, .responder])
+    #expect(result.links.map(\.group) == [0x00, 0x03])
+    #expect(await recorder.lines.suffix(2) == ["linking back \(keypad) group 3", "linked \(keypad) group 3 responder back"])
+    #expect(await modem.linkingSteps.contains(.modem(.responder, 0x03)))
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func linksBackASETButtonLinkOfADeviceThatControls() async throws {
+
+    let modem = InMemoryModem()
+    let keypad: InsteonAddress = LinkingExample.keypad
+    let network: DeviceNetwork = self.network(modem, identities: [keypad: LinkingExample.keypadIdentity])
+
+    let result: DeviceLinkingResult = try await network.linking.linkBySETButton(as: .controller, observer: pressing(keypad, on: modem))
+
+    #expect(result.links.map(\.mode) == [.controller, .responder])
+    #expect(result.links.map(\.group) == [0x00, 0x03])
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func joinsTheGroupTheDeviceControlsAsResponder() async throws {
+
+    let modem = InMemoryModem()
+    let keypad: InsteonAddress = LinkingExample.keypad
+    let network: DeviceNetwork = self.network(modem, identities: [keypad: LinkingExample.keypadIdentity])
+    let recorder = LinkingRecorder()
+
+    let result: DeviceLinkingResult = try await network.linking.link(keypad, as: .responder, observer: recorder)
+
+    // The modem joins group 3, not the group it was given or group 1.
+    #expect(result.links.map(\.mode) == [.responder])
+    #expect(result.links.map(\.group) == [0x03])
+    #expect(await modem.linkingSteps.contains(.modem(.responder, 0x03)))
+    #expect(await recorder.lines == ["linking remotely \(keypad) as responder", "linked \(keypad) group 3 responder first"])
 
   }
 
