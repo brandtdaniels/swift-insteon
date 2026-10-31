@@ -5,6 +5,7 @@ import InsteonTestSupport
 
 /// Every test runs on a ``TestClock`` that only moves when the test advances it, so retry
 /// delays and echo timeouts never depend on how fast the machine running the tests is.
+@Suite(.timeLimit(.minutes(1)))
 struct ModemTests {
 
   let clock = TestClock()

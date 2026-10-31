@@ -6,6 +6,7 @@ import InsteonTestSupport
 
 /// The bytes written come from the worked examples in the Insteon Developer's Guide, chapter 9.
 /// Like ``ModemTests``, every test runs on a ``TestClock``.
+@Suite(.timeLimit(.minutes(1)))
 struct PowerLincControllerTests {
 
   let clock = TestClock()

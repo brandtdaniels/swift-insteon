@@ -5,6 +5,7 @@ import InsteonProtocol
 import InsteonTestSupport
 
 /// Deleting a gone device's records from the modem's own ALL-Link database.
+@Suite(.timeLimit(.minutes(1)))
 struct ModemRecordDeletionTests {
 
   let sensor = InsteonAddress(0x4C, 0x5D, 0x01)

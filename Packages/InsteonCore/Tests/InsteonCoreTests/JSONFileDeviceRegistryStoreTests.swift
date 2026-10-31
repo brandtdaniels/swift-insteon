@@ -278,7 +278,7 @@ struct JSONFileDeviceRegistryStoreTests {
 
   }
 
-  @Test func savesThroughTheProtocol() async throws {
+  @Test(.timeLimit(.minutes(1))) func savesThroughTheProtocol() async throws {
 
     let directory: URL = Self.temporaryDirectory()
 

@@ -20,6 +20,7 @@ actor Recorder<Value: Sendable> {
 /// Waiting for replies, manual linking with a ready callback, link mismatches, the modem's
 /// links with a device, responder state and remote unlinking, on a ``TestClock`` that moves
 /// only when a test advances it.
+@Suite(.timeLimit(.minutes(1)))
 struct LinkingPrimitivesTests {
 
   let lamp = InsteonAddress(0x1A, 0x2B, 0x3C)

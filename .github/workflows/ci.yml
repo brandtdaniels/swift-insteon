@@ -19,6 +19,8 @@ jobs:
           fetch-depth: 0
       - name: Check the docs and comments for ruled-out terms
         run: python3 Scripts/check-terms.py
+      - name: Check that every async test has a time limit
+        run: python3 Scripts/check-time-limits.py
       - name: Check that the insteon command leaves device behavior to the libraries
         run: python3 Scripts/check-cli-thin.py
       # The allow-list only shrinks: a pull request may remove entries but not add them.
@@ -40,7 +42,7 @@ jobs:
             exit 1
           fi
           echo "The allow-list didn't grow."
-      - name: Test the check
+      - name: Test the checks
         run: python3 -m unittest discover -s Scripts/tests -v
 
   macos:

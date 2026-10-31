@@ -37,6 +37,7 @@ actor RecordingHTTPClient: HTTPClient {
 
 }
 
+@Suite(.timeLimit(.minutes(1)))
 struct HubIdentifierTests {
 
   let credentials = HubIdentifier.Credentials(user: "user", password: "secret")

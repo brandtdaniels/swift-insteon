@@ -331,7 +331,7 @@ struct NetworkSnapshotStoreTests {
 
   }
 
-  @Test func savesThroughTheProtocol() async throws {
+  @Test(.timeLimit(.minutes(1))) func savesThroughTheProtocol() async throws {
 
     let (directory, file) = Self.temporaryFile()
 

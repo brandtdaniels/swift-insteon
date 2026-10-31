@@ -60,6 +60,7 @@ final class Count: @unchecked Sendable {
 }
 
 /// A network on an in-memory modem, on a ``TestClock`` and fixed times.
+@Suite(.timeLimit(.minutes(1)))
 struct DeviceNetworkTests {
 
   let clock: TestClock = TestClock()

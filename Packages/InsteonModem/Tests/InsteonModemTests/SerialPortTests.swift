@@ -104,7 +104,7 @@ struct SerialPortTests {
 
   }
 
-  @Test func writingAfterClosingThrows() async throws {
+  @Test(.timeLimit(.minutes(1))) func writingAfterClosingThrows() async throws {
 
     let (controller, path) = try #require(openPseudoTerminal())
     defer { _ = close(controller) }

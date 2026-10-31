@@ -5,6 +5,7 @@ import InsteonProtocol
 import InsteonTestSupport
 
 /// Identifying devices, on a ``TestClock`` that moves only when a test advances it.
+@Suite(.timeLimit(.minutes(1)))
 struct DeviceIdentifierTests {
 
   let lamp = InsteonAddress(0x1A, 0x2B, 0x3C)

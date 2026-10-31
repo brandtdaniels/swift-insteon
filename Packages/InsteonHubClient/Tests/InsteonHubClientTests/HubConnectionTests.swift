@@ -12,6 +12,7 @@ import InsteonTestSupport
 /// on a write, a reply or a sleeping poll rather than on elapsed time, so results never depend
 /// on speed. Polling happens only while a stream is read, so each test reads the stream it
 /// expects bytes from.
+@Suite(.timeLimit(.minutes(1)))
 struct HubConnectionTests {
 
   let clock = TestClock()

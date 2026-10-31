@@ -4,6 +4,7 @@ import InsteonProtocol
 import InsteonTestSupport
 
 /// Requests to devices, run on a ``TestClock`` so timeouts never depend on the machine's speed.
+@Suite(.timeLimit(.minutes(1)))
 struct RequestTests {
 
   let clock = TestClock()

@@ -67,6 +67,7 @@ enum GetInfoPage {
 
 }
 
+@Suite(.timeLimit(.minutes(1)))
 struct InsteonConnectLookupTests {
 
   func makeLookup(answering body: String, status: Int = 200) -> (InsteonConnectLookup, ScriptedHTTPClient) {

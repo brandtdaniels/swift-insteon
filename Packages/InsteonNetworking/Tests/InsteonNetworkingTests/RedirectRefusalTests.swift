@@ -29,7 +29,7 @@ struct RedirectRefusalTests {
 
   // MARK: Which requests refuse redirects
 
-  @Test func aRequestFromBasicAuthenticationCarriesCredentials() async throws {
+  @Test(.timeLimit(.minutes(1))) func aRequestFromBasicAuthenticationCarriesCredentials() async throws {
 
     let stub: StubHTTPClient = StubHTTPClient()
     let client: BasicAuthenticationHTTPClient = BasicAuthenticationHTTPClient(stub, user: Self.user, password: Self.password)
@@ -83,7 +83,7 @@ struct RedirectRefusalTests {
 
   // MARK: The refusal
 
-  @Test func theDelegateDeclinesARedirectAndRecordsIt() async throws {
+  @Test(.timeLimit(.minutes(1))) func theDelegateDeclinesARedirectAndRecordsIt() async throws {
 
     let refusal: RedirectRefusal = RedirectRefusal()
     // The task is never resumed, so nothing is sent.
@@ -107,7 +107,7 @@ struct RedirectRefusalTests {
 
   }
 
-  @Test(arguments: [301, 302, 303, 307, 308])
+  @Test(.timeLimit(.minutes(1)), arguments: [301, 302, 303, 307, 308])
   func refusesEveryKindOfRedirect(_ statusCode: Int) async throws {
 
     let refusal: RedirectRefusal = RedirectRefusal()
@@ -169,7 +169,7 @@ struct RedirectRefusalTests {
   // A made-up catalog host. Other hosts are made up too, or in a documentation range.
   static let catalogManifest: URL = URL(string: "https://catalog.example/v0/manifest.json")!
 
-  @Test(arguments: [
+  @Test(.timeLimit(.minutes(1)), arguments: [
     "https://catalog.example/v0/manifest.json?sha256=0",
     "https://catalog.example/v0/",
     "https://catalog.example/v1/manifest.json",
@@ -185,7 +185,7 @@ struct RedirectRefusalTests {
 
   }
 
-  @Test(arguments: [
+  @Test(.timeLimit(.minutes(1)), arguments: [
     "http://catalog.example/v0/manifest.json",
     "https://192.0.2.80/v0/manifest.json",
     "https://catalog.example.evil.example/v0/manifest.json",
@@ -204,7 +204,7 @@ struct RedirectRefusalTests {
 
   }
 
-  @Test func sameOriginTreatsAnExplicitDefaultPortAsTheSameOrigin() async throws {
+  @Test(.timeLimit(.minutes(1))) func sameOriginTreatsAnExplicitDefaultPortAsTheSameOrigin() async throws {
 
     let original: URL = try #require(URL(string: "https://catalog.example:443/v0/manifest.json"))
     let redirect: URL = try #require(URL(string: "https://catalog.example/v0/"))
@@ -214,7 +214,7 @@ struct RedirectRefusalTests {
 
   }
 
-  @Test func sameOriginRefusesAChainThroughHTTPAtItsFirstStep() async throws {
+  @Test(.timeLimit(.minutes(1))) func sameOriginRefusesAChainThroughHTTPAtItsFirstStep() async throws {
 
     let session: URLSession = URLSession(configuration: .ephemeral)
     let task: URLSessionDataTask = session.dataTask(with: URLRequest(url: Self.catalogManifest))
@@ -244,7 +244,7 @@ struct RedirectRefusalTests {
 
   }
 
-  @Test func sameOriginComparesEachStepWithTheFirstAddress() async throws {
+  @Test(.timeLimit(.minutes(1))) func sameOriginComparesEachStepWithTheFirstAddress() async throws {
 
     let session: URLSession = URLSession(configuration: .ephemeral)
     let task: URLSessionDataTask = session.dataTask(with: URLRequest(url: Self.catalogManifest))
@@ -262,7 +262,7 @@ struct RedirectRefusalTests {
 
   }
 
-  @Test func sameOriginFollowsNothingFromARequestThatIsntHTTPS() async throws {
+  @Test(.timeLimit(.minutes(1))) func sameOriginFollowsNothingFromARequestThatIsntHTTPS() async throws {
 
     let original: URL = try #require(URL(string: "http://catalog.example/v0/manifest.json"))
     let followed: URLRequest? = try await Self.decide(.sameOriginHTTPSOnly, from: original, to: Self.catalogManifest)
@@ -271,7 +271,7 @@ struct RedirectRefusalTests {
 
   }
 
-  @Test func followAllFollowsAnotherHostAndRefuseAllFollowsNothing() async throws {
+  @Test(.timeLimit(.minutes(1))) func followAllFollowsAnotherHostAndRefuseAllFollowsNothing() async throws {
 
     let redirect: URL = try #require(URL(string: "http://192.0.2.80/collect"))
 

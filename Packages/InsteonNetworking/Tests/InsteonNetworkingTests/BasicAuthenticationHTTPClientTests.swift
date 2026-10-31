@@ -10,7 +10,7 @@ struct BasicAuthenticationHTTPClientTests {
 
   let request = URLRequest(url: URL(string: "http://hub.local:25105/buffstatus.xml")!)
 
-  @Test func addsBasicAuthorizationHeader() async throws {
+  @Test(.timeLimit(.minutes(1))) func addsBasicAuthorizationHeader() async throws {
 
     let stub = StubHTTPClient()
     let client = BasicAuthenticationHTTPClient(stub, user: "user", password: "password")
@@ -38,7 +38,7 @@ struct BasicAuthenticationHTTPClientTests {
 
   }
 
-  @Test func returnsWrappedClientsResponse() async throws {
+  @Test(.timeLimit(.minutes(1))) func returnsWrappedClientsResponse() async throws {
 
     let expected = HTTPResponse(statusCode: 401, body: Data("denied".utf8))
     let client = BasicAuthenticationHTTPClient(StubHTTPClient(response: expected), user: "user", password: "password")
