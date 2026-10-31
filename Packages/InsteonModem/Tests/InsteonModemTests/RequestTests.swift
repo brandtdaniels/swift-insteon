@@ -447,6 +447,45 @@ struct RequestTests {
 
   }
 
+  @Test func waitsTheRetryDelayBeforeAskingForARecordAgain() async throws {
+
+    let acknowledgment: [UInt8] = received(from: device, .directAcknowledgment, command1: 0x2F, command2: 0x00)
+    let end: [UInt8] = recordResponse(at: 0x0FFF, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    // The first record response is lost.
+    let connection = ScriptedConnection { (written: [UInt8], index: Int) -> [UInt8] in
+
+      let record: [UInt8] = index == 0 ? [] : end
+
+      return written + [0x06] + acknowledgment + record
+
+    }
+    let modem = Modem(
+      connection: connection,
+      retryPolicy: RetryPolicy(attempts: 3, delay: .milliseconds(500), answerTimeout: .seconds(2)),
+      clock: clock
+    )
+
+    try await run(modem) {
+
+      async let responses = modem.readAllLinkDatabase(of: device)
+      await clock.waitForSleeper(until: Modem.defaultExtendedRequestTimeout)
+      clock.advance(by: Modem.defaultExtendedRequestTimeout)
+
+      // The request is asked for again only once the retry delay has passed.
+      await clock.waitForSleeper(until: Modem.defaultExtendedRequestTimeout + .milliseconds(500))
+      #expect(connection.written.count == 1)
+      clock.advance(by: .milliseconds(500))
+
+      let read: [AllLinkRecordResponse] = try await responses
+
+      #expect(read.map(\.address) == [0x0FFF])
+
+    }
+
+    #expect(connection.written.count == 2)
+
+  }
+
   @Test func stopsAtTheBottomOfTheDatabasesMemory() async throws {
 
     let acknowledgment = received(from: device, .directAcknowledgment, command1: 0x2F, command2: 0x00)

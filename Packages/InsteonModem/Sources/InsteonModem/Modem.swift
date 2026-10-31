@@ -32,6 +32,9 @@ public actor Modem: SerialCommandSender {
 
   private let retryPolicy: RetryPolicy
 
+  /// The clock that times the wait before a record is asked for again.
+  private let clock: any Clock<Duration>
+
   /// Creates a modem that talks over a connection.
   ///
   /// - Parameters:
@@ -46,6 +49,7 @@ public actor Modem: SerialCommandSender {
   ) {
 
     self.retryPolicy = retryPolicy
+    self.clock = clock
     pacer = CommandPacer(
       connection: connection,
       parser: ModemReplyParser(),
@@ -644,7 +648,8 @@ public actor Modem: SerialCommandSender {
   /// Reads the record at an address in a device's ALL-Link database.
   ///
   /// A record that doesn't arrive in time is asked for again, as many times as the modem's
-  /// ``RetryPolicy`` allows.
+  /// ``RetryPolicy`` allows, after its ``RetryPolicy/delay``, which gives the modem time to
+  /// finish with the device before it's sent the next message.
   ///
   /// - Parameters:
   ///   - device: The device whose database to read.
@@ -653,7 +658,7 @@ public actor Modem: SerialCommandSender {
   ///     ``Modem/defaultExtendedRequestTimeout``.
   /// - Returns: The record and its address.
   /// - Throws: The errors of ``Modem/request(_:awaitingReply:timeout:)``, once every attempt
-  ///   has failed.
+  ///   has failed, or `CancellationError` if the task is canceled during the delay.
   public func readAllLinkRecord(
     of device: InsteonAddress,
     at address: UInt16,
@@ -680,6 +685,9 @@ public actor Modem: SerialCommandSender {
       } catch let ModemError.deviceTimedOut(address) where address == device && attempt < retryPolicy.attempts {
 
         attempt += 1
+
+        // The modem may still be busy with the device, as after a rejected command.
+        try await clock.sleep(for: retryPolicy.delay)
 
       }
 
