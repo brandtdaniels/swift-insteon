@@ -11,7 +11,7 @@ protocol's command enumerations. A comparison with `nil` only asks whether a val
 so it's allowed.
 
 It reads the Swift files under each root, `Packages/InsteonCLI/Sources/insteon` and
-`Packages/InsteonCLI/Sources/InsteonCLICore` by default, leaving out comments, including
+`Packages/InsteonCLI/Sources/InsteonCLISupport` by default, leaving out comments, including
 nested ones, and string literals, including raw ones, and prints each line that breaks a
 rule, by its path from the root's parent, such as `insteon/DeviceCommands.swift`. A line
 that's in the allow-list, `Scripts/check-cli-thin-allowlist.txt` by default, is known and
@@ -31,7 +31,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 DEFAULT_SOURCES = [
     ROOT / "Packages" / "InsteonCLI" / "Sources" / "insteon",
-    ROOT / "Packages" / "InsteonCLI" / "Sources" / "InsteonCLICore",
+    ROOT / "Packages" / "InsteonCLI" / "Sources" / "InsteonCLISupport",
 ]
 
 DEFAULT_ALLOWLIST = ROOT / "Scripts" / "check-cli-thin-allowlist.txt"

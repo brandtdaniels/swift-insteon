@@ -1,5 +1,5 @@
 import Testing
-import InsteonCLICore
+import InsteonCLISupport
 import InsteonCore
 import InsteonDeviceCatalog
 import InsteonProtocol
@@ -234,18 +234,6 @@ struct DeviceSettingsTextTests {
     #expect(HexInput.bytes("027") == nil)
     #expect(HexInput.bytes("") == nil)
     #expect(HexInput.bytes("02 7G") == nil)
-
-  }
-
-  @Test func refusesSerialCommandsThatChangeWhatTheModemKeeps() {
-
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x77]) == nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x60]) == nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x67]) != nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x6F, 0x80]) != nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x76]) != nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x99]) != nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02]) != nil)
 
   }
 

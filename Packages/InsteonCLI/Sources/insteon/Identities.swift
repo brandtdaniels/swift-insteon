@@ -4,7 +4,7 @@ import Darwin
 #elseif canImport(Glibc)
 import Glibc
 #endif
-import InsteonCLICore
+import InsteonCLISupport
 import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking

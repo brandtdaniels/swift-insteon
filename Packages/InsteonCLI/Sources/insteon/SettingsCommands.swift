@@ -1,4 +1,4 @@
-import InsteonCLICore
+import InsteonCLISupport
 import InsteonCore
 
 /// `insteon device ADDRESS settings` and `set`: reads and changes the settings the Insteon

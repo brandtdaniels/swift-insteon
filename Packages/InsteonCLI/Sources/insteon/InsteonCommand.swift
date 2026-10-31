@@ -4,13 +4,13 @@ import Darwin
 #elseif canImport(Glibc)
 import Glibc
 #endif
-import InsteonCLICore
+import InsteonCLISupport
 import InsteonCore
 import InsteonModem
 
 /// The `insteon` command: drives an Insteon Hub or modem, and its devices, from the terminal.
 ///
-/// The command line is read by `Invocation.parse(_:)` in InsteonCLICore, so this target only
+/// The command line is read by `Invocation.parse(_:)` in InsteonCLISupport, so this target only
 /// runs what it asks for.
 @main
 struct InsteonCommand {

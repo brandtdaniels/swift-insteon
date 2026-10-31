@@ -248,6 +248,8 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 ### Networks
 
 - ``DeviceNetwork``
+- ``DeviceProductData``
+- ``ModemScene``
 - ``ModemDatabaseEntry``
 - ``NetworkDeviceState``
 - ``HubLocation``
@@ -305,3 +307,7 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 - ``NetworkSnapshotStore``
 - ``JSONFileDeviceRegistryStore``
 - ``DeviceRegistryStoreError``
+
+### Raw passthroughs
+
+- ``SerialCommandPolicy``

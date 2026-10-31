@@ -851,7 +851,7 @@ extension Invocation {
 
     }
 
-    guard bytes[0] == 0x02 else {
+    guard SerialCommandPolicy.isSerialCommand(bytes) else {
 
       throw ArgumentError.invalidValue(option: "send", value: joined, expected: "a serial command, which starts with 02")
 

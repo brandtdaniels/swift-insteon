@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import InsteonCLICore
+import InsteonCLISupport
 import InsteonDeviceCatalog
 
 struct CatalogCacheTests {

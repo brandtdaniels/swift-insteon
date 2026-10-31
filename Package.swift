@@ -159,11 +159,11 @@ let package = Package(
       path: "Packages/InsteonCore/Tests/InsteonCoreTests"
     ),
 
-    // The `insteon` command. Its command-line parsing is in InsteonCLICore, so it can be tested.
+    // The `insteon` command. Its command-line parsing is in InsteonCLISupport, so it can be tested.
     .executableTarget(
       name: "insteon",
       dependencies: [
-        "InsteonCLICore",
+        "InsteonCLISupport",
         "InsteonCore",
         "InsteonDeviceCatalog",
         "InsteonHubClient",
@@ -176,14 +176,14 @@ let package = Package(
       path: "Packages/InsteonCLI/Sources/insteon"
     ),
     .target(
-      name: "InsteonCLICore",
+      name: "InsteonCLISupport",
       dependencies: ["InsteonCore", "InsteonDeviceCatalog", "InsteonLinking", "InsteonProtocol"],
-      path: "Packages/InsteonCLI/Sources/InsteonCLICore"
+      path: "Packages/InsteonCLI/Sources/InsteonCLISupport"
     ),
     .testTarget(
-      name: "InsteonCLICoreTests",
-      dependencies: ["InsteonCLICore", "InsteonCore", "InsteonDeviceCatalog", "InsteonLinking", "InsteonProtocol"],
-      path: "Packages/InsteonCLI/Tests/InsteonCLICoreTests"
+      name: "InsteonCLISupportTests",
+      dependencies: ["InsteonCLISupport", "InsteonCore", "InsteonDeviceCatalog", "InsteonLinking", "InsteonProtocol"],
+      path: "Packages/InsteonCLI/Tests/InsteonCLISupportTests"
     ),
 
     // Test doubles shared by the test targets. Not a product.

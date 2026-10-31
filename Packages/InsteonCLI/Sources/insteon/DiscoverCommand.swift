@@ -1,4 +1,4 @@
-import InsteonCLICore
+import InsteonCLISupport
 import InsteonHubClient
 import InsteonHubDiscovery
 import InsteonProtocol
