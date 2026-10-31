@@ -96,15 +96,16 @@ struct CatalogControlTests {
 
   @Test(.timeLimit(.minutes(1))) func switchesOneRelayOfTheBallastDimmerInRelayMode() async throws {
 
-    // Relay mode's bit, 0x80, is set.
+    // Relay mode's bit, 0x80 of the Get Operating Flags 0x05 reply, is set; the modem
+    // reports the same byte for every query.
     let (ballast, modem): (Device, SettingsModem) = try makeBallast(flags: 0x80)
 
     let result: DeviceTurnOnResult = try await ballast.turnOn(outputs: ["relay2"])
 
     #expect(result.group == 1)
     #expect(result.level == nil)
-    // Get Operating Flags for relay mode, then Light On with relay 2's bit.
-    #expect(await modem.standardCommands == [Command(command1: 0x1F, command2: 0x00), Command(command1: 0x11, command2: 0x02)])
+    // Get Operating Flags 0x05, whose reply holds relay mode, then Light On with relay 2's bit.
+    #expect(await modem.standardCommands == [Command(command1: 0x1F, command2: 0x05), Command(command1: 0x11, command2: 0x02)])
 
   }
 
@@ -137,8 +138,8 @@ struct CatalogControlTests {
 
     }
 
-    // Only the flag was read.
-    #expect(await modem.standardCommands == [Command(command1: 0x1F, command2: 0x00)])
+    // Only relay mode's flags byte was read.
+    #expect(await modem.standardCommands == [Command(command1: 0x1F, command2: 0x05)])
 
   }
 
