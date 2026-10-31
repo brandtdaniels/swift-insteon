@@ -107,9 +107,11 @@ public struct ModemScene: Hashable, Sendable {
   /// - Throws: The modem's error, which ``SendFailure`` reads as
   ///   ``SendFailure/modemRejected`` for a group the modem has no records for, or
   ///   `CancellationError`.
-  public func send(turningOn isOn: Bool, responderCount: Int, through session: ModemSession) async throws -> AllLinkCleanupReport {
+  public func send(turningOn isOn: Bool, responderCount: Int, through session: ModemSession) async throws -> SceneResult {
 
-    try await send(turningOn: isOn, responderCount: responderCount, through: session.modem)
+    let report: AllLinkCleanupReport = try await send(turningOn: isOn, responderCount: responderCount, through: session.modem)
+
+    return SceneResult(report)
 
   }
 

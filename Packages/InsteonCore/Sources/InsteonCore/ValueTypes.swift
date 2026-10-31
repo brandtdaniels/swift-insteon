@@ -51,10 +51,6 @@ public typealias AllLinkRecordResponse = InsteonProtocol.AllLinkRecordResponse
 /// The modem's report of a link it made or removed.
 public typealias AllLinkingCompleted = InsteonProtocol.AllLinkingCompleted
 
-/// How a group command's ALL-Link cleanups went: which members acknowledged their cleanup,
-/// which didn't, and whether the modem reached them all.
-public typealias AllLinkCleanupReport = InsteonModem.AllLinkCleanupReport
-
 /// The modem's role in a link it reported: controller, responder or deleted.
 public typealias AllLinkMode = InsteonProtocol.AllLinkMode
 

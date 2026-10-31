@@ -398,7 +398,7 @@ do {
 - ``AllLinkRecord``
 - ``AllLinkRecordResponse``
 - ``AllLinkingCompleted``
-- ``AllLinkCleanupReport``
+- ``SceneResult``
 - ``AllLinkMode``
 - ``ModemLink``
 - ``ModemRole``

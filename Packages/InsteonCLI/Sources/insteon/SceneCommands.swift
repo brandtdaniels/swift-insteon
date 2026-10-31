@@ -21,7 +21,7 @@ enum SceneCommands {
 
     }
 
-    let report: AllLinkCleanupReport
+    let report: SceneResult
 
     do {
 
