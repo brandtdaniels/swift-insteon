@@ -66,10 +66,11 @@ struct HubTransportTests {
 
   }
 
-  @Test func theDefaultClientIsForTheLocalNetwork() {
+  // A Hub's page limit and the local-network client's agree, so neither cuts off the other.
+  @Test func aHubsPageLimitMatchesTheLocalNetworkClients() {
 
     #expect(Hub.maximumResponseSize == 64 * 1024)
-    #expect(URLSessionHTTPClient.localNetwork().redirectPolicy == .refuseAll)
+    #expect(URLSessionHTTPClient.localNetwork().maximumResponseSize == Hub.maximumResponseSize)
 
   }
 
