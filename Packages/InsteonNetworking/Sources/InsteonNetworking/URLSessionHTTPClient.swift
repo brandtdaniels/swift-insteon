@@ -32,8 +32,8 @@ import FoundationNetworking
 /// On Apple platforms the session's configuration turns proxies off. On Linux,
 /// swift-corelibs-foundation ignores that and libcurl uses the proxy the environment names, so
 /// the client refuses a request a proxy would carry and throws
-/// ``HTTPClientError/proxyConfigured`` instead; naming the device's address in `no_proxy`
-/// sends it directly.
+/// ``HTTPClientError/proxyConfigured`` instead; naming the device's exact address in
+/// `no_proxy` sends it directly, since an address range there isn't read.
 ///
 /// ## The size of an answer
 ///
@@ -153,7 +153,7 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
   package static func localNetwork(maximumResponseSize: Int, resourceTimeout: Duration, environment: [String: String]) -> URLSessionHTTPClient {
 
     URLSessionHTTPClient(
-      session: URLSession(configuration: isolatedConfiguration(resourceTimeout: resourceTimeout)),
+      session: URLSession(configuration: isolatedConfiguration(resourceTimeout: resourceTimeout, turningProxiesOff: true)),
       redirectPolicy: .refuseAll,
       maximumResponseSize: maximumResponseSize,
       proxyEnvironment: ProxyEnvironment(environment),
@@ -165,9 +165,12 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
   /// Makes a client with a session of its own that keeps nothing between requests, for a
   /// request that shouldn't leave a trace on the device, such as one to Insteon's servers.
   ///
-  /// The session keeps no cookies, credentials or cache, and on Apple platforms uses no
-  /// proxy. On Linux, swift-corelibs-foundation uses the proxy the environment names, which
-  /// for an HTTPS request carries only an encrypted tunnel to the host.
+  /// The session keeps no cookies, credentials or cache. It uses the proxy the system or the
+  /// environment sets, as other requests do, so it reaches the internet where only a proxy
+  /// can; for an HTTPS request, a proxy carries only an encrypted tunnel to the host. Send no
+  /// credentials through it to a plain HTTP address: use
+  /// ``URLSessionHTTPClient/localNetwork(maximumResponseSize:resourceTimeout:)`` for devices
+  /// on the local network.
   ///
   /// - Parameters:
   ///   - redirectPolicy: Which redirects requests without credentials follow.
@@ -177,7 +180,7 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
   public static func ephemeral(redirectPolicy: RedirectPolicy, maximumResponseSize: Int, resourceTimeout: Duration) -> URLSessionHTTPClient {
 
     URLSessionHTTPClient(
-      session: URLSession(configuration: isolatedConfiguration(resourceTimeout: resourceTimeout)),
+      session: URLSession(configuration: isolatedConfiguration(resourceTimeout: resourceTimeout, turningProxiesOff: false)),
       redirectPolicy: redirectPolicy,
       maximumResponseSize: maximumResponseSize,
       proxyEnvironment: nil,
@@ -199,15 +202,24 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
     "ProxyAutoDiscoveryEnable": 0,
   ]
 
-  /// A configuration that keeps no cookies, credentials or cache, uses no proxy where the
-  /// platform reads the setting, and limits a request's total time.
+  /// A configuration that keeps no cookies, credentials or cache and limits a request's total
+  /// time.
   ///
-  /// - Parameter resourceTimeout: How long a request may take in all.
+  /// - Parameters:
+  ///   - resourceTimeout: How long a request may take in all.
+  ///   - turningProxiesOff: Whether to turn every proxy off, where the platform reads the
+  ///     setting, or to use the system's.
   /// - Returns: The configuration.
-  package static func isolatedConfiguration(resourceTimeout: Duration) -> URLSessionConfiguration {
+  package static func isolatedConfiguration(resourceTimeout: Duration, turningProxiesOff: Bool) -> URLSessionConfiguration {
 
     let configuration: URLSessionConfiguration = URLSessionConfiguration.ephemeral
-    configuration.connectionProxyDictionary = noProxies as [AnyHashable: Any]
+
+    if turningProxiesOff {
+
+      configuration.connectionProxyDictionary = noProxies as [AnyHashable: Any]
+
+    }
+
     configuration.urlCredentialStorage = nil
     configuration.httpCookieStorage = nil
     configuration.httpShouldSetCookies = false
@@ -231,6 +243,14 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
   var sessionAddsCredentials: Bool {
 
     Self.addsCredentials(session.configuration)
+
+  }
+
+  /// Whether the session has a credential storage, whose saved credentials it could answer a
+  /// server's challenge with.
+  var sessionStoresCredentials: Bool {
+
+    session.configuration.urlCredentialStorage != nil
 
   }
 

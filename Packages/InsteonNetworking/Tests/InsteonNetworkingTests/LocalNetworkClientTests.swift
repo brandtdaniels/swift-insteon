@@ -57,6 +57,7 @@ struct LocalNetworkClientTests {
 
   }
 
+  // It's for HTTPS to the internet without credentials, so it uses the system's proxy.
   @Test func anEphemeralClientKeepsNothingAndKeepsItsPolicy() {
 
     let client: URLSessionHTTPClient = URLSessionHTTPClient.ephemeral(
@@ -71,8 +72,10 @@ struct LocalNetworkClientTests {
     #expect(configuration.urlCredentialStorage == nil)
     #expect(configuration.httpCookieStorage == nil)
     #expect(configuration.urlCache == nil)
-    #expect((configuration.connectionProxyDictionary?["HTTPEnable"] as? Int) == 0)
+    #expect(configuration.connectionProxyDictionary?.isEmpty ?? true)
     #expect(configuration.timeoutIntervalForResource == 30)
+    #expect(!client.sessionStoresCredentials)
+    #expect(!client.sessionAddsCredentials)
 
   }
 
@@ -268,6 +271,7 @@ struct UnauthenticatedHTTPClientTests {
   @Test(.timeLimit(.minutes(1))) func refusesEveryRequestWhenTheSessionAddsCredentials() async throws {
 
     let configuration: URLSessionConfiguration = URLSessionConfiguration.ephemeral
+    configuration.urlCredentialStorage = nil
     configuration.httpAdditionalHeaders = ["authorization": "Basic ZXhhbXBsZS11c2VyOmV4YW1wbGUtcGFzc3dvcmQ="]
     let client: UnauthenticatedHTTPClient = UnauthenticatedHTTPClient(URLSessionHTTPClient(session: URLSession(configuration: configuration)))
     let request: URLRequest = URLRequest(url: try #require(URL(string: "http://192.168.1.20:25105/buffstatus.xml")))
@@ -280,9 +284,30 @@ struct UnauthenticatedHTTPClientTests {
 
   }
 
-  @Test func theLocalNetworkClientsSessionAddsNoCredentials() {
+  // A session with a credential storage could answer a server's challenge with credentials
+  // saved for it, so nothing is sent through it.
+  @Test(.timeLimit(.minutes(1))) func refusesEveryRequestWhenTheSessionStoresCredentials() async throws {
 
-    #expect(!URLSessionHTTPClient.localNetwork().sessionAddsCredentials)
+    let configuration: URLSessionConfiguration = URLSessionConfiguration.ephemeral
+    let client: UnauthenticatedHTTPClient = UnauthenticatedHTTPClient(URLSessionHTTPClient(session: URLSession(configuration: configuration)))
+    let request: URLRequest = URLRequest(url: try #require(URL(string: "http://192.168.1.20:25105/buffstatus.xml")))
+
+    try #require(configuration.urlCredentialStorage != nil)
+
+    await #expect(throws: HTTPClientError.credentialsRefused) {
+
+      try await client.send(request)
+
+    }
+
+  }
+
+  @Test func theLocalNetworkClientsSessionAddsAndStoresNoCredentials() {
+
+    let client: URLSessionHTTPClient = URLSessionHTTPClient.localNetwork()
+
+    #expect(!client.sessionAddsCredentials)
+    #expect(!client.sessionStoresCredentials)
 
   }
 

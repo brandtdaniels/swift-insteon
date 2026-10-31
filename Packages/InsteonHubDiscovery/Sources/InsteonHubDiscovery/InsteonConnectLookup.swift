@@ -66,9 +66,10 @@ public struct InsteonConnectLookup: Sendable {
   public let timeout: Duration
 
   /// Makes the default client: a session of its own that keeps no cache, cookies or
-  /// credentials, uses no proxy where the platform allows turning it off, follows a redirect
-  /// only to HTTPS on the same host, and reads at most
-  /// ``InsteonConnectLookup/maximumResponseSize`` bytes.
+  /// credentials, follows a redirect only to HTTPS on the same host, and reads at most
+  /// ``InsteonConnectLookup/maximumResponseSize`` bytes. It uses the system's or the
+  /// environment's proxy, as other requests to the internet do; the request is HTTPS and
+  /// carries no credentials, so a proxy carries only an encrypted tunnel to Insteon Connect.
   ///
   /// - Returns: The client.
   public static func defaultClient() -> UnauthenticatedHTTPClient {

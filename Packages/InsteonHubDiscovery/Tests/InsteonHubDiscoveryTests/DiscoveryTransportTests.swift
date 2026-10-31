@@ -24,6 +24,7 @@ struct DiscoveryTransportTests {
   static func credentialedSessionClient() -> UnauthenticatedHTTPClient {
 
     let configuration: URLSessionConfiguration = URLSessionConfiguration.ephemeral
+    configuration.urlCredentialStorage = nil
     // Made-up credentials.
     configuration.httpAdditionalHeaders = ["Authorization": "Basic ZXhhbXBsZS11c2VyOmV4YW1wbGUtcGFzc3dvcmQ="]
 

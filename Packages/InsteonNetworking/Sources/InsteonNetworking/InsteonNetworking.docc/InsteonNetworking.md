@@ -36,8 +36,9 @@ makes the client for devices on the local network, with a session of its own:
   every proxy off. On Linux, swift-corelibs-foundation ignores that setting and libcurl uses
   the proxy the environment names, in `http_proxy`, `HTTP_PROXY`, `all_proxy` or
   `ALL_PROXY`, so the client refuses a request a proxy would carry with
-  ``HTTPClientError/proxyConfigured``. Naming the device's address in `no_proxy` sends it
-  directly.
+  ``HTTPClientError/proxyConfigured``. Naming the device's exact address in `no_proxy`
+  sends it directly; an address range there isn't read, and `*` counts only as the whole
+  value.
 - It keeps no cookies, credentials or cache, and follows no redirects.
 - It reads at most ``URLSessionHTTPClient/localNetworkMaximumResponseSize`` bytes of an
   answer, and throws ``HTTPClientError/responseTooLarge(limit:)`` for more.
@@ -53,7 +54,13 @@ let client: URLSessionHTTPClient = URLSessionHTTPClient.localNetwork()
 addresses that mustn't receive them, such as every address Hub discovery asks. It's made only
 from a ``URLSessionHTTPClient``, so a client that adds credentials can't take its place, and
 it refuses a request that carries an `Authorization` header, a user name or password in its
-URL, or one its session adds, with ``HTTPClientError/credentialsRefused``.
+URL, or one its session adds, with ``HTTPClientError/credentialsRefused``. It refuses every
+request through a session that has a credential storage, which could answer a server's
+challenge with saved credentials.
+
+``URLSessionHTTPClient/ephemeral(redirectPolicy:maximumResponseSize:resourceTimeout:)`` makes
+a client for HTTPS requests to the internet without credentials, such as to Insteon's
+servers: its session keeps no cookies, credentials or cache, and uses the system's proxy.
 
 ### Redirect policies
 

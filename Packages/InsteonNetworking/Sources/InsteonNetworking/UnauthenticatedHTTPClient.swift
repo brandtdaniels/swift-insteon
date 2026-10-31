@@ -12,7 +12,11 @@ import FoundationNetworking
 /// this type is required. It checks every request as well, and refuses one that carries
 /// credentials with ``HTTPClientError/credentialsRefused`` before it's sent: a request with an
 /// `Authorization` header or a user name or password in its URL, and any request when the
-/// session's configuration adds an `Authorization` header to every request.
+/// session's configuration adds an `Authorization` header to every request or has a credential
+/// storage, whose saved credentials the session could answer a server's challenge with.
+/// ``URLSessionHTTPClient/localNetwork(maximumResponseSize:resourceTimeout:)`` and
+/// ``URLSessionHTTPClient/ephemeral(redirectPolicy:maximumResponseSize:resourceTimeout:)``
+/// make sessions without one.
 ///
 /// ```swift
 /// let discovery = HubDiscovery(httpClient: .localNetwork())
@@ -21,19 +25,20 @@ public struct UnauthenticatedHTTPClient: HTTPClient {
 
   private let transport: any HTTPClient
 
-  /// Whether the transport's session adds an `Authorization` header to every request, so
-  /// every request is refused.
+  /// Whether the transport's session adds an `Authorization` header to every request, or
+  /// could answer a challenge with saved credentials, so every request is refused.
   private let sessionAddsCredentials: Bool
 
   /// Creates a client that sends requests with a `URLSession` client.
   ///
   /// - Parameter client: The client to send the requests with. If its session's
-  ///   configuration adds an `Authorization` header to every request, every request is
-  ///   refused.
+  ///   configuration adds an `Authorization` header to every request, or has a credential
+  ///   storage, as `URLSession.shared` and `URLSessionConfiguration.ephemeral` do, every
+  ///   request is refused.
   public init(_ client: URLSessionHTTPClient) {
 
     transport = client
-    sessionAddsCredentials = client.sessionAddsCredentials
+    sessionAddsCredentials = client.sessionAddsCredentials || client.sessionStoresCredentials
 
   }
 
