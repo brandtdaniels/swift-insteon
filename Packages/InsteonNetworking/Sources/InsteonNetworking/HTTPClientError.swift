@@ -24,6 +24,21 @@ public enum HTTPClientError: Error, Hashable, Sendable {
   /// named.
   case redirectRefused
 
+  /// The answer's body was larger than the client reads, with the limit in bytes, so it
+  /// wasn't used.
+  case responseTooLarge(limit: Int)
+
+  /// A proxy is set in the environment for the request's address, and a client for the local
+  /// network doesn't send a request through one, so the request wasn't sent.
+  ///
+  /// Only Linux reads a proxy from the environment, from `http_proxy`, `HTTP_PROXY`,
+  /// `all_proxy` or `ALL_PROXY`. Naming the address in `no_proxy` sends the request directly.
+  case proxyConfigured
+
+  /// A request carried credentials, such as an `Authorization` header, through a client that
+  /// never sends them, so it wasn't sent.
+  case credentialsRefused
+
 }
 
 extension HTTPClientError: CustomStringConvertible, LocalizedError {
@@ -38,6 +53,12 @@ extension HTTPClientError: CustomStringConvertible, LocalizedError {
       "An HTTPS request was redirected to an address that isn't HTTPS, so its answer wasn't used."
     case .redirectRefused:
       "A request was answered with a redirect that isn't followed, so it wasn't sent on to another address."
+    case let .responseTooLarge(limit):
+      "The server's answer was larger than \(limit) bytes, so it wasn't used."
+    case .proxyConfigured:
+      "A proxy is set in the environment for this address, and requests on the local network aren't sent through one, so the request wasn't sent. Add the address to no_proxy to send it directly."
+    case .credentialsRefused:
+      "A request carried credentials through a client that never sends them, so it wasn't sent."
     }
 
   }

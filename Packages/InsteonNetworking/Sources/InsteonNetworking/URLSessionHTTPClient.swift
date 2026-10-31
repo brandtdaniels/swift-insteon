@@ -21,7 +21,41 @@ import FoundationNetworking
 /// session has already sent the request to every address in between. With
 /// ``RedirectPolicy/sameOriginHTTPSOnly``, the client decides before following each redirect,
 /// and follows it only to HTTPS at the request's own host and port.
+///
+/// ## The local network
+///
+/// ``URLSessionHTTPClient/localNetwork(maximumResponseSize:resourceTimeout:)`` makes the client
+/// for devices on the local network, such as a Hub: its session of its own goes to the device
+/// directly, never through a proxy, keeps no cookies, credentials or cache, follows no
+/// redirects and reads at most ``URLSessionHTTPClient/localNetworkMaximumResponseSize`` bytes
+/// of an answer. A proxy would receive a Hub's credentials, which plain HTTP carries readably.
+/// On Apple platforms the session's configuration turns proxies off. On Linux,
+/// swift-corelibs-foundation ignores that and libcurl uses the proxy the environment names, so
+/// the client refuses a request a proxy would carry and throws
+/// ``HTTPClientError/proxyConfigured`` instead; naming the device's address in `no_proxy`
+/// sends it directly.
+///
+/// ## The size of an answer
+///
+/// A client with a ``URLSessionHTTPClient/maximumResponseSize`` throws
+/// ``HTTPClientError/responseTooLarge(limit:)`` for a larger body. On Apple platforms it stops
+/// reading once the body passes the limit, or before reading if the body's length says so. On
+/// Linux, swift-corelibs-foundation hands over a body only once it's complete, so the body is
+/// checked then; a client for the local network also has a time limit for the whole request,
+/// which bounds how much can arrive.
 public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
+
+  /// The most a client for the local network reads of an answer by default: 64 KiB.
+  ///
+  /// A Hub's buffer page is well under 1 KiB, and its other pages a few KiB.
+  public static let localNetworkMaximumResponseSize: Int = 64 * 1024
+
+  /// How long a request from a client for the local network may take in all by default: 120
+  /// seconds.
+  ///
+  /// This bounds a request whose caller sets no shorter limit; a Hub's own requests stop far
+  /// sooner, after `Hub.requestTimeout`.
+  public static let localNetworkResourceTimeout: Duration = .seconds(120)
 
   // `URLSession` is thread-safe; it isn't marked `Sendable` on every platform.
   private let session: URLSession
@@ -31,16 +65,181 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
   /// Requests with credentials follow none, whatever the policy.
   public let redirectPolicy: RedirectPolicy
 
+  /// The most bytes of an answer's body the client reads, or `nil` for no limit.
+  public let maximumResponseSize: Int?
+
+  /// The environment's proxy settings, for a client that refuses a request a proxy would
+  /// carry, or `nil` for a client that sends requests as the session does.
+  private let proxyEnvironment: ProxyEnvironment?
+
+  /// Whether the client made its session, and so invalidates it when it's released.
+  private let ownsSession: Bool
+
   /// Creates a client that sends requests with a session.
   ///
   /// - Parameters:
   ///   - session: The session to send requests with. Defaults to the shared session.
   ///   - redirectPolicy: Which redirects requests without credentials follow. Defaults to
   ///     ``RedirectPolicy/followAll``.
-  public init(session: URLSession = .shared, redirectPolicy: RedirectPolicy = .followAll) {
+  ///   - maximumResponseSize: The most bytes of an answer's body to read, or `nil` for no
+  ///     limit. Defaults to `nil`.
+  public convenience init(session: URLSession = .shared, redirectPolicy: RedirectPolicy = .followAll, maximumResponseSize: Int? = nil) {
+
+    self.init(
+      session: session,
+      redirectPolicy: redirectPolicy,
+      maximumResponseSize: maximumResponseSize,
+      proxyEnvironment: nil,
+      ownsSession: false
+    )
+
+  }
+
+  private init(
+    session: URLSession,
+    redirectPolicy: RedirectPolicy,
+    maximumResponseSize: Int?,
+    proxyEnvironment: ProxyEnvironment?,
+    ownsSession: Bool
+  ) {
 
     self.session = session
     self.redirectPolicy = redirectPolicy
+    self.maximumResponseSize = maximumResponseSize.map { (limit: Int) -> Int in max(0, limit) }
+    self.proxyEnvironment = proxyEnvironment
+    self.ownsSession = ownsSession
+
+  }
+
+  deinit {
+
+    if ownsSession {
+
+      session.finishTasksAndInvalidate()
+
+    }
+
+  }
+
+  /// Makes a client for devices on the local network, such as a Hub, with a session of its
+  /// own.
+  ///
+  /// The session sends each request to the device directly, never through a proxy, keeps no
+  /// cookies, credentials or cache, and follows no redirects, which a device on the local
+  /// network never sends. On Linux, where the environment's proxy can't be turned off, a
+  /// request a proxy would carry is refused with ``HTTPClientError/proxyConfigured``.
+  ///
+  /// ```swift
+  /// let hub = Hub(endpoint: endpoint, user: user, password: password, httpClient: URLSessionHTTPClient.localNetwork())
+  /// ```
+  ///
+  /// - Parameters:
+  ///   - maximumResponseSize: The most bytes of an answer's body to read. Defaults to
+  ///     ``URLSessionHTTPClient/localNetworkMaximumResponseSize``.
+  ///   - resourceTimeout: How long a request may take in all. Defaults to
+  ///     ``URLSessionHTTPClient/localNetworkResourceTimeout``.
+  /// - Returns: The client.
+  public static func localNetwork(
+    maximumResponseSize: Int = URLSessionHTTPClient.localNetworkMaximumResponseSize,
+    resourceTimeout: Duration = URLSessionHTTPClient.localNetworkResourceTimeout
+  ) -> URLSessionHTTPClient {
+
+    localNetwork(maximumResponseSize: maximumResponseSize, resourceTimeout: resourceTimeout, environment: ProcessInfo.processInfo.environment)
+
+  }
+
+  /// Makes a client for devices on the local network that reads its proxy settings from an
+  /// environment, for tests.
+  package static func localNetwork(maximumResponseSize: Int, resourceTimeout: Duration, environment: [String: String]) -> URLSessionHTTPClient {
+
+    URLSessionHTTPClient(
+      session: URLSession(configuration: isolatedConfiguration(resourceTimeout: resourceTimeout)),
+      redirectPolicy: .refuseAll,
+      maximumResponseSize: maximumResponseSize,
+      proxyEnvironment: ProxyEnvironment(environment),
+      ownsSession: true
+    )
+
+  }
+
+  /// Makes a client with a session of its own that keeps nothing between requests, for a
+  /// request that shouldn't leave a trace on the device, such as one to Insteon's servers.
+  ///
+  /// The session keeps no cookies, credentials or cache, and on Apple platforms uses no
+  /// proxy. On Linux, swift-corelibs-foundation uses the proxy the environment names, which
+  /// for an HTTPS request carries only an encrypted tunnel to the host.
+  ///
+  /// - Parameters:
+  ///   - redirectPolicy: Which redirects requests without credentials follow.
+  ///   - maximumResponseSize: The most bytes of an answer's body to read.
+  ///   - resourceTimeout: How long a request may take in all.
+  /// - Returns: The client.
+  public static func ephemeral(redirectPolicy: RedirectPolicy, maximumResponseSize: Int, resourceTimeout: Duration) -> URLSessionHTTPClient {
+
+    URLSessionHTTPClient(
+      session: URLSession(configuration: isolatedConfiguration(resourceTimeout: resourceTimeout)),
+      redirectPolicy: redirectPolicy,
+      maximumResponseSize: maximumResponseSize,
+      proxyEnvironment: nil,
+      ownsSession: true
+    )
+
+  }
+
+  /// The proxy settings that turn every proxy off, in the keys of CFNetwork's proxy
+  /// dictionary: HTTP, HTTPS, SOCKS and automatic configuration, each `0`.
+  ///
+  /// The keys are written out because CFNetwork names some of them only on macOS. Linux
+  /// ignores the dictionary.
+  package static let noProxies: [String: Int] = [
+    "HTTPEnable": 0,
+    "HTTPSEnable": 0,
+    "SOCKSEnable": 0,
+    "ProxyAutoConfigEnable": 0,
+    "ProxyAutoDiscoveryEnable": 0,
+  ]
+
+  /// A configuration that keeps no cookies, credentials or cache, uses no proxy where the
+  /// platform reads the setting, and limits a request's total time.
+  ///
+  /// - Parameter resourceTimeout: How long a request may take in all.
+  /// - Returns: The configuration.
+  package static func isolatedConfiguration(resourceTimeout: Duration) -> URLSessionConfiguration {
+
+    let configuration: URLSessionConfiguration = URLSessionConfiguration.ephemeral
+    configuration.connectionProxyDictionary = noProxies as [AnyHashable: Any]
+    configuration.urlCredentialStorage = nil
+    configuration.httpCookieStorage = nil
+    configuration.httpShouldSetCookies = false
+    configuration.httpCookieAcceptPolicy = .never
+    configuration.urlCache = nil
+    configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+    configuration.timeoutIntervalForResource = seconds(resourceTimeout)
+
+    return configuration
+
+  }
+
+  /// The configuration of the client's session, for tests.
+  package var sessionConfiguration: URLSessionConfiguration {
+
+    session.configuration
+
+  }
+
+  /// Whether the session adds an `Authorization` header to every request it sends.
+  var sessionAddsCredentials: Bool {
+
+    Self.addsCredentials(session.configuration)
+
+  }
+
+  /// A duration in seconds, as `URLSessionConfiguration` takes it.
+  private static func seconds(_ duration: Duration) -> TimeInterval {
+
+    let (seconds, attoseconds) = duration.components
+
+    return TimeInterval(seconds) + TimeInterval(attoseconds) / 1e18
 
   }
 
@@ -51,9 +250,22 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
   /// - Throws: The session's error if the request failed,
   ///   ``HTTPClientError/nonHTTPResponse`` if the response wasn't HTTP,
   ///   ``HTTPClientError/redirectRefused`` if the request was answered with a redirect its
-  ///   policy doesn't follow, or ``HTTPClientError/insecureRedirect`` if an HTTPS request was
-  ///   redirected to, or ended at, an address that isn't HTTPS.
+  ///   policy doesn't follow, ``HTTPClientError/insecureRedirect`` if an HTTPS request was
+  ///   redirected to, or ended at, an address that isn't HTTPS,
+  ///   ``HTTPClientError/responseTooLarge(limit:)`` if the body is larger than
+  ///   ``URLSessionHTTPClient/maximumResponseSize``, or ``HTTPClientError/proxyConfigured`` if
+  ///   a client for the local network would send the request through a proxy.
   public func send(_ request: URLRequest) async throws -> HTTPResponse {
+
+    #if canImport(FoundationNetworking)
+    // libcurl reads its proxy from the environment, and nothing turns it off, so a request it
+    // would send through one isn't sent at all.
+    if let proxyEnvironment, proxyEnvironment.proxies(request.url) {
+
+      throw HTTPClientError.proxyConfigured
+
+    }
+    #endif
 
     // A request with credentials refuses every redirect, so the session never sends the
     // credentials on to another address.
@@ -135,6 +347,16 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
       return true
 
     }
+
+    return addsCredentials(configuration)
+
+  }
+
+  /// Whether a session's configuration adds an `Authorization` header to every request.
+  ///
+  /// - Parameter configuration: The session's configuration.
+  /// - Returns: `true` if its additional headers include `Authorization`, in any case.
+  static func addsCredentials(_ configuration: URLSessionConfiguration) -> Bool {
 
     let additionalHeaders: [AnyHashable: Any] = configuration.httpAdditionalHeaders ?? [:]
 
@@ -226,6 +448,56 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
 
   }
 
+  #if !canImport(FoundationNetworking)
+  /// Reads a response's body as it arrives, and stops once it passes a limit.
+  ///
+  /// - Parameters:
+  ///   - request: The request to send.
+  ///   - delegate: The task's delegate, if it has one.
+  ///   - limit: The most bytes of the body to read.
+  /// - Returns: The body and the response.
+  /// - Throws: ``HTTPClientError/responseTooLarge(limit:)`` if the body's length, as the
+  ///   response gives it or as it arrives, is larger than the limit, or the session's error.
+  private func boundedData(for request: URLRequest, delegate: RedirectRefusal?, limit: Int) async throws -> (Data, URLResponse) {
+
+    let (bytes, response): (URLSession.AsyncBytes, URLResponse) = try await session.bytes(for: request, delegate: delegate)
+
+    // The length the response gives decides before any of the body is read.
+    if response.expectedContentLength > Int64(limit) {
+
+      bytes.task.cancel()
+
+      throw HTTPClientError.responseTooLarge(limit: limit)
+
+    }
+
+    var data: Data = Data()
+
+    if response.expectedContentLength > 0 {
+
+      data.reserveCapacity(Int(response.expectedContentLength))
+
+    }
+
+    for try await byte in bytes {
+
+      guard data.count < limit else {
+
+        bytes.task.cancel()
+
+        throw HTTPClientError.responseTooLarge(limit: limit)
+
+      }
+
+      data.append(byte)
+
+    }
+
+    return (data, response)
+
+  }
+  #endif
+
   private func data(for request: URLRequest, refusingRedirectsWith refusal: RedirectRefusal?) async throws -> (Data, URLResponse) {
 
     #if canImport(FoundationNetworking)
@@ -234,7 +506,7 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
     // the async API on Apple platforms does.
     let cancellation = DataTaskCancellation()
 
-    return try await withTaskCancellationHandler {
+    let (body, answer): (Data, URLResponse) = try await withTaskCancellationHandler {
 
       try await withCheckedThrowingContinuation { continuation in
 
@@ -273,7 +545,22 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
       cancellation.cancel()
 
     }
+
+    // The body arrives whole, so its size can only be checked now.
+    if let maximumResponseSize, body.count > maximumResponseSize {
+
+      throw HTTPClientError.responseTooLarge(limit: maximumResponseSize)
+
+    }
+
+    return (body, answer)
     #else
+    if let maximumResponseSize {
+
+      return try await boundedData(for: request, delegate: refusal, limit: maximumResponseSize)
+
+    }
+
     if let refusal {
 
       return try await session.data(for: request, delegate: refusal)
