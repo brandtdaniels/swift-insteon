@@ -220,6 +220,10 @@ public struct DeviceLifecycle: Hashable, Sendable {
   /// How long the device stays in linking mode if nothing links.
   public var linkingTimeout: Duration?
 
+  /// Linking the product to a Hub or modem, as data an app can follow on its own, or `nil` if
+  /// the catalog doesn't give it.
+  public var fromHub: HubLinking?
+
   /// Linking several devices in one session.
   public var multiLinking: Procedure?
 
@@ -254,6 +258,7 @@ public struct DeviceLifecycle: Hashable, Sendable {
   ///   - reset: Restoring the factory settings.
   ///   - resetErases: What a factory reset erases.
   ///   - removal: Taking the product out of service.
+  ///   - fromHub: Linking the product to a Hub, as data. Defaults to `nil`.
   public init(
     installation: Procedure? = nil,
     linking: Procedure? = nil,
@@ -264,7 +269,8 @@ public struct DeviceLifecycle: Hashable, Sendable {
     awakeDuration: Duration? = nil,
     reset: Procedure? = nil,
     resetErases: Set<Erasure> = [],
-    removal: Procedure? = nil
+    removal: Procedure? = nil,
+    fromHub: HubLinking? = nil
   ) {
 
     self.installation = installation
@@ -277,6 +283,7 @@ public struct DeviceLifecycle: Hashable, Sendable {
     self.reset = reset
     self.resetErases = resetErases
     self.removal = removal
+    self.fromHub = fromHub
 
   }
 
@@ -298,6 +305,7 @@ extension DeviceLifecycle: Decodable {
     case reset
     case resetErases
     case removal
+    case fromHub
 
   }
 
@@ -322,7 +330,8 @@ extension DeviceLifecycle: Decodable {
       awakeDuration: try container.decodeSecondsIfPresent(forKey: .awakeSeconds),
       reset: try container.decodeIfPresent(Procedure.self, forKey: .reset),
       resetErases: Set((try container.decodeIfPresent([String].self, forKey: .resetErases) ?? []).compactMap(Erasure.init(rawValue:))),
-      removal: try container.decodeIfPresent(Procedure.self, forKey: .removal)
+      removal: try container.decodeIfPresent(Procedure.self, forKey: .removal),
+      fromHub: try container.decodeIfPresent(HubLinking.self, forKey: .fromHub)
     )
 
   }

@@ -66,6 +66,55 @@ public struct DeviceDescription: Hashable, Sendable {
 
   }
 
+  /// The profile's identity the device matched, preferring one for a range of firmware versions
+  /// over one for every version, or `nil` without a profile.
+  public var identity: DeviceIdentity? {
+
+    let matching: [DeviceIdentity] = (profile?.identities ?? []).filter { (identity: DeviceIdentity) -> Bool in
+
+      identity.matches(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion)
+
+    }
+
+    return matching.first { (identity: DeviceIdentity) -> Bool in identity.firmware != nil } ?? matching.first
+
+  }
+
+  /// The Insteon Product Key the catalog says the device reports under its identity, or `nil`
+  /// without a profile or if no source gives it.
+  ///
+  /// The key comes from the catalog, not the device: a Product Data Response is the device's
+  /// own word.
+  public var productKey: DeviceIdentity.ProductKeyEntry? {
+
+    identity?.productKey
+
+  }
+
+  /// Linking the device to a Hub or modem as data, from the profile's lifecycle, or `nil` if
+  /// the catalog doesn't give it.
+  public var hubLinking: DeviceLifecycle.HubLinking? {
+
+    profile?.lifecycle?.fromHub
+
+  }
+
+  /// The links to make between the modem and the device to add it to a Hub, in order, one
+  /// ALL-Linking session each. Empty if the catalog doesn't give them.
+  public var hubLinkingLegs: [DeviceLifecycle.HubLinking.Leg] {
+
+    hubLinking?.legs ?? []
+
+  }
+
+  /// For a modem, what Data 1 through Data 3 hold in the ALL-Link database records it writes
+  /// itself when it links, or `nil` if the catalog doesn't say.
+  public var modemLinkData: ModemLinkData? {
+
+    profile?.modemLinkData
+
+  }
+
   /// Whether the device is a light or a switched load that takes its state as its on-level
   /// when it links as a responder, so turning it fully on with Light On first is safe and
   /// makes the link turn it fully on.

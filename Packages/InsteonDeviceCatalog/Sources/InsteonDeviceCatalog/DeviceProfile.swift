@@ -172,6 +172,11 @@ public struct DeviceProfile: Hashable, Sendable {
   /// What the product can do.
   public var capabilities: [DeviceCapability]
 
+  /// For a modem, what Data 1 through Data 3 hold in the ALL-Link database records it writes
+  /// itself when it links, or `nil` if the catalog doesn't say. The catalog's JSON gives it in
+  /// the ``DeviceCapability/modem`` capability's `linkData`.
+  public var modemLinkData: ModemLinkData?
+
   /// How to install the product, link it, wake it, reset it and take it out of service, or
   /// `nil` if the catalog doesn't say.
   public var lifecycle: DeviceLifecycle?
@@ -201,6 +206,7 @@ public struct DeviceProfile: Hashable, Sendable {
   ///   - isBatteryPowered: Whether the product runs on batteries.
   ///   - groups: The product's ALL-Link groups.
   ///   - capabilities: What the product can do.
+  ///   - modemLinkData: For a modem, what the records it writes itself hold. Defaults to `nil`.
   ///   - lifecycle: How to install, link, wake, reset and remove the product.
   ///   - notes: Behavior worth knowing.
   ///   - sources: The documents the values come from.
@@ -218,6 +224,7 @@ public struct DeviceProfile: Hashable, Sendable {
     isBatteryPowered: Bool = false,
     groups: [Group] = [],
     capabilities: [DeviceCapability] = [],
+    modemLinkData: ModemLinkData? = nil,
     lifecycle: DeviceLifecycle? = nil,
     notes: [String] = [],
     sources: [String] = [],
@@ -236,6 +243,7 @@ public struct DeviceProfile: Hashable, Sendable {
     self.isBatteryPowered = isBatteryPowered
     self.groups = groups
     self.capabilities = capabilities
+    self.modemLinkData = modemLinkData
     self.lifecycle = lifecycle
     self.notes = notes
     self.sources = sources
@@ -430,14 +438,34 @@ extension DeviceProfile: Decodable {
 
   }
 
-  /// A capability, or `nil` for one this package doesn't read.
+  /// A capability, or `nil` for one this package doesn't read, and a modem's record data.
   private struct CapabilityEntry: Decodable {
+
+    private enum CodingKeys: String, CodingKey {
+
+      case linkData
+
+    }
 
     let capability: DeviceCapability?
 
+    let modemLinkData: ModemLinkData?
+
     init(from decoder: any Decoder) throws {
 
-      capability = try DeviceCapability(from: decoder)
+      let capability = try DeviceCapability(from: decoder)
+
+      self.capability = capability
+
+      if capability == .modem {
+
+        modemLinkData = try decoder.container(keyedBy: CodingKeys.self).decodeIfPresent(ModemLinkData.self, forKey: .linkData)
+
+      } else {
+
+        modemLinkData = nil
+
+      }
 
     }
 
@@ -455,6 +483,7 @@ extension DeviceProfile: Decodable {
   public init(from decoder: any Decoder) throws {
 
     let container = try decoder.container(keyedBy: CodingKeys.self)
+    let capabilities: [CapabilityEntry] = try container.decode([CapabilityEntry].self, forKey: .capabilities)
 
     self.init(
       model: try container.decode(ProductModel.self, forKey: .model),
@@ -468,7 +497,8 @@ extension DeviceProfile: Decodable {
       role: try container.decodeIfPresent(String.self, forKey: .role).flatMap(LinkRole.init(rawValue:)),
       isBatteryPowered: try container.decodeIfPresent(Bool.self, forKey: .batteryPowered) ?? false,
       groups: try (container.decodeIfPresent([GroupEntry].self, forKey: .groups) ?? []).compactMap(\.group),
-      capabilities: try container.decode([CapabilityEntry].self, forKey: .capabilities).compactMap(\.capability),
+      capabilities: capabilities.compactMap(\.capability),
+      modemLinkData: capabilities.lazy.compactMap(\.modemLinkData).first,
       lifecycle: try container.decodeIfPresent(DeviceLifecycle.self, forKey: .lifecycle),
       notes: try container.decodeIfPresent([String].self, forKey: .notes) ?? [],
       sources: try container.decode([String].self, forKey: .sources),

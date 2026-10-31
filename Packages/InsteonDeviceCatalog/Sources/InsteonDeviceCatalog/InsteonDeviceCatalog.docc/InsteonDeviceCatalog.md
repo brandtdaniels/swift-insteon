@@ -79,9 +79,31 @@ back into the byte to write. ``CommandSet/change(for:setting:)`` and
 
 A command set's group types, each a ``GroupType`` that a profile's groups name, say what the
 groups are: how to read a group's state, what it can be told to do, and what Data 1 through
-Data 3 of an ALL-Link database record hold for it, each a ``LinkDataByte``. A profile's
-``DeviceLifecycle`` gives the steps to install, link, wake, reset and remove the product, for
-an app to guide people through or do itself.
+Data 3 of an ALL-Link database record hold for it, each a ``LinkDataByte``. A group type can
+also say which bits of a shared status byte mean the group is on, in
+``GroupType/State/onWhen``, which outputs of its load one action switches together, in
+``GroupType/outputs``, and, for an alarm or arming group, its ``GroupType/armModes``. A
+profile's ``DeviceLifecycle`` gives the steps to install, link, wake, reset and remove the
+product, for an app to guide people through or do itself, and its
+``DeviceLifecycle/fromHub`` gives linking to a Hub as data: the links to make with the
+modem, in order, each a ``DeviceLifecycle/HubLinking/Leg``, whether the modem can put the
+device in linking mode, and how to keep a battery-powered device awake. A modem's profile
+says what the records it writes itself hold, in ``DeviceProfile/modemLinkData``, and an
+identity gives the product key the product reports, in ``DeviceIdentity/productKey``.
+
+Some operating flags can cut a device off from the modem or lock it, so the catalog guards
+them. An ``OperatingFlag/writeGuard`` of ``FlagGuard/keep`` means a write leaves the bit as
+the device reported it, and ``FlagGuard/neverSet`` that a write may clear it but never sets
+it; a bit of an extended command's flags parameter carries the same, in
+``FieldBit/writeGuard``. A command whose `sendGuard` is ``CommandGuard/never`` is one an app
+never sends. A value whose byte is an operating flags byte names its query in
+``SettingValue/flagsQuery``, and ``CommandSet/flagsHeld(by:)`` gives the flags that name its
+bits. A command set's ``CommandSet/linkingChanges`` are the flags linking may change on its
+own, which a linking flow may set back.
+
+Values from a later version of the catalog are read rather than refused: a kind, guard, role,
+mode or answer this package doesn't know keeps its name, and a message in a form it doesn't
+read is left out.
 
 ``DeviceCatalog/profiles(matching:)`` searches the catalog by model, name, alias or identity,
 such as for an app's list of supported products.
@@ -129,6 +151,8 @@ dimming for dimmable lighting control, as ``GroupType/Kind/fallback(for:)`` give
 - ``ProductModel``
 - ``DeviceEventName``
 - ``DeviceLifecycle``
+- ``ModemLinkData``
+- ``ModemLinkDataByte``
 
 ### Settings
 
@@ -149,6 +173,9 @@ dimming for dimmable lighting control, as ``GroupType/Kind/fallback(for:)`` give
 - ``FlagChange``
 - ``ValueChange``
 - ``SettingInputError``
+- ``FlagGuard``
+- ``CommandGuard``
+- ``LinkingChange``
 
 ### Groups
 
