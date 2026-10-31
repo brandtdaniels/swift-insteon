@@ -410,15 +410,17 @@ struct ModemReplyParserTests {
 
   }
 
-  @Test func finishesARejectedConfigurationRequestAndTheRepliesAfterIt() {
+  // The frame start after the NAK settles it as a rejection at once, without waiting for the
+  // answer's timeout, and the frame after it is read as usual.
+  @Test func readsARejectedConfigurationRequestAndTheRepliesAfterIt() {
 
     var parser = ModemReplyParser()
 
-    #expect(parser.parse(bytes("027315" + "0255")).isEmpty)
-    #expect(parser.finishPendingReply() == [
+    #expect(parser.parse(bytes("027315" + "0255")) == [
       .echo(CommandEcho(number: .getModemConfiguration, parameters: [], isAccepted: false)),
       .userReset
     ])
+    #expect(parser.finishPendingReply().isEmpty)
 
   }
 
