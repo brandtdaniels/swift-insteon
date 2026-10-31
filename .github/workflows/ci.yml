@@ -8,17 +8,31 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request supersedes the run for the older one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   terms:
     name: Terms
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # The whole history, so a pull request's base branch is there to compare with.
           fetch-depth: 0
       - name: Check the docs and comments for ruled-out terms
         run: python3 Scripts/check-terms.py
+      - name: Check that the workflows pin their actions and images and limit their jobs
+        run: python3 Scripts/check-workflows.py
+      # ubuntu-latest has ShellCheck; install it if an image ever doesn't.
+      - name: Check the shell scripts
+        run: |
+          command -v shellcheck > /dev/null || { sudo apt-get update && sudo apt-get install -y shellcheck; }
+          shellcheck --version
+          shellcheck Scripts/*.sh
       - name: Check that every async test has a time limit
         run: python3 Scripts/check-time-limits.py
       - name: Check that the insteon command leaves device behavior to the libraries
@@ -48,28 +62,32 @@ jobs:
   macos:
     name: macOS
     runs-on: macos-latest
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # Use the runner's newest Xcode, and so its newest Swift, rather than its default.
       - name: Select Xcode
         run: sudo xcode-select --switch "$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -n 1)"
       - name: Show the Swift version
         run: swift --version
       # Warnings fail the build here rather than in Package.swift, so they don't affect apps
-      # that depend on the package. An import of a module a target doesn't depend on fails
-      # too, so the insteon command can't reach past InsteonCore.
+      # that depend on the package. The tests are built too, so a warning in a test fails as
+      # well. An import of a module a target doesn't depend on fails too, so the insteon
+      # command can't reach past InsteonCore.
       - name: Build
-        run: swift build --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
+        run: swift build --build-tests --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
+      # The tests built in the step before, with the same flags.
       - name: Test
-        run: swift test --explicit-target-dependency-import-check error
+        run: swift test --skip-build
       - name: Build documentation
         run: Scripts/build-docs.sh
 
   ios:
     name: iOS
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # Use the runner's newest Xcode, and so its newest Swift, rather than its default.
       - name: Select Xcode
         run: sudo xcode-select --switch "$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -n 1)"
@@ -84,12 +102,14 @@ jobs:
   linux:
     name: Linux
     runs-on: ubuntu-latest
-    container: swift:6.3.3
+    timeout-minutes: 45
+    # The image by digest, so a retagged image can't change what runs. The tag says which it is.
+    container: swift:6.3.3@sha256:1038d54c80063f5cdfabc4560990c30af64b5de8ebf28161deb22ca4ad5db866
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Build
-        run: swift build --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
+        run: swift build --build-tests --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
       - name: Test
-        run: swift test --explicit-target-dependency-import-check error
+        run: swift test --skip-build
       - name: Build documentation
         run: Scripts/build-docs.sh
