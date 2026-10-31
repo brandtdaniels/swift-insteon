@@ -309,7 +309,13 @@ public enum HelpText {
                           3 by default. Bytes are hexadecimal, such as 0x2E or 2E. With
                           --extended, the message is extended, with the data bytes given and
                           0x00 after; unless all 14 are given or --no-checksum is, D14 holds
-                          the checksum i2CS devices require.
+                          the checksum i2CS devices require. Set Operating Flags (20) that
+                          turns the radio (0C) or the powerline (0E) off, requires a checksum
+                          (19) or turns the programming lock on (00) is never sent, to any
+                          device, and nor is Poke (28 or 29). For a device the identity
+                          cache knows, nor is a message its catalog entry never sends, or an
+                          extended message that writes a byte holding a guarded flag, which
+                          only 'set' writes. Nothing forces them.
 
     'on', 'off', 'instant', 'status', 'beep', 'links', 'settings' and 'set' use the device's
     identity, from the identity cache or, for a device the cache doesn't know, an ID Request
@@ -344,19 +350,25 @@ public enum HelpText {
     modem sends in the next SECONDS, 3 by default, in hexadecimal and as the package reads it.
     HEX is the command's bytes, starting with 02, such as 0277 or 02 77 01.
 
+    A message to a device (0x62) or a group (0x61) is never written, with or without
+    --force, when it's Set Operating Flags (0x20) that turns the radio (0C) or the powerline
+    (0E) off, requires a checksum (19) or turns the programming lock on (00), or Poke (0x28
+    or 0x29), which writes a device's memory. Nor is one cut short.
+
     Without --force, a command is refused when the package doesn't know its number, since the
     modem's answer can't be read, or when it changes or erases what the modem keeps or stops
     it answering, such as Reset the IM (0x67), Manage ALL-Link Record (0x6F) and Write
     Database (0x76). So is Start ALL-Linking (0x64) with link code FF, which deletes links,
-    and a message (0x62) that writes to a device: Read/Write ALL-Link Database (0x2F), Set
-    Operating Flags (0x20) or Extended Set/Get (0x2E) with D2 other than 00. Use 'insteon
-    device ADDRESS set' or 'insteon device ADDRESS send' for those. A command must also have
-    the length its number calls for, counting 02: 8 bytes for a standard message and 22 for
-    an extended one, and 2 or 3 for Beep (0x77).
+    and a message (0x62) that writes to a device: Read/Write ALL-Link Database (0x2F), any
+    other Set Operating Flags (0x20), or Extended Set/Get (0x2E) with D2 other than 00. Use
+    'insteon device ADDRESS set' or 'insteon device ADDRESS send', which check a message
+    against the device's catalog entry, for those. A command must also have the length its
+    number calls for, counting 02: 8 bytes for a standard message and 22 for an extended one,
+    and 2 or 3 for Beep (0x77).
 
     What you find is worth adding to the Insteon device catalog, marked as observed.
 
-      --force             Send the command even so.
+      --force             Send a command refused without it even so.
       --wait SECONDS      How long to print the modem's replies. Defaults to 3.
     """
 

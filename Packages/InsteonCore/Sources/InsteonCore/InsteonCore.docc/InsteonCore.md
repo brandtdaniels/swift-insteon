@@ -134,7 +134,9 @@ the catalog marks with `SettingValue.flagsQuery`, and for the guarded bits of an
 command's flags parameter: it's refused before it's written when it would set a bit that's
 never set or change one that's kept. The radio, powerline, checksum and programming lock flags
 are guarded even where the catalog gives no guard; the catalog adds guards, and never removes
-these. A catalog that names a flags byte's query differently from the floor is checked against
+these. Under every guard is a floor of bytes: the ``ProtectedCommand``s, Set Operating Flags
+with cmd2 `0x0C`, `0x0E`, `0x19` or `0x00` and Poke, are never sent to any device, whether
+or not the catalog knows it, and whatever its command set calls them. A catalog that names a flags byte's query differently from the floor is checked against
 both. Every message a ``Device`` sends is checked by the bytes it carries, after any value is
 filled in: the Set Operating Flags bytes that turn a kept flag on or off or a never-set flag on,
 those of a command the catalog guards, and those of a command named for one of these, such as
@@ -222,6 +224,25 @@ let removal = try await network.linking.remove(lamp, scan: true, observer: promp
 
 for step in removal.factoryReset?.procedure?.steps ?? [] {
   print(step.text)
+}
+```
+
+### Sending bytes as they're given
+
+A front end that explores what the catalog doesn't describe yet sends a device a message as
+it's given with ``DeviceNetwork/send(_:collectingFor:onAcknowledgment:)``, and writes the
+modem a serial command with ``ModemSession/write(rawCommand:forcing:collectingFor:clock:)``.
+Both check the bytes first, and throw a ``SendRefusal`` before anything is sent. A message is
+checked like every message a ``Device`` sends, and a serial command by
+``SerialCommandPolicy``, which finds the ``ProtectedCommand``s in any message to a device or
+a group it holds. Nothing forces a ``ProtectedCommand`` through; `forcing` writes only a
+serial command the policy refuses unless it's forced:
+
+```swift
+do {
+  _ = try await session.write(rawCommand: bytes, collectingFor: .seconds(3))
+} catch let refusal as SendRefusal where !refusal.canBeForced {
+  print("Never written: \(refusal)")
 }
 ```
 
@@ -344,6 +365,8 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 
 ### Raw passthroughs
 
+- ``ProtectedCommand``
+- ``SendRefusal``
 - ``SerialCommandPolicy``
 - ``DirectMessage``
 - ``ReceivedFrame``
