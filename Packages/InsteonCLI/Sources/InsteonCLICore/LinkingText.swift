@@ -317,14 +317,6 @@ public enum LinkingEventText {
       return ["Linking back: sending \(device) Enter Linking Mode for its group \(group), so the modem becomes its responder..."]
     case .linked, .unlinked, .unlinkedAll:
       return []
-    case let .operatingFlagsRestored(device, changes):
-      return changes.map { (change: DeviceSettingChange) -> String in
-
-        "Linking changed \(device)'s \(change.setting.label) setting, so it was set back to \(change.requested)."
-
-      }
-    case let .operatingFlagNotRestored(device, setting, reason):
-      return ["Linking changed \(device)'s \(setting) setting, and it couldn't be set back: \(message(reason))"]
     case let .readingModemLinks(device, purpose):
       switch purpose {
       case .findingLinksToRemove:

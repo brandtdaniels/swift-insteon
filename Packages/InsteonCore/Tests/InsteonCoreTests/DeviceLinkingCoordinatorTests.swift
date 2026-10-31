@@ -155,10 +155,6 @@ actor LinkingRecorder: LinkingObserver {
       return "linking back \(device) group \(group)"
     case let .linked(linked):
       return "linked \(linked.link.address) group \(linked.link.group) \(linked.link.mode?.name ?? "unknown") \(linked.leg == .first ? "first" : "back")"
-    case let .operatingFlagsRestored(device, changes):
-      return "flags restored \(device) \(changes.map(\.setting.key))"
-    case let .operatingFlagNotRestored(device, setting, _):
-      return "flag not restored \(device) \(setting)"
     case let .readingModemLinks(device, purpose):
       return "reading modem links \(device) \(purpose == .findingLinksToRemove ? "to remove" : "for group")"
     case let .unlinkGroupChosen(device, group, isFromModemRecords):
@@ -819,69 +815,6 @@ struct DeviceLinkingCoordinatorTests {
 
     #expect(await turns.waitingCount == 0)
     await turns.end()
-
-  }
-
-  // MARK: - Operating flags
-
-  @Test(.timeLimit(.minutes(1))) func setsBackAnOperatingFlagALinkChanged() async throws {
-
-    let dimmer: InsteonAddress = ControlExample.dimmer
-    let modem = SettingsModem(device: dimmer, flags: 0x02, values: [:])
-    let network = DeviceNetwork(
-      modem: modem,
-      catalog: ControlExample.catalog,
-      snapshot: NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: ControlExample.identities)),
-      clock: clock
-    )
-    let device: Device = network.device(dimmer)
-    let description: DeviceDescription? = await network.registry.device(dimmer)?.deviceDescription
-
-    let guarded: OperatingFlagsGuard? = try await OperatingFlagsGuard.read(device, description: description)
-
-    // Linking clears the flag.
-    _ = try await device.writeSetting("keyBeep", to: "off")
-    #expect(await modem.flags == 0x00)
-
-    let changes: [DeviceSettingChange] = try await guarded?.restore(failed: { (_: String, _: any Error) async -> Void in }) ?? []
-
-    #expect(changes.map(\.setting.key) == ["keyBeep"])
-    #expect(changes.first?.after == "on")
-    #expect(await modem.flags == 0x02)
-
-  }
-
-  @Test(.timeLimit(.minutes(1))) func leavesOperatingFlagsALinkDidntChange() async throws {
-
-    let dimmer: InsteonAddress = ControlExample.dimmer
-    let modem = SettingsModem(device: dimmer, flags: 0x02, values: [:])
-    let network = DeviceNetwork(
-      modem: modem,
-      catalog: ControlExample.catalog,
-      snapshot: NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: ControlExample.identities)),
-      clock: clock
-    )
-    let description: DeviceDescription? = await network.registry.device(dimmer)?.deviceDescription
-
-    let guarded: OperatingFlagsGuard? = try await OperatingFlagsGuard.read(network.device(dimmer), description: description)
-    let changes: [DeviceSettingChange] = try await guarded?.restore(failed: { (_: String, _: any Error) async -> Void in }) ?? []
-
-    #expect(guarded != nil)
-    #expect(changes.isEmpty)
-    // Two Get Operating Flags, and no Set Operating Flags.
-    #expect(await modem.standardCommands.map(\.command1) == [0x1F, 0x1F])
-
-  }
-
-  @Test(.timeLimit(.minutes(1))) func keepsNoFlagsForADeviceTheRegistryDoesntKnow() async throws {
-
-    let modem = InMemoryModem()
-    let network: DeviceNetwork = self.network(modem)
-
-    let guarded: OperatingFlagsGuard? = try await OperatingFlagsGuard.read(network.device(LinkingExample.lamp), description: nil)
-
-    #expect(guarded == nil)
-    #expect(await modem.linkingSteps.isEmpty)
 
   }
 

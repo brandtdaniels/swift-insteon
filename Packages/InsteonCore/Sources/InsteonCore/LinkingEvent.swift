@@ -95,12 +95,6 @@ public enum LinkingEvent: Sendable {
   /// The modem reported a link.
   case linked(LinkedDevice)
 
-  /// The operating flags a link changed were set back as they were before it.
-  case operatingFlagsRestored(InsteonAddress, [DeviceSettingChange])
-
-  /// An operating flag a link changed couldn't be set back. The value is the setting's key.
-  case operatingFlagNotRestored(InsteonAddress, setting: String, reason: any Error)
-
   /// The modem's ALL-Link database is being read for the device's links.
   case readingModemLinks(InsteonAddress, purpose: ModemLinksPurpose)
 

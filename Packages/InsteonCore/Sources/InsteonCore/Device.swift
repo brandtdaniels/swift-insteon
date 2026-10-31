@@ -898,7 +898,7 @@ public struct Device: Sendable {
   }
 
   /// The device's acknowledgment, or `nil` if it rejected the message or didn't answer.
-  func answer(_ message: StandardMessage) async throws -> ReceivedMessage? {
+  private func answer(_ message: StandardMessage) async throws -> ReceivedMessage? {
 
     do {
 

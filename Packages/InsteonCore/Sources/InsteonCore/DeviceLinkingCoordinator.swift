@@ -22,9 +22,10 @@ import InsteonProtocol
 /// - whether a device is linked back after the modem links as its controller, and in which of
 ///   its groups: the first group it controls, group 1 when it controls that;
 /// - how a device is sent Enter Unlinking Mode when its links are removed without its SET
-///   button: extended for a battery-powered i2CS device;
-/// - which operating flags are kept as they were across a link in which the device is the
-///   controller, since a device can record its state in one as it enters linking mode.
+///   button: extended for a battery-powered i2CS device.
+///
+/// Operating flags aren't read or written around a link or unlink: a device keeps whatever
+/// flags linking leaves it with.
 ///
 /// Canceling the task stops a link or unlink cleanly, as the linking primitives do: the modem
 /// is sent Cancel ALL-Linking, and a device sent Enter Linking Mode is sent Exit Linking Mode.
@@ -163,15 +164,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
       await observer.linking(.linkingRemotely(device, modemRole: role))
 
-      var flags: OperatingFlagsGuard?
       var first: AllLinkingCompleted?
-
-      // The device enters linking mode as the controller, which can change a flag.
-      if role == .responder {
-
-        flags = try await OperatingFlagsGuard.read(network.device(device), description: description)
-
-      }
 
       do {
 
@@ -206,12 +199,6 @@ public struct DeviceLinkingCoordinator: Sendable {
       if let first {
 
         made = first
-
-        if let flags {
-
-          try await restore(flags, of: device, observer: observer)
-
-        }
 
       } else {
 
@@ -588,17 +575,10 @@ public struct DeviceLinkingCoordinator: Sendable {
 
     do {
 
-      let flags: OperatingFlagsGuard? = try await OperatingFlagsGuard.read(network.device(device), description: description)
       let back: AllLinkingCompleted = try await makeLinker().linkRemotely(device, modemRole: .responder, modemGroup: group, deviceGroup: group)
 
       await network.recordLinkChange(of: back.address, answered: true)
       await observer.linking(.linked(LinkedDevice(link: back, device: registered, leg: .linkBack)))
-
-      if let flags {
-
-        try await restore(flags, of: device, observer: observer)
-
-      }
 
       return DeviceLinkingResult(links: [first, back], device: registered, linkBackFailure: nil)
 
@@ -663,23 +643,6 @@ public struct DeviceLinkingCoordinator: Sendable {
     }
 
     return await network.registry.device(device)
-
-  }
-
-  /// Sets back the operating flags a link changed, and tells the observer.
-  private func restore(_ flags: OperatingFlagsGuard, of device: InsteonAddress, observer: any LinkingObserver) async throws {
-
-    let changes: [DeviceSettingChange] = try await flags.restore { (setting: String, error: any Error) async -> Void in
-
-      await observer.linking(.operatingFlagNotRestored(device, setting: setting, reason: error))
-
-    }
-
-    if !changes.isEmpty {
-
-      await observer.linking(.operatingFlagsRestored(device, changes))
-
-    }
 
   }
 
