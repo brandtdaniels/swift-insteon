@@ -598,7 +598,21 @@ public struct DeviceLinkingCoordinator: Sendable {
 
     await network.recordLinkChange(of: device, answered: true)
 
-    let registered: RegisteredDevice? = try await learnIdentity(from: first, observer: observer)
+    let registered: RegisteredDevice?
+
+    do {
+
+      registered = try await learnIdentity(from: first, observer: observer)
+
+    } catch {
+
+      // Something may have read the device's database again while it was identified, so the
+      // link is recorded again before the error goes on.
+      await network.recordLinkChange(of: device, answered: true)
+
+      throw error
+
+    }
 
     await observer.linking(.linked(LinkedDevice(link: first, device: registered, leg: .first)))
 
