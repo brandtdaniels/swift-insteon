@@ -13,7 +13,8 @@ public struct RetryPolicy: Hashable, Sendable {
 
   }
 
-  /// How long to wait before sending a rejected command again.
+  /// How long to wait before sending a rejected command again, or asking a device again for an
+  /// ALL-Link record that didn't arrive.
   public var delay: Duration
 
   /// How long to wait for the device to answer a command.
@@ -24,8 +25,8 @@ public struct RetryPolicy: Hashable, Sendable {
   /// - Parameters:
   ///   - attempts: How many times to send a command before giving up. Defaults to 3, and a
   ///     value below 1 is raised to 1.
-  ///   - delay: How long to wait before resending a rejected command. Defaults to half a
-  ///     second, which gives a busy device time to finish.
+  ///   - delay: How long to wait before resending a rejected command or asking again for a
+  ///     record. Defaults to half a second, which gives a busy device time to finish.
   ///   - answerTimeout: How long to wait for an answer. Defaults to 2 seconds.
   public init(attempts: Int = 3, delay: Duration = .milliseconds(500), answerTimeout: Duration = .seconds(2)) {
 

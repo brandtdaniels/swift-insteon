@@ -106,6 +106,8 @@ enum Names {
       return "Interrupted."
     case let error as ModemError:
       return describe(error)
+    case let error as ModemStoppedEchoing:
+      return ModemText.didntConfirmSending(to: error.device)
     case let error as HubError:
       return describe(error)
     case let error as LinkingError:
@@ -163,7 +165,7 @@ enum Names {
     case let .rejected(number):
       "The modem rejected \(number.name) every time it was sent."
     case let .timedOut(number):
-      "The modem didn't answer \(number.name). Check that it's connected and powered."
+      ModemText.unanswered(command: number.name)
     case .connectionClosed:
       "The connection to the modem closed."
     case let .deviceRejected(device, reason):
