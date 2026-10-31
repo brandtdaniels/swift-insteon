@@ -7,6 +7,6 @@ Find Insteon Hubs on your local network, by asking the network itself or, if you
 - `DiscoveredHub`: a Hub that was found, with the `HubEndpoint` to connect to with InsteonHubClient and, from Insteon Connect, its Insteon ID, its modem's category, subcategory and firmware version, and its unit type
 - `LocalNetwork`, `InterfaceNetwork` and `IPv4Subnet`: the subnets to search, read from the device's network interfaces
 
-Only subnets of at most 1,024 addresses are searched. On iOS, iPadOS, tvOS and visionOS, add `NSLocalNetworkUsageDescription` to your app's `Info.plist`.
+Only subnets of at most 1,024 addresses are searched. Discovery and the Insteon Connect lookup send through an `UnauthenticatedHTTPClient`, which can't carry the Hub's credentials, with a session that keeps nothing on the device and, for the local network, uses no proxy. On iOS, iPadOS, tvOS and visionOS, add `NSLocalNetworkUsageDescription` to your app's `Info.plist`.
 
 See the DocC catalog in `Sources/InsteonHubDiscovery/InsteonHubDiscovery.docc` for the full documentation.

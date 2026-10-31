@@ -74,7 +74,7 @@ struct InsteonConnectLookupTests {
     let response = HTTPResponse(statusCode: status, body: Data(body.utf8))
     let client = ScriptedHTTPClient { $0 == "connect.insteon.com" ? response : nil }
 
-    return (InsteonConnectLookup(httpClient: client), client)
+    return (InsteonConnectLookup(httpClient: UnauthenticatedHTTPClient(transport: client)), client)
 
   }
 

@@ -31,7 +31,10 @@ on the Hub.
 Discovery sends one request to each address on private subnets (`10.0.0.0/8`,
 `172.16.0.0/12` and `192.168.0.0/16`) of at most 1,024 addresses, a few dozen at a time, and
 nothing more to the Hubs it finds. It never searches a cellular, public or larger network,
-and it sends no credentials: its client mustn't add any.
+and it sends no credentials: its client is an `UnauthenticatedHTTPClient`, which can be made
+only from a `URLSessionHTTPClient` and refuses any request that carries credentials. The
+default client goes to each address directly rather than through a proxy, keeps nothing
+between requests, and gives up on an address after ``HubDiscovery/probeTimeout`` in all.
 
 Any device on port `25105` that asks for a password the same way would be reported too, so a
 result is a candidate rather than a verified Hub. The Hub's interface sends its password
@@ -48,6 +51,11 @@ probe the local network and it gives each Hub's Insteon ID, which tells several 
 and its modem's category and subcategory, which name its model,
 but it needs the internet, sends the network's public IP address to Insteon, and misses a
 Hub that hasn't reported recently. It's opt-in: nothing in this library calls it for you.
+
+The page lists each Hub's MAC address and public IP address, so the default client keeps
+nothing on the device: no cache, cookies or credentials. It follows a redirect only to HTTPS on
+Insteon Connect's own host, and sends a `User-Agent` that names this package rather than the
+app.
 
 ```swift
 let hubs = try await InsteonConnectLookup().hubs()

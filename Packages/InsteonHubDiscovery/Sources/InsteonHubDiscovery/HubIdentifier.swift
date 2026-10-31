@@ -129,7 +129,9 @@ public struct HubIdentifier: Sendable {
   ///
   /// - Parameters:
   ///   - httpClient: The client to send requests with, before the Hub's credentials are added.
-  ///     Defaults to a `URLSessionHTTPClient`.
+  ///     Defaults to `URLSessionHTTPClient.localNetwork()`, which goes to each candidate
+  ///     directly rather than through a proxy, keeps nothing between requests and refuses
+  ///     redirects.
   ///   - port: The Hub's port, which a candidate must be on for
   ///     ``HubIdentifier/identify(_:provideCredentials:onResult:)`` to send it credentials.
   ///     Defaults to `HubEndpoint.defaultPort`, 25105. Pass another port only when the Hub is
@@ -137,7 +139,7 @@ public struct HubIdentifier: Sendable {
   ///   - timeout: How long a candidate has to answer Get IM Info. Defaults to
   ///     ``HubIdentifier/defaultTimeout``.
   public init(
-    httpClient: any HTTPClient = URLSessionHTTPClient(),
+    httpClient: any HTTPClient = URLSessionHTTPClient.localNetwork(),
     port: Int = HubEndpoint.defaultPort,
     timeout: Duration = HubIdentifier.defaultTimeout
   ) {

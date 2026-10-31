@@ -18,6 +18,11 @@ import InsteonNetworking
 /// user the address and let them confirm it before sending the Hub's password there, since
 /// the Hub's interface sends it unencrypted.
 ///
+/// The probes go through an `UnauthenticatedHTTPClient`, a client that can't carry
+/// credentials, so the Hub's password never goes to the addresses discovery asks. The default
+/// client goes to each address directly rather than through a proxy, keeps nothing between
+/// requests, and reads at most 64 KiB of an answer.
+///
 /// ```swift
 /// let hubs = try await HubDiscovery().discover { hub in
 ///   print("Found a Hub at", hub.endpoint.host)
@@ -25,7 +30,7 @@ import InsteonNetworking
 /// ```
 ///
 /// Asking every address takes a moment: the probes run a few dozen at a time, and an address
-/// that doesn't answer costs ``HubDiscovery/probeTimeout``. Only the private address ranges
+/// that doesn't answer, or answers slowly, costs at most ``HubDiscovery/probeTimeout``. Only the private address ranges
 /// home networks use are searched, never a cellular, public or other network, and only
 /// subnets of at most 1,024 addresses, so discovery never sweeps a large network.
 ///
@@ -43,8 +48,8 @@ public struct HubDiscovery: Sendable {
   /// How many addresses are asked at once by default: 32.
   public static let defaultConcurrentProbes = 32
 
-  /// The client the probes are sent with.
-  public let httpClient: any HTTPClient
+  /// The client the probes are sent with, which can't carry credentials.
+  public let httpClient: UnauthenticatedHTTPClient
 
   /// The network whose subnets are searched.
   public let network: any LocalNetwork
@@ -52,7 +57,7 @@ public struct HubDiscovery: Sendable {
   /// The port Hubs are looked for on.
   public let port: Int
 
-  /// How long each address has to answer.
+  /// How long each address has to answer, in all.
   public let probeTimeout: Duration
 
   /// How many addresses are asked at once.
@@ -61,28 +66,23 @@ public struct HubDiscovery: Sendable {
   /// Creates a discovery.
   ///
   /// - Parameters:
-  ///   - httpClient: The client to send the probes with. Defaults to a
-  ///     `URLSessionHTTPClient`. It must not add credentials, which would go to every address
-  ///     probed, so a `BasicAuthenticationHTTPClient` is refused.
+  ///   - httpClient: The client to send the probes with, which can't carry credentials, since
+  ///     they'd go to every address probed. Defaults to
+  ///     `UnauthenticatedHTTPClient.localNetwork()`.
   ///   - network: The network whose subnets to search. Defaults to the device's network
   ///     interfaces.
   ///   - port: The port to look for Hubs on. Defaults to `HubEndpoint.defaultPort`.
-  ///   - probeTimeout: How long each address has to answer. Defaults to
+  ///   - probeTimeout: How long each address has to answer, in all. Defaults to
   ///     ``HubDiscovery/defaultProbeTimeout``.
   ///   - concurrentProbes: How many addresses to ask at once. Defaults to
   ///     ``HubDiscovery/defaultConcurrentProbes``; a value below 1 is raised to 1.
   public init(
-    httpClient: any HTTPClient = URLSessionHTTPClient(),
+    httpClient: UnauthenticatedHTTPClient = .localNetwork(),
     network: any LocalNetwork = InterfaceNetwork(),
     port: Int = HubEndpoint.defaultPort,
     probeTimeout: Duration = HubDiscovery.defaultProbeTimeout,
     concurrentProbes: Int = HubDiscovery.defaultConcurrentProbes
   ) {
-
-    precondition(
-      !(httpClient is BasicAuthenticationHTTPClient),
-      "Discovery probes every address, so its client must not send the Hub's credentials."
-    )
 
     self.httpClient = httpClient
     self.network = network
@@ -112,8 +112,9 @@ public struct HubDiscovery: Sendable {
   /// - Parameter found: Called with each Hub as it's found, in the order the Hubs answer.
   /// - Returns: Every Hub found, in address order.
   /// - Throws: The network's error if its subnets can't be read, `HubError.invalidEndpoint`
-  ///   if ``HubDiscovery/port`` is outside 0 to 65,535, or `CancellationError` if the task is
-  ///   canceled.
+  ///   if ``HubDiscovery/port`` is outside 0 to 65,535, `HTTPClientError.proxyConfigured` if
+  ///   the probes would go through a proxy the environment names, on Linux, or
+  ///   `CancellationError` if the task is canceled.
   @discardableResult
   public func discover(_ found: @Sendable (DiscoveredHub) async -> Void = { _ in }) async throws -> [DiscoveredHub] {
 
@@ -188,20 +189,34 @@ public struct HubDiscovery: Sendable {
 
   }
 
-  /// Asks one address whether it's a Hub.
+  /// Asks one address whether it's a Hub, giving up after ``HubDiscovery/probeTimeout`` in all.
   ///
   /// - Returns: The Hub, or `nil` if the address doesn't answer as one.
-  /// - Throws: `CancellationError` if the task is canceled.
+  /// - Throws: `HTTPClientError.proxyConfigured` or `HTTPClientError.credentialsRefused` if
+  ///   the client refuses to send the probe, or `CancellationError` if the task is canceled.
   private func probe(_ endpoint: HubEndpoint, with request: URLRequest) async throws -> DiscoveredHub? {
 
     var request = request
     request.timeoutInterval = probeTimeout.timeInterval
 
+    let httpClient: UnauthenticatedHTTPClient = httpClient
+    let sent: URLRequest = request
     let response: HTTPResponse
 
     do {
 
-      response = try await httpClient.send(request)
+      // The request's own timeout limits only the wait between bytes, so an address that
+      // answers a byte at a time is given up on too.
+      response = try await withDeadline(probeTimeout) {
+
+        try await httpClient.send(sent)
+
+      }
+
+    } catch let error as HTTPClientError where error == .proxyConfigured || error == .credentialsRefused {
+
+      // The client wouldn't send the probe at all, so it wouldn't send any other either.
+      throw error
 
     } catch {
 
