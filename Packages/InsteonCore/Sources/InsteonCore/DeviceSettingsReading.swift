@@ -491,7 +491,7 @@ enum DeviceSettingSafety {
   /// of one.
   static func isSendable(_ command: DeviceStandardCommand, in commands: CommandSet?) -> Bool {
 
-    guard !isNeverSent(command.sendGuard), !neverSentNames.contains(command.name), !ProtectedCommand.pokeCommand1s.contains(command.command1) else {
+    guard !isNeverSent(command.sendGuard), !neverSentNames.contains(command.name), command.command1 != ProtectedCommand.pokeCommand1 else {
 
       return false
 

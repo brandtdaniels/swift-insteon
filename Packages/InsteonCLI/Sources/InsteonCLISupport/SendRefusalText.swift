@@ -43,7 +43,7 @@ public enum SendRefusalText {
     case .checksumOn:
       return "Requiring a checksum in every message would cut the device off from a modem that doesn't send one; insteon never sends it."
     case .poke:
-      return "Set Address MSB and Poke One Byte write any byte of a device's memory, its ALL-Link database included; insteon never sends them."
+      return "Poke One Byte writes any byte of a device's memory, its ALL-Link database included; insteon never sends it."
     }
 
   }

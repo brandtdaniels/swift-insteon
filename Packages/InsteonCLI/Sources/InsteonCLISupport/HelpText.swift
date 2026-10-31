@@ -312,7 +312,7 @@ public enum HelpText {
                           the checksum i2CS devices require. Set Operating Flags (20) that
                           turns the radio (0C) or the powerline (0E) off, requires a checksum
                           (19) or turns the programming lock on (00) is never sent, to any
-                          device, and nor is Poke (28 or 29). For a device the identity
+                          device, and nor is Poke (29). For a device the identity
                           cache knows, nor is a message its catalog entry never sends, or an
                           extended message that writes a byte holding a guarded flag, which
                           only 'set' writes. Nothing forces them.
@@ -352,8 +352,8 @@ public enum HelpText {
 
     A message to a device (0x62) or a group (0x61) is never written, with or without
     --force, when it's Set Operating Flags (0x20) that turns the radio (0C) or the powerline
-    (0E) off, requires a checksum (19) or turns the programming lock on (00), or Poke (0x28
-    or 0x29), which writes a device's memory. Nor is one cut short.
+    (0E) off, requires a checksum (19) or turns the programming lock on (00), or Poke
+    (0x29), which writes a device's memory. Nor is one cut short.
 
     Without --force, a command is refused when the package doesn't know its number, since the
     modem's answer can't be read, or when it changes or erases what the modem keeps or stops

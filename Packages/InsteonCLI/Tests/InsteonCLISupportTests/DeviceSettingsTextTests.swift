@@ -389,10 +389,16 @@ struct ExploringArgumentTests {
 
     }
 
-    // Radio on isn't protected.
+    // Radio on isn't protected, and Set Address MSB writes nothing.
     #expect(throws: Never.self) {
 
       try Invocation.parse(["device", "1A.2B.3C", "send", "20", "0D"])
+
+    }
+
+    #expect(throws: Never.self) {
+
+      try Invocation.parse(["device", "1A.2B.3C", "send", "28", "0F"])
 
     }
 
@@ -528,7 +534,7 @@ struct ExploringArgumentTests {
 
       #expect(throws: ArgumentError.neverSent(.protected(.poke))) {
 
-        try Invocation.parse(["modem", "send", "02621A2B3C0F28FF"] + forcing)
+        try Invocation.parse(["modem", "send", "02621A2B3C0F29FF"] + forcing)
 
       }
 
@@ -564,6 +570,7 @@ struct ExploringArgumentTests {
     }
 
     #expect(SendRefusalText.sentence(.protected(.radioOff)) == "Turning radio off would cut the device off the network; insteon never sends it.")
+    #expect(SendRefusalText.sentence(.protected(.poke)).hasSuffix("insteon never sends it."))
     #expect(SendRefusalText.sentence(.serialCommand("Reset.")).hasSuffix("Pass --force to send it anyway."))
 
   }

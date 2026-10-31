@@ -9,7 +9,7 @@ import InsteonTestSupport
 
 /// The byte floor under every guard: the four protected Set Operating Flags, radio off
 /// (`0x0C`), powerline off (`0x0E`), checksum on (`0x19`) and programming lock on (`0x00`), and
-/// Poke (cmd1 `0x28` and `0x29`), pushed through every send path. Each is refused with nothing
+/// Poke (cmd1 `0x29`), pushed through every send path. Each is refused with nothing
 /// written, for a device the catalog doesn't know, with no catalog at all, and for a command
 /// set with no programming lock flag; bytes the floor doesn't hold still go through.
 struct GuardedBytesTests {
@@ -19,19 +19,20 @@ struct GuardedBytesTests {
   /// The device every message is for.
   static let address = InsteonAddress(0x3A, 0x4B, 0x41)
 
-  /// Every protected command's bytes, with a cmd2 for Set Address MSB and Poke One Byte.
+  /// Every protected command's bytes, with a cmd2 for Poke One Byte.
   static let protectedCommands: [Command] = [
     Command(command1: 0x20, command2: 0x0C),
     Command(command1: 0x20, command2: 0x0E),
     Command(command1: 0x20, command2: 0x19),
     Command(command1: 0x20, command2: 0x00),
-    Command(command1: 0x28, command2: 0x0F),
     Command(command1: 0x29, command2: 0xAA)
   ]
 
-  /// Bytes the floor doesn't hold: Set Operating Flags radio on, and Light On.
+  /// Bytes the floor doesn't hold: Set Operating Flags radio on, Set Address MSB, which writes
+  /// nothing, and Light On.
   static let allowedCommands: [Command] = [
     Command(command1: 0x20, command2: 0x0D),
+    Command(command1: 0x28, command2: 0x0F),
     Command(command1: 0x11, command2: 0xFF)
   ]
 
@@ -52,7 +53,7 @@ struct GuardedBytesTests {
   }
 
   /// A command set with no operating flags at all: its off action fills Set Operating Flags'
-  /// cmd2 with the off value, `0x00`, the programming lock on, and it lists Set Address MSB.
+  /// cmd2 with the off value, `0x00`, the programming lock on, and it lists Poke One Byte.
   static let flaglessJSON = #"""
     {
       "devices": [{
@@ -72,8 +73,8 @@ struct GuardedBytesTests {
           { "name": "lightOn", "description": "On.", "command1": "0x11", "command2": "0xFF" },
           { "name": "setFlags", "description": "Set Operating Flags with a cmd2 the caller gives.", "command1": "0x20",
             "parameter": { "name": "flags", "description": "The cmd2." } },
-          { "name": "setAddressMsb", "description": "Set Address MSB.", "command1": "0x28",
-            "parameter": { "name": "address", "description": "The address's high byte." } }
+          { "name": "poke", "description": "Poke One Byte.", "command1": "0x29",
+            "parameter": { "name": "byte", "description": "The byte." } }
         ],
         "groupTypes": [{
           "name": "load",
@@ -142,8 +143,8 @@ struct GuardedBytesTests {
     #expect(ProtectedCommand(command1: 0x20, command2: 0x0E) == .powerlineOff)
     #expect(ProtectedCommand(command1: 0x20, command2: 0x19) == .checksumOn)
     #expect(ProtectedCommand(command1: 0x20, command2: 0x00) == .programmingLockOn)
-    #expect(ProtectedCommand(command1: 0x28, command2: 0xFF) == .poke)
     #expect(ProtectedCommand(command1: 0x29, command2: 0x00) == .poke)
+    #expect(ProtectedCommand(command1: 0x29, command2: 0xFF) == .poke)
 
     for command in Self.allowedCommands {
 
@@ -151,7 +152,8 @@ struct GuardedBytesTests {
 
     }
 
-    // Peek isn't Poke.
+    // Set Address MSB and Peek write nothing.
+    #expect(ProtectedCommand(command1: 0x28, command2: 0xFF) == nil)
     #expect(ProtectedCommand(command1: 0x2B, command2: 0x00) == nil)
 
   }
@@ -178,9 +180,9 @@ struct GuardedBytesTests {
     }
 
     // A command set's own command with Poke's cmd1 is never sent, whatever cmd2 it's given.
-    if let commands, let setAddress = commands.standardCommand(named: "setAddressMsb") {
+    if let commands, let poke = commands.standardCommand(named: "poke") {
 
-      #expect(!DeviceSettingSafety.isSendable(setAddress, in: commands))
+      #expect(!DeviceSettingSafety.isSendable(poke, in: commands))
 
     }
 

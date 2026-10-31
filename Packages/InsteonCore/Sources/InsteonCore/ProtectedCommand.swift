@@ -31,15 +31,16 @@ public enum ProtectedCommand: Hashable, Sendable, CaseIterable {
   /// message, so a modem that doesn't send one can't reach it.
   case checksumOn
 
-  /// Set Address MSB (cmd1 `0x28`) or Poke One Byte (cmd1 `0x29`), with any cmd2, which
-  /// together write any byte of a device's memory, its ALL-Link database included.
+  /// Poke One Byte (cmd1 `0x29`), with any cmd2, which writes a byte of a device's memory, its
+  /// ALL-Link database included, at the address that Set Address MSB (`0x28`) and Peek One
+  /// Byte (`0x2B`) choose. Those two write nothing, so they're sent.
   case poke
 
   /// Set Operating Flags' cmd1.
   static let setOperatingFlags: UInt8 = 0x20
 
-  /// The cmd1s of Set Address MSB and Poke One Byte.
-  static let pokeCommand1s: Set<UInt8> = [0x28, 0x29]
+  /// Poke One Byte's cmd1.
+  static let pokeCommand1: UInt8 = 0x29
 
   /// The protected command a message's cmd1 and cmd2 send, if they send one.
   ///
@@ -48,7 +49,7 @@ public enum ProtectedCommand: Hashable, Sendable, CaseIterable {
   ///   - command2: The message's cmd2.
   public init?(command1: UInt8, command2: UInt8) {
 
-    if Self.pokeCommand1s.contains(command1) {
+    if command1 == Self.pokeCommand1 {
 
       self = .poke
 
