@@ -1,4 +1,5 @@
 import Foundation
+import InsteonCLISupport
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)
@@ -23,39 +24,20 @@ enum Terminal {
   /// after the instructions ends the wait.
   ///
   /// The line is read on a thread of its own, so the wait doesn't hold up the tasks that keep
-  /// the modem running.
+  /// the modem running. A read that a canceled wait leaves behind hands its line to the next
+  /// wait, rather than taking it.
   ///
   /// - Throws: `CancellationError` if the task was canceled while waiting.
   static func waitForReturn() async throws {
 
     discardTypedAhead()
 
-    let resumption = Resumption()
-
-    await withTaskCancellationHandler {
-
-      await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-
-        resumption.set(continuation)
-
-        DispatchQueue.global().async {
-
-          _ = readLine()
-          resumption.resume()
-
-        }
-
-      }
-
-    } onCancel: {
-
-      resumption.resume()
-
-    }
-
-    try Task.checkCancellation()
+    _ = try await lines.line()
 
   }
+
+  /// Standard input's lines, read one at a time for whichever prompt waits.
+  private static let lines = LineReader { () -> String? in readLine() }
 
   /// Discards what the terminal has received but the command hasn't read yet.
   private static func discardTypedAhead() {
@@ -80,72 +62,11 @@ enum Terminal {
 
     Output.prompt(question)
 
-    let answer = OneShot<String?>()
-
-    let line: String? = try await withTaskCancellationHandler {
-
-      DispatchQueue.global().async {
-
-        answer.finish(.success(readLine()))
-
-      }
-
-      return try await answer.value()
-
-    } onCancel: {
-
-      answer.finish(.failure(CancellationError()))
-
-    }
+    let line: String? = try await lines.line()
 
     let text: String = (line ?? "").trimmingCharacters(in: .whitespaces).lowercased()
 
     return text == "y" || text == "yes"
-
-  }
-
-}
-
-/// Resumes a continuation once, from whichever of Return and cancellation comes first.
-private final class Resumption: @unchecked Sendable {
-
-  private let lock = NSLock()
-
-  private var continuation: CheckedContinuation<Void, Never>?
-
-  private var isResumed = false
-
-  /// Keeps the continuation, or resumes it at once if the wait already ended.
-  func set(_ continuation: CheckedContinuation<Void, Never>) {
-
-    lock.lock()
-
-    guard !isResumed else {
-
-      lock.unlock()
-      continuation.resume()
-
-      return
-
-    }
-
-    self.continuation = continuation
-    lock.unlock()
-
-  }
-
-  /// Ends the wait, if it hasn't ended.
-  func resume() {
-
-    lock.lock()
-
-    let continuation = self.continuation
-    self.continuation = nil
-    isResumed = true
-
-    lock.unlock()
-
-    continuation?.resume()
 
   }
 
