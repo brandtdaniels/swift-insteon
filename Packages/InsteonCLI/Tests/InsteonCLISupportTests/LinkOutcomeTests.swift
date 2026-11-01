@@ -2,6 +2,7 @@ import Testing
 import InsteonCLISupport
 import InsteonCore
 import InsteonProtocol
+import InsteonLinking
 
 /// What `insteon link` and `insteon unlink` say about a link that isn't the one asked for.
 struct LinkOutcomeTests {
