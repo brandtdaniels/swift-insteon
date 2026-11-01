@@ -373,6 +373,8 @@ do {
 - ``ProductCatalog``
 - ``ProductCatalogUpdate``
 - ``ProductCatalogUpdateError``
+- ``ProductCatalogStore``
+- ``ProductCatalogStoreError``
 
 ### Raw passthroughs
 

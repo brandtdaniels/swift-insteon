@@ -44,16 +44,23 @@ enum CatalogStore {
 
   }
 
-  /// Whether there's a cached copy of the catalog, readable or not.
-  static func hasCachedCopy() -> Bool {
+  /// The cached copy's files, or `nil` if neither `XDG_CACHE_HOME` nor `HOME` is set.
+  static func store() -> ProductCatalogStore? {
 
-    guard let path = catalogPath() else {
+    guard let catalogPath = catalogPath(), let versionPath = versionPath() else {
 
-      return false
+      return nil
 
     }
 
-    return PrivateFiles.exists(path)
+    return ProductCatalogStore(catalogPath: catalogPath, versionPath: versionPath)
+
+  }
+
+  /// Whether there's a cached copy of the catalog, readable or not.
+  static func hasCachedCopy() -> Bool {
+
+    store()?.hasCachedCopy ?? false
 
   }
 
@@ -61,26 +68,14 @@ enum CatalogStore {
   /// read.
   static func cachedVersion() -> DeviceCatalogVersion? {
 
-    guard hasCachedCopy(), let path = versionPath(), let data = PrivateFiles.read(path) else {
-
-      return nil
-
-    }
-
-    return CatalogCache.version(json: data)
+    store()?.cachedVersion()
 
   }
 
   /// The cached copy's JSON, or `nil` if there's none or it can't be read.
   static func cachedJSON() -> Data? {
 
-    guard let path = catalogPath() else {
-
-      return nil
-
-    }
-
-    return PrivateFiles.read(path)
+    store()?.cachedJSON()
 
   }
 
@@ -171,17 +166,19 @@ enum CatalogStore {
   /// - Throws: `CommandFailure` if either file can't be written.
   static func save(json: Data, version: DeviceCatalogVersion) throws {
 
-    guard let path = catalogPath(), let versionPath = versionPath() else {
+    guard let store = store() else {
 
       throw noCacheDirectory
 
     }
 
-    let versionJSON: Data = try CatalogCache.versionJSON(version)
+    do {
 
-    guard PrivateFiles.replace(path, with: json), PrivateFiles.replace(versionPath, with: versionJSON) else {
+      try store.save(json: json, version: version)
 
-      throw CommandFailure(description: "The Insteon device catalog couldn't be saved in \(Paths.directory(of: path)).")
+    } catch is ProductCatalogStoreError {
+
+      throw CommandFailure(description: "The Insteon device catalog couldn't be saved in \(store.directory).")
 
     }
 

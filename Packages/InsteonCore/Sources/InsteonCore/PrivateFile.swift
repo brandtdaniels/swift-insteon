@@ -7,9 +7,35 @@ import Glibc
 import Musl
 #endif
 
-/// Writes files readable only by the current user, replacing a file whole so a reader never
-/// sees half of one.
+/// Reads and writes files readable only by the current user, replacing a file whole so a
+/// reader never sees half of one.
 enum PrivateFile {
+
+  /// The contents of a regular file, or `nil` if there's none, something else is at the path,
+  /// such as a directory, a symbolic link or a named pipe, or it can't be read.
+  ///
+  /// Only a regular file is read, so a named pipe can't block the caller.
+  static func read(_ path: String) -> Data? {
+
+    guard
+      let type = try? FileManager.default.attributesOfItem(atPath: path)[.type] as? FileAttributeType,
+      type == .typeRegular
+    else {
+
+      return nil
+
+    }
+
+    return FileManager.default.contents(atPath: path)
+
+  }
+
+  /// Whether there's a file, or anything else, at a path.
+  static func exists(_ path: String) -> Bool {
+
+    FileManager.default.fileExists(atPath: path)
+
+  }
 
   /// Writes data to a temporary file of its own, readable only by the current user, then moves it
   /// into place.

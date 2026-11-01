@@ -1,6 +1,7 @@
 import Testing
 import InsteonCLISupport
 import InsteonCore
+import InsteonProtocol
 
 /// The parsing of the raw passthroughs, `insteon modem send` and `insteon device ADDRESS send`:
 /// their limits, options and malformed input.

@@ -280,22 +280,3 @@ enum Identities {
   }
 
 }
-
-/// Works with file paths as strings.
-enum Paths {
-
-  /// The directory a path is in, such as `/home/example/.cache/insteon` for
-  /// `/home/example/.cache/insteon/identities.json`.
-  static func directory(of path: String) -> String {
-
-    guard let slash = path.lastIndex(of: "/") else {
-
-      return "."
-
-    }
-
-    return slash == path.startIndex ? "/" : String(path[..<slash])
-
-  }
-
-}

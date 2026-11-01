@@ -1,6 +1,7 @@
 import Testing
 import InsteonCLISupport
 import InsteonCore
+import InsteonProtocol
 
 /// What `insteon device ADDRESS id` prints about a product key, next to what the catalog says.
 struct IdentityTextTests {

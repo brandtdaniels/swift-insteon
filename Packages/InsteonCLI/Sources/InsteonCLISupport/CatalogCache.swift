@@ -97,7 +97,7 @@ public enum CatalogCache {
   /// - Returns: The version, or `nil` if the contents aren't a version.
   public static func version(json: Data) -> DeviceCatalogVersion? {
 
-    try? JSONDecoder().decode(DeviceCatalogVersion.self, from: json)
+    ProductCatalogStore.version(json: json)
 
   }
 
@@ -108,7 +108,7 @@ public enum CatalogCache {
   /// - Throws: `EncodingError` if the version can't be encoded.
   public static func versionJSON(_ version: DeviceCatalogVersion) throws -> Data {
 
-    try JSONEncoder().encode(version)
+    try ProductCatalogStore.versionJSON(version)
 
   }
 
