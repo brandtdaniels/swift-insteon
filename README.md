@@ -149,6 +149,8 @@ CI also runs these checks, each a Python script with tests in `Scripts/tests`:
 - `Scripts/check-concurrency.py`: the libraries add no unstructured task, `@unchecked Sendable`, `Task.sleep` or real clock outside a default argument; `Scripts/check-concurrency-allowlist.txt` lists the known ones, each with a reason, and only shrinks.
 - `Scripts/check-cli-thin.py`: the `insteon` command leaves device behavior to the libraries.
 - `Scripts/check-workflows.py`: the workflows pin each action to a commit and each image to a digest, and give each job a time limit.
+- `Scripts/check-credentials.py`: no string in the sources interpolates a value whose name says it's a credential, such as a password, token or Authorization header; `Scripts/check-credentials-allowlist.txt` lists the known ones, each with a reason, and only shrinks.
+- `Scripts/check-public-api.py`: InsteonCore's public declarations match `Scripts/insteoncore-public-api.txt`, so a change to the API front ends build on shows in review. After a deliberate change, run `python3 Scripts/check-public-api.py --update` and commit the list with it.
 
 `python3 -m unittest discover -s Scripts/tests` runs the scripts' tests.
 
