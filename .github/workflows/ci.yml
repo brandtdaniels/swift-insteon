@@ -80,6 +80,31 @@ jobs:
             exit 1
           fi
           echo "The allow-list didn't grow."
+      - name: Check that no credential is written into a string
+        run: python3 Scripts/check-credentials.py
+      # This allow-list only shrinks too. An entry is its path and names; its reason may be
+      # reworded.
+      - name: Check that the credentials allow-list doesn't grow
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          list=Scripts/check-credentials-allowlist.txt
+          if ! git cat-file -e "origin/${BASE_REF}:${list}" 2>/dev/null; then
+            echo "The base branch has no allow-list yet, so there's nothing to compare."
+            exit 0
+          fi
+          entries() { grep -v -e '^#' -e '^$' | cut -f1-2 | sort; }
+          added=$(comm -13 <(git show "origin/${BASE_REF}:${list}" | entries) <(entries < "$list"))
+          if [ -n "$added" ]; then
+            echo "These entries were added to $list, which may only lose entries:"
+            echo "$added"
+            echo "Leave the credential out of the string instead of allowing it."
+            exit 1
+          fi
+          echo "The allow-list didn't grow."
+      - name: Check that InsteonCore's public API matches its list
+        run: python3 Scripts/check-public-api.py
       - name: Test the checks
         run: python3 -m unittest discover -s Scripts/tests -v
 

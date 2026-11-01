@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import InsteonCLISupport
 import InsteonCore
+import InsteonDeviceCatalog
 
 struct CatalogCacheTests {
 

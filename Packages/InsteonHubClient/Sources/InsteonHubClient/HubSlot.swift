@@ -1,3 +1,4 @@
+import Foundation
 import InsteonProtocol
 
 /// One of the 256 slots in which a Hub 2242 keeps a scene or device it runs timers for.

@@ -6,6 +6,7 @@ import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
 import InsteonTestSupport
+import InsteonDeviceCatalog
 
 /// Times a test gives a network, one after another, each a minute after the last.
 final class FixedTimes: @unchecked Sendable {

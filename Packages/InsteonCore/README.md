@@ -10,6 +10,7 @@ Keep track of the Insteon devices on a network: the library an app or a command 
 - `SerialCommandPolicy`: which raw serial commands are written, refused unless forced, or never written
 - `HubSearch`: finds Hubs on the local network or through Insteon Connect, and identifies them with their credentials
 - `ProductCatalog`: the Insteon device catalog, bundled or saved, and its update, which never goes back to an older version
+- `ProductCatalogStore`: a downloaded copy of the catalog and its version, kept in files readable only by the current user
 - `InsteonErrorDescription`, `SendFailure`: a message for a person from the lower-level modules' errors, and what a failed send means
 
 ### Devices and the network

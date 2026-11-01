@@ -2,6 +2,13 @@
 
 import PackageDescription
 
+// Every target but the `insteon` command's two reads a member of a type, such as a method or an
+// enum case, only from a module the file imports itself (SE-0444). The command's targets depend
+// only on InsteonCore, which names lower-level types through typealiases, so they keep the
+// default: their files read those types' members without importing the modules that declare
+// them.
+let memberImportVisibility: [SwiftSetting] = [.enableUpcomingFeature("MemberImportVisibility")]
+
 let package = Package(
   name: "swift-insteon",
   platforms: [
@@ -32,87 +39,103 @@ let package = Package(
   targets: [
     .target(
       name: "InsteonProtocol",
-      path: "Packages/InsteonProtocol/Sources/InsteonProtocol"
+      path: "Packages/InsteonProtocol/Sources/InsteonProtocol",
+      swiftSettings: memberImportVisibility
     ),
     .testTarget(
       name: "InsteonProtocolTests",
       dependencies: ["InsteonProtocol"],
-      path: "Packages/InsteonProtocol/Tests/InsteonProtocolTests"
+      path: "Packages/InsteonProtocol/Tests/InsteonProtocolTests",
+      swiftSettings: memberImportVisibility
     ),
 
     .target(
       name: "InsteonNetworking",
-      path: "Packages/InsteonNetworking/Sources/InsteonNetworking"
+      path: "Packages/InsteonNetworking/Sources/InsteonNetworking",
+      swiftSettings: memberImportVisibility
     ),
     .testTarget(
       name: "InsteonNetworkingTests",
       dependencies: ["InsteonNetworking", "InsteonTestSupport"],
-      path: "Packages/InsteonNetworking/Tests/InsteonNetworkingTests"
+      path: "Packages/InsteonNetworking/Tests/InsteonNetworkingTests",
+      swiftSettings: memberImportVisibility
     ),
 
     .target(
       name: "InsteonHubClient",
       dependencies: ["InsteonModem", "InsteonNetworking", "InsteonProtocol"],
-      path: "Packages/InsteonHubClient/Sources/InsteonHubClient"
+      path: "Packages/InsteonHubClient/Sources/InsteonHubClient",
+      swiftSettings: memberImportVisibility
     ),
     .testTarget(
       name: "InsteonHubClientTests",
       dependencies: ["InsteonHubClient", "InsteonModem", "InsteonNetworking", "InsteonProtocol", "InsteonTestSupport"],
-      path: "Packages/InsteonHubClient/Tests/InsteonHubClientTests"
+      path: "Packages/InsteonHubClient/Tests/InsteonHubClientTests",
+      swiftSettings: memberImportVisibility
     ),
 
     .target(
       name: "InsteonHubDiscovery",
       dependencies: ["InsteonHubClient", "InsteonModem", "InsteonNetworking", "InsteonProtocol"],
-      path: "Packages/InsteonHubDiscovery/Sources/InsteonHubDiscovery"
+      path: "Packages/InsteonHubDiscovery/Sources/InsteonHubDiscovery",
+      swiftSettings: memberImportVisibility
     ),
     .testTarget(
       name: "InsteonHubDiscoveryTests",
       dependencies: ["InsteonHubDiscovery", "InsteonHubClient", "InsteonModem", "InsteonNetworking", "InsteonProtocol"],
-      path: "Packages/InsteonHubDiscovery/Tests/InsteonHubDiscoveryTests"
+      path: "Packages/InsteonHubDiscovery/Tests/InsteonHubDiscoveryTests",
+      swiftSettings: memberImportVisibility
     ),
 
     .target(
       name: "InsteonHubPro",
       dependencies: ["InsteonNetworking", "InsteonProtocol"],
-      path: "Packages/InsteonHubPro/Sources/InsteonHubPro"
+      path: "Packages/InsteonHubPro/Sources/InsteonHubPro",
+      swiftSettings: memberImportVisibility
     ),
     .testTarget(
       name: "InsteonHubProTests",
       dependencies: ["InsteonHubPro", "InsteonNetworking", "InsteonProtocol", "InsteonTestSupport"],
-      path: "Packages/InsteonHubPro/Tests/InsteonHubProTests"
+      path: "Packages/InsteonHubPro/Tests/InsteonHubProTests",
+      swiftSettings: memberImportVisibility
     ),
 
     .target(
       name: "InsteonModem",
       dependencies: ["InsteonProtocol"],
-      path: "Packages/InsteonModem/Sources/InsteonModem"
+      path: "Packages/InsteonModem/Sources/InsteonModem",
+      swiftSettings: memberImportVisibility
     ),
     .testTarget(
       name: "InsteonModemTests",
       dependencies: ["InsteonModem", "InsteonProtocol", "InsteonTestSupport"],
-      path: "Packages/InsteonModem/Tests/InsteonModemTests"
+      path: "Packages/InsteonModem/Tests/InsteonModemTests",
+      swiftSettings: memberImportVisibility
     ),
 
     .target(
       name: "InsteonLinking",
       dependencies: ["InsteonModem", "InsteonProtocol"],
-      path: "Packages/InsteonLinking/Sources/InsteonLinking"
+      path: "Packages/InsteonLinking/Sources/InsteonLinking",
+      swiftSettings: memberImportVisibility
     ),
     .testTarget(
       name: "InsteonLinkingTests",
       dependencies: ["InsteonLinking", "InsteonLinkingTestSupport", "InsteonModem", "InsteonProtocol", "InsteonTestSupport"],
-      path: "Packages/InsteonLinking/Tests/InsteonLinkingTests"
+      path: "Packages/InsteonLinking/Tests/InsteonLinkingTests",
+      swiftSettings: memberImportVisibility
     ),
 
     .target(
       name: "InsteonScheduling",
-      path: "Packages/InsteonScheduling/Sources/InsteonScheduling"
+      path: "Packages/InsteonScheduling/Sources/InsteonScheduling",
+      swiftSettings: memberImportVisibility
     ),
     .testTarget(
       name: "InsteonSchedulingTests",
       dependencies: ["InsteonScheduling"],
-      path: "Packages/InsteonScheduling/Tests/InsteonSchedulingTests"
+      path: "Packages/InsteonScheduling/Tests/InsteonSchedulingTests",
+      swiftSettings: memberImportVisibility
     ),
 
     .target(
@@ -123,7 +146,8 @@ let package = Package(
         .product(name: "Crypto", package: "swift-crypto")
       ],
       path: "Packages/InsteonDeviceCatalog/Sources/InsteonDeviceCatalog",
-      resources: [.copy("Resources/catalog.json"), .copy("Resources/manifest.json")]
+      resources: [.copy("Resources/catalog.json"), .copy("Resources/manifest.json")],
+      swiftSettings: memberImportVisibility
     ),
     .testTarget(
       name: "InsteonDeviceCatalogTests",
@@ -133,18 +157,21 @@ let package = Package(
         "InsteonProtocol",
         .product(name: "Crypto", package: "swift-crypto")
       ],
-      path: "Packages/InsteonDeviceCatalog/Tests/InsteonDeviceCatalogTests"
+      path: "Packages/InsteonDeviceCatalog/Tests/InsteonDeviceCatalogTests",
+      swiftSettings: memberImportVisibility
     ),
 
     .target(
       name: "InsteonNotifications",
       dependencies: ["InsteonDeviceCatalog", "InsteonProtocol"],
-      path: "Packages/InsteonNotifications/Sources/InsteonNotifications"
+      path: "Packages/InsteonNotifications/Sources/InsteonNotifications",
+      swiftSettings: memberImportVisibility
     ),
     .testTarget(
       name: "InsteonNotificationsTests",
       dependencies: ["InsteonNotifications", "InsteonDeviceCatalog", "InsteonProtocol"],
-      path: "Packages/InsteonNotifications/Tests/InsteonNotificationsTests"
+      path: "Packages/InsteonNotifications/Tests/InsteonNotificationsTests",
+      swiftSettings: memberImportVisibility
     ),
 
     // The library a front end, such as an app or the `insteon` command, depends on.
@@ -159,7 +186,8 @@ let package = Package(
         "InsteonNetworking",
         "InsteonProtocol"
       ],
-      path: "Packages/InsteonCore/Sources/InsteonCore"
+      path: "Packages/InsteonCore/Sources/InsteonCore",
+      swiftSettings: memberImportVisibility
     ),
     .testTarget(
       name: "InsteonCoreTests",
@@ -175,7 +203,8 @@ let package = Package(
         "InsteonProtocol",
         "InsteonTestSupport"
       ],
-      path: "Packages/InsteonCore/Tests/InsteonCoreTests"
+      path: "Packages/InsteonCore/Tests/InsteonCoreTests",
+      swiftSettings: memberImportVisibility
     ),
 
     // The `insteon` command. Its command-line parsing is in InsteonCLISupport, so it can be tested.
@@ -194,7 +223,8 @@ let package = Package(
     .testTarget(
       name: "InsteonCLISupportTests",
       dependencies: ["InsteonCLISupport", "InsteonCore", "InsteonDeviceCatalog", "InsteonLinking", "InsteonProtocol"],
-      path: "Packages/InsteonCLI/Tests/InsteonCLISupportTests"
+      path: "Packages/InsteonCLI/Tests/InsteonCLISupportTests",
+      swiftSettings: memberImportVisibility
     ),
 
     // Test doubles shared by the test targets. Not products. InsteonTestSupport has the clock,
@@ -204,17 +234,20 @@ let package = Package(
     .target(
       name: "InsteonTestSupport",
       dependencies: ["InsteonModem", "InsteonNetworking"],
-      path: "Packages/InsteonTestSupport/Sources/InsteonTestSupport"
+      path: "Packages/InsteonTestSupport/Sources/InsteonTestSupport",
+      swiftSettings: memberImportVisibility
     ),
     .testTarget(
       name: "InsteonTestSupportTests",
       dependencies: ["InsteonTestSupport"],
-      path: "Packages/InsteonTestSupport/Tests/InsteonTestSupportTests"
+      path: "Packages/InsteonTestSupport/Tests/InsteonTestSupportTests",
+      swiftSettings: memberImportVisibility
     ),
     .target(
       name: "InsteonLinkingTestSupport",
       dependencies: ["InsteonLinking", "InsteonModem", "InsteonProtocol"],
-      path: "Packages/InsteonTestSupport/Sources/InsteonLinkingTestSupport"
+      path: "Packages/InsteonTestSupport/Sources/InsteonLinkingTestSupport",
+      swiftSettings: memberImportVisibility
     )
   ]
 )

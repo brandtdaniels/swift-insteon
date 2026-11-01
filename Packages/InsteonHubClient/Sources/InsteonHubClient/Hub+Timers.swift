@@ -1,3 +1,4 @@
+import InsteonNetworking
 import InsteonProtocol
 
 extension Hub {
