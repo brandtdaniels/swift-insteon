@@ -253,7 +253,19 @@ enum ModemCommands {
   ) async throws {
 
     // With --json, the words go to standard error, so the JSON can be piped on its own.
-    let say: (String) -> Void = printsJSON ? Output.note : Output.line
+    let say = { (text: String) -> Void in
+
+      if printsJSON {
+
+        Output.note(text)
+
+      } else {
+
+        Output.line(text)
+
+      }
+
+    }
 
     DatabaseLinkText.plan(plan).forEach(say)
 
