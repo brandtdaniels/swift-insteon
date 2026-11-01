@@ -151,7 +151,7 @@ struct SelfTestTests {
     #expect(report.check(.modemLinks)?.detail == "The device and the modem hold both records of the link.")
     #expect(report.check(.leftoverRecords)?.detail == "Every record names the modem or a device the modem is linked to.")
     #expect(report.check(.operatingFlags)?.detail == "The Insteon device catalog describes no operating flags for the device.")
-    #expect(report.checks.allSatisfy(\.fixes.isEmpty))
+    #expect(report.checks.allSatisfy { (check: SelfTestCheck) -> Bool in check.fixes.isEmpty })
     #expect(report.outcome == .passed)
     #expect(report.engine == .i2cs)
     #expect(report.identity == Example.plugIdentity)
