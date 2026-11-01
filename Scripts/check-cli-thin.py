@@ -224,11 +224,18 @@ def scan_string(line, index, closing, hashes=0):
     return index, "".join(interpolations), False
 
 
+# The lines with an interpolation that reaches the end of the line without closing, which the
+# reader can't follow onto the next line. A check that must see every interpolation, such as
+# check-credentials.py, reads and clears it.
+unclosed_interpolations = []
+
+
 def interpolation(line, index):
     """Reads an interpolation's code from `index`, after its `\\(`, to its closing parenthesis.
 
     Returns the index after the parenthesis and the code, with its own string literals as
-    `""` followed by their interpolations.
+    `""` followed by their interpolations. An interpolation that isn't closed on its line is
+    read to the line's end, and the line is added to `unclosed_interpolations`.
     """
 
     depth = 0
@@ -253,6 +260,8 @@ def interpolation(line, index):
 
         code.append(character)
         index += 1
+
+    unclosed_interpolations.append(line)
 
     return index, "".join(code)
 

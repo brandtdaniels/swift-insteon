@@ -11,12 +11,18 @@ change to what it makes public is a change to every front end. The list,
 one shows it in the list's diff, where a reviewer sees it.
 
 It reads the Swift files under `Packages/InsteonCore/Sources/InsteonCore`, leaving out comments
-and string literals, and finds each declaration marked `public` or `open`, each requirement of
-a public protocol, and each case of a public enum. A declaration in a type that isn't public is
-left out, since nothing outside the module reaches it. A declaration a module opts into with
-`@_spi(Name)` is listed with that attribute, since it's still public to a caller that opts in.
-Functions are listed by name and argument labels, so overloads that differ only in their types
-share a line.
+and string literals, and finds each declaration marked `public` or `open`, each member of a
+`public` or `open` extension that doesn't say `internal`, `fileprivate`, `private` or
+`package`, each requirement of a public protocol, and each case of a public enum. A declaration
+in a type that isn't public is left out, since nothing outside the module reaches it. A
+declaration a module opts into with `@_spi(Name)` is listed with that attribute, since it's
+still public to a caller that opts in.
+
+The list holds names, not whole signatures: functions, initializers, subscripts and enum cases
+by their argument labels, such as `case KeepAwakeEvent.notSent(_:reason:)`, and properties by name,
+with a setter that isn't public marked, such as `private(set) var DeviceRegistry.catalog`. So
+overloads that differ only in their types share a line, and a change to a type, a default value
+or a conformance doesn't show in the list.
 
 It prints each declaration that isn't in the list and each line of the list that matches none,
 and exits with status 1 if there's either. `--update` writes the list from the sources;
@@ -42,6 +48,9 @@ _spec.loader.exec_module(_thin)
 
 TYPE_KEYWORDS = {"struct", "enum", "class", "actor", "protocol", "extension"}
 
+# Modifiers that keep a member of a `public` extension from being public.
+RESTRICTING = {"internal", "fileprivate", "private", "package"}
+
 DECLARATION = re.compile(
     r"\b(struct|enum|class|actor|protocol|extension|func|var|let|init|subscript|case|typealias|associatedtype)\b"
 )
@@ -60,12 +69,14 @@ MODIFIER = re.compile(
 class Context:
     """A type or extension whose body declares members."""
 
-    def __init__(self, kind, name, is_public, spi, body_depth):
+    def __init__(self, kind, name, is_public, spi, body_depth, members_public=False):
         self.kind = kind
         self.name = name
         self.is_public = is_public
         self.spi = spi
         self.body_depth = body_depth
+        # A `public` or `open` extension makes its members public unless they say otherwise.
+        self.members_public = members_public
 
 
 def code_text(text):
@@ -90,7 +101,8 @@ def modifiers_before(code, start):
 
         for token in reversed(tokens):
             if not MODIFIER.match(token):
-                return words
+                # Another token, such as a type's opening line or `;`, ends the modifiers.
+                return list(reversed(taken)) + words
 
             taken.append(token)
 
@@ -126,10 +138,11 @@ def split_top_level(text):
 
     parts, depth, current = [], 0, []
 
-    for character in text:
-        if character in "([<":
+    for index, character in enumerate(text):
+        if character in "([<{":
             depth += 1
-        elif character in ")]>":
+        elif character in ")]>}" and not (character == ">" and text[index - 1:index] == "-"):
+            # The `>` of a function type's `->` closes nothing.
             depth -= 1
 
         if character == "," and depth == 0:
@@ -150,6 +163,11 @@ def labels(parameters):
     result = []
 
     for parameter in split_top_level(parameters):
+        if ":" not in parameter:
+            # An enum case's unlabeled associated value, such as the `Int` in `case code(Int)`.
+            result.append("_:")
+            continue
+
         names = re.findall(IDENTIFIER, parameter.split(":")[0])
         names = [name for name in names if name not in ("inout", "borrowing", "consuming", "isolated", "sending")]
 
@@ -212,12 +230,16 @@ def declarations(text):
         explicit = "public" in modifiers or "open" in modifiers
         is_static = "static" in modifiers or "class" in modifiers
 
+        restricted = any(word in RESTRICTING for word in modifiers)
+
         if context is None:
             is_public = explicit
         elif context.kind == "protocol":
             is_public = context.is_public
         elif keyword == "case":
             is_public = context.is_public
+        elif context.members_public:
+            is_public = explicit or not restricted
         else:
             is_public = explicit and context.is_public
 
@@ -230,13 +252,13 @@ def declarations(text):
                 continue
 
             if keyword == "extension":
-                # An extension's members are public when they say so, whatever the extension's
-                # own modifiers, so the extension itself isn't listed.
-                pending = Context("extension", name.group(1), True, spi, None)
+                # An extension isn't listed itself. Its members are public when they say so, or
+                # when the extension is `public` or `open` and they don't say otherwise.
+                pending = Context("extension", name.group(1), True, spi, None, members_public=explicit)
                 continue
 
             qualified = owner + name.group(1)
-            pending = Context(keyword, qualified, is_public, spi, None)
+            pending = Context(keyword, qualified, is_public, spi, None, members_public=False)
 
             if is_public:
                 found.add(entry(spi, keyword, qualified))
@@ -246,7 +268,8 @@ def declarations(text):
         if not is_public:
             continue
 
-        prefix = "static " if is_static else ""
+        setter = next((word for word in modifiers if word.endswith("(set)") and not word.startswith(("public", "open"))), None)
+        prefix = ("static " if is_static else "")
 
         if keyword == "func":
             name = re.match(r"\s+(" + IDENTIFIER + r"|[^\s(<]+)\s*(?:<[^>]*>)?\s*\(", rest)
@@ -267,7 +290,8 @@ def declarations(text):
             name = re.match(r"\s+(" + IDENTIFIER + ")", rest)
 
             if name:
-                found.add(entry(spi, prefix + keyword, owner + name.group(1).strip("`")))
+                kind = (setter + " " if setter else "") + prefix + keyword
+                found.add(entry(spi, kind, owner + name.group(1).strip("`")))
 
         elif keyword in ("typealias", "associatedtype"):
             name = re.match(r"\s+(" + IDENTIFIER + ")", rest)
@@ -277,11 +301,14 @@ def declarations(text):
 
         elif keyword == "case":
             line = rest.split("\n")[0]
-            line = re.sub(r"\([^)]*\)", "", line)
-            line = re.sub(r"=\s*[^,]+", "", line)
 
-            for name in re.findall(IDENTIFIER, line):
-                found.add(entry(spi, "case", owner + name.strip("`")))
+            for element in split_top_level(line):
+                element = element.split("=")[0]
+                name = re.match(r"\s*(" + IDENTIFIER + r")\s*(\(.*\))?", element)
+
+                if name:
+                    values = f"({labels(name.group(2)[1:-1])})" if name.group(2) else ""
+                    found.add(entry(spi, "case", owner + name.group(1).strip("`") + values))
 
     return found
 

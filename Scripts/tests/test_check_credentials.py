@@ -138,12 +138,55 @@ class CheckCredentialsTests(unittest.TestCase):
             "Lib/Sources/Lib/Auth.swift\ttoken\t",
         ])
 
-    def test_restores_the_string_reader_after_reading(self):
-        scan_string = check._thin.scan_string
+    def test_restores_the_interpolation_reader_after_reading(self):
+        interpolation = check._thin.interpolation
 
         list(check.interpolation_lines('let a = "\\(password)"\n'))
 
-        self.assertIs(check._thin.scan_string, scan_string)
+        self.assertIs(check._thin.interpolation, interpolation)
+
+    def test_reads_names_as_words(self):
+        matching = [
+            "password", "hubPassword", "passwordPrompt", "INSTEON_PASSWORD", "passwd", "pwd", "userPwd",
+            "passphrase", "token", "accessTokens", "bearerToken", "secret", "clientSecrets", "credential",
+            "credentials", "creds", "authorization", "authorizationHeader", "bearer", "apiKey", "APIKey",
+            "api_key", "apikey", "privateKey", "accessKey", "PRIVATE_KEY",
+        ]
+        other = ["tokenizer", "detokenize", "passage", "secretary", "keyPath", "privateMode", "accessLevel", "user", "host"]
+
+        self.assertEqual([word for word in matching if not check.is_credential(word)], [])
+        self.assertEqual([word for word in other if check.is_credential(word)], [])
+
+    def test_reads_string_literals_inside_an_interpolation(self):
+        self.write("Lib/Sources/Lib/Env.swift", textwrap.dedent("""\
+            let a = "Hub \\(environment["INSTEON_PASSWORD"] ?? "")"
+            let b = "Hub \\(environment["INSTEON_HUB_HOST"] ?? "")"
+            let c = "INSTEON_PASSWORD isn't set, so \\(name) can't sign in."
+            """))
+
+        found = [(names, number) for _, names, number in check.violations(self.root)]
+
+        self.assertEqual(found, [("INSTEON_PASSWORD", 1)])
+
+    def test_fails_on_an_interpolation_not_closed_on_its_line(self):
+        self.write("Lib/Sources/Lib/Long.swift", textwrap.dedent("""\
+            let text = \"\"\"
+              Signed in as \\(account.name(
+                for: hub
+              ))
+              \"\"\"
+            """))
+        self.allowlist.write_text("", encoding="utf-8")
+
+        status, output = self.run_check()
+
+        self.assertEqual(status, 1)
+        self.assertIn("Lib/Sources/Lib/Long.swift:2: an interpolation isn't closed on its line", output)
+
+        # An update doesn't allow it.
+        self.run_check("--update")
+
+        self.assertEqual(self.run_check()[0], 1)
 
 
 if __name__ == "__main__":

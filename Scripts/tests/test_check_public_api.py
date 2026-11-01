@@ -106,7 +106,7 @@ SOURCE = textwrap.dedent("""\
 EXPECTED = sorted([
     "struct Store",
     "var Store.path",
-    "var Store.count",
+    "private(set) var Store.count",
     "static let Store.defaultName",
     "init Store(path:)",
     "init Store?(_:strict:)",
@@ -116,9 +116,9 @@ EXPECTED = sorted([
     "struct Store.Entry",
     "var Store.Entry.name",
     "enum StoreError",
-    "case StoreError.writeFailed",
+    "case StoreError.writeFailed(code:)",
     "case StoreError.unreadable",
-    "case StoreError.tooLarge",
+    "case StoreError.tooLarge(limit:)",
     "var StoreError.description",
     "protocol Saving",
     "associatedtype Saving.Item",
@@ -206,6 +206,92 @@ class CheckPublicAPITests(unittest.TestCase):
             """))
 
         self.assertEqual(check.public_api(self.sources), ["func Long.update(replacing:from:timeout:)", "struct Long"])
+
+    def test_lists_the_members_of_a_public_extension_unless_they_say_otherwise(self):
+        self.write("Extension.swift", textwrap.dedent("""\
+            public extension Store {
+              func load() -> Data? { nil }
+              static var shared: Store { Store() }
+              internal func helper() {}
+              private func hidden() {}
+              fileprivate var cache: Int { 0 }
+              package func packaged() {}
+            }
+
+            extension Store {
+              func notPublic() {}
+              public func stated() {}
+            }
+            """))
+
+        self.assertEqual(check.public_api(self.sources), [
+            "func Store.load()",
+            "func Store.stated()",
+            "static var Store.shared",
+        ])
+
+    def test_reads_members_on_a_types_opening_line(self):
+        self.write("OneLine.swift", "public struct S { public func f() {} }\nstruct T { public func g() {} }\n")
+
+        self.assertEqual(check.public_api(self.sources), ["func S.f()", "struct S"])
+
+    def test_reads_declarations_separated_by_semicolons(self):
+        self.write("Semicolons.swift", textwrap.dedent("""\
+            public struct S {
+              public var a: Int; public var b: Int; var c: Int
+            }
+            """))
+
+        self.assertEqual(check.public_api(self.sources), ["struct S", "var S.a", "var S.b"])
+
+    def test_lists_enum_cases_with_their_associated_value_labels(self):
+        self.write("Cases.swift", textwrap.dedent("""\
+            public enum Reply: UInt8 {
+              case ack = 0x06, nak = 0x15
+            }
+
+            public enum Event {
+              case sent(Data, to: Address), heard(_ level: Int)
+              case idle
+            }
+            """))
+
+        self.assertEqual(check.public_api(self.sources), [
+            "case Event.heard(_:)",
+            "case Event.idle",
+            "case Event.sent(_:to:)",
+            "case Reply.ack",
+            "case Reply.nak",
+            "enum Event",
+            "enum Reply",
+        ])
+
+    def test_marks_a_restricted_setter(self):
+        self.write("Setter.swift", textwrap.dedent("""\
+            public struct S {
+              public private(set) var count: Int
+              public internal(set) var name: String
+              public var open: Bool
+            }
+            """))
+
+        self.assertEqual(check.public_api(self.sources), [
+            "internal(set) var S.name",
+            "private(set) var S.count",
+            "struct S",
+            "var S.open",
+        ])
+
+    def test_reads_labels_after_a_function_type(self):
+        self.write("Closures.swift", textwrap.dedent("""\
+            public func identify(
+              _ hubs: [Hub],
+              sendsCredentials: @Sendable (Hub) async throws -> Bool,
+              onResult: @Sendable (Hub, Result<Int, Error>) -> Void = { _, _ in }
+            ) {}
+            """))
+
+        self.assertEqual(check.public_api(self.sources), ["func identify(_:sendsCredentials:onResult:)"])
 
 
 if __name__ == "__main__":
