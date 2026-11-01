@@ -19,13 +19,13 @@ public enum LinkingInstructions {
 
   }
 
-  /// The steps of one of a device's procedures that are done on the device itself, each with
+  /// The steps of a device's instructions that are done on the device itself, each with
   /// what the device does in answer, such as
   /// `"Press and hold the SET button until the module beeps. [LED blinks green]"`.
   ///
-  /// - Parameter procedure: The procedure, such as the profile's lifecycle `linking`.
+  /// - Parameter procedure: The instructions, such as a factory reset's.
   /// - Returns: The steps, in order.
-  public static func steps(of procedure: LifecycleProcedure) -> [String] {
+  public static func steps(of procedure: Instructions) -> [String] {
 
     steps(procedure.steps.filter { !$0.isOnOtherDevice })
 
@@ -36,9 +36,9 @@ public enum LinkingInstructions {
   ///
   /// - Parameter steps: The steps, such as a `SETButtonPrompt`'s.
   /// - Returns: The steps, in order.
-  public static func steps(_ steps: [LifecycleStep]) -> [String] {
+  public static func steps(_ steps: [InstructionStep]) -> [String] {
 
-    steps.map { (step: LifecycleStep) -> String in
+    steps.map { (step: InstructionStep) -> String in
 
       step.expectation.map { "\(step.text) [\($0)]" } ?? step.text
 
@@ -47,23 +47,23 @@ public enum LinkingInstructions {
   }
 
   /// A device's address, then its product's name and model in parentheses when the catalog
-  /// has its profile, such as `"1A.2B.3C (Dimmer Switch 2477D)"`, to name it in a sentence.
+  /// has its product, such as `"1A.2B.3C (Dimmer Switch 2477D)"`, to name it in a sentence.
   ///
   /// The product's alias is left out, so the parentheses don't nest.
   ///
   /// - Parameters:
   ///   - device: The device's address.
-  ///   - profile: The catalog's profile for the device, or `nil` if it isn't known.
+  ///   - info: What the catalog says about the device, or `nil` if it isn't known.
   /// - Returns: The label.
-  public static func deviceLabel(_ device: InsteonAddress, profile: DeviceProfile?) -> String {
+  public static func deviceLabel(_ device: InsteonAddress, info: DeviceInfo?) -> String {
 
-    guard let profile else {
+    guard let name = info?.productName, let model = info?.model else {
 
       return "\(device)"
 
     }
 
-    return "\(device) (\(profile.name) \(profile.model))"
+    return "\(device) (\(name) \(model))"
 
   }
 
@@ -72,7 +72,7 @@ public enum LinkingInstructions {
   ///
   /// - Parameters:
   ///   - mode: Whether the device is to link or unlink.
-  ///   - device: The device, as ``deviceLabel(_:profile:)`` writes it, such as
+  ///   - device: The device, as ``deviceLabel(_:info:)`` writes it, such as
   ///     `"1A.2B.3C (Dimmer Switch 2477D)"`, or `nil` for any device.
   ///   - steps: The device's own steps for the mode, from ``steps(of:)``, or empty if the
   ///     catalog doesn't have them.
@@ -164,7 +164,7 @@ public enum LinkingInstructions {
   ///
   /// - Parameters:
   ///   - modemRole: The modem's role in the link.
-  ///   - device: The device, as ``deviceLabel(_:profile:)`` writes it.
+  ///   - device: The device, as ``deviceLabel(_:info:)`` writes it.
   ///   - group: The link's group: the modem's when it's the controller, the device's when
   ///     it's the responder.
   /// - Returns: The line.
@@ -186,7 +186,7 @@ public enum LinkingInstructions {
   /// left.
   ///
   /// - Parameters:
-  ///   - device: The device, as ``deviceLabel(_:profile:)`` writes it.
+  ///   - device: The device, as ``deviceLabel(_:info:)`` writes it.
   ///   - steps: The device's own steps to unlink, from ``steps(of:)``, or empty if the catalog
   ///     doesn't have them.
   /// - Returns: The lines, in order.
@@ -244,7 +244,7 @@ public enum LinkOutcome {
   ///   - device: The device asked for, or `nil` for any device.
   /// - Returns: A message that says what happened and what to do, or `nil` if the link is the
   ///   one asked for.
-  public static func mismatch(_ link: AllLinkingCompleted, mode: LinkingInstructions.Mode, device: InsteonAddress?) -> String? {
+  public static func mismatch(_ link: LinkMade, mode: LinkingInstructions.Mode, device: InsteonAddress?) -> String? {
 
     let direction: LinkingDirection = mode == .linking ? .linking : .unlinking
 
@@ -313,7 +313,7 @@ public enum LinkingEventText {
       ]
     case let .fallback(.setButtonUnlinking(device, description, steps)):
       return LinkingInstructions.setButtonUnlinking(
-        device: LinkingInstructions.deviceLabel(device, profile: description?.profile),
+        device: LinkingInstructions.deviceLabel(device, info: description),
         steps: LinkingInstructions.steps(steps)
       )
     case let .pressSETButton(prompt):
@@ -323,7 +323,7 @@ public enum LinkingEventText {
         seconds: prompt.timeout.components.seconds,
         device: prompt.device.map { (device: InsteonAddress) -> String in
 
-          LinkingInstructions.deviceLabel(device, profile: prompt.deviceDescription?.profile)
+          LinkingInstructions.deviceLabel(device, info: prompt.info)
 
         },
         steps: LinkingInstructions.steps(prompt.steps),
@@ -386,7 +386,7 @@ public enum LinkingEventText {
       return [
         LinkingInstructions.remoteUnlinking(
           modemRole: link.modemRole,
-          device: LinkingInstructions.deviceLabel(device, profile: description?.profile),
+          device: LinkingInstructions.deviceLabel(device, info: description),
           group: link.group
         )
       ]
@@ -514,7 +514,7 @@ public enum LinkingEventText {
   /// - Returns: The lines, in order.
   public static func wake(_ prompt: WakePrompt, waitsForReturn: Bool) -> [String] {
 
-    let target: String = LinkingInstructions.deviceLabel(prompt.device, profile: prompt.deviceDescription?.profile)
+    let target: String = LinkingInstructions.deviceLabel(prompt.device, info: prompt.info)
     let steps: [String] = LinkingInstructions.steps(prompt.steps)
     var lines: [String]
 
@@ -563,7 +563,7 @@ public enum LinkingEventText {
       mode(prompt.direction),
       device: prompt.device.map { (device: InsteonAddress) -> String in
 
-        LinkingInstructions.deviceLabel(device, profile: prompt.deviceDescription?.profile)
+        LinkingInstructions.deviceLabel(device, info: prompt.info)
 
       },
       steps: LinkingInstructions.steps(prompt.steps),

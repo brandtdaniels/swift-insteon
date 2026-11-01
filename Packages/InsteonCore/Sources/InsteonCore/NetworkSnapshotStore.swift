@@ -5,7 +5,7 @@
 ///
 /// ```swift
 /// let store: any NetworkSnapshotStore = JSONFileDeviceRegistryStore(fileURL: url)
-/// let network = DeviceNetwork(modem: modem, catalog: catalog, snapshot: try await store.loadNetwork())
+/// let network = session.network(catalog: catalog, snapshot: try await store.loadNetwork(), hub: session.hub)
 ///
 /// _ = try await network.allLinkDatabase(of: lamp)
 /// try await store.saveNetwork(await network.snapshot())

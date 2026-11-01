@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import InsteonCLISupport
-import InsteonCore
+@testable import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonProtocol
@@ -30,7 +30,7 @@ struct LinkingJSONTests {
     RegisteredDevice(
       address: lamp,
       identity: identity,
-      deviceDescription: catalog.describe(category: 0x01, subcategory: 0x5A, firmwareVersion: 0x41)
+      info: DeviceInfo(catalog.describe(category: 0x01, subcategory: 0x5A, firmwareVersion: 0x41))
     )
 
   }
@@ -38,7 +38,7 @@ struct LinkingJSONTests {
   /// The product's name, as the catalog writes it.
   var product: String {
 
-    registered.deviceDescription.displayName ?? ""
+    registered.info.displayName ?? ""
 
   }
 
@@ -54,7 +54,7 @@ struct LinkingJSONTests {
 
   @Test func printsOneLinkInTheSameObjectWithNoLegs() throws {
 
-    let made = AllLinkingCompleted(linkCode: 0x01, group: 0, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let made = LinkMade(address: lamp, group: 0, mode: .controller)
     let result = DeviceLinkingResult(links: [made], device: registered, linkBackFailure: nil)
 
     #expect(try encoded(LinkingJSON.report(result)) == """
@@ -66,8 +66,8 @@ struct LinkingJSONTests {
 
   @Test func printsALinkBackInTheSameObject() throws {
 
-    let made = AllLinkingCompleted(linkCode: 0x01, group: 0, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
-    let back = AllLinkingCompleted(linkCode: 0x00, group: 1, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let made = LinkMade(address: lamp, group: 0, mode: .controller)
+    let back = LinkMade(address: lamp, group: 1, mode: .responder)
     let result = DeviceLinkingResult(links: [made, back], device: nil, linkBackFailure: nil)
 
     // A device whose identity isn't known has no category, subcategory, firmware or product.
@@ -95,7 +95,7 @@ struct LinkingJSONTests {
 
   @Test func printsAnUnlinkWithTheProductWhenItsKnown() throws {
 
-    let removed = AllLinkingCompleted(linkCode: 0xFF, group: 3, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let removed = LinkMade(address: lamp, group: 3, mode: .delete)
 
     #expect(try encoded(LinkingJSON.unlink(UnlinkedLink(link: removed, device: registered))) == """
       {"address":"1A.2B.3C","group":3,"product":"\(product)"}
@@ -108,7 +108,7 @@ struct LinkingJSONTests {
 
   @Test func printsTheLegsWithTheirLinks() throws {
 
-    let made = AllLinkingCompleted(linkCode: 0x01, group: 0, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let made = LinkMade(address: lamp, group: 0, mode: .controller)
     let first = HubLinkingLeg(device: lamp, index: 0, count: 3, modemRole: .controller, modemGroup: 0, deviceGroup: 1)
     let second = HubLinkingLeg(device: lamp, index: 1, count: 3, modemRole: .responder, modemGroup: 1, deviceGroup: 1)
     let third = HubLinkingLeg(device: lamp, index: 2, count: 3, modemRole: .responder, modemGroup: 2, deviceGroup: 2)

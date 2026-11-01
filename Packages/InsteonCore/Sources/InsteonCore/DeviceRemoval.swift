@@ -45,7 +45,7 @@ public struct LeftoverRecords: Hashable, Sendable {
 
   /// The records in use that name the removed device, in the database's order, each with its
   /// address in the database.
-  public var records: [AllLinkRecordResponse]
+  public var records: [LinkRecord]
 
   /// Creates leftover records.
   ///
@@ -53,7 +53,7 @@ public struct LeftoverRecords: Hashable, Sendable {
   ///   - address: The device whose database holds the records.
   ///   - device: The device as the registry knows it.
   ///   - records: The records that name the removed device.
-  public init(address: InsteonAddress, device: RegisteredDevice?, records: [AllLinkRecordResponse]) {
+  public init(address: InsteonAddress, device: RegisteredDevice?, records: [LinkRecord]) {
 
     self.address = address
     self.device = device
@@ -135,33 +135,57 @@ public struct FactoryResetSteps: Hashable, Sendable {
   public var address: InsteonAddress
 
   /// What the catalog says about the device, or `nil` if its identity isn't known.
-  public var deviceDescription: DeviceDescription?
+  public var info: DeviceInfo?
 
-  /// The catalog's reset procedure, with its steps, notes and alternatives, or `nil` when the
-  /// catalog doesn't have one for the device.
-  public var procedure: DeviceLifecycle.Procedure?
+  /// The catalog's reset steps and notes, or `nil` when the catalog doesn't have them for the
+  /// device.
+  public var procedure: Instructions?
 
   /// What a factory reset erases, if the catalog says. Empty when it doesn't.
-  public var erases: Set<DeviceLifecycle.Erasure>
+  public var erases: Set<ResetErasure>
 
   /// Creates reset steps.
   ///
   /// - Parameters:
   ///   - address: The device's address.
-  ///   - deviceDescription: What the catalog says about the device.
-  ///   - procedure: The catalog's reset procedure.
+  ///   - info: What the catalog says about the device.
+  ///   - procedure: The catalog's reset steps and notes.
   ///   - erases: What a factory reset erases.
   public init(
+    address: InsteonAddress,
+    info: DeviceInfo?,
+    procedure: Instructions?,
+    erases: Set<ResetErasure>
+  ) {
+
+    self.address = address
+    self.info = info
+    self.procedure = procedure
+    self.erases = erases
+
+  }
+
+  /// Creates reset steps from the catalog's description and procedure.
+  init(
     address: InsteonAddress,
     deviceDescription: DeviceDescription?,
     procedure: DeviceLifecycle.Procedure?,
     erases: Set<DeviceLifecycle.Erasure>
   ) {
 
-    self.address = address
-    self.deviceDescription = deviceDescription
-    self.procedure = procedure
-    self.erases = erases
+    self.init(
+      address: address,
+      info: deviceDescription.map { (description: DeviceDescription) -> DeviceInfo in DeviceInfo(description) },
+      procedure: procedure.map { (procedure: DeviceLifecycle.Procedure) -> Instructions in Instructions(procedure) },
+      erases: Set(erases.map { (erasure: DeviceLifecycle.Erasure) -> ResetErasure in ResetErasure(erasure) })
+    )
+
+  }
+
+  /// The catalog's description of the device.
+  var deviceDescription: DeviceDescription? {
+
+    info?.catalogDescription
 
   }
 
@@ -236,7 +260,7 @@ public struct DeviceRemovalResult: Sendable {
 
   /// The modem's records that named the device and were deleted directly, because the caller
   /// said it's gone. Empty otherwise.
-  public var deletedModemRecords: [AllLinkRecord]
+  public var deletedModemRecords: [LinkRecord]
 
   /// The device the network forgot, or `nil` when it was kept.
   public var forgotten: ForgottenDevice?
@@ -269,7 +293,7 @@ public struct DeviceRemovalResult: Sendable {
     removed: RemovedLinks,
     remainingLinks: [ModemLink]?,
     remoteUnlinkingFailure: (any Error)?,
-    deletedModemRecords: [AllLinkRecord],
+    deletedModemRecords: [LinkRecord],
     forgotten: ForgottenDevice?,
     keptBecause: DeviceKeptReason?,
     leftoverRecords: LeftoverRecordScan?,

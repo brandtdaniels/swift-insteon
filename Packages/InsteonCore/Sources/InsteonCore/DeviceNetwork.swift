@@ -15,10 +15,10 @@ import InsteonProtocol
 ///
 /// ```swift
 /// let store = JSONFileDeviceRegistryStore(fileURL: url)
-/// let network = DeviceNetwork(modem: modem, catalog: try? DeviceCatalog.bundled(), snapshot: try store.loadNetwork())
+/// let network = session.network(catalog: catalog, snapshot: try store.loadNetwork(), hub: session.hub)
 ///
 /// for entry in try await network.modemDatabase() {
-///   print(entry.record.address, entry.device?.deviceDescription.displayName ?? "unknown")
+///   print(entry.record.address, entry.device?.info.displayName ?? "unknown")
 /// }
 ///
 /// let database = try await network.allLinkDatabase(of: lamp)   // Read only if it changed.
@@ -239,7 +239,7 @@ public actor DeviceNetwork {
 
     for record in records {
 
-      entries.append(ModemDatabaseEntry(record: record, device: await registry.device(record.address)))
+      entries.append(ModemDatabaseEntry(record: LinkRecord(record), device: await registry.device(record.address)))
 
     }
 
@@ -267,6 +267,19 @@ public actor DeviceNetwork {
   /// - Throws: The modem's errors, such as `ModemError.deviceRejected` from an i2CS device
   ///   that isn't linked to the modem.
   public func allLinkDatabase(
+    of device: InsteonAddress,
+    beforeReading: @Sendable () -> Void = {}
+  ) async throws -> LinkDatabase {
+
+    let copy: AllLinkDatabaseCopy = try await databaseCopy(of: device, beforeReading: beforeReading)
+
+    return LinkDatabase(copy)
+
+  }
+
+  /// A device's ALL-Link database as the cache holds it, the way
+  /// ``allLinkDatabase(of:beforeReading:)`` returns it.
+  func databaseCopy(
     of device: InsteonAddress,
     beforeReading: @Sendable () -> Void = {}
   ) async throws -> AllLinkDatabaseCopy {
@@ -657,14 +670,14 @@ public actor DeviceNetwork {
 ///
 /// ```swift
 /// for entry in try await network.modemDatabase() {
-///   let role = entry.record.flags.contains(.controller) ? "controller" : "responder"
-///   print(role, entry.record.group, entry.device?.deviceDescription.displayName ?? "")
+///   let role = entry.record.isController ? "controller" : "responder"
+///   print(role, entry.record.group, entry.device?.info.displayName ?? "")
 /// }
 /// ```
 public struct ModemDatabaseEntry: Hashable, Sendable {
 
   /// The record.
-  public var record: AllLinkRecord
+  public var record: LinkRecord
 
   /// The device the record names, with its identity and description, or `nil` if the
   /// registry doesn't know it.
@@ -675,7 +688,7 @@ public struct ModemDatabaseEntry: Hashable, Sendable {
   /// - Parameters:
   ///   - record: The record.
   ///   - device: The device the record names, if the registry knows it.
-  public init(record: AllLinkRecord, device: RegisteredDevice?) {
+  public init(record: LinkRecord, device: RegisteredDevice?) {
 
     self.record = record
     self.device = device

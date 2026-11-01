@@ -99,9 +99,9 @@ public enum InsteonErrorDescription {
   ///   - device: The device asked for, or `nil` for any device.
   /// - Returns: A message that says what happened and what to do, or `nil` if the link is the
   ///   one asked for.
-  public static func linkMismatch(_ link: AllLinkingCompleted, direction: LinkingDirection, device: InsteonAddress?) -> String? {
+  public static func linkMismatch(_ link: LinkMade, direction: LinkingDirection, device: InsteonAddress?) -> String? {
 
-    LinkMismatch(link, direction: direction, device: device).map(explanation(of:))
+    LinkMismatch(link.allLinkingCompleted, direction: direction, device: device).map(explanation(of:))
 
   }
 

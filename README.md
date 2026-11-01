@@ -13,13 +13,15 @@ Swift packages for working with [Insteon](https://www.insteon.com) home automati
 | [InsteonLinking](Packages/InsteonLinking) | Link devices to each other and to the modem: by writing their ALL-Link databases, remotely, or with their SET buttons |
 | [InsteonHubClient](Packages/InsteonHubClient) | Control Insteon devices through an Insteon Hub on your local network, by driving its built-in modem with InsteonModem |
 | [InsteonHubDiscovery](Packages/InsteonHubDiscovery) | Find Insteon Hubs on your local network, by asking the network itself or Insteon Connect |
-| [InsteonHubPro](Packages/InsteonHubPro) | Add Insteon devices to a Hub Pro and read its settings and update its software through its local interface |
+| [InsteonHubPro](Packages/InsteonHubPro) | The requests only a Hub Pro has: adding Insteon devices to it, reading its settings and updating its software through its local interface. Untested with a Hub Pro |
 | [InsteonScheduling](Packages/InsteonScheduling) | Work out when schedules run, at clock times or around sunrise and sunset, in a home's time zone through daylight saving changes |
 | [InsteonDeviceCatalog](Packages/InsteonDeviceCatalog) | Look a device up in the [Insteon device catalog](https://github.com/brandtdaniels/insteon-device-catalog) by the category, subcategory and firmware version it reports, to find what it is and can do, such as its groups, what its group commands mean and its heartbeat interval, and read its messages as named events |
 | [InsteonNotifications](Packages/InsteonNotifications) | Let people know when their devices do something they care about, such as a leak sensor turning wet, a door opening or a sensor going quiet |
 | [InsteonNetworking](Packages/InsteonNetworking) | The `HTTPClient` abstraction the Insteon clients send requests through |
 
 The package also has a command, [`insteon`](Packages/InsteonCLI), for driving a Hub or modem, and its devices, from a terminal: finding Hubs, reading ALL-Link databases, linking devices by their addresses or SET buttons, sending commands and watching events.
+
+InsteonHubPro, InsteonScheduling and InsteonNotifications stand on their own: neither InsteonCore nor the `insteon` command uses them. They're kept for apps that want them. InsteonHubPro follows the Hub Pro's local interface without having been run against a Hub Pro, so treat it as untested.
 
 The [Supported Modems](Packages/InsteonModem/Sources/InsteonModem/InsteonModem.docc/SupportedModems.md) article lists every modem, Hub and controller, and how well each is supported.
 

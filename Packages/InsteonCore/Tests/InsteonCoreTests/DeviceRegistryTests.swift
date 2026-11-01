@@ -1,5 +1,5 @@
 import Testing
-import InsteonCore
+@testable import InsteonCore
 import InsteonDeviceCatalog
 import InsteonProtocol
 
@@ -53,6 +53,9 @@ struct DeviceRegistryTests {
     #expect(found?.identity == Example.plugIdentity)
     #expect(found?.deviceDescription.profile == Example.plugProfile)
     #expect(found?.deviceDescription.displayName == "Example Plug 9001")
+    #expect(found?.info.displayName == "Example Plug 9001")
+    #expect(found?.info.isInCatalog == true)
+    #expect(found?.info.category == 0x02)
 
   }
 
@@ -68,6 +71,9 @@ struct DeviceRegistryTests {
     #expect(found?.deviceDescription.profile == nil)
     #expect(found?.deviceDescription.category == 0x01)
     #expect(found?.deviceDescription.subcategory == 0x7B)
+    #expect(found?.info.displayName == nil)
+    #expect(found?.info.isInCatalog == false)
+    #expect(found?.info.category == 0x01)
 
   }
 

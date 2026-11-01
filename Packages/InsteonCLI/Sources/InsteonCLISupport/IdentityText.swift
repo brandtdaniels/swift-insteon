@@ -14,7 +14,7 @@ public enum IdentityText {
   ///     doesn't have the device.
   /// - Returns: The text, such as `"0x00001A"`, or
   ///   `"not reported; the Insteon device catalog says this product doesn't report one"`.
-  public static func productKey(reported: ProductKey?, answered: Bool, catalog: ProductKeyEntry?) -> String {
+  public static func productKey(reported: ProductKey?, answered: Bool, catalog: ExpectedProductKey?) -> String {
 
     if let reported {
 
@@ -50,7 +50,7 @@ public enum IdentityText {
   ///
   /// - Parameter entry: What the catalog says the product reports.
   /// - Returns: The value.
-  public static func catalogProductKey(_ entry: ProductKeyEntry?) -> String? {
+  public static func catalogProductKey(_ entry: ExpectedProductKey?) -> String? {
 
     switch entry {
     case let .key(key)?:

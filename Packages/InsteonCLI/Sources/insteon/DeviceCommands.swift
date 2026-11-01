@@ -239,7 +239,7 @@ enum DeviceCommands {
     }
 
     // What the catalog says the product reports explains a key that's missing.
-    let catalogKey: ProductKeyEntry? = await network.registry.device(device)?.deviceDescription.productKey
+    let catalogKey: ExpectedProductKey? = await network.registry.device(device)?.info.expectedProductKey
 
     // Newer devices leave the product key out, or report zeros; that's expected, not a failure.
     let productKey = productData?.productKey
@@ -382,20 +382,17 @@ enum DeviceCommands {
 
     })
     let records = database.records
-      .filter { $0.record.flags.contains(.inUse) }
-      .map { response in
+      .filter { $0.isInUse }
+      .map { record in
 
-        let record = response.record
-        let data = [record.data1, record.data2, record.data3]
-        let isController = record.flags.contains(.controller)
-        let explanation: RecordDataExplanation? = known?.explain(record, isController: isController)
+        let explanation: LinkDataMeaning? = known?.meaning(of: record)
 
         return Record(
-          memoryAddress: Hex.address(response.address),
-          role: isController ? "controller" : "responder",
+          memoryAddress: record.memoryAddress.map(Hex.address) ?? "",
+          role: record.isController ? "controller" : "responder",
           group: Int(record.group.rawValue),
           address: "\(record.address)",
-          data: data.map(Hex.byte),
+          data: record.data.map(Hex.byte),
           meaning: explanation.map(LinkDataText.meaning(of:))
         )
 
@@ -418,7 +415,7 @@ enum DeviceCommands {
     }
 
     let explains = records.contains { $0.meaning != nil }
-    let isDeviceInCatalog: Bool = known?.profile != nil
+    let isDeviceInCatalog: Bool = known?.isInCatalog ?? false
     let rows: [[String]] = records.map { (record: Record) -> [String] in
 
       let meaning: String = LinkDataText.column(

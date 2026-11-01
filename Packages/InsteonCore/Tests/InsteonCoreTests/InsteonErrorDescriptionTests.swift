@@ -85,8 +85,8 @@ struct InsteonErrorDescriptionTests {
       + "Run the command again, and hold its SET button only until it first beeps."
 
     #expect(InsteonErrorDescription.message(for: mismatch) == expected)
-    #expect(InsteonErrorDescription.linkMismatch(removed, direction: .linking, device: nil) == expected)
-    #expect(InsteonErrorDescription.linkMismatch(removed, direction: .unlinking, device: lamp) == nil)
+    #expect(InsteonErrorDescription.linkMismatch(LinkMade(removed), direction: .linking, device: nil) == expected)
+    #expect(InsteonErrorDescription.linkMismatch(LinkMade(removed), direction: .unlinking, device: lamp) == nil)
 
   }
 

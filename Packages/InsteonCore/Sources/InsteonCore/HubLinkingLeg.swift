@@ -183,7 +183,7 @@ public enum HubLinkingJoin: Hashable, Sendable {
 public enum HubLinkingLegStatus: Sendable {
 
   /// The modem reported the leg's link, and how the device joined it.
-  case linked(AllLinkingCompleted, by: HubLinkingJoin)
+  case linked(LinkMade, by: HubLinkingJoin)
 
   /// The leg failed, for the reason given, and the legs after it weren't run.
   case failed(any Error)
@@ -215,7 +215,7 @@ public struct HubLinkingLegOutcome: Sendable {
   }
 
   /// The link the modem reported, or `nil` if the leg didn't link.
-  public var link: AllLinkingCompleted? {
+  public var link: LinkMade? {
 
     if case let .linked(link, _) = status {
 

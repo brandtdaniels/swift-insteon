@@ -14,15 +14,15 @@ public enum LinkDataText {
   ///
   /// - Parameter explanation: What the catalog says the record's bytes hold.
   /// - Returns: The text.
-  public static func meaning(of explanation: RecordDataExplanation) -> String {
+  public static func meaning(of explanation: LinkDataMeaning) -> String {
 
-    let parts: [String] = explanation.bytes.map { (byte: RecordDataByte) -> String in
+    let parts: [String] = explanation.bytes.map { (byte: LinkDataField) -> String in
 
       var notes: [String] = []
 
-      if let entry = byte.tableEntry {
+      if let valueName = byte.valueName {
 
-        notes.append(entry.label)
+        notes.append(valueName)
 
       } else if byte.isPerGroup {
 
@@ -36,7 +36,7 @@ public enum LinkDataText {
 
       }
 
-      let name: String = byte.label ?? byte.name.rawValue
+      let name: String = byte.label ?? byte.name
       let text: String = "\(name) \(Hex.byte(byte.value))"
 
       return notes.isEmpty ? text : "\(text) (\(notes.joined(separator: "; ")))"
@@ -53,7 +53,7 @@ public enum LinkDataText {
   ///   - meaning: What ``meaning(of:)`` wrote for the record, or `nil` if the catalog doesn't
   ///     explain its bytes.
   ///   - isController: Whether it's a controller record.
-  ///   - isDeviceInCatalog: Whether the Insteon device catalog has the device's profile.
+  ///   - isDeviceInCatalog: Whether the Insteon device catalog has the device's product.
   /// - Returns: The meaning; or "not documented" for a controller record of a device the
   ///   catalog has but gives no controller data bytes for; or else an empty string.
   public static func column(meaning: String?, isController: Bool, isDeviceInCatalog: Bool) -> String {

@@ -40,8 +40,8 @@ struct LinkingEventTextTests {
 
   @Test func tellsThePersonToPressTheSETButtonWithTheCatalogsSteps() {
 
-    let steps: [DeviceLifecycle.Step] = [DeviceLifecycle.Step(text: "Hold the SET button.", expectation: "Beeps")]
-    let prompt = SETButtonPrompt(direction: .linking, group: 0, timeout: .seconds(240), device: lamp, deviceDescription: nil, steps: steps)
+    let steps: [InstructionStep] = [InstructionStep(text: "Hold the SET button.", expectation: "Beeps")]
+    let prompt = SETButtonPrompt(direction: .linking, group: 0, timeout: .seconds(240), device: lamp, info: nil, steps: steps)
 
     #expect(notes(.pressSETButton(prompt)) == [
       "The modem is in linking mode for group 0.",
@@ -55,7 +55,7 @@ struct LinkingEventTextTests {
 
   @Test func asksForTheDeviceFirst() {
 
-    let prompt = DeviceFirstPrompt(direction: .unlinking, device: nil, deviceDescription: nil, steps: [])
+    let prompt = DeviceFirstPrompt(direction: .unlinking, device: nil, info: nil, steps: [])
 
     #expect(LinkingEventText.deviceFirst(prompt, waitsForReturn: true) == [
       "First put the device into unlinking mode. On most devices, press and hold the SET button until it beeps, "
@@ -87,7 +87,7 @@ struct LinkingEventTextTests {
 
   @Test func leavesTheResultsToTheCommand() {
 
-    let link = AllLinkingCompleted(linkCode: 0x01, group: 0, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let link = LinkMade(address: lamp, group: 0, mode: .controller)
 
     #expect(notes(.linked(LinkedDevice(link: link, device: nil, leg: .first))).isEmpty)
     #expect(notes(.unlinkedAll(RemovedLinks(address: lamp, device: nil, links: []))).isEmpty)
@@ -97,7 +97,7 @@ struct LinkingEventTextTests {
   @Test func saysWhatEachLegDoes() {
 
     let leg = HubLinkingLeg(device: lamp, index: 1, count: 3, modemRole: .responder, modemGroup: 2, deviceGroup: 2)
-    let link = AllLinkingCompleted(linkCode: 0x00, group: 2, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let link = LinkMade(address: lamp, group: 2, mode: .responder)
 
     #expect(notes(.hubLinkingLegStarted(leg)) == [
       "Leg 2 of 3: the modem starts ALL-Linking as responder of group 2, for 1A.2B.3C's group 2..."
@@ -136,7 +136,7 @@ struct LinkingEventTextTests {
 
     let first = HubLinkingLeg(device: lamp, index: 0, count: 2, modemRole: .controller, modemGroup: 0, deviceGroup: 1)
     let second = HubLinkingLeg(device: lamp, index: 1, count: 2, modemRole: .responder, modemGroup: 1, deviceGroup: 1)
-    let made = AllLinkingCompleted(linkCode: 0x01, group: 0, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let made = LinkMade(address: lamp, group: 0, mode: .controller)
     let result = DeviceLinkingResult(
       links: [made],
       device: nil,
@@ -184,14 +184,14 @@ struct LinkingEventTextTests {
 
   @Test func asksForTheDeviceToBeWokenWithTheCatalogsSteps() {
 
-    let steps: [DeviceLifecycle.Step] = [DeviceLifecycle.Step(text: "Press the Program button.")]
+    let steps: [InstructionStep] = [InstructionStep(text: "Press the Program button.")]
 
-    #expect(LinkingEventText.wake(WakePrompt(device: lamp, deviceDescription: nil, steps: steps), waitsForReturn: true) == [
+    #expect(LinkingEventText.wake(WakePrompt(device: lamp, info: nil, steps: steps), waitsForReturn: true) == [
       "First wake 1A.2B.3C:",
       "  1. Press the Program button.",
       "Then press Return, and the modem keeps it awake while it links."
     ])
-    #expect(LinkingEventText.wake(WakePrompt(device: lamp, deviceDescription: nil, steps: []), waitsForReturn: false) == [
+    #expect(LinkingEventText.wake(WakePrompt(device: lamp, info: nil, steps: []), waitsForReturn: false) == [
       "First wake 1A.2B.3C; its manual says how, such as by pressing one of its buttons.",
       "The modem keeps it awake while it links now."
     ])
@@ -232,7 +232,7 @@ struct LinkingEventTextTests {
 
     let first = HubLinkingLeg(device: lamp, index: 0, count: 2, modemRole: .controller, modemGroup: 0, deviceGroup: 1)
     let second = HubLinkingLeg(device: lamp, index: 1, count: 2, modemRole: .responder, modemGroup: 1, deviceGroup: 1)
-    let made = AllLinkingCompleted(linkCode: 0x01, group: 0, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let made = LinkMade(address: lamp, group: 0, mode: .controller)
     let result = DeviceLinkingResult(
       links: [made],
       device: nil,
@@ -254,7 +254,7 @@ struct LinkingEventTextTests {
       group: 2,
       timeout: .seconds(240),
       device: lamp,
-      deviceDescription: nil,
+      info: nil,
       steps: [],
       modemRole: .responder,
       deviceGroup: 2

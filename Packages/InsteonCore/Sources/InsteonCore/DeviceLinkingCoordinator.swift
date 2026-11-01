@@ -84,7 +84,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   ///   - twoWay: Whether to link the device back when the modem is its controller. Defaults to
   ///     ``TwoWayLinking/whenDeviceControls``.
   ///   - timeout: How long the modem waits for the SET button. Defaults to
-  ///     `Linker.defaultManualLinkingTimeout`.
+  ///     ``defaultSETButtonTimeout``.
   ///   - observer: What a person is told and asked.
   /// - Returns: The links made and the device.
   /// - Throws: `LinkingError.linkingTimedOut` if no device links in time, `LinkMismatch` if
@@ -167,7 +167,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   ///   - twoWay: Whether to link the device back when the modem is its controller. Defaults to
   ///     ``TwoWayLinking/whenDeviceControls``.
   ///   - setButtonTimeout: How long the modem waits for the SET button when the device is
-  ///     linked with it. Defaults to `Linker.defaultManualLinkingTimeout`.
+  ///     linked with it. Defaults to ``defaultSETButtonTimeout``.
   ///   - usesCatalogLegs: Whether the catalog's legs may be linked, when the other options are
   ///     the defaults. Pass `false` when a person asked for a role or group of their own, even
   ///     one equal to the default, such as the modem in either role or group 0 given
@@ -347,7 +347,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   ///     for the device in its role, or ``DeviceLinkingCoordinator/defaultModemGroup`` when there's no device or it has
   ///     none.
   ///   - timeout: How long the modem waits for the SET button. Defaults to
-  ///     `Linker.defaultManualLinkingTimeout`.
+  ///     ``defaultSETButtonTimeout``.
   ///   - observer: What a person is told and asked.
   /// - Returns: The removed link and the links left.
   /// - Throws: `LinkingError.linkingTimedOut` if no device unlinks in time, `LinkMismatch` if
@@ -433,7 +433,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   /// - Parameters:
   ///   - device: The device.
   ///   - timeout: How long to wait for the modem to report each link removed. Defaults to
-  ///     `Linker.defaultRemoteLinkingTimeout`.
+  ///     ``defaultRemoteTimeout``.
   ///   - observer: What a person is told.
   /// - Returns: The links removed and the links left.
   /// - Throws: ``RemoteUnlinkingError`` when a link can't be removed, and `CancellationError` if
@@ -505,7 +505,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   ///     when its links can't be removed through it, because a person confirmed it's gone.
   ///     Defaults to `false`.
   ///   - timeout: How long to wait for the modem to report each link removed. Defaults to
-  ///     `Linker.defaultRemoteLinkingTimeout`.
+  ///     ``defaultRemoteTimeout``.
   ///   - observer: What a person is told.
   /// - Returns: What was removed, and either the device forgotten, what other devices still
   ///   hold and the reset steps, or why the device was kept.
@@ -594,7 +594,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
         if deletionFailure == nil {
 
-          await observer.linking(.modemRecordsDeleted(device, deleted))
+          await observer.linking(.modemRecordsDeleted(device, deleted.map { (record: AllLinkRecord) -> LinkRecord in LinkRecord(record) }))
 
         }
 
@@ -613,7 +613,7 @@ public struct DeviceLinkingCoordinator: Sendable {
           removed: removed,
           remainingLinks: left.links,
           remoteUnlinkingFailure: remoteFailure,
-          deletedModemRecords: deleted,
+          deletedModemRecords: deleted.map { (record: AllLinkRecord) -> LinkRecord in LinkRecord(record) },
           forgotten: nil,
           keptBecause: keptBecause,
           leftoverRecords: nil,
@@ -649,7 +649,7 @@ public struct DeviceLinkingCoordinator: Sendable {
         removed: removed,
         remainingLinks: left.links,
         remoteUnlinkingFailure: remoteFailure,
-        deletedModemRecords: deleted,
+        deletedModemRecords: deleted.map { (record: AllLinkRecord) -> LinkRecord in LinkRecord(record) },
         forgotten: forgotten,
         keptBecause: nil,
         leftoverRecords: leftovers,
@@ -1030,6 +1030,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   ) async throws -> RemovedAllLinks {
 
     let known: RegisteredDevice? = await network.registry.device(device)
+    let info: DeviceInfo? = known?.info
     let description: DeviceDescription? = known?.deviceDescription
     // Battery-powered i2CS devices take Enter Unlinking Mode extended.
     let isBatteryPowered: Bool = description?.profile?.isBatteryPowered ?? false
@@ -1046,7 +1047,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
       removed = try await makeUnlinker().unlinkAllRemotely(device, unlinkingMode: unlinkingMode, timeout: timeout) { (link: ModemLink) async -> Void in
 
-        await observer.linking(.unlinkingRemotely(device, deviceDescription: description, link: link))
+        await observer.linking(.unlinkingRemotely(device, info: info, link: link))
 
       }
 
@@ -1065,11 +1066,11 @@ public struct DeviceLinkingCoordinator: Sendable {
 
         let steps: [DeviceLifecycle.Step] = Self.deviceSteps(of: description?.profile?.lifecycle?.unlinking)
 
-        await observer.linking(.fallback(.setButtonUnlinking(device, deviceDescription: description, steps: steps)))
+        await observer.linking(.fallback(.setButtonUnlinking(device, info: info, steps: steps.map { (step: DeviceLifecycle.Step) -> InstructionStep in InstructionStep(step) })))
 
       }
 
-      throw RemoteUnlinkingError(device: device, deviceDescription: description, underlying: error)
+      throw RemoteUnlinkingError(device: device, info: info, underlying: error)
 
     }
 
@@ -1116,7 +1117,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
       do {
 
-        let copy: AllLinkDatabaseCopy = try await network.allLinkDatabase(of: other)
+        let copy: AllLinkDatabaseCopy = try await network.databaseCopy(of: other)
         let naming: [AllLinkRecordResponse] = copy.records.filter { (response: AllLinkRecordResponse) -> Bool in
 
           response.record.flags.contains(.inUse) && response.record.address == device
@@ -1125,7 +1126,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
         if !naming.isEmpty {
 
-          holders.append(LeftoverRecords(address: other, device: registered, records: naming))
+          holders.append(LeftoverRecords(address: other, device: registered, records: naming.map { (response: AllLinkRecordResponse) -> LinkRecord in LinkRecord(response) }))
 
         }
 

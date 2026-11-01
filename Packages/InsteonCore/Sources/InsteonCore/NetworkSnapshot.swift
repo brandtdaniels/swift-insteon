@@ -15,7 +15,7 @@ import InsteonProtocol
 /// let snapshot = await network.snapshot()
 /// try store.saveNetwork(snapshot)
 ///
-/// let restored = DeviceNetwork(modem: modem, catalog: catalog, snapshot: try store.loadNetwork())
+/// let restored = session.network(catalog: catalog, snapshot: try store.loadNetwork(), hub: session.hub)
 /// ```
 public struct NetworkSnapshot: Hashable, Sendable {
 
@@ -76,7 +76,7 @@ extension NetworkSnapshot {
   ///
   /// ```swift
   /// let start = try store.loadNetwork()
-  /// let network = DeviceNetwork(modem: modem, catalog: catalog, snapshot: start)
+  /// let network = session.network(catalog: catalog, snapshot: start, hub: session.hub)
   ///
   /// _ = try await network.allLinkDatabase(of: lamp)
   ///
@@ -248,7 +248,7 @@ public struct NetworkDeviceState: Hashable, Sendable {
 ///
 /// ```swift
 /// let hub = HubLocation(host: "192.0.2.10", port: 25105)
-/// let network = DeviceNetwork(modem: modem, catalog: catalog, hub: hub)
+/// let network = session.network(catalog: catalog, snapshot: NetworkSnapshot(), hub: hub)
 /// ```
 public struct HubLocation: Hashable, Sendable {
 

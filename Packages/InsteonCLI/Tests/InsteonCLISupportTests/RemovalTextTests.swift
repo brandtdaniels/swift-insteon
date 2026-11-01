@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import InsteonCLISupport
-import InsteonCore
+@testable import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonProtocol
@@ -43,14 +43,14 @@ struct RemovalTextTests {
     RegisteredDevice(
       address: lamp,
       identity: ReportedIdentity(category: 0x01, subcategory: 0x7A, firmwareVersion: 0x41),
-      deviceDescription: catalog.describe(category: 0x01, subcategory: 0x7A, firmwareVersion: 0x41)
+      info: DeviceInfo(catalog.describe(category: 0x01, subcategory: 0x7A, firmwareVersion: 0x41))
     )
 
   }
 
   var label: String {
 
-    LinkingInstructions.deviceLabel(lamp, profile: registered.deviceDescription.profile)
+    LinkingInstructions.deviceLabel(lamp, info: registered.info)
 
   }
 
@@ -58,8 +58,14 @@ struct RemovalTextTests {
 
     FactoryResetSteps(
       address: lamp,
-      deviceDescription: registered.deviceDescription,
-      procedure: registered.deviceDescription.profile?.lifecycle?.reset,
+      info: registered.info,
+      procedure: Instructions(
+        steps: [
+          InstructionStep(text: "Pull the air gap out for 10 seconds."),
+          InstructionStep(text: "Push it in and hold the paddle down.", expectation: "A long beep")
+        ],
+        notes: ["The LED blinks while it resets."]
+      ),
       erases: [.links, .settings]
     )
 
@@ -116,8 +122,7 @@ struct RemovalTextTests {
 
   @Test func listsTheRecordsOtherDevicesHoldAndThoseNotRead() {
 
-    let scene = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 3, address: lamp)
-    let response = AllLinkRecordResponse(sender: keypad, address: 0x0FF7, record: scene)
+    let response = LinkRecord(isController: true, isInUse: true, group: 3, address: lamp, data: [0x00, 0x00, 0x00], memoryAddress: 0x0FF7)
     let scan = LeftoverRecordScan(
       removedDevice: lamp,
       holders: [LeftoverRecords(address: keypad, device: nil, records: [response])],
@@ -145,7 +150,7 @@ struct RemovalTextTests {
       "Note: The LED blinks while it resets."
     ])
 
-    let unknown = FactoryResetSteps(address: lamp, deviceDescription: nil, procedure: nil, erases: [])
+    let unknown = FactoryResetSteps(address: lamp, info: nil, procedure: nil, erases: [])
 
     #expect(RemovalText.factoryReset(unknown) == [
       "The Insteon device catalog has no factory reset steps for 1A.2B.3C; its owner's manual has them. "
@@ -196,9 +201,9 @@ struct RemovalTextTests {
 
   @Test func listsTheModemsRecordsDeleted() {
 
-    let records: [AllLinkRecord] = [
-      AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0, address: lamp),
-      AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 1, address: lamp)
+    let records: [LinkRecord] = [
+      LinkRecord(isController: true, isInUse: true, group: 0, address: lamp, data: [0x00, 0x00, 0x00]),
+      LinkRecord(isController: false, isInUse: true, group: 1, address: lamp, data: [0x00, 0x00, 0x00])
     ]
 
     #expect(RemovalText.modemRecordsDeleted(lamp, records) == [
@@ -230,7 +235,7 @@ struct RemovalTextTests {
 
   @Test func printsTheRemovalAsJSON() throws {
 
-    let scene = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 1, address: lamp)
+    let scene = LinkRecord(isController: false, isInUse: true, group: 1, address: lamp, data: [0x00, 0x00, 0x00], memoryAddress: 0x0FFF)
     let result = DeviceRemovalResult(
       address: lamp,
       removed: RemovedLinks(address: lamp, device: registered, links: [ModemLink(modemRole: .responder, group: 1), ModemLink(modemRole: .controller, group: 0)]),
@@ -241,12 +246,12 @@ struct RemovalTextTests {
       keptBecause: nil,
       leftoverRecords: LeftoverRecordScan(
         removedDevice: lamp,
-        holders: [LeftoverRecords(address: keypad, device: nil, records: [AllLinkRecordResponse(sender: keypad, address: 0x0FFF, record: scene)])],
+        holders: [LeftoverRecords(address: keypad, device: nil, records: [scene])],
         unread: [UnreadDatabase(address: sensor, device: nil, reason: Failure())]
       ),
       factoryReset: reset
     )
-    let product: String = registered.deviceDescription.displayName ?? ""
+    let product: String = registered.info.displayName ?? ""
 
     #expect(try encoded(LinkingJSON.removal(result, message: message)) == """
       {"address":"1A.2B.3C","deletedModemRecords":[],\
@@ -264,7 +269,7 @@ struct RemovalTextTests {
 
   @Test func printsTheModemsDeletedRecordsAndLeavesOutWhatWasntDone() throws {
 
-    let record = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0, address: lamp)
+    let record = LinkRecord(isController: true, isInUse: true, group: 0, address: lamp, data: [0x00, 0x00, 0x00])
     let result = DeviceRemovalResult(
       address: lamp,
       removed: RemovedLinks(address: lamp, device: nil, links: []),
@@ -274,7 +279,7 @@ struct RemovalTextTests {
       forgotten: ForgottenDevice(address: lamp, device: nil),
       keptBecause: nil,
       leftoverRecords: nil,
-      factoryReset: FactoryResetSteps(address: lamp, deviceDescription: nil, procedure: nil, erases: [])
+      factoryReset: FactoryResetSteps(address: lamp, info: nil, procedure: nil, erases: [])
     )
 
     #expect(try encoded(LinkingJSON.removal(result, message: message)) == """
