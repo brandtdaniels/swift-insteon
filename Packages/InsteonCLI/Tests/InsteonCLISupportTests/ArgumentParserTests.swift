@@ -535,6 +535,29 @@ struct ArgumentParserTests {
 
   }
 
+  @Test func readsASelfTestAndItsOptions() throws {
+
+    #expect(try Invocation.parse(["device", "1A.2B.3C", "selftest"]).subcommand == .device(lamp, .selfTest(actuates: false, showsChecklist: false)))
+    #expect(
+      try Invocation.parse(["device", "1A.2B.3C", "selftest", "--actuate", "--checklist"]).subcommand
+        == .device(lamp, .selfTest(actuates: true, showsChecklist: true))
+    )
+    #expect(try Invocation.parse(["--json", "device", "1A.2B.3C", "selftest", "--checklist"]).printsJSON)
+
+    #expect(throws: ArgumentError.unknownOption("--fix", subcommand: "device")) {
+
+      try Invocation.parse(["device", "1A.2B.3C", "selftest", "--fix"])
+
+    }
+
+    #expect(throws: ArgumentError.unexpectedArgument("all", subcommand: "device")) {
+
+      try Invocation.parse(["device", "1A.2B.3C", "selftest", "all"])
+
+    }
+
+  }
+
   @Test func turnsOnFullyOrToALevel() throws {
 
     #expect(try Invocation.parse(["device", "1A.2B.3C", "on"]).subcommand == .device(lamp, .on(levelPercent: nil)))

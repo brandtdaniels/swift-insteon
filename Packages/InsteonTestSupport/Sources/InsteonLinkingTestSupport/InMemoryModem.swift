@@ -169,6 +169,9 @@ public actor InMemoryModem: LinkingModem {
   /// How many records were deleted from the modem.
   public private(set) var modemDeletions = 0
 
+  /// The byte each device reports to Get Operating Flags, for devices given one.
+  public private(set) var operatingFlags: [InsteonAddress: UInt8] = [:]
+
   /// Each device's ALL-Link database delta, which changes with every write to its database.
   private var deltas: [InsteonAddress: UInt8] = [:]
 
@@ -196,6 +199,13 @@ public actor InMemoryModem: LinkingModem {
       continuation.finish()
 
     }
+
+  }
+
+  /// Sets the byte a device reports to Get Operating Flags.
+  public func setOperatingFlags(_ flags: UInt8, of device: InsteonAddress) {
+
+    operatingFlags[device] = flags
 
   }
 
@@ -541,6 +551,11 @@ public actor InMemoryModem: LinkingModem {
 
       // The device acknowledges, then broadcasts its identity.
       broadcastIdentity(of: device)
+
+    } else if message.command.command1 == 0x1F, let flags = operatingFlags[device] {
+
+      // A device given operating flags reports them, whatever the query.
+      command2 = flags
 
     } else if [0x11, 0x13].contains(message.command.command1) {
 
