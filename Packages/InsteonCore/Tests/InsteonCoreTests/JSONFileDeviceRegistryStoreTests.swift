@@ -293,6 +293,9 @@ struct JSONFileDeviceRegistryStoreTests {
     let restored = DeviceRegistry(catalog: Example.catalog, snapshot: try await store.load())
 
     #expect(await restored.device(Example.plug)?.deviceDescription.profile == Example.plugProfile)
+    #expect(await restored.device(Example.plug)?.info.displayName == "Example Plug 9001")
+    #expect(await restored.device(Example.plug)?.info.isInCatalog == true)
+    #expect(await restored.device(Example.plug)?.info.category == 0x02)
 
   }
 

@@ -243,8 +243,9 @@ struct DeviceRemovalTests {
     #expect(scan?.removedDevice == lamp)
     #expect(scan?.holders.map(\.address) == [keypad])
     #expect(scan?.holders.first?.device?.identity == RemovalExample.keypadIdentity)
-    #expect(scan?.holders.first?.records.map(\.address) == [scene.address])
-    #expect(scan?.holders.first?.records.map(\.memoryAddress) == [0x0FF7])
+    #expect(scan?.holders.first?.records == [
+      LinkRecord(isController: true, isInUse: true, group: 0x03, address: lamp, data: [0x00, 0x00, 0x00], memoryAddress: 0x0FF7)
+    ])
     #expect(scan?.unread.map(\.address) == [sensor])
     // Nothing was written to any device's database.
     #expect(await modem.writes.isEmpty)

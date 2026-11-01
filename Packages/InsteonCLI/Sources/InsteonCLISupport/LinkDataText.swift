@@ -53,7 +53,7 @@ public enum LinkDataText {
   ///   - meaning: What ``meaning(of:)`` wrote for the record, or `nil` if the catalog doesn't
   ///     explain its bytes.
   ///   - isController: Whether it's a controller record.
-  ///   - isDeviceInCatalog: Whether the Insteon device catalog has the device's profile.
+  ///   - isDeviceInCatalog: Whether the Insteon device catalog has the device's product.
   /// - Returns: The meaning; or "not documented" for a controller record of a device the
   ///   catalog has but gives no controller data bytes for; or else an empty string.
   public static func column(meaning: String?, isController: Bool, isDeviceInCatalog: Bool) -> String {

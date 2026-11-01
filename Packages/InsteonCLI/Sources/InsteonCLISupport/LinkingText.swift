@@ -19,11 +19,11 @@ public enum LinkingInstructions {
 
   }
 
-  /// The steps of one of a device's procedures that are done on the device itself, each with
+  /// The steps of a device's instructions that are done on the device itself, each with
   /// what the device does in answer, such as
   /// `"Press and hold the SET button until the module beeps. [LED blinks green]"`.
   ///
-  /// - Parameter procedure: The procedure, such as the profile's lifecycle `linking`.
+  /// - Parameter procedure: The instructions, such as a factory reset's.
   /// - Returns: The steps, in order.
   public static func steps(of procedure: Instructions) -> [String] {
 
@@ -47,13 +47,13 @@ public enum LinkingInstructions {
   }
 
   /// A device's address, then its product's name and model in parentheses when the catalog
-  /// has its profile, such as `"1A.2B.3C (Dimmer Switch 2477D)"`, to name it in a sentence.
+  /// has its product, such as `"1A.2B.3C (Dimmer Switch 2477D)"`, to name it in a sentence.
   ///
   /// The product's alias is left out, so the parentheses don't nest.
   ///
   /// - Parameters:
   ///   - device: The device's address.
-  ///   - profile: The catalog's profile for the device, or `nil` if it isn't known.
+  ///   - info: What the catalog says about the device, or `nil` if it isn't known.
   /// - Returns: The label.
   public static func deviceLabel(_ device: InsteonAddress, info: DeviceInfo?) -> String {
 

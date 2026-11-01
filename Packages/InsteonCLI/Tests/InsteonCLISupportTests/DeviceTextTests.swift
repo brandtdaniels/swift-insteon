@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import InsteonCLISupport
-@_spi(Catalog) import InsteonCore
+@testable import InsteonCore
 import InsteonDeviceCatalog
 import InsteonProtocol
 
@@ -157,7 +157,7 @@ struct DeviceTextTests {
   @Test func writesARecordsMeaning() throws {
 
     let identity = ExampleCatalog.identity
-    let device = DeviceInfo(catalogDescription: ExampleCatalog.catalog.describe(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion))
+    let device = DeviceInfo(ExampleCatalog.catalog.describe(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion))
     let record = LinkRecord(isController: false, isInUse: true, group: 0, address: plug, data: [0xFF, 0x1F, 0x01])
     let explanation = try #require(device.meaning(of: record))
 
@@ -173,7 +173,7 @@ struct DeviceTextTests {
   @Test func saysWhenARecordsByteDiffersFromTheDocuments() throws {
 
     let identity = ExampleCatalog.identity
-    let device = DeviceInfo(catalogDescription: ExampleCatalog.catalog.describe(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion))
+    let device = DeviceInfo(ExampleCatalog.catalog.describe(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion))
     let record = LinkRecord(isController: false, isInUse: true, group: 0, address: plug, data: [0x00, 0x1F, 0x01])
     let explanation: LinkDataMeaning = try #require(device.meaning(of: record))
 
@@ -228,13 +228,9 @@ struct DeviceTextTests {
 
   // MARK: - Linking instructions
 
-  @Test func givesTheDevicesOwnStepsOnly() {
+  @Test func givesTheDevicesOwnStepsOnly() throws {
 
-    let unlinking = Instructions(steps: [
-      InstructionStep(text: "Press the Hub's button.", isOnOtherDevice: true),
-      InstructionStep(text: "Hold the SET button until it beeps."),
-      InstructionStep(text: "Hold it again until it beeps again.", expectation: "LED blinks red"),
-    ])
+    let unlinking = Instructions(try #require(ExampleCatalog.plug.lifecycle?.unlinking))
 
     #expect(LinkingInstructions.steps(of: unlinking) == [
       "Hold the SET button until it beeps.",
@@ -271,7 +267,7 @@ struct DeviceTextTests {
 
   @Test func namesADeviceByItsProductsNameAndModel() {
 
-    let info = DeviceInfo(catalogDescription: ExampleCatalog.catalog.describe(category: 0x02, subcategory: 0x7A, firmwareVersion: nil))
+    let info = DeviceInfo(ExampleCatalog.catalog.describe(category: 0x02, subcategory: 0x7A, firmwareVersion: nil))
 
     #expect(LinkingInstructions.deviceLabel(plug, info: info) == "1A.2B.3C (Example Plug 9001)")
     #expect(LinkingInstructions.deviceLabel(plug, info: nil) == "1A.2B.3C")

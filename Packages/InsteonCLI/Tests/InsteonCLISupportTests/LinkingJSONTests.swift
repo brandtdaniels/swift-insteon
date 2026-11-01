@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import InsteonCLISupport
-@_spi(Catalog) import InsteonCore
+@testable import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonProtocol
@@ -30,7 +30,7 @@ struct LinkingJSONTests {
     RegisteredDevice(
       address: lamp,
       identity: identity,
-      info: DeviceInfo(catalogDescription: catalog.describe(category: 0x01, subcategory: 0x5A, firmwareVersion: 0x41))
+      info: DeviceInfo(catalog.describe(category: 0x01, subcategory: 0x5A, firmwareVersion: 0x41))
     )
 
   }

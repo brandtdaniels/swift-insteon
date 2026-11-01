@@ -36,7 +36,7 @@ extension Device {
 
   /// A message the catalog's linking from a Hub names, resolved to what's sent, once every
   /// guard allows it.
-  enum LinkingSend {
+  private enum LinkingSend {
 
     /// A standard message.
     case standard(StandardMessage)
@@ -107,7 +107,7 @@ extension Device {
   /// What a message the catalog's linking from a Hub names sends, once every guard allows it,
   /// without sending anything: the flags a linking flow may write, the command set's guards
   /// and the byte floor, by the bytes the message carries.
-  func resolveLinkingMessage(_ message: DeviceLifecycle.HubLinking.HubMessage, duration: Duration?, writableFlags: Set<SettingName>) async throws -> LinkingSend {
+  private func resolveLinkingMessage(_ message: DeviceLifecycle.HubLinking.HubMessage, duration: Duration?, writableFlags: Set<SettingName>) async throws -> LinkingSend {
 
     let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription
     let commands: CommandSet? = description?.commandSet
@@ -403,7 +403,7 @@ extension Device {
   /// extended Set to a device with no command set. Every
   /// message the device is sent is checked here, with the bytes it actually carries, so a
   /// command filled in with a value, or listed under another name, can't send them.
-  func refuseIfNeverSent(_ command: Command, userData: UserData? = nil, for purpose: SendPurpose) async throws {
+  private func refuseIfNeverSent(_ command: Command, userData: UserData? = nil, for purpose: SendPurpose) async throws {
 
     let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription
     let commands: CommandSet? = description?.commandSet

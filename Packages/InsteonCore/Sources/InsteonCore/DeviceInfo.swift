@@ -23,17 +23,6 @@ public struct DeviceInfo: Hashable, Sendable {
 
   }
 
-  /// The facts a catalog description gives, for code that reads the catalog itself, such as
-  /// tests.
-  ///
-  /// - Parameter description: The catalog's description of the device.
-  @_spi(Catalog)
-  public init(catalogDescription description: DeviceDescription) {
-
-    self.init(description)
-
-  }
-
   /// The category the device reported.
   public var category: DeviceCategory {
 

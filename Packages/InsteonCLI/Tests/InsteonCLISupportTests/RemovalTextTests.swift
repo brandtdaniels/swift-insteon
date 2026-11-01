@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 import InsteonCLISupport
-@_spi(Catalog) import InsteonCore
+@testable import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonProtocol
@@ -43,7 +43,7 @@ struct RemovalTextTests {
     RegisteredDevice(
       address: lamp,
       identity: ReportedIdentity(category: 0x01, subcategory: 0x7A, firmwareVersion: 0x41),
-      info: DeviceInfo(catalogDescription: catalog.describe(category: 0x01, subcategory: 0x7A, firmwareVersion: 0x41))
+      info: DeviceInfo(catalog.describe(category: 0x01, subcategory: 0x7A, firmwareVersion: 0x41))
     )
 
   }

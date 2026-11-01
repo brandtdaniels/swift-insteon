@@ -28,12 +28,23 @@ public struct LinkRecord: Hashable, Sendable {
   /// The other device in the link.
   public var address: InsteonAddress
 
-  /// The record's three data bytes, whose meaning depends on the device, such as a
-  /// responder's on-level and ramp rate.
+  /// The record's three data bytes, Data 1 through Data 3, whose meaning depends on the
+  /// device, such as a responder's on-level and ramp rate. A record always has three; when
+  /// the catalog explains a record, bytes past the third are left out and missing ones are
+  /// read as `0x00`.
   public var data: [UInt8]
 
   /// Where the record is in a device's database, or `nil` for a record of the modem's.
   public var memoryAddress: UInt16?
+
+  /// Whether the record's checksum matched when the device sent it. A record whose checksum
+  /// failed may have been damaged on the way, so its contents aren't to be trusted. A device
+  /// older than i2CS may send no checksum at all. Always `true` for a record of the modem's.
+  public var hasIntactChecksum: Bool
+
+  /// Whether the record marks the end of a device's database: one that has never been used.
+  /// The device has no records after it. Always `false` for a record of the modem's.
+  public var isEndOfDatabase: Bool
 
   /// Creates a record.
   ///
@@ -45,13 +56,18 @@ public struct LinkRecord: Hashable, Sendable {
   ///   - data: The three data bytes.
   ///   - memoryAddress: Where the record is in a device's database, or `nil` for a record of
   ///     the modem's. Defaults to `nil`.
+  ///   - hasIntactChecksum: Whether the record's checksum matched. Defaults to `true`.
+  ///   - isEndOfDatabase: Whether the record marks the end of a device's database. Defaults to
+  ///     `false`.
   public init(
     isController: Bool,
     isInUse: Bool,
     group: AllLinkGroupNumber,
     address: InsteonAddress,
     data: [UInt8],
-    memoryAddress: UInt16? = nil
+    memoryAddress: UInt16? = nil,
+    hasIntactChecksum: Bool = true,
+    isEndOfDatabase: Bool = false
   ) {
 
     self.isController = isController
@@ -60,6 +76,8 @@ public struct LinkRecord: Hashable, Sendable {
     self.address = address
     self.data = data
     self.memoryAddress = memoryAddress
+    self.hasIntactChecksum = hasIntactChecksum
+    self.isEndOfDatabase = isEndOfDatabase
 
   }
 
@@ -85,7 +103,9 @@ public struct LinkRecord: Hashable, Sendable {
       group: response.record.group,
       address: response.record.address,
       data: [response.record.data1, response.record.data2, response.record.data3],
-      memoryAddress: response.address
+      memoryAddress: response.address,
+      hasIntactChecksum: response.hasIntactChecksum,
+      isEndOfDatabase: response.isEndOfDatabase
     )
 
   }
@@ -104,6 +124,12 @@ public struct LinkRecord: Hashable, Sendable {
     if isController {
 
       flags.insert(.controller)
+
+    }
+
+    if !isEndOfDatabase {
+
+      flags.insert(.usedBefore)
 
     }
 
@@ -129,8 +155,16 @@ public struct LinkDatabase: Hashable, Sendable {
   public var delta: UInt8
 
   /// The records, in the device's order, ending with the record that marks the end of the
-  /// database.
+  /// database, whose ``LinkRecord/isEndOfDatabase`` is `true`.
   public var records: [LinkRecord]
+
+  /// Whether every record's checksum matched. A database with a damaged record is read again
+  /// the next time it's needed.
+  public var hasIntactChecksums: Bool {
+
+    records.allSatisfy { (record: LinkRecord) -> Bool in record.hasIntactChecksum }
+
+  }
 
   /// Creates a database.
   ///

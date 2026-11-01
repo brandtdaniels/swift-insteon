@@ -83,7 +83,7 @@ extension Device {
   /// Sends Set Operating Flags as the device takes it: extended with a checksum for i2CS,
   /// extended with the command repeated when the flag's `extendedWhen` flag is set, and
   /// standard otherwise.
-  func sendFlag(_ command2: UInt8, flag: OperatingFlag, description: DeviceDescription, commands: CommandSet) async throws {
+  private func sendFlag(_ command2: UInt8, flag: OperatingFlag, description: DeviceDescription, commands: CommandSet) async throws {
 
     try await sendSetOperatingFlags(
       command2,
@@ -140,7 +140,7 @@ extension Device {
   }
 
   /// The device's engine, from the catalog or else from Get Insteon Engine Version.
-  func engine(_ description: DeviceDescription) async throws -> InsteonEngine? {
+  private func engine(_ description: DeviceDescription) async throws -> InsteonEngine? {
 
     if let engine = description.engine {
 

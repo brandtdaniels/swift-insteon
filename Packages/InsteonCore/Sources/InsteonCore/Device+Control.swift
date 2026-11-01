@@ -137,7 +137,7 @@ extension Device {
   /// outputs are the load.
   ///
   /// - Returns: The group's number.
-  func switchOutputs(_ names: [String], group number: Int?, action name: SettingName, for operation: DeviceOperation) async throws -> Int {
+  private func switchOutputs(_ names: [String], group number: Int?, action name: SettingName, for operation: DeviceOperation) async throws -> Int {
 
     let model: DeviceControlModel = try await controlModel()
     let target: DeviceControlModel.Group = try controlGroup(number, in: model, for: operation)

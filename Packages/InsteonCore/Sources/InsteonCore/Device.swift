@@ -45,7 +45,7 @@ public struct Device: Sendable {
   public let network: DeviceNetwork
 
   /// Called before the device is asked for its identity.
-  let beforeIdentifying: @Sendable () -> Void
+  private let beforeIdentifying: @Sendable () -> Void
 
   /// Creates a device on a network.
   ///

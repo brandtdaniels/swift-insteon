@@ -577,6 +577,36 @@ struct DeviceNetworkTests {
 
   }
 
+  @Test func handsBackADatabaseAsLinkRecords() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setDatabase([0x0FFF: link], of: Example.plug)
+    await modem.setDamaged(true, record: 0x0FFF, of: Example.plug)
+    let network: DeviceNetwork = self.network(modem)
+
+    let database: LinkDatabase = try await network.allLinkDatabase(of: Example.plug)
+    let first: LinkRecord = try #require(database.records.first)
+    let last: LinkRecord = try #require(database.records.last)
+
+    // 0xA2 is in use and used before, as a responder record.
+    #expect(first == LinkRecord(
+      isController: false,
+      isInUse: true,
+      group: 0x01,
+      address: InsteonAddress(0x11, 0x22, 0x33),
+      data: [0xFF, 0x1C, 0x01],
+      memoryAddress: 0x0FFF,
+      hasIntactChecksum: false,
+      isEndOfDatabase: false
+    ))
+    #expect(database.records.count == 2)
+    #expect(last.isEndOfDatabase)
+    #expect(!last.isInUse)
+    #expect(last.memoryAddress == 0x0FF7)
+    #expect(!database.hasIntactChecksums)
+
+  }
+
   @Test func leavesOutADatabaseWithARecordWhoseChecksumFailed() async throws {
 
     let modem = InMemoryModem()
