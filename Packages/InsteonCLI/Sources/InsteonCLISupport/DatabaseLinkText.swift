@@ -357,7 +357,7 @@ public enum DatabaseLinkText {
       direction: plan.direction.rawValue,
       device: "\(plan.device)",
       modem: "\(plan.modem)",
-      engine: "\(plan.engine)",
+      engine: plan.engine.name,
       product: plan.info?.displayName,
       dryRun: isDryRun,
       steps: plan.steps.map { (step: DatabaseLinkStep) -> Step in Step(kind: step.kind.rawValue, record: json(step.record, isDevice: step.isDeviceStep), outcome: nil) },

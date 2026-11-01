@@ -59,7 +59,8 @@ extension DeviceLinkingCoordinator {
 
       let reading: DatabaseReading = try await readForPlan(device)
 
-      guard reading.description != nil else {
+      // A description without a profile is the catalog not knowing the identity.
+      guard reading.description?.profile != nil else {
 
         throw reading.identification.identity == nil ? DatabaseLinkRefusal.notIdentified(device) : DatabaseLinkRefusal.notInCatalog(device)
 
