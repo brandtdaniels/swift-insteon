@@ -262,6 +262,14 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 }
 ```
 
+### Writing ALL-Link databases
+
+``DeviceLinkingCoordinator/planDatabaseLink(_:)`` and
+``DeviceLinkingCoordinator/planDatabaseUnlink(_:removingOrphans:)`` plan the writes that link a
+device to the modem, or unlink it, by writing both ALL-Link databases directly, from a fresh
+reading of each, and write nothing. ``DeviceLinkingCoordinator/apply(_:)`` carries a plan out,
+reading each write back. <doc:DatabaseLinking> says what each writes and when to use it.
+
 ### Sending bytes as they're given
 
 A front end that explores what the catalog doesn't describe yet sends a device a message as
@@ -366,6 +374,12 @@ do {
 - ``DeviceUnlinkingResult``
 - ``DeviceUnlinkingAllResult``
 - ``RemoteUnlinkingError``
+
+### Writing ALL-Link databases
+
+- <doc:DatabaseLinking>
+- ``DatabaseLinkPlan``
+- ``DatabaseLinkResult``
 
 ### Removing devices
 

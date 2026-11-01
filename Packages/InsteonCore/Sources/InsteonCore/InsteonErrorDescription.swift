@@ -58,6 +58,12 @@ public enum InsteonErrorDescription {
       return hubStoppedAnsweringInline
     case let error as HubAddressRefused:
       return error.description
+    case let error as DatabaseLinkRefusal:
+      return error.description
+    case let error as DatabaseLinkInterrupted:
+      let cause: String = error.cause is CancellationError ? "it was canceled." : (message(for: error.cause) ?? error.cause.localizedDescription)
+
+      return "The writes to the ALL-Link databases stopped partway: \(cause)"
     default:
       break
     }

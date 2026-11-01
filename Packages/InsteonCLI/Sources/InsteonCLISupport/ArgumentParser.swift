@@ -260,6 +260,9 @@ extension Invocation {
     var otherOption: String?
     var deviceArgument: String?
     var cancels = false
+    var usesDatabase = false
+    var database = DatabaseWriteOptions()
+    var databaseOnlyOption: String?
     var index = 0
 
     while index < arguments.count {
@@ -310,9 +313,48 @@ extension Invocation {
       case "--cancel":
         try expectNoValue(name, inlineValue)
         cancels = true
+      case "--database":
+        try expectNoValue(name, inlineValue)
+        usesDatabase = true
+      case "--dry-run":
+        try expectNoValue(name, inlineValue)
+        database.isDryRun = true
+        databaseOnlyOption = databaseOnlyOption ?? name
+      case "-y", "--yes":
+        try expectNoValue(name, inlineValue)
+        database.assumesYes = true
+        databaseOnlyOption = databaseOnlyOption ?? name
       default:
         throw unexpected(argument, subcommand: "link")
       }
+
+    }
+
+    // --database writes the links the Insteon device catalog gives one device, so it takes no
+    // role, group, timeout or way of linking back.
+    if usesDatabase {
+
+      if let other = roleOption ?? otherOption ?? (cancels ? "--cancel" : nil) {
+
+        throw ArgumentError.conflictingOptions("--database", other)
+
+      }
+
+      if deviceArgument == nil {
+
+        throw ArgumentError.missingArgument("ADDRESS with --database", subcommand: "link")
+
+      }
+
+      options.database = database
+
+      return .link(options)
+
+    }
+
+    if let databaseOnlyOption {
+
+      throw ArgumentError.missingArgument("--database with \(databaseOnlyOption)", subcommand: "link")
 
     }
 
@@ -351,7 +393,11 @@ extension Invocation {
     var options = UnlinkOptions()
     var roleOption: String?
     var groupOption: String?
+    var timeoutOption: String?
     var deviceArgument: String?
+    var usesDatabase = false
+    var database = DatabaseWriteOptions()
+    var databaseOnlyOption: String?
     var index = 0
 
     while index < arguments.count {
@@ -374,6 +420,7 @@ extension Invocation {
         groupOption = name
       case "--timeout":
         options.timeoutSeconds = try seconds(value(of: name, inline: inlineValue, in: arguments, at: &index), option: name)
+        timeoutOption = name
       case "--all":
         try expectNoValue(name, inlineValue)
         options.removesAllLinks = true
@@ -388,9 +435,52 @@ extension Invocation {
 
         roleOption = name
         options.role = name == "--responder" ? .responder : .controller
+      case "--database":
+        try expectNoValue(name, inlineValue)
+        usesDatabase = true
+      case "--orphans":
+        try expectNoValue(name, inlineValue)
+        database.removesOrphans = true
+        databaseOnlyOption = databaseOnlyOption ?? name
+      case "--dry-run":
+        try expectNoValue(name, inlineValue)
+        database.isDryRun = true
+        databaseOnlyOption = databaseOnlyOption ?? name
+      case "-y", "--yes":
+        try expectNoValue(name, inlineValue)
+        database.assumesYes = true
+        databaseOnlyOption = databaseOnlyOption ?? name
       default:
         throw unexpected(argument, subcommand: "unlink")
       }
+
+    }
+
+    // --database removes every link between the modem and one device, so it takes no role,
+    // group or timeout.
+    if usesDatabase {
+
+      if let other = groupOption ?? roleOption ?? timeoutOption {
+
+        throw ArgumentError.conflictingOptions("--database", other)
+
+      }
+
+      if deviceArgument == nil {
+
+        throw ArgumentError.missingArgument("ADDRESS with --database", subcommand: "unlink")
+
+      }
+
+      options.database = database
+
+      return options
+
+    }
+
+    if let databaseOnlyOption {
+
+      throw ArgumentError.missingArgument("--database with \(databaseOnlyOption)", subcommand: "unlink")
 
     }
 

@@ -291,6 +291,63 @@ public enum LinkingRole: String, Hashable, Sendable, CaseIterable {
 
 }
 
+/// How `insteon link --database` and `insteon unlink --database` write ALL-Link databases.
+public struct DatabaseWriteOptions: Hashable, Sendable {
+
+  /// Whether to show the plan and write nothing, as `--dry-run` asks.
+  public var isDryRun: Bool
+
+  /// Whether to write without asking first, as `--yes` asks.
+  public var assumesYes: Bool
+
+  /// Whether `insteon unlink --database` also removes the device's records that name a
+  /// device the modem doesn't know, as `--orphans` asks.
+  public var removesOrphans: Bool
+
+  /// Creates database write options.
+  ///
+  /// - Parameters:
+  ///   - isDryRun: Whether to show the plan and write nothing. Defaults to `false`.
+  ///   - assumesYes: Whether to write without asking. Defaults to `false`.
+  ///   - removesOrphans: Whether to remove the device's orphaned records too. Defaults to
+  ///     `false`.
+  public init(isDryRun: Bool = false, assumesYes: Bool = false, removesOrphans: Bool = false) {
+
+    self.isDryRun = isDryRun
+    self.assumesYes = assumesYes
+    self.removesOrphans = removesOrphans
+
+  }
+
+  /// Whether the command asks the person before it writes: never for a dry run or with
+  /// `--yes`, and otherwise at a terminal, refusing to go on without one.
+  ///
+  /// - Parameters:
+  ///   - readsFromTerminal: Whether standard input is a terminal.
+  ///   - subcommand: The subcommand, such as `"link"`, for the error.
+  /// - Returns: `true` to ask first, or `false` to go on without asking.
+  /// - Throws: ``ArgumentError/confirmationNeeded(subcommand:)`` when standard input isn't a
+  ///   terminal and neither `--yes` nor `--dry-run` is given.
+  public func asksForConfirmation(readsFromTerminal: Bool, subcommand: String) throws(ArgumentError) -> Bool {
+
+    if isDryRun || assumesYes {
+
+      return false
+
+    }
+
+    guard readsFromTerminal else {
+
+      throw ArgumentError.confirmationNeeded(subcommand: subcommand)
+
+    }
+
+    return true
+
+  }
+
+}
+
 /// How `insteon link` links a device.
 public struct LinkOptions: Hashable, Sendable {
 
@@ -325,6 +382,10 @@ public struct LinkOptions: Hashable, Sendable {
   /// that group rather than by the Insteon device catalog's links to a Hub.
   public var isGroupGiven: Bool
 
+  /// How to link by writing both ALL-Link databases directly, as `--database` asks, or `nil`
+  /// to link with linking mode or the SET button.
+  public var database: DatabaseWriteOptions?
+
   /// Whether the Insteon device catalog's links to a Hub may be made: the modem is the
   /// controller, not in either role, and no group was given. The library still checks the
   /// other options.
@@ -347,13 +408,16 @@ public struct LinkOptions: Hashable, Sendable {
   ///     Defaults to `nil`.
   ///   - isGroupGiven: Whether `--group` was given, or `nil` for whether `group` isn't the
   ///     default. Defaults to `nil`.
+  ///   - database: How to link by writing ALL-Link databases, or `nil` for linking mode.
+  ///     Defaults to `nil`.
   public init(
     device: InsteonAddress? = nil,
     group: AllLinkGroupNumber = LinkOptions.defaultGroup,
     role: LinkingRole = .controller,
     twoWay: TwoWayLinking = .whenDeviceControls,
     timeoutSeconds: Int? = nil,
-    isGroupGiven: Bool? = nil
+    isGroupGiven: Bool? = nil,
+    database: DatabaseWriteOptions? = nil
   ) {
 
     self.device = device
@@ -362,6 +426,7 @@ public struct LinkOptions: Hashable, Sendable {
     self.twoWay = twoWay
     self.timeoutSeconds = timeoutSeconds
     self.isGroupGiven = isGroupGiven ?? (group != LinkOptions.defaultGroup)
+    self.database = database
 
   }
 
@@ -388,6 +453,10 @@ public struct UnlinkOptions: Hashable, Sendable {
   /// directions, without its SET button, as `--all` asks.
   public var removesAllLinks: Bool
 
+  /// How to remove every link by writing both ALL-Link databases directly, as `--database`
+  /// asks, or `nil` to unlink with unlinking mode or the SET button.
+  public var database: DatabaseWriteOptions?
+
   /// Creates unlinking options.
   ///
   /// - Parameters:
@@ -399,12 +468,15 @@ public struct UnlinkOptions: Hashable, Sendable {
   ///     Defaults to `nil`.
   ///   - removesAllLinks: Whether to remove every link with the device without its SET
   ///     button. Defaults to `false`.
+  ///   - database: How to unlink by writing ALL-Link databases, or `nil` for unlinking mode.
+  ///     Defaults to `nil`.
   public init(
     device: InsteonAddress? = nil,
     group: AllLinkGroupNumber? = nil,
     role: LinkingRole = .controller,
     timeoutSeconds: Int? = nil,
-    removesAllLinks: Bool = false
+    removesAllLinks: Bool = false,
+    database: DatabaseWriteOptions? = nil
   ) {
 
     self.device = device
@@ -412,6 +484,7 @@ public struct UnlinkOptions: Hashable, Sendable {
     self.role = role
     self.timeoutSeconds = timeoutSeconds
     self.removesAllLinks = removesAllLinks
+    self.database = database
 
   }
 

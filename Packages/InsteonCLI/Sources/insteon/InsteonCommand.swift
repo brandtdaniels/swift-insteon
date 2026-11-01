@@ -72,9 +72,12 @@ struct InsteonCommand {
 
       }
     case let .link(options):
+      // Asked before the modem is opened, so a command that can't ask fails at once.
+      let asks: Bool = try options.database?.asksForConfirmation(readsFromTerminal: Terminal.readsFromTerminal, subcommand: "link") ?? false
+
       try await withModem(invocation) { modem, names in
 
-        try await ModemCommands.link(modem, options: options, names: names, printsJSON: printsJSON)
+        try await ModemCommands.link(modem, options: options, asks: asks, names: names, printsJSON: printsJSON)
 
       }
     case .cancelLinking:
@@ -84,9 +87,11 @@ struct InsteonCommand {
 
       }
     case let .unlink(options):
+      let asks: Bool = try options.database?.asksForConfirmation(readsFromTerminal: Terminal.readsFromTerminal, subcommand: "unlink") ?? false
+
       try await withModem(invocation) { modem, names in
 
-        try await ModemCommands.unlink(modem, options: options, names: names, printsJSON: printsJSON)
+        try await ModemCommands.unlink(modem, options: options, asks: asks, names: names, printsJSON: printsJSON)
 
       }
     case let .remove(options):

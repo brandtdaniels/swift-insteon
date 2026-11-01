@@ -77,6 +77,17 @@ public actor InMemoryModem: LinkingModem {
   /// Devices that acknowledge writes without storing them.
   public var forgetfulDevices: Set<InsteonAddress> = []
 
+  /// How many more writes each device acknowledges without storing, before it stores them
+  /// again.
+  public var forgottenWrites: [InsteonAddress: Int] = [:]
+
+  /// How many more writes each device stores before it rejects every request, as an i2CS
+  /// device does once its last record of the modem is gone.
+  public var writesBeforeUnlinking: [InsteonAddress: Int] = [:]
+
+  /// How many more writes each device stores without acknowledging them.
+  public var unacknowledgedWrites: [InsteonAddress: Int] = [:]
+
   /// The addresses of records in each device's database that arrive with a checksum that
   /// fails, as a record damaged on the way does.
   public var damagedRecords: [InsteonAddress: Set<UInt16>] = [:]
@@ -383,6 +394,30 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Makes a device acknowledge its next `count` writes without storing them, then store
+  /// writes again.
+  public func setForgetful(_ device: InsteonAddress, writes count: Int) {
+
+    forgottenWrites[device] = count
+
+  }
+
+  /// Makes a device reject every request once it has stored `count` more writes, as an i2CS
+  /// device does once its last record of the modem is gone.
+  public func setUnlinked(_ device: InsteonAddress, afterWrites count: Int) {
+
+    writesBeforeUnlinking[device] = count
+
+  }
+
+  /// Makes a device store its next `count` writes without acknowledging them, so the modem
+  /// reports that it didn't answer.
+  public func setUnacknowledged(_ device: InsteonAddress, writes count: Int) {
+
+    unacknowledgedWrites[device] = count
+
+  }
+
   /// The device sets `flags` in every record in use written to it, as an i3 device may set its
   /// fast fail and smart hop bits.
   public func setMaintainedFlags(_ flags: AllLinkRecordFlags, of device: InsteonAddress) {
@@ -624,7 +659,15 @@ public actor InMemoryModem: LinkingModem {
 
       writes.append(Write(device: device, address: recordAddress))
 
-      if !forgetfulDevices.contains(device) {
+      let forgets: Bool = forgetfulDevices.contains(device) || forgottenWrites[device, default: 0] > 0
+
+      if forgottenWrites[device, default: 0] > 0 {
+
+        forgottenWrites[device, default: 0] -= 1
+
+      }
+
+      if !forgets {
 
         changeDatabase(of: device)
         databases[device, default: [:]][recordAddress] = AllLinkRecord(
@@ -635,6 +678,26 @@ public actor InMemoryModem: LinkingModem {
           data2: data[12],
           data3: data[13]
         )
+
+        if let left = writesBeforeUnlinking[device] {
+
+          writesBeforeUnlinking[device] = left > 1 ? left - 1 : nil
+
+          if left <= 1 {
+
+            unlinkedDevices.insert(device)
+
+          }
+
+        }
+
+        if unacknowledgedWrites[device, default: 0] > 0 {
+
+          unacknowledgedWrites[device, default: 0] -= 1
+
+          throw ModemError.deviceTimedOut(device)
+
+        }
 
       }
 
