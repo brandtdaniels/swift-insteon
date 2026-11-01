@@ -58,6 +58,8 @@ public enum InsteonErrorDescription {
       return hubStoppedAnsweringInline
     case let error as HubAddressRefused:
       return error.description
+    case let error as DatabaseLinkRefusal:
+      return error.description
     default:
       break
     }

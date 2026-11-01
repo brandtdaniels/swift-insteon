@@ -157,6 +157,8 @@ public enum HelpText {
     Usage: insteon [--hub HOST[:PORT] | --serial PATH] link [ADDRESS] [--group N]
                    [--controller | --responder | --either] [--two-way | --one-way]
                    [--timeout SECONDS] [--json]
+           insteon [--hub HOST[:PORT] | --serial PATH] link ADDRESS --database
+                   [--dry-run] [--yes] [--json]
            insteon [--hub HOST[:PORT] | --serial PATH] link --cancel
 
     With ADDRESS, the device's Insteon address from its label, links the device without its
@@ -197,10 +199,31 @@ public enum HelpText {
                           modem stays in linking mode.
       --cancel            Take the modem out of linking mode with Cancel ALL-Linking.
 
+    With ADDRESS and --database, links the device by writing the records of the catalog's
+    links to a Hub straight into its ALL-Link database and the modem's, without linking mode
+    or the SET button. Both databases are read first, and the command shows each write it
+    plans and asks before making them. Records already there stay as they are; a device's
+    new records go into its free slots, then past its last record, which moves the end of its
+    database down first. A responder record holds the catalog's data bytes for the group,
+    with full on as its on-level and 0.5 s as its ramp rate where the catalog gives no value.
+    Each write is read back, and written once more if it reads back differently. The device
+    must run i2CS and accept the modem, as it does once it holds any record of the modem, or
+    run i2 by the catalog; the command writes nothing to a device whose database fails a
+    checksum, has no end, has no room, or that the catalog doesn't give links for. Undo it
+    with 'unlink ADDRESS --database'.
+
+      --database          Link by writing the ALL-Link databases, as above. Not with --group,
+                          --controller, --responder, --either, --two-way, --one-way,
+                          --timeout or --cancel.
+      --dry-run           With --database, show the writes and make none.
+      --yes, -y           With --database, write without asking. Needed when standard input
+                          isn't a terminal.
+
     With --json, prints one object, the same for every device: "links", every link the modem
     reported, in order, and "legs", each of the catalog's links to a Hub with its modemRole,
     modemGroup, deviceGroup, status (linked, failed or notRun), joinedBy and error, or an
-    empty array when the device wasn't linked by them.
+    empty array when the device wasn't linked by them. With --database, prints the object
+    'insteon unlink --help' describes for --database.
 
     Control-C stops waiting and takes the modem out of linking mode.
     """
@@ -211,6 +234,8 @@ public enum HelpText {
                    [--controller | --responder] [--timeout SECONDS] [--json]
            insteon [--hub HOST[:PORT] | --serial PATH] unlink ADDRESS --all
                    [--timeout SECONDS] [--json]
+           insteon [--hub HOST[:PORT] | --serial PATH] unlink ADDRESS --database
+                   [--orphans] [--dry-run] [--yes] [--json]
 
     Removes a link with a device's SET button and prints the unlinked device. With ADDRESS,
     only that device's unlink is accepted, and its own steps are shown when its identity is
@@ -236,6 +261,27 @@ public enum HelpText {
                           Not with --group, --controller or --responder.
       --timeout SECONDS   How long to wait. Defaults to 240, or with --all, 30 for each
                           link.
+
+    With ADDRESS and --database, removes every link between the modem and the device by
+    clearing the device's records of the modem in its ALL-Link database and deleting the
+    modem's records of the device, without unlinking mode or the SET button. Both databases
+    are read first, and the command shows each write it plans and asks before making them.
+    No other record is changed, and no database is compacted. The modem's records go first,
+    then the device's; an i2CS device rejects the modem once its last record of the modem is
+    gone, so that write isn't read back. The plan also lists the device's records that name
+    a device the modem doesn't know.
+
+      --database          Unlink by writing the ALL-Link databases, as above. Not with
+                          --group, --controller, --responder or --timeout.
+      --orphans           With --database, also clear the device's records that name a
+                          device the modem doesn't know, first.
+      --dry-run           With --database, show the writes and make none.
+      --yes, -y           With --database, write without asking. Needed when standard input
+                          isn't a terminal.
+
+    With --database and --json, prints one object: "direction", "device", "modem", "engine",
+    "product", "dryRun", "steps" (each write's kind, record and outcome), "inPlace",
+    "orphans", and, once the writes are made, "mismatches", "deviceCheck" and "complete".
     """
 
   /// The help for `insteon remove`.

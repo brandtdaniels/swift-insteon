@@ -219,11 +219,85 @@ enum ModemCommands {
 
   // MARK: - link
 
-  static func link(_ modem: ModemSession, options: LinkOptions, names: ProductNames, printsJSON: Bool) async throws {
+  static func link(_ modem: ModemSession, options: LinkOptions, asks: Bool, names: ProductNames, printsJSON: Bool) async throws {
 
     try await IdentityStore.withNetwork(modem: modem, hub: nil, names: names) { (cached: CachedNetwork) async throws -> Void in
 
+      if let database = options.database, let device = options.device {
+
+        let coordinator: DeviceLinkingCoordinator = cached.network.linking
+        let plan: DatabaseLinkPlan = try await coordinator.planDatabaseLink(device)
+
+        try await carryOut(plan, coordinator: coordinator, options: database, asks: asks, printsJSON: printsJSON)
+
+        return
+
+      }
+
       try await link(cached, options: options, names: names, printsJSON: printsJSON)
+
+    }
+
+  }
+
+  // MARK: - --database
+
+  /// Shows a plan to write ALL-Link databases, asks first when `asks` is `true`, and carries
+  /// it out unless it's a dry run, the person declines, or there's nothing to write.
+  private static func carryOut(
+    _ plan: DatabaseLinkPlan,
+    coordinator: DeviceLinkingCoordinator,
+    options: DatabaseWriteOptions,
+    asks: Bool,
+    printsJSON: Bool
+  ) async throws {
+
+    // With --json, the words go to standard error, so the JSON can be piped on its own.
+    let say: (String) -> Void = printsJSON ? Output.note : Output.line
+
+    DatabaseLinkText.plan(plan).forEach(say)
+
+    if plan.isEmpty || options.isDryRun {
+
+      if options.isDryRun, !plan.isEmpty {
+
+        say(DatabaseLinkText.dryRun)
+
+      }
+
+      if printsJSON {
+
+        try Output.json(DatabaseLinkText.report(plan, isDryRun: options.isDryRun))
+
+      }
+
+      return
+
+    }
+
+    if asks {
+
+      guard try await Terminal.confirm(DatabaseLinkText.question(plan)) else {
+
+        throw CommandFailure(description: DatabaseLinkText.declined)
+
+      }
+
+    }
+
+    let result: DatabaseLinkResult = try await coordinator.apply(plan)
+
+    DatabaseLinkText.result(result).forEach(say)
+
+    if printsJSON {
+
+      try Output.json(DatabaseLinkText.report(result))
+
+    }
+
+    guard result.isComplete else {
+
+      throw CommandFailure(description: "Not every write to the ALL-Link databases went as planned.")
 
     }
 
@@ -298,11 +372,22 @@ enum ModemCommands {
 
   // MARK: - unlink
 
-  static func unlink(_ modem: ModemSession, options: UnlinkOptions, names: ProductNames, printsJSON: Bool) async throws {
+  static func unlink(_ modem: ModemSession, options: UnlinkOptions, asks: Bool, names: ProductNames, printsJSON: Bool) async throws {
 
     try await IdentityStore.withNetwork(modem: modem, hub: nil, names: names) { (cached: CachedNetwork) async throws -> Void in
 
       let coordinator: DeviceLinkingCoordinator = cached.network.linking
+
+      if let database = options.database, let device = options.device {
+
+        let plan: DatabaseLinkPlan = try await coordinator.planDatabaseUnlink(device, removingOrphans: database.removesOrphans)
+
+        try await carryOut(plan, coordinator: coordinator, options: database, asks: asks, printsJSON: printsJSON)
+
+        return
+
+      }
+
       let observer = LinkingPrompter(names: names, printsJSON: printsJSON, cached: cached)
 
       if options.removesAllLinks, let device = options.device {

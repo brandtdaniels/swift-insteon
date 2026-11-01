@@ -77,6 +77,10 @@ public actor InMemoryModem: LinkingModem {
   /// Devices that acknowledge writes without storing them.
   public var forgetfulDevices: Set<InsteonAddress> = []
 
+  /// How many more writes each device acknowledges without storing, before it stores them
+  /// again.
+  public var forgottenWrites: [InsteonAddress: Int] = [:]
+
   /// The addresses of records in each device's database that arrive with a checksum that
   /// fails, as a record damaged on the way does.
   public var damagedRecords: [InsteonAddress: Set<UInt16>] = [:]
@@ -383,6 +387,14 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Makes a device acknowledge its next `count` writes without storing them, then store
+  /// writes again.
+  public func setForgetful(_ device: InsteonAddress, writes count: Int) {
+
+    forgottenWrites[device] = count
+
+  }
+
   /// The device sets `flags` in every record in use written to it, as an i3 device may set its
   /// fast fail and smart hop bits.
   public func setMaintainedFlags(_ flags: AllLinkRecordFlags, of device: InsteonAddress) {
@@ -624,7 +636,15 @@ public actor InMemoryModem: LinkingModem {
 
       writes.append(Write(device: device, address: recordAddress))
 
-      if !forgetfulDevices.contains(device) {
+      let forgets: Bool = forgetfulDevices.contains(device) || forgottenWrites[device, default: 0] > 0
+
+      if forgottenWrites[device, default: 0] > 0 {
+
+        forgottenWrites[device, default: 0] -= 1
+
+      }
+
+      if !forgets {
 
         changeDatabase(of: device)
         databases[device, default: [:]][recordAddress] = AllLinkRecord(

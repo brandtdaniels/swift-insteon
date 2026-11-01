@@ -4,6 +4,34 @@
 # file with it.
 actor DeviceNetwork
 actor DeviceRegistry
+case DatabaseLinkDirection.link
+case DatabaseLinkDirection.unlink
+case DatabaseLinkRefusal.changedSincePlanned(_:)
+case DatabaseLinkRefusal.damagedRecords(_:count:)
+case DatabaseLinkRefusal.databaseFull(_:needed:available:)
+case DatabaseLinkRefusal.noCatalogLinks(_:)
+case DatabaseLinkRefusal.noEndOfDatabase(_:)
+case DatabaseLinkRefusal.notIdentified(_:)
+case DatabaseLinkRefusal.notInCatalog(_:)
+case DatabaseLinkRefusal.rejectsModem(_:)
+case DatabaseLinkRefusal.undescribedLinkData(_:group:)
+case DatabaseLinkRefusal.unknownLinkDataByte(_:name:)
+case DatabaseLinkRefusal.unsupportedEngine(_:_:)
+case DatabaseLinkResult.DeviceCheck.checked
+case DatabaseLinkResult.DeviceCheck.rejectsModemAfterUnlinking
+case DatabaseLinkResult.DeviceCheck.unanswered
+case DatabaseLinkStep.Kind.addDeviceRecord
+case DatabaseLinkStep.Kind.addModemRecord
+case DatabaseLinkStep.Kind.markEndOfDatabase
+case DatabaseLinkStep.Kind.removeDeviceRecord
+case DatabaseLinkStep.Kind.removeModemRecord
+case DatabaseLinkStep.Kind.removeOrphanRecord
+case DatabaseLinkStepOutcome.notReached
+case DatabaseLinkStepOutcome.notWritten
+case DatabaseLinkStepOutcome.unanswered
+case DatabaseLinkStepOutcome.unverifiable
+case DatabaseLinkStepOutcome.written
+case DatabaseLinkStepOutcome.writtenOnRetry
 case DeviceCapabilities.Source.catalog
 case DeviceCapabilities.Source.categoryFallback
 case DeviceCapabilities.Source.uncontrolled
@@ -212,6 +240,11 @@ case TwoWayLinking.whenDeviceControls
 case UnidentifiedReason.failed(_:)
 case UnidentifiedReason.noIdentity
 case UnidentifiedReason.notLinked
+enum DatabaseLinkDirection
+enum DatabaseLinkRefusal
+enum DatabaseLinkResult.DeviceCheck
+enum DatabaseLinkStep.Kind
+enum DatabaseLinkStepOutcome
 enum DeviceCapabilities.Source
 enum DeviceControlError
 enum DeviceKeptReason
@@ -268,8 +301,11 @@ func Device.turnOn(outputs:group:)
 func Device.turnOnFast(level:)
 func Device.writeSetting(_:to:button:)
 func DeviceInfo.meaning(of:)
+func DeviceLinkingCoordinator.apply(_:)
 func DeviceLinkingCoordinator.link(_:as:group:twoWay:setButtonTimeout:usesCatalogLegs:observer:)
 func DeviceLinkingCoordinator.linkBySETButton(as:group:twoWay:timeout:observer:)
+func DeviceLinkingCoordinator.planDatabaseLink(_:)
+func DeviceLinkingCoordinator.planDatabaseUnlink(_:removingOrphans:)
 func DeviceLinkingCoordinator.remove(_:scan:forceModemSide:timeout:observer:)
 func DeviceLinkingCoordinator.unlink(_:as:group:timeout:observer:)
 func DeviceLinkingCoordinator.unlinkAll(_:timeout:observer:)
@@ -319,6 +355,8 @@ func ProductCatalogStore.cachedJSON()
 func ProductCatalogStore.cachedVersion()
 func ProductCatalogStore.save(json:version:)
 func SelfTestReport.check(_:)
+init DatabaseLinkResult.StepResult(step:outcome:)
+init DatabaseMismatch(isDevice:memoryAddress:expected:found:)
 init Device(address:network:beforeIdentifying:)
 init DeviceBeepResult(isListed:)
 init DeviceCapabilities(productName:isIdentified:source:groups:mainGroupNumber:canBeep:settings:)
@@ -387,6 +425,16 @@ init SendFailure?(_:)
 init UnlinkedLink(link:device:)
 init UnreadDatabase(address:device:reason:)
 init WakePrompt(device:info:steps:)
+internal(set) var DatabaseLinkPlan.device
+internal(set) var DatabaseLinkPlan.direction
+internal(set) var DatabaseLinkPlan.engine
+internal(set) var DatabaseLinkPlan.info
+internal(set) var DatabaseLinkPlan.linksInPlace
+internal(set) var DatabaseLinkPlan.modem
+internal(set) var DatabaseLinkPlan.orphans
+internal(set) var DatabaseLinkPlan.steps
+internal(set) var DatabaseLinkStep.kind
+internal(set) var DatabaseLinkStep.record
 let Device.address
 let Device.network
 let DeviceGroupKind.rawValue
@@ -446,6 +494,11 @@ static let InsteonErrorDescription.hubStoppedAnsweringInline
 static let JSONFileDeviceRegistryStore.formatVersion
 static let ProductCatalog.updateLocation
 static var ProductCatalog.bundleName
+struct DatabaseLinkPlan
+struct DatabaseLinkResult
+struct DatabaseLinkResult.StepResult
+struct DatabaseLinkStep
+struct DatabaseMismatch
 struct Device
 struct DeviceBeepResult
 struct DeviceCapabilities
@@ -531,6 +584,26 @@ typealias ModemRole
 typealias NAKReason
 typealias ProductKey
 typealias ReportedIdentity
+var DatabaseLinkPlan.deviceSteps
+var DatabaseLinkPlan.isEmpty
+var DatabaseLinkPlan.modemSteps
+var DatabaseLinkPlan.rejectsModemOnceUnlinked
+var DatabaseLinkPlan.removesOrphans
+var DatabaseLinkRefusal.description
+var DatabaseLinkRefusal.errorDescription
+var DatabaseLinkResult.StepResult.outcome
+var DatabaseLinkResult.StepResult.step
+var DatabaseLinkResult.deviceCheck
+var DatabaseLinkResult.isComplete
+var DatabaseLinkResult.mismatches
+var DatabaseLinkResult.plan
+var DatabaseLinkResult.steps
+var DatabaseLinkStep.isDeviceStep
+var DatabaseLinkStepOutcome.isDone
+var DatabaseMismatch.expected
+var DatabaseMismatch.found
+var DatabaseMismatch.isDevice
+var DatabaseMismatch.memoryAddress
 var DeviceBeepResult.isListed
 var DeviceCapabilities.canBeep
 var DeviceCapabilities.canDim
