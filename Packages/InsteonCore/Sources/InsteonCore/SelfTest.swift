@@ -53,8 +53,8 @@ public enum SelfTestCheckKind: String, Hashable, Sendable, CaseIterable {
   case linkDatabase
 
   /// The device and the modem hold both records of each link between them: each link the
-  /// catalog gives the device to a Hub, or, without those, a link with the modem as
-  /// controller.
+  /// catalog gives the device to a Hub, or, without those, each link either side's records
+  /// show, of which there must be at least one.
   case modemLinks
 
   /// Every record of the device names the modem or a device the modem is linked to.
@@ -103,8 +103,9 @@ public enum SelfTestFix: Hashable, Sendable {
   /// device on each or a phase coupler.
   case checkSignal
 
-  /// Link the device to the modem again.
-  case link
+  /// Link the device to the modem again: with the modem in a role and group, or as the
+  /// catalog gives the device's links when both are `nil`.
+  case link(modemRole: ModemRole?, group: Int?)
 
   /// Read the device again, as a record or an answer may have been lost on the way.
   case readAgain

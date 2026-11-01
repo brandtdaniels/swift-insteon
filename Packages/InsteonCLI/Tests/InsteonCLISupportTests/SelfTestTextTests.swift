@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import InsteonCLISupport
 import InsteonCore
+import InsteonLinking
 import InsteonProtocol
 
 struct SelfTestTextTests {
@@ -18,7 +19,7 @@ struct SelfTestTextTests {
       checks: [
         SelfTestCheck(kind: .answers, outcome: .passed, detail: "The device answered and accepts the modem."),
         SelfTestCheck(kind: .status, outcome: .skipped, detail: "Not read."),
-        SelfTestCheck(kind: .modemLinks, outcome: .failed, detail: "A link is missing a record.", fixes: [.link, .checkSignal]),
+        SelfTestCheck(kind: .modemLinks, outcome: .failed, detail: "A link is missing a record.", fixes: [.link(modemRole: nil, group: nil), .checkSignal]),
         SelfTestCheck(kind: .leftoverRecords, outcome: .warning, detail: "A record names a device that's gone.", fixes: [.reviewRecords([gone])])
       ],
       checklist: [.pressButton(group: 1), .powerCycle]
@@ -74,30 +75,75 @@ struct SelfTestTextTests {
 
   }
 
-  @Test func printsJSONWithEveryCheckAndTheChecklist() throws {
+  @Test func suggestsTheLinkCommandForTheRoleAndGroup() {
 
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.sortedKeys]
+    #expect(SelfTestText.linkCommand(lamp, modemRole: nil, group: nil) == "insteon link 1A.2B.3C")
+    #expect(SelfTestText.linkCommand(lamp, modemRole: .controller, group: 0) == "insteon link 1A.2B.3C")
+    #expect(SelfTestText.linkCommand(lamp, modemRole: .controller, group: 3) == "insteon link 1A.2B.3C --group 3")
+    #expect(SelfTestText.linkCommand(lamp, modemRole: .responder, group: 1) == "insteon link 1A.2B.3C --responder")
 
-    let data: Data = try encoder.encode(SelfTestText.JSON(report))
+    // Each command parses as the link it names.
+    #expect(throws: Never.self) {
+
+      _ = try Invocation.parse(["link", "1A.2B.3C", "--group", "3"])
+      _ = try Invocation.parse(["link", "1A.2B.3C", "--responder"])
+
+    }
+
+  }
+
+  @Test func printsJSONWithEveryCheckTheIdentityAndTheChecklist() throws {
+
+    var described: SelfTestReport = report
+    described.engine = .i2cs
+    described.identity = ReportedIdentity(category: 0x02, subcategory: 0x2A, firmwareVersion: 0x45)
+    described.productName = "Example Plug"
+
+    let data: Data = try JSONEncoder().encode(SelfTestText.JSON(described))
     let parsed: Any = try JSONSerialization.jsonObject(with: data)
     let object: [String: Any] = try #require(parsed as? [String: Any])
     let checks: [[String: Any]] = try #require(object["checks"] as? [[String: Any]])
-    let first: [String: Any] = try #require(checks.first)
-    let links: [String: Any] = checks[2]
-    let checklist: [String] = try #require(object["checklist"] as? [String])
+    let checklist: [[String: Any]] = try #require(object["checklist"] as? [[String: Any]])
+    let linkFixes: [[String: Any]] = try #require(checks[2]["fixes"] as? [[String: Any]])
+    let reviewFixes: [[String: Any]] = try #require(checks[3]["fixes"] as? [[String: Any]])
 
-    #expect(object.keys.sorted() == ["address", "checklist", "checks", "outcome"])
+    #expect(object.keys.sorted() == ["address", "category", "checklist", "checks", "engine", "firmwareVersion", "outcome", "product", "subcategory"])
     #expect(object["address"] as? String == "1A.2B.3C")
+    #expect(object["engine"] as? String == "i2CS")
+    #expect(object["product"] as? String == "Example Plug")
     #expect(object["outcome"] as? String == "failed")
-    #expect(checks.count == 4)
-    #expect(first.keys.sorted() == ["detail", "fixes", "id", "outcome", "title"])
-    #expect(first["id"] as? String == "answers")
-    #expect(first["outcome"] as? String == "passed")
-    #expect((first["fixes"] as? [String])?.isEmpty == true)
-    #expect(links["id"] as? String == "modemLinks")
-    #expect((links["fixes"] as? [String])?.count == 2)
-    #expect(checklist.count == 2)
+    #expect(checks.map { (check: [String: Any]) -> String? in check["id"] as? String } == ["answers", "status", "modemLinks", "leftoverRecords"])
+    #expect(checks[0].keys.sorted() == ["detail", "fixes", "id", "outcome", "title"])
+    #expect(checks[0]["outcome"] as? String == "passed")
+    #expect((checks[0]["fixes"] as? [Any])?.isEmpty == true)
+    #expect(linkFixes.map { (fix: [String: Any]) -> String? in fix["id"] as? String } == ["link", "checkSignal"])
+    #expect(linkFixes[0]["text"] as? String == "Link the device to the modem: 'insteon link 1A.2B.3C'.")
+    #expect(reviewFixes.first?["id"] as? String == "reviewRecords")
+    #expect(reviewFixes.first?["addresses"] as? [String] == ["0E.0E.0E"])
+    #expect(checklist.map { (item: [String: Any]) -> String? in item["id"] as? String } == ["pressButton", "powerCycle"])
+    #expect(checklist.first?["group"] as? Int == 1)
+    #expect(checklist.last?["group"] == nil)
+
+  }
+
+  @Test func printsTheLinkFixWithItsRoleAndGroup() throws {
+
+    let linking = SelfTestReport(
+      device: lamp,
+      checks: [SelfTestCheck(kind: .modemLinks, outcome: .failed, detail: "", fixes: [.link(modemRole: .controller, group: 3)])]
+    )
+
+    let data: Data = try JSONEncoder().encode(SelfTestText.JSON(linking))
+    let parsed: Any = try JSONSerialization.jsonObject(with: data)
+    let object: [String: Any] = try #require(parsed as? [String: Any])
+    let checks: [[String: Any]] = try #require(object["checks"] as? [[String: Any]])
+    let fixes: [[String: Any]] = try #require(checks.first?["fixes"] as? [[String: Any]])
+
+    #expect(object["engine"] as? String == "unknown")
+    #expect(object["category"] == nil)
+    #expect(fixes.first?["modemRole"] as? String == "controller")
+    #expect(fixes.first?["group"] as? Int == 3)
+    #expect(fixes.first?["text"] as? String == "Link the device to the modem: 'insteon link 1A.2B.3C --group 3'.")
 
   }
 

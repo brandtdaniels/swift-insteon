@@ -23,6 +23,69 @@ public enum SelfTestText {
 
   }
 
+  /// A fix's stable name, as `--json` prints it.
+  ///
+  /// - Parameter fix: The fix.
+  /// - Returns: Such as `"link"` or `"turnOffProgrammingLock"`.
+  public static func id(_ fix: SelfTestFix) -> String {
+
+    switch fix {
+    case .checkSignal:
+      "checkSignal"
+    case .link:
+      "link"
+    case .readAgain:
+      "readAgain"
+    case .reviewRecords:
+      "reviewRecords"
+    case .turnOffProgrammingLock:
+      "turnOffProgrammingLock"
+    case .updateCatalog:
+      "updateCatalog"
+    case .factoryReset:
+      "factoryReset"
+    }
+
+  }
+
+  /// A checklist item's stable name, as `--json` prints it.
+  ///
+  /// - Parameter item: The item.
+  /// - Returns: `"pressButton"` or `"powerCycle"`.
+  public static func id(_ item: SelfTestChecklistItem) -> String {
+
+    switch item {
+    case .pressButton:
+      "pressButton"
+    case .powerCycle:
+      "powerCycle"
+    }
+
+  }
+
+  /// The `insteon link` command that makes a link: as the catalog says without a role or
+  /// group, and otherwise with the options for them.
+  ///
+  /// - Parameters:
+  ///   - device: The device.
+  ///   - modemRole: The modem's role, or `nil` to link as the catalog says.
+  ///   - group: The modem's group, or `nil` for the default.
+  /// - Returns: The command.
+  public static func linkCommand(_ device: InsteonAddress, modemRole: ModemRole?, group: Int?) -> String {
+
+    switch modemRole {
+    case .responder?:
+      // With an address, the modem joins the group the device's link back uses.
+      "insteon link \(device) --responder"
+    case .controller?:
+      group.map { (number: Int) -> String in number == 0 ? "insteon link \(device)" : "insteon link \(device) --group \(number)" }
+        ?? "insteon link \(device)"
+    case nil:
+      "insteon link \(device)"
+    }
+
+  }
+
   /// What to do about a fix, with the command that does it, when there's one.
   ///
   /// - Parameters:
@@ -36,8 +99,8 @@ public enum SelfTestText {
       "Check the signal: try another outlet, one on the modem's circuit or nearer to it, away from "
         + "power strips and filtered outlets, and check that the home's two power phases are bridged, "
         + "by a dual-band device on each or a phase coupler."
-    case .link:
-      "Link the device to the modem: 'insteon link \(device)'."
+    case let .link(modemRole, group):
+      "Link the device to the modem: '\(linkCommand(device, modemRole: modemRole, group: group))'."
     case .readAgain:
       "Run the test again: 'insteon device \(device) selftest'."
     case let .reviewRecords(others):
@@ -148,6 +211,26 @@ public enum SelfTestText {
   /// The test as `--json` prints it.
   public struct JSON: Encodable, Hashable, Sendable {
 
+    /// What may put a check right.
+    public struct Fix: Encodable, Hashable, Sendable {
+
+      /// The fix's stable name, such as `"link"`.
+      public let id: String
+
+      /// What to do, as a sentence.
+      public let text: String
+
+      /// For `link`, `"controller"` or `"responder"`, or `nil` to link as the catalog says.
+      public let modemRole: String?
+
+      /// For `link`, the modem's group, or `nil` for the default.
+      public let group: Int?
+
+      /// For `reviewRecords`, the devices the records name.
+      public let addresses: [String]?
+
+    }
+
     /// One check.
     public struct Check: Encodable, Hashable, Sendable {
 
@@ -163,13 +246,42 @@ public enum SelfTestText {
       /// What the check found.
       public let detail: String
 
-      /// What may put it right, as sentences.
-      public let fixes: [String]
+      /// What may put it right.
+      public let fixes: [Fix]
+
+    }
+
+    /// Something only a person can check.
+    public struct ChecklistItem: Encodable, Hashable, Sendable {
+
+      /// The item's stable name, `"pressButton"` or `"powerCycle"`.
+      public let id: String
+
+      /// For `pressButton`, the group.
+      public let group: Int?
+
+      /// What to do, as a sentence.
+      public let text: String
 
     }
 
     /// The device's address.
     public let address: String
+
+    /// The engine the device reported, or `"unknown"`.
+    public let engine: String
+
+    /// The category the device reported, or `nil` if it reported no identity.
+    public let category: String?
+
+    /// The subcategory the device reported.
+    public let subcategory: String?
+
+    /// The firmware version the device reported.
+    public let firmwareVersion: String?
+
+    /// The product the Insteon device catalog has for the device.
+    public let product: String?
 
     /// The test's outcome as a whole.
     public let outcome: String
@@ -177,15 +289,22 @@ public enum SelfTestText {
     /// The checks, in order.
     public let checks: [Check]
 
-    /// What only a person can check, as sentences.
-    public let checklist: [String]
+    /// What only a person can check.
+    public let checklist: [ChecklistItem]
 
     /// Creates the JSON of a report.
     ///
     /// - Parameter report: The report.
     public init(_ report: SelfTestReport) {
 
-      address = "\(report.device)"
+      let device: InsteonAddress = report.device
+
+      address = "\(device)"
+      engine = report.engine?.name ?? "unknown"
+      category = report.identity.map { (identity: ReportedIdentity) -> String in "\(identity.category)" }
+      subcategory = report.identity.map { (identity: ReportedIdentity) -> String in "\(identity.subcategory)" }
+      firmwareVersion = report.identity?.firmwareVersion.map { (version: FirmwareVersion) -> String in "\(version)" }
+      product = report.productName
       outcome = report.outcome.rawValue
       checks = report.checks.map { (check: SelfTestCheck) -> Check in
 
@@ -194,11 +313,50 @@ public enum SelfTestText {
           title: check.title,
           outcome: check.outcome.rawValue,
           detail: check.detail,
-          fixes: check.fixes.map { (each: SelfTestFix) -> String in SelfTestText.fix(each, device: report.device) }
+          fixes: check.fixes.map { (each: SelfTestFix) -> Fix in Self.fix(each, device: device) }
         )
 
       }
-      checklist = report.checklist.map { (item: SelfTestChecklistItem) -> String in SelfTestText.checklistItem(item, device: report.device) }
+      checklist = report.checklist.map { (item: SelfTestChecklistItem) -> ChecklistItem in
+
+        var group: Int?
+
+        if case let .pressButton(number) = item {
+
+          group = number
+
+        }
+
+        return ChecklistItem(id: SelfTestText.id(item), group: group, text: SelfTestText.checklistItem(item, device: device))
+
+      }
+
+    }
+
+    /// A fix as JSON.
+    private static func fix(_ fix: SelfTestFix, device: InsteonAddress) -> Fix {
+
+      var modemRole: String?
+      var group: Int?
+      var addresses: [String]?
+
+      switch fix {
+      case let .link(role, number):
+        modemRole = role.map { (role: ModemRole) -> String in role == .controller ? "controller" : "responder" }
+        group = number
+      case let .reviewRecords(others):
+        addresses = others.map { (other: InsteonAddress) -> String in "\(other)" }
+      default:
+        break
+      }
+
+      return Fix(
+        id: SelfTestText.id(fix),
+        text: SelfTestText.fix(fix, device: device),
+        modemRole: modemRole,
+        group: group,
+        addresses: addresses
+      )
 
     }
 

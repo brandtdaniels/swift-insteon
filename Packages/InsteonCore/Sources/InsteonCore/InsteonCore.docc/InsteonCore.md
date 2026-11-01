@@ -167,10 +167,12 @@ do {
 
 ``Device/selfTest(_:)`` checks that a device is healthy and set up as the catalog expects, and
 returns a ``SelfTestReport`` of ``SelfTestCheck``s in the order they ran: the device answers
-and accepts the modem, the catalog describes it, it reports its state, its ALL-Link database
-reads intact, it and the modem hold both records of each link the catalog gives it, its
-records name only the modem and devices the modem is linked to, and no operating flag locks it
-or cuts it off. Each check has a ``SelfTestOutcome``, a sentence saying what it found, and the
+and accepts the modem, the catalog describes the identity it reports in the test, it reports
+its state, its ALL-Link database, read from the device rather than from a copy the network
+holds, ends whole, with every checksum intact for an i2CS device, it and the modem hold both
+records of each link the catalog gives it, its records name only the modem and devices the
+modem is linked to, and no operating flag locks it or cuts it off. A damaged record isn't
+taken for a missing link. Each check has a ``SelfTestOutcome``, a sentence saying what it found, and the
 ``SelfTestFix``es that may put it right, from Insteon's troubleshooting steps, for a front end
 to say how to carry out. The test only reads; ``SelfTestOptions/actuates`` also sends Beep when
 the catalog lists a Beep that's sent to the device. A device that doesn't answer fails the

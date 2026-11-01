@@ -13,13 +13,17 @@ extension Device {
   ///
   /// The test only reads: it sends Get Insteon Engine Version, ID Request, the catalog's
   /// status request, the requests that read the device's ALL-Link database and its operating
-  /// flags, and reads the modem's own database. It writes no record and no setting. With
-  /// ``SelfTestOptions/actuates``, it also sends Beep when the catalog lists a Beep that's
-  /// sent to the device, and nothing to a device the catalog doesn't describe.
+  /// flags, and reads the modem's own database. It writes no record and no setting. The
+  /// device's database is read from the device every time, never from a copy the network
+  /// holds. With ``SelfTestOptions/actuates``, it also sends Beep when the catalog lists a
+  /// Beep that's sent to the device, and nothing to a device the catalog doesn't describe.
   ///
-  /// A device that doesn't answer, or rejects the modem, fails the first check, and the checks
-  /// that need it to answer are skipped. A check the device doesn't answer fails or warns with
-  /// what may put it right; it doesn't stop the test.
+  /// What the catalog says comes from the identity the device reports to ID Request during
+  /// the test; a device that reports none is tested without the catalog. A device that doesn't
+  /// answer, or rejects the modem, fails the first check, and the checks that need it to
+  /// answer are skipped. A check the device doesn't answer fails or warns with what may put it
+  /// right; it doesn't stop the test. Checksums are checked only for an i2CS device, since
+  /// older devices may send none.
   ///
   /// ```swift
   /// let report = try await network.device(lamp).selfTest()
@@ -47,16 +51,9 @@ extension Device {
 
     } catch {
 
-      let problem: SelfTestProblem = try SelfTestProblem(error)
+      let answers: SelfTestCheck = try await unansweredIdentification(error)
 
-      report.checks.append(SelfTestCheck(
-        kind: .answers,
-        outcome: .failed,
-        detail: problem.isTimeout
-          ? "The device didn't answer Get Insteon Engine Version."
-          : "The device rejected Get Insteon Engine Version.",
-        fixes: problem.isTimeout ? [.checkSignal, .link, .factoryReset] : [.link, .factoryReset]
-      ))
+      report.checks.append(answers)
       report.checks += Self.skipped(after: .answers, options: options, because: "The device didn't answer, so this wasn't checked.")
       report.checklist = [.powerCycle]
 
@@ -73,9 +70,10 @@ extension Device {
         kind: .answers,
         outcome: .failed,
         detail: "The device answered, but rejects the modem: it runs i2CS and isn't linked to it.",
-        fixes: [.link]
+        fixes: [.link(modemRole: nil, group: nil)]
       ))
       report.checks += Self.skipped(after: .answers, options: options, because: "The device rejects the modem until it's linked, so this wasn't checked.")
+      report.checklist = [.powerCycle]
 
       return report
 
@@ -85,30 +83,51 @@ extension Device {
 
     // MARK: Catalog
 
-    let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription
-    let info: DeviceInfo? = description.map(DeviceInfo.init)
+    // Only the identity the device reported in this test counts, so a device isn't judged by
+    // what an earlier identity said, and isn't asked for its identity again.
+    var description: DeviceDescription?
+
+    if report.identity != nil {
+
+      description = await network.registry.device(address)?.deviceDescription
+
+    }
+
+    let info: DeviceInfo? = description.map { (description: DeviceDescription) -> DeviceInfo in DeviceInfo(description) }
 
     report.productName = info?.displayName
     report.checks.append(Self.catalogCheck(identity: report.identity, info: info))
 
     // MARK: Status
 
-    do {
+    if description == nil {
 
-      report.status = try await status()
-      report.checks.append(SelfTestCheck(kind: .status, outcome: .passed, detail: "The device reported its state."))
+      report.checks.append(SelfTestCheck(kind: .status, outcome: .skipped, detail: Self.withoutIdentity))
 
-    } catch is DeviceControlError {
+    } else {
 
-      report.checks.append(SelfTestCheck(kind: .status, outcome: .skipped, detail: "The Insteon device catalog gives no way to read the device's state."))
+      do {
 
-    } catch {
+        report.status = try await status()
+        report.checks.append(SelfTestCheck(kind: .status, outcome: .passed, detail: "The device reported its state."))
 
-      try report.checks.append(Self.unanswered(.status, error, outcome: .warning, what: "a status request"))
+      } catch is DeviceControlError {
+
+        report.checks.append(SelfTestCheck(kind: .status, outcome: .skipped, detail: "The Insteon device catalog gives no way to read the device's state."))
+
+      } catch {
+
+        try report.checks.append(Self.unanswered(.status, error, outcome: .warning, what: "the status request"))
+
+      }
 
     }
 
     // MARK: ALL-Link database
+
+    // The copy the network holds may be old, or kept from a reading that's since changed, so
+    // the database is read from the device.
+    await network.cache.invalidate(address)
 
     var database: LinkDatabase?
 
@@ -122,9 +141,12 @@ extension Device {
 
     }
 
+    // Only an i2CS device sends checksums, so only its records can be damaged on the way.
+    let checksChecksums: Bool = identification.engine == .i2cs
+
     if let database {
 
-      report.checks.append(Self.databaseCheck(database))
+      report.checks.append(Self.databaseCheck(database, checksChecksums: checksChecksums))
 
     }
 
@@ -132,10 +154,11 @@ extension Device {
 
     let modemAddress: InsteonAddress = try await network.modemInfo().address
     let modemRecords: [LinkRecord] = try await network.modemDatabase().map(\.record).filter(\.isInUse)
-    let deviceRecords: [LinkRecord]? = database?.records.filter { (record: LinkRecord) -> Bool in record.isInUse && record.hasIntactChecksum }
+    let deviceRecords: [LinkRecord]? = database?.records.filter(\.isInUse)
+    let isDamaged: Bool = checksChecksums && deviceRecords?.contains { (record: LinkRecord) -> Bool in !record.hasIntactChecksum } == true
     let legs: [HubLinkingLeg]? = HubLinkingLeg.legs(of: description, device: address)
 
-    if let deviceRecords {
+    if let deviceRecords, !isDamaged {
 
       report.checks.append(Self.linksCheck(
         device: address,
@@ -145,6 +168,21 @@ extension Device {
         legs: legs
       ))
       report.checks.append(Self.leftoversCheck(modem: modemAddress, deviceRecords: deviceRecords, modemRecords: modemRecords))
+
+    } else if isDamaged {
+
+      // A damaged record isn't a missing link, so nothing is said about the links until the
+      // database reads whole.
+      for kind in [SelfTestCheckKind.modemLinks, .leftoverRecords] {
+
+        report.checks.append(SelfTestCheck(
+          kind: kind,
+          outcome: .warning,
+          detail: "Some of the device's records failed their checksum, so this wasn't checked.",
+          fixes: [.readAgain]
+        ))
+
+      }
 
     } else {
 
@@ -172,13 +210,62 @@ extension Device {
 
     }
 
-    report.checklist = Self.checklist(modem: modemAddress, deviceRecords: deviceRecords ?? [], legs: legs)
+    report.checklist = Self.checklist(modem: modemAddress, deviceRecords: isDamaged ? [] : deviceRecords ?? [], legs: legs)
 
     return report
 
   }
 
   // MARK: - Checks
+
+  /// What a check that needs the catalog says of a device that reported no identity.
+  static let withoutIdentity: String = "The device didn't report its identity in this test, so the Insteon device catalog can't say how to check this."
+
+  /// The answers check for an identification that failed: which request the device didn't
+  /// answer or rejected, found by asking for its engine once more.
+  func unansweredIdentification(_ error: any Error) async throws -> SelfTestCheck {
+
+    let problem: SelfTestProblem = try SelfTestProblem(error)
+    let request: String
+    let engineProblem: SelfTestProblem?
+
+    // The engine is asked for first, so a device that answers it on a second try failed at ID
+    // Request.
+    do {
+
+      _ = try await modem.request(StandardMessage(to: address, command: StandardDirectCommand.getEngineVersion), timeout: network.requestTimeout)
+      engineProblem = nil
+
+    } catch {
+
+      engineProblem = try SelfTestProblem(error)
+
+    }
+
+    let failure: SelfTestProblem
+
+    if let engineProblem {
+
+      request = "Get Insteon Engine Version"
+      failure = engineProblem
+
+    } else {
+
+      request = "ID Request"
+      failure = problem
+
+    }
+
+    return SelfTestCheck(
+      kind: .answers,
+      outcome: .failed,
+      detail: failure.isTimeout ? "The device didn't answer \(request)." : "The device rejected \(request).",
+      fixes: failure.isTimeout
+        ? [.checkSignal, .link(modemRole: nil, group: nil), .factoryReset]
+        : [.link(modemRole: nil, group: nil), .factoryReset]
+    )
+
+  }
 
   /// The checks after `kind`, skipped for a reason.
   static func skipped(after kind: SelfTestCheckKind, options: SelfTestOptions, because detail: String) -> [SelfTestCheck] {
@@ -202,18 +289,12 @@ extension Device {
 
     }
 
-    return SelfTestCheck(kind: kind, outcome: outcome, detail: "The device rejected \(what).", fixes: [.link])
+    return SelfTestCheck(kind: kind, outcome: outcome, detail: "The device rejected \(what).", fixes: [.link(modemRole: nil, group: nil)])
 
   }
 
   /// Whether the catalog describes the identity the device reported.
   static func catalogCheck(identity: ReportedIdentity?, info: DeviceInfo?) -> SelfTestCheck {
-
-    if let info, info.isInCatalog {
-
-      return SelfTestCheck(kind: .catalog, outcome: .passed, detail: "The Insteon device catalog describes the device as \(info.displayName ?? "a product it lists").")
-
-    }
 
     guard identity != nil else {
 
@@ -226,6 +307,12 @@ extension Device {
 
     }
 
+    if let info, info.isInCatalog {
+
+      return SelfTestCheck(kind: .catalog, outcome: .passed, detail: "The Insteon device catalog describes the device as \(info.displayName ?? "a product it lists").")
+
+    }
+
     return SelfTestCheck(
       kind: .catalog,
       outcome: .warning,
@@ -235,10 +322,11 @@ extension Device {
 
   }
 
-  /// Whether a database read intact.
-  static func databaseCheck(_ database: LinkDatabase) -> SelfTestCheck {
+  /// Whether a database read intact, counting failed checksums only when the device sends
+  /// them.
+  static func databaseCheck(_ database: LinkDatabase, checksChecksums: Bool) -> SelfTestCheck {
 
-    let damaged: Int = database.records.filter { (record: LinkRecord) -> Bool in !record.hasIntactChecksum }.count
+    let damaged: Int = checksChecksums ? database.records.filter { (record: LinkRecord) -> Bool in !record.hasIntactChecksum }.count : 0
 
     if damaged > 0 {
 
@@ -263,8 +351,13 @@ extension Device {
     }
 
     let inUse: Int = database.records.filter(\.isInUse).count
+    let records: String = "\(inUse) \(inUse == 1 ? "record" : "records") in use"
 
-    return SelfTestCheck(kind: .linkDatabase, outcome: .passed, detail: "\(inUse) \(inUse == 1 ? "record" : "records") in use, each with its checksum intact.")
+    return SelfTestCheck(
+      kind: .linkDatabase,
+      outcome: .passed,
+      detail: checksChecksums ? "\(records), each with its checksum intact." : "\(records). The device's engine sends no checksums to check."
+    )
 
   }
 
@@ -279,6 +372,12 @@ extension Device {
 
     /// The group it holds.
     var group: AllLinkGroupNumber
+
+    /// The modem's role in the link the record is part of.
+    var modemRole: ModemRole
+
+    /// The group the modem's linking names for the link.
+    var modemGroup: AllLinkGroupNumber
 
     /// Whether `records` holds it, naming `other`.
     func isIn(_ records: [LinkRecord], naming other: InsteonAddress) -> Bool {
@@ -300,27 +399,27 @@ extension Device {
 
   }
 
-  /// The two records of a link between the modem and the device.
+  /// The two records of a link between the modem and the device. A responder's record holds
+  /// its controller's group.
   static func records(modemRole: ModemRole, modemGroup: AllLinkGroupNumber, deviceGroup: AllLinkGroupNumber) -> [ExpectedRecord] {
 
     switch modemRole {
     case .controller:
-      // A responder's record holds its controller's group.
       [
-        ExpectedRecord(isModems: true, isController: true, group: modemGroup),
-        ExpectedRecord(isModems: false, isController: false, group: modemGroup)
+        ExpectedRecord(isModems: true, isController: true, group: modemGroup, modemRole: modemRole, modemGroup: modemGroup),
+        ExpectedRecord(isModems: false, isController: false, group: modemGroup, modemRole: modemRole, modemGroup: modemGroup)
       ]
     case .responder:
       [
-        ExpectedRecord(isModems: false, isController: true, group: deviceGroup),
-        ExpectedRecord(isModems: true, isController: false, group: modemGroup)
+        ExpectedRecord(isModems: false, isController: true, group: deviceGroup, modemRole: modemRole, modemGroup: modemGroup),
+        ExpectedRecord(isModems: true, isController: false, group: deviceGroup, modemRole: modemRole, modemGroup: modemGroup)
       ]
     }
 
   }
 
   /// Whether the device and the modem hold both records of each link between them: each of
-  /// the catalog's legs, or, without them, the links their records show.
+  /// the catalog's legs, or, without them, each link either side's records show.
   static func linksCheck(
     device: InsteonAddress,
     modem: InsteonAddress,
@@ -341,8 +440,7 @@ extension Device {
 
     } else {
 
-      // Without the catalog's legs, each group either side has a record for is a link,
-      // with the modem controlling the device at least.
+      // Without the catalog's legs, each group either side has a record for is a link.
       var modemControls: Set<AllLinkGroupNumber> = []
       var deviceControls: Set<AllLinkGroupNumber> = []
 
@@ -374,12 +472,14 @@ extension Device {
 
       }
 
-      links = modemControls.sorted { (first: AllLinkGroupNumber, second: AllLinkGroupNumber) -> Bool in first.rawValue < second.rawValue }.map { (group: AllLinkGroupNumber) -> [ExpectedRecord] in
+      let ascending = { (first: AllLinkGroupNumber, second: AllLinkGroupNumber) -> Bool in first.rawValue < second.rawValue }
+
+      links = modemControls.sorted(by: ascending).map { (group: AllLinkGroupNumber) -> [ExpectedRecord] in
 
         records(modemRole: .controller, modemGroup: group, deviceGroup: group)
 
       }
-      links += deviceControls.sorted { (first: AllLinkGroupNumber, second: AllLinkGroupNumber) -> Bool in first.rawValue < second.rawValue }.map { (group: AllLinkGroupNumber) -> [ExpectedRecord] in
+      links += deviceControls.sorted(by: ascending).map { (group: AllLinkGroupNumber) -> [ExpectedRecord] in
 
         records(modemRole: .responder, modemGroup: group, deviceGroup: group)
 
@@ -389,7 +489,12 @@ extension Device {
 
     guard !links.isEmpty else {
 
-      return SelfTestCheck(kind: .modemLinks, outcome: .failed, detail: "Neither the device nor the modem holds a record of a link with the other.", fixes: [.link])
+      return SelfTestCheck(
+        kind: .modemLinks,
+        outcome: .failed,
+        detail: "Neither the device nor the modem holds a record of a link with the other.",
+        fixes: [.link(modemRole: nil, group: nil)]
+      )
 
     }
 
@@ -401,7 +506,7 @@ extension Device {
 
     }
 
-    guard !missing.isEmpty else {
+    guard let first = missing.first else {
 
       let count: Int = links.count
       let source: String = legs == nil ? "" : " the Insteon device catalog gives"
@@ -417,13 +522,19 @@ extension Device {
     let list: String = missing.map(\.text).joined(separator: ", ")
     let isUnlinked: Bool = missing.count == links.count * 2
 
+    // Linking as the catalog says makes every leg again; without legs, the first broken link
+    // is made with its role and group.
+    let link: SelfTestFix = legs == nil
+      ? .link(modemRole: first.modemRole, group: Int(first.modemGroup.rawValue))
+      : .link(modemRole: nil, group: nil)
+
     return SelfTestCheck(
       kind: .modemLinks,
       outcome: .failed,
       detail: isUnlinked
         ? "The device isn't linked to the modem: neither holds a record the link needs (\(list))."
         : "A link is missing a record, so it works one way only, or not at all: \(list).",
-      fixes: [.link, .checkSignal]
+      fixes: [link, .checkSignal]
     )
 
   }
@@ -462,7 +573,13 @@ extension Device {
   /// describes.
   func flagsCheck(description: DeviceDescription?) async throws -> SelfTestCheck {
 
-    guard description?.commandSet?.operatingFlags.isEmpty == false else {
+    guard let description else {
+
+      return SelfTestCheck(kind: .operatingFlags, outcome: .skipped, detail: Self.withoutIdentity)
+
+    }
+
+    guard description.commandSet?.operatingFlags.isEmpty == false else {
 
       return SelfTestCheck(kind: .operatingFlags, outcome: .skipped, detail: "The Insteon device catalog describes no operating flags for the device.")
 
@@ -488,12 +605,23 @@ extension Device {
 
   }
 
-  /// Whether a reading shows a flag set that locks the device or cuts it off.
+  /// Whether a reading shows a flag set that locks the device or cuts it off, or a flag the
+  /// catalog guards in a state it's never written to or doesn't leave the factory in.
   static func flagsCheck(_ reading: DeviceSettingsReading) -> SelfTestCheck {
 
     var reported: Int = 0
     var problems: [String] = []
     var fixes: [SelfTestFix] = []
+
+    func add(_ fix: SelfTestFix) {
+
+      if !fixes.contains(fix) {
+
+        fixes.append(fix)
+
+      }
+
+    }
 
     for item in reading.items {
 
@@ -505,27 +633,37 @@ extension Device {
 
       reported += 1
 
-      guard raw & flag.bit != 0 else {
-
-        continue
-
-      }
-
+      let isOn: Bool = raw & flag.bit != 0
       let label: String = flag.label ?? flag.name.rawValue
 
       if flag.name == DeviceSettingSafety.programmingLock {
 
-        problems.append("\(label) is on, so the device's buttons can't change its links or settings")
-        fixes.append(.turnOffProgrammingLock)
+        if isOn {
+
+          problems.append("\(label) is on, so the device's buttons can't change its links or settings")
+          add(.turnOffProgrammingLock)
+
+        }
 
       } else if DeviceSettingSafety.neverWritten.contains(flag.name) {
 
-        problems.append("\(label) is on, which cuts the device off from the modem")
+        if isOn {
 
-        if !fixes.contains(.factoryReset) {
+          problems.append("\(label) is on, which cuts the device off from the modem")
+          add(.factoryReset)
 
-          fixes.append(.factoryReset)
+        }
 
+      } else if let rule = DeviceSettingSafety.rule(for: flag) {
+
+        switch rule {
+        case .neverSet where isOn:
+          problems.append("\(label) is on, which the Insteon device catalog says is never turned on")
+        case .keep where flag.defaultValue.map({ (value: Bool) -> Bool in value != isOn }) == true:
+          problems.append("\(label) is \(isOn ? "on" : "off"), unlike the device as it leaves the factory, and isn't written")
+          add(.factoryReset)
+        default:
+          break
         }
 
       }

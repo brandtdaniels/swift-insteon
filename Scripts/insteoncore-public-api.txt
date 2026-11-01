@@ -186,7 +186,7 @@ case SelfTestChecklistItem.powerCycle
 case SelfTestChecklistItem.pressButton(group:)
 case SelfTestFix.checkSignal
 case SelfTestFix.factoryReset
-case SelfTestFix.link
+case SelfTestFix.link(modemRole:group:)
 case SelfTestFix.readAgain
 case SelfTestFix.reviewRecords(_:)
 case SelfTestFix.turnOffProgrammingLock
