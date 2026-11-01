@@ -14,19 +14,62 @@ enum PrivateFile {
   /// The contents of a regular file, or `nil` if there's none, something else is at the path,
   /// such as a directory, a symbolic link or a named pipe, or it can't be read.
   ///
-  /// Only a regular file is read, so a named pipe can't block the caller.
+  /// The file is opened without following a symbolic link and without waiting, then checked
+  /// to be a regular file through the descriptor it was opened as, so a named pipe can't block
+  /// the caller and nothing swapped in between a check and the read is read.
   static func read(_ path: String) -> Data? {
 
-    guard
-      let type = try? FileManager.default.attributesOfItem(atPath: path)[.type] as? FileAttributeType,
-      type == .typeRegular
-    else {
+    let descriptor: Int32 = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+
+    guard descriptor >= 0 else {
 
       return nil
 
     }
 
-    return FileManager.default.contents(atPath: path)
+    defer { _ = close(descriptor) }
+
+    var status: stat = stat()
+
+    // The file's type, S_IFMT, is a regular file, S_IFREG.
+    guard fstat(descriptor, &status) == 0, status.st_mode & 0o170000 == 0o100000 else {
+
+      return nil
+
+    }
+
+    var data: Data = Data()
+    var buffer: [UInt8] = [UInt8](repeating: 0, count: 65_536)
+
+    while true {
+
+      let count: Int = buffer.withUnsafeMutableBytes { (bytes: UnsafeMutableRawBufferPointer) -> Int in
+
+        readDescriptor(descriptor, bytes.baseAddress, bytes.count)
+
+      }
+
+      if count < 0 {
+
+        guard errno == EINTR else {
+
+          return nil
+
+        }
+
+        continue
+
+      }
+
+      if count == 0 {
+
+        return data
+
+      }
+
+      data.append(contentsOf: buffer[0..<count])
+
+    }
 
   }
 
@@ -111,10 +154,10 @@ enum PrivateFile {
 
   }
 
-  /// Makes one directory, whose parent is there, unless something is already at its path.
+  /// Makes one directory, whose parent is there, unless a directory is already at its path.
   ///
   /// - Throws: ``DeviceRegistryStoreError/writeFailed(code:)`` with the system's error code if
-  ///   it couldn't be made.
+  ///   it couldn't be made, or with `ENOTDIR` if something other than a directory is there.
   private static func makeOne(_ directory: String, permissions: mode_t) throws {
 
     guard mkdir(directory, permissions) != 0 else {
@@ -128,6 +171,16 @@ enum PrivateFile {
     guard code == EEXIST else {
 
       throw DeviceRegistryStoreError.writeFailed(code: code)
+
+    }
+
+    // Something is already there: it must be a directory, or a symbolic link to one, such as
+    // a cache directory kept elsewhere, and not a file the write would fail inside.
+    var isDirectory: ObjCBool = false
+
+    guard FileManager.default.fileExists(atPath: directory, isDirectory: &isDirectory), isDirectory.boolValue else {
+
+      throw DeviceRegistryStoreError.writeFailed(code: ENOTDIR)
 
     }
 
@@ -202,5 +255,19 @@ enum PrivateFile {
     return true
 
   }
+
+}
+
+/// Reads from a file descriptor with the system's `read`, which `PrivateFile.read(_:)` hides by
+/// name.
+private func readDescriptor(_ descriptor: Int32, _ bytes: UnsafeMutableRawPointer?, _ count: Int) -> Int {
+
+  #if canImport(Darwin)
+  return Darwin.read(descriptor, bytes, count)
+  #elseif canImport(Glibc)
+  return Glibc.read(descriptor, bytes, count)
+  #else
+  return Musl.read(descriptor, bytes, count)
+  #endif
 
 }
