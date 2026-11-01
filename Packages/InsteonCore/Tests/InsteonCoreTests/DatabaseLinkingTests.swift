@@ -29,6 +29,9 @@ enum DatabaseLinkingExample {
   /// A module whose catalog says it runs i2.
   static let older = ReportedIdentity(category: 0x02, subcategory: 0x72, firmwareVersion: 0x41)
 
+  /// A module whose catalog doesn't say what its responder record's data bytes hold.
+  static let plain = ReportedIdentity(category: 0x02, subcategory: 0x73, firmwareVersion: 0x41)
+
   static let responderBytes: [LinkDataByte] = [
     LinkDataByte(position: 1, name: "onLevel", summary: "The level the link turns the load to.", table: "onOff"),
     LinkDataByte(position: 2, name: "rampRate", summary: "How fast the load ramps."),
@@ -46,7 +49,8 @@ enum DatabaseLinkingExample {
         label: "Load",
         kind: .relay,
         linkData: GroupType.LinkData(responder: [LinkDataByte(position: 1, name: "speed", summary: "A speed.")])
-      )
+      ),
+      GroupType(name: "plainLoad", label: "Load", kind: .relay)
     ]
   )
 
@@ -80,10 +84,28 @@ enum DatabaseLinkingExample {
       profile("9501", moduleIdentity),
       profile("9502", legless, legs: []),
       profile("9503", speedy, type: "speedyLoad"),
-      profile("9504", older, engines: [DeviceEngine(engine: .i2, category: older.category, subcategory: older.subcategory)])
+      profile("9504", older, engines: [DeviceEngine(engine: .i2, category: older.category, subcategory: older.subcategory)]),
+      profile("9505", plain, type: "plainLoad")
     ],
     commandSets: [commands]
   )
+
+  /// The in-memory modem, whose catalog profile says what its own records hold.
+  static let modemProfile = DeviceProfile(
+    model: "9599",
+    name: "Example Modem",
+    identities: [DeviceIdentity(category: 0x03, subcategory: 0x15)],
+    modemLinkData: ModemLinkData(
+      controller: [
+        ModemLinkDataByte(position: 1, name: "data1", summary: "Always 0x01.", value: 0x01),
+        ModemLinkDataByte(position: 2, name: "subcategory", summary: "The responder's subcategory.", identity: .subcategory),
+        ModemLinkDataByte(position: 3, name: "firmware", summary: "The responder's firmware version.", identity: .firmware)
+      ],
+      responder: [ModemLinkDataByte(position: 1, name: "category", summary: "The controller's category.", identity: .category)]
+    )
+  )
+
+  static let catalogWithModem = DeviceCatalog(profiles: catalog.profiles + [modemProfile], commandSets: [commands])
 
 }
 
@@ -142,9 +164,9 @@ struct DatabaseLinkingTests {
 
   }
 
-  func network(_ modem: InMemoryModem) -> DeviceNetwork {
+  func network(_ modem: InMemoryModem, catalog: DeviceCatalog = DatabaseLinkingExample.catalog) -> DeviceNetwork {
 
-    DeviceNetwork(modem: modem, catalog: DatabaseLinkingExample.catalog, clock: clock)
+    DeviceNetwork(modem: modem, catalog: catalog, clock: clock)
 
   }
 
@@ -251,7 +273,12 @@ struct DatabaseLinkingTests {
     let plan: DatabaseLinkPlan = try await network(modem).linking.planDatabaseLink(device)
 
     #expect(plan.isEmpty)
-    #expect(plan.linksInPlace.count == 4)
+    #expect(plan.linksInPlace == [
+      LinkRecord(isController: false, isInUse: true, group: 0x00, address: modemAddress, data: [0x80, 0x1F, 0x01], memoryAddress: 0x0FF7),
+      LinkRecord(isController: true, isInUse: true, group: 0x00, address: device, data: [0x00, 0x00, 0x00]),
+      LinkRecord(isController: false, isInUse: true, group: 0x01, address: device, data: [0x00, 0x00, 0x00]),
+      LinkRecord(isController: true, isInUse: true, group: 0x01, address: modemAddress, data: [0x00, 0x00, 0x00], memoryAddress: 0x0FFF)
+    ])
 
   }
 
@@ -581,9 +608,29 @@ struct DatabaseLinkingTests {
     let modem: InMemoryModem = await linked()
     let linking: DeviceLinkingCoordinator = network(modem).linking
     let plan: DatabaseLinkPlan = try await linking.planDatabaseUnlink(device)
+
+    // The device acknowledges removing its last record of the modem, then rejects the modem.
+    await modem.setUnlinked(device, afterWrites: 2)
+
+    let result: DatabaseLinkResult = try await linking.apply(plan)
+
+    #expect(result.steps.map { $0.outcome } == [.written, .written, .written, .unverifiable])
+    #expect(result.deviceCheck == .rejectsModemAfterUnlinking)
+    #expect(result.mismatches.isEmpty)
+    #expect(result.isComplete)
+    #expect(await modem.record(of: device, at: 0x0FFF) == deleted(controller(0x01, naming: modemAddress)))
+    #expect(await modem.record(of: device, at: 0x0FF7) == deleted(responder(0x00, naming: modemAddress, data: [0xFF, 0x1C, 0x01])))
+
+  }
+
+  @Test func doesntCountAWriteTheDeviceRejectsAsDone() async throws {
+
+    let modem: InMemoryModem = await linked()
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    let plan: DatabaseLinkPlan = try await linking.planDatabaseUnlink(device)
     let device: InsteonAddress = self.device
 
-    // The device rejects the modem from the write of its last record of the modem on.
+    // The device rejects the modem before its last record of the modem is written.
     await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
 
       if case .extendedRequest = operation, await modem.writes.count == 1 {
@@ -596,10 +643,300 @@ struct DatabaseLinkingTests {
 
     let result: DatabaseLinkResult = try await linking.apply(plan)
 
-    #expect(result.steps.map { $0.outcome } == [.written, .written, .written, .unverifiable])
-    #expect(result.deviceCheck == .rejectsModemAfterUnlinking)
-    #expect(result.mismatches.isEmpty)
+    #expect(result.steps.map { $0.outcome } == [.written, .written, .written, .rejected])
+    #expect(!result.isComplete)
+    #expect(await modem.record(of: device, at: 0x0FF7) == responder(0x00, naming: modemAddress, data: [0xFF, 0x1C, 0x01]))
+
+  }
+
+  @Test func unlinksBothModemRolesInAGroupWhicheverComesFirst() async throws {
+
+    let modem: InMemoryModem = await modem()
+
+    await modem.setDatabase([
+      0x0FFF: controller(0x01, naming: modemAddress),
+      0x0FF7: responder(0x01, naming: modemAddress)
+    ], of: device)
+    await modem.setModemRecords([responder(0x01, naming: device), controller(0x01, naming: device), controller(0x00, naming: DatabaseLinkingExample.lamp)])
+
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    let result: DatabaseLinkResult = try await linking.apply(try await linking.planDatabaseUnlink(device))
+
     #expect(result.isComplete)
+    #expect(await modem.modemRecords == [controller(0x00, naming: DatabaseLinkingExample.lamp)])
+
+  }
+
+  // MARK: - Partway
+
+  @Test func countsAWriteThatTimesOutButReadsBackAsWritten() async throws {
+
+    let modem: InMemoryModem = await partlyLinked()
+
+    await modem.setUnacknowledged(device, writes: 1)
+
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    let result: DatabaseLinkResult = try await linking.apply(try await linking.planDatabaseLink(device))
+
+    #expect(result.steps.map { $0.outcome } == [.written, .written, .written])
+    #expect(result.isComplete)
+    #expect(await modem.writes == [InMemoryModem.Write(device: device, address: 0x0FF7)])
+
+  }
+
+  @Test func stopsAtAWriteThatsNeitherAnsweredNorReadBack() async throws {
+
+    let modem: InMemoryModem = await partlyLinked()
+
+    // The device doesn't acknowledge the write, then rejects the modem when it's read back.
+    await modem.setUnacknowledged(device, writes: 1)
+    await modem.setUnlinked(device, afterWrites: 1)
+
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    let result: DatabaseLinkResult = try await linking.apply(try await linking.planDatabaseLink(device))
+
+    #expect(result.steps.map { $0.outcome } == [.unanswered, .notReached, .notReached])
+    #expect(result.deviceCheck == .unanswered)
+    #expect(!result.isComplete)
+    #expect(await modem.modemRecords.isEmpty)
+
+  }
+
+  @Test func keepsTheDatabaseWholeWhenTheRecordAfterANewEndIsntWritten() async throws {
+
+    let modem: InMemoryModem = await modem()
+    let device: InsteonAddress = self.device
+
+    await modem.setDatabase([0x0FFF: controller(0x01, naming: modemAddress)], of: device)
+
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    let plan: DatabaseLinkPlan = try await linking.planDatabaseLink(device)
+
+    // The new end is written, and the record in the old end's slot isn't.
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      if case .extendedRequest = operation, await modem.writes.count == 1 {
+
+        await modem.setForgetful(device)
+
+      }
+
+    }
+
+    let result: DatabaseLinkResult = try await linking.apply(plan)
+
+    #expect(result.steps.map { $0.outcome } == [.written, .notWritten, .notReached, .notReached])
+    #expect(result.mismatches.isEmpty)
+    #expect(await modem.record(of: device, at: 0x0FF7) == end)
+    #expect(await modem.record(of: device, at: 0x0FEF) == end)
+    #expect(await modem.modemRecords.isEmpty)
+
+  }
+
+  @Test func reportsAnAddTheModemRejects() async throws {
+
+    let modem: InMemoryModem = await partlyLinked()
+
+    // The modem's database is full.
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      if case let .send(command) = operation, case .manageAllLinkRecord(.modifyFirstControllerOrAdd, _) = command {
+
+        throw ModemError.rejected(.manageAllLinkRecord)
+
+      }
+
+    }
+
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    let result: DatabaseLinkResult = try await linking.apply(try await linking.planDatabaseLink(device))
+
+    #expect(result.steps.map { $0.outcome } == [.written, .rejected, .notReached])
+    #expect(result.mismatches.isEmpty)
+    #expect(!result.isComplete)
+
+  }
+
+  @Test func carriesTheStepsMadeWhenTheModemStopsAnswering() async throws {
+
+    let modem: InMemoryModem = await partlyLinked()
+
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      if case .send = operation {
+
+        throw ModemError.timedOut(.manageAllLinkRecord)
+
+      }
+
+    }
+
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    let plan: DatabaseLinkPlan = try await linking.planDatabaseLink(device)
+    let error: DatabaseLinkInterrupted? = await #expect(throws: DatabaseLinkInterrupted.self) {
+
+      try await linking.apply(plan)
+
+    }
+
+    #expect(error?.result.steps.map { $0.outcome } == [.written, .unanswered, .notReached])
+    #expect(error?.result.deviceCheck == .checked)
+    #expect(error?.result.mismatches == [])
+    #expect(error?.cause as? ModemError == .timedOut(.manageAllLinkRecord))
+
+  }
+
+  @Test func carriesTheStepsMadeWhenCanceled() async throws {
+
+    let modem: InMemoryModem = await partlyLinked()
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    let plan: DatabaseLinkPlan = try await linking.planDatabaseLink(device)
+
+    // The task is canceled as the modem is sent its first record.
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      if case .send = operation {
+
+        withUnsafeCurrentTask { (task: UnsafeCurrentTask?) -> Void in task?.cancel() }
+
+      }
+
+    }
+
+    let applying = Task { () async throws -> DatabaseLinkResult in try await linking.apply(plan) }
+    let outcome: Result<DatabaseLinkResult, any Error> = await applying.result
+    let error: DatabaseLinkInterrupted? = #expect(throws: DatabaseLinkInterrupted.self) { try outcome.get() }
+
+    #expect(error?.cause is CancellationError)
+    #expect(error?.result.steps.map { $0.outcome } == [.written, .unanswered, .notReached])
+    #expect(error?.result.deviceCheck == .unanswered)
+    #expect(await modem.modemRecords.isEmpty)
+
+  }
+
+  @Test func stopsBeforeWritingASlotThatChangedAfterTheCheck() async throws {
+
+    let modem: InMemoryModem = await linked()
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    let plan: DatabaseLinkPlan = try await linking.planDatabaseUnlink(device)
+    let device: InsteonAddress = self.device
+    let changed: AllLinkRecord = controller(0x07, naming: DatabaseLinkingExample.lamp)
+    let others: [UInt16: AllLinkRecord] = [
+      0x0FFF: changed,
+      0x0FF7: responder(0x00, naming: modemAddress, data: [0xFF, 0x1C, 0x01]),
+      0x0FEF: responder(0x05, naming: DatabaseLinkingExample.stranger)
+    ]
+
+    // Something else writes the device's first slot while the modem's records are deleted.
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      if case .send = operation {
+
+        await modem.setDatabase(others, of: device)
+
+      }
+
+    }
+
+    let error: DatabaseLinkInterrupted? = await #expect(throws: DatabaseLinkInterrupted.self) {
+
+      try await linking.apply(plan)
+
+    }
+
+    #expect(error?.cause as? DatabaseLinkRefusal == .changedSincePlanned(device))
+    #expect(error?.result.steps.map { $0.outcome } == [.written, .written, .notReached, .notReached])
+    #expect(await modem.writes.isEmpty)
+    #expect(await modem.record(of: device, at: 0x0FFF) == changed)
+
+  }
+
+  // MARK: - More refusals
+
+  @Test func refusesALastRecordMarkedInUse() async {
+
+    let modem: InMemoryModem = await modem()
+
+    // The record that ends the database has never been used, yet it's marked in use.
+    await modem.setDatabase([
+      0x0FFF: controller(0x01, naming: modemAddress),
+      0x0FF7: AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0x80), group: 0x00, address: DatabaseLinkingExample.lamp)
+    ], of: device)
+
+    #expect(await refusal(modem) == .noEndOfDatabase(device))
+
+  }
+
+  @Test func refusesAGroupWhoseLinkDataTheCatalogDoesntGive() async {
+
+    let modem: InMemoryModem = await modem(identity: DatabaseLinkingExample.plain)
+
+    await modem.setDatabase([0x0FFF: controller(0x01, naming: modemAddress)], of: device)
+
+    #expect(await refusal(modem) == .undescribedLinkData(device, group: 0x01))
+
+  }
+
+  @Test func refusesAnEngineThisPackageDoesntKnow() async {
+
+    let modem: InMemoryModem = await modem()
+
+    await modem.setUnknownEngine(0x05, of: device)
+
+    #expect(await refusal(modem) == .unsupportedEngine(device, nil))
+
+  }
+
+  @Test func refusesWhenTheDevicesDatabaseChangedSinceThePlan() async throws {
+
+    let modem: InMemoryModem = await partlyLinked()
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    let plan: DatabaseLinkPlan = try await linking.planDatabaseLink(device)
+
+    await modem.setDatabase([0x0FFF: controller(0x01, naming: modemAddress)], of: device)
+
+    let error: DatabaseLinkRefusal? = await #expect(throws: DatabaseLinkRefusal.self) {
+
+      try await linking.apply(plan)
+
+    }
+
+    #expect(error == .changedSincePlanned(device))
+    #expect(await modem.writes.isEmpty)
+
+  }
+
+  @Test func refusesAPlanForAnotherModem() async throws {
+
+    let modem: InMemoryModem = await partlyLinked()
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    var plan: DatabaseLinkPlan = try await linking.planDatabaseLink(device)
+
+    plan.modem = InsteonAddress(0x44, 0x55, 0x66)
+
+    let other: DatabaseLinkPlan = plan
+    let error: DatabaseLinkRefusal? = await #expect(throws: DatabaseLinkRefusal.self) {
+
+      try await linking.apply(other)
+
+    }
+
+    #expect(error == .changedSincePlanned(device))
+    #expect(await modem.writes.isEmpty)
+
+  }
+
+  // MARK: - The modem's record data
+
+  @Test func writesTheModemsRecordsAsTheCatalogSaysTheModemDoes() async throws {
+
+    let modem: InMemoryModem = await partlyLinked()
+    let plan: DatabaseLinkPlan = try await network(modem, catalog: DatabaseLinkingExample.catalogWithModem).linking.planDatabaseLink(device)
+
+    #expect(plan.modemSteps.map { $0.written } == [
+      controller(0x00, naming: device, data: [0x01, 0x6F, 0x41]),
+      responder(0x01, naming: device, data: [0x02, 0x00, 0x00])
+    ])
 
   }
 

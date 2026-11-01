@@ -28,6 +28,7 @@ case DatabaseLinkStep.Kind.removeModemRecord
 case DatabaseLinkStep.Kind.removeOrphanRecord
 case DatabaseLinkStepOutcome.notReached
 case DatabaseLinkStepOutcome.notWritten
+case DatabaseLinkStepOutcome.rejected
 case DatabaseLinkStepOutcome.unanswered
 case DatabaseLinkStepOutcome.unverifiable
 case DatabaseLinkStepOutcome.written
@@ -355,6 +356,7 @@ func ProductCatalogStore.cachedJSON()
 func ProductCatalogStore.cachedVersion()
 func ProductCatalogStore.save(json:version:)
 func SelfTestReport.check(_:)
+init DatabaseLinkInterrupted(result:cause:)
 init DatabaseLinkResult.StepResult(step:outcome:)
 init DatabaseMismatch(isDevice:memoryAddress:expected:found:)
 init Device(address:network:beforeIdentifying:)
@@ -435,6 +437,8 @@ internal(set) var DatabaseLinkPlan.orphans
 internal(set) var DatabaseLinkPlan.steps
 internal(set) var DatabaseLinkStep.kind
 internal(set) var DatabaseLinkStep.record
+let DatabaseLinkInterrupted.cause
+let DatabaseLinkInterrupted.result
 let Device.address
 let Device.network
 let DeviceGroupKind.rawValue
@@ -494,6 +498,7 @@ static let InsteonErrorDescription.hubStoppedAnsweringInline
 static let JSONFileDeviceRegistryStore.formatVersion
 static let ProductCatalog.updateLocation
 static var ProductCatalog.bundleName
+struct DatabaseLinkInterrupted
 struct DatabaseLinkPlan
 struct DatabaseLinkResult
 struct DatabaseLinkResult.StepResult

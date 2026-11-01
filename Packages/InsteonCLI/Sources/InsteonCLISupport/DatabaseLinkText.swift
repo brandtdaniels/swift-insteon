@@ -56,8 +56,8 @@ public enum DatabaseLinkText {
     if !plan.orphans.isEmpty {
 
       lines.append(plan.removesOrphans
-        ? "The device's records that name a device the modem doesn't know, removed first:"
-        : "The device's records that name a device the modem doesn't know, left as they are; pass --orphans to remove them:")
+        ? "The device's records that name a device the modem has no record of, removed first. Such a record can be a working link with another device that was never linked to the modem, such as a 3-way switch or a keypad button; clearing it breaks that link:"
+        : "The device's records that name a device the modem has no record of, left as they are. Such a record can be a working link with another device that was never linked to the modem, such as a 3-way switch or a keypad button; pass --orphans to clear them anyway:")
 
       for record in plan.orphans {
 
@@ -94,7 +94,7 @@ public enum DatabaseLinkText {
     case .removeDeviceRecord:
       return "Clear the device's \(role(record)) record for group \(record.group.rawValue) at \(address), naming \(record.address)."
     case .removeOrphanRecord:
-      return "Clear the device's \(role(record)) record for group \(record.group.rawValue) at \(address), naming \(record.address), a device the modem doesn't know."
+      return "Clear the device's \(role(record)) record for group \(record.group.rawValue) at \(address), naming \(record.address), a device the modem has no record of."
     case .addModemRecord:
       return "Add the modem's \(role(record)) record for group \(record.group.rawValue), naming the device."
     case .removeModemRecord:
@@ -132,11 +132,14 @@ public enum DatabaseLinkText {
 
     var lines: [String] = []
     let done: Int = result.steps.filter(\.outcome.isDone).count
+    let readBack: Int = result.steps.filter { (step: DatabaseLinkResult.StepResult) -> Bool in step.outcome == .written || step.outcome == .writtenOnRetry }.count
     let total: Int = result.steps.count
 
-    lines.append("Made \(done) of \(total) \(total == 1 ? "write" : "writes"), each read back.")
+    lines.append("Made \(done) of \(total) \(total == 1 ? "write" : "writes"); \(readBack) read back as written.")
 
-    for (index, stepResult) in result.steps.enumerated() where stepResult.outcome != .written {
+    // When something didn't go as planned, every write is listed, so it's clear which records
+    // were written; otherwise only those that need a word.
+    for (index, stepResult) in result.steps.enumerated() where !result.isComplete || stepResult.outcome != .written {
 
       lines.append("  \(index + 1). \(outcome(stepResult.outcome))")
 
@@ -180,6 +183,8 @@ public enum DatabaseLinkText {
       "Read back differently after it was written twice; the writes after it weren't made."
     case .unanswered:
       "The device or the modem didn't answer, so it isn't known whether it was written; the writes after it weren't made."
+    case .rejected:
+      "Rejected each time it was sent, as a modem whose database is full rejects an add; the writes after it weren't made."
     case .unverifiable:
       "Written; the device rejects the modem from then on, as an i2CS device unlinked from it does, so it wasn't read back."
     case .notReached:

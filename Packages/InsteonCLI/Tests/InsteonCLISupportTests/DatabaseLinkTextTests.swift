@@ -123,7 +123,8 @@ struct DatabaseLinkTextTests {
       linksInPlace: [],
       orphans: orphans,
       deviceRecords: [],
-      modemRecords: []
+      modemRecords: [],
+      allModemRecords: []
     )
 
   }
@@ -160,7 +161,7 @@ struct DatabaseLinkTextTests {
 
     #expect(DatabaseLinkText.plan(plan(direction: .unlink, steps: [], orphans: [orphan])) == [
       "Neither 1A.2B.3C nor the modem holds a record of a link with the other. Nothing to write.",
-      "The device's records that name a device the modem doesn't know, left as they are; pass --orphans to remove them:",
+      "The device's records that name a device the modem has no record of, left as they are. Such a record can be a working link with another device that was never linked to the modem, such as a 3-way switch or a keypad button; pass --orphans to clear them anyway:",
       "  responder record for group 5 at 0x0FEF naming 55.66.77, data 00 00 00."
     ])
 
@@ -182,7 +183,8 @@ struct DatabaseLinkTextTests {
 
     #expect(!result.isComplete)
     #expect(DatabaseLinkText.result(result) == [
-      "Made 1 of 3 writes, each read back.",
+      "Made 1 of 3 writes; 1 read back as written.",
+      "  1. Written.",
       "  2. Read back differently after it was written twice; the writes after it weren't made.",
       "  3. Not made.",
       "Not every write went as planned; read the databases with 'insteon device 1A.2B.3C links' and 'insteon links'."

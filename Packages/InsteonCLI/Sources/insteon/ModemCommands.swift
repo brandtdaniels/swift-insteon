@@ -297,7 +297,32 @@ enum ModemCommands {
 
     }
 
-    let result: DatabaseLinkResult = try await coordinator.apply(plan)
+    let result: DatabaseLinkResult
+
+    do {
+
+      result = try await coordinator.apply(plan)
+
+    } catch let interrupted as DatabaseLinkInterrupted {
+
+      // Which records were written is said before why the writes stopped.
+      DatabaseLinkText.result(interrupted.result).forEach(say)
+
+      if printsJSON {
+
+        try Output.json(DatabaseLinkText.report(interrupted.result))
+
+      }
+
+      if interrupted.cause is CancellationError {
+
+        throw CancellationError()
+
+      }
+
+      throw CommandFailure(description: "The writes to the ALL-Link databases stopped partway: \(Names.message(for: interrupted.cause))")
+
+    }
 
     DatabaseLinkText.result(result).forEach(say)
 

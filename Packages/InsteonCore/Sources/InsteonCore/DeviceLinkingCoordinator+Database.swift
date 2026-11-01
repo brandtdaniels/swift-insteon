@@ -131,6 +131,9 @@ extension DeviceLinkingCoordinator {
     /// Every record in use in the modem's database.
     var allModemRecords: [AllLinkRecord]
 
+    /// What the modem's own records hold, from the catalog's profile of the modem, if any.
+    var modemLinkData: ModemLinkData?
+
     /// The modem's records in use that name the device.
     var modemRecords: [AllLinkRecord] {
 
@@ -163,17 +166,23 @@ extension DeviceLinkingCoordinator {
 
     try Self.checkReadable(records, of: device, engine: engine)
 
-    let modem: InsteonAddress = try await network.modemInfo().address
+    let modemInfo: ModemInfo = try await network.modemInfo()
     let modemRecords: [AllLinkRecord] = try await network.modem.allLinkRecords().filter { (record: AllLinkRecord) -> Bool in record.flags.contains(.inUse) }
+    let modemProfile: DeviceProfile? = await network.registry.catalog?.profile(
+      category: modemInfo.category,
+      subcategory: modemInfo.subcategory,
+      firmwareVersion: modemInfo.firmwareVersion
+    )
 
     return DatabaseReading(
       device: device,
-      modem: modem,
+      modem: modemInfo.address,
       identification: identification,
       engine: engine,
       description: description,
       deviceRecords: records,
-      allModemRecords: modemRecords
+      allModemRecords: modemRecords,
+      modemLinkData: modemProfile?.modemLinkData
     )
 
   }
@@ -205,8 +214,8 @@ extension DeviceLinkingCoordinator {
 
   }
 
-  /// Checks that a device's database read whole: ending with its end record, and, for an
-  /// i2CS device, every record's checksum intact.
+  /// Checks that a device's database read whole: ending with its end record, which isn't in
+  /// use, and, for an i2CS device, every record's checksum intact.
   static func checkReadable(_ records: [AllLinkRecordResponse], of device: InsteonAddress, engine: InsteonEngine) throws {
 
     if engine == .i2cs {
@@ -221,7 +230,8 @@ extension DeviceLinkingCoordinator {
 
     }
 
-    guard records.last?.isEndOfDatabase == true else {
+    // A last record that's marked in use isn't an end to write over.
+    guard let last = records.last, last.isEndOfDatabase, !last.record.flags.contains(.inUse) else {
 
       throw DatabaseLinkRefusal.noEndOfDatabase(device)
 
@@ -272,9 +282,7 @@ extension DeviceLinkingCoordinator {
     for record in needed {
 
       // Two legs may need the same record; it's written once.
-      let key = NeededRecord(isModems: record.isModems, isController: record.isController, group: record.group, deviceGroup: 0)
-
-      guard seen.insert(key).inserted else {
+      guard seen.insert(record).inserted else {
 
         continue
 
@@ -331,7 +339,15 @@ extension DeviceLinkingCoordinator {
 
       if record.isModems {
 
-        let written = AllLinkRecord(flags: inUseFlags(isController: record.isController), group: record.group, address: device)
+        let data: [UInt8] = modemData(reading.modemLinkData, isController: record.isController, identity: reading.identification.identity)
+        let written = AllLinkRecord(
+          flags: inUseFlags(isController: record.isController),
+          group: record.group,
+          address: device,
+          data1: data[0],
+          data2: data[1],
+          data3: data[2]
+        )
 
         steps.append(DatabaseLinkStep(kind: .addModemRecord, written: written, memoryAddress: nil))
 
@@ -377,8 +393,43 @@ extension DeviceLinkingCoordinator {
       linksInPlace: inPlace,
       orphans: [],
       deviceRecords: reading.deviceRecords,
-      modemRecords: reading.modemRecords
+      modemRecords: reading.modemRecords,
+      allModemRecords: reading.allModemRecords
     )
+
+  }
+
+  /// The data bytes of a record the modem keeps for the device, from the catalog's profile of
+  /// the modem: a fixed value, or a byte of the identity the device reported. A byte the
+  /// catalog doesn't give, or one of an identity the device didn't report, is `0x00`.
+  static func modemData(_ linkData: ModemLinkData?, isController: Bool, identity: SetButtonPressed?) -> [UInt8] {
+
+    var data: [UInt8] = [0x00, 0x00, 0x00]
+    let bytes: [ModemLinkDataByte] = (isController ? linkData?.controller : linkData?.responder) ?? []
+
+    for byte in bytes where (1...3).contains(byte.position) {
+
+      if let value = byte.value {
+
+        data[byte.position - 1] = value
+
+      } else if let identity, byte.identity == .category {
+
+        data[byte.position - 1] = identity.category.rawValue
+
+      } else if let identity, byte.identity == .subcategory {
+
+        data[byte.position - 1] = identity.subcategory.rawValue
+
+      } else if let identity, byte.identity == .firmware, let firmware = identity.firmwareVersion {
+
+        data[byte.position - 1] = firmware.rawValue
+
+      }
+
+    }
+
+    return data
 
   }
 
@@ -441,7 +492,8 @@ extension DeviceLinkingCoordinator {
 
       },
       deviceRecords: reading.deviceRecords,
-      modemRecords: reading.modemRecords
+      modemRecords: reading.modemRecords,
+      allModemRecords: reading.allModemRecords
     )
 
   }
@@ -528,14 +580,15 @@ extension DeviceLinkingCoordinator {
   /// ``DeviceLinkingCoordinator/planDatabaseUnlink(_:removingOrphans:)``.
   ///
   /// Both databases are read again first; when either changed since the plan was made,
-  /// nothing is written. Each step is then made in order and read back. A device's record is
-  /// written with Read/Write ALL-Link Database (`0x2F`) and read back from its slot; a modem's
-  /// record is added or deleted with Manage ALL-Link Record (`0x6F`) and the modem's records
-  /// for the device in the group are read back. A step that reads back differently is made
-  /// once more, and only then; when it still reads back differently, or the device or modem
-  /// doesn't answer, the steps after it aren't made. Last, both databases are read again and
-  /// compared with what the steps that were made should have left; every other record is
-  /// expected unchanged.
+  /// nothing is written. Each step is then made in order and read back. Before a device's
+  /// record is written, its slot is read again, and the steps stop if it changed. A device's
+  /// record is written with Read/Write ALL-Link Database (`0x2F`) and read back from its slot;
+  /// a modem's record is added or deleted with Manage ALL-Link Record (`0x6F`) and the modem's
+  /// records for the device in the group are read back. A step that reads back differently is
+  /// made once more, and only then; when it still reads back differently, or the device or
+  /// modem doesn't answer or rejects it, the steps after it aren't made. Last, both databases
+  /// are read again and compared with what the steps that were made should have left; every
+  /// other record is expected unchanged.
   ///
   /// Nothing else is sent: no operating flag is read or written, and no device is put into
   /// linking mode. Afterward, the network forgets its copies of the device's and the modem's
@@ -543,10 +596,12 @@ extension DeviceLinkingCoordinator {
   ///
   /// - Parameter plan: The plan.
   /// - Returns: Each step's outcome and what reading both databases again found.
-  /// - Throws: ``DatabaseLinkRefusal/changedSincePlanned(_:)`` or another refusal when a
-  ///   database changed or doesn't read whole, with nothing written; the errors of the
-  ///   modem and the connection to it; and `CancellationError` if the task is canceled. The
-  ///   device's own timeouts and rejections during a step don't throw; its outcome says so.
+  /// - Throws: ``DatabaseLinkRefusal`` when a database changed or doesn't read whole, before
+  ///   anything is written. ``DatabaseLinkInterrupted`` when the steps stop partway for
+  ///   anything but the device's own timeouts and rejections, such as the modem's error, a
+  ///   slot that changed before it was written, or `CancellationError`: it carries the
+  ///   outcome of each step, and what reading the databases again found when they could be
+  ///   read. The device's own timeouts and rejections don't throw; a step's outcome says so.
   public func apply(_ plan: DatabaseLinkPlan) async throws -> DatabaseLinkResult {
 
     try await inTurn(changing: plan.device) { () async throws -> DatabaseLinkResult in
@@ -560,16 +615,12 @@ extension DeviceLinkingCoordinator {
       try Self.checkReadable(records, of: device, engine: plan.engine)
 
       let modemAddress: InsteonAddress = try await network.modemInfo().address
-      let modemRecords: [AllLinkRecord] = try await modem.allLinkRecords().filter { (record: AllLinkRecord) -> Bool in
-
-        record.flags.contains(.inUse) && record.address == device
-
-      }
+      let modemRecords: [AllLinkRecord] = try await modem.allLinkRecords().filter { (record: AllLinkRecord) -> Bool in record.flags.contains(.inUse) }
 
       guard
         modemAddress == plan.modem,
         Self.isSame(records, plan.deviceRecords),
-        Self.isSameModemRecords(modemRecords, plan.modemRecords)
+        Self.isSameModemRecords(modemRecords, plan.allModemRecords)
       else {
 
         throw DatabaseLinkRefusal.changedSincePlanned(device)
@@ -578,6 +629,9 @@ extension DeviceLinkingCoordinator {
 
       var results: [DatabaseLinkResult.StepResult] = []
       var isStopped: Bool = false
+      var interruption: (any Error)?
+      // What each slot of the device's database holds, as read and as written since.
+      var slots: [UInt16: AllLinkRecord] = Self.slots(of: plan.deviceRecords)
       let lastDeviceLinkIndex: Int? = plan.steps.lastIndex { (step: DatabaseLinkStep) -> Bool in step.kind == .removeDeviceRecord }
 
       for (index, step) in plan.steps.enumerated() {
@@ -590,33 +644,131 @@ extension DeviceLinkingCoordinator {
 
         }
 
-        let outcome: DatabaseLinkStepOutcome
+        do {
 
-        if step.isDeviceStep {
+          let outcome: DatabaseLinkStepOutcome
 
-          // An i2CS device rejects the modem once its last record of the modem is gone.
-          let mayBecomeUnreadable: Bool = plan.engine == .i2cs && index == lastDeviceLinkIndex
+          if step.isDeviceStep, let address = step.record.memoryAddress {
 
-          outcome = try await writeDeviceRecord(step, of: device, engine: plan.engine, mayBecomeUnreadable: mayBecomeUnreadable)
+            if let expected = slots[address] {
 
-        } else {
+              let holds: Bool
 
-          outcome = try await writeModemRecord(step, of: device)
+              do {
+
+                holds = try await slotHolds(expected, at: address, of: device, engine: plan.engine)
+
+              } catch where Self.isDeviceProblem(error) {
+
+                results.append(DatabaseLinkResult.StepResult(step: step, outcome: .unanswered))
+                isStopped = true
+
+                continue
+
+              }
+
+              guard holds else {
+
+                // Something else wrote the slot since it was read, so it isn't written over.
+                results.append(DatabaseLinkResult.StepResult(step: step, outcome: .notReached))
+                interruption = DatabaseLinkRefusal.changedSincePlanned(device)
+                isStopped = true
+
+                continue
+
+              }
+
+            }
+
+            // An i2CS device rejects the modem once its last record of the modem is gone.
+            let mayBecomeUnreadable: Bool = plan.engine == .i2cs && index == lastDeviceLinkIndex
+
+            outcome = try await writeDeviceRecord(step, of: device, engine: plan.engine, mayBecomeUnreadable: mayBecomeUnreadable)
+
+            if outcome.isDone {
+
+              slots[address] = step.written
+
+            }
+
+          } else {
+
+            outcome = try await writeModemRecord(step, of: device)
+
+          }
+
+          results.append(DatabaseLinkResult.StepResult(step: step, outcome: outcome))
+          isStopped = !outcome.isDone
+
+        } catch {
+
+          // It isn't known whether the step took; the steps after it aren't made.
+          results.append(DatabaseLinkResult.StepResult(step: step, outcome: .unanswered))
+          interruption = error
+          isStopped = true
 
         }
 
-        results.append(DatabaseLinkResult.StepResult(step: step, outcome: outcome))
-        isStopped = !outcome.isDone
+      }
+
+      var mismatches: [DatabaseMismatch] = []
+      var deviceCheck: DatabaseLinkResult.DeviceCheck = .unanswered
+
+      // A canceled task reads nothing more, so the databases aren't read again.
+      if !(interruption is CancellationError) {
+
+        do {
+
+          (mismatches, deviceCheck) = try await verify(plan, results: results)
+
+        } catch {
+
+          interruption = interruption ?? error
+
+        }
 
       }
 
-      let (mismatches, deviceCheck): ([DatabaseMismatch], DatabaseLinkResult.DeviceCheck) = try await verify(plan, results: results)
+      let result = DatabaseLinkResult(plan: plan, steps: results, mismatches: mismatches, deviceCheck: deviceCheck)
+
+      if let interruption {
+
+        throw DatabaseLinkInterrupted(result: result, cause: interruption)
+
+      }
 
       await network.recordLinkChange(of: device, answered: true)
 
-      return DatabaseLinkResult(plan: plan, steps: results, mismatches: mismatches, deviceCheck: deviceCheck)
+      return result
 
     }
+
+  }
+
+  /// Each slot of a device's database and the record it holds.
+  static func slots(of records: [AllLinkRecordResponse]) -> [UInt16: AllLinkRecord] {
+
+    var slots: [UInt16: AllLinkRecord] = [:]
+
+    for response in records {
+
+      slots[response.address] = response.record
+
+    }
+
+    return slots
+
+  }
+
+  /// Whether a slot of a device's database holds a record, read again just before it's
+  /// written.
+  ///
+  /// - Throws: The device's timeout or rejection, and the modem's errors.
+  func slotHolds(_ expected: AllLinkRecord, at address: UInt16, of device: InsteonAddress, engine: InsteonEngine) async throws -> Bool {
+
+    let current: AllLinkRecordResponse = try await readRecord(at: address, of: device, engine: engine)
+
+    return Self.isSame(current.record, expected)
 
   }
 
@@ -632,7 +784,7 @@ extension DeviceLinkingCoordinator {
 
   }
 
-  /// Whether the modem's records for a device are those a plan read, in any order.
+  /// Whether the modem's records are those a plan read, in any order.
   static func isSameModemRecords(_ records: [AllLinkRecord], _ planned: [AllLinkRecord]) -> Bool {
 
     records.count == planned.count && records.allSatisfy { (record: AllLinkRecord) -> Bool in
@@ -686,14 +838,22 @@ extension DeviceLinkingCoordinator {
 
     let modem: any LinkingModem = network.modem
     let message: ExtendedMessage = AllLinkDatabaseRequest.write(step.written, address: address).message(to: device)
+    var rejections: Int = 0
 
     for attempt in 1...2 {
+
+      var isAcknowledged: Bool = false
 
       do {
 
         _ = try await modem.request(message, timeout: Modem.defaultExtendedRequestTimeout)
+        isAcknowledged = true
 
-      } catch where Self.isDeviceProblem(error) {
+      } catch ModemError.deviceRejected {
+
+        rejections += 1
+
+      } catch ModemError.deviceTimedOut {
 
         // Whether it took is read back below.
 
@@ -705,13 +865,15 @@ extension DeviceLinkingCoordinator {
 
         readBack = try await readRecord(at: address, of: device, engine: engine)
 
-      } catch ModemError.deviceRejected(_, .notLinked) where mayBecomeUnreadable {
+      } catch ModemError.deviceRejected(_, .notLinked) where mayBecomeUnreadable && isAcknowledged {
 
+        // The device acknowledged removing its last record of the modem, and rejects the modem
+        // from then on.
         return .unverifiable
 
       } catch where Self.isDeviceProblem(error) {
 
-        return .unanswered
+        return rejections > 0 ? .rejected : .unanswered
 
       }
 
@@ -723,7 +885,7 @@ extension DeviceLinkingCoordinator {
 
     }
 
-    return .notWritten
+    return rejections == 2 ? .rejected : .notWritten
 
   }
 
@@ -760,6 +922,7 @@ extension DeviceLinkingCoordinator {
     let record: AllLinkRecord = step.written
     let isController: Bool = record.flags.contains(.controller)
     let before: [AllLinkRecord] = try await modem.allLinkRecords(group: record.group, device: device)
+    var rejections: Int = 0
 
     for attempt in 1...2 {
 
@@ -780,7 +943,9 @@ extension DeviceLinkingCoordinator {
 
       } catch ModemError.rejected(.manageAllLinkRecord) {
 
-        // Whether anything changed is read back below.
+        // A modem whose database is full rejects an add; whether anything changed is read
+        // back below.
+        rejections += 1
 
       }
 
@@ -809,7 +974,7 @@ extension DeviceLinkingCoordinator {
 
     }
 
-    return .notWritten
+    return rejections == 2 ? .rejected : .notWritten
 
   }
 
@@ -823,13 +988,7 @@ extension DeviceLinkingCoordinator {
     var deviceCheck: DatabaseLinkResult.DeviceCheck = .checked
 
     // The device: each slot as read, with the writes made.
-    var expected: [UInt16: AllLinkRecord] = [:]
-
-    for response in plan.deviceRecords {
-
-      expected[response.address] = response.record
-
-    }
+    var expected: [UInt16: AllLinkRecord] = Self.slots(of: plan.deviceRecords)
 
     for result in results where result.step.isDeviceStep && result.outcome.isDone {
 
@@ -844,24 +1003,23 @@ extension DeviceLinkingCoordinator {
     do {
 
       let records: [AllLinkRecordResponse] = try await modem.readAllLinkDatabase(of: device, timeout: Modem.defaultExtendedRequestTimeout)
-      var found: [UInt16: AllLinkRecordResponse] = [:]
-
-      for response in records {
-
-        found[response.address] = response
-
-      }
-
-      // The device sends no records past its end, so only the slots down to the end are
-      // compared.
+      let found: [UInt16: AllLinkRecordResponse] = Dictionary(records.map { (response: AllLinkRecordResponse) -> (UInt16, AllLinkRecordResponse) in (response.address, response) }) { (first: AllLinkRecordResponse, _: AllLinkRecordResponse) -> AllLinkRecordResponse in first }
       let end: UInt16 = records.last?.address ?? 0x0FFF
 
-      for address in expected.keys.sorted(by: >) where address >= end {
+      for address in Set(expected.keys).union(found.keys).sorted(by: >) {
 
         let want: AllLinkRecord? = expected[address]
         let got: AllLinkRecordResponse? = found[address]
 
         if let want, let got, Self.isSame(got.record, want) {
+
+          continue
+
+        }
+
+        // The device sends no records past its end, so a slot there holding an end marker, or
+        // one never expected, reads as nothing; any other record expected there is cut off.
+        if got == nil, address < end, want.map({ (record: AllLinkRecord) -> Bool in !record.flags.contains(.usedBefore) }) ?? true {
 
           continue
 

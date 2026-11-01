@@ -209,8 +209,9 @@ public enum HelpText {
     Each write is read back, and written once more if it reads back differently. The device
     must run i2CS and accept the modem, as it does once it holds any record of the modem, or
     run i2 by the catalog; the command writes nothing to a device whose database fails a
-    checksum, has no end, has no room, or that the catalog doesn't give links for. Undo it
-    with 'unlink ADDRESS --database'.
+    checksum, has no end, has no room, or that the catalog doesn't give links for. A later
+    'unlink ADDRESS --database' removes every link between the device and the modem, not only
+    the records this wrote.
 
       --database          Link by writing the ALL-Link databases, as above. Not with --group,
                           --controller, --responder, --either, --two-way, --one-way,
@@ -268,13 +269,17 @@ public enum HelpText {
     are read first, and the command shows each write it plans and asks before making them.
     No other record is changed, and no database is compacted. The modem's records go first,
     then the device's; an i2CS device rejects the modem once its last record of the modem is
-    gone, so that write isn't read back. The plan also lists the device's records that name
-    a device the modem doesn't know.
+    gone, so that write isn't read back, and it can only be linked again with linking mode or
+    its SET button. Every link with the modem goes, including the device's place in the
+    modem's scenes. The plan also lists the device's records that name a device the modem has
+    no record of; such a record can be a working link with another device never linked to the
+    modem, such as a 3-way switch or a keypad button.
 
       --database          Unlink by writing the ALL-Link databases, as above. Not with
                           --group, --controller, --responder or --timeout.
       --orphans           With --database, also clear the device's records that name a
-                          device the modem doesn't know, first.
+                          device the modem has no record of, first. This breaks any working
+                          link they hold with a device never linked to the modem.
       --dry-run           With --database, show the writes and make none.
       --yes, -y           With --database, write without asking. Needed when standard input
                           isn't a terminal.

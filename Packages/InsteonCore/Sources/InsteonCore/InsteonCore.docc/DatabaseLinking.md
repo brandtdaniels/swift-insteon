@@ -48,9 +48,12 @@ no value for, and for a device the catalog gives no links for.
 
 ``DeviceLinkingCoordinator/planDatabaseUnlink(_:removingOrphans:)`` clears the in-use bit of each
 of the device's records that names the modem, in its slot, and deletes each of the modem's
-records that names the device. ``DatabaseLinkPlan/orphans`` lists the device's records that name
-a device the modem has no record of; with `removingOrphans`, they're cleared too, first. No
-database is compacted. The modem's records go first and the device's last, so an i2CS device
+records that names the device, in every group and both roles: the links made by any means,
+including those that were there before, and the device's place in each of the modem's scenes.
+``DatabaseLinkPlan/orphans`` lists the device's records that name a device the modem has no
+record of. Such a record can be a working link between the device and another device that was
+never linked to the modem, such as a 3-way switch or a keypad button, so it's cleared only with
+`removingOrphans`, first, and clearing it breaks that link. No database is compacted. The modem's records go first and the device's last, so an i2CS device
 keeps a record of the modem, which it needs to accept a write, until its last one; it rejects
 the modem from then on, so that write can't be read back.
 
@@ -65,18 +68,30 @@ checksum, ends without its end record, or has no room for the records.
 
 ``DeviceLinkingCoordinator/apply(_:)`` reads both databases again and writes nothing when either
 changed since the plan. Each step is then made and read back: a device's record from its slot,
-and the modem's records for the device in the step's group. A step that reads back differently
-is made once more, and only then; when it still reads back differently, or the device doesn't
-answer, the steps after it aren't made. Last, both databases are read again and every record is
+read again just before it's written, and the modem's records for the device in the step's group.
+A step that reads back differently is made once more, and only then; when it still reads back
+differently, or the device or modem doesn't answer or rejects it, the steps after it aren't made.
+When the steps stop for the modem's error, a slot that changed, or cancellation,
+``DatabaseLinkInterrupted`` carries each step's outcome, so it's known which records were
+written. Last, both databases are read again and every record is
 compared with what the steps that were made should have left, in
 ``DatabaseLinkResult/mismatches``. Nothing else is sent: no operating flag is read or written,
 and no device is put into linking mode.
 
 ### Undoing it
 
-A database link is undone with a database unlink of the same device, which removes every record
-of a link between it and the modem. An unlink is undone by linking again, by database or with
-linking mode; the cleared slots are reused.
+Neither is undone exactly:
+
+- A database unlink after a database link removes every link between the device and the modem,
+  not only the records the link wrote: links that were there before, made by any means, and the
+  device's place in the modem's scenes go too.
+- After a database unlink, an i2CS device rejects the modem, so it can't be linked again by
+  database; link it with linking mode or its SET button. Another device links again by database
+  or either way, and the cleared slots are reused.
+- Records cleared as orphans aren't restored. Link the devices they named again to restore
+  those links.
+- An end of the device's database that a link moved down stays where it is; the slots above it
+  are free for the next records.
 
 ## Topics
 
@@ -92,3 +107,4 @@ linking mode; the cleared slots are reused.
 - ``DatabaseLinkResult``
 - ``DatabaseLinkStepOutcome``
 - ``DatabaseMismatch``
+- ``DatabaseLinkInterrupted``

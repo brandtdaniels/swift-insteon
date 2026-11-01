@@ -130,6 +130,9 @@ public struct DatabaseLinkPlan: Hashable, Sendable {
   /// The modem's records in use that name the device, as they were read.
   var modemRecords: [AllLinkRecord]
 
+  /// Every record in use in the modem's database, as it was read.
+  var allModemRecords: [AllLinkRecord]
+
   /// Whether the plan writes nothing.
   public var isEmpty: Bool {
 
@@ -282,9 +285,14 @@ public enum DatabaseLinkStepOutcome: String, Hashable, Sendable {
   /// made.
   case notWritten
 
-  /// The device or the modem didn't answer, or rejected the write or the read back, so it
-  /// isn't known whether the record was written. The steps after it weren't made.
+  /// The device or the modem didn't answer the write or the read back, so it isn't known
+  /// whether the record was written. The steps after it weren't made.
   case unanswered
+
+  /// The device or the modem rejected the write each time, as a modem whose database is
+  /// full rejects an add, and the record didn't read back as written. The steps after it
+  /// weren't made.
+  case rejected
 
   /// The step removed the device's last record of the modem, and the device, which runs
   /// i2CS, rejects the modem from then on, so the record can't be read back.
@@ -299,7 +307,7 @@ public enum DatabaseLinkStepOutcome: String, Hashable, Sendable {
     switch self {
     case .written, .writtenOnRetry, .unverifiable:
       true
-    case .notWritten, .unanswered, .notReached:
+    case .notWritten, .unanswered, .rejected, .notReached:
       false
     }
 
@@ -384,7 +392,8 @@ public struct DatabaseLinkResult: Hashable, Sendable {
     /// removed, as unlinking does, so its database can't be read again.
     case rejectsModemAfterUnlinking
 
-    /// The device didn't answer, or rejected the modem, so its database wasn't compared.
+    /// The device didn't answer, or rejected the modem, or the databases couldn't be read
+    /// again, so the device's database wasn't compared.
     case unanswered
 
   }
@@ -397,6 +406,34 @@ public struct DatabaseLinkResult: Hashable, Sendable {
   public var isComplete: Bool {
 
     steps.allSatisfy(\.outcome.isDone) && mismatches.isEmpty && deviceCheck != .unanswered
+
+  }
+
+}
+
+/// The steps of a ``DatabaseLinkPlan`` stopped partway, for something other than the device's
+/// own timeout or rejection: the modem's error, a slot of the device's database that changed
+/// before it was written, or `CancellationError`.
+///
+/// ``DatabaseLinkInterrupted/result`` says which steps were made, so a front end can say
+/// which records were written.
+public struct DatabaseLinkInterrupted: Error, Sendable {
+
+  /// Each step's outcome, and what reading the databases again found when they could be read.
+  public let result: DatabaseLinkResult
+
+  /// What stopped the steps.
+  public let cause: any Error
+
+  /// Creates the error.
+  ///
+  /// - Parameters:
+  ///   - result: Each step's outcome.
+  ///   - cause: What stopped the steps.
+  public init(result: DatabaseLinkResult, cause: any Error) {
+
+    self.result = result
+    self.cause = cause
 
   }
 
