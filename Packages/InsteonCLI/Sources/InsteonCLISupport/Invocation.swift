@@ -557,6 +557,11 @@ public enum DeviceAction: Hashable, Sendable {
   /// Reads the device's ALL-Link database.
   case links
 
+  /// Checks that the device is healthy and set up as the Insteon device catalog expects,
+  /// reading only unless `actuates`, which also sends Beep when the catalog lists it, and
+  /// prints the checks only a person can do when `showsChecklist`.
+  case selfTest(actuates: Bool, showsChecklist: Bool)
+
 }
 
 /// How `insteon watch` prints what the modem hears.

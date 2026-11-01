@@ -36,6 +36,7 @@ Keep track of the Insteon devices on a network: the library an app or a command 
 - `ProtectedCommand`: Set Operating Flags with the cmd2s that turn most devices' radio or powerline off, require a checksum or turn the programming lock on, sent only to a device whose command set names the cmd2 for a flag it doesn't guard, and Poke, never sent; every message InsteonCore sends is checked against them by its bytes
 - `SendRefusal`: why `DeviceNetwork.send(_:collectingFor:onAcknowledgment:)`, which sends a device a message as it's given through the same guards as `Device`, or `ModemSession.write(rawCommand:forcing:collectingFor:clock:)`, which writes a serial command once `SerialCommandPolicy` allows it, refused before sending anything; only a refusal the policy makes unless forced can be forced
 - `DeviceCapabilities`: what a device can do, for a front end to decide what to show
+- `SelfTestReport`: what `Device.selfTest(_:)` found: each check's outcome, what it found and what may put it right, and what only a person can check; the test only reads unless asked to send Beep
 
 ### Linking and scenes
 

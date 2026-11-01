@@ -298,6 +298,19 @@ public enum HelpText {
                           list Beep for the device, with a note saying so.
       links               Read the device's ALL-Link database, with what each record's data
                           means when the device is known.
+      selftest [--actuate] [--checklist]
+                          Check that the device is healthy and set up as the Insteon device
+                          catalog expects: that it answers and accepts the modem, that the
+                          catalog describes it, that it reports its state, that its
+                          ALL-Link database reads with every checksum intact, that it and
+                          the modem hold both records of each link the catalog gives it,
+                          that its records name only the modem and devices the modem is
+                          linked to, and that no operating flag locks it or cuts it off.
+                          Each check passes, warns, fails or is skipped, with what may put
+                          it right. It only reads; --actuate also sends Beep when the
+                          catalog lists a Beep that's sent to the device. --checklist also
+                          lists the checks only a person can do, such as pressing a button
+                          or cutting the device's power. The command fails when a check does.
       settings [--advanced]
                           Read the settings the Insteon device catalog describes for the
                           device: its operating flags (Get Operating Flags), its values

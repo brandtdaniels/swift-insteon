@@ -163,6 +163,29 @@ do {
 }
 ```
 
+### Checking a device
+
+``Device/selfTest(_:)`` checks that a device is healthy and set up as the catalog expects, and
+returns a ``SelfTestReport`` of ``SelfTestCheck``s in the order they ran: the device answers
+and accepts the modem, the catalog describes it, it reports its state, its ALL-Link database
+reads intact, it and the modem hold both records of each link the catalog gives it, its
+records name only the modem and devices the modem is linked to, and no operating flag locks it
+or cuts it off. Each check has a ``SelfTestOutcome``, a sentence saying what it found, and the
+``SelfTestFix``es that may put it right, from Insteon's troubleshooting steps, for a front end
+to say how to carry out. The test only reads; ``SelfTestOptions/actuates`` also sends Beep when
+the catalog lists a Beep that's sent to the device. A device that doesn't answer fails the
+first check, and the rest are skipped. ``SelfTestReport/checklist`` lists what only a person
+can check, such as pressing a button or cutting the device's power, for a front end to show
+once, after the checks:
+
+```swift
+let report = try await network.device(lamp).selfTest()
+
+for check in report.checks where check.outcome != .passed {
+  print(check.title, check.detail)
+}
+```
+
 ### Watching what the modem hears
 
 ``DeviceNetwork/monitor`` hands out a ``DeviceMonitor``, whose
@@ -273,6 +296,16 @@ do {
 - ``DeviceBeepResult``
 - ``DeviceOperation``
 - ``DeviceControlError``
+
+### Checking devices
+
+- ``SelfTestReport``
+- ``SelfTestCheck``
+- ``SelfTestCheckKind``
+- ``SelfTestOutcome``
+- ``SelfTestFix``
+- ``SelfTestChecklistItem``
+- ``SelfTestOptions``
 
 ### Device settings
 

@@ -100,6 +100,12 @@ enum DeviceCommands {
         try await links(device, network: cached.network, printsJSON: printsJSON)
 
       }
+    case let .selfTest(actuates, showsChecklist):
+      try await withDevice(device, modem: modem, hub: hub, names: names) { (target: Device) async throws -> Void in
+
+        try await selfTest(target, actuates: actuates, showsChecklist: showsChecklist, printsJSON: printsJSON)
+
+      }
     }
 
   }
@@ -346,6 +352,73 @@ enum DeviceCommands {
     }
 
     Output.line(DeviceText.status(device.address, status: status))
+
+  }
+
+  // MARK: - selftest
+
+  private static func selfTest(_ device: Device, actuates: Bool, showsChecklist: Bool, printsJSON: Bool) async throws {
+
+    if !printsJSON {
+
+      Output.note("Testing \(device.address): reading its identity, state, ALL-Link database and operating flags, and the modem's database...")
+
+    }
+
+    let report: SelfTestReport = try await device.selfTest(SelfTestOptions(actuates: actuates))
+
+    if printsJSON {
+
+      try Output.json(SelfTestText.JSON(report))
+
+    } else {
+
+      var heading: String = "Self-test of \(device.address)"
+
+      if let product = report.productName {
+
+        heading += ", \(product)"
+
+      }
+
+      Output.line(heading + ", engine \(Names.engine(report.engine)):")
+      Output.line()
+
+      for line in SelfTestText.checkLines(report) {
+
+        Output.line(line)
+
+      }
+
+      Output.line()
+      Output.line(SelfTestText.summary(report))
+
+      if showsChecklist {
+
+        let checklist: [String] = SelfTestText.checklistLines(report)
+
+        if !checklist.isEmpty {
+
+          Output.line()
+
+          for line in checklist {
+
+            Output.line(line)
+
+          }
+
+        }
+
+      }
+
+    }
+
+    // A failed check fails the command, so a script can tell.
+    if report.outcome == .failed {
+
+      throw CommandFailure(description: "The self-test of \(device.address) found a problem.")
+
+    }
 
   }
 

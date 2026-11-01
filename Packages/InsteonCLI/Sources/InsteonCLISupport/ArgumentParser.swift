@@ -566,6 +566,8 @@ extension Invocation {
     case "links":
       try expectNoArguments(rest, subcommand: "device")
       return .device(address, .links)
+    case "selftest":
+      return try .device(address, parseSelfTest(rest))
     default:
       if action.hasPrefix("-") {
 
@@ -575,6 +577,32 @@ extension Invocation {
 
       throw ArgumentError.unknownDeviceAction(action)
     }
+
+  }
+
+  private static func parseSelfTest(_ arguments: [String]) throws(ArgumentError) -> DeviceAction {
+
+    var actuates = false
+    var showsChecklist = false
+
+    for argument in arguments {
+
+      let (name, inlineValue) = split(argument)
+
+      switch name {
+      case "--actuate":
+        try expectNoValue(name, inlineValue)
+        actuates = true
+      case "--checklist":
+        try expectNoValue(name, inlineValue)
+        showsChecklist = true
+      default:
+        throw unexpected(argument, subcommand: "device")
+      }
+
+    }
+
+    return .selfTest(actuates: actuates, showsChecklist: showsChecklist)
 
   }
 

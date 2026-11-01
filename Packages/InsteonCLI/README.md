@@ -61,6 +61,7 @@ The Hub's interface is plain HTTP, so the password is readable on the network: u
 | `device ADDRESS status` | Light Status Request: the device's level, or on or off for an on/off device. |
 | `device ADDRESS beep` | Beep. A device whose command set doesn't list it is sent it anyway, with a note. |
 | `device ADDRESS links` | Reads the device's ALL-Link database, with what each record's data means when the catalog describes the device. |
+| `device ADDRESS selftest [--actuate] [--checklist]` | Checks that the device is healthy and set up as the catalog expects, as described below, and fails when a check does. |
 | `device ADDRESS settings [--advanced]` | Reads the settings the catalog describes for the device, grouped by section, as described below. |
 | `device ADDRESS set NAME VALUE [--button N]` | Changes a setting, then reads it back and prints the old and new values. |
 | `device ADDRESS send CMD1 CMD2 [--extended [D1 ... D14]] [--no-checksum] [--wait SECONDS]` | Sends a direct message as given and prints the ACK or NAK and what the device sends in the next 3 seconds, for exploring. It sends the protected Set Operating Flags only where the device's catalog entry gives them another meaning, and never Poke, as described below. |
@@ -71,11 +72,23 @@ The Hub's interface is plain HTTP, so the password is readable on the network: u
 | `catalog` | Prints the version of the bundled Insteon device catalog, the version of the cached copy or `none`, and which copy is in use. Needs no Hub or modem. |
 | `catalog update` | Downloads the latest published Insteon device catalog into the cache directory when it's in the format the command reads and differs from the copy in use, as described below. Needs no Hub or modem. |
 
-The modem's group is 0 unless `--group` is given, as Insteon's Hub app links devices. Links made by earlier versions of the command are in group 1: `insteon unlink ADDRESS` finds them from the modem's records, and `insteon unlink --group 1` removes one without an address. `--json` prints JSON for `discover`, `info`, `links`, `link`, `unlink`, `remove` and `device ... id`, `status`, `links` and `settings`; `link` always prints one object, `{"links":[…],"legs":[…]}`: `links` holds every link the modem reported, in order, and `legs` each of the catalog's links to a Hub with its `modemRole`, `modemGroup`, `deviceGroup`, `status` (`linked`, `failed` or `notRun`), `joinedBy` and `error`, or is empty when the device wasn't linked by them. `unlink --all` prints an array of the links it removed. `insteon --help` and `insteon COMMAND --help` print help.
+The modem's group is 0 unless `--group` is given, as Insteon's Hub app links devices. Links made by earlier versions of the command are in group 1: `insteon unlink ADDRESS` finds them from the modem's records, and `insteon unlink --group 1` removes one without an address. `--json` prints JSON for `discover`, `info`, `links`, `link`, `unlink`, `remove` and `device ... id`, `status`, `links`, `settings` and `selftest`; `link` always prints one object, `{"links":[…],"legs":[…]}`: `links` holds every link the modem reported, in order, and `legs` each of the catalog's links to a Hub with its `modemRole`, `modemGroup`, `deviceGroup`, `status` (`linked`, `failed` or `notRun`), `joinedBy` and `error`, or is empty when the device wasn't linked by them. `unlink --all` prints an array of the links it removed. `insteon --help` and `insteon COMMAND --help` print help.
 
 Control-C stops a command cleanly: `link`, `unlink` and `remove` take the modem out of linking mode first. Press it again to stop at once.
 
 ### Settings
+
+`insteon device ADDRESS selftest` checks a device in order, and says of each check whether it passed, warned, failed or was skipped, with what may put it right:
+
+1. It answers Get Insteon Engine Version and accepts the modem. A device that doesn't, or that rejects the modem as an unlinked i2CS device does, fails, and the checks that need it to answer are skipped.
+2. The Insteon device catalog describes the identity it reports to ID Request.
+3. It reports its state, with the status request its catalog entry names.
+4. Its ALL-Link database reads with every record's checksum intact, ending with the record that marks its end.
+5. It and the modem hold both records of each link the catalog gives the device to a Hub, or, for a device without those, of each link their records show. A link missing a record on one side works one way only.
+6. Its records name only the modem and devices the modem is linked to; a record for any other device may be left from a device that's gone.
+7. None of its operating flags the catalog describes locks its programming or cuts it off from the modem: the programming lock, radio off, powerline off and checksum required.
+
+It only reads, and writes no record and no setting. `--actuate` also sends Beep, when the device's catalog entry lists a Beep that's sent to it, and nothing to a device the catalog doesn't describe. `--checklist` also lists the checks only a person can do, once, after the others: pressing the device's button for each group it controls the modem with while `insteon watch` runs, and cutting its power for about ten seconds. With `--json` it prints the address, the outcome, each check's `id`, `title`, `outcome`, `detail` and `fixes`, and the `checklist`.
 
 `insteon device ADDRESS settings` reads what the Insteon device catalog describes for the device's command set: each Get Operating Flags query its flags and readings need, and extended Get for button 1, and for each of the device's other groups when some values are per button. It prints them under the catalog's sections, in the catalog's order, with each value shown through its value table, unit and scale, its default when the catalog gives one, and whether it's writable:
 
