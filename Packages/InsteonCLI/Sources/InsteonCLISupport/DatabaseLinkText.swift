@@ -73,6 +73,15 @@ public enum DatabaseLinkText {
 
     }
 
+    if let state = plan.relayState {
+
+      lines.append(
+        "Data 1 of the device's responder record is \(Hex.byte(state.data1)), the relay \(state.rawValue): "
+          + "a group On turns the relay \(state.rawValue), and a group Off turns it \(state.opposite.rawValue)."
+      )
+
+    }
+
     return lines
 
   }

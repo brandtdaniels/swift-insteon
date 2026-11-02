@@ -226,7 +226,7 @@ enum ModemCommands {
       if let database = options.database, let device = options.device {
 
         let coordinator: DeviceLinkingCoordinator = cached.network.linking
-        let plan: DatabaseLinkPlan = try await coordinator.planDatabaseLink(device)
+        let plan: DatabaseLinkPlan = try await coordinator.planDatabaseLink(device, relayState: options.relayState)
 
         try await carryOut(plan, coordinator: coordinator, options: database, asks: asks, printsJSON: printsJSON)
 
@@ -361,6 +361,7 @@ enum ModemCommands {
         twoWay: twoWay,
         setButtonTimeout: timeout,
         usesCatalogLegs: options.followsCatalogLegs,
+        relayState: options.relayState,
         observer: observer
       )
 
@@ -379,6 +380,12 @@ enum ModemCommands {
     if let incomplete = LinkingEventText.incompleteLegs(result, message: Names.message(for:)) {
 
       throw CommandFailure(description: incomplete)
+
+    }
+
+    if let notRestored = LinkingEventText.flagNotRestored(result, message: Names.message(for:)) {
+
+      throw CommandFailure(description: notRestored)
 
     }
 

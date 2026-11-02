@@ -4,7 +4,7 @@
 # that adds one.
 InsteonCLI/Sources/InsteonCLISupport/LineReader.swift	unchecked-sendable	public final class LineReader: @unchecked Sendable {	NSLock guards its state; a blocking readLine can't be awaited or canceled, so callers hand off through it.
 InsteonCLI/Sources/InsteonCLISupport/OrderedSaver.swift	unstructured-task	let saving = Task { () async -> Void in	Chains each save after the one before, whichever task asked; the next save awaits it.
-InsteonCore/Sources/InsteonCore/DeviceLinkingCoordinator+HubLinking.swift	unstructured-task	await Task { await send() }.value	Awaited at once; shields the keep-awake release from cancellation, so the device isn't left awake.
+InsteonCore/Sources/InsteonCore/DeviceLinkingCoordinator+HubLinking.swift	unstructured-task	await Task { await send() }.value	Awaited at once; shields putting a device back after linking from cancellation: the keep-awake release, and a flag cleared for a relay state.
 InsteonCore/Sources/InsteonCore/DeviceMonitor.swift	unchecked-sendable	final class MonitorFeed<C: Clock>: @unchecked Sendable where C.Duration == Duration {	NSLock guards isReading; a precondition keeps the iterator to one reading task at a time.
 InsteonCore/Sources/InsteonCore/DeviceNetwork.swift	unstructured-task	let task = Task<DeviceIdentification, any Error> {	A shared identification that several callers join; the last caller to cancel cancels it.
 InsteonCore/Sources/InsteonCore/DeviceNetwork.swift	unchecked-sendable	final class IdentificationWaiters: @unchecked Sendable {	NSLock guards the waiter count, which cancellation handlers outside the actor change.

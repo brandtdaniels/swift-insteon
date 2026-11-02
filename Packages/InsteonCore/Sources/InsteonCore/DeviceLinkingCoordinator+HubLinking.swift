@@ -555,6 +555,23 @@ extension DeviceLinkingCoordinator {
 
     }
 
+    await Self.runToEnd(send)
+
+  }
+
+  /// Runs `send` to its end, and waits for it, even when this task is canceled before or
+  /// while it runs.
+  ///
+  /// Linking changes some things on a device only for as long as it links, such as keeping
+  /// it awake or clearing a flag, and they're put back however linking ends. A canceled task
+  /// can't send anything, since the modem throws `CancellationError` for it, so `send` runs in
+  /// a task of its own, which canceling this one doesn't reach. It's awaited at once, so it
+  /// never outlives the call, and it ends as soon as the modem answers or gives up.
+  ///
+  /// - Parameter send: What puts the device back.
+  /// - Returns: What `send` returns.
+  static func runToEnd<Value: Sendable>(_ send: @escaping @Sendable () async -> Value) async -> Value {
+
     // Unstructured, so cancellation that arrives while it sends doesn't stop it.
     await Task { await send() }.value
 

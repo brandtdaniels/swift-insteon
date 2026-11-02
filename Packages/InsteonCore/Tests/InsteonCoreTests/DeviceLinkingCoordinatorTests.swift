@@ -198,6 +198,29 @@ actor LinkingRecorder: LinkingObserver {
 
   }
 
+  static func relayState(_ event: RelayStateEvent) -> String {
+
+    switch event {
+    case let .clearingFlag(device, flag):
+      return "clearing \(flag) \(device)"
+    case let .settingRelay(device, state):
+      return "setting \(device) \(state)"
+    case let .relayAlreadySet(device, state):
+      return "\(device) already \(state)"
+    case let .relayConfirmed(device, state):
+      return "\(device) confirmed \(state)"
+    case let .restoringFlag(device, flag):
+      return "restoring \(flag) \(device)"
+    case let .flagRestored(device, flag):
+      return "restored \(flag) \(device)"
+    case let .flagNotRestored(device, flag, _):
+      return "not restored \(flag) \(device)"
+    case let .recorded(link):
+      return "group on gives \(link.groupOn), off gives \(link.groupOff), momentary \(link.isMomentary), pulses \(link.pulsesOnBothCommands)"
+    }
+
+  }
+
   static func join(_ join: HubLinkingJoin) -> String {
 
     switch join {
@@ -284,6 +307,8 @@ actor LinkingRecorder: LinkingObserver {
       return "leg \(leg.index + 1) all groups when \(condition.flag) \(condition.isSet)"
     case let .keepAwake(keepAwake):
       return "keep awake: \(self.keepAwake(keepAwake))"
+    case let .relayState(event):
+      return "relay state: \(relayState(event))"
     case let .readingModemLinks(device, purpose):
       return "reading modem links \(device) \(purpose == .findingLinksToRemove ? "to remove" : "for group")"
     case let .unlinkGroupChosen(device, group, isFromModemRecords):

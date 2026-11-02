@@ -156,9 +156,9 @@ public enum HelpText {
   public static let link = """
     Usage: insteon [--hub HOST[:PORT] | --serial PATH] link [ADDRESS] [--group N]
                    [--controller | --responder | --either] [--two-way | --one-way]
-                   [--timeout SECONDS] [--json]
+                   [--relay-state on|off] [--timeout SECONDS] [--json]
            insteon [--hub HOST[:PORT] | --serial PATH] link ADDRESS --database
-                   [--dry-run] [--yes] [--json]
+                   [--relay-state on|off] [--dry-run] [--yes] [--json]
            insteon [--hub HOST[:PORT] | --serial PATH] link --cancel
 
     With ADDRESS, the device's Insteon address from its label, links the device without its
@@ -197,7 +197,21 @@ public enum HelpText {
       --one-way           Don't link the device back: the modem only controls it.
       --timeout SECONDS   How long to wait for the SET button. Defaults to 240, the time the
                           modem stays in linking mode.
+      --relay-state on|off
+                          With ADDRESS, the state a relay, such as an I/O Linc's, records, so
+                          a group On from the modem sets the relay to it and a group Off sets
+                          the opposite. See below. Not with --responder, --either or --cancel.
       --cancel            Take the modem out of linking mode with Cancel ALL-Linking.
+
+    With ADDRESS and --relay-state, the device's main group must be a relay, as the catalog
+    describes it, or nothing is changed. The device is linked in one link, in the --group
+    group, rather than by the catalog's links to a Hub. Its momentary flag is read first; when
+    it's on, it's turned off for the link, since a momentary relay opens again before it
+    links, but only when the catalog lets linking change it, and it's turned back on
+    afterward, even when linking fails or Control-C stops it. Then the relay's status is read,
+    the relay is sent Light On or Light Off unless it's already in the state, and its status
+    is read again; a relay that doesn't show the state isn't linked. Without --relay-state, a
+    relay is never switched and its flags are never written.
 
     With ADDRESS and --database, links the device by writing the records of the catalog's
     links to a Hub straight into its ALL-Link database and the modem's, without linking mode
@@ -215,7 +229,10 @@ public enum HelpText {
 
       --database          Link by writing the ALL-Link databases, as above. Not with --group,
                           --controller, --responder, --either, --two-way, --one-way,
-                          --timeout or --cancel.
+                          --timeout or --cancel. With --relay-state, Data 1 of the device's
+                          responder record holds the state, 0xFF for on and 0x00 for off,
+                          and the relay isn't switched; a responder record already there with
+                          the other state is refused.
       --dry-run           With --database, show the writes and make none.
       --yes, -y           With --database, write without asking. Needed when standard input
                           isn't a terminal.

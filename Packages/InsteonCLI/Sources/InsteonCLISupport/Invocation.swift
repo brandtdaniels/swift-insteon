@@ -386,6 +386,10 @@ public struct LinkOptions: Hashable, Sendable {
   /// to link with linking mode or the SET button.
   public var database: DatabaseWriteOptions?
 
+  /// The state a relay records, as `--relay-state` asks, so a group On sets it and a group Off
+  /// sets the opposite, or `nil` to leave the relay as it is.
+  public var relayState: RelayState?
+
   /// Whether the Insteon device catalog's links to a Hub may be made: the modem is the
   /// controller, not in either role, and no group was given. The library still checks the
   /// other options.
@@ -410,6 +414,8 @@ public struct LinkOptions: Hashable, Sendable {
   ///     default. Defaults to `nil`.
   ///   - database: How to link by writing ALL-Link databases, or `nil` for linking mode.
   ///     Defaults to `nil`.
+  ///   - relayState: The state a relay records, or `nil` to leave it as it is. Defaults to
+  ///     `nil`.
   public init(
     device: InsteonAddress? = nil,
     group: AllLinkGroupNumber = LinkOptions.defaultGroup,
@@ -417,7 +423,8 @@ public struct LinkOptions: Hashable, Sendable {
     twoWay: TwoWayLinking = .whenDeviceControls,
     timeoutSeconds: Int? = nil,
     isGroupGiven: Bool? = nil,
-    database: DatabaseWriteOptions? = nil
+    database: DatabaseWriteOptions? = nil,
+    relayState: RelayState? = nil
   ) {
 
     self.device = device
@@ -427,6 +434,7 @@ public struct LinkOptions: Hashable, Sendable {
     self.timeoutSeconds = timeoutSeconds
     self.isGroupGiven = isGroupGiven ?? (group != LinkOptions.defaultGroup)
     self.database = database
+    self.relayState = relayState
 
   }
 

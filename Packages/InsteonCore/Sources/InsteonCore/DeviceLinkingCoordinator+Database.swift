@@ -48,21 +48,42 @@ extension DeviceLinkingCoordinator {
   /// for an on-level, and `0x1C` (0.5 s) for a ramp rate. A controller record holds the
   /// catalog's fixed values and `0x00` otherwise, as do the modem's records.
   ///
-  /// - Parameter device: The device.
+  /// With a `relayState`, a device whose main group is a relay gets the state as Data 1 of its
+  /// responder records for a relay group: `0xFF` for on and `0x00` for off. The relay isn't
+  /// sent a command and no flag is written. A responder record already in place with the other
+  /// state is refused, since the plan leaves records in place as they are.
+  ///
+  /// - Parameters:
+  ///   - device: The device.
+  ///   - relayState: The state a relay records, or `nil` for the catalog's data bytes alone.
+  ///     Defaults to `nil`.
   /// - Returns: The plan, which ``DeviceLinkingCoordinator/apply(_:)`` carries out.
-  /// - Throws: ``DatabaseLinkRefusal`` when the device can't be linked this way, the modem's
-  ///   errors, such as `ModemError.deviceTimedOut` when the device doesn't answer, and
-  ///   `CancellationError` if the task is canceled.
-  public func planDatabaseLink(_ device: InsteonAddress) async throws -> DatabaseLinkPlan {
+  /// - Throws: ``DatabaseLinkRefusal`` when the device can't be linked this way,
+  ///   ``RelayStateLinkingError`` when it can't record the relay state, the modem's errors, such
+  ///   as `ModemError.deviceTimedOut` when the device doesn't answer, and `CancellationError`
+  ///   if the task is canceled.
+  public func planDatabaseLink(_ device: InsteonAddress, relayState: RelayState? = nil) async throws -> DatabaseLinkPlan {
 
     try await inTurn(changing: nil) { () async throws -> DatabaseLinkPlan in
 
       let reading: DatabaseReading = try await readForPlan(device)
 
       // A description without a profile is the catalog not knowing the identity.
-      guard reading.description?.profile != nil else {
+      guard let description = reading.description, description.profile != nil else {
+
+        if relayState != nil {
+
+          throw RelayStateLinkingError.notDescribed(device)
+
+        }
 
         throw reading.identification.identity == nil ? DatabaseLinkRefusal.notIdentified(device) : DatabaseLinkRefusal.notInCatalog(device)
+
+      }
+
+      if relayState != nil, description.mainGroupType?.kind != .relay {
+
+        throw RelayStateLinkingError.notARelay(device, product: DeviceControlModel.product(of: description))
 
       }
 
@@ -72,7 +93,7 @@ extension DeviceLinkingCoordinator {
 
       }
 
-      return try Self.linkPlan(reading: reading, legs: legs)
+      return try Self.linkPlan(reading: reading, legs: legs, relayState: relayState)
 
     }
 
@@ -253,8 +274,10 @@ extension DeviceLinkingCoordinator {
 
   }
 
-  /// The plan that adds the records the catalog's legs need and the databases lack.
-  static func linkPlan(reading: DatabaseReading, legs: [HubLinkingLeg]) throws -> DatabaseLinkPlan {
+  /// The plan that adds the records the catalog's legs need and the databases lack, with a
+  /// relay state, if one is given, as Data 1 of the device's responder records for a relay
+  /// group.
+  static func linkPlan(reading: DatabaseReading, legs: [HubLinkingLeg], relayState: RelayState? = nil) throws -> DatabaseLinkPlan {
 
     let device: InsteonAddress = reading.device
     let modem: InsteonAddress = reading.modem
@@ -306,6 +329,13 @@ extension DeviceLinkingCoordinator {
 
       }) {
 
+        // A record in place stays as it is, so one with the other state can't be planned past.
+        if let relayState, !record.isController, recordsRelayState(reading.description, deviceGroup: record.deviceGroup), existing.record.data1 != relayState.data1 {
+
+          throw RelayStateLinkingError.recordInPlace(device, group: record.group, data1: existing.record.data1)
+
+        }
+
         inPlace.append(LinkRecord(existing))
 
       } else {
@@ -355,9 +385,15 @@ extension DeviceLinkingCoordinator {
 
       }
 
-      let data: [UInt8] = record.isController
+      var data: [UInt8] = record.isController
         ? controllerData(reading.description, group: record.deviceGroup)
         : try responderData(reading.description, device: device, deviceGroup: record.deviceGroup)
+
+      if let relayState, !record.isController, recordsRelayState(reading.description, deviceGroup: record.deviceGroup) {
+
+        data[0] = relayState.data1
+
+      }
       let written = AllLinkRecord(
         flags: inUseFlags(isController: record.isController),
         group: record.group,
@@ -394,8 +430,17 @@ extension DeviceLinkingCoordinator {
       orphans: [],
       deviceRecords: reading.deviceRecords,
       modemRecords: reading.modemRecords,
-      allModemRecords: reading.allModemRecords
+      allModemRecords: reading.allModemRecords,
+      relayState: relayState
     )
+
+  }
+
+  /// Whether a device's responder record for a link in which `deviceGroup` is its group holds
+  /// a relay's state as Data 1: when the group's type, or else the main group's, is a relay.
+  static func recordsRelayState(_ description: DeviceDescription?, deviceGroup: AllLinkGroupNumber) -> Bool {
+
+    (description?.groupType(forGroup: deviceGroup) ?? description?.mainGroupType)?.kind == .relay
 
   }
 
@@ -576,7 +621,7 @@ extension DeviceLinkingCoordinator {
 
   // MARK: - Applying
 
-  /// Carries out a plan from ``DeviceLinkingCoordinator/planDatabaseLink(_:)`` or
+  /// Carries out a plan from ``DeviceLinkingCoordinator/planDatabaseLink(_:relayState:)`` or
   /// ``DeviceLinkingCoordinator/planDatabaseUnlink(_:removingOrphans:)``.
   ///
   /// Both databases are read again first; when either changed since the plan was made,
