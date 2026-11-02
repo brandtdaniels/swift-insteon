@@ -240,7 +240,9 @@ public actor InMemoryModem: LinkingModem {
   /// clearing a bit of the byte it reports to Get Operating Flags.
   ///
   /// A device given one is one whose flags a test follows, so its status requests and its Get
-  /// and Set Operating Flags appear in ``linkingSteps`` too, in order with the linking.
+  /// and Set Operating Flags appear in ``linkingSteps`` too, in order with the linking. An
+  /// unlinked device rejects Get and Set Operating Flags, as an i2CS device rejects the
+  /// modem's direct commands until it holds a link to it.
   ///
   /// - Parameters:
   ///   - command2: The cmd2.
@@ -277,8 +279,10 @@ public actor InMemoryModem: LinkingModem {
   /// Carries out Set Operating Flags for a device given the cmd2, and records it as a linking
   /// step.
   ///
+  /// - Parameter recording: Whether to record it as a linking step, rather than leave that to
+  ///   the caller. Defaults to `true`.
   /// - Returns: Whether the device has the command.
-  private func setOperatingFlags(_ command: Command, of device: InsteonAddress, isExtended: Bool) -> Bool {
+  private func setOperatingFlags(_ command: Command, of device: InsteonAddress, isExtended: Bool, recording: Bool = true) -> Bool {
 
     guard command.command1 == 0x20, let flag = flagCommands[device]?[command.command2] else {
 
@@ -286,7 +290,11 @@ public actor InMemoryModem: LinkingModem {
 
     }
 
-    linkingSteps.append(.device(device, command, isExtended: isExtended))
+    if recording {
+
+      linkingSteps.append(.device(device, command, isExtended: isExtended))
+
+    }
 
     let flags: UInt8 = operatingFlags[device, default: 0x00]
 
@@ -678,6 +686,13 @@ public actor InMemoryModem: LinkingModem {
 
       }
 
+      // An i2CS device rejects a modem it isn't linked to.
+      guard !unlinkedDevices.contains(device) else {
+
+        throw ModemError.deviceRejected(device, .notLinked)
+
+      }
+
       // A device given operating flags reports them, whatever the query.
       command2 = flags
 
@@ -700,9 +715,17 @@ public actor InMemoryModem: LinkingModem {
 
       }
 
-    } else if setOperatingFlags(message.command, of: device, isExtended: false) {
+    } else if message.command.command1 == 0x20, flagCommands[device]?[message.command.command2] != nil {
 
-      // Carried out.
+      linkingSteps.append(.device(device, message.command, isExtended: false))
+
+      guard !unlinkedDevices.contains(device) else {
+
+        throw ModemError.deviceRejected(device, .notLinked)
+
+      }
+
+      _ = setOperatingFlags(message.command, of: device, isExtended: false, recording: false)
 
     } else {
 
