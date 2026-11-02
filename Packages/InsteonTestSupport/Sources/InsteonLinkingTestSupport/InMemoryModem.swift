@@ -183,6 +183,22 @@ public actor InMemoryModem: LinkingModem {
   /// The byte each device reports to Get Operating Flags, for devices given one.
   public private(set) var operatingFlags: [InsteonAddress: UInt8] = [:]
 
+  /// A Set Operating Flags cmd2 a device carries out: the bit of its operating flags byte it
+  /// sets or clears.
+  private struct FlagCommand {
+
+    let bit: UInt8
+
+    let isSet: Bool
+
+  }
+
+  /// The Set Operating Flags commands each device carries out, by cmd2.
+  private var flagCommands: [InsteonAddress: [UInt8: FlagCommand]] = [:]
+
+  /// The bit of each device's operating flags byte that makes its relay momentary.
+  private var momentaryBits: [InsteonAddress: UInt8] = [:]
+
   /// Each device's ALL-Link database delta, which changes with every write to its database.
   private var deltas: [InsteonAddress: UInt8] = [:]
 
@@ -217,6 +233,66 @@ public actor InMemoryModem: LinkingModem {
   public func setOperatingFlags(_ flags: UInt8, of device: InsteonAddress) {
 
     operatingFlags[device] = flags
+
+  }
+
+  /// Makes a device carry out a Set Operating Flags cmd2, standard or extended, by setting or
+  /// clearing a bit of the byte it reports to Get Operating Flags.
+  ///
+  /// A device given one is one whose flags a test follows, so its status requests and its Get
+  /// and Set Operating Flags appear in ``linkingSteps`` too, in order with the linking.
+  ///
+  /// - Parameters:
+  ///   - command2: The cmd2.
+  ///   - bit: The bit it changes.
+  ///   - isSet: Whether it sets the bit, rather than clears it.
+  ///   - device: The device.
+  public func setOperatingFlagCommand(_ command2: UInt8, bit: UInt8, isSet: Bool, of device: InsteonAddress) {
+
+    flagCommands[device, default: [:]][command2] = FlagCommand(bit: bit, isSet: isSet)
+
+  }
+
+  /// Makes a device's relay momentary while a bit of its operating flags is set: Light On
+  /// closes it only for a moment, so its status reads off again by the time it's asked, as an
+  /// I/O Linc's momentary relay opens again.
+  ///
+  /// - Parameters:
+  ///   - bit: The bit.
+  ///   - device: The device.
+  public func setMomentaryBit(_ bit: UInt8, of device: InsteonAddress) {
+
+    momentaryBits[device] = bit
+
+  }
+
+  /// Whether a test follows a device's flags, so its status and flag requests are linking
+  /// steps.
+  private func followsFlags(of device: InsteonAddress) -> Bool {
+
+    flagCommands[device] != nil
+
+  }
+
+  /// Carries out Set Operating Flags for a device given the cmd2, and records it as a linking
+  /// step.
+  ///
+  /// - Returns: Whether the device has the command.
+  private func setOperatingFlags(_ command: Command, of device: InsteonAddress, isExtended: Bool) -> Bool {
+
+    guard command.command1 == 0x20, let flag = flagCommands[device]?[command.command2] else {
+
+      return false
+
+    }
+
+    linkingSteps.append(.device(device, command, isExtended: isExtended))
+
+    let flags: UInt8 = operatingFlags[device, default: 0x00]
+
+    operatingFlags[device] = flag.isSet ? flags | flag.bit : flags & ~flag.bit
+
+    return true
 
   }
 
@@ -527,7 +603,8 @@ public actor InMemoryModem: LinkingModem {
   /// Answers a standard message as the device it's sent to would: a status request with the
   /// device's delta and level, Get Insteon Engine Version with its engine, ID Request with an
   /// acknowledgment and then its SET Button Pressed broadcast, Light On and Light Off by
-  /// setting its level, and a linking command by entering linking mode.
+  /// setting its level, Set Operating Flags with a cmd2 ``setOperatingFlagCommand(_:bit:isSet:of:)``
+  /// gave it by changing its flags, and a linking command by entering linking mode.
   ///
   /// - Throws: `ModemError.deviceTimedOut` for a device that acknowledges nothing, and
   ///   `ModemError.deviceRejected` for a request an unlinked device rejects.
@@ -545,6 +622,12 @@ public actor InMemoryModem: LinkingModem {
     }
 
     if message.command.command1 == 0x19 {
+
+      if followsFlags(of: device) {
+
+        linkingSteps.append(.device(device, message.command, isExtended: false))
+
+      }
 
       guard !unlinkedDevices.contains(device) else {
 
@@ -589,6 +672,12 @@ public actor InMemoryModem: LinkingModem {
 
     } else if message.command.command1 == 0x1F, let flags = operatingFlags[device] {
 
+      if followsFlags(of: device) {
+
+        linkingSteps.append(.device(device, message.command, isExtended: false))
+
+      }
+
       // A device given operating flags reports them, whatever the query.
       command2 = flags
 
@@ -603,6 +692,17 @@ public actor InMemoryModem: LinkingModem {
       }
 
       levels[device] = message.command.command1 == 0x11 ? message.command.command2 : 0x00
+
+      // A momentary relay opens again before it's asked for its status.
+      if let bit = momentaryBits[device], operatingFlags[device, default: 0x00] & bit != 0 {
+
+        levels[device] = 0x00
+
+      }
+
+    } else if setOperatingFlags(message.command, of: device, isExtended: false) {
+
+      // Carried out.
 
     } else {
 
@@ -620,8 +720,9 @@ public actor InMemoryModem: LinkingModem {
   }
 
   /// Answers an extended message as the device it's sent to would: a linking command enters
-  /// linking mode, and a write to its ALL-Link database stores the record, unless the device
-  /// forgets writes.
+  /// linking mode, Set Operating Flags with a cmd2 ``setOperatingFlagCommand(_:bit:isSet:of:)``
+  /// gave it changes its flags, and a write to its ALL-Link database stores the record, unless
+  /// the device forgets writes.
   ///
   /// - Throws: `ModemError.deviceRejected` for a message an unlinked device rejects.
   public func request(_ message: ExtendedMessage, timeout: Duration) async throws -> ReceivedMessage {
@@ -650,6 +751,8 @@ public actor InMemoryModem: LinkingModem {
       throw ModemError.deviceRejected(device, .notLinked)
 
     }
+
+    _ = setOperatingFlags(message.command, of: device, isExtended: true)
 
     let data = message.userData
 
