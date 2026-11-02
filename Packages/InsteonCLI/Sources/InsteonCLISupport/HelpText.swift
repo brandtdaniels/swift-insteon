@@ -204,14 +204,16 @@ public enum HelpText {
       --cancel            Take the modem out of linking mode with Cancel ALL-Linking.
 
     With ADDRESS and --relay-state, the device's main group must be a relay, as the catalog
-    describes it, or nothing is changed. The device is linked in one link, in the --group
-    group, rather than by the catalog's links to a Hub. Its momentary flag is read first; when
-    it's on, it's turned off for the link, since a momentary relay opens again before it
-    links, but only when the catalog lets linking change it, and it's turned back on
-    afterward, even when linking fails or Control-C stops it. Then the relay's status is read,
-    the relay is sent Light On or Light Off unless it's already in the state, and its status
-    is read again; a relay that doesn't show the state isn't linked. Without --relay-state, a
-    relay is never switched and its flags are never written.
+    describes it, and the device must already be linked to the modem, or nothing is changed.
+    The command reads the relay's flags and status. When the relay isn't in the state, it
+    switches the relay, and whatever it controls, such as a garage door opener, then reads
+    its status again; a relay already in the state is sent nothing. A momentary relay would
+    open again before it links, so its momentary flag is turned off first, when the catalog
+    lets linking change it, and the relay is switched back afterward, before the flag is
+    turned back on, even when linking fails or Control-C stops it. The device is linked in
+    one link, in the --group group, not by the catalog's links to a Hub, and never with its
+    SET button. Then its responder record is read back to check the state it holds. Without
+    --relay-state, a relay is never switched and its flags are never written.
 
     With ADDRESS and --database, links the device by writing the records of the catalog's
     links to a Hub straight into its ALL-Link database and the modem's, without linking mode

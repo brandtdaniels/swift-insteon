@@ -159,19 +159,9 @@ public struct DeviceLinkingCoordinator: Sendable {
   /// yet, is linked with its SET button instead, with the catalog's steps, and only its link is
   /// accepted.
   ///
-  /// With a `relayState`, the device records that state, so a group On sets its relay to it
-  /// and a group Off sets the opposite. The modem must be the controller and the device's main
-  /// group a relay, as the catalog describes it, or ``RelayStateLinkingError`` is thrown before
-  /// anything is changed. The device is linked in one link, in the modem's `group`, not by the
-  /// catalog's legs, and isn't turned on first. Its momentary flag is read first; when it's on,
-  /// it's turned off for the link, since a momentary relay opens again before it links, but only
-  /// when the catalog lets linking change it, and it's set back afterward however linking ends,
-  /// even when it's canceled. Then the relay's status is read, the relay is sent Light On or
-  /// Light Off unless it's already in the state, and its status is read again; a relay that
-  /// doesn't show the state isn't linked. The observer gets ``LinkingEvent/relayState(_:)`` for
-  /// each step, and the result's ``DeviceLinkingResult/relayState`` says what a group On and a
-  /// group Off do. Without a `relayState`, a relay is never sent a command and its flags are
-  /// never written.
+  /// A relay is never switched and its flags are never written; to link one with a chosen
+  /// state, use
+  /// ``DeviceLinkingCoordinator/linkRelay(_:recording:group:twoWay:setButtonTimeout:observer:)``.
   ///
   /// - Parameters:
   ///   - device: The device.
@@ -188,8 +178,6 @@ public struct DeviceLinkingCoordinator: Sendable {
   ///     the defaults. Pass `false` when a person asked for a role or group of their own, even
   ///     one equal to the default, such as the modem in either role or group 0 given
   ///     explicitly. Defaults to `true`.
-  ///   - relayState: The state a relay records, so a group On sets it and a group Off sets the
-  ///     opposite, or `nil` to leave the relay as it is. Defaults to `nil`.
   ///   - observer: What a person is told and asked.
   /// - Returns: The links made and the device.
   /// - Throws: `LinkMismatch` when the modem reports another device's link or a removed link,
@@ -197,8 +185,7 @@ public struct DeviceLinkingCoordinator: Sendable {
   ///   `LinkingError.linkingTimedOut` if the device isn't linked in time, the observer's
   ///   errors, the modem's errors, and `CancellationError` if the task is canceled. A first
   ///   leg of the catalog's linking from a Hub that fails throws its error. A link back, or a
-  ///   later leg, that fails doesn't throw; the result says why. With a `relayState`, also
-  ///   ``RelayStateLinkingError``.
+  ///   later leg, that fails doesn't throw; the result says why.
   public func link(
     _ device: InsteonAddress,
     as role: ModemRole,
@@ -206,24 +193,10 @@ public struct DeviceLinkingCoordinator: Sendable {
     twoWay: TwoWayLinking = .whenDeviceControls,
     setButtonTimeout: Duration = Linker.defaultManualLinkingTimeout,
     usesCatalogLegs: Bool = true,
-    relayState: RelayState? = nil,
     observer: any LinkingObserver
   ) async throws -> DeviceLinkingResult {
 
-    if let relayState {
-
-      // The device records a state only as the responder.
-      guard role == .controller else {
-
-        throw RelayStateLinkingError.modemNotController(device)
-
-      }
-
-      return try await link(device, recording: relayState, group: group, twoWay: twoWay, setButtonTimeout: setButtonTimeout, observer: observer)
-
-    }
-
-    return try await inTurn(changing: device) { () async throws -> DeviceLinkingResult in
+    try await inTurn(changing: device) { () async throws -> DeviceLinkingResult in
 
       var description: DeviceDescription? = await network.registry.device(device)?.deviceDescription
 
@@ -252,10 +225,12 @@ public struct DeviceLinkingCoordinator: Sendable {
   }
 
   /// Links a device by its address in one link, in the caller's turn, without the catalog's
-  /// legs, and with its SET button when that fails, as
-  /// ``DeviceLinkingCoordinator/link(_:as:group:twoWay:setButtonTimeout:usesCatalogLegs:relayState:observer:)``
+  /// legs, and with its SET button when that fails and `fallsBackToSETButton` allows it, as
+  /// ``DeviceLinkingCoordinator/link(_:as:group:twoWay:setButtonTimeout:usesCatalogLegs:observer:)``
   /// describes. The device isn't turned on first.
   ///
+  /// - Parameter fallsBackToSETButton: Whether a device that doesn't link without its SET
+  ///   button is linked with it. Without, the error is thrown. Defaults to `true`.
   /// - Returns: The links made and the device.
   func linkByAddress(
     _ device: InsteonAddress,
@@ -264,6 +239,7 @@ public struct DeviceLinkingCoordinator: Sendable {
     twoWay: TwoWayLinking,
     setButtonTimeout: Duration,
     description: DeviceDescription?,
+    fallsBackToSETButton: Bool = true,
     observer: any LinkingObserver
   ) async throws -> DeviceLinkingResult {
 
@@ -295,6 +271,12 @@ public struct DeviceLinkingCoordinator: Sendable {
       throw LinkingError.unexpectedLink(link)
 
     } catch {
+
+      guard fallsBackToSETButton else {
+
+        throw error
+
+      }
 
       await observer.linking(.fallback(.setButtonLinking(device, reason: error)))
 
@@ -350,6 +332,25 @@ public struct DeviceLinkingCoordinator: Sendable {
   /// - Throws: `CancellationError` if the task is canceled while the device is asked.
   private func identifyBeforeLinking(_ device: InsteonAddress, observer: any LinkingObserver) async throws -> DeviceDescription? {
 
+    let identified: (description: DeviceDescription?, reason: UnidentifiedReason?) = try await askIdentity(of: device, observer: observer)
+
+    if let reason = identified.reason {
+
+      await observer.linking(.notIdentifiedBeforeLinking(device, because: reason))
+
+    }
+
+    return identified.description
+
+  }
+
+  /// Asks a device the registry doesn't know for its identity with ID Request, and tells the
+  /// observer it's asking. A device that doesn't report one isn't an error.
+  ///
+  /// - Returns: What the catalog says about the device, or why it didn't report an identity.
+  /// - Throws: `CancellationError` if the task is canceled while the device is asked.
+  func askIdentity(of device: InsteonAddress, observer: any LinkingObserver) async throws -> (description: DeviceDescription?, reason: UnidentifiedReason?) {
+
     await observer.linking(.identifying(device))
 
     let reason: UnidentifiedReason
@@ -360,7 +361,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
       if let known = await network.registry.device(device) {
 
-        return known.deviceDescription
+        return (known.deviceDescription, nil)
 
       }
 
@@ -376,9 +377,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
     }
 
-    await observer.linking(.notIdentifiedBeforeLinking(device, because: reason))
-
-    return nil
+    return (nil, reason)
 
   }
 

@@ -71,12 +71,6 @@ extension DeviceLinkingCoordinator {
       // A description without a profile is the catalog not knowing the identity.
       guard let description = reading.description, description.profile != nil else {
 
-        if relayState != nil {
-
-          throw RelayStateLinkingError.notDescribed(device)
-
-        }
-
         throw reading.identification.identity == nil ? DatabaseLinkRefusal.notIdentified(device) : DatabaseLinkRefusal.notInCatalog(device)
 
       }
@@ -437,10 +431,12 @@ extension DeviceLinkingCoordinator {
   }
 
   /// Whether a device's responder record for a link in which `deviceGroup` is its group holds
-  /// a relay's state as Data 1: when the group's type, or else the main group's, is a relay.
+  /// a relay's state as Data 1: when the catalog gives the group a type that's a relay. A
+  /// group without a type isn't taken for the main group, so its Data 1 is left as the
+  /// catalog says.
   static func recordsRelayState(_ description: DeviceDescription?, deviceGroup: AllLinkGroupNumber) -> Bool {
 
-    (description?.groupType(forGroup: deviceGroup) ?? description?.mainGroupType)?.kind == .relay
+    description?.groupType(forGroup: deviceGroup)?.kind == .relay
 
   }
 

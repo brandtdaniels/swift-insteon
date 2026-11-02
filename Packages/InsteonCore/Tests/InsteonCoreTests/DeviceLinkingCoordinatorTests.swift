@@ -209,12 +209,14 @@ actor LinkingRecorder: LinkingObserver {
       return "\(device) already \(state)"
     case let .relayConfirmed(device, state):
       return "\(device) confirmed \(state)"
+    case let .returningRelay(device, state):
+      return "returning \(device) \(state)"
     case let .restoringFlag(device, flag):
       return "restoring \(flag) \(device)"
     case let .flagRestored(device, flag):
       return "restored \(flag) \(device)"
-    case let .flagNotRestored(device, flag, _):
-      return "not restored \(flag) \(device)"
+    case let .restoreFailed(device, _):
+      return "failed \(device)"
     case let .recorded(link):
       return "group on gives \(link.groupOn), off gives \(link.groupOff), momentary \(link.isMomentary), pulses \(link.pulsesOnBothCommands)"
     }

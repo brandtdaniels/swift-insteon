@@ -49,6 +49,40 @@ public enum LinkingJSON {
     /// Each leg of the catalog's linking from a Hub, in the catalog's order, or empty.
     public let legs: [Leg]
 
+    /// What a relay linked with `--relay-state` recorded and does, or `nil`, and left out,
+    /// without one.
+    public let relayState: RelayStateReport?
+
+  }
+
+  /// What a relay linked with `--relay-state` recorded, what a group On and a group Off do to
+  /// it, and whether what linking changed went back as it was.
+  public struct RelayStateReport: Encodable, Hashable, Sendable {
+
+    /// The state asked for, `"on"` or `"off"`.
+    public let state: String
+
+    /// What a group On sets the relay to.
+    public let groupOn: String
+
+    /// What a group Off sets the relay to.
+    public let groupOff: String
+
+    /// Whether the relay is momentary after the link.
+    public let isMomentary: Bool
+
+    /// Data 1 of the relay's responder record, such as `"0xFF"`, or `nil` when it wasn't read.
+    public let recordedData1: String?
+
+    /// Why the record doesn't hold the state, or `nil` when it does.
+    public let recordFailure: String?
+
+    /// Whether the flag turned off for the link read back on, or `nil` when none was.
+    public let restored: Bool?
+
+    /// What didn't go back as it was, or `nil` when everything did.
+    public let restoreFailure: String?
+
   }
 
   /// A leg of the catalog's linking from a Hub, and what became of it.
@@ -362,7 +396,24 @@ public enum LinkingJSON {
 
     return LinkReport(
       links: result.links.map { (made: LinkMade) -> Link in link(made, known: known) },
-      legs: result.legs.map { (outcome: HubLinkingLegOutcome) -> Leg in leg(outcome, message: message) }
+      legs: result.legs.map { (outcome: HubLinkingLegOutcome) -> Leg in leg(outcome, message: message) },
+      relayState: result.relayState.map { (link: RelayStateLink) -> RelayStateReport in relayState(link, message: message) }
+    )
+
+  }
+
+  /// What a relay linked with a state recorded and does.
+  private static func relayState(_ link: RelayStateLink, message: (any Error) -> String) -> RelayStateReport {
+
+    RelayStateReport(
+      state: link.state.rawValue,
+      groupOn: link.groupOn.rawValue,
+      groupOff: link.groupOff.rawValue,
+      isMomentary: link.isMomentary,
+      recordedData1: link.recordedData1.map(Hex.byte),
+      recordFailure: link.recordFailure.map { (failure: RelayStateLinkingError) -> String in message(failure) },
+      restored: link.isRestored,
+      restoreFailure: link.restoreFailures.isEmpty ? nil : link.restoreFailures.map { (failure: RelayStateLinkingError) -> String in message(failure) }.joined(separator: " ")
     )
 
   }

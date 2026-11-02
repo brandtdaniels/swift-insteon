@@ -506,45 +506,117 @@ public enum LinkingEventText {
 
   }
 
-  /// The notes for putting a relay in the state it's to record before it links, and setting
-  /// back the flag changed for that.
+  /// The notes for putting a relay in the state it's to record before it links, and putting
+  /// back what was changed for that.
   private static func relayStateNotes(_ event: RelayStateEvent, message: (any Error) -> String) -> [String] {
 
     switch event {
     case let .clearingFlag(device, flag):
       return ["Turning \(device)'s \(flag) flag off for the link, so its relay holds its state..."]
     case let .settingRelay(device, state):
-      return ["Turning \(device)'s relay \(state.rawValue) with \(state == .on ? "Light On" : "Light Off"), so it links with the relay \(state.rawValue)..."]
+      return ["Turning \(device)'s relay \(state.rawValue), so it links with the relay \(state.rawValue)..."]
     case let .relayAlreadySet(device, state):
       return ["\(device)'s relay is already \(state.rawValue), so it links with the relay \(state.rawValue)."]
     case .relayConfirmed, .flagRestored:
       return []
+    case let .returningRelay(device, state):
+      return ["Turning \(device)'s relay back \(state.rawValue), as it was before the link..."]
     case let .restoringFlag(device, flag):
       return ["Turning \(device)'s \(flag) flag back on..."]
-    case let .flagNotRestored(device, flag, reason):
-      return ["\(device)'s \(flag) flag wasn't turned back on: \(message(reason)) Turn it on with 'insteon device \(device) set \(flag) on'."]
+    case let .restoreFailed(_, failure):
+      return [relayStateMessage(failure)]
     case let .recorded(link):
-      return [relayStateRecorded(link)]
+      // The command's failure says what the record holds instead.
+      return link.recordFailure == nil ? [relayStateRecorded(link)] : []
     }
 
   }
 
-  /// Why `insteon link --relay-state` fails after linking, when the flag it turned off for the
-  /// link wasn't turned back on, or `nil` when it was, or none was turned off.
+  /// A relay state error's sentence, then the command that fixes it, when there is one.
+  ///
+  /// - Parameter error: The error.
+  /// - Returns: The message, such as the error's description followed by
+  ///   `"Turn it back on with 'insteon device 1A.2B.3C set momentary on'."`.
+  public static func relayStateMessage(_ error: RelayStateLinkingError) -> String {
+
+    guard let hint = relayStateHint(error) else {
+
+      return error.description
+
+    }
+
+    return "\(error.description) \(hint)"
+
+  }
+
+  /// The command that fixes what a relay state error describes, as a sentence, or `nil`.
+  private static func relayStateHint(_ error: RelayStateLinkingError) -> String? {
+
+    let device: InsteonAddress = error.device
+
+    switch error {
+    case .notLinkedToModem:
+      return "Link it first with 'insteon link \(device)', then run it again with --relay-state."
+    case let .momentaryNotChangeable(_, flag):
+      return "Run 'insteon device \(device) set \(flag) off', link it, then run 'insteon device \(device) set \(flag) on'."
+    case let .flagNotRestored(_, flag, _):
+      return "Turn it back on with 'insteon device \(device) set \(flag) on'."
+    case .flagRestoreUnconfirmed, .otherFlagsChanged:
+      return "Check it with 'insteon device \(device) settings'."
+    case let .relayNotReturned(_, state, _):
+      return "Turn it \(state.rawValue) with 'insteon device \(device) \(state.rawValue)'."
+    case let .recordedOtherState(_, group, _, requested):
+      return "Run 'insteon link \(device) --group \(group.rawValue) --relay-state \(requested.rawValue)' again."
+    case .notIdentified, .notDescribed, .notARelay, .flagUnreadable, .flagNotChanged, .relayNotConfirmed, .remoteLinkingFailed,
+      .recordNotFound, .recordNotRead, .recordInPlace:
+      return nil
+    }
+
+  }
+
+  /// Why `insteon link --relay-state` fails once the link is made: the relay's record holds
+  /// another state, what linking changed wasn't all put back, which the notes said as it
+  /// happened, or the link back failed. `nil` when everything went as asked.
   ///
   /// - Parameters:
   ///   - result: What the coordinator linked.
   ///   - message: The sentence that describes an error, ending with a period.
   /// - Returns: The message.
-  public static func flagNotRestored(_ result: DeviceLinkingResult, message: (any Error) -> String) -> String? {
+  public static func relayStateFailure(_ result: DeviceLinkingResult, message: (any Error) -> String) -> String? {
 
-    guard let link = result.relayState, let failure = link.restoreFailure else {
+    guard let link = result.relayState else {
 
       return nil
 
     }
 
-    return "\(link.device) is linked. \(message(failure))"
+    var parts: [String] = []
+
+    if let failure = link.recordFailure {
+
+      parts.append(relayStateMessage(failure))
+
+    }
+
+    if !link.restoreFailures.isEmpty {
+
+      parts.append("What linking changed wasn't all put back, as said above.")
+
+    }
+
+    if let failure = result.linkBackFailure {
+
+      parts.append("It didn't link back: \(message(failure)) To link back with its SET button, run 'insteon link \(link.device) --responder'.")
+
+    }
+
+    guard !parts.isEmpty else {
+
+      return nil
+
+    }
+
+    return "\(link.device) is linked. " + parts.joined(separator: " ")
 
   }
 

@@ -352,7 +352,11 @@ enum ModemCommands {
     let twoWay: TwoWayLinking = options.twoWay
     let result: DeviceLinkingResult
 
-    if let device = options.device {
+    if let device = options.device, let state = options.relayState {
+
+      result = try await coordinator.linkRelay(device, recording: state, group: options.group, twoWay: twoWay, setButtonTimeout: timeout, observer: observer)
+
+    } else if let device = options.device {
 
       result = try await coordinator.link(
         device,
@@ -361,7 +365,6 @@ enum ModemCommands {
         twoWay: twoWay,
         setButtonTimeout: timeout,
         usesCatalogLegs: options.followsCatalogLegs,
-        relayState: options.relayState,
         observer: observer
       )
 
@@ -383,9 +386,11 @@ enum ModemCommands {
 
     }
 
-    if let notRestored = LinkingEventText.flagNotRestored(result, message: Names.message(for:)) {
+    // One message for everything a relay linked with a state didn't do as asked, the link
+    // back included.
+    if let failure = LinkingEventText.relayStateFailure(result, message: Names.message(for:)) {
 
-      throw CommandFailure(description: notRestored)
+      throw CommandFailure(description: failure)
 
     }
 

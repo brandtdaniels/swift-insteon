@@ -107,7 +107,7 @@ extension Device {
 
     }
 
-    _ = try await resolveLinkingMessage(release, duration: nil, writableFlags: writableFlags)
+    _ = try await resolveLinkingMessage(release, duration: nil, writableFlags: writableFlags, for: .keepAwake)
 
   }
 
@@ -118,7 +118,7 @@ extension Device {
     _ message: DeviceLifecycle.HubLinking.HubMessage,
     duration: Duration?,
     writableFlags: Set<SettingName>,
-    for operation: DeviceOperation = .keepAwake
+    for operation: DeviceOperation
   ) async throws -> LinkingSend {
 
     let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription

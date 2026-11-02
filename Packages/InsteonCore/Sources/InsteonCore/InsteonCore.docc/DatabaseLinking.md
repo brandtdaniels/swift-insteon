@@ -6,7 +6,7 @@ ALL-Link databases directly, without linking mode or the SET button.
 ## Overview
 
 Linking with linking mode or a device's SET button, as
-``DeviceLinkingCoordinator/link(_:as:group:twoWay:setButtonTimeout:usesCatalogLegs:relayState:observer:)``
+``DeviceLinkingCoordinator/link(_:as:group:twoWay:setButtonTimeout:usesCatalogLegs:observer:)``
 does, is the default, and the way Insteon's own apps link. Writing the databases directly is
 for a device that can't be reached with linking mode but answers the modem, such as one whose
 SET button is out of reach or one that keeps falling back to it, and for removing the records

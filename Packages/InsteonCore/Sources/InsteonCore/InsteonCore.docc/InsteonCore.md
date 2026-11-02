@@ -247,13 +247,15 @@ for outcome in result.legs {
 ```
 
 A relay, such as an I/O Linc's, records its state as it links: a group On then sets it to that
-state and a group Off to the opposite. Pass a ``RelayState`` to put the relay in a state
-first. The coordinator turns the relay's momentary flag off for the link when the catalog lets
-it, sets the relay and reads its status back, links, and sets the flag back however linking
-ends. Without one, a relay is never switched:
+state and a group Off to the opposite.
+``DeviceLinkingCoordinator/linkRelay(_:recording:group:twoWay:setButtonTimeout:observer:)``
+puts the relay in a chosen ``RelayState`` first, turning a momentary relay's flag off for the
+link when the catalog lets it, links, reads the record back, and puts back what it changed
+however linking ends. ``DeviceLinkingCoordinator/link(_:as:group:twoWay:setButtonTimeout:usesCatalogLegs:observer:)``
+never switches a relay:
 
 ```swift
-let result = try await network.linking.link(module, as: .controller, group: 2, relayState: .off, observer: prompter)
+let result = try await network.linking.linkRelay(module, recording: .off, group: 2, observer: prompter)
 
 print(result.relayState?.groupOn, result.relayState?.groupOff)   // off, on
 ```
