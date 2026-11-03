@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import InsteonDeviceCatalog
+import InsteonProtocol
 
 struct BundledCatalogTests {
 
@@ -67,6 +68,44 @@ struct BundledCatalogTests {
 
     #expect(url.lastPathComponent == "catalog.json")
     #expect(catalog == bundled)
+
+  }
+
+  // MARK: - Contents
+
+  @Test func listsOnlyTheIOLincsMomentaryFlagAsALinkingChange() throws {
+
+    let catalog: DeviceCatalog = try DeviceCatalog.bundled()
+    let ioLinc: [LinkingChange] = try #require(catalog.commandSet(id: "ioLinc")).linkingChanges
+
+    #expect(ioLinc.map(\.flag) == ["momentary"])
+    #expect(ioLinc.map(\.verification.status) == [.observed])
+    #expect(ioLinc.map(\.verification.firmware) == [[0x41]])
+
+    for profile in catalog.profiles {
+
+      for identity in profile.identities {
+
+        let description: DeviceDescription = catalog.describe(category: identity.category, subcategory: identity.subcategory, firmwareVersion: nil)
+        let expected: [LinkingChange] = description.commandSet?.id == "ioLinc" ? ioLinc : []
+
+        #expect(description.commandSet?.linkingChanges ?? [] == expected, "\(profile.model)")
+
+      }
+
+    }
+
+  }
+
+  @Test func givesTheIOLincsRelayAnOnOrOffResponderByte() throws {
+
+    let commands: CommandSet = try #require(try DeviceCatalog.bundled().commandSet(id: "ioLinc"))
+    let relay: GroupType = try #require(commands.groupType(named: "relay"))
+
+    #expect(relay.linkData.responder.map(\.position) == [1])
+    #expect(relay.linkData.responder.map(\.name) == ["onLevel"])
+    #expect(relay.linkData.responder.map(\.table) == ["onOff"])
+    #expect(relay.linkData.responder.map(\.verification.status) == [.observed])
 
   }
 
