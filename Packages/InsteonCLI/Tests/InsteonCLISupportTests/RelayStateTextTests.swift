@@ -131,12 +131,16 @@ struct RelayStateTextTests {
     #expect(String(decoding: try encoder.encode(report.relayState), as: UTF8.self) == """
       {"ignoresState":true,"isMomentary":true,"leavesUnverifiedMode":false,"pulsesOnBothCommands":true,"recordedData1":"0x00","state":"on"}
       """)
-    #expect(!notes(.relayState(.recorded(ignored))).joined().contains("group On turns"))
+    #expect(notes(.relayState(.recorded(ignored))) == [
+      "1A.2B.3C linked without switching its relay, whose record holds Data 1 0x00. "
+        + "Its relay is momentary with momentaryOnBothCommands on, so every On and Off only pulses it and the state is ignored."
+    ])
 
     let unverified = RelayStateLink(device: module, state: .off, group: 2, recordedData1: 0x00, isMomentary: false, pulsesOnBothCommands: true)
 
     #expect(LinkingJSON.report(DeviceLinkingResult(links: [], device: nil, linkBackFailure: nil, relayState: unverified)).relayState?.leavesUnverifiedMode == true)
     #expect(LinkingJSON.report(DeviceLinkingResult(links: [], device: nil, linkBackFailure: nil, relayState: unverified)).relayState?.groupOn == "off")
+    #expect(LinkingJSON.report(DeviceLinkingResult(links: [], device: nil, linkBackFailure: nil, relayState: unverified)).relayState?.groupOff == "on")
 
   }
 
@@ -287,8 +291,8 @@ struct RelayStateTextTests {
         + "Its relay is momentary with momentaryOnBothCommands on, so every On and Off only pulses it and the state is ignored."
     ])
     #expect(notes(.relayState(.recorded(link(isMomentary: false, pulses: true)))) == [
-      "1A.2B.3C linked without switching its relay, whose record holds Data 1 0xFF. "
-        + "Its momentaryOnBothCommands flag is on though the relay isn't momentary, a mode whose effect isn't verified."
+      "1A.2B.3C recorded its relay on: a group On turns the relay on, and a group Off turns it off. "
+        + "Its momentaryOnBothCommands flag is on though the relay isn't momentary, a mode whose effect isn't verified, so the relay wasn't switched."
     ])
     // The command's failure says what the record holds instead.
     #expect(notes(.relayState(.recorded(link(record: .recordedOtherState(module, group: 2, data1: 0x00, requested: .on))))).isEmpty)

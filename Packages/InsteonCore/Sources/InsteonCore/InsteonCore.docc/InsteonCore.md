@@ -257,7 +257,8 @@ never switches a relay:
 ```swift
 let result = try await network.linking.linkRelay(module, recording: .off, group: 2, observer: prompter)
 
-print(result.relayState?.groupOn, result.relayState?.groupOff)   // off, on
+// `nil` when the relay ignores the state, as a momentary one with momentaryOnBothCommands on does.
+print(result.relayState?.groupOn.map(\.rawValue) ?? "ignored")   // off
 ```
 
 ``DeviceLinkingCoordinator/remove(_:scan:forceModemSide:timeout:observer:)`` removes a device

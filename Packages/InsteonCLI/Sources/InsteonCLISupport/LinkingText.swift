@@ -543,7 +543,7 @@ public enum LinkingEventText {
       return [relayStateMessage(failure)]
     case let .recorded(link):
       // The command's failure says what the record holds instead.
-      return link.pulsesOnBothCommands || link.recordFailure == nil ? [relayStateRecorded(link)] : []
+      return link.ignoresState || link.recordFailure == nil ? [relayStateRecorded(link)] : []
     }
 
   }
@@ -652,21 +652,23 @@ public enum LinkingEventText {
   ///   `"1A.2B.3C recorded its relay on: a group On turns the relay on, and a group Off turns it off."`.
   public static func relayStateRecorded(_ link: RelayStateLink) -> String {
 
-    if link.pulsesOnBothCommands {
+    if link.ignoresState {
 
       let record: String = link.recordedData1.map { (data1: UInt8) -> String in "whose record holds Data 1 \(Hex.byte(data1))" } ?? "whose record wasn't read"
-      let mode: String = link.isMomentary
-        ? "Its relay is momentary with momentaryOnBothCommands on, so every On and Off only pulses it and the state is ignored."
-        : "Its momentaryOnBothCommands flag is on though the relay isn't momentary, a mode whose effect isn't verified."
 
-      return "\(link.device) linked without switching its relay, \(record). \(mode)"
+      return "\(link.device) linked without switching its relay, \(record). "
+        + "Its relay is momentary with momentaryOnBothCommands on, so every On and Off only pulses it and the state is ignored."
 
     }
 
     var line: String = "\(link.device) recorded its relay \(link.state.rawValue): a group On turns the relay \(link.state.rawValue), "
       + "and a group Off turns it \(link.state.opposite.rawValue)."
 
-    if link.isMomentary {
+    if link.leavesUnverifiedMode {
+
+      line += " Its momentaryOnBothCommands flag is on though the relay isn't momentary, a mode whose effect isn't verified, so the relay wasn't switched."
+
+    } else if link.isMomentary {
 
       line += " The relay is momentary, so it holds that state only for its momentary time."
 

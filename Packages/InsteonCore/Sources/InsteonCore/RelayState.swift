@@ -469,7 +469,7 @@ extension RelayStateLinkingError: CustomStringConvertible, LocalizedError {
     case let .relayNotReturned(device, state, reason):
       "\(device)'s relay wasn't switched \(state.rawValue): \(Self.message(reason)) It may be left \(state.opposite.rawValue)."
     case let .unverifiedModeStateDiffers(device, flag, reads, requested):
-      "\(device)'s \(flag) flag is on though its relay isn't momentary, a mode whose effect isn't verified, so the relay isn't switched; it reads \(reads.rawValue), so it would record \(reads.rawValue), not \(requested.rawValue). Nothing was changed. Turn \(flag) off, or link with the relay's state, \(reads.rawValue)."
+      "\(device)'s \(flag) flag is on though its relay isn't momentary, a mode whose effect isn't verified, so the relay isn't switched; it reads \(reads.rawValue), so it would record \(reads.rawValue), not \(requested.rawValue). Nothing was changed."
     case let .planChanged(old, new):
       "\(old.device) changed since the plan was shown: \(Self.difference(old, new)). Nothing was changed; plan the link again."
     case let .relayReturnUnconfirmed(device, state, reason):

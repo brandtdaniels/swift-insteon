@@ -485,6 +485,83 @@ struct RelayStateLinkingTests {
 
   }
 
+  @Test func refusesTheBothCommandsBitInTheOtherStateWhilePlanning() async throws {
+
+    let modem: InMemoryModem = await modem(flags: RelayExample.bothCommands.bit)
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+
+    await expectRefusal({ _ = try await linking.planRelayLink(module, recording: .on, observer: LinkingRecorder()) }) { (error: RelayStateLinkingError) -> Bool in
+
+      if case .unverifiedModeStateDiffers = error {
+
+        return true
+
+      }
+
+      return false
+
+    }
+
+    #expect(await modem.linkingSteps == [step(0x1F, 0x00), step(0x19, 0x00)])
+
+  }
+
+  @Test func refusesAnApprovedLatchingRelayWithTheBothCommandsBitThatToggled() async throws {
+
+    let modem: InMemoryModem = await modem(flags: RelayExample.bothCommands.bit, relay: 0xFF)
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    let plan: RelayLinkPlan = try await linking.planRelayLink(module, recording: .on, observer: LinkingRecorder())
+
+    // Someone switches it off after the plan was approved.
+    await modem.setLevel(0x00, of: module)
+
+    await expectRefusal({ _ = try await linking.linkRelay(plan, group: 2, twoWay: .never, observer: LinkingRecorder()) }) { (error: RelayStateLinkingError) -> Bool in
+
+      if case .unverifiedModeStateDiffers = error {
+
+        return true
+
+      }
+
+      return false
+
+    }
+
+    #expect(changes(in: await modem.linkingSteps).isEmpty)
+
+  }
+
+  @Test func holdsALatchingRelayWithTheBothCommandsBitToTheStateItClaims() async throws {
+
+    let modem: InMemoryModem = await modem(flags: RelayExample.bothCommands.bit)
+    let module: InsteonAddress = self.module
+    // The relay closes as it links, so its record holds on though it read off.
+    let recorder = LinkingRecorder(reacting: { (event: LinkingEvent) async -> Void in
+
+      if case .linkingRemotely = event {
+
+        await modem.setLevel(0xFF, of: module)
+
+      }
+
+    })
+
+    let result: DeviceLinkingResult = try await linkRelay(modem, .off, observer: recorder)
+
+    guard case let .recordedOtherState(device, _, data1, requested)? = result.relayState?.recordFailure else {
+
+      Issue.record("Expected the record to hold another state, got \(String(describing: result.relayState?.recordFailure))")
+
+      return
+
+    }
+
+    #expect(device == module)
+    #expect(data1 == 0xFF)
+    #expect(requested == .off)
+
+  }
+
   @Test func leavesALatchingRelayWithTheBothCommandsBitAloneAndSaysWhy() async throws {
 
     let modem: InMemoryModem = await modem(flags: RelayExample.bothCommands.bit)

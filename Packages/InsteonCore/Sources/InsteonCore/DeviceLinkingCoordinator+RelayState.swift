@@ -34,9 +34,10 @@ extension DeviceLinkingCoordinator {
   ///    allow it, and when the messages that set the flag back and open the relay would be
   ///    sent; otherwise the link is refused. A relay already in the state is sent nothing,
   ///    and no flag is written. Neither is a relay whose momentaryOnBothCommands flag is on:
-  ///    on a momentary relay every On and Off only pulses it, so the state is ignored, and on
-  ///    one that isn't momentary what the flag does isn't verified. Its record isn't held to
-  ///    the state. ``DeviceLinkingCoordinator/planRelayLink(_:recording:observer:)`` reads the same
+  ///    on a momentary relay every On and Off only pulses it, so the state is ignored and its
+  ///    record isn't held to it; on one that isn't momentary what the flag does isn't
+  ///    verified, so it's linked only when it already reads the state, and its record is held
+  ///    to that state. ``DeviceLinkingCoordinator/planRelayLink(_:recording:observer:)`` reads the same
   ///    and says what will be switched, for a front end to ask first.
   /// 3. The relay is sent its group type's On or Off through the device's guarded send path,
   ///    and its status is read again; a relay that doesn't show the state isn't linked.
@@ -118,7 +119,10 @@ extension DeviceLinkingCoordinator {
   ///   - observer: What a person is told.
   /// - Returns: The links made, the device, and the relay's ``RelayStateLink``.
   /// - Throws: ``RelayStateLinkingError/planChanged(old:new:)`` when the relay changed since
-  ///   the plan, and the errors of
+  ///   the plan, or
+  ///   ``RelayStateLinkingError/unverifiedModeStateDiffers(_:flag:reads:requested:)`` when a
+  ///   relay that isn't momentary, with momentaryOnBothCommands on, switched to the other
+  ///   state since, which is found while the plan is read again; and the errors of
   ///   ``DeviceLinkingCoordinator/linkRelay(_:recording:group:twoWay:setButtonTimeout:observer:)``.
   public func linkRelay(
     _ plan: RelayLinkPlan,
@@ -249,8 +253,8 @@ extension DeviceLinkingCoordinator {
         }
 
         let linkedGroup: AllLinkGroupNumber = result.links.first?.group ?? group
-        // A relay that wasn't switched for momentaryOnBothCommands isn't held to the state.
-        let recorded: (data1: UInt8?, failure: RelayStateLinkingError?) = try await checkRecord(of: device, group: linkedGroup, state: plan.pulsesOnBothCommands ? nil : state)
+        // Only a relay that ignores the state isn't held to it; every other result claims it.
+        let recorded: (data1: UInt8?, failure: RelayStateLinkingError?) = try await checkRecord(of: device, group: linkedGroup, state: plan.ignoresState ? nil : state)
         let link = RelayStateLink(
           device: device,
           state: state,
@@ -312,8 +316,10 @@ extension DeviceLinkingCoordinator {
   /// - Returns: The plan.
   /// - Throws: The refusals of
   ///   ``DeviceLinkingCoordinator/linkRelay(_:recording:group:twoWay:setButtonTimeout:observer:)``
-  ///   that come before anything changes, the modem's errors, and `CancellationError` if the
-  ///   task is canceled.
+  ///   that come before anything changes, such as
+  ///   ``RelayStateLinkingError/unverifiedModeStateDiffers(_:flag:reads:requested:)`` for a
+  ///   relay that isn't momentary, with momentaryOnBothCommands on, reading the other state;
+  ///   the modem's errors; and `CancellationError` if the task is canceled.
   public func planRelayLink(_ device: InsteonAddress, recording state: RelayState, observer: any LinkingObserver) async throws -> RelayLinkPlan {
 
     try await inTurn(changing: nil) { () async throws -> RelayLinkPlan in
