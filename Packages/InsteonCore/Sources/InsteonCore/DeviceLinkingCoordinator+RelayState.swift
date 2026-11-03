@@ -367,7 +367,8 @@ extension DeviceLinkingCoordinator {
       isMomentary: flags.states[Self.momentaryFlag] ?? false,
       pulsesOnBothCommands: flags.states[Self.momentaryOnBothCommandsFlag] ?? false
     )
-    let writableFlags: Set<SettingName> = Self.writableLinkingFlags(of: description)
+    // A relay link writes only the flags the catalog lets a linking flow change around it.
+    let writableFlags = Set<SettingName>(commands?.linkingChanges.map(\.flag) ?? [])
 
     // The relay isn't switched in a mode whose effect isn't verified, so it would record the
     // state it's in, not the one asked for.
