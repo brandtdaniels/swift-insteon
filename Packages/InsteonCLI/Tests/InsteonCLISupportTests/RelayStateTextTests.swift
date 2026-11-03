@@ -2,6 +2,8 @@ import Foundation
 import Testing
 @testable import InsteonCLISupport
 @testable import InsteonCore
+import InsteonDeviceCatalog
+import InsteonLinking
 import InsteonProtocol
 
 /// Parsing `link --relay-state`, and what `insteon link` prints while it puts a relay in the
@@ -362,6 +364,51 @@ struct RelayStateTextTests {
     #expect(LinkingJSON.report(DeviceLinkingResult(links: [], device: nil, linkBackFailure: nil, relayState: withFlag)).relayState?.restored == false)
     // Without a relay state, the object is as it always is.
     #expect(String(decoding: try encoder.encode(LinkingJSON.report(DeviceLinkingResult(links: [], device: nil, linkBackFailure: nil))), as: UTF8.self) == #"{"legs":[],"links":[]}"#)
+
+  }
+
+  /// The plan `link --database --relay-state` makes for an I/O Linc with the bundled catalog,
+  /// whose database holds a controller record of the modem and a free slot below it.
+  func ioLincPlan(_ state: RelayState) throws -> DatabaseLinkPlan {
+
+    let identity = SetButtonPressed(sender: module, role: .responder, category: 0x07, subcategory: 0x00, firmwareVersion: 0x41)
+    let description: DeviceDescription = try DeviceCatalog.bundled().describe(category: 0x07, subcategory: 0x00, firmwareVersion: 0x41)
+    let reading = DeviceLinkingCoordinator.DatabaseReading(
+      device: module,
+      modem: modem,
+      identification: DeviceIdentification(device: module, engine: .i2cs, acceptsModem: true, identity: identity),
+      engine: .i2cs,
+      description: description,
+      deviceRecords: [
+        AllLinkRecordResponse(sender: module, address: 0x0FFF, record: AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xE2), group: 0x01, address: modem)),
+        AllLinkRecordResponse(sender: module, address: 0x0FF7, record: AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0x22), group: 0x09, address: InsteonAddress(0x2C, 0x3D, 0x02))),
+        AllLinkRecordResponse(sender: module, address: 0x0FEF, record: AllLinkRecord(flags: [], group: 0x00, address: InsteonAddress(0x00, 0x00, 0x00)))
+      ],
+      allModemRecords: [],
+      modemLinkData: nil
+    )
+    let legs: [HubLinkingLeg] = try #require(HubLinkingLeg.legs(of: description, device: module))
+
+    return try DeviceLinkingCoordinator.linkPlan(reading: reading, legs: legs, relayState: state)
+
+  }
+
+  @Test func showsTheRelayStateAnIOLincsDryRunWrites() throws {
+
+    let on: [String] = DatabaseLinkText.plan(try ioLincPlan(.on))
+    let off: [String] = DatabaseLinkText.plan(try ioLincPlan(.off))
+
+    #expect(on == [
+      "Linking 1A.2B.3C (I/O Module 2450 (I/O Linc)) by writing ALL-Link records directly, 3 writes:",
+      "  1. Write the device's responder record for group 0 at 0x0FF7: 11.22.33, data FF 00 00.",
+      "  2. Add the modem's controller record for group 0, naming the device.",
+      "  3. Add the modem's responder record for group 1, naming the device.",
+      "Already in place:",
+      "  The device's controller record for group 1 at 0x0FFF naming 11.22.33, data 00 00 00.",
+      "Data 1 of the device's responder record is 0xFF, the relay on: a group On turns the relay on, and a group Off turns it off."
+    ])
+    #expect(off.first { (line: String) -> Bool in line.hasPrefix("  1.") } == "  1. Write the device's responder record for group 0 at 0x0FF7: 11.22.33, data 00 00 00.")
+    #expect(off.last == "Data 1 of the device's responder record is 0x00, the relay off: a group On turns the relay off, and a group Off turns it on.")
 
   }
 

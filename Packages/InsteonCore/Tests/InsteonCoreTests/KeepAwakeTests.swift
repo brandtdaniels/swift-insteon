@@ -353,14 +353,22 @@ struct KeepAwakeTests {
     #expect(DeviceLinkingCoordinator.writableLinkingFlags(of: plug).isEmpty)
     #expect(DeviceLinkingCoordinator.writableLinkingFlags(of: nil).isEmpty)
 
-    // The bundled catalog names no flags that linking changes on its own.
+    // In the bundled catalog, only the I/O Linc names a flag a linking flow may change around
+    // a link: its momentary flag, seen on firmware 0x41.
+    let ioLinc: [LinkingChange] = try #require(catalog.commandSet(id: "ioLinc")).linkingChanges
+
+    #expect(ioLinc.map(\.flag) == ["momentary"])
+    #expect(ioLinc.map(\.verification.status) == [.observed])
+    #expect(ioLinc.map(\.verification.firmware) == [[0x41]])
+
     for profile in catalog.profiles {
 
       for identity in profile.identities {
 
         let description: DeviceDescription = catalog.describe(category: identity.category, subcategory: identity.subcategory, firmwareVersion: nil)
+        let expected: [LinkingChange] = description.commandSet?.id == "ioLinc" ? ioLinc : []
 
-        #expect(description.commandSet?.linkingChanges.isEmpty ?? true, "\(profile.model)")
+        #expect(description.commandSet?.linkingChanges ?? [] == expected, "\(profile.model)")
 
       }
 

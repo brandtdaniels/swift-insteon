@@ -926,6 +926,54 @@ struct DatabaseLinkingTests {
 
   }
 
+  // MARK: - The bundled catalog
+
+  /// The I/O Linc 2450, as firmware 0x41 reports itself.
+  static let ioLinc = ReportedIdentity(category: 0x07, subcategory: 0x00, firmwareVersion: 0x41)
+
+  /// The I/O Linc, holding a controller record of the modem in group 1 and a free slot below
+  /// it, on a network with the bundled catalog.
+  func ioLincLinking() async throws -> (InMemoryModem, DeviceLinkingCoordinator) {
+
+    let modem: InMemoryModem = await modem(identity: Self.ioLinc)
+
+    await modem.setDatabase([
+      0x0FFF: controller(0x01, naming: modemAddress),
+      0x0FF7: deleted(responder(0x09, naming: DatabaseLinkingExample.lamp))
+    ], of: device)
+
+    return (modem, network(modem, catalog: try DeviceCatalog.bundled()).linking)
+
+  }
+
+  @Test(arguments: [(RelayState.on, UInt8(0xFF)), (RelayState.off, UInt8(0x00))])
+  func writesAnIOLincsRelayStateAsTheBundledCatalogSays(state: RelayState, data1: UInt8) async throws {
+
+    let (modem, linking): (InMemoryModem, DeviceLinkingCoordinator) = try await ioLincLinking()
+    let plan: DatabaseLinkPlan = try await linking.planDatabaseLink(device, relayState: state)
+
+    #expect(plan.relayState == state)
+    #expect(plan.deviceSteps.map { $0.kind } == [.addDeviceRecord])
+    #expect(plan.deviceSteps.map { $0.written } == [responder(0x00, naming: modemAddress, data: [data1, 0x00, 0x00])])
+    #expect(plan.modemSteps.map { $0.kind } == [.addModemRecord, .addModemRecord])
+
+    let result: DatabaseLinkResult = try await linking.apply(plan)
+
+    #expect(result.isComplete)
+    #expect(await modem.record(of: device, at: 0x0FF7) == responder(0x00, naming: modemAddress, data: [data1, 0x00, 0x00]))
+
+  }
+
+  @Test func linksAnIOLincWithTheBundledCatalogsOnLevel() async throws {
+
+    let (_, linking): (InMemoryModem, DeviceLinkingCoordinator) = try await ioLincLinking()
+    let plan: DatabaseLinkPlan = try await linking.planDatabaseLink(device)
+
+    // Without a relay state, the catalog's on-level byte records full on.
+    #expect(plan.deviceSteps.map { $0.written } == [responder(0x00, naming: modemAddress, data: [0xFF, 0x00, 0x00])])
+
+  }
+
   // MARK: - The modem's record data
 
   @Test func writesTheModemsRecordsAsTheCatalogSaysTheModemDoes() async throws {
