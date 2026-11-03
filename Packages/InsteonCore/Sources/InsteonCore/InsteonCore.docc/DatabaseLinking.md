@@ -31,7 +31,7 @@ if !result.isComplete {
 
 ### What a link writes
 
-``DeviceLinkingCoordinator/planDatabaseLink(_:)`` asks the device for its engine and identity,
+``DeviceLinkingCoordinator/planDatabaseLink(_:relayState:)`` asks the device for its engine and identity,
 reads its database and the modem's, and adds whichever records of the Insteon device catalog's
 links between the device and a Hub are missing, the responder's record of each link before the
 controller's. A record already there stays as it is, data and all, and the plan lists it in
@@ -43,6 +43,12 @@ A responder record the device keeps holds the data bytes the catalog gives for i
 fixed value, the device's own group for a byte that holds it, full on for an on-level, and 0.5 s
 for a ramp rate. The plan is refused, as a ``DatabaseLinkRefusal``, for a byte the catalog gives
 no value for, and for a device the catalog gives no links for.
+
+With a ``RelayState``, a relay's responder record holds the state as Data 1, `0xFF` for on and
+`0x00` for off, so a group On sets the relay to it and a group Off to the opposite. The relay
+isn't switched and no flag is written. The plan is refused, as a ``RelayStateLinkingError``,
+for a device whose main group isn't a relay, and when a responder record already in place holds
+the other state.
 
 ### What an unlink writes
 

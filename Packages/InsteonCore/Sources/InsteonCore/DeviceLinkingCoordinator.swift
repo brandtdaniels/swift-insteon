@@ -35,8 +35,10 @@ import InsteonProtocol
 ///   button: extended for a battery-powered i2CS device;
 /// - the steps to restore a removed device's factory settings, which a person follows.
 ///
-/// Operating flags aren't read or written around a link or unlink: a device keeps whatever
-/// flags linking leaves it with.
+/// Operating flags aren't read or written around a link or unlink, apart from those the
+/// catalog lets a link change: a flag that keeps a battery-powered device awake while it
+/// links, and a relay's momentary flag while it's linked with a chosen ``RelayState``. Each is
+/// set back afterward.
 ///
 /// Canceling the task stops a link or unlink cleanly, as the linking primitives do: the modem
 /// is sent Cancel ALL-Linking, and a device sent Enter Linking Mode is sent Exit Linking Mode.
@@ -157,6 +159,10 @@ public struct DeviceLinkingCoordinator: Sendable {
   /// yet, is linked with its SET button instead, with the catalog's steps, and only its link is
   /// accepted.
   ///
+  /// A relay is never switched and its flags are never written; to link one with a chosen
+  /// state, use
+  /// ``DeviceLinkingCoordinator/linkRelay(_:recording:group:twoWay:setButtonTimeout:observer:)``.
+  ///
   /// - Parameters:
   ///   - device: The device.
   ///   - role: The modem's role.
@@ -192,7 +198,6 @@ public struct DeviceLinkingCoordinator: Sendable {
 
     try await inTurn(changing: device) { () async throws -> DeviceLinkingResult in
 
-      let linker: Linker = makeLinker()
       var description: DeviceDescription? = await network.registry.device(device)?.deviceDescription
 
       if description == nil {
@@ -207,85 +212,115 @@ public struct DeviceLinkingCoordinator: Sendable {
 
       }
 
-      let deviceGroup: AllLinkGroupNumber = role == .responder ? Self.controllingGroup(of: description) : Self.respondingDeviceGroup
-      let modemGroup: AllLinkGroupNumber = role == .responder ? deviceGroup : group
-
       if role == .controller {
 
-        try await turnOnBeforeLinking(device, description: description, linker: linker, observer: observer)
+        try await turnOnBeforeLinking(device, description: description, linker: makeLinker(), observer: observer)
 
       }
 
-      await observer.linking(.linkingRemotely(device, modemRole: role))
+      return try await linkByAddress(device, as: role, group: group, twoWay: twoWay, setButtonTimeout: setButtonTimeout, description: description, observer: observer)
 
-      var first: AllLinkingCompleted?
+    }
 
-      do {
+  }
 
-        first = try await linker.linkRemotely(device, modemRole: role, modemGroup: modemGroup, deviceGroup: deviceGroup)
+  /// Links a device by its address in one link, in the caller's turn, without the catalog's
+  /// legs, and with its SET button when that fails and `fallsBackToSETButton` allows it, as
+  /// ``DeviceLinkingCoordinator/link(_:as:group:twoWay:setButtonTimeout:usesCatalogLegs:observer:)``
+  /// describes. The device isn't turned on first.
+  ///
+  /// - Parameter fallsBackToSETButton: Whether a device that doesn't link without its SET
+  ///   button is linked with it. Without, the error is thrown. Defaults to `true`.
+  /// - Returns: The links made and the device.
+  func linkByAddress(
+    _ device: InsteonAddress,
+    as role: ModemRole,
+    group: AllLinkGroupNumber,
+    twoWay: TwoWayLinking,
+    setButtonTimeout: Duration,
+    description: DeviceDescription?,
+    fallsBackToSETButton: Bool = true,
+    observer: any LinkingObserver
+  ) async throws -> DeviceLinkingResult {
 
-      } catch let error as CancellationError {
+    let linker: Linker = makeLinker()
+    let deviceGroup: AllLinkGroupNumber = role == .responder ? Self.controllingGroup(of: description) : Self.respondingDeviceGroup
+    let modemGroup: AllLinkGroupNumber = role == .responder ? deviceGroup : group
 
-        // The turn records the change on the way out.
+    await observer.linking(.linkingRemotely(device, modemRole: role))
+
+    var first: AllLinkingCompleted?
+
+    do {
+
+      first = try await linker.linkRemotely(device, modemRole: role, modemGroup: modemGroup, deviceGroup: deviceGroup)
+
+    } catch let error as CancellationError {
+
+      // The turn records the change on the way out.
+      throw error
+
+    } catch let LinkingError.unexpectedLink(link) {
+
+      if let mismatch = LinkMismatch(link, direction: .linking, device: device) {
+
+        throw mismatch
+
+      }
+
+      throw LinkingError.unexpectedLink(link)
+
+    } catch {
+
+      guard fallsBackToSETButton else {
+
         throw error
 
-      } catch let LinkingError.unexpectedLink(link) {
-
-        if let mismatch = LinkMismatch(link, direction: .linking, device: device) {
-
-          throw mismatch
-
-        }
-
-        throw LinkingError.unexpectedLink(link)
-
-      } catch {
-
-        await observer.linking(.fallback(.setButtonLinking(device, reason: error)))
-
       }
 
-      let made: AllLinkingCompleted
+      await observer.linking(.fallback(.setButtonLinking(device, reason: error)))
 
-      if let first {
+    }
 
-        made = first
+    let made: AllLinkingCompleted
+
+    if let first {
+
+      made = first
+
+    } else {
+
+      let steps: [DeviceLifecycle.Step] = Self.deviceSteps(of: description?.profile?.lifecycle?.linking)
+
+      if role == .responder {
+
+        try await observer.waitUntilDeviceIsReady(DeviceFirstPrompt(direction: .linking, device: device, deviceDescription: description, steps: steps))
+        await observer.linking(.modemJoining(timeout: setButtonTimeout))
+
+        made = try await linker.linkManually(as: .responder, group: modemGroup, device: device, timeout: setButtonTimeout)
 
       } else {
 
-        let steps: [DeviceLifecycle.Step] = Self.deviceSteps(of: description?.profile?.lifecycle?.linking)
+        let prompt = SETButtonPrompt(
+          direction: .linking,
+          group: modemGroup,
+          timeout: setButtonTimeout,
+          device: device,
+          deviceDescription: description,
+          steps: steps
+        )
 
-        if role == .responder {
+        made = try await linker.linkManually(as: .controller, group: modemGroup, device: device, timeout: setButtonTimeout, ready: { () async -> Void in
 
-          try await observer.waitUntilDeviceIsReady(DeviceFirstPrompt(direction: .linking, device: device, deviceDescription: description, steps: steps))
-          await observer.linking(.modemJoining(timeout: setButtonTimeout))
+          await observer.linking(.pressSETButton(prompt))
 
-          made = try await linker.linkManually(as: .responder, group: modemGroup, device: device, timeout: setButtonTimeout)
-
-        } else {
-
-          let prompt = SETButtonPrompt(
-            direction: .linking,
-            group: modemGroup,
-            timeout: setButtonTimeout,
-            device: device,
-            deviceDescription: description,
-            steps: steps
-          )
-
-          made = try await linker.linkManually(as: .controller, group: modemGroup, device: device, timeout: setButtonTimeout, ready: { () async -> Void in
-
-            await observer.linking(.pressSETButton(prompt))
-
-          })
-
-        }
+        })
 
       }
 
-      return try await finishLink(made, twoWay: twoWay, observer: observer)
-
     }
+
+    return try await finishLink(made, twoWay: twoWay, observer: observer)
 
   }
 
@@ -297,6 +332,25 @@ public struct DeviceLinkingCoordinator: Sendable {
   /// - Throws: `CancellationError` if the task is canceled while the device is asked.
   private func identifyBeforeLinking(_ device: InsteonAddress, observer: any LinkingObserver) async throws -> DeviceDescription? {
 
+    let identified: (description: DeviceDescription?, reason: UnidentifiedReason?) = try await askIdentity(of: device, observer: observer)
+
+    if let reason = identified.reason {
+
+      await observer.linking(.notIdentifiedBeforeLinking(device, because: reason))
+
+    }
+
+    return identified.description
+
+  }
+
+  /// Asks a device the registry doesn't know for its identity with ID Request, and tells the
+  /// observer it's asking. A device that doesn't report one isn't an error.
+  ///
+  /// - Returns: What the catalog says about the device, or why it didn't report an identity.
+  /// - Throws: `CancellationError` if the task is canceled while the device is asked.
+  func askIdentity(of device: InsteonAddress, observer: any LinkingObserver) async throws -> (description: DeviceDescription?, reason: UnidentifiedReason?) {
+
     await observer.linking(.identifying(device))
 
     let reason: UnidentifiedReason
@@ -307,7 +361,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
       if let known = await network.registry.device(device) {
 
-        return known.deviceDescription
+        return (known.deviceDescription, nil)
 
       }
 
@@ -323,9 +377,7 @@ public struct DeviceLinkingCoordinator: Sendable {
 
     }
 
-    await observer.linking(.notIdentifiedBeforeLinking(device, because: reason))
-
-    return nil
+    return (nil, reason)
 
   }
 

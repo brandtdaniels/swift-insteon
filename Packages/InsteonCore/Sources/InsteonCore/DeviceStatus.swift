@@ -248,6 +248,10 @@ public enum DeviceOperation: String, Hashable, Sendable {
   /// Keeping a battery-powered device awake while it links, or letting it sleep again.
   case keepAwake
 
+  /// Changing an operating flag a link needs changed, as the catalog lets linking, and
+  /// setting it back afterward.
+  case linkingFlags
+
 }
 
 /// Why a ``Device`` couldn't do what it was asked.

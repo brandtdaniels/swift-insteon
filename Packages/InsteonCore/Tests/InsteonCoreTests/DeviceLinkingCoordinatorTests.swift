@@ -198,6 +198,36 @@ actor LinkingRecorder: LinkingObserver {
 
   }
 
+  static func relayState(_ event: RelayStateEvent) -> String {
+
+    switch event {
+    case let .clearingFlag(device, flag):
+      return "clearing \(flag) \(device)"
+    case let .settingRelay(device, state):
+      return "setting \(device) \(state)"
+    case let .relayAlreadySet(device, state):
+      return "\(device) already \(state)"
+    case let .linkedWithoutSwitching(device, _, isMomentary):
+      return isMomentary ? "\(device) ignores the state" : "\(device) leaves the state, unverified mode"
+    case let .relayLeft(device, reads):
+      return "\(device) left \(reads)"
+    case let .relayConfirmed(device, state):
+      return "\(device) confirmed \(state)"
+    case let .returningRelay(device, state):
+      return "returning \(device) \(state)"
+    case let .restoringFlag(device, flag):
+      return "restoring \(flag) \(device)"
+    case let .flagRestored(device, flag):
+      return "restored \(flag) \(device)"
+    case let .restoreFailed(device, _):
+      return "failed \(device)"
+    case let .recorded(link):
+      return "group on gives \(link.groupOn.map(\.rawValue) ?? "nothing"), off gives \(link.groupOff.map(\.rawValue) ?? "nothing"), "
+        + "momentary \(link.isMomentary), pulses \(link.pulsesOnBothCommands)"
+    }
+
+  }
+
   static func join(_ join: HubLinkingJoin) -> String {
 
     switch join {
@@ -284,6 +314,8 @@ actor LinkingRecorder: LinkingObserver {
       return "leg \(leg.index + 1) all groups when \(condition.flag) \(condition.isSet)"
     case let .keepAwake(keepAwake):
       return "keep awake: \(self.keepAwake(keepAwake))"
+    case let .relayState(event):
+      return "relay state: \(relayState(event))"
     case let .readingModemLinks(device, purpose):
       return "reading modem links \(device) \(purpose == .findingLinksToRemove ? "to remove" : "for group")"
     case let .unlinkGroupChosen(device, group, isFromModemRecords):

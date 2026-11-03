@@ -91,7 +91,7 @@ public struct DatabaseLinkStep: Hashable, Sendable {
 /// Only the coordinator makes a plan, and its writes can't be changed, so a plan carried out
 /// writes only what was read and shown.
 ///
-/// ``DeviceLinkingCoordinator/planDatabaseLink(_:)`` and
+/// ``DeviceLinkingCoordinator/planDatabaseLink(_:relayState:)`` and
 /// ``DeviceLinkingCoordinator/planDatabaseUnlink(_:removingOrphans:)`` make a plan and write
 /// nothing. ``DeviceLinkingCoordinator/apply(_:)`` carries it out, after checking that neither
 /// database changed since it was read.
@@ -132,6 +132,10 @@ public struct DatabaseLinkPlan: Hashable, Sendable {
 
   /// Every record in use in the modem's database, as it was read.
   var allModemRecords: [AllLinkRecord]
+
+  /// The state a relay records as Data 1 of its responder records, when the plan was asked
+  /// for one, or `nil` for the catalog's data bytes alone.
+  public internal(set) var relayState: RelayState? = nil
 
   /// Whether the plan writes nothing.
   public var isEmpty: Bool {

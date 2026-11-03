@@ -60,6 +60,7 @@ case DeviceMonitorEvent.statusChanged(_:)
 case DeviceOperation.beep
 case DeviceOperation.instantChange
 case DeviceOperation.keepAwake
+case DeviceOperation.linkingFlags
 case DeviceOperation.settings
 case DeviceOperation.status
 case DeviceOperation.turnOff
@@ -158,6 +159,7 @@ case LinkingEvent.notTurnedOnBeforeLinking(_:reason:)
 case LinkingEvent.notTurningOnBeforeLinking(_:)
 case LinkingEvent.pressSETButton(_:)
 case LinkingEvent.readingModemLinks(_:purpose:)
+case LinkingEvent.relayState(_:)
 case LinkingEvent.remainingLinksUnknown(_:reason:)
 case LinkingEvent.scanningDatabase(_:removedDevice:)
 case LinkingEvent.turningOnBeforeLinking(_:)
@@ -201,6 +203,39 @@ case RawModemReply.echo(bytes:kind:)
 case RawModemReply.message(_:)
 case RawModemReply.negativeAcknowledgment
 case RawModemReply.other(kind:description:)
+case RelayState.off
+case RelayState.on
+case RelayStateEvent.clearingFlag(_:flag:)
+case RelayStateEvent.flagRestored(_:flag:)
+case RelayStateEvent.linkedWithoutSwitching(_:flag:isMomentary:)
+case RelayStateEvent.recorded(_:)
+case RelayStateEvent.relayAlreadySet(_:_:)
+case RelayStateEvent.relayConfirmed(_:_:)
+case RelayStateEvent.relayLeft(_:reads:)
+case RelayStateEvent.restoreFailed(_:_:)
+case RelayStateEvent.restoringFlag(_:flag:)
+case RelayStateEvent.returningRelay(_:_:)
+case RelayStateEvent.settingRelay(_:_:)
+case RelayStateLinkingError.flagNotChanged(_:flag:isSet:)
+case RelayStateLinkingError.flagNotRestored(_:flag:reason:)
+case RelayStateLinkingError.flagRestoreUnconfirmed(_:flag:reason:)
+case RelayStateLinkingError.flagUnreadable(_:flag:)
+case RelayStateLinkingError.momentaryNotChangeable(_:flag:)
+case RelayStateLinkingError.notARelay(_:product:)
+case RelayStateLinkingError.notDescribed(_:)
+case RelayStateLinkingError.notIdentified(_:because:)
+case RelayStateLinkingError.notLinkedToModem(_:)
+case RelayStateLinkingError.otherFlagsChanged(_:before:after:)
+case RelayStateLinkingError.planChanged(old:new:)
+case RelayStateLinkingError.recordInPlace(_:group:data1:)
+case RelayStateLinkingError.recordNotFound(_:group:)
+case RelayStateLinkingError.recordNotRead(_:reason:)
+case RelayStateLinkingError.recordedOtherState(_:group:data1:requested:)
+case RelayStateLinkingError.relayNotConfirmed(_:requested:)
+case RelayStateLinkingError.relayNotReturned(_:state:reason:)
+case RelayStateLinkingError.relayReturnUnconfirmed(_:state:reason:)
+case RelayStateLinkingError.remoteLinkingFailed(_:reason:)
+case RelayStateLinkingError.unverifiedModeStateDiffers(_:flag:reads:requested:)
 case ResetErasure.links
 case ResetErasure.settings
 case SelfTestCheckKind.answers
@@ -276,6 +311,9 @@ enum ProductCatalogUpdate
 enum ProductCatalogUpdateError
 enum ProtectedCommand
 enum RawModemReply
+enum RelayState
+enum RelayStateEvent
+enum RelayStateLinkingError
 enum ResetErasure
 enum SelfTestCheckKind
 enum SelfTestChecklistItem
@@ -305,8 +343,11 @@ func DeviceInfo.meaning(of:)
 func DeviceLinkingCoordinator.apply(_:)
 func DeviceLinkingCoordinator.link(_:as:group:twoWay:setButtonTimeout:usesCatalogLegs:observer:)
 func DeviceLinkingCoordinator.linkBySETButton(as:group:twoWay:timeout:observer:)
-func DeviceLinkingCoordinator.planDatabaseLink(_:)
+func DeviceLinkingCoordinator.linkRelay(_:group:twoWay:setButtonTimeout:observer:)
+func DeviceLinkingCoordinator.linkRelay(_:recording:group:twoWay:setButtonTimeout:observer:)
+func DeviceLinkingCoordinator.planDatabaseLink(_:relayState:)
 func DeviceLinkingCoordinator.planDatabaseUnlink(_:removingOrphans:)
+func DeviceLinkingCoordinator.planRelayLink(_:recording:observer:)
 func DeviceLinkingCoordinator.remove(_:scan:forceModemSide:timeout:observer:)
 func DeviceLinkingCoordinator.unlink(_:as:group:timeout:observer:)
 func DeviceLinkingCoordinator.unlinkAll(_:timeout:observer:)
@@ -369,7 +410,7 @@ init DeviceGroupCommand(device:group:command1:commandName:event:isOn:productName
 init DeviceGroupKind(rawValue:)
 init DeviceInstantChangeResult(group:level:isOnOffOnly:isCommandDescribed:)
 init DeviceLinkingCoordinator(network:)
-init DeviceLinkingResult(links:device:linkBackFailure:legs:)
+init DeviceLinkingResult(links:device:linkBackFailure:legs:relayState:)
 init DeviceMessageSummary(_:)
 init DeviceNetwork(modem:catalog:snapshot:hub:timeout:clock:now:)
 init DeviceOutput(key:label:)
@@ -416,6 +457,8 @@ init ProductCatalog(json:)
 init ProductCatalogStore(catalogPath:versionPath:)
 init ProtectedCommand?(command1:command2:)
 init RegisteredDevice(address:identity:info:)
+init RelayLinkPlan(device:state:before:isMomentary:pulsesOnBothCommands:)
+init RelayStateLink(device:state:group:recordedData1:recordFailure:clearedFlag:isMomentary:pulsesOnBothCommands:restoreFailures:)
 init RemoteUnlinkingError(device:info:underlying:)
 init RemovedLinks(address:device:links:)
 init SETButtonPrompt(direction:group:timeout:device:info:steps:modemRole:deviceGroup:)
@@ -434,6 +477,7 @@ internal(set) var DatabaseLinkPlan.info
 internal(set) var DatabaseLinkPlan.linksInPlace
 internal(set) var DatabaseLinkPlan.modem
 internal(set) var DatabaseLinkPlan.orphans
+internal(set) var DatabaseLinkPlan.relayState
 internal(set) var DatabaseLinkPlan.steps
 internal(set) var DatabaseLinkStep.kind
 internal(set) var DatabaseLinkStep.record
@@ -563,6 +607,8 @@ struct ProductCatalog
 struct ProductCatalogStore
 struct ReceivedFrame
 struct RegisteredDevice
+struct RelayLinkPlan
+struct RelayStateLink
 struct RemoteUnlinkingError
 struct RemovedLinks
 struct SETButtonPrompt
@@ -663,6 +709,7 @@ var DeviceLinkingResult.failedLeg
 var DeviceLinkingResult.legs
 var DeviceLinkingResult.linkBackFailure
 var DeviceLinkingResult.links
+var DeviceLinkingResult.relayState
 var DeviceMessageSummary.command1
 var DeviceMessageSummary.command2
 var DeviceMessageSummary.commandName
@@ -840,6 +887,37 @@ var ProductCatalogStoreError.description
 var RegisteredDevice.address
 var RegisteredDevice.identity
 var RegisteredDevice.info
+var RelayLinkPlan.before
+var RelayLinkPlan.clearedFlag
+var RelayLinkPlan.device
+var RelayLinkPlan.ignoresState
+var RelayLinkPlan.isMomentary
+var RelayLinkPlan.leavesUnverifiedMode
+var RelayLinkPlan.opensAfterLinking
+var RelayLinkPlan.pulsesOnBothCommands
+var RelayLinkPlan.state
+var RelayLinkPlan.switchesBackOnFailure
+var RelayLinkPlan.switchesRelay
+var RelayState.data1
+var RelayState.opposite
+var RelayStateLink.clearedFlag
+var RelayStateLink.device
+var RelayStateLink.group
+var RelayStateLink.groupOff
+var RelayStateLink.groupOn
+var RelayStateLink.ignoresState
+var RelayStateLink.isMomentary
+var RelayStateLink.isRestored
+var RelayStateLink.leavesUnverifiedMode
+var RelayStateLink.problems
+var RelayStateLink.pulsesOnBothCommands
+var RelayStateLink.recordFailure
+var RelayStateLink.recordedData1
+var RelayStateLink.restoreFailures
+var RelayStateLink.state
+var RelayStateLinkingError.description
+var RelayStateLinkingError.device
+var RelayStateLinkingError.errorDescription
 var RemoteUnlinkingError.device
 var RemoteUnlinkingError.info
 var RemoteUnlinkingError.underlying

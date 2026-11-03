@@ -216,6 +216,10 @@ public enum LinkingEvent: Sendable {
   /// The device is kept awake while it links, or let sleep again afterward.
   case keepAwake(KeepAwakeEvent)
 
+  /// The relay is put in the state it's to record before it links, or the operating flag
+  /// changed for that is set back afterward.
+  case relayState(RelayStateEvent)
+
   /// Linking by the catalog's legs stopped with an error after the first leg linked, for the
   /// reason given, which is then thrown, such as when it's canceled or another device links.
   /// The result holds the links made so far and what became of each leg, so they aren't lost
@@ -619,6 +623,10 @@ public struct DeviceLinkingResult: Sendable {
   /// order, or empty when the device was linked without them.
   public var legs: [HubLinkingLegOutcome]
 
+  /// What a group On and a group Off do to a relay linked with a chosen state, or `nil` when
+  /// none was asked for.
+  public var relayState: RelayStateLink?
+
   /// Creates a result.
   ///
   /// - Parameters:
@@ -627,12 +635,15 @@ public struct DeviceLinkingResult: Sendable {
   ///   - linkBackFailure: Why the link back failed.
   ///   - legs: Each leg of the catalog's linking from a Hub and what became of it. Defaults to
   ///     none.
-  public init(links: [LinkMade], device: RegisteredDevice?, linkBackFailure: (any Error)?, legs: [HubLinkingLegOutcome] = []) {
+  ///   - relayState: What the group's commands do to a relay linked with a chosen state.
+  ///     Defaults to `nil`.
+  public init(links: [LinkMade], device: RegisteredDevice?, linkBackFailure: (any Error)?, legs: [HubLinkingLegOutcome] = [], relayState: RelayStateLink? = nil) {
 
     self.links = links
     self.device = device
     self.linkBackFailure = linkBackFailure
     self.legs = legs
+    self.relayState = relayState
 
   }
 

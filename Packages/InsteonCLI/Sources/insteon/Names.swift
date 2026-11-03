@@ -85,6 +85,8 @@ enum Names {
       return "Interrupted."
     case let error as CommandFailure:
       return error.description
+    case let error as RelayStateLinkingError:
+      return LinkingEventText.relayStateMessage(error)
     default:
       break
     }

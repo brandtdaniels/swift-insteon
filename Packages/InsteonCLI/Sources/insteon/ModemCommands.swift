@@ -226,7 +226,7 @@ enum ModemCommands {
       if let database = options.database, let device = options.device {
 
         let coordinator: DeviceLinkingCoordinator = cached.network.linking
-        let plan: DatabaseLinkPlan = try await coordinator.planDatabaseLink(device)
+        let plan: DatabaseLinkPlan = try await coordinator.planDatabaseLink(device, relayState: options.relayState)
 
         try await carryOut(plan, coordinator: coordinator, options: database, asks: asks, printsJSON: printsJSON)
 
@@ -234,7 +234,7 @@ enum ModemCommands {
 
       }
 
-      try await link(cached, options: options, names: names, printsJSON: printsJSON)
+      try await link(cached, options: options, asks: asks, names: names, printsJSON: printsJSON)
 
     }
 
@@ -342,7 +342,7 @@ enum ModemCommands {
 
   /// Links a device by its address, or whichever device's SET button is pressed, through the
   /// network's coordinator, which says what to do as it goes.
-  private static func link(_ cached: CachedNetwork, options: LinkOptions, names: ProductNames, printsJSON: Bool) async throws {
+  private static func link(_ cached: CachedNetwork, options: LinkOptions, asks: Bool, names: ProductNames, printsJSON: Bool) async throws {
 
     let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? DeviceLinkingCoordinator.defaultSETButtonTimeout
     let observer = LinkingPrompter(names: names, printsJSON: printsJSON, cached: cached)
@@ -352,7 +352,53 @@ enum ModemCommands {
     let twoWay: TwoWayLinking = options.twoWay
     let result: DeviceLinkingResult
 
-    if let device = options.device {
+    if let device = options.device, let state = options.relayState {
+
+      // The relay, and whatever it controls, is switched, so the plan is shown and agreed to
+      // first. Its refusals name the command to run, with the group given.
+      let plan: RelayLinkPlan
+
+      do {
+
+        plan = try await coordinator.planRelayLink(device, recording: state, observer: observer)
+
+      } catch let error as RelayStateLinkingError {
+
+        throw CommandFailure(description: LinkingEventText.relayStateMessage(error, group: options.isGroupGiven ? options.group : nil))
+
+      }
+      let say = { (text: String) -> Void in printsJSON ? Output.note(text) : Output.line(text) }
+
+      RelayLinkText.plan(plan).forEach(say)
+
+      switch try await RelayLinkText.decision(plan, isDryRun: options.relayStateConfirmation?.isDryRun == true, asks: asks, confirm: Terminal.confirm) {
+      case .dryRun:
+        say(RelayLinkText.dryRun)
+
+        if printsJSON {
+
+          try Output.json(RelayLinkText.report(plan, isDryRun: true))
+
+        }
+
+        return
+      case .declined:
+        throw CommandFailure(description: RelayLinkText.declined)
+      case .link:
+        // The relay is read again in the link, which refuses when it doesn't match the
+        // plan shown.
+        do {
+
+          result = try await coordinator.linkRelay(plan, group: options.group, twoWay: twoWay, setButtonTimeout: timeout, observer: observer)
+
+        } catch let error as RelayStateLinkingError {
+
+          throw CommandFailure(description: LinkingEventText.relayStateMessage(error, group: options.isGroupGiven ? options.group : nil))
+
+        }
+      }
+
+    } else if let device = options.device {
 
       result = try await coordinator.link(
         device,
@@ -379,6 +425,14 @@ enum ModemCommands {
     if let incomplete = LinkingEventText.incompleteLegs(result, message: Names.message(for:)) {
 
       throw CommandFailure(description: incomplete)
+
+    }
+
+    // One message for everything a relay linked with a state didn't do as asked, the link
+    // back included.
+    if let failure = LinkingEventText.relayStateFailure(result, message: Names.message(for:)) {
+
+      throw CommandFailure(description: failure)
 
     }
 

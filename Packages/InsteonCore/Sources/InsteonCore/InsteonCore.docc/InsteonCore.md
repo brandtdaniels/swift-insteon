@@ -246,6 +246,21 @@ for outcome in result.legs {
 }
 ```
 
+A relay, such as an I/O Linc's, records its state as it links: a group On then sets it to that
+state and a group Off to the opposite.
+``DeviceLinkingCoordinator/linkRelay(_:recording:group:twoWay:setButtonTimeout:observer:)``
+puts the relay in a chosen ``RelayState`` first, turning a momentary relay's flag off for the
+link when the catalog lets it, links, reads the record back, and puts back what it changed
+however linking ends. ``DeviceLinkingCoordinator/link(_:as:group:twoWay:setButtonTimeout:usesCatalogLegs:observer:)``
+never switches a relay:
+
+```swift
+let result = try await network.linking.linkRelay(module, recording: .off, group: 2, observer: prompter)
+
+// `nil` when the relay ignores the state, as a momentary one with momentaryOnBothCommands on does.
+print(result.relayState?.groupOn.map(\.rawValue) ?? "ignored")   // off
+```
+
 ``DeviceLinkingCoordinator/remove(_:scan:forceModemSide:timeout:observer:)`` removes a device
 from the network: every link between it and the modem, with the modem's group 0 last, then,
 once the modem's ALL-Link database has no links with it, the network forgets it. A device
@@ -264,7 +279,7 @@ for step in removal.factoryReset?.procedure?.steps ?? [] {
 
 ### Writing ALL-Link databases
 
-``DeviceLinkingCoordinator/planDatabaseLink(_:)`` and
+``DeviceLinkingCoordinator/planDatabaseLink(_:relayState:)`` and
 ``DeviceLinkingCoordinator/planDatabaseUnlink(_:removingOrphans:)`` plan the writes that link a
 device to the modem, or unlink it, by writing both ALL-Link databases directly, from a fresh
 reading of each, and write nothing. ``DeviceLinkingCoordinator/apply(_:)`` carries a plan out,
@@ -366,6 +381,11 @@ do {
 - ``HubLinkingLegOutcome``
 - ``KeepAwakeEvent``
 - ``WakePrompt``
+- ``RelayState``
+- ``RelayStateEvent``
+- ``RelayLinkPlan``
+- ``RelayStateLink``
+- ``RelayStateLinkingError``
 - ``LinkedDevice``
 - ``UnlinkedLink``
 - ``RemovedLinks``

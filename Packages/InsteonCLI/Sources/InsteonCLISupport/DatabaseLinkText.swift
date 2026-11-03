@@ -73,6 +73,15 @@ public enum DatabaseLinkText {
 
     }
 
+    if let state = plan.relayState {
+
+      lines.append(
+        "Data 1 of the device's responder record is \(Hex.byte(state.data1)), the relay \(state.rawValue): "
+          + "a group On turns the relay \(state.rawValue), and a group Off turns it \(state.opposite.rawValue)."
+      )
+
+    }
+
     return lines
 
   }
@@ -348,6 +357,13 @@ public enum DatabaseLinkText {
     /// carried out.
     public var complete: Bool?
 
+    /// The relay state asked for with `--relay-state`, `"on"` or `"off"`, or `nil`.
+    public var relayState: String?
+
+    /// The Data 1 the device's responder records hold for the relay state, such as `"0xFF"`,
+    /// or `nil` without one.
+    public var relayData1: String?
+
   }
 
   /// A plan as `--json` prints it, before or without carrying it out.
@@ -370,7 +386,9 @@ public enum DatabaseLinkText {
       orphans: plan.orphans.map { (record: LinkRecord) -> Record in json(record, isDevice: true) },
       mismatches: nil,
       deviceCheck: nil,
-      complete: nil
+      complete: nil,
+      relayState: plan.relayState?.rawValue,
+      relayData1: plan.relayState.map { (state: RelayState) -> String in Hex.byte(state.data1) }
     )
 
   }

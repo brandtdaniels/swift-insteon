@@ -63,15 +63,22 @@ extension Device {
   ///   - message: The message.
   ///   - duration: How long the message keeps the device awake, if the catalog says.
   ///   - writableFlags: The operating flags a linking flow may write.
+  ///   - operation: What the message is sent for, which a refusal names. Defaults to
+  ///     ``DeviceOperation/keepAwake``.
   /// - Throws: ``DeviceControlError/unsupported(_:product:)`` for a message that's never
   ///   sent, ``DeviceControlError/missingCommand(_:product:)`` for one the command set
   ///   doesn't describe, `FieldError` for a parameter that doesn't fit, and the modem's
   ///   errors.
-  func sendLinkingMessage(_ message: DeviceLifecycle.HubLinking.HubMessage, duration: Duration?, writableFlags: Set<SettingName>) async throws {
+  func sendLinkingMessage(
+    _ message: DeviceLifecycle.HubLinking.HubMessage,
+    duration: Duration?,
+    writableFlags: Set<SettingName>,
+    for operation: DeviceOperation = .keepAwake
+  ) async throws {
 
-    let purpose: SendPurpose = .control(.keepAwake)
+    let purpose: SendPurpose = .control(operation)
 
-    switch try await resolveLinkingMessage(message, duration: duration, writableFlags: writableFlags) {
+    switch try await resolveLinkingMessage(message, duration: duration, writableFlags: writableFlags, for: operation) {
     case let .standard(standard):
       _ = try await request(standard, timeout: network.requestTimeout, for: purpose)
     case let .extended(extended):
@@ -100,20 +107,25 @@ extension Device {
 
     }
 
-    _ = try await resolveLinkingMessage(release, duration: nil, writableFlags: writableFlags)
+    _ = try await resolveLinkingMessage(release, duration: nil, writableFlags: writableFlags, for: .keepAwake)
 
   }
 
   /// What a message the catalog's linking from a Hub names sends, once every guard allows it,
   /// without sending anything: the flags a linking flow may write, the command set's guards
   /// and the byte floor, by the bytes the message carries.
-  private func resolveLinkingMessage(_ message: DeviceLifecycle.HubLinking.HubMessage, duration: Duration?, writableFlags: Set<SettingName>) async throws -> LinkingSend {
+  private func resolveLinkingMessage(
+    _ message: DeviceLifecycle.HubLinking.HubMessage,
+    duration: Duration?,
+    writableFlags: Set<SettingName>,
+    for operation: DeviceOperation
+  ) async throws -> LinkingSend {
 
     let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription
     let commands: CommandSet? = description?.commandSet
     let product: String = description.map { (described: DeviceDescription) -> String in DeviceControlModel.product(of: described) } ?? "this device"
-    let refused = DeviceControlError.unsupported(.keepAwake, product: product)
-    let purpose: SendPurpose = .control(.keepAwake)
+    let refused = DeviceControlError.unsupported(operation, product: product)
+    let purpose: SendPurpose = .control(operation)
 
     // A linking flow writes only the flags the catalog lets it. The registry can change while
     // a device links, so a flag outside them is refused rather than asserted.
@@ -477,6 +489,26 @@ extension Device {
     case let .extended(extended):
       _ = try await request(extended, timeout: Modem.defaultExtendedRequestTimeout, for: .control(operation))
     }
+
+  }
+
+  /// Throws the refusal sending an action's message would get, without sending it.
+  func refuseUnlessSendable(_ message: DeviceControlModel.ActionMessage, for operation: DeviceOperation) async throws {
+
+    switch message {
+    case let .standard(standard):
+      try await refuseIfNeverSent(standard.command, for: .control(operation))
+    case let .extended(extended):
+      try await refuseIfNeverSent(extended.command, userData: extended.userData, for: .control(operation))
+    }
+
+  }
+
+  /// Throws the refusal a message the catalog's linking names would get, for any reason
+  /// ``sendLinkingMessage(_:duration:writableFlags:for:)`` refuses one, without sending it.
+  func refuseUnlessSendable(_ message: DeviceLifecycle.HubLinking.HubMessage, writableFlags: Set<SettingName>, for operation: DeviceOperation) async throws {
+
+    _ = try await resolveLinkingMessage(message, duration: nil, writableFlags: writableFlags, for: operation)
 
   }
 

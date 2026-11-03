@@ -324,8 +324,35 @@ extension Invocation {
         try expectNoValue(name, inlineValue)
         database.assumesYes = true
         databaseOnlyOption = databaseOnlyOption ?? name
+      case "--relay-state":
+        let text: String = try value(of: name, inline: inlineValue, in: arguments, at: &index)
+
+        guard let state = RelayState(rawValue: text.lowercased()) else {
+
+          throw ArgumentError.invalidValue(option: name, value: text, expected: "on or off")
+
+        }
+
+        options.relayState = state
       default:
         throw unexpected(argument, subcommand: "link")
+      }
+
+    }
+
+    // A relay records a state only when it's linked by its address as the modem's responder.
+    if options.relayState != nil {
+
+      if let other = (roleOption == "--controller" ? nil : roleOption) ?? (cancels ? "--cancel" : nil) {
+
+        throw ArgumentError.conflictingOptions("--relay-state", other)
+
+      }
+
+      if deviceArgument == nil {
+
+        throw ArgumentError.missingArgument("ADDRESS with --relay-state", subcommand: "link")
+
       }
 
     }
@@ -352,7 +379,12 @@ extension Invocation {
 
     }
 
-    if let databaseOnlyOption {
+    // --relay-state asks before it switches the relay, as --database asks before it writes.
+    if options.relayState != nil {
+
+      options.relayStateConfirmation = database
+
+    } else if let databaseOnlyOption {
 
       throw ArgumentError.missingArgument("--database with \(databaseOnlyOption)", subcommand: "link")
 
