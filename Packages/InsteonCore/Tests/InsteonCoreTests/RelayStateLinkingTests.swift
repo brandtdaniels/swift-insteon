@@ -194,13 +194,17 @@ struct RelayStateLinkingTests {
 
   let module: InsteonAddress = RelayExample.module
 
-  func network(_ modem: InMemoryModem, identities: [InsteonAddress: ReportedIdentity] = RelayExample.identities) -> DeviceNetwork {
+  func network(
+    _ modem: InMemoryModem,
+    catalog: DeviceCatalog = RelayExample.catalog,
+    identities: [InsteonAddress: ReportedIdentity] = RelayExample.identities
+  ) -> DeviceNetwork {
 
     let times: FixedTimes = self.times
 
     return DeviceNetwork(
       modem: modem,
-      catalog: RelayExample.catalog,
+      catalog: catalog,
       snapshot: NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: identities)),
       clock: clock,
       now: { () -> Date in times.now() }
@@ -1637,6 +1641,107 @@ struct RelayStateLinkingTests {
 
     })
     #expect(await modem.operatingFlags[module] == RelayExample.momentary.bit)
+
+  }
+
+  // MARK: - The bundled I/O Linc
+
+  /// The I/O Linc 2450 as firmware 0x41 reports itself, at the module's address.
+  static let ioLinc = ReportedIdentity(category: 0x07, subcategory: 0x00, firmwareVersion: 0x41)
+
+  /// A network with the bundled catalog, on which the module is an I/O Linc.
+  func ioLincNetwork(_ modem: InMemoryModem) throws -> DeviceNetwork {
+
+    network(modem, catalog: try DeviceCatalog.bundled(), identities: [module: Self.ioLinc])
+
+  }
+
+  @Test func plainLinkOfTheBundledIOLincNeverTouchesTheRelayOrItsFlags() async throws {
+
+    let modem: InMemoryModem = await modem(flags: RelayExample.momentary.bit)
+
+    let result: DeviceLinkingResult = try await ioLincNetwork(modem).linking.link(module, as: .controller, observer: LinkingRecorder())
+
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+
+    // Linked by the catalog's legs, with no relay command and no flag written.
+    #expect(result.legs.count == 2)
+    #expect(!steps.contains { (step: InMemoryModem.LinkingStep) -> Bool in
+
+      if case let .device(_, command, _) = step {
+
+        return [0x11, 0x13, 0x20].contains(command.command1)
+
+      }
+
+      return false
+
+    })
+    #expect(await modem.operatingFlags[module] == RelayExample.momentary.bit)
+
+  }
+
+  @Test func linksTheBundledMomentaryIOLincOnAndPutsItAllBack() async throws {
+
+    let modem: InMemoryModem = await modem(flags: RelayExample.momentary.bit)
+
+    let result: DeviceLinkingResult = try await ioLincNetwork(modem).linking.linkRelay(module, recording: .on, observer: LinkingRecorder())
+
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+
+    // Flags and status read, momentary cleared and read back, the relay set and confirmed,
+    // the link and the link back, then the relay opened, the flag set back and read back,
+    // and the status the record check asks for.
+    #expect(steps == [
+      step(0x1F, 0x00),
+      statusRequest,
+      step(0x20, RelayExample.momentary.off, extended: true),
+      step(0x1F, 0x00),
+      step(0x11, 0xFF),
+      statusRequest,
+      step(0x0D, 0x00),
+      .modem(.controller, 0x00),
+      step(0x09, 0x01, extended: true),
+      step(0x0D, 0x00),
+      step(0x09, 0x01, extended: true),
+      .modem(.responder, 0x01)
+    ] + returnAndRestore + [statusRequest])
+    #expect(await modem.databases[module]?.values.contains { (record: AllLinkRecord) -> Bool in
+
+      !record.flags.contains(.controller) && record.data1 == 0xFF
+
+    } == true)
+    #expect(result.relayState?.clearedFlag == "momentary")
+    #expect(result.relayState?.isRestored == true)
+    #expect(await modem.operatingFlags[module] == RelayExample.momentary.bit)
+    #expect(await modem.levels[module] == 0x00)
+
+  }
+
+  @Test func putsTheBundledIOLincBackWhenItsLinkIsCanceled() async throws {
+
+    let modem: InMemoryModem = await modem(flags: RelayExample.momentary.bit)
+    await modem.setSilent(module)
+    let network: DeviceNetwork = try ioLincNetwork(modem)
+    let module: InsteonAddress = self.module
+    let linking = Task { () async throws -> DeviceLinkingResult in
+
+      try await network.linking.linkRelay(module, recording: .on, observer: LinkingRecorder())
+
+    }
+
+    await clock.waitForSleeper(until: Linker.defaultRemoteLinkingTimeout)
+    linking.cancel()
+
+    await #expect(throws: CancellationError.self) {
+
+      _ = try await linking.value
+
+    }
+
+    #expect(Array(await modem.linkingSteps.suffix(3)) == returnAndRestore)
+    #expect(await modem.operatingFlags[module] == RelayExample.momentary.bit)
+    #expect(await modem.levels[module] == 0x00)
 
   }
 

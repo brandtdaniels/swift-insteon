@@ -13405,6 +13405,24 @@
           ],
           "kind": "relay",
           "label": "Relay",
+          "linkData": {
+            "responder": [
+              {
+                "byte": 1,
+                "description": "0x00 sets the relay off when the controller's On arrives, 0xFF on. A controller's Off sets the opposite state. This holds with the momentary flags off.",
+                "label": "On or off",
+                "name": "onLevel",
+                "table": "onOff",
+                "verification": {
+                  "firmware": [
+                    "0x41"
+                  ],
+                  "note": "Seen on a device running firmware 0x41: linked to a Hub 2245 with the momentary flag off, the device wrote its responder record with Data 1 as 0x00 when the relay was off and 0xFF when it was on. A group On, Light ON (cmd1 0x11) with the group's number, then set the relay to the recorded state, and a group Off, Light OFF (cmd1 0x13), set it to the opposite state. With the momentary flag on, the relay returned to off soon after a Light ON, before a link could finish, and the record's Data 1 was 0x00 whatever state the relay had been set to.",
+                  "status": "observed"
+                }
+              }
+            ]
+          },
           "name": "relay",
           "state": {
             "command": "readStatus",
@@ -13431,10 +13449,23 @@
         }
       ],
       "id": "ioLinc",
+      "linkingChanges": [
+        {
+          "flag": "momentary",
+          "verification": {
+            "firmware": [
+              "0x41"
+            ],
+            "note": "Seen on a device running firmware 0x41: with the momentary flag on, the relay returned to off soon after a Light ON (cmd1 0x11), before a link could finish, so a link made then recorded Data 1 as 0x00 whatever state the relay had been set to. With the flag off, a link made with the relay on recorded 0xFF and one made with it off recorded 0x00.",
+            "status": "observed"
+          }
+        }
+      ],
       "name": "I/O Linc",
       "notes": [
         "A later source marks bit 6 of the 0x00 reply as ignored; an earlier source reads it as the trigger reversal that 0x0E and 0x0F set.",
-        "An earlier source labels D5 and D6 of the reply the relay's X10 address and D7 and D8 the sensor's, where a later source has the input's and the output's."
+        "An earlier source labels D5 and D6 of the reply the relay's X10 address and D7 and D8 the sensor's, where a later source has the input's and the output's.",
+        "Recording a relay state at link time needs the momentary flag off, and the relay left in the state to record. A relay wired to a door, lock or valve stays in that state until it is set back, and the momentary flag stays off until it is restored, so a flow restores both on every failure path, including cancellation."
       ],
       "operatingFlags": [
         {
@@ -13604,6 +13635,22 @@
             "note": "Seen on a device running firmware 0x41: the device acknowledged Beep (cmd1 0x30), sent from a Hub 2245 with modem firmware 0xA5. No document lists Beep for the I/O Linc.",
             "status": "observed"
           }
+        }
+      ],
+      "valueTables": [
+        {
+          "description": "Off and on, for a relay a record switches.",
+          "name": "onOff",
+          "values": [
+            {
+              "label": "Off",
+              "value": "0x00"
+            },
+            {
+              "label": "On",
+              "value": "0xFF"
+            }
+          ]
         }
       ]
     },
@@ -24257,7 +24304,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories (January 2014)",
         "Hub 2242 Owner's Manual",
         "Hub 2242 Quick Start Guide",
@@ -24395,7 +24442,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Hub Pro 2243 Owner's Manual"
       ]
     },
@@ -24595,7 +24642,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Hub 2245 Owner's Manual",
         "Hub 2245 Quick Start Guide"
@@ -24771,7 +24818,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc Device Definitions (version 2.9.87)"
       ]
     },
     {
@@ -25267,7 +25314,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "KeypadLinc Line Developer Notes",
         "Dimmer Keypad 2334 Owner's Manual",
@@ -25669,7 +25716,7 @@
       "radio": "rf",
       "role": "controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Mini Remote Control 2342 Owner's Manual",
         "Mini Remote Control 2342 Quick Start Guide",
@@ -26059,7 +26106,7 @@
       "model": "2411R",
       "name": "Infrared Receiver",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Infrared Receiver 2411R Owner's Manual",
         "Infrared Receiver 2411R Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)"
@@ -26245,7 +26292,7 @@
       "model": "2411T",
       "name": "Infrared Transmitter",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Infrared Transmitter 2411T Owner's Manual",
         "Infrared Transmitter 2411T Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)"
@@ -26427,7 +26474,7 @@
       "model": "2412N",
       "name": "Central Controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Central Controller 2412N Owner's Manual",
         "Central Controller 2412N Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)"
@@ -26570,7 +26617,7 @@
         "Insteon Device Categories (January 2014) lists 0x03/0x1E as a version without EEPROM and without RF."
       ],
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories (January 2014)",
         "HouseLinc Owner's Manual",
         "Insteon Modem Developer's Guide",
@@ -26719,7 +26766,7 @@
       "model": "2412SH",
       "name": "Serial Modem",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "HouseLinc Owner's Manual",
         "Insteon Modem Developer's Guide",
         "Insteon Device Categories and Product Keys (October 2008)"
@@ -26855,7 +26902,7 @@
       "model": "2412U",
       "name": "USB Modem",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "HouseLinc Owner's Manual",
         "Insteon Modem Developer's Guide",
         "Insteon Device Categories and Product Keys (October 2008)"
@@ -27003,7 +27050,7 @@
       "model": "2412UH",
       "name": "USB Modem",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "HouseLinc Owner's Manual",
         "Insteon Modem Developer's Guide",
         "Insteon Device Categories and Product Keys (October 2008)"
@@ -27170,7 +27217,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Serial Modem 2413S Quick Start Guide",
         "HouseLinc Owner's Manual",
         "Insteon Modem Developer's Guide",
@@ -27357,7 +27404,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories (January 2014)",
         "Serial Modem 2413S Quick Start Guide",
         "HouseLinc Owner's Manual",
@@ -27523,7 +27570,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "USB Modem 2413U Quick Start Guide",
         "HouseLinc Owner's Manual",
@@ -27708,7 +27755,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories (January 2014)",
         "USB Modem 2413U Quick Start Guide",
         "HouseLinc Owner's Manual",
@@ -27730,7 +27777,7 @@
       "model": "2414S",
       "name": "Serial Controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
       ]
@@ -27750,7 +27797,7 @@
       "model": "2414U",
       "name": "USB Controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
       ]
@@ -27779,7 +27826,7 @@
           },
           "subcategory": "0x07",
           "verification": {
-            "note": "The iMeter Developer Notes describe the meter as i2CS but give 0x01, i2, as its Get Insteon Engine Version reply; the HouseLinc device catalog gives i2CS for firmware 0x30, which the catalog uses.",
+            "note": "The iMeter Developer Notes describe the meter as i2CS but give 0x01, i2, as its Get Insteon Engine Version reply; the HouseLinc Device Definitions (version 2.9.87) gives i2CS for firmware 0x30, which the catalog uses.",
             "status": "conflicting"
           }
         }
@@ -27863,7 +27910,7 @@
         "Rated for 15 A."
       ],
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "iMeter Developer Notes",
         "Power Meter 2423A1 Owner's Manual",
         "Power Meter 2423A1 Quick Start Guide"
@@ -28031,7 +28078,7 @@
       "model": "2423A4",
       "name": "iGateway",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "iGateway 2423A4 Owner's Manual",
         "iGateway 2423A4 Quick Start Guide"
       ]
@@ -28193,7 +28240,7 @@
       "model": "2423A5",
       "name": "Appliance Status Sensor",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "SynchroLinc Developer Notes",
         "Appliance Status Sensor 2423A5 Owner's Manual"
       ]
@@ -28339,7 +28386,7 @@
       "model": "2430",
       "name": "Tabletop Controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Tabletop Controller 2430 Owner's Manual",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
@@ -28636,7 +28683,7 @@
       "radio": "rf",
       "role": "controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Remote Control 2440 Owner's Manual",
         "Remote Control 2440 Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)"
@@ -29245,7 +29292,7 @@
       "radio": "rf",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Thermostat 2441TH Owner's Manual",
         "Thermostat 2441TH Quick Start Guide",
         "Insteon Developer's Guide (2009)"
@@ -29583,7 +29630,7 @@
       ],
       "radio": "rf",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)",
         "Thermostat Adapter 2441V Owner's Manual",
         "Thermostat Adapter 2441V Quick Start Guide",
@@ -30028,7 +30075,7 @@
       "radio": "rf",
       "role": "controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Wireless Zone Thermostat 2441ZTH Owner's Manual",
         "Wireless Zone Thermostat 2441ZTH Quick Start Guide",
         "Wireless Thermostat Developer Notes"
@@ -30441,7 +30488,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Global Line Developer Notes",
         "Micro Dimmer 2442 Owner's Manual",
@@ -30465,7 +30512,7 @@
       "model": "2442",
       "name": "RF Signal Enhancer",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
       ]
@@ -30888,7 +30935,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Global Line Developer Notes",
         "Micro On/Off 2443 Owner's Manual",
@@ -30960,7 +31007,7 @@
       ],
       "radio": "dual",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)",
         "Access Point 2443 Owner's Manual",
         "Access Point 2443 Quick Start Guide",
@@ -31357,7 +31404,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Micro Open/Close Module 2444 Owner's Manual",
         "Insteon Developer's Guide (2009)"
@@ -31771,7 +31818,7 @@
       "radio": "rf",
       "role": "controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "RemoteLinc 2 Developer Notes",
         "Mini Remote - 4 Scene 2444A2WH4 Owner's Manual"
       ]
@@ -32160,7 +32207,7 @@
       "radio": "rf",
       "role": "controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Mini Remote - 8 Scene 2444A2WH8 Owner's Manual",
         "Mini Remote - 8 Scene 2444A2WH8 Quick Start Guide",
         "RemoteLinc 2 Developer Notes"
@@ -32518,7 +32565,7 @@
       "radio": "rf",
       "role": "controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Mini Remote Control 2342 Owner's Manual",
         "RemoteLinc 2 Developer Notes"
       ]
@@ -32527,6 +32574,26 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "inLineLinc0To10V",
+          "subcategory": "0x3D",
+          "verification": {
+            "note": "Inferred from the 0-10V Ballast Dimmer 2475DA2, which this product matches: both are 0-10VDC ballast dimmers that also work as two relays. The In-Line 0-10VDC Dimmer Developer Notes describe the 2475DA2's settings. No document lists this product's own, or says whether its two input lines match.",
+            "status": "inferred"
+          }
+        },
+        {
+          "category": "0x01",
+          "commandSet": "inLineLinc0To10V",
+          "subcategory": "0x3E",
+          "verification": {
+            "note": "Inferred from the 0-10V Ballast Dimmer 2475DA2, which this product matches: both are 0-10VDC ballast dimmers that also work as two relays. The In-Line 0-10VDC Dimmer Developer Notes describe the 2475DA2's settings. No document lists this product's own, or says whether its two input lines match.",
+            "status": "inferred"
+          }
         }
       ],
       "engines": [
@@ -32813,15 +32880,36 @@
       "model": "2446",
       "name": "Ballast Dimmer",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Ballast Dimmer 2446 Owner's Manual",
-        "Ballast Dimmer 2446 Quick Start Guide"
+        "Ballast Dimmer 2446 Quick Start Guide",
+        "In-Line 0-10VDC Dimmer Developer Notes"
       ]
     },
     {
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "inLineLinc",
+          "subcategory": "0x3F",
+          "verification": {
+            "note": "Inferred from the In-Line Dimmer Module (Dual-Band) 2475DA1, which takes the same command set: this product is an in-line dimmer for a fixture, with a single load. No document lists this product's own.",
+            "status": "inferred"
+          }
+        },
+        {
+          "category": "0x01",
+          "commandSet": "inLineLinc",
+          "subcategory": "0x40",
+          "verification": {
+            "note": "Inferred from the In-Line Dimmer Module (Dual-Band) 2475DA1, which takes the same command set: this product is an in-line dimmer for a fixture, with a single load. No document lists this product's own.",
+            "status": "inferred"
+          }
         }
       ],
       "engines": [
@@ -32961,7 +33049,7 @@
       "model": "2447",
       "name": "Fixture Dimmer",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc Device Definitions (version 2.9.87)"
       ]
     },
     {
@@ -33405,7 +33493,7 @@
       ],
       "radio": "rf",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Portable USB Adapter 2448A7 Quick Start Guide",
         "USB Stick 2448A7 Quick Start Guide",
         "USB Adapter Developer Notes"
@@ -33477,7 +33565,7 @@
       "model": "2448A7H",
       "name": "USB Adapter",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Portable USB Adapter 2448A7 Quick Start Guide",
         "USB Stick 2448A7 Quick Start Guide",
         "USB Adapter Developer Notes"
@@ -33552,7 +33640,7 @@
       "model": "2448A7T",
       "name": "Touchscreen Controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories (January 2014)",
         "Touchscreen Controller 2448 Owner's Manual",
         "Touchscreen Controller 2448 Quick Start Guide"
@@ -33939,7 +34027,7 @@
         "Inferred: group 1 is both the sensor, which controls it, and the output relay, which responds to it. The I/O Module 2450 Owner's Manual says the output relay responds to Insteon ON and OFF commands, and the ioLinc command set's relay commands, Light ON (cmd1 0x11) and Light OFF (cmd1 0x13) sent to the device directly, are read from that and the Insteon Developer's Guide; no document gives the I/O Linc's direct commands."
       ],
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Insteon Device Categories (January 2014)",
         "I/O Module 2450 Owner's Manual",
@@ -34368,7 +34456,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Global Line Developer Notes",
         "Dimmer DIN Rail Module 2452 Owner's Manual",
@@ -34811,7 +34899,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Global Line Developer Notes",
         "On/Off DIN Rail Module 2453 Owner's Manual",
@@ -34988,7 +35076,7 @@
       "model": "2454D",
       "name": "Socket Dimmer",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
       ]
@@ -35185,7 +35273,7 @@
       "model": "2456D2",
       "name": "Lamp Dimmer Module",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Lamp Dimmer Module 2456D2 Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
@@ -35459,7 +35547,7 @@
       "model": "2456D3",
       "name": "Dimmer Module",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Dimmer Module 2456D3 Owner's Manual",
         "Dimmer Module 2456D3 Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)",
@@ -35741,7 +35829,7 @@
       "model": "2456S3",
       "name": "On/Off Module",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "On/Off Module 2456S3 Owner's Manual",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
@@ -36015,7 +36103,7 @@
       "model": "2456S3E",
       "name": "Outdoor On/Off Module",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Outdoor On/Off Module 2456S3E Owner's Manual",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
@@ -36301,7 +36389,7 @@
       "model": "2456S3T",
       "name": "Timer Module",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Timer Module 2456S3T Owner's Manual",
         "Timer Module 2456S3T Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)",
@@ -36634,7 +36722,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Dimmer Plug 2457D2 Owner's Manual",
         "Dimmer Plug 2457D2 Quick Start Guide",
@@ -37048,7 +37136,7 @@
       "model": "2457D2X",
       "name": "Dimmer Plug",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Dimmer Plug 2457D2 Owner's Manual",
         "Dimmer Plug 2457D2 Quick Start Guide",
         "Insteon Developer's Guide (2009)"
@@ -37290,7 +37378,7 @@
       "model": "2458A1",
       "name": "Morning Industry Lock Controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Morning Industry Lock Controller 2458A1 Owner's Manual"
       ]
     },
@@ -37655,7 +37743,7 @@
         "HouseLinc lists subcategory 0x1F for firmware 0x3A and later."
       ],
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Toggle Dimmer Switch 2466DW Owner's Manual",
         "Toggle Dimmer Switch 2466DW Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)",
@@ -38020,7 +38108,7 @@
         "HouseLinc lists subcategory 0x1A for firmware 0x3A and later."
       ],
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Toggle On/Off Switch 2466SW Owner's Manual",
         "Toggle On/Off Switch 2466SW Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)",
@@ -38376,7 +38464,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "2472D Developer Notes",
         "OutletLinc Dimmer 2472D Owner's Manual",
@@ -38691,7 +38779,7 @@
       "model": "2473SWH",
       "name": "On/Off Outlet",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "On/Off Outlet 2473SWH Owner's Manual",
         "On/Off Outlet 2473SWH Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)",
@@ -38859,7 +38947,7 @@
       "model": "2474D",
       "name": "ICON In-Line Dimmer",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
       ]
@@ -39219,7 +39307,7 @@
       "radio": "rf",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "SwitchLinc 2-Wire Dimmer Developer Notes",
         "2-Wire Dimmer Switch 2474DWH Owner's Manual",
         "Insteon Developer's Guide (2009)",
@@ -39387,7 +39475,7 @@
       "model": "2474S",
       "name": "ICON In-Line On/Off Module",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
       ]
@@ -39706,7 +39794,7 @@
       "radio": "powerline",
       "role": "responder",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "In-Line Dimmer Module 2475D Owner's Manual",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
@@ -40084,7 +40172,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "In-Line Dimmer Module (Dual-Band) 2475DA1 Owner's Manual",
         "In-Line Dimmer Module (Dual-Band) 2475DA1 Quick Start Guide",
         "Insteon Developer's Guide (2009)",
@@ -40478,7 +40566,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "In-Line 0-10VDC Dimmer Developer Notes",
         "0-10V Ballast Dimmer 2475DA2 Owner's Manual",
@@ -40524,7 +40612,7 @@
           "role": "responder",
           "type": "light",
           "verification": {
-            "note": "The HouseLinc device catalog makes the FanLinc a responder only; no document says its light group controls other devices.",
+            "note": "The HouseLinc Device Definitions (version 2.9.87) makes the FanLinc a responder only; no document says its light group controls other devices.",
             "status": "inferred"
           }
         },
@@ -40902,7 +40990,7 @@
       "radio": "dual",
       "role": "responder",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "FanLinc Developer Notes",
         "Ceiling Fan and Light Control Module 2475F Owner's Manual",
@@ -41284,7 +41372,7 @@
       "radio": "powerline",
       "role": "responder",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "In-LineLinc On/Off 2475SDB Owner's Manual",
         "In-LineLinc On/Off 2475SDB Quick Start Guide",
         "2475SDB Developer Notes",
@@ -41671,7 +41759,7 @@
       "name": "In-Line On/Off Module with Sense",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "In-Line On/Off Module with Sense 2475S2 Owner's Manual",
         "In-Line On/Off Module with Sense 2475S2 Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)",
@@ -42044,7 +42132,7 @@
       "model": "2475SDB-50",
       "name": "In-Line On/Off Module (Dual-Band)",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "In-LineLinc On/Off 2475SDB Owner's Manual",
         "In-LineLinc On/Off 2475SDB Quick Start Guide",
         "2475SDB Developer Notes",
@@ -42402,7 +42490,7 @@
       "radio": "dual",
       "role": "responder",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "2475SDB Developer Notes",
         "In-LineLinc On/Off 2475SDB Owner's Manual",
         "In-LineLinc On/Off 2475SDB Quick Start Guide",
@@ -42803,7 +42891,7 @@
       "model": "2476D",
       "name": "Dimmer Switch",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Dimmer Switch 2476D Owner's Manual",
         "Dimmer Switch 2476D Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)",
@@ -43168,7 +43256,7 @@
       "model": "2476DH",
       "name": "Dimmer Switch (High Wattage)",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Dimmer Switch 2476D Owner's Manual",
         "Dimmer Switch 2476D Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)",
@@ -43532,7 +43620,7 @@
       "model": "2476S",
       "name": "On/Off Switch",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "On/Off Switch 2476S Owner's Manual",
         "On/Off Switch 2476S Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)",
@@ -43720,7 +43808,7 @@
         "HouseLinc lists 0x02/0x15 under 2476S."
       ],
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories (January 2014)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
@@ -43925,7 +44013,7 @@
       ],
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
       ]
@@ -44275,7 +44363,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Dimmer Switch 2477D Owner's Manual",
         "Dimmer Switch 2477D Quick Start Guide",
@@ -44614,7 +44702,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Dimmer Switch 2477DH Owner's Manual",
         "Dimmer Switch 2477DH Quick Start Guide",
@@ -44983,7 +45071,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "2477S Developer Notes",
         "On/Off Switch 2477S Owner's Manual",
@@ -45379,7 +45467,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "240V Load Controller 2477SA Owner's Manual",
         "240V Load Controller 2477SA Quick Start Guide",
         "Insteon Developer's Guide (2009)"
@@ -45771,7 +45859,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "240V Load Controller 2477SA Owner's Manual",
         "240V Load Controller 2477SA Quick Start Guide",
         "Insteon Developer's Guide (2009)"
@@ -46147,7 +46235,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Dimmer Switch 240V 2478D Owner's Manual",
         "Dimmer Switch 240V 2478D Quick Start Guide",
         "Insteon Developer's Guide (2009)"
@@ -46313,7 +46401,7 @@
       "model": "2484DST6",
       "name": "Schedule Timer Dimmer Keypad",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)"
       ]
     },
@@ -46577,7 +46665,7 @@
       ],
       "radio": "powerline",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Countdown Timer Dimmer Keypad, 8 Buttons 2484D Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
@@ -46853,7 +46941,7 @@
       "name": "Countdown Timer On/Off Keypad, 8 Buttons",
       "radio": "powerline",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Countdown Timer Dimmer Keypad, 8 Buttons 2484D Quick Start Guide",
         "Insteon Developer's Guide (2009)"
       ]
@@ -47018,7 +47106,7 @@
       "model": "2485SWH6",
       "name": "Schedule Timer On/Off Keypad",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)"
       ]
     },
@@ -47484,7 +47572,7 @@
       "radio": "powerline",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "KeypadLinc Line Developer Notes",
         "Dimmer Keypad, 6 Buttons 2486DWH6 Owner's Manual",
         "Dimmer Keypad, 6 Buttons 2486DWH6 Quick Start Guide",
@@ -47983,7 +48071,7 @@
       "radio": "powerline",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "KeypadLinc Line Developer Notes",
         "Dimmer Keypad, 8 Buttons 2486DWH8 Owner's Manual",
         "Dimmer Keypad, 8 Buttons 2486DWH8 Quick Start Guide",
@@ -48465,7 +48553,7 @@
       "radio": "powerline",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "KeypadLinc Line Developer Notes",
         "On/Off Keypad 2487S Owner's Manual",
         "Insteon Device Categories and Product Keys (October 2008)",
@@ -48521,6 +48609,7 @@
           "firmware": {
             "only": [
               "0x41",
+              "0x44",
               "0xB6",
               "0xB7",
               "0xB8",
@@ -48950,7 +49039,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "KeypadLinc Line Developer Notes",
         "On/Off Keypad 2487S Owner's Manual",
@@ -49216,7 +49305,7 @@
         "A Venstar thermostat with the 2441V's board built in, so it uses the same commands."
       ],
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)",
         "Integrated Remote Control Thermostat 2491T1E Owner's Manual"
       ]
@@ -49390,7 +49479,7 @@
       "model": "2494S220",
       "name": "On/Off Switch 220V",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)"
       ]
     },
@@ -49798,7 +49887,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Global Line Developer Notes",
         "Dimmer Module 2632-452 Owner's Manual",
         "Dimmer Module 2632 Owner's Manual",
@@ -50217,7 +50306,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Global Line Developer Notes",
         "On/Off Module 2633 Owner's Manual",
         "Insteon Developer's Guide (2009)",
@@ -50570,7 +50659,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Outdoor ApplianceLinc with RF Developer Notes",
         "Outdoor On/Off Plug 2634-222 Owner's Manual",
@@ -50969,7 +51058,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "On/Off Module, Dual-Band Developer Notes",
         "On/Off Plug 2635-222 Owner's Manual",
@@ -51388,7 +51477,7 @@
       "radio": "dual",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "On/Off Outlet Developer Notes",
         "On/Off Outlet 2663-222 Owner's Manual",
@@ -51519,7 +51608,7 @@
           "region": "Australia and New Zealand, B22",
           "subcategory": "0x4D",
           "verification": {
-            "note": "The LED Bulb Developer Notes print 0x4D as an Australian Edison base, the same as 0x3C; the HouseLinc device catalog makes it the B22 version.",
+            "note": "The LED Bulb Developer Notes print 0x4D as an Australian Edison base, the same as 0x3C; the HouseLinc Device Definitions (version 2.9.87) makes it the B22 version.",
             "status": "conflicting"
           }
         }
@@ -51709,7 +51798,7 @@
       "radio": "dual",
       "role": "responder",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "LED Bulb A19 2672 Owner's Manual",
         "LED Bulb Developer Notes",
         "LED Bulb A19 2672 Quick Start Guide",
@@ -51998,7 +52087,7 @@
       "radio": "dual",
       "role": "responder",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "LED Bulb Developer Notes",
         "LED Bulb PAR38 2674 Owner's Manual",
         "LED Bulb PAR38 2674 Quick Start Guide",
@@ -52454,7 +52543,7 @@
       "radio": "rf",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories (January 2014)",
         "Thermostat 2441TH Owner's Manual",
         "Thermostat for Heat Pump 2732 Quick Start Guide",
@@ -52527,7 +52616,7 @@
       "model": "2814S",
       "name": "ICON PowerLinc Serial",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories (January 2014)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
@@ -52548,7 +52637,7 @@
       "model": "2814U",
       "name": "ICON PowerLinc USB",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories (January 2014)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
@@ -52783,7 +52872,7 @@
       "model": "2830",
       "name": "ICON Tabletop Controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
       ]
@@ -53131,7 +53220,7 @@
       "radio": "rf",
       "role": "controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Motion Sensor 2842 Owner's Manual",
         "Motion Sensor 2842 Quick Start Guide",
         "Insteon Device Categories and Product Keys (October 2008)"
@@ -53528,11 +53617,11 @@
       "radio": "rf",
       "role": "controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Open/Close Sensor Developer Notes"
       ],
       "verification": {
-        "note": "Read from its device category: it shares category 0x10 with the Open/Close Sensor 2843, and its commands, groups and setup are read from that sensor. The HouseLinc device catalog lists subcategory 0x09 as the Door Sensor 2843-232; no other document gives its model number, and none describes the sensor itself.",
+        "note": "Read from its device category: it shares category 0x10 with the Open/Close Sensor 2843, and its commands, groups and setup are read from that sensor. The HouseLinc Device Definitions (version 2.9.87) lists subcategory 0x09 as the Door Sensor 2843-232; no other document gives its model number, and none describes the sensor itself.",
         "status": "inferred"
       }
     },
@@ -53982,7 +54071,7 @@
       "radio": "rf",
       "role": "controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Open/Close Sensor Developer Notes",
         "Open/Close Sensor 2843 Owner's Manual",
@@ -54829,7 +54918,7 @@
       "radio": "rf",
       "role": "controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Hidden Door Sensor Developer Notes",
         "Hidden Door Sensor 2845 Owner's Manual"
@@ -55176,7 +55265,7 @@
       "radio": "rf",
       "role": "controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "insteon.com product catalog",
         "Leak Sensor Developer Notes",
         "Leak Sensor 2852 Owner's Manual",
@@ -55347,7 +55436,7 @@
         "HouseLinc and Insteon Device Categories (January 2014) also list its identity under 2856D2B; Insteon Device Categories and Product Keys (October 2008) gives 2856D2."
       ],
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories (January 2014)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
@@ -55518,7 +55607,7 @@
         "HouseLinc lists 0x02/0x0C under 2856S3B."
       ],
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories (January 2014)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
@@ -55684,7 +55773,7 @@
         "HouseLinc also lists 0x02/0x0C, which Insteon Device Categories (January 2014) gives to the 2856S3, under 2856S3B."
       ],
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories (January 2014)",
         "Insteon Developer's Guide (2009)"
       ]
@@ -55901,7 +55990,7 @@
       "name": "Lock Controller",
       "radio": "powerline",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Lock Controller 2862 Owner's Manual",
         "Lock Controller 2862 Quick Start Guide"
       ]
@@ -55951,7 +56040,7 @@
       "radio": "rf",
       "role": "both",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc Device Definitions (version 2.9.87)"
       ]
     },
     {
@@ -56490,7 +56579,7 @@
         "Insteon Device Categories (January 2014) lists 0x01/0x03 and 0x01/0x1E as model 2876DB; Insteon Device Categories and Product Keys (October 2008) gives 0x01/0x03 as 2876D."
       ],
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories (January 2014)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
@@ -56663,7 +56752,7 @@
       "model": "2876S",
       "name": "ICON On/Off Switch",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
       ]
@@ -56786,7 +56875,7 @@
       "model": "2886D",
       "name": "ICON In-Wall Controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Device Categories (January 2014)",
         "Insteon Device Categories and Product Keys (October 2008)",
         "Insteon Developer's Guide (2009)"
@@ -57216,7 +57305,7 @@
       "radio": "powerline",
       "role": "controller",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Smoke Bridge Developer Notes",
         "Smoke Bridge 2982-222 Owner's Manual",
         "Smoke Bridge 2982-222 Quick Start Guide",
@@ -57380,7 +57469,7 @@
       "radio": "dual",
       "role": "responder",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Range Extender 2992-222 Owner's Manual",
         "Range Extender 2992-222 Quick Start Guide"
       ]
@@ -57702,7 +57791,7 @@
         "In the 8-button layout groups 1 to 8 are buttons A to H, and in the 6-button layout group 1 is the On and Off buttons and groups 3 to 6 are buttons A to D. Software sets the layout, and Insteon's documents don't say which one it ships with."
       ],
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)"
       ]
     },
@@ -57717,7 +57806,7 @@
       "model": "4700",
       "name": "Network Hub",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc Device Definitions (version 2.9.87)"
       ]
     },
     {
@@ -57877,7 +57966,7 @@
       "model": "4701",
       "name": "Wall Dimmer",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)"
       ]
     },
@@ -58038,7 +58127,7 @@
       "model": "4702",
       "name": "Wall Switch",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)"
       ]
     },
@@ -58315,7 +58404,7 @@
         "In the 8-button layout groups 1 to 8 are buttons A to H, and in the 6-button layout group 1 is the On and Off buttons and groups 3 to 6 are buttons A to D. Software sets the layout, and Insteon's documents don't say which one it ships with."
       ],
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)"
       ]
     },
@@ -58592,7 +58681,7 @@
         "In the 8-button layout groups 1 to 8 are buttons A to H, and in the 6-button layout group 1 is the On and Off buttons and groups 3 to 6 are buttons A to D. Software sets the layout, and Insteon's documents don't say which one it ships with."
       ],
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)"
       ]
     },
@@ -58753,7 +58842,7 @@
       "model": "4705",
       "name": "Plug-in Dimmer",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)"
       ]
     },
@@ -58772,7 +58861,7 @@
       "model": "4706A",
       "name": "Central Controller Interface",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc Device Definitions (version 2.9.87)"
       ]
     },
     {
@@ -58932,7 +59021,7 @@
       "model": "4707",
       "name": "Outlet Switch",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)"
       ]
     },
@@ -58940,6 +59029,17 @@
       "capabilities": [
         {
           "kind": "dimmable"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x01",
+          "commandSet": "switchLincDimmer",
+          "subcategory": "0x2B",
+          "verification": {
+            "note": "Inferred from the Wall Dimmer 4701, which takes the same command set: this product, the Wall Dimmer - 1000W, is a wall dimmer with a single load. No document lists this product's own.",
+            "status": "inferred"
+          }
         }
       ],
       "identities": [
@@ -59057,7 +59157,7 @@
       "model": "4711",
       "name": "Wall Dimmer - 1000W",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc Device Definitions (version 2.9.87)"
       ]
     },
     {
@@ -59217,7 +59317,7 @@
       "model": "4712",
       "name": "In-Line Dimmer",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)"
       ]
     },
@@ -59378,7 +59478,7 @@
       "model": "4713",
       "name": "In-Line Switch",
       "sources": [
-        "HouseLinc device catalog",
+        "HouseLinc Device Definitions (version 2.9.87)",
         "Insteon Developer's Guide (2009)"
       ]
     },
@@ -59497,7 +59597,7 @@
       "model": "4715",
       "name": "7 Day Thermostat",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc Device Definitions (version 2.9.87)"
       ]
     },
     {
@@ -59631,7 +59731,7 @@
       "model": "4716",
       "name": "Motion Sensor",
       "sources": [
-        "HouseLinc device catalog"
+        "HouseLinc Device Definitions (version 2.9.87)"
       ]
     },
     {
@@ -59740,7 +59840,7 @@
           "productKey": "0x000001",
           "subcategory": "0x00",
           "verification": {
-            "note": "Insteon Device Categories and Product Keys (October 2008) gives 0x04/0x00 to the Compacta EZRain Sprinkler Controller and lists no EZFlora; the HouseLinc device catalog gives the same identity to the EZRain as model 31270. That the EZFlora reports it is read from those entries: no other irrigation controller from Compacta is listed, and no EZFlora document gives a category.",
+            "note": "Insteon Device Categories and Product Keys (October 2008) gives 0x04/0x00 to the Compacta EZRain Sprinkler Controller and lists no EZFlora; the HouseLinc Device Definitions (version 2.9.87) gives the same identity to the EZRain as model 31270. That the EZFlora reports it is read from those entries: no other irrigation controller from Compacta is listed, and no EZFlora document gives a category.",
             "status": "inferred"
           }
         }
@@ -59984,7 +60084,7 @@
         "Quick Start Guide - EZFlora Model #5010A",
         "EZFlora Insteon and X10 Messages/Commands",
         "Insteon Device Categories and Product Keys (October 2008)",
-        "HouseLinc device catalog"
+        "HouseLinc Device Definitions (version 2.9.87)"
       ]
     },
     {

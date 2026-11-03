@@ -926,6 +926,155 @@ struct DatabaseLinkingTests {
 
   }
 
+  // MARK: - The bundled catalog
+
+  /// The I/O Linc 2450, as firmware 0x41 reports itself.
+  static let ioLinc = ReportedIdentity(category: 0x07, subcategory: 0x00, firmwareVersion: 0x41)
+
+  /// The I/O Linc, holding a controller record of the modem in group 1 and a free slot below
+  /// it, with the operating flags given, on a network with the bundled catalog.
+  func ioLincLinking(flags: UInt8 = 0x00) async throws -> (InMemoryModem, DeviceLinkingCoordinator) {
+
+    let modem: InMemoryModem = await modem(identity: Self.ioLinc)
+    await modem.setOperatingFlags(flags, of: device)
+
+    await modem.setDatabase([
+      0x0FFF: controller(0x01, naming: modemAddress),
+      0x0FF7: deleted(responder(0x09, naming: DatabaseLinkingExample.lamp))
+    ], of: device)
+
+    return (modem, network(modem, catalog: try DeviceCatalog.bundled()).linking)
+
+  }
+
+  @Test(arguments: [(RelayState.on, UInt8(0xFF)), (RelayState.off, UInt8(0x00))])
+  func writesAnIOLincsRelayStateAsTheBundledCatalogSays(state: RelayState, data1: UInt8) async throws {
+
+    let (modem, linking): (InMemoryModem, DeviceLinkingCoordinator) = try await ioLincLinking()
+    let plan: DatabaseLinkPlan = try await linking.planDatabaseLink(device, relayState: state)
+
+    #expect(plan.relayState == state)
+    #expect(plan.momentaryFlagsOn == [])
+    #expect(plan.deviceSteps.map { $0.kind } == [.addDeviceRecord])
+    #expect(plan.deviceSteps.map { $0.written } == [responder(0x00, naming: modemAddress, data: [data1, 0x00, 0x00])])
+    #expect(plan.modemSteps.map { $0.kind } == [.addModemRecord, .addModemRecord])
+
+    let result: DatabaseLinkResult = try await linking.apply(plan)
+
+    #expect(result.isComplete)
+    #expect(await modem.record(of: device, at: 0x0FF7) == responder(0x00, naming: modemAddress, data: [data1, 0x00, 0x00]))
+
+  }
+
+  @Test func readsTheIOLincsMomentaryFlagsForARelayStateAndWritesNone() async throws {
+
+    // Momentary and momentaryOnBothCommands on.
+    let (modem, linking): (InMemoryModem, DeviceLinkingCoordinator) = try await ioLincLinking(flags: 0x18)
+    let log: OperationLog = await OperationLog.logging(modem)
+
+    let plan: DatabaseLinkPlan = try await linking.planDatabaseLink(device, relayState: .on)
+
+    #expect(plan.momentaryFlagsOn == ["momentary", "momentaryOnBothCommands"])
+    // Identification, then one Get Operating Flags; nothing is written.
+    #expect(log.standardCommands == [0x0D, 0x10, 0x1F])
+    #expect(log.writesAndExtendedMessages == 0)
+    #expect(await modem.operatingFlags[device] == 0x18)
+
+    // Without a relay state, no flag is read.
+    let plain: DatabaseLinkPlan = try await linking.planDatabaseLink(device)
+
+    #expect(plain.momentaryFlagsOn == [])
+    #expect(log.standardCommands == [0x0D, 0x10, 0x1F, 0x0D, 0x10])
+
+  }
+
+  @Test func listsOnlyTheMomentaryFlagsThatAreOn() async throws {
+
+    // Momentary on, momentaryOnBothCommands off.
+    let (_, linking): (InMemoryModem, DeviceLinkingCoordinator) = try await ioLincLinking(flags: 0x08)
+
+    #expect(try await linking.planDatabaseLink(device, relayState: .on).momentaryFlagsOn == ["momentary"])
+
+  }
+
+  /// How the I/O Linc's reply to Get Operating Flags fails.
+  enum FlagReadFailure: CaseIterable, Sendable {
+
+    case rejected
+
+    case unanswered
+
+    case canceled
+
+    case withoutTheFlag
+
+  }
+
+  @Test(arguments: FlagReadFailure.allCases)
+  func writesNothingWhenTheMomentaryFlagsCantBeRead(_ failure: FlagReadFailure) async throws {
+
+    let (modem, linking): (InMemoryModem, DeviceLinkingCoordinator) = try await ioLincLinking(flags: 0x08)
+    let device: InsteonAddress = self.device
+    let log: OperationLog = await OperationLog.logging(modem)
+
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      guard case let .standardRequest(message) = operation, message.command.command1 == 0x1F else {
+
+        return
+
+      }
+
+      switch failure {
+      case .rejected:
+        await modem.setUnlinked(device)
+      case .unanswered:
+        await modem.setUnanswering(device)
+      case .canceled:
+        throw CancellationError()
+      case .withoutTheFlag:
+        await modem.setAnswer(Command(command1: 0x00, command2: 0x08), to: 0x1F, of: device)
+      }
+
+    }
+
+    let outcome: Result<DatabaseLinkPlan, any Error> = await Task { () async throws -> DatabaseLinkPlan in
+
+      try await linking.planDatabaseLink(device, relayState: .on)
+
+    }.result
+
+    switch (failure, outcome) {
+    case (.rejected, .failure(RelayStateLinkingError.notLinkedToModem(let refused))):
+      #expect(refused == device)
+    case (.unanswered, .failure(ModemError.deviceTimedOut(let silent))):
+      #expect(silent == device)
+    case (.canceled, .failure(is CancellationError)):
+      break
+    case (.withoutTheFlag, .failure(RelayStateLinkingError.flagUnreadable(let unread, let flag))):
+      #expect(unread == device)
+      #expect(flag == "momentary")
+    default:
+      Issue.record("Expected the \(failure) failure, got \(outcome)")
+    }
+
+    #expect(log.writesAndExtendedMessages == 0)
+    #expect(await modem.writes.isEmpty)
+    #expect(await modem.modemRecords.isEmpty)
+    #expect(await modem.operatingFlags[device] == 0x08)
+
+  }
+
+  @Test func linksAnIOLincWithTheBundledCatalogsOnLevel() async throws {
+
+    let (_, linking): (InMemoryModem, DeviceLinkingCoordinator) = try await ioLincLinking()
+    let plan: DatabaseLinkPlan = try await linking.planDatabaseLink(device)
+
+    // Without a relay state, the catalog's on-level byte records full on.
+    #expect(plan.deviceSteps.map { $0.written } == [responder(0x00, naming: modemAddress, data: [0xFF, 0x00, 0x00])])
+
+  }
+
   // MARK: - The modem's record data
 
   @Test func writesTheModemsRecordsAsTheCatalogSaysTheModemDoes() async throws {

@@ -311,6 +311,64 @@ struct KeepAwakeTests {
 
   }
 
+  @Test(.timeLimit(.minutes(1))) func neverSendsAKeepAwakeMessageNamingALinkingChange() async throws {
+
+    // The command set lets a relay link clear momentary, which a plain link never writes,
+    // even when a keep-awake message names it.
+    let commands = CommandSet(
+      id: "exampleRelaySensor",
+      name: "Example",
+      summary: "A relay whose keep-awake message names its momentary flag.",
+      operatingFlags: [OperatingFlag(name: "momentary", summary: "The relay closes for a moment.", query: .operatingFlags, bit: 0x08, on: 0x06, off: 0x07)],
+      linkingChanges: [LinkingChange(flag: "momentary")]
+    )
+    let catalog = DeviceCatalog(
+      profiles: [
+        DeviceProfile(
+          model: "9402",
+          name: "Example Relay Sensor",
+          identities: [DeviceIdentity(category: 0x10, subcategory: 0x7B)],
+          commandSets: [CommandSetEntry(commandSet: "exampleRelaySensor", category: 0x10, subcategory: 0x7B)],
+          isBatteryPowered: true,
+          groups: [DeviceProfile.Group(number: 1, name: "Open", role: .controller)],
+          lifecycle: DeviceLifecycle(fromHub: DeviceLifecycle.HubLinking(
+            legs: [DeviceLifecycle.HubLinking.Leg(modemRole: .responder, modemGroup: 0x01, deviceGroup: 0x01)],
+            remoteEnterLinkingMode: DeviceLifecycle.HubLinking.RemoteEnterLinkingMode(works: .yes),
+            keepAwake: DeviceLifecycle.HubLinking.KeepAwake(timing: .afterLinked, send: .flag(DeviceProfile.Group.Condition(flag: "momentary", isSet: false)))
+          ))
+        )
+      ],
+      commandSets: [commands]
+    )
+    let modem = InMemoryModem()
+    let sensor = InsteonAddress(0x5A, 0x6B, 0x05)
+    let network: DeviceNetwork = self.network(modem, catalog: catalog, identities: [sensor: ReportedIdentity(category: 0x10, subcategory: 0x7B, firmwareVersion: 0x41)])
+    let recorder = LinkingRecorder()
+
+    let result: DeviceLinkingResult = try await network.linking.link(sensor, as: .controller, observer: recorder)
+
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+    let lines: [String] = await recorder.lines
+
+    // The keep-awake message names momentary, yet it isn't a flag a plain link may write.
+    #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: catalog.describe(category: 0x10, subcategory: 0x7B, firmwareVersion: 0x41)).isEmpty)
+    #expect(result.links.count == 1)
+    #expect(await modem.extendedRequests.isEmpty)
+    #expect(!steps.contains { (step: InMemoryModem.LinkingStep) -> Bool in
+
+      if case let .device(_, command, _) = step {
+
+        return command.command1 == 0x20
+
+      }
+
+      return false
+
+    })
+    #expect(lines.contains("keep awake: not sent \(sensor)"))
+
+  }
+
   @Test func fillsOnlyTheParameterThatTakesTheDuration() throws {
 
     let duration = MessageField(name: "duration", summary: "How long.", location: .userData([3]), kind: .number(unit: .seconds), range: 0...255)
@@ -347,24 +405,11 @@ struct KeepAwakeTests {
     let openClose: DeviceDescription = catalog.describe(category: 0x10, subcategory: 0x02, firmwareVersion: 0x41)
     let plug: DeviceDescription = catalog.describe(category: 0x02, subcategory: 0x38, firmwareVersion: 0x42)
 
-    #expect(DeviceLinkingCoordinator.writableLinkingFlags(of: remote) == ["stayAwake"])
+    #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: remote) == ["stayAwake"])
     // An extended Set writes no operating flag, and a device without keep-awake writes none.
-    #expect(DeviceLinkingCoordinator.writableLinkingFlags(of: openClose).isEmpty)
-    #expect(DeviceLinkingCoordinator.writableLinkingFlags(of: plug).isEmpty)
-    #expect(DeviceLinkingCoordinator.writableLinkingFlags(of: nil).isEmpty)
-
-    // The bundled catalog names no flags that linking changes on its own.
-    for profile in catalog.profiles {
-
-      for identity in profile.identities {
-
-        let description: DeviceDescription = catalog.describe(category: identity.category, subcategory: identity.subcategory, firmwareVersion: nil)
-
-        #expect(description.commandSet?.linkingChanges.isEmpty ?? true, "\(profile.model)")
-
-      }
-
-    }
+    #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: openClose).isEmpty)
+    #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: plug).isEmpty)
+    #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: nil).isEmpty)
 
   }
 

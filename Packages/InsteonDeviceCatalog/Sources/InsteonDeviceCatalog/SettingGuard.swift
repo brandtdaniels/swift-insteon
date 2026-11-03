@@ -66,25 +66,26 @@ public struct CommandGuard: RawRepresentable, Hashable, Sendable, CustomStringCo
 
 }
 
-/// An operating flag that linking can change on its own, which a linking flow may read before
-/// it links and set back afterward.
+/// An operating flag a linking flow may change around a link and restore afterward: it reads
+/// the flag before it links and sets it back with Set Operating Flags.
 ///
 /// A command set's ``CommandSet/linkingChanges`` is an allowlist: a linking flow changes and
-/// restores no other flag, and never one with a ``FlagGuard``.
+/// restores no other flag, and never one with a ``FlagGuard``. A flag is on the list once a
+/// document or a device shows that linking changes it or that it changes what a link records.
 public struct LinkingChange: Hashable, Sendable {
 
   /// The operating flag, in the command set's ``CommandSet/operatingFlags``.
   public var flag: SettingName
 
-  /// How sure the catalog is that linking changes the flag.
+  /// How sure the catalog is that linking changes the flag or what a link records.
   public var verification: Verification
 
-  /// Creates a flag linking changes.
+  /// Creates a flag a linking flow may change around a link.
   ///
   /// - Parameters:
   ///   - flag: The operating flag.
-  ///   - verification: How sure the catalog is that linking changes the flag. Defaults to
-  ///     ``Verification/documented``.
+  ///   - verification: How sure the catalog is that linking changes the flag or what a link
+  ///     records. Defaults to ``Verification/documented``.
   public init(flag: SettingName, verification: Verification = .documented) {
 
     self.flag = flag

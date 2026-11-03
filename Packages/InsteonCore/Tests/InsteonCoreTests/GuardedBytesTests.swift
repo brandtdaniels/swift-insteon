@@ -547,7 +547,7 @@ struct GuardedBytesTests {
     let description: DeviceDescription = try #require(await network.registry.device(Self.hiddenDoor.address)?.deviceDescription)
     let keepAwake: DeviceLifecycle.HubLinking.KeepAwake = try #require(description.hubLinking?.keepAwake)
     let release: DeviceLifecycle.HubLinking.HubMessage = try #require(keepAwake.release)
-    let writableFlags: Set<SettingName> = DeviceLinkingCoordinator.writableLinkingFlags(of: description)
+    let writableFlags: Set<SettingName> = DeviceLinkingCoordinator.keepAwakeFlags(of: description)
 
     // Its release, stayAwakeOff, is 0x19, which its command set names for a flag command.
     try await device.refuseKeepAwakeWithoutRelease(keepAwake, writableFlags: writableFlags)

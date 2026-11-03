@@ -476,6 +476,7 @@ internal(set) var DatabaseLinkPlan.engine
 internal(set) var DatabaseLinkPlan.info
 internal(set) var DatabaseLinkPlan.linksInPlace
 internal(set) var DatabaseLinkPlan.modem
+internal(set) var DatabaseLinkPlan.momentaryFlagsOn
 internal(set) var DatabaseLinkPlan.orphans
 internal(set) var DatabaseLinkPlan.relayState
 internal(set) var DatabaseLinkPlan.steps

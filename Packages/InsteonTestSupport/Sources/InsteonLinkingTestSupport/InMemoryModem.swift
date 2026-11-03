@@ -156,6 +156,10 @@ public actor InMemoryModem: LinkingModem {
   /// `ModemError.deviceTimedOut`.
   public var unansweringDevices: Set<InsteonAddress> = []
 
+  /// The command each device acknowledges a standard message with, by the message's cmd1, in
+  /// place of the one it was sent.
+  public var answers: [InsteonAddress: [UInt8: Command]] = [:]
+
   /// Devices whose unlinks the modem carries out without reporting them.
   public var unreportedUnlinks: Set<InsteonAddress> = []
 
@@ -332,6 +336,19 @@ public actor InMemoryModem: LinkingModem {
   public func setSilent(_ device: InsteonAddress) {
 
     silentDevices.insert(device)
+
+  }
+
+  /// Makes a device acknowledge a standard message with another command, such as a reply
+  /// that doesn't carry what was asked for.
+  ///
+  /// - Parameters:
+  ///   - command: The command the acknowledgment carries.
+  ///   - command1: The cmd1 of the messages it answers.
+  ///   - device: The device.
+  public func setAnswer(_ command: Command, to command1: UInt8, of device: InsteonAddress) {
+
+    answers[device, default: [:]][command1] = command
 
   }
 
@@ -737,7 +754,7 @@ public actor InMemoryModem: LinkingModem {
       sender: device,
       destination: address,
       flags: MessageFlags(messageType: .directAcknowledgment),
-      command: Command(command1: message.command.command1, command2: command2)
+      command: answers[device]?[message.command.command1] ?? Command(command1: message.command.command1, command2: command2)
     )
 
   }

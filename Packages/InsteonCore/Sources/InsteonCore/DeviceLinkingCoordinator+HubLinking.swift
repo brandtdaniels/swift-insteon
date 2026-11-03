@@ -45,7 +45,8 @@ extension DeviceLinkingCoordinator {
   /// know isn't sent. Once the legs are done, or stopped by an error or cancellation, the
   /// catalog's message that lets the device sleep again is sent, when it gives one and the
   /// first message may have reached the device. No operating flag is written but the ones
-  /// these messages name, and the command set's ``CommandSet/linkingChanges``.
+  /// these messages name; the command set's ``CommandSet/linkingChanges`` are written only by
+  /// a relay link with a chosen state.
   ///
   /// - Parameters:
   ///   - device: The device.
@@ -66,7 +67,7 @@ extension DeviceLinkingCoordinator {
   ) async throws -> DeviceLinkingResult {
 
     let keepAwake: DeviceLifecycle.HubLinking.KeepAwake? = description?.hubLinking?.keepAwake
-    let writableFlags: Set<SettingName> = Self.writableLinkingFlags(of: description)
+    let writableFlags: Set<SettingName> = Self.keepAwakeFlags(of: description)
     var isKeptAwake: Bool = false
 
     do {
@@ -388,22 +389,23 @@ extension DeviceLinkingCoordinator {
 
   // MARK: - Keeping a device awake
 
-  /// The operating flags a linking flow may write: those the catalog's messages that keep the
-  /// device awake and let it sleep again name, and the command set's
-  /// ``CommandSet/linkingChanges``. Every flag a linking flow writes is checked against them.
+  /// The operating flags linking by the catalog's legs may write: those the catalog's
+  /// messages that keep the device awake and let it sleep again name, but none of the command
+  /// set's ``CommandSet/linkingChanges``, which only a relay link with a chosen state writes.
+  /// Every flag those messages write is checked against them.
   ///
   /// - Parameter description: What the catalog says about the device, if it's known.
   /// - Returns: The flags' names.
-  static func writableLinkingFlags(of description: DeviceDescription?) -> Set<SettingName> {
+  static func keepAwakeFlags(of description: DeviceDescription?) -> Set<SettingName> {
 
     let commands: CommandSet? = description?.commandSet
-    var flags = Set<SettingName>(commands?.linkingChanges.map(\.flag) ?? [])
+    var flags: Set<SettingName> = []
 
     if let keepAwake = description?.hubLinking?.keepAwake {
 
       for message in [keepAwake.send, keepAwake.release].compactMap({ $0 }) {
 
-        if let flag = flagWritten(by: message, in: commands) {
+        if let flag = flagWritten(by: message, in: commands), commands?.linkingChanges.contains(where: { (change: LinkingChange) -> Bool in change.flag == flag }) != true {
 
           flags.insert(flag)
 

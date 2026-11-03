@@ -83,9 +83,9 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
   /// rates, which ``LinkDataByte/table`` names.
   public var valueTables: [ValueTable]
 
-  /// The operating flags linking can change on its own, which a linking flow may read before
-  /// it links and set back afterward. It's an allowlist: a flow changes and restores no other
-  /// flag. Empty when the catalog names none.
+  /// The operating flags a linking flow may change around a link and restore afterward: it
+  /// reads them before it links and sets them back with Set Operating Flags. It's an
+  /// allowlist: a flow changes and restores no other flag. Empty when the catalog names none.
   public var linkingChanges: [LinkingChange]
 
   /// Where Insteon's documents disagree, and which one the command set follows.
@@ -110,7 +110,8 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
   ///   - celsiusIndicator: The flag, value or bit that's true when the device displays Celsius.
   ///   - groupTypes: What the products' ALL-Link groups are.
   ///   - valueTables: Names for the values of settings.
-  ///   - linkingChanges: The operating flags linking can change on its own. Defaults to none.
+  ///   - linkingChanges: The operating flags a linking flow may change around a link and
+  ///     restore afterward. Defaults to none.
   ///   - notes: Where Insteon's documents disagree.
   ///   - sources: The documents the command set comes from.
   public init(
