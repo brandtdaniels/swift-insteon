@@ -27,6 +27,22 @@ enum RelayExample {
 
   static let oneWayModuleIdentity = ReportedIdentity(category: 0x07, subcategory: 0x63, firmwareVersion: 0x41)
 
+  /// A module whose relay group type gives no Off.
+  static let noOffModule = InsteonAddress(0x4A, 0x5B, 0x06)
+
+  static let noOffModuleIdentity = ReportedIdentity(category: 0x07, subcategory: 0x64, firmwareVersion: 0x41)
+
+  /// A module whose relay group type gives no On.
+  static let noOnModule = InsteonAddress(0x4A, 0x5B, 0x07)
+
+  static let noOnModuleIdentity = ReportedIdentity(category: 0x07, subcategory: 0x65, firmwareVersion: 0x41)
+
+  /// A module whose catalog gives a command that turns momentary on but none that turns it
+  /// off, so clearing it is refused before anything is sent.
+  static let noClearModule = InsteonAddress(0x4A, 0x5B, 0x08)
+
+  static let noClearModuleIdentity = ReportedIdentity(category: 0x07, subcategory: 0x66, firmwareVersion: 0x41)
+
   static let moduleIdentity = ReportedIdentity(category: 0x07, subcategory: 0x60, firmwareVersion: 0x41)
 
   static let fixedModuleIdentity = ReportedIdentity(category: 0x07, subcategory: 0x61, firmwareVersion: 0x41)
@@ -77,7 +93,7 @@ enum RelayExample {
     ]
   )
 
-  static func moduleCommands(id: CommandSetID, linkingChanges: [LinkingChange], flags: [OperatingFlag] = operatingFlags) -> CommandSet {
+  static func moduleCommands(id: CommandSetID, linkingChanges: [LinkingChange], flags: [OperatingFlag] = operatingFlags, relayType: GroupType = relay) -> CommandSet {
 
     CommandSet(
       id: id,
@@ -85,7 +101,7 @@ enum RelayExample {
       summary: "A relay with a momentary mode.",
       operatingFlags: flags,
       standardCommands: [ControlExample.lightOn, ControlExample.lightOff, readStatus],
-      groupTypes: [relay],
+      groupTypes: [relayType],
       linkingChanges: linkingChanges
     )
 
@@ -99,6 +115,27 @@ enum RelayExample {
     id: "exampleOneWayIO",
     linkingChanges: [LinkingChange(flag: "momentary")],
     flags: [OperatingFlag(name: "momentary", summary: "The relay closes for a moment, then opens.", query: .operatingFlags, bit: momentary.bit, off: momentary.off, label: "Momentary relay")]
+  )
+
+  /// The relay group type with only the action named.
+  static func relay(onlyAction name: SettingName) -> GroupType {
+
+    var type: GroupType = relay
+
+    type.actions = relay.actions.filter { (action: GroupType.Action) -> Bool in action.name == name }
+
+    return type
+
+  }
+
+  static let noOffCommands: CommandSet = moduleCommands(id: "exampleNoOffIO", linkingChanges: [LinkingChange(flag: "momentary")], relayType: relay(onlyAction: "on"))
+
+  static let noOnCommands: CommandSet = moduleCommands(id: "exampleNoOnIO", linkingChanges: [LinkingChange(flag: "momentary")], relayType: relay(onlyAction: "off"))
+
+  static let noClearCommands: CommandSet = moduleCommands(
+    id: "exampleNoClearIO",
+    linkingChanges: [LinkingChange(flag: "momentary")],
+    flags: [OperatingFlag(name: "momentary", summary: "The relay closes for a moment, then opens.", query: .operatingFlags, bit: momentary.bit, on: momentary.on, label: "Momentary relay")]
   )
 
   static let dimmerCommands = CommandSet(
@@ -127,16 +164,22 @@ enum RelayExample {
       profile("9601", moduleIdentity, commands: commands, type: "relay"),
       profile("9602", fixedModuleIdentity, commands: fixedCommands, type: "relay"),
       profile("9603", dimmerIdentity, commands: dimmerCommands, type: "light"),
-      profile("9604", oneWayModuleIdentity, commands: oneWayCommands, type: "relay")
+      profile("9604", oneWayModuleIdentity, commands: oneWayCommands, type: "relay"),
+      profile("9605", noOffModuleIdentity, commands: noOffCommands, type: "relay"),
+      profile("9606", noOnModuleIdentity, commands: noOnCommands, type: "relay"),
+      profile("9607", noClearModuleIdentity, commands: noClearCommands, type: "relay")
     ],
-    commandSets: [commands, fixedCommands, dimmerCommands, oneWayCommands]
+    commandSets: [commands, fixedCommands, dimmerCommands, oneWayCommands, noOffCommands, noOnCommands, noClearCommands]
   )
 
   static let identities: [InsteonAddress: ReportedIdentity] = [
     module: moduleIdentity,
     fixedModule: fixedModuleIdentity,
     dimmer: dimmerIdentity,
-    oneWayModule: oneWayModuleIdentity
+    oneWayModule: oneWayModuleIdentity,
+    noOffModule: noOffModuleIdentity,
+    noOnModule: noOnModuleIdentity,
+    noClearModule: noClearModuleIdentity
   ]
 
 }
@@ -234,11 +277,11 @@ struct RelayStateLinkingTests {
 
   }
 
-  /// The steps before the record is checked: the cache asks for the status, whose cmd1 is the
-  /// database delta, before it reads the database.
-  func beforeRecordCheck(_ steps: [InMemoryModem.LinkingStep]) -> [InMemoryModem.LinkingStep] {
+  /// The status request the network's cache sends for the database delta before it reads the
+  /// relay's database to check its record: the last step of a link that checks it.
+  var recordCheck: InMemoryModem.LinkingStep {
 
-    steps.last == step(0x19, 0x00) ? Array(steps.dropLast()) : steps
+    step(0x19, 0x00)
 
   }
 
@@ -300,7 +343,8 @@ struct RelayStateLinkingTests {
       step(0x19, 0x00)
     ])
     #expect(steps.dropFirst(6).dropLast(3).contains(.modem(.controller, 0x02)))
-    #expect(Array(beforeRecordCheck(steps).suffix(3)) == returnAndRestore)
+    // The record is checked after everything is put back.
+    #expect(Array(steps.suffix(4)) == returnAndRestore + [recordCheck])
     // The device recorded on, and the relay is off again, as it was.
     #expect(await modem.databases[module]?.values.first?.data1 == 0xFF)
     #expect(await modem.levels[module] == 0x00)
@@ -700,7 +744,7 @@ struct RelayStateLinkingTests {
 
     #expect(!steps.contains(step(0x11, 0xFF)))
     #expect(steps.contains(step(0x13, 0x00)))
-    #expect(Array(beforeRecordCheck(steps).suffix(2)) == [step(0x20, RelayExample.momentary.on, extended: true), step(0x1F, 0x00)])
+    #expect(Array(steps.suffix(3)) == [step(0x20, RelayExample.momentary.on, extended: true), step(0x1F, 0x00), recordCheck])
     #expect(await modem.levels[module] == 0x00)
     #expect(await modem.operatingFlags[module] == RelayExample.momentary.bit)
     #expect(result.relayState?.recordedData1 == 0x00)
@@ -717,7 +761,7 @@ struct RelayStateLinkingTests {
 
     // On once, to hold it, and Off once the link is made: never On again.
     #expect(steps.filter { $0 == step(0x11, 0xFF) }.count == 1)
-    #expect(Array(beforeRecordCheck(steps).suffix(3)) == returnAndRestore)
+    #expect(Array(steps.suffix(4)) == returnAndRestore + [recordCheck])
     #expect(await modem.levels[module] == 0x00)
     #expect(await modem.operatingFlags[module] == RelayExample.momentary.bit)
     #expect(result.relayState?.recordedData1 == 0xFF)
@@ -884,7 +928,8 @@ struct RelayStateLinkingTests {
     }
 
     // The relay was opened and the flag set back before the record was read.
-    #expect(Array(beforeRecordCheck(await modem.linkingSteps).suffix(3)) == returnAndRestore)
+    // The canceled status request was never sent.
+    #expect(Array(await modem.linkingSteps.suffix(3)) == returnAndRestore)
     #expect(await modem.levels[module] == 0x00)
     #expect(await modem.operatingFlags[module] == RelayExample.momentary.bit)
     #expect(await modem.databaseReads[module] == nil)
@@ -989,6 +1034,165 @@ struct RelayStateLinkingTests {
     }
 
     #expect(await modem.linkingSteps == [step(0x1F, 0x00, to: device), step(0x19, 0x00, to: device)])
+    #expect(await modem.operatingFlags[device] == RelayExample.momentary.bit)
+
+  }
+
+  @Test func leavesALatchingRelayAloneWhenItsStatusDisagrees() async throws {
+
+    let modem: InMemoryModem = await modem(flags: 0x80)
+    // The relay opens again, though the catalog doesn't call it momentary.
+    await modem.setMomentaryBit(0x80, of: module)
+
+    await expectRefusal({ _ = try await linkRelay(modem, .on) }) { (error: RelayStateLinkingError) -> Bool in
+
+      if case .relayNotConfirmed = error {
+
+        return true
+
+      }
+
+      return false
+
+    }
+
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+
+    #expect(steps.filter { $0 == step(0x11, 0xFF) }.count == 1)
+    #expect(!steps.contains(step(0x13, 0x00)))
+
+  }
+
+  @Test func leavesALatchingRelaySomeoneElseSwitchedWhenTheLinkFails() async throws {
+
+    let modem: InMemoryModem = await modem(flags: 0x00)
+    let module: InsteonAddress = self.module
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      if case let .extendedRequest(message) = operation, message.command.command1 == 0x09 {
+
+        // Someone switches the relay off as the link fails.
+        await modem.setLevel(0x00, of: module)
+
+        throw ModemError.deviceTimedOut(module)
+
+      }
+
+    }
+
+    await expectRefusal({ _ = try await linkRelay(modem, .on) }) { (error: RelayStateLinkingError) -> Bool in
+
+      if case .remoteLinkingFailed = error {
+
+        return true
+
+      }
+
+      return false
+
+    }
+
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+
+    #expect(steps.last == recordCheck)
+    #expect(!steps.contains(step(0x13, 0x00)))
+
+  }
+
+  @Test func switchesALatchingRelayBackAndSaysSoWhenItsStatusCantBeRead() async throws {
+
+    let modem: InMemoryModem = await modem(flags: 0x00)
+    let module: InsteonAddress = self.module
+    let linking = RestoreWatch()
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      switch operation {
+      case let .extendedRequest(message) where message.command.command1 == 0x09:
+        await linking.begin()
+
+        throw ModemError.deviceTimedOut(module)
+      case let .standardRequest(message) where message.command.command1 == 0x19:
+        if await linking.hasBegun {
+
+          throw ModemError.deviceTimedOut(module)
+
+        }
+      default:
+        break
+      }
+
+    }
+    let recorder = LinkingRecorder()
+
+    await expectRefusal({ _ = try await linkRelay(modem, .on, observer: recorder) }) { (error: RelayStateLinkingError) -> Bool in
+
+      if case .remoteLinkingFailed = error {
+
+        return true
+
+      }
+
+      return false
+
+    }
+
+    #expect(await modem.linkingSteps.last == step(0x13, 0x00))
+    #expect(await recorder.lines.suffix(2) == ["relay state: returning \(module) off", "relay state: failed \(module)"])
+
+  }
+
+  @Test func refusesBeforeChangingAnythingWhenTheRelayCantBeOpenedAfterward() async throws {
+
+    let device: InsteonAddress = RelayExample.noOffModule
+    let momentary: InMemoryModem = await modem(device, flags: RelayExample.momentary.bit)
+
+    await #expect(throws: DeviceControlError.self) {
+
+      _ = try await linkRelay(momentary, .on, device: device)
+
+    }
+
+    #expect(await momentary.linkingSteps == [step(0x1F, 0x00, to: device), step(0x19, 0x00, to: device)])
+
+    let latching: InMemoryModem = await modem(device, flags: 0x00)
+
+    await #expect(throws: DeviceControlError.self) {
+
+      _ = try await linkRelay(latching, .on, device: device)
+
+    }
+
+    #expect(await latching.linkingSteps == [step(0x1F, 0x00, to: device), step(0x19, 0x00, to: device)])
+
+  }
+
+  @Test func refusesBeforeChangingAnythingWhenTheRelayCantBeSwitched() async throws {
+
+    let device: InsteonAddress = RelayExample.noOnModule
+    let modem: InMemoryModem = await modem(device, flags: 0x00)
+
+    await #expect(throws: DeviceControlError.self) {
+
+      _ = try await linkRelay(modem, .on, device: device)
+
+    }
+
+    #expect(await modem.linkingSteps == [step(0x1F, 0x00, to: device), step(0x19, 0x00, to: device)])
+
+  }
+
+  @Test func setsNothingBackWhenClearingTheFlagIsRefused() async throws {
+
+    let device: InsteonAddress = RelayExample.noClearModule
+    let modem: InMemoryModem = await modem(device, flags: RelayExample.momentary.bit)
+
+    await #expect(throws: DeviceControlError.self) {
+
+      _ = try await linkRelay(modem, .on, device: device)
+
+    }
+
+    #expect(!writesFlags(await modem.linkingSteps))
     #expect(await modem.operatingFlags[device] == RelayExample.momentary.bit)
 
   }

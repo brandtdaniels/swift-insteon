@@ -79,9 +79,9 @@ public struct RelayStateLink: Sendable {
   /// says. The relay then only pulses, so the recorded state isn't used while it's momentary.
   public var pulsesOnBothCommands: Bool
 
-  /// What didn't go back as it was after the link, in order: the relay not returned to its
-  /// state before the link, the flag not set back or not confirmed, or another flag that
-  /// changed. Empty when everything did.
+  /// What didn't go back as it was after the link, in order: a momentary relay not switched
+  /// off, the flag not set back or not confirmed, or another flag that changed. Empty when
+  /// everything did.
   public var restoreFailures: [RelayStateLinkingError]
 
   /// What a group On sets the relay to: the state asked for.
@@ -184,8 +184,9 @@ public enum RelayStateEvent: Sendable {
   /// The relay's status, read again, showed it in the state.
   case relayConfirmed(InsteonAddress, RelayState)
 
-  /// A momentary relay is being returned to its state before the link, while its flag is
-  /// still off, so it isn't left closed.
+  /// The relay is being switched to the state given after the link: off, for a momentary
+  /// relay switched on, while its flag is still off, since it rests open; or its state before,
+  /// for a relay that isn't momentary, when linking failed or was canceled.
   case returningRelay(InsteonAddress, RelayState)
 
   /// The flag turned off for the link is being turned back on: after the link, or after a
@@ -261,9 +262,14 @@ public enum RelayStateLinkingError: Error, Sendable {
   /// link was reported.
   case recordNotRead(InsteonAddress, reason: any Error)
 
-  /// A momentary relay wasn't returned to its state before the link, for the reason given, so
-  /// it may be left closed.
+  /// The relay wasn't switched to the state given after the link, for the reason given: off
+  /// for a momentary relay switched on, or its state before for a relay that isn't momentary
+  /// when linking failed. It's left in the state it was switched to.
   case relayNotReturned(InsteonAddress, state: RelayState, reason: any Error)
+
+  /// The relay's status couldn't be read after linking failed, for the reason given, so it
+  /// was switched back to the state given without knowing whether someone had switched it.
+  case relayReturnUnconfirmed(InsteonAddress, state: RelayState, reason: any Error)
 
   /// The flag turned off for the link wasn't turned back on, twice, for the reason given.
   case flagNotRestored(InsteonAddress, flag: String, reason: any Error)
@@ -287,7 +293,7 @@ public enum RelayStateLinkingError: Error, Sendable {
     case let .notIdentified(device, _), let .notLinkedToModem(device), let .notDescribed(device), let .notARelay(device, _),
       let .momentaryNotChangeable(device, _), let .flagUnreadable(device, _), let .flagNotChanged(device, _, _),
       let .relayNotConfirmed(device, _), let .remoteLinkingFailed(device, _), let .recordedOtherState(device, _, _, _),
-      let .recordNotFound(device, _), let .recordNotRead(device, _), let .relayNotReturned(device, _, _),
+      let .recordNotFound(device, _), let .recordNotRead(device, _), let .relayNotReturned(device, _, _), let .relayReturnUnconfirmed(device, _, _),
       let .flagNotRestored(device, _, _), let .flagRestoreUnconfirmed(device, _, _), let .otherFlagsChanged(device, _, _),
       let .recordInPlace(device, _, _):
       return device
@@ -328,7 +334,9 @@ extension RelayStateLinkingError: CustomStringConvertible, LocalizedError {
     case let .recordNotRead(device, reason):
       "\(device)'s ALL-Link database couldn't be read to check the state it recorded: \(Self.message(reason))"
     case let .relayNotReturned(device, state, reason):
-      "\(device)'s relay wasn't turned back \(state.rawValue): \(Self.message(reason)) It may be left closed."
+      "\(device)'s relay wasn't switched \(state.rawValue): \(Self.message(reason)) It's left \(state.opposite.rawValue)."
+    case let .relayReturnUnconfirmed(device, state, reason):
+      "\(device)'s status couldn't be read after linking stopped: \(Self.message(reason)) Its relay was switched \(state.rawValue), as it was before, without knowing whether someone had switched it since."
     case let .flagNotRestored(device, flag, reason):
       "\(device)'s \(flag) flag wasn't set back on: \(Self.message(reason))"
     case let .flagRestoreUnconfirmed(device, flag, reason):

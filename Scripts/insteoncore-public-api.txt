@@ -230,6 +230,7 @@ case RelayStateLinkingError.recordNotRead(_:reason:)
 case RelayStateLinkingError.recordedOtherState(_:group:data1:requested:)
 case RelayStateLinkingError.relayNotConfirmed(_:requested:)
 case RelayStateLinkingError.relayNotReturned(_:state:reason:)
+case RelayStateLinkingError.relayReturnUnconfirmed(_:state:reason:)
 case RelayStateLinkingError.remoteLinkingFailed(_:reason:)
 case ResetErasure.links
 case ResetErasure.settings

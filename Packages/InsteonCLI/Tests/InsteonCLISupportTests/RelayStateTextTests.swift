@@ -104,7 +104,7 @@ struct RelayStateTextTests {
     #expect(notes(.relayState(.settingRelay(module, .off))) == ["Turning 1A.2B.3C's relay off, so it links with the relay off..."])
     #expect(notes(.relayState(.relayAlreadySet(module, .off))) == ["1A.2B.3C's relay is already off, so it links with the relay off."])
     #expect(notes(.relayState(.relayConfirmed(module, .on))).isEmpty)
-    #expect(notes(.relayState(.returningRelay(module, .off))) == ["Turning 1A.2B.3C's relay back off, as it was before the link..."])
+    #expect(notes(.relayState(.returningRelay(module, .off))) == ["Turning 1A.2B.3C's relay off after the link..."])
     #expect(notes(.relayState(.restoringFlag(module, flag: "momentary"))) == ["Turning 1A.2B.3C's momentary flag back on..."])
     #expect(notes(.relayState(.flagRestored(module, flag: "momentary"))).isEmpty)
 

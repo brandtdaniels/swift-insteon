@@ -47,7 +47,10 @@ extension DeviceLinkingCoordinator {
   ///
   /// Step 5 runs however linking ends, after a failure and when the task is canceled. A relay
   /// that isn't momentary keeps the state it recorded once the link is made; when linking
-  /// fails or is canceled after it was switched, it's switched back to its state before. The
+  /// fails or is canceled after it was switched, it's switched back to its state before, but
+  /// only while its status still reads the state it was switched to, or can't be read, and
+  /// not when its status already disagreed with it. Every command that sets the relay or
+  /// switches it back is checked before anything changes. The
   /// observer gets ``LinkingEvent/relayState(_:)`` for each step, and the result's
   /// ``DeviceLinkingResult/relayState`` says what a group On and a group Off do, and what
   /// didn't go as asked once the link was made, which doesn't throw.
@@ -71,8 +74,8 @@ extension DeviceLinkingCoordinator {
   ///   - observer: What a person is told.
   /// - Returns: The links made, the device, and the relay's ``RelayStateLink``.
   /// - Throws: ``RelayStateLinkingError`` when the relay can't record the state or doesn't
-  ///   link without its SET button, ``DeviceControlError`` when a message it needs would be
-  ///   refused, `LinkMismatch` or `LinkingError.unexpectedLink(_:)` when the modem reports
+  ///   link without its SET button, ``DeviceControlError`` or `FieldError` when a message it
+  ///   needs would be refused, `LinkMismatch` or `LinkingError.unexpectedLink(_:)` when the modem reports
   ///   another link, the modem's errors, such as `ModemError.deviceTimedOut` when the device
   ///   doesn't answer, and `CancellationError` if the task is canceled.
   public func linkRelay(
@@ -103,6 +106,21 @@ extension DeviceLinkingCoordinator {
       let writableFlags: Set<SettingName> = Self.writableLinkingFlags(of: description)
       // A momentary relay rests open, so only one switched on is switched back, and only off.
       let opensAfter: Bool = clears && state == .on
+
+      if needsCommand {
+
+        // A command that would be refused is found before anything changes: the one that sets
+        // the relay, and, for a relay that isn't momentary, the one that switches it back
+        // when linking fails.
+        try await target.refuseUnlessSwitchable(on: state == .on)
+
+        if !isMomentary {
+
+          try await target.refuseUnlessSwitchable(on: before == .on)
+
+        }
+
+      }
 
       if clears {
 
@@ -232,11 +250,12 @@ extension DeviceLinkingCoordinator {
 
           _ = await putBack(flag, switched)
 
-        } else if switched {
+        } else if switched, !Self.isUnconfirmedRelay(error) {
 
           // A relay that isn't momentary goes back to its state before, since nothing
-          // recorded the one it was switched to.
-          _ = await returnRelay(target, to: before, observer: observer)
+          // recorded the one it was switched to. One whose status already disagreed isn't
+          // switched again.
+          _ = await returnRelay(target, from: state, to: before, observer: observer)
 
         }
 
@@ -591,15 +610,69 @@ extension DeviceLinkingCoordinator {
 
   }
 
+  /// Whether an error is a relay's status disagreeing with the state it was switched to.
+  private static func isUnconfirmedRelay(_ error: any Error) -> Bool {
+
+    if case .relayNotConfirmed? = error as? RelayStateLinkingError {
+
+      return true
+
+    }
+
+    return false
+
+  }
+
   /// Switches a relay that isn't momentary back to its state before linking failed, to its
-  /// end even when the task is canceled.
+  /// end even when the task is canceled: only when its status still reads the state it was
+  /// switched to, since someone may have switched it since, and also when the status can't
+  /// be read, which is reported.
   ///
-  /// - Returns: Why it wasn't switched back, or `nil` when it was.
-  private func returnRelay(_ target: Device, to state: RelayState, observer: any LinkingObserver) async -> RelayStateLinkingError? {
+  /// - Parameters:
+  ///   - target: The relay.
+  ///   - switched: The state it was switched to.
+  ///   - before: Its state before.
+  ///   - observer: What a person is told.
+  /// - Returns: Why it wasn't switched back, or isn't known to have been, or `nil`.
+  private func returnRelay(_ target: Device, from switched: RelayState, to before: RelayState, observer: any LinkingObserver) async -> RelayStateLinkingError? {
 
     await Self.runToEnd { () async -> RelayStateLinkingError? in
 
-      await Self.switchBack(target, to: state, observer: observer)
+      let unread: (any Error)?
+
+      do {
+
+        guard try await target.status().isOn == (switched == .on) else {
+
+          return nil
+
+        }
+
+        unread = nil
+
+      } catch {
+
+        unread = error
+
+      }
+
+      if let failure = await Self.switchBack(target, to: before, observer: observer) {
+
+        return failure
+
+      }
+
+      guard let unread else {
+
+        return nil
+
+      }
+
+      let failure = RelayStateLinkingError.relayReturnUnconfirmed(target.address, state: before, reason: unread)
+
+      await observer.linking(.relayState(.restoreFailed(target.address, failure)))
+
+      return failure
 
     }
 

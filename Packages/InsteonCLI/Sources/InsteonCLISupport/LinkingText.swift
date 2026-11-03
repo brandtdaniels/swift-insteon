@@ -520,7 +520,7 @@ public enum LinkingEventText {
     case .relayConfirmed, .flagRestored:
       return []
     case let .returningRelay(device, state):
-      return ["Turning \(device)'s relay back \(state.rawValue), as it was before the link..."]
+      return ["Turning \(device)'s relay \(state.rawValue) after the link..."]
     case let .restoringFlag(device, flag):
       return ["Turning \(device)'s \(flag) flag back on..."]
     case let .restoreFailed(_, failure):
@@ -565,6 +565,8 @@ public enum LinkingEventText {
       return "Check it with 'insteon device \(device) settings'."
     case let .relayNotReturned(_, state, _):
       return "Turn it \(state.rawValue) with 'insteon device \(device) \(state.rawValue)'."
+    case .relayReturnUnconfirmed:
+      return "Check it with 'insteon device \(device) status'."
     case let .recordedOtherState(_, group, _, requested):
       return "Run 'insteon link \(device) --group \(group.rawValue) --relay-state \(requested.rawValue)' again."
     case .notIdentified, .notDescribed, .notARelay, .flagUnreadable, .flagNotChanged, .relayNotConfirmed, .remoteLinkingFailed,
