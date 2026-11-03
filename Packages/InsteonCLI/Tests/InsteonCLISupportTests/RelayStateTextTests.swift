@@ -79,9 +79,9 @@ struct RelayStateTextTests {
       "1A.2B.3C's relay is momentary with its momentaryOnBothCommands flag on, so every On and Off only pulses it and the state is ignored.",
       "  1. Link it. The relay isn't switched and no flag is written."
     ])
-    #expect(RelayLinkText.plan(plan(pulses: true)) == [
+    #expect(RelayLinkText.plan(plan(before: .on, pulses: true)) == [
       "1A.2B.3C's momentaryOnBothCommands flag is on though its relay isn't momentary, a mode whose effect isn't verified, so the relay isn't switched.",
-      "  1. Link it. The relay isn't switched and no flag is written; its record holds the state the relay is in."
+      "  1. Link it. No flag is written; its record holds on, the state the relay is in, so a group On turns the relay on and a group Off turns it off."
     ])
 
   }
@@ -97,6 +97,46 @@ struct RelayStateTextTests {
     #expect(try await RelayLinkText.decision(plan(), isDryRun: false, asks: false, confirm: declines) == .link)
     // A plan that switches nothing isn't asked about.
     #expect(try await RelayLinkText.decision(plan(before: .on), isDryRun: false, asks: true, confirm: declines) == .link)
+
+  }
+
+  @Test func keepsTheGroupInTheGuidanceToPlanAgain() {
+
+    let old: RelayLinkPlan = plan()
+    var new: RelayLinkPlan = old
+
+    new.before = .on
+
+    let error = RelayStateLinkingError.planChanged(old: old, new: new)
+
+    #expect(LinkingEventText.relayStateMessage(error, group: 2) == error.description
+      + " Run 'insteon link 1A.2B.3C --group 2 --relay-state on' again to see the plan as it is.")
+    #expect(LinkingEventText.relayStateMessage(error) == error.description
+      + " Run 'insteon link 1A.2B.3C --relay-state on' again to see the plan as it is.")
+
+    let differs = RelayStateLinkingError.unverifiedModeStateDiffers(module, flag: "momentaryOnBothCommands", reads: .off, requested: .on)
+
+    #expect(LinkingEventText.relayStateMessage(differs, group: 2) == differs.description
+      + " Run 'insteon device 1A.2B.3C set momentaryOnBothCommands off' and link again, or run 'insteon link 1A.2B.3C --group 2 --relay-state off'.")
+
+  }
+
+  @Test func doesntClaimAStateTheRelayIgnores() throws {
+
+    let ignored = RelayStateLink(device: module, state: .on, group: 2, recordedData1: 0x00, isMomentary: true, pulsesOnBothCommands: true)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    let report = LinkingJSON.report(DeviceLinkingResult(links: [], device: nil, linkBackFailure: nil, relayState: ignored), message: { (_: any Error) -> String in "" })
+
+    #expect(String(decoding: try encoder.encode(report.relayState), as: UTF8.self) == """
+      {"ignoresState":true,"isMomentary":true,"leavesUnverifiedMode":false,"pulsesOnBothCommands":true,"recordedData1":"0x00","state":"on"}
+      """)
+    #expect(!notes(.relayState(.recorded(ignored))).joined().contains("group On turns"))
+
+    let unverified = RelayStateLink(device: module, state: .off, group: 2, recordedData1: 0x00, isMomentary: false, pulsesOnBothCommands: true)
+
+    #expect(LinkingJSON.report(DeviceLinkingResult(links: [], device: nil, linkBackFailure: nil, relayState: unverified)).relayState?.leavesUnverifiedMode == true)
+    #expect(LinkingJSON.report(DeviceLinkingResult(links: [], device: nil, linkBackFailure: nil, relayState: unverified)).relayState?.groupOn == "off")
 
   }
 
@@ -289,8 +329,8 @@ struct RelayStateTextTests {
     withFlag.clearedFlag = "momentary"
 
     #expect(String(decoding: try encoder.encode(report), as: UTF8.self) == """
-      {"legs":[],"links":[],"relayState":{"groupOff":"off","groupOn":"on","isMomentary":false,"recordedData1":"0xFF",\
-      "restoreFailure":"It failed.","state":"on"}}
+      {"legs":[],"links":[],"relayState":{"groupOff":"off","groupOn":"on","ignoresState":false,"isMomentary":false,"leavesUnverifiedMode":false,\
+      "pulsesOnBothCommands":false,"recordedData1":"0xFF","restoreFailure":"It failed.","state":"on"}}
       """)
     #expect(LinkingJSON.report(DeviceLinkingResult(links: [], device: nil, linkBackFailure: nil, relayState: withFlag)).relayState?.restored == false)
     // Without a relay state, the object is as it always is.

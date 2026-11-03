@@ -235,6 +235,7 @@ case RelayStateLinkingError.relayNotConfirmed(_:requested:)
 case RelayStateLinkingError.relayNotReturned(_:state:reason:)
 case RelayStateLinkingError.relayReturnUnconfirmed(_:state:reason:)
 case RelayStateLinkingError.remoteLinkingFailed(_:reason:)
+case RelayStateLinkingError.unverifiedModeStateDiffers(_:flag:reads:requested:)
 case ResetErasure.links
 case ResetErasure.settings
 case SelfTestCheckKind.answers
@@ -904,8 +905,10 @@ var RelayStateLink.device
 var RelayStateLink.group
 var RelayStateLink.groupOff
 var RelayStateLink.groupOn
+var RelayStateLink.ignoresState
 var RelayStateLink.isMomentary
 var RelayStateLink.isRestored
+var RelayStateLink.leavesUnverifiedMode
 var RelayStateLink.problems
 var RelayStateLink.pulsesOnBothCommands
 var RelayStateLink.recordFailure

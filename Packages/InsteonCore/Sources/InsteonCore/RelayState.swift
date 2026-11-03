@@ -176,17 +176,36 @@ public struct RelayStateLink: Sendable {
   /// everything did.
   public var restoreFailures: [RelayStateLinkingError]
 
-  /// What a group On sets the relay to: the state asked for.
-  public var groupOn: RelayState {
+  /// Whether the state was ignored: the relay is momentary with momentaryOnBothCommands on,
+  /// so every On and Off only pulses it.
+  public var ignoresState: Bool {
 
-    state
+    isMomentary && pulsesOnBothCommands
 
   }
 
-  /// What a group Off sets the relay to: the opposite of the state asked for.
-  public var groupOff: RelayState {
+  /// Whether momentaryOnBothCommands is on though the relay isn't momentary, a mode whose
+  /// effect isn't verified, so the relay wasn't switched and recorded the state it was in,
+  /// which was the state asked for.
+  public var leavesUnverifiedMode: Bool {
 
-    state.opposite
+    !isMomentary && pulsesOnBothCommands
+
+  }
+
+  /// What a group On sets the relay to: the state asked for, or `nil` when the state was
+  /// ignored.
+  public var groupOn: RelayState? {
+
+    ignoresState ? nil : state
+
+  }
+
+  /// What a group Off sets the relay to: the opposite of the state asked for, or `nil` when
+  /// the state was ignored.
+  public var groupOff: RelayState? {
+
+    ignoresState ? nil : state.opposite
 
   }
 
@@ -372,6 +391,11 @@ public enum RelayStateLinkingError: Error, Sendable {
   /// link would switch or put back other than it showed. Nothing was changed.
   case planChanged(old: RelayLinkPlan, new: RelayLinkPlan)
 
+  /// The relay's flag, such as `momentaryOnBothCommands`, is on though the relay isn't
+  /// momentary, a mode whose effect isn't verified, so the relay isn't switched; and it reads
+  /// the other state, so it would record that one. Nothing was changed.
+  case unverifiedModeStateDiffers(InsteonAddress, flag: String, reads: RelayState, requested: RelayState)
+
   /// The relay's status couldn't be read after linking failed, for the reason given, so it
   /// was switched back to the state given without knowing whether someone had switched it.
   case relayReturnUnconfirmed(InsteonAddress, state: RelayState, reason: any Error)
@@ -404,6 +428,8 @@ public enum RelayStateLinkingError: Error, Sendable {
       return device
     case let .planChanged(old, _):
       return old.device
+    case let .unverifiedModeStateDiffers(device, _, _, _):
+      return device
     }
 
   }
@@ -442,6 +468,8 @@ extension RelayStateLinkingError: CustomStringConvertible, LocalizedError {
       "\(device)'s ALL-Link database couldn't be read to check the state it recorded: \(Self.message(reason))"
     case let .relayNotReturned(device, state, reason):
       "\(device)'s relay wasn't switched \(state.rawValue): \(Self.message(reason)) It may be left \(state.opposite.rawValue)."
+    case let .unverifiedModeStateDiffers(device, flag, reads, requested):
+      "\(device)'s \(flag) flag is on though its relay isn't momentary, a mode whose effect isn't verified, so the relay isn't switched; it reads \(reads.rawValue), so it would record \(reads.rawValue), not \(requested.rawValue). Nothing was changed. Turn \(flag) off, or link with the relay's state, \(reads.rawValue)."
     case let .planChanged(old, new):
       "\(old.device) changed since the plan was shown: \(Self.difference(old, new)). Nothing was changed; plan the link again."
     case let .relayReturnUnconfirmed(device, state, reason):

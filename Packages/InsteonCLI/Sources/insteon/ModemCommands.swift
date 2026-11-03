@@ -355,8 +355,18 @@ enum ModemCommands {
     if let device = options.device, let state = options.relayState {
 
       // The relay, and whatever it controls, is switched, so the plan is shown and agreed to
-      // first.
-      let plan: RelayLinkPlan = try await coordinator.planRelayLink(device, recording: state, observer: observer)
+      // first. Its refusals name the command to run, with the group given.
+      let plan: RelayLinkPlan
+
+      do {
+
+        plan = try await coordinator.planRelayLink(device, recording: state, observer: observer)
+
+      } catch let error as RelayStateLinkingError {
+
+        throw CommandFailure(description: LinkingEventText.relayStateMessage(error, group: options.isGroupGiven ? options.group : nil))
+
+      }
       let say = { (text: String) -> Void in printsJSON ? Output.note(text) : Output.line(text) }
 
       RelayLinkText.plan(plan).forEach(say)
@@ -377,7 +387,15 @@ enum ModemCommands {
       case .link:
         // The relay is read again in the link, which refuses when it doesn't match the
         // plan shown.
-        result = try await coordinator.linkRelay(plan, group: options.group, twoWay: twoWay, setButtonTimeout: timeout, observer: observer)
+        do {
+
+          result = try await coordinator.linkRelay(plan, group: options.group, twoWay: twoWay, setButtonTimeout: timeout, observer: observer)
+
+        } catch let error as RelayStateLinkingError {
+
+          throw CommandFailure(description: LinkingEventText.relayStateMessage(error, group: options.isGroupGiven ? options.group : nil))
+
+        }
       }
 
     } else if let device = options.device {

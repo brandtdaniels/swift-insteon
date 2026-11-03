@@ -455,9 +455,33 @@ struct RelayStateLinkingTests {
     })
     #expect(await modem.operatingFlags[module] == flags)
     #expect(result.relayState?.pulsesOnBothCommands == true)
+    #expect(result.relayState?.ignoresState == true)
+    // The state wasn't applied, so nothing claims what a group On or Off does.
+    #expect(result.relayState?.groupOn == nil)
+    #expect(result.relayState?.groupOff == nil)
     #expect(result.relayState?.clearedFlag == nil)
     #expect(result.relayState?.recordFailure == nil)
     #expect(Array(await recorder.lines.prefix(1)) == ["relay state: \(module) ignores the state"])
+
+  }
+
+  @Test func refusesALatchingRelayWithTheBothCommandsBitInTheOtherState() async throws {
+
+    let modem: InMemoryModem = await modem(flags: RelayExample.bothCommands.bit)
+
+    await expectRefusal({ _ = try await linkRelay(modem, .on) }) { (error: RelayStateLinkingError) -> Bool in
+
+      guard case let .unverifiedModeStateDiffers(device, flag, reads, requested) = error else {
+
+        return false
+
+      }
+
+      return device == module && flag == "momentaryOnBothCommands" && reads == .off && requested == .on
+
+    }
+
+    #expect(await modem.linkingSteps == [step(0x1F, 0x00), step(0x19, 0x00)])
 
   }
 
@@ -466,7 +490,8 @@ struct RelayStateLinkingTests {
     let modem: InMemoryModem = await modem(flags: RelayExample.bothCommands.bit)
     let recorder = LinkingRecorder()
 
-    let result: DeviceLinkingResult = try await linkRelay(modem, .on, observer: recorder)
+    // The relay is off, the state asked for, so it records that state without a switch.
+    let result: DeviceLinkingResult = try await linkRelay(modem, .off, observer: recorder)
 
     let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
 
@@ -476,7 +501,10 @@ struct RelayStateLinkingTests {
     #expect(result.relayState?.pulsesOnBothCommands == true)
     #expect(result.relayState?.isMomentary == false)
     #expect(Array(await recorder.lines.prefix(1)) == ["relay state: \(module) leaves the state, unverified mode"])
-    #expect(await recorder.lines.last == "relay state: group on gives on, off gives off, momentary false, pulses true")
+    #expect(result.relayState?.groupOn == .off)
+    #expect(result.relayState?.groupOff == .on)
+    #expect(result.relayState?.recordedData1 == 0x00)
+    #expect(await recorder.lines.last == "relay state: group on gives off, off gives on, momentary false, pulses true")
 
   }
 
@@ -578,7 +606,7 @@ struct RelayStateLinkingTests {
     #expect(!pulsing.switchesRelay)
     #expect(pulsing.clearedFlag == nil)
 
-    let latchingBit: RelayLinkPlan = try await network(await modem(flags: RelayExample.bothCommands.bit)).linking.planRelayLink(module, recording: .on, observer: LinkingRecorder())
+    let latchingBit: RelayLinkPlan = try await network(await modem(flags: RelayExample.bothCommands.bit, relay: 0xFF)).linking.planRelayLink(module, recording: .on, observer: LinkingRecorder())
 
     // The bit applies only to a momentary relay, so the state isn't ignored; but what it does
     // on a latching relay isn't verified, so it isn't switched either.
@@ -1658,6 +1686,31 @@ struct RelayStateLinkingTests {
 
   }
 
+  @Test func saysHowARelayChangedSinceItsPlan() {
+
+    let old = RelayLinkPlan(device: module, state: .on, before: .off, isMomentary: true, pulsesOnBothCommands: false)
+    var switched: RelayLinkPlan = old
+    var flagged: RelayLinkPlan = old
+    var both: RelayLinkPlan = old
+    var other: RelayLinkPlan = old
+
+    switched.before = .on
+    flagged.isMomentary = false
+    both.before = .on
+    both.pulsesOnBothCommands = true
+    other.state = .off
+
+    let prefix: String = "\(module) changed since the plan was shown: "
+    let suffix: String = ". Nothing was changed; plan the link again."
+
+    #expect(RelayStateLinkingError.planChanged(old: old, new: switched).description == prefix + "its relay reads on, not off" + suffix)
+    #expect(RelayStateLinkingError.planChanged(old: old, new: flagged).description == prefix + "its momentary flag is off" + suffix)
+    #expect(RelayStateLinkingError.planChanged(old: old, new: both).description == prefix
+      + "its relay reads on, not off, and its momentaryOnBothCommands flag is on" + suffix)
+    #expect(RelayStateLinkingError.planChanged(old: old, new: other).description == prefix + "the plan is for another relay or state" + suffix)
+
+  }
+
   @Test func givesEachStateItsData1AndItsOpposite() {
 
     #expect(RelayState.on.data1 == 0xFF)
@@ -1669,7 +1722,6 @@ struct RelayStateLinkingTests {
 
 }
 
-/// Whether the momentary flag's restore has begun, for a test that fails what follows it.
 /// The failures an observer was told about while things were put back.
 actor ReportedFailures {
 
@@ -1683,6 +1735,8 @@ actor ReportedFailures {
 
 }
 
+/// Whether the momentary flag's restore has begun, for a test that fails what follows it, and
+/// how many times something was tried.
 actor RestoreWatch {
 
   private(set) var hasBegun: Bool = false

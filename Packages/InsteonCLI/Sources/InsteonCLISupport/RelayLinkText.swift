@@ -27,7 +27,8 @@ public enum RelayLinkText {
 
       return [
         "\(device)'s momentaryOnBothCommands flag is on though its relay isn't momentary, a mode whose effect isn't verified, so the relay isn't switched.",
-        "  1. Link it. The relay isn't switched and no flag is written; its record holds the state the relay is in."
+        "  1. Link it. No flag is written; its record holds \(plan.before.rawValue), the state the relay is in, "
+          + "so a group On turns the relay \(plan.before.rawValue) and a group Off turns it \(plan.before.opposite.rawValue)."
       ]
 
     }

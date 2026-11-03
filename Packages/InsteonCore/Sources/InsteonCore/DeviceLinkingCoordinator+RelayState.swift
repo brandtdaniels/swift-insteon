@@ -104,7 +104,9 @@ extension DeviceLinkingCoordinator {
   /// The relay is read again inside the link. When its plan differs from the approved one,
   /// such as when someone switched the relay since, nothing is sent but those reads, and
   /// ``RelayStateLinkingError/planChanged(old:new:)`` is thrown, so the relay is never
-  /// switched other than the plan showed.
+  /// switched other than the plan showed. The plan is compared whole, readings and all, so a
+  /// changed reading is refused even when the steps it leads to would be the same: a person
+  /// approved what they were shown, and is shown it again.
   ///
   /// - Parameters:
   ///   - plan: The plan a person approved.
@@ -360,6 +362,14 @@ extension DeviceLinkingCoordinator {
       pulsesOnBothCommands: flags.states[Self.momentaryOnBothCommandsFlag] ?? false
     )
     let writableFlags: Set<SettingName> = Self.writableLinkingFlags(of: description)
+
+    // The relay isn't switched in a mode whose effect isn't verified, so it would record the
+    // state it's in, not the one asked for.
+    if plan.leavesUnverifiedMode, before != state {
+
+      throw RelayStateLinkingError.unverifiedModeStateDiffers(device, flag: Self.momentaryOnBothCommandsFlag.rawValue, reads: before, requested: state)
+
+    }
 
     if plan.switchesRelay {
 

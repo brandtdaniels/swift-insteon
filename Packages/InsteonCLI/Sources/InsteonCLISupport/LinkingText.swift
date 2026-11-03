@@ -550,12 +550,14 @@ public enum LinkingEventText {
 
   /// A relay state error's sentence, then the command that fixes it, when there is one.
   ///
-  /// - Parameter error: The error.
+  /// - Parameters:
+  ///   - error: The error.
+  ///   - group: The group `--group` gave, for a command that links again, or `nil`.
   /// - Returns: The message, such as the error's description followed by
   ///   `"Turn it back on with 'insteon device 1A.2B.3C set momentary on'."`.
-  public static func relayStateMessage(_ error: RelayStateLinkingError) -> String {
+  public static func relayStateMessage(_ error: RelayStateLinkingError, group: AllLinkGroupNumber? = nil) -> String {
 
-    guard let hint = relayStateHint(error) else {
+    guard let hint = relayStateHint(error, group: group) else {
 
       return error.description
 
@@ -566,9 +568,10 @@ public enum LinkingEventText {
   }
 
   /// The command that fixes what a relay state error describes, as a sentence, or `nil`.
-  private static func relayStateHint(_ error: RelayStateLinkingError) -> String? {
+  private static func relayStateHint(_ error: RelayStateLinkingError, group: AllLinkGroupNumber?) -> String? {
 
     let device: InsteonAddress = error.device
+    let groupOption: String = group.map { (number: AllLinkGroupNumber) -> String in " --group \(number.rawValue)" } ?? ""
 
     switch error {
     case .notLinkedToModem:
@@ -584,7 +587,9 @@ public enum LinkingEventText {
     case .relayReturnUnconfirmed:
       return "Check it with 'insteon device \(device) status'."
     case let .planChanged(old, _):
-      return "Run 'insteon link \(device) --relay-state \(old.state.rawValue)' again to see the plan as it is."
+      return "Run 'insteon link \(device)\(groupOption) --relay-state \(old.state.rawValue)' again to see the plan as it is."
+    case let .unverifiedModeStateDiffers(_, flag, reads, _):
+      return "Run 'insteon device \(device) set \(flag) off' and link again, or run 'insteon link \(device)\(groupOption) --relay-state \(reads.rawValue)'."
     case let .recordedOtherState(_, group, _, requested):
       return "Run 'insteon link \(device) --group \(group.rawValue) --relay-state \(requested.rawValue)' again."
     case .notIdentified, .notDescribed, .notARelay, .flagUnreadable, .flagNotChanged, .relayNotConfirmed, .remoteLinkingFailed,
@@ -658,8 +663,8 @@ public enum LinkingEventText {
 
     }
 
-    var line: String = "\(link.device) recorded its relay \(link.state.rawValue): a group On turns the relay \(link.groupOn.rawValue), "
-      + "and a group Off turns it \(link.groupOff.rawValue)."
+    var line: String = "\(link.device) recorded its relay \(link.state.rawValue): a group On turns the relay \(link.state.rawValue), "
+      + "and a group Off turns it \(link.state.opposite.rawValue)."
 
     if link.isMomentary {
 

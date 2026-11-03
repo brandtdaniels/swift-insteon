@@ -62,14 +62,24 @@ public enum LinkingJSON {
     /// The state asked for, `"on"` or `"off"`.
     public let state: String
 
-    /// What a group On sets the relay to.
-    public let groupOn: String
+    /// What a group On sets the relay to, or `nil` when the state was ignored.
+    public let groupOn: String?
 
-    /// What a group Off sets the relay to.
-    public let groupOff: String
+    /// What a group Off sets the relay to, or `nil` when the state was ignored.
+    public let groupOff: String?
 
     /// Whether the relay is momentary after the link.
     public let isMomentary: Bool
+
+    /// Whether its momentaryOnBothCommands flag is on.
+    public let pulsesOnBothCommands: Bool
+
+    /// Whether the state was ignored, on a momentary relay with momentaryOnBothCommands on.
+    public let ignoresState: Bool
+
+    /// Whether momentaryOnBothCommands is on though the relay isn't momentary, so it wasn't
+    /// switched.
+    public let leavesUnverifiedMode: Bool
 
     /// Data 1 of the relay's responder record, such as `"0xFF"`, or `nil` when it wasn't read.
     public let recordedData1: String?
@@ -407,9 +417,12 @@ public enum LinkingJSON {
 
     RelayStateReport(
       state: link.state.rawValue,
-      groupOn: link.groupOn.rawValue,
-      groupOff: link.groupOff.rawValue,
+      groupOn: link.groupOn?.rawValue,
+      groupOff: link.groupOff?.rawValue,
       isMomentary: link.isMomentary,
+      pulsesOnBothCommands: link.pulsesOnBothCommands,
+      ignoresState: link.ignoresState,
+      leavesUnverifiedMode: link.leavesUnverifiedMode,
       recordedData1: link.recordedData1.map(Hex.byte),
       recordFailure: link.recordFailure.map { (failure: RelayStateLinkingError) -> String in message(failure) },
       restored: link.isRestored,

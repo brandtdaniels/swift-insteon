@@ -222,7 +222,8 @@ actor LinkingRecorder: LinkingObserver {
     case let .restoreFailed(device, _):
       return "failed \(device)"
     case let .recorded(link):
-      return "group on gives \(link.groupOn), off gives \(link.groupOff), momentary \(link.isMomentary), pulses \(link.pulsesOnBothCommands)"
+      return "group on gives \(link.groupOn.map(\.rawValue) ?? "nothing"), off gives \(link.groupOff.map(\.rawValue) ?? "nothing"), "
+        + "momentary \(link.isMomentary), pulses \(link.pulsesOnBothCommands)"
     }
 
   }

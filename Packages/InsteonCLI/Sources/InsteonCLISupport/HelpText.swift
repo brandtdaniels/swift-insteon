@@ -213,7 +213,9 @@ public enum HelpText {
     a lock or a valve, then reads its status again; a relay already in the state is sent
     nothing. On a momentary relay with momentaryOnBothCommands on, every On and Off only
     pulses the relay and the state is ignored; and what that flag does on a relay that isn't
-    momentary isn't verified. Either way the relay isn't switched and no flag is written.
+    momentary isn't verified. Either way the relay isn't switched and no flag is written,
+    and a relay that isn't momentary is linked only when it already reads the state asked
+    for, since that's the state it records.
     The relay is read again as it links, and nothing is switched when it doesn't match
     the plan shown. A momentary relay would
     open again before it links, so its momentary flag is turned off first, when the catalog
