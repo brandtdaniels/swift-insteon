@@ -975,8 +975,8 @@ struct DatabaseLinkingTests {
     let plan: DatabaseLinkPlan = try await linking.planDatabaseLink(device, relayState: .on)
 
     #expect(plan.momentaryFlagsOn == ["momentary", "momentaryOnBothCommands"])
-    // One Get Operating Flags is read; nothing is written.
-    #expect(log.standardCommands.filter { (command1: UInt8) -> Bool in command1 == 0x1F }.count == 1)
+    // Identification, then one Get Operating Flags; nothing is written.
+    #expect(log.standardCommands == [0x0D, 0x10, 0x1F])
     #expect(log.writesAndExtendedMessages == 0)
     #expect(await modem.operatingFlags[device] == 0x18)
 
@@ -984,7 +984,84 @@ struct DatabaseLinkingTests {
     let plain: DatabaseLinkPlan = try await linking.planDatabaseLink(device)
 
     #expect(plain.momentaryFlagsOn == [])
-    #expect(log.standardCommands.filter { (command1: UInt8) -> Bool in command1 == 0x1F }.count == 1)
+    #expect(log.standardCommands == [0x0D, 0x10, 0x1F, 0x0D, 0x10])
+
+  }
+
+  @Test func listsOnlyTheMomentaryFlagsThatAreOn() async throws {
+
+    // Momentary on, momentaryOnBothCommands off.
+    let (_, linking): (InMemoryModem, DeviceLinkingCoordinator) = try await ioLincLinking(flags: 0x08)
+
+    #expect(try await linking.planDatabaseLink(device, relayState: .on).momentaryFlagsOn == ["momentary"])
+
+  }
+
+  /// How the I/O Linc's reply to Get Operating Flags fails.
+  enum FlagReadFailure: CaseIterable, Sendable {
+
+    case rejected
+
+    case unanswered
+
+    case canceled
+
+    case withoutTheFlag
+
+  }
+
+  @Test(arguments: FlagReadFailure.allCases)
+  func writesNothingWhenTheMomentaryFlagsCantBeRead(_ failure: FlagReadFailure) async throws {
+
+    let (modem, linking): (InMemoryModem, DeviceLinkingCoordinator) = try await ioLincLinking(flags: 0x08)
+    let device: InsteonAddress = self.device
+    let log: OperationLog = await OperationLog.logging(modem)
+
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      guard case let .standardRequest(message) = operation, message.command.command1 == 0x1F else {
+
+        return
+
+      }
+
+      switch failure {
+      case .rejected:
+        await modem.setUnlinked(device)
+      case .unanswered:
+        await modem.setUnanswering(device)
+      case .canceled:
+        throw CancellationError()
+      case .withoutTheFlag:
+        await modem.setAnswer(Command(command1: 0x00, command2: 0x08), to: 0x1F, of: device)
+      }
+
+    }
+
+    let outcome: Result<DatabaseLinkPlan, any Error> = await Task { () async throws -> DatabaseLinkPlan in
+
+      try await linking.planDatabaseLink(device, relayState: .on)
+
+    }.result
+
+    switch (failure, outcome) {
+    case (.rejected, .failure(RelayStateLinkingError.notLinkedToModem(let refused))):
+      #expect(refused == device)
+    case (.unanswered, .failure(ModemError.deviceTimedOut(let silent))):
+      #expect(silent == device)
+    case (.canceled, .failure(is CancellationError)):
+      break
+    case (.withoutTheFlag, .failure(RelayStateLinkingError.flagUnreadable(let unread, let flag))):
+      #expect(unread == device)
+      #expect(flag == "momentary")
+    default:
+      Issue.record("Expected the \(failure) failure, got \(outcome)")
+    }
+
+    #expect(log.writesAndExtendedMessages == 0)
+    #expect(await modem.writes.isEmpty)
+    #expect(await modem.modemRecords.isEmpty)
+    #expect(await modem.operatingFlags[device] == 0x08)
 
   }
 

@@ -350,6 +350,8 @@ struct KeepAwakeTests {
     let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
     let lines: [String] = await recorder.lines
 
+    // The keep-awake message names momentary, yet it isn't a flag a plain link may write.
+    #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: catalog.describe(category: 0x10, subcategory: 0x7B, firmwareVersion: 0x41)).isEmpty)
     #expect(result.links.count == 1)
     #expect(await modem.extendedRequests.isEmpty)
     #expect(!steps.contains { (step: InMemoryModem.LinkingStep) -> Bool in
@@ -403,15 +405,11 @@ struct KeepAwakeTests {
     let openClose: DeviceDescription = catalog.describe(category: 0x10, subcategory: 0x02, firmwareVersion: 0x41)
     let plug: DeviceDescription = catalog.describe(category: 0x02, subcategory: 0x38, firmwareVersion: 0x42)
 
-    let ioLinc: DeviceDescription = catalog.describe(category: 0x07, subcategory: 0x00, firmwareVersion: 0x41)
-
     #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: remote) == ["stayAwake"])
     // An extended Set writes no operating flag, and a device without keep-awake writes none.
     #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: openClose).isEmpty)
     #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: plug).isEmpty)
     #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: nil).isEmpty)
-    // The I/O Linc's linking changes are a relay link's alone.
-    #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: ioLinc).isEmpty)
 
   }
 

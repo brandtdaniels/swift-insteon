@@ -407,6 +407,14 @@ struct RelayStateTextTests {
     #expect(DatabaseLinkText.plan(plan).last == "Data 1 of the device's responder record is 0xFF, the relay on, but its momentary and momentaryOnBothCommands flags are on, "
       + "so the relay only pulses and doesn't keep a state. The record holds the state only with the momentary flags off, and this plan writes no flag.")
 
+    // momentaryOnBothCommands alone is a mode whose effect isn't verified.
+    var unverified: DatabaseLinkPlan = try ioLincPlan(.off)
+    unverified.momentaryFlagsOn = ["momentaryOnBothCommands"]
+
+    #expect(DatabaseLinkText.plan(unverified).last == "Data 1 of the device's responder record is 0x00, the relay off, but its momentaryOnBothCommands flag is on, "
+      + "and what that flag does on a relay that isn't momentary isn't verified, so what a group On and a group Off do isn't known. "
+      + "The record holds the state only with the momentary flags off, and this plan writes no flag.")
+
     let report: DatabaseLinkText.Report = DatabaseLinkText.report(plan, isDryRun: true)
 
     #expect(report.momentaryFlagsOn == ["momentary", "momentaryOnBothCommands"])

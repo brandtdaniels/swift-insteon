@@ -139,7 +139,9 @@ public struct DatabaseLinkPlan: Hashable, Sendable {
 
   /// The relay's momentary flags that read on as the plan was made, such as `"momentary"`,
   /// in the command set's order. Data 1 holds a relay state only with these flags off, and
-  /// the plan writes no flag. Read only with a ``relayState``; empty otherwise.
+  /// the plan writes no flag. They're read only for a ``relayState``; otherwise the list is
+  /// empty. ``DeviceLinkingCoordinator/apply(_:)`` doesn't read them again, so a flag
+  /// changed after the plan was made isn't reflected here.
   public internal(set) var momentaryFlagsOn: [String] = []
 
   /// Whether the plan writes nothing.
