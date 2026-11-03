@@ -185,8 +185,8 @@ public struct RelayStateLink: Sendable {
   }
 
   /// Whether momentaryOnBothCommands is on though the relay isn't momentary, a mode whose
-  /// effect isn't verified, so the relay wasn't switched and recorded the state it was in,
-  /// which was the state asked for.
+  /// effect isn't verified: the relay wasn't switched, and was linked only while it read the
+  /// state asked for. ``recordFailure`` says when its record holds another.
   public var leavesUnverifiedMode: Bool {
 
     !isMomentary && pulsesOnBothCommands
@@ -295,7 +295,7 @@ public enum RelayStateEvent: Sendable {
   /// The relay's flag, such as `momentaryOnBothCommands`, is on, so it's linked without being
   /// switched, and no flag is written: on a momentary relay every On and Off only pulses it,
   /// so the state is ignored; on one that isn't momentary, what the flag does isn't verified.
-  case stateIgnored(InsteonAddress, flag: String, isMomentary: Bool)
+  case linkedWithoutSwitching(InsteonAddress, flag: String, isMomentary: Bool)
 
   /// The relay's status reads the state given, not the one it was switched to, so it's left
   /// as it is rather than switched again.
@@ -328,12 +328,18 @@ public enum RelayStateEvent: Sendable {
 /// Why a relay wasn't linked with a chosen ``RelayState``, or what didn't go as asked once it
 /// was.
 ///
-/// The refusals come before the relay is switched or a flag is written:
+/// The refusals come before the relay is switched or a flag is written, and change nothing:
 /// ``notIdentified(_:because:)``, ``notLinkedToModem(_:)``, ``notDescribed(_:)``,
-/// ``notARelay(_:product:)``, ``momentaryNotChangeable(_:flag:)`` and
-/// ``flagUnreadable(_:flag:)``. After ``flagNotChanged(_:flag:isSet:)``,
-/// ``relayNotConfirmed(_:requested:)`` or ``remoteLinkingFailed(_:reason:)``, what was changed
-/// is put back first. The rest are reported in a ``RelayStateLink``, since the link stays made.
+/// ``notARelay(_:product:)``, ``momentaryNotChangeable(_:flag:)``,
+/// ``flagUnreadable(_:flag:)``, ``planChanged(old:new:)`` and
+/// ``unverifiedModeStateDiffers(_:flag:reads:requested:)``. After
+/// ``flagNotChanged(_:flag:isSet:)``, ``relayNotConfirmed(_:requested:)`` or
+/// ``remoteLinkingFailed(_:reason:)``, what was changed is put back first, and what didn't go
+/// back, such as ``relayNotReturned(_:state:reason:)`` or
+/// ``relayReturnUnconfirmed(_:state:reason:)``, reaches the observer as
+/// ``RelayStateEvent/restoreFailed(_:_:)``. Once the link is made, the rest are reported in a
+/// ``RelayStateLink``, since the link stays made. ``recordInPlace(_:group:data1:)`` is the
+/// database link's refusal, before anything is written.
 public enum RelayStateLinkingError: Error, Sendable {
 
   /// The device didn't report its identity, for the reason given, so whether its main group

@@ -517,7 +517,7 @@ public enum LinkingEventText {
       return ["Turning \(device)'s relay \(state.rawValue), so it links with the relay \(state.rawValue)..."]
     case let .relayAlreadySet(device, state):
       return ["\(device)'s relay is already \(state.rawValue), so it links with the relay \(state.rawValue)."]
-    case let .stateIgnored(device, flag, isMomentary):
+    case let .linkedWithoutSwitching(device, flag, isMomentary):
       guard isMomentary else {
 
         return [
@@ -654,7 +654,21 @@ public enum LinkingEventText {
 
     if link.ignoresState {
 
-      let record: String = link.recordedData1.map { (data1: UInt8) -> String in "whose record holds Data 1 \(Hex.byte(data1))" } ?? "whose record wasn't read"
+      let record: String
+
+      if let data1 = link.recordedData1 {
+
+        record = "whose record holds Data 1 \(Hex.byte(data1))"
+
+      } else if case .recordNotFound? = link.recordFailure {
+
+        record = "whose record wasn't found"
+
+      } else {
+
+        record = "whose record wasn't read"
+
+      }
 
       return "\(link.device) linked without switching its relay, \(record). "
         + "Its relay is momentary with momentaryOnBothCommands on, so every On and Off only pulses it and the state is ignored."

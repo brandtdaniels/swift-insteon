@@ -229,7 +229,7 @@ extension DeviceLinkingCoordinator {
 
         } else if plan.pulsesOnBothCommands {
 
-          await observer.linking(.relayState(.stateIgnored(device, flag: Self.momentaryOnBothCommandsFlag.rawValue, isMomentary: plan.isMomentary)))
+          await observer.linking(.relayState(.linkedWithoutSwitching(device, flag: Self.momentaryOnBothCommandsFlag.rawValue, isMomentary: plan.isMomentary)))
 
         } else {
 

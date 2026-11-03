@@ -256,8 +256,12 @@ public enum HelpText {
     With --json, prints one object, the same for every device: "links", every link the modem
     reported, in order, and "legs", each of the catalog's links to a Hub with its modemRole,
     modemGroup, deviceGroup, status (linked, failed or notRun), joinedBy and error, or an
-    empty array when the device wasn't linked by them. With --database, prints the object
-    'insteon unlink --help' describes for --database.
+    empty array when the device wasn't linked by them. With --relay-state, the object also
+    has "relayState": the state, groupOn and groupOff (absent when the state is ignored),
+    isMomentary, pulsesOnBothCommands, ignoresState, leavesUnverifiedMode, recordedData1,
+    recordFailure, restored and restoreFailure; with --dry-run, it prints instead
+    the plan as an object. With --database, prints the object 'insteon unlink --help'
+    describes for --database.
 
     Control-C stops waiting and takes the modem out of linking mode.
     """

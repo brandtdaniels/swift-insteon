@@ -207,7 +207,7 @@ actor LinkingRecorder: LinkingObserver {
       return "setting \(device) \(state)"
     case let .relayAlreadySet(device, state):
       return "\(device) already \(state)"
-    case let .stateIgnored(device, _, isMomentary):
+    case let .linkedWithoutSwitching(device, _, isMomentary):
       return isMomentary ? "\(device) ignores the state" : "\(device) leaves the state, unverified mode"
     case let .relayLeft(device, reads):
       return "\(device) left \(reads)"

@@ -144,6 +144,29 @@ struct RelayStateTextTests {
 
   }
 
+  @Test func saysWhyTheRecordOfARelayThatIgnoresTheStateIsntShown() {
+
+    var notFound = RelayStateLink(device: module, state: .on, group: 2, recordedData1: nil, isMomentary: true, pulsesOnBothCommands: true)
+    var notRead: RelayStateLink = notFound
+
+    notFound.recordFailure = .recordNotFound(module, group: 2)
+    notRead.recordFailure = .recordNotRead(module, reason: Failure())
+
+    let mode: String = "Its relay is momentary with momentaryOnBothCommands on, so every On and Off only pulses it and the state is ignored."
+
+    #expect(notes(.relayState(.recorded(notFound))) == ["1A.2B.3C linked without switching its relay, whose record wasn't found. " + mode])
+    #expect(notes(.relayState(.recorded(notRead))) == ["1A.2B.3C linked without switching its relay, whose record wasn't read. " + mode])
+
+  }
+
+  @Test func describesTheJSONInTheHelp() {
+
+    #expect(HelpText.link.contains("\"relayState\""))
+    #expect(HelpText.link.contains("absent when the state is ignored"))
+    #expect(HelpText.link.contains("the plan as an object"))
+
+  }
+
   @Test func printsThePlanAsJSONForADryRun() throws {
 
     let encoder = JSONEncoder()
@@ -235,11 +258,11 @@ struct RelayStateTextTests {
     #expect(notes(.relayState(.settingRelay(module, .on))) == ["Turning 1A.2B.3C's relay on, so it links with the relay on..."])
     #expect(notes(.relayState(.settingRelay(module, .off))) == ["Turning 1A.2B.3C's relay off, so it links with the relay off..."])
     #expect(notes(.relayState(.relayAlreadySet(module, .off))) == ["1A.2B.3C's relay is already off, so it links with the relay off."])
-    #expect(notes(.relayState(.stateIgnored(module, flag: "momentaryOnBothCommands", isMomentary: true))) == [
+    #expect(notes(.relayState(.linkedWithoutSwitching(module, flag: "momentaryOnBothCommands", isMomentary: true))) == [
       "1A.2B.3C's relay is momentary with its momentaryOnBothCommands flag on, so every On and Off only pulses it and the state is ignored. "
         + "It's linked without switching the relay or writing a flag."
     ])
-    #expect(notes(.relayState(.stateIgnored(module, flag: "momentaryOnBothCommands", isMomentary: false))) == [
+    #expect(notes(.relayState(.linkedWithoutSwitching(module, flag: "momentaryOnBothCommands", isMomentary: false))) == [
       "1A.2B.3C's momentaryOnBothCommands flag is on though its relay isn't momentary, a mode whose effect isn't verified, "
         + "so it's linked without switching the relay or writing a flag, and records the state the relay is in."
     ])
