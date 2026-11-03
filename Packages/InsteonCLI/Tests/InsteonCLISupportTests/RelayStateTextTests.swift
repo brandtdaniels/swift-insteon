@@ -393,6 +393,26 @@ struct RelayStateTextTests {
 
   }
 
+  @Test func warnsThatAMomentaryIOLincDoesntKeepTheStateItsRecordHolds() throws {
+
+    var plan: DatabaseLinkPlan = try ioLincPlan(.on)
+    plan.momentaryFlagsOn = ["momentary"]
+
+    #expect(DatabaseLinkText.plan(plan).last == "Data 1 of the device's responder record is 0xFF, the relay on, but its momentary flag is on, so the relay only pulses and doesn't keep a state. "
+      + "The record holds the state only with the momentary flags off, and this plan writes no flag.")
+
+    plan.momentaryFlagsOn = ["momentary", "momentaryOnBothCommands"]
+
+    #expect(DatabaseLinkText.plan(plan).last == "Data 1 of the device's responder record is 0xFF, the relay on, but its momentary and momentaryOnBothCommands flags are on, "
+      + "so the relay only pulses and doesn't keep a state. The record holds the state only with the momentary flags off, and this plan writes no flag.")
+
+    let report: DatabaseLinkText.Report = DatabaseLinkText.report(plan, isDryRun: true)
+
+    #expect(report.momentaryFlagsOn == ["momentary", "momentaryOnBothCommands"])
+    #expect(DatabaseLinkText.report(try ioLincPlan(.on), isDryRun: true).momentaryFlagsOn == [])
+
+  }
+
   @Test func showsTheRelayStateAnIOLincsDryRunWrites() throws {
 
     let on: [String] = DatabaseLinkText.plan(try ioLincPlan(.on))

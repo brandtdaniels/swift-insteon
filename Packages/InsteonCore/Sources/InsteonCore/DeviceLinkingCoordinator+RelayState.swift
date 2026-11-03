@@ -418,7 +418,7 @@ extension DeviceLinkingCoordinator {
   }
 
   /// The operating flags a relay reported, read once per Get Operating Flags request.
-  private struct RelayFlags {
+  struct RelayFlags {
 
     /// Whether each flag is set, by its name.
     var states: [SettingName: Bool] = [:]
@@ -504,7 +504,7 @@ extension DeviceLinkingCoordinator {
   /// - Throws: ``RelayStateLinkingError/notLinkedToModem(_:)`` when the device rejects the
   ///   modem, ``RelayStateLinkingError/flagUnreadable(_:flag:)`` for a reply that doesn't
   ///   carry a flag, and the modem's errors, such as `ModemError.deviceTimedOut`.
-  private func readFlags(_ flags: [OperatingFlag], of target: Device) async throws -> RelayFlags {
+  func readFlags(_ flags: [OperatingFlag], of target: Device) async throws -> RelayFlags {
 
     var reading = RelayFlags()
     var replies: [OperatingFlagsRequest: ReceivedMessage] = [:]

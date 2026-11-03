@@ -137,6 +137,11 @@ public struct DatabaseLinkPlan: Hashable, Sendable {
   /// for one, or `nil` for the catalog's data bytes alone.
   public internal(set) var relayState: RelayState? = nil
 
+  /// The relay's momentary flags that read on as the plan was made, such as `"momentary"`,
+  /// in the command set's order. Data 1 holds a relay state only with these flags off, and
+  /// the plan writes no flag. Read only with a ``relayState``; empty otherwise.
+  public internal(set) var momentaryFlagsOn: [String] = []
+
   /// Whether the plan writes nothing.
   public var isEmpty: Bool {
 

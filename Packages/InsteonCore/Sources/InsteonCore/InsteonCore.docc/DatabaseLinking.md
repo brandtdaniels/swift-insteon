@@ -45,8 +45,10 @@ for a ramp rate. The plan is refused, as a ``DatabaseLinkRefusal``, for a byte t
 no value for, and for a device the catalog gives no links for.
 
 With a ``RelayState``, a relay's responder record holds the state as Data 1, `0xFF` for on and
-`0x00` for off, so a group On sets the relay to it and a group Off to the opposite. The relay
-isn't switched and no flag is written. The plan is refused, as a ``RelayStateLinkingError``,
+`0x00` for off, so a group On sets the relay to it and a group Off to the opposite. That holds
+only with the relay's momentary flags off, so the plan reads them with Get Operating Flags and
+lists those that are on in ``DatabaseLinkPlan/momentaryFlagsOn``. The relay isn't switched and
+no flag is written. The plan is refused, as a ``RelayStateLinkingError``,
 for a device whose main group isn't a relay, and when a responder record already in place holds
 the other state.
 
@@ -81,8 +83,8 @@ When the steps stop for the modem's error, a slot that changed, or cancellation,
 ``DatabaseLinkInterrupted`` carries each step's outcome, so it's known which records were
 written. Last, both databases are read again and every record is
 compared with what the steps that were made should have left, in
-``DatabaseLinkResult/mismatches``. Nothing else is sent: no operating flag is read or written,
-and no device is put into linking mode.
+``DatabaseLinkResult/mismatches``. Nothing else is sent: no operating flag is written, one is
+read only for a relay state, and no device is put into linking mode.
 
 ### Undoing it
 

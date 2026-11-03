@@ -932,10 +932,11 @@ struct DatabaseLinkingTests {
   static let ioLinc = ReportedIdentity(category: 0x07, subcategory: 0x00, firmwareVersion: 0x41)
 
   /// The I/O Linc, holding a controller record of the modem in group 1 and a free slot below
-  /// it, on a network with the bundled catalog.
-  func ioLincLinking() async throws -> (InMemoryModem, DeviceLinkingCoordinator) {
+  /// it, with the operating flags given, on a network with the bundled catalog.
+  func ioLincLinking(flags: UInt8 = 0x00) async throws -> (InMemoryModem, DeviceLinkingCoordinator) {
 
     let modem: InMemoryModem = await modem(identity: Self.ioLinc)
+    await modem.setOperatingFlags(flags, of: device)
 
     await modem.setDatabase([
       0x0FFF: controller(0x01, naming: modemAddress),
@@ -953,6 +954,7 @@ struct DatabaseLinkingTests {
     let plan: DatabaseLinkPlan = try await linking.planDatabaseLink(device, relayState: state)
 
     #expect(plan.relayState == state)
+    #expect(plan.momentaryFlagsOn == [])
     #expect(plan.deviceSteps.map { $0.kind } == [.addDeviceRecord])
     #expect(plan.deviceSteps.map { $0.written } == [responder(0x00, naming: modemAddress, data: [data1, 0x00, 0x00])])
     #expect(plan.modemSteps.map { $0.kind } == [.addModemRecord, .addModemRecord])
@@ -961,6 +963,28 @@ struct DatabaseLinkingTests {
 
     #expect(result.isComplete)
     #expect(await modem.record(of: device, at: 0x0FF7) == responder(0x00, naming: modemAddress, data: [data1, 0x00, 0x00]))
+
+  }
+
+  @Test func readsTheIOLincsMomentaryFlagsForARelayStateAndWritesNone() async throws {
+
+    // Momentary and momentaryOnBothCommands on.
+    let (modem, linking): (InMemoryModem, DeviceLinkingCoordinator) = try await ioLincLinking(flags: 0x18)
+    let log: OperationLog = await OperationLog.logging(modem)
+
+    let plan: DatabaseLinkPlan = try await linking.planDatabaseLink(device, relayState: .on)
+
+    #expect(plan.momentaryFlagsOn == ["momentary", "momentaryOnBothCommands"])
+    // One Get Operating Flags is read; nothing is written.
+    #expect(log.standardCommands.filter { (command1: UInt8) -> Bool in command1 == 0x1F }.count == 1)
+    #expect(log.writesAndExtendedMessages == 0)
+    #expect(await modem.operatingFlags[device] == 0x18)
+
+    // Without a relay state, no flag is read.
+    let plain: DatabaseLinkPlan = try await linking.planDatabaseLink(device)
+
+    #expect(plain.momentaryFlagsOn == [])
+    #expect(log.standardCommands.filter { (command1: UInt8) -> Bool in command1 == 0x1F }.count == 1)
 
   }
 

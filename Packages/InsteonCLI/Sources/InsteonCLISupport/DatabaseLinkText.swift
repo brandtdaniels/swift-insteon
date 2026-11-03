@@ -75,10 +75,25 @@ public enum DatabaseLinkText {
 
     if let state = plan.relayState {
 
-      lines.append(
-        "Data 1 of the device's responder record is \(Hex.byte(state.data1)), the relay \(state.rawValue): "
-          + "a group On turns the relay \(state.rawValue), and a group Off turns it \(state.opposite.rawValue)."
-      )
+      let flags: [String] = plan.momentaryFlagsOn
+
+      if flags.isEmpty {
+
+        lines.append(
+          "Data 1 of the device's responder record is \(Hex.byte(state.data1)), the relay \(state.rawValue): "
+            + "a group On turns the relay \(state.rawValue), and a group Off turns it \(state.opposite.rawValue)."
+        )
+
+      } else {
+
+        let named: String = flags.count == 1 ? "\(flags[0]) flag is" : "\(flags.dropLast().joined(separator: ", ")) and \(flags[flags.count - 1]) flags are"
+
+        lines.append(
+          "Data 1 of the device's responder record is \(Hex.byte(state.data1)), the relay \(state.rawValue), but its \(named) on, "
+            + "so the relay only pulses and doesn't keep a state. The record holds the state only with the momentary flags off, and this plan writes no flag."
+        )
+
+      }
 
     }
 
@@ -364,6 +379,10 @@ public enum DatabaseLinkText {
     /// or `nil` without one.
     public var relayData1: String?
 
+    /// The relay's momentary flags that read on, with which it doesn't keep the state its
+    /// record holds, or `nil` without a relay state.
+    public var momentaryFlagsOn: [String]?
+
   }
 
   /// A plan as `--json` prints it, before or without carrying it out.
@@ -388,7 +407,8 @@ public enum DatabaseLinkText {
       deviceCheck: nil,
       complete: nil,
       relayState: plan.relayState?.rawValue,
-      relayData1: plan.relayState.map { (state: RelayState) -> String in Hex.byte(state.data1) }
+      relayData1: plan.relayState.map { (state: RelayState) -> String in Hex.byte(state.data1) },
+      momentaryFlagsOn: plan.relayState == nil ? nil : plan.momentaryFlagsOn
     )
 
   }
