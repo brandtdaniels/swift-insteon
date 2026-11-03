@@ -184,6 +184,7 @@ struct RelayStateTextTests {
   @Test func asksOnlyWhenTheRelayIsSwitched() {
 
     #expect(RelayLinkText.question(plan()) == "Switch 1A.2B.3C's relay on and link it? [y/N]")
+    #expect(RelayLinkText.question(plan(momentary: true)) == "Turn off 1A.2B.3C's momentary flag, switch its relay on and link it? [y/N]")
     #expect(RelayLinkText.question(plan(before: .on)) == nil)
     #expect(RelayLinkText.question(plan(momentary: true, pulses: true)) == nil)
     #expect(RelayLinkText.declined == "Nothing was switched or linked.")

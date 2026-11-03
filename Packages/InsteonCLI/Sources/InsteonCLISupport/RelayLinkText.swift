@@ -82,6 +82,12 @@ public enum RelayLinkText {
 
     }
 
+    if let flag = plan.clearedFlag {
+
+      return "Turn off \(plan.device)'s \(flag) flag, switch its relay \(plan.state.rawValue) and link it? [y/N]"
+
+    }
+
     return "Switch \(plan.device)'s relay \(plan.state.rawValue) and link it? [y/N]"
 
   }
