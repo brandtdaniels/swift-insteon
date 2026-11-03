@@ -156,7 +156,8 @@ public enum HelpText {
   public static let link = """
     Usage: insteon [--hub HOST[:PORT] | --serial PATH] link [ADDRESS] [--group N]
                    [--controller | --responder | --either] [--two-way | --one-way]
-                   [--relay-state on|off [--dry-run] [--yes]] [--timeout SECONDS] [--json]
+                   [--relay-state on|off [--dry-run] [--yes]]
+                   [--timeout SECONDS] [--json]
            insteon [--hub HOST[:PORT] | --serial PATH] link ADDRESS --database
                    [--relay-state on|off] [--dry-run] [--yes] [--json]
            insteon [--hub HOST[:PORT] | --serial PATH] link --cancel
@@ -210,8 +211,11 @@ public enum HelpText {
     a terminal, and --dry-run shows the plan and sends nothing more. When the relay isn't in
     the state, it switches the relay, and whatever it controls, such as a garage door opener,
     a lock or a valve, then reads its status again; a relay already in the state is sent
-    nothing. With the momentaryOnBothCommands flag on, every On and Off only pulses the
-    relay and the state is ignored, so the relay isn't switched and no flag is written. A momentary relay would
+    nothing. On a momentary relay with momentaryOnBothCommands on, every On and Off only
+    pulses the relay and the state is ignored; and what that flag does on a relay that isn't
+    momentary isn't verified. Either way the relay isn't switched and no flag is written.
+    The relay is read again as it links, and nothing is switched when it doesn't match
+    the plan shown. A momentary relay would
     open again before it links, so its momentary flag is turned off first, when the catalog
     lets linking change it and the flag can be turned back on. The device is linked in one
     link, in the --group group, not by the catalog's links to a Hub, and never with its SET

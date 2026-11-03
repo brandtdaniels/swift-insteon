@@ -277,9 +277,10 @@ struct RelayStateLinkingTests {
 
   }
 
-  /// The status request the network's cache sends for the database delta before it reads the
-  /// relay's database to check its record: the last step of a link that checks it.
-  var recordCheck: InMemoryModem.LinkingStep {
+  /// A status request: the one the network's cache sends for the database delta before it
+  /// reads the relay's database to check its record, the last step of a link that checks it,
+  /// and the one that checks a relay before it's switched back.
+  var statusRequest: InMemoryModem.LinkingStep {
 
     step(0x19, 0x00)
 
@@ -344,7 +345,7 @@ struct RelayStateLinkingTests {
     ])
     #expect(steps.dropFirst(6).dropLast(3).contains(.modem(.controller, 0x02)))
     // The record is checked after everything is put back.
-    #expect(Array(steps.suffix(4)) == returnAndRestore + [recordCheck])
+    #expect(Array(steps.suffix(4)) == returnAndRestore + [statusRequest])
     // The device recorded on, and the relay is off again, as it was.
     #expect(await modem.databases[module]?.values.first?.data1 == 0xFF)
     #expect(await modem.levels[module] == 0x00)
@@ -460,6 +461,25 @@ struct RelayStateLinkingTests {
 
   }
 
+  @Test func leavesALatchingRelayWithTheBothCommandsBitAloneAndSaysWhy() async throws {
+
+    let modem: InMemoryModem = await modem(flags: RelayExample.bothCommands.bit)
+    let recorder = LinkingRecorder()
+
+    let result: DeviceLinkingResult = try await linkRelay(modem, .on, observer: recorder)
+
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+
+    #expect(Array(steps.prefix(2)) == [step(0x1F, 0x00), step(0x19, 0x00)])
+    #expect(!steps.contains(step(0x11, 0xFF)))
+    #expect(!writesFlags(steps))
+    #expect(result.relayState?.pulsesOnBothCommands == true)
+    #expect(result.relayState?.isMomentary == false)
+    #expect(Array(await recorder.lines.prefix(1)) == ["relay state: \(module) leaves the state, unverified mode"])
+    #expect(await recorder.lines.last == "relay state: group on gives on, off gives off, momentary false, pulses true")
+
+  }
+
   // MARK: - Planning
 
   @Test func plansWhatItWillSwitchAndSendsOnlyReads() async throws {
@@ -480,6 +500,70 @@ struct RelayStateLinkingTests {
 
   }
 
+  @Test func refusesToLinkWhenTheRelayChangedSinceThePlan() async throws {
+
+    let modem: InMemoryModem = await modem(flags: 0x00)
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    let plan: RelayLinkPlan = try await linking.planRelayLink(module, recording: .on, observer: LinkingRecorder())
+
+    // Someone switches it on between the plan and the link.
+    await modem.setLevel(0xFF, of: module)
+
+    await expectRefusal({ _ = try await linking.linkRelay(plan, group: 2, twoWay: .never, observer: LinkingRecorder()) }) { (error: RelayStateLinkingError) -> Bool in
+
+      guard case let .planChanged(old, new) = error else {
+
+        return false
+
+      }
+
+      return old == plan && new.before == .on && !new.switchesRelay
+
+    }
+
+    #expect(await modem.linkingSteps == [step(0x1F, 0x00), step(0x19, 0x00), step(0x1F, 0x00), step(0x19, 0x00)])
+
+  }
+
+  @Test func refusesToSwitchARelayWhosePlanAskedNothing() async throws {
+
+    let modem: InMemoryModem = await modem(flags: 0x00, relay: 0xFF)
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    let plan: RelayLinkPlan = try await linking.planRelayLink(module, recording: .on, observer: LinkingRecorder())
+
+    #expect(!plan.switchesRelay)
+
+    // Someone switches it off, so the link would switch a relay no one was asked about.
+    await modem.setLevel(0x00, of: module)
+
+    await expectRefusal({ _ = try await linking.linkRelay(plan, group: 2, twoWay: .never, observer: LinkingRecorder()) }) { (error: RelayStateLinkingError) -> Bool in
+
+      if case .planChanged = error {
+
+        return true
+
+      }
+
+      return false
+
+    }
+
+    #expect(changes(in: await modem.linkingSteps).isEmpty)
+
+  }
+
+  @Test func linksWithThePlanItWasGivenWhenNothingChanged() async throws {
+
+    let modem: InMemoryModem = await modem(flags: 0x00)
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+    let plan: RelayLinkPlan = try await linking.planRelayLink(module, recording: .on, observer: LinkingRecorder())
+
+    let result: DeviceLinkingResult = try await linking.linkRelay(plan, group: 2, twoWay: .never, observer: LinkingRecorder())
+
+    #expect(result.relayState?.recordedData1 == 0xFF)
+
+  }
+
   @Test func plansNothingToSwitchForARelayAlreadyInTheStateOrOneThatOnlyPulses() async throws {
 
     let still: RelayLinkPlan = try await network(await modem(flags: 0x00, relay: 0xFF)).linking.planRelayLink(module, recording: .on, observer: LinkingRecorder())
@@ -493,6 +577,14 @@ struct RelayStateLinkingTests {
     #expect(pulsing.ignoresState)
     #expect(!pulsing.switchesRelay)
     #expect(pulsing.clearedFlag == nil)
+
+    let latchingBit: RelayLinkPlan = try await network(await modem(flags: RelayExample.bothCommands.bit)).linking.planRelayLink(module, recording: .on, observer: LinkingRecorder())
+
+    // The bit applies only to a momentary relay, so the state isn't ignored; but what it does
+    // on a latching relay isn't verified, so it isn't switched either.
+    #expect(!latchingBit.ignoresState)
+    #expect(latchingBit.leavesUnverifiedMode)
+    #expect(!latchingBit.switchesRelay)
 
   }
 
@@ -797,7 +889,7 @@ struct RelayStateLinkingTests {
 
     #expect(!steps.contains(step(0x11, 0xFF)))
     #expect(steps.contains(step(0x13, 0x00)))
-    #expect(Array(steps.suffix(3)) == [step(0x20, RelayExample.momentary.on, extended: true), step(0x1F, 0x00), recordCheck])
+    #expect(Array(steps.suffix(3)) == [step(0x20, RelayExample.momentary.on, extended: true), step(0x1F, 0x00), statusRequest])
     #expect(await modem.levels[module] == 0x00)
     #expect(await modem.operatingFlags[module] == RelayExample.momentary.bit)
     #expect(result.relayState?.recordedData1 == 0x00)
@@ -814,7 +906,7 @@ struct RelayStateLinkingTests {
 
     // On once, to hold it, and Off once the link is made: never On again.
     #expect(steps.filter { $0 == step(0x11, 0xFF) }.count == 1)
-    #expect(Array(steps.suffix(4)) == returnAndRestore + [recordCheck])
+    #expect(Array(steps.suffix(4)) == returnAndRestore + [statusRequest])
     #expect(await modem.levels[module] == 0x00)
     #expect(await modem.operatingFlags[module] == RelayExample.momentary.bit)
     #expect(result.relayState?.recordedData1 == 0xFF)
@@ -875,7 +967,8 @@ struct RelayStateLinkingTests {
 
     }
 
-    #expect(await modem.linkingSteps.last == step(0x13, 0x00))
+    // Its status is read inside the put back, and it still reads on, so it's switched back.
+    #expect(Array(await modem.linkingSteps.suffix(2)) == [statusRequest, step(0x13, 0x00)])
     #expect(await modem.levels[module] == 0x00)
 
   }
@@ -1096,8 +1189,9 @@ struct RelayStateLinkingTests {
     let modem: InMemoryModem = await modem(flags: 0x80)
     // The relay opens again, though the catalog doesn't call it momentary.
     await modem.setMomentaryBit(0x80, of: module)
+    let recorder = LinkingRecorder()
 
-    await expectRefusal({ _ = try await linkRelay(modem, .on) }) { (error: RelayStateLinkingError) -> Bool in
+    await expectRefusal({ _ = try await linkRelay(modem, .on, observer: recorder) }) { (error: RelayStateLinkingError) -> Bool in
 
       if case .relayNotConfirmed = error {
 
@@ -1109,10 +1203,9 @@ struct RelayStateLinkingTests {
 
     }
 
-    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
-
-    #expect(steps.filter { $0 == step(0x11, 0xFF) }.count == 1)
-    #expect(!steps.contains(step(0x13, 0x00)))
+    // After On, only the status that disagreed: nothing switches it again.
+    #expect(await modem.linkingSteps == [step(0x1F, 0x00), step(0x19, 0x00), step(0x11, 0xFF), statusRequest])
+    #expect(await recorder.lines.last == "relay state: \(module) left off")
 
   }
 
@@ -1132,8 +1225,9 @@ struct RelayStateLinkingTests {
       }
 
     }
+    let recorder = LinkingRecorder()
 
-    await expectRefusal({ _ = try await linkRelay(modem, .on) }) { (error: RelayStateLinkingError) -> Bool in
+    await expectRefusal({ _ = try await linkRelay(modem, .on, observer: recorder) }) { (error: RelayStateLinkingError) -> Bool in
 
       if case .remoteLinkingFailed = error {
 
@@ -1147,8 +1241,9 @@ struct RelayStateLinkingTests {
 
     let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
 
-    #expect(steps.last == recordCheck)
+    #expect(steps.last == statusRequest)
     #expect(!steps.contains(step(0x13, 0x00)))
+    #expect(await recorder.lines.last == "relay state: \(module) left off")
 
   }
 
@@ -1175,7 +1270,16 @@ struct RelayStateLinkingTests {
       }
 
     }
-    let recorder = LinkingRecorder()
+    let reported = ReportedFailures()
+    let recorder = LinkingRecorder(reacting: { (event: LinkingEvent) async -> Void in
+
+      if case let .relayState(.restoreFailed(_, failure)) = event {
+
+        await reported.append(failure)
+
+      }
+
+    })
 
     await expectRefusal({ _ = try await linkRelay(modem, .on, observer: recorder) }) { (error: RelayStateLinkingError) -> Bool in
 
@@ -1191,6 +1295,18 @@ struct RelayStateLinkingTests {
 
     #expect(await modem.linkingSteps.last == step(0x13, 0x00))
     #expect(await recorder.lines.suffix(2) == ["relay state: returning \(module) off", "relay state: failed \(module)"])
+
+    // Reported, not thrown: the link's own failure is what's thrown.
+    guard case let .relayReturnUnconfirmed(device, state, _)? = await reported.failures.first else {
+
+      Issue.record("Expected an unconfirmed return, got \(await reported.failures)")
+
+      return
+
+    }
+
+    #expect(device == module)
+    #expect(state == .off)
 
   }
 
@@ -1554,6 +1670,19 @@ struct RelayStateLinkingTests {
 }
 
 /// Whether the momentary flag's restore has begun, for a test that fails what follows it.
+/// The failures an observer was told about while things were put back.
+actor ReportedFailures {
+
+  private(set) var failures: [RelayStateLinkingError] = []
+
+  func append(_ failure: RelayStateLinkingError) {
+
+    failures.append(failure)
+
+  }
+
+}
+
 actor RestoreWatch {
 
   private(set) var hasBegun: Bool = false

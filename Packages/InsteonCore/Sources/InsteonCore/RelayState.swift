@@ -62,8 +62,8 @@ public struct RelayLinkPlan: Hashable, Sendable {
   /// Whether its momentary flag is on.
   public var isMomentary: Bool
 
-  /// Whether its momentaryOnBothCommands flag is on, so every On and Off only pulses the relay
-  /// and the recorded state is ignored.
+  /// Whether its momentaryOnBothCommands flag is on. On a momentary relay, every On and Off
+  /// then only pulses it, and the recorded state is ignored.
   public var pulsesOnBothCommands: Bool
 
   /// Creates a plan.
@@ -84,20 +84,29 @@ public struct RelayLinkPlan: Hashable, Sendable {
 
   }
 
-  /// Whether the state is ignored, since every On and Off only pulses the relay, so the relay
-  /// isn't switched and no flag is written.
+  /// Whether the state is ignored: on a momentary relay with momentaryOnBothCommands on, every
+  /// On and Off only pulses it. The relay isn't switched and no flag is written.
   public var ignoresState: Bool {
 
-    pulsesOnBothCommands
+    isMomentary && pulsesOnBothCommands
+
+  }
+
+  /// Whether momentaryOnBothCommands is on though the relay isn't momentary, a mode whose
+  /// effect on the relay isn't verified. The relay isn't switched and no flag is written, so
+  /// its record holds the state it's in.
+  public var leavesUnverifiedMode: Bool {
+
+    !isMomentary && pulsesOnBothCommands
 
   }
 
   /// Whether the relay is switched to the state: when it isn't in it, or when it's momentary
   /// and the state is on, since a momentary relay reads on only while it's closed for its
-  /// momentary time. Never when it ignores the state.
+  /// momentary time. Never with momentaryOnBothCommands on.
   public var switchesRelay: Bool {
 
-    !ignoresState && (before != state || (isMomentary && state == .on))
+    !pulsesOnBothCommands && (before != state || (isMomentary && state == .on))
 
   }
 
@@ -264,10 +273,14 @@ public enum RelayStateEvent: Sendable {
   /// The relay's status showed it already in the state, so it wasn't sent a command.
   case relayAlreadySet(InsteonAddress, RelayState)
 
-  /// The relay's flag, such as `momentaryOnBothCommands`, is on, so every On and Off only
-  /// pulses it and the state is ignored. It's linked without being switched, and no flag is
-  /// written.
-  case stateIgnored(InsteonAddress, flag: String)
+  /// The relay's flag, such as `momentaryOnBothCommands`, is on, so it's linked without being
+  /// switched, and no flag is written: on a momentary relay every On and Off only pulses it,
+  /// so the state is ignored; on one that isn't momentary, what the flag does isn't verified.
+  case stateIgnored(InsteonAddress, flag: String, isMomentary: Bool)
+
+  /// The relay's status reads the state given, not the one it was switched to, so it's left
+  /// as it is rather than switched again.
+  case relayLeft(InsteonAddress, reads: RelayState)
 
   /// The relay's status, read again, showed it in the state.
   case relayConfirmed(InsteonAddress, RelayState)
@@ -352,8 +365,12 @@ public enum RelayStateLinkingError: Error, Sendable {
 
   /// The relay wasn't switched to the state given after the link, for the reason given: off
   /// for a momentary relay switched on, or its state before for a relay that isn't momentary
-  /// when linking failed. It's left in the state it was switched to.
+  /// when linking failed. It may be left in the state it was switched to.
   case relayNotReturned(InsteonAddress, state: RelayState, reason: any Error)
+
+  /// The relay, read again inside the link, isn't as the plan approved for it said, so the
+  /// link would switch or put back other than it showed. Nothing was changed.
+  case planChanged(old: RelayLinkPlan, new: RelayLinkPlan)
 
   /// The relay's status couldn't be read after linking failed, for the reason given, so it
   /// was switched back to the state given without knowing whether someone had switched it.
@@ -385,6 +402,8 @@ public enum RelayStateLinkingError: Error, Sendable {
       let .flagNotRestored(device, _, _), let .flagRestoreUnconfirmed(device, _, _), let .otherFlagsChanged(device, _, _),
       let .recordInPlace(device, _, _):
       return device
+    case let .planChanged(old, _):
+      return old.device
     }
 
   }
@@ -422,7 +441,9 @@ extension RelayStateLinkingError: CustomStringConvertible, LocalizedError {
     case let .recordNotRead(device, reason):
       "\(device)'s ALL-Link database couldn't be read to check the state it recorded: \(Self.message(reason))"
     case let .relayNotReturned(device, state, reason):
-      "\(device)'s relay wasn't switched \(state.rawValue): \(Self.message(reason)) It's left \(state.opposite.rawValue)."
+      "\(device)'s relay wasn't switched \(state.rawValue): \(Self.message(reason)) It may be left \(state.opposite.rawValue)."
+    case let .planChanged(old, new):
+      "\(old.device) changed since the plan was shown: \(Self.difference(old, new)). Nothing was changed; plan the link again."
     case let .relayReturnUnconfirmed(device, state, reason):
       "\(device)'s status couldn't be read after linking stopped: \(Self.message(reason)) Its relay was switched \(state.rawValue), as it was before, without knowing whether someone had switched it since."
     case let .flagNotRestored(device, flag, reason):
@@ -455,6 +476,33 @@ extension RelayStateLinkingError: CustomStringConvertible, LocalizedError {
   private static func message(_ error: any Error) -> String {
 
     InsteonErrorDescription.message(for: error) ?? error.localizedDescription
+
+  }
+
+  /// How a relay's plan read again differs from the one approved, as a clause.
+  private static func difference(_ old: RelayLinkPlan, _ new: RelayLinkPlan) -> String {
+
+    var parts: [String] = []
+
+    if old.before != new.before {
+
+      parts.append("its relay reads \(new.before.rawValue), not \(old.before.rawValue)")
+
+    }
+
+    if old.isMomentary != new.isMomentary {
+
+      parts.append("its momentary flag is \(new.isMomentary ? "on" : "off")")
+
+    }
+
+    if old.pulsesOnBothCommands != new.pulsesOnBothCommands {
+
+      parts.append("its momentaryOnBothCommands flag is \(new.pulsesOnBothCommands ? "on" : "off")")
+
+    }
+
+    return parts.isEmpty ? "the plan is for another relay or state" : parts.joined(separator: ", and ")
 
   }
 

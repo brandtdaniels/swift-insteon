@@ -382,7 +382,7 @@ extension Invocation {
     // --relay-state asks before it switches the relay, as --database asks before it writes.
     if options.relayState != nil {
 
-      options.relayStateWrite = database
+      options.relayStateConfirmation = database
 
     } else if let databaseOnlyOption {
 

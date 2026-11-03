@@ -34,8 +34,9 @@ extension DeviceLinkingCoordinator {
   ///    allow it, and when the messages that set the flag back and open the relay would be
   ///    sent; otherwise the link is refused. A relay already in the state is sent nothing,
   ///    and no flag is written. Neither is a relay whose momentaryOnBothCommands flag is on:
-  ///    every On and Off only pulses it, so the state is ignored, and its record isn't held to
-  ///    it. ``DeviceLinkingCoordinator/planRelayLink(_:recording:observer:)`` reads the same
+  ///    on a momentary relay every On and Off only pulses it, so the state is ignored, and on
+  ///    one that isn't momentary what the flag does isn't verified. Its record isn't held to
+  ///    the state. ``DeviceLinkingCoordinator/planRelayLink(_:recording:observer:)`` reads the same
   ///    and says what will be switched, for a front end to ask first.
   /// 3. The relay is sent its group type's On or Off through the device's guarded send path,
   ///    and its status is read again; a relay that doesn't show the state isn't linked.
@@ -90,12 +91,69 @@ extension DeviceLinkingCoordinator {
     observer: any LinkingObserver
   ) async throws -> DeviceLinkingResult {
 
+    try await linkRelay(device, recording: state, approved: nil, group: group, twoWay: twoWay, setButtonTimeout: setButtonTimeout, observer: observer)
+
+  }
+
+  /// Links a relay as a plan from
+  /// ``DeviceLinkingCoordinator/planRelayLink(_:recording:observer:)`` says, once a person
+  /// approved it, as
+  /// ``DeviceLinkingCoordinator/linkRelay(_:recording:group:twoWay:setButtonTimeout:observer:)``
+  /// does.
+  ///
+  /// The relay is read again inside the link. When its plan differs from the approved one,
+  /// such as when someone switched the relay since, nothing is sent but those reads, and
+  /// ``RelayStateLinkingError/planChanged(old:new:)`` is thrown, so the relay is never
+  /// switched other than the plan showed.
+  ///
+  /// - Parameters:
+  ///   - plan: The plan a person approved.
+  ///   - group: The modem's group. Defaults to ``DeviceLinkingCoordinator/defaultModemGroup``.
+  ///   - twoWay: Whether to link the device back. Defaults to
+  ///     ``TwoWayLinking/whenDeviceControls``.
+  ///   - setButtonTimeout: How long the modem waits in linking mode for a link back. Defaults
+  ///     to ``defaultSETButtonTimeout``.
+  ///   - observer: What a person is told.
+  /// - Returns: The links made, the device, and the relay's ``RelayStateLink``.
+  /// - Throws: ``RelayStateLinkingError/planChanged(old:new:)`` when the relay changed since
+  ///   the plan, and the errors of
+  ///   ``DeviceLinkingCoordinator/linkRelay(_:recording:group:twoWay:setButtonTimeout:observer:)``.
+  public func linkRelay(
+    _ plan: RelayLinkPlan,
+    group: AllLinkGroupNumber = DeviceLinkingCoordinator.defaultModemGroup,
+    twoWay: TwoWayLinking = .whenDeviceControls,
+    setButtonTimeout: Duration = Linker.defaultManualLinkingTimeout,
+    observer: any LinkingObserver
+  ) async throws -> DeviceLinkingResult {
+
+    try await linkRelay(plan.device, recording: plan.state, approved: plan, group: group, twoWay: twoWay, setButtonTimeout: setButtonTimeout, observer: observer)
+
+  }
+
+  /// Links a relay with a state, after checking its plan against an approved one, if any.
+  private func linkRelay(
+    _ device: InsteonAddress,
+    recording state: RelayState,
+    approved: RelayLinkPlan?,
+    group: AllLinkGroupNumber,
+    twoWay: TwoWayLinking,
+    setButtonTimeout: Duration,
+    observer: any LinkingObserver
+  ) async throws -> DeviceLinkingResult {
+
     // The device's databases are recorded as changed only once a link may have been made, so
     // a refusal leaves the network's copies as they are.
     try await inTurn(changing: nil) { () async throws -> DeviceLinkingResult in
 
       let prepared: Preparation = try await prepare(device, recording: state, observer: observer)
       let plan: RelayLinkPlan = prepared.plan
+
+      if let approved, approved != plan {
+
+        throw RelayStateLinkingError.planChanged(old: approved, new: plan)
+
+      }
+
       let target: Device = prepared.target
       let momentary: OperatingFlag? = prepared.momentary
       let flags: RelayFlags = prepared.flags
@@ -163,9 +221,9 @@ extension DeviceLinkingCoordinator {
 
           await observer.linking(.relayState(.relayConfirmed(device, state)))
 
-        } else if plan.ignoresState {
+        } else if plan.pulsesOnBothCommands {
 
-          await observer.linking(.relayState(.stateIgnored(device, flag: Self.momentaryOnBothCommandsFlag.rawValue)))
+          await observer.linking(.relayState(.stateIgnored(device, flag: Self.momentaryOnBothCommandsFlag.rawValue, isMomentary: plan.isMomentary)))
 
         } else {
 
@@ -189,8 +247,8 @@ extension DeviceLinkingCoordinator {
         }
 
         let linkedGroup: AllLinkGroupNumber = result.links.first?.group ?? group
-        // A relay that only pulses ignores the state, so its record isn't held to it.
-        let recorded: (data1: UInt8?, failure: RelayStateLinkingError?) = try await checkRecord(of: device, group: linkedGroup, state: plan.ignoresState ? nil : state)
+        // A relay that wasn't switched for momentaryOnBothCommands isn't held to the state.
+        let recorded: (data1: UInt8?, failure: RelayStateLinkingError?) = try await checkRecord(of: device, group: linkedGroup, state: plan.pulsesOnBothCommands ? nil : state)
         let link = RelayStateLink(
           device: device,
           state: state,
@@ -215,11 +273,15 @@ extension DeviceLinkingCoordinator {
 
           _ = await putBack(flag, switched)
 
-        } else if switched, !Self.isUnconfirmedRelay(error) {
+        } else if switched, Self.isUnconfirmedRelay(error) {
+
+          // Its status already disagreed with the state, so it isn't switched again.
+          await observer.linking(.relayState(.relayLeft(device, reads: state.opposite)))
+
+        } else if switched {
 
           // A relay that isn't momentary goes back to its state before, since nothing
-          // recorded the one it was switched to. One whose status already disagreed isn't
-          // switched again.
+          // recorded the one it was switched to.
           _ = await returnRelay(target, from: state, to: before, observer: observer)
 
         }
@@ -713,7 +775,11 @@ extension DeviceLinkingCoordinator {
 
       do {
 
-        guard try await target.status().isOn == (switched == .on) else {
+        let isOn: Bool = try await target.status().isOn
+
+        guard isOn == (switched == .on) else {
+
+          await observer.linking(.relayState(.relayLeft(target.address, reads: isOn ? .on : .off)))
 
           return nil
 

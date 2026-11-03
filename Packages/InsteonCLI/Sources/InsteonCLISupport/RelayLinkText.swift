@@ -17,8 +17,17 @@ public enum RelayLinkText {
     if plan.ignoresState {
 
       return [
-        "\(device)'s momentaryOnBothCommands flag is on, so every On and Off only pulses the relay and the state is ignored.",
+        "\(device)'s relay is momentary with its momentaryOnBothCommands flag on, so every On and Off only pulses it and the state is ignored.",
         "  1. Link it. The relay isn't switched and no flag is written."
+      ]
+
+    }
+
+    if plan.leavesUnverifiedMode {
+
+      return [
+        "\(device)'s momentaryOnBothCommands flag is on though its relay isn't momentary, a mode whose effect isn't verified, so the relay isn't switched.",
+        "  1. Link it. The relay isn't switched and no flag is written; its record holds the state the relay is in."
       ]
 
     }
@@ -73,6 +82,113 @@ public enum RelayLinkText {
     }
 
     return "Switch \(plan.device)'s relay \(plan.state.rawValue) and link it? [y/N]"
+
+  }
+
+  /// What `insteon link --relay-state` does once it has shown the plan.
+  public enum Decision: Hashable, Sendable {
+
+    /// Only show the plan, as `--dry-run` asks.
+    case dryRun
+
+    /// Stop: the person didn't agree to switching the relay.
+    case declined
+
+    /// Link as the plan says.
+    case link
+
+  }
+
+  /// Decides what to do with a plan once it's shown: a dry run stops there, a plan that
+  /// switches the relay is asked about when `asks` is `true`, and anything else links.
+  ///
+  /// - Parameters:
+  ///   - plan: The plan.
+  ///   - isDryRun: Whether `--dry-run` was given.
+  ///   - asks: Whether to ask before switching, as ``DatabaseWriteOptions/asksForConfirmation(readsFromTerminal:subcommand:)`` says.
+  ///   - confirm: Asks a person a question, and returns whether they agreed.
+  /// - Returns: What to do.
+  public static func decision(_ plan: RelayLinkPlan, isDryRun: Bool, asks: Bool, confirm: (String) async throws -> Bool) async throws -> Decision {
+
+    if isDryRun {
+
+      return .dryRun
+
+    }
+
+    if asks, let question = question(plan) {
+
+      return try await confirm(question) ? .link : .declined
+
+    }
+
+    return .link
+
+  }
+
+  /// A plan as `--json` prints it for a dry run.
+  public struct Report: Encodable, Hashable, Sendable {
+
+    /// The relay's address.
+    public var device: String
+
+    /// The state asked for, `"on"` or `"off"`.
+    public var state: String
+
+    /// The relay's state before the link, as its status read.
+    public var before: String
+
+    /// Whether its momentary flag is on.
+    public var isMomentary: Bool
+
+    /// Whether its momentaryOnBothCommands flag is on.
+    public var pulsesOnBothCommands: Bool
+
+    /// Whether the relay is switched.
+    public var switchesRelay: Bool
+
+    /// The flag turned off for the link, or `nil`.
+    public var clearedFlag: String?
+
+    /// Whether a momentary relay switched on is switched off after the link.
+    public var opensAfterLinking: Bool
+
+    /// Whether a relay that isn't momentary is switched back when linking fails.
+    public var switchesBackOnFailure: Bool
+
+    /// Whether the state is ignored, on a momentary relay with momentaryOnBothCommands on.
+    public var ignoresState: Bool
+
+    /// Whether momentaryOnBothCommands is on though the relay isn't momentary.
+    public var leavesUnverifiedMode: Bool
+
+    /// Whether the plan was only shown.
+    public var dryRun: Bool
+
+  }
+
+  /// A plan as `--json` prints it.
+  ///
+  /// - Parameters:
+  ///   - plan: The plan.
+  ///   - isDryRun: Whether it was only shown.
+  /// - Returns: The report.
+  public static func report(_ plan: RelayLinkPlan, isDryRun: Bool) -> Report {
+
+    Report(
+      device: "\(plan.device)",
+      state: plan.state.rawValue,
+      before: plan.before.rawValue,
+      isMomentary: plan.isMomentary,
+      pulsesOnBothCommands: plan.pulsesOnBothCommands,
+      switchesRelay: plan.switchesRelay,
+      clearedFlag: plan.clearedFlag,
+      opensAfterLinking: plan.opensAfterLinking,
+      switchesBackOnFailure: plan.switchesBackOnFailure,
+      ignoresState: plan.ignoresState,
+      leavesUnverifiedMode: plan.leavesUnverifiedMode,
+      dryRun: isDryRun
+    )
 
   }
 

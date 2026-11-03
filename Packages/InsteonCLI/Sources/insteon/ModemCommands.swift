@@ -361,25 +361,24 @@ enum ModemCommands {
 
       RelayLinkText.plan(plan).forEach(say)
 
-      if options.relayStateWrite?.isDryRun == true {
-
+      switch try await RelayLinkText.decision(plan, isDryRun: options.relayStateConfirmation?.isDryRun == true, asks: asks, confirm: Terminal.confirm) {
+      case .dryRun:
         say(RelayLinkText.dryRun)
 
-        return
+        if printsJSON {
 
-      }
-
-      if asks, let question = RelayLinkText.question(plan) {
-
-        guard try await Terminal.confirm(question) else {
-
-          throw CommandFailure(description: RelayLinkText.declined)
+          try Output.json(RelayLinkText.report(plan, isDryRun: true))
 
         }
 
+        return
+      case .declined:
+        throw CommandFailure(description: RelayLinkText.declined)
+      case .link:
+        // The relay is read again in the link, which refuses when it doesn't match the
+        // plan shown.
+        result = try await coordinator.linkRelay(plan, group: options.group, twoWay: twoWay, setButtonTimeout: timeout, observer: observer)
       }
-
-      result = try await coordinator.linkRelay(device, recording: state, group: options.group, twoWay: twoWay, setButtonTimeout: timeout, observer: observer)
 
     } else if let device = options.device {
 

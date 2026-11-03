@@ -210,11 +210,12 @@ case RelayStateEvent.flagRestored(_:flag:)
 case RelayStateEvent.recorded(_:)
 case RelayStateEvent.relayAlreadySet(_:_:)
 case RelayStateEvent.relayConfirmed(_:_:)
+case RelayStateEvent.relayLeft(_:reads:)
 case RelayStateEvent.restoreFailed(_:_:)
 case RelayStateEvent.restoringFlag(_:flag:)
 case RelayStateEvent.returningRelay(_:_:)
 case RelayStateEvent.settingRelay(_:_:)
-case RelayStateEvent.stateIgnored(_:flag:)
+case RelayStateEvent.stateIgnored(_:flag:isMomentary:)
 case RelayStateLinkingError.flagNotChanged(_:flag:isSet:)
 case RelayStateLinkingError.flagNotRestored(_:flag:reason:)
 case RelayStateLinkingError.flagRestoreUnconfirmed(_:flag:reason:)
@@ -225,6 +226,7 @@ case RelayStateLinkingError.notDescribed(_:)
 case RelayStateLinkingError.notIdentified(_:because:)
 case RelayStateLinkingError.notLinkedToModem(_:)
 case RelayStateLinkingError.otherFlagsChanged(_:before:after:)
+case RelayStateLinkingError.planChanged(old:new:)
 case RelayStateLinkingError.recordInPlace(_:group:data1:)
 case RelayStateLinkingError.recordNotFound(_:group:)
 case RelayStateLinkingError.recordNotRead(_:reason:)
@@ -340,6 +342,7 @@ func DeviceInfo.meaning(of:)
 func DeviceLinkingCoordinator.apply(_:)
 func DeviceLinkingCoordinator.link(_:as:group:twoWay:setButtonTimeout:usesCatalogLegs:observer:)
 func DeviceLinkingCoordinator.linkBySETButton(as:group:twoWay:timeout:observer:)
+func DeviceLinkingCoordinator.linkRelay(_:group:twoWay:setButtonTimeout:observer:)
 func DeviceLinkingCoordinator.linkRelay(_:recording:group:twoWay:setButtonTimeout:observer:)
 func DeviceLinkingCoordinator.planDatabaseLink(_:relayState:)
 func DeviceLinkingCoordinator.planDatabaseUnlink(_:removingOrphans:)
@@ -888,6 +891,7 @@ var RelayLinkPlan.clearedFlag
 var RelayLinkPlan.device
 var RelayLinkPlan.ignoresState
 var RelayLinkPlan.isMomentary
+var RelayLinkPlan.leavesUnverifiedMode
 var RelayLinkPlan.opensAfterLinking
 var RelayLinkPlan.pulsesOnBothCommands
 var RelayLinkPlan.state

@@ -28,8 +28,8 @@ struct RelayStateTextTests {
     let off = try Invocation.parse(["link", "1A.2B.3C", "--relay-state=off"]).subcommand
     let database = try Invocation.parse(["link", "1A.2B.3C", "--database", "--dry-run", "--relay-state", "on"]).subcommand
 
-    #expect(on == .link(LinkOptions(device: module, group: 2, relayState: .on, relayStateWrite: DatabaseWriteOptions())))
-    #expect(off == .link(LinkOptions(device: module, relayState: .off, relayStateWrite: DatabaseWriteOptions())))
+    #expect(on == .link(LinkOptions(device: module, group: 2, relayState: .on, relayStateConfirmation: DatabaseWriteOptions())))
+    #expect(off == .link(LinkOptions(device: module, relayState: .off, relayStateConfirmation: DatabaseWriteOptions())))
     #expect(database == .link(LinkOptions(device: module, database: DatabaseWriteOptions(isDryRun: true), relayState: .on)))
 
   }
@@ -39,8 +39,8 @@ struct RelayStateTextTests {
     let yes = try Invocation.parse(["link", "1A.2B.3C", "--relay-state", "on", "--yes"]).subcommand
     let dry = try Invocation.parse(["link", "1A.2B.3C", "--relay-state", "on", "--dry-run"]).subcommand
 
-    #expect(yes == .link(LinkOptions(device: module, relayState: .on, relayStateWrite: DatabaseWriteOptions(assumesYes: true))))
-    #expect(dry == .link(LinkOptions(device: module, relayState: .on, relayStateWrite: DatabaseWriteOptions(isDryRun: true))))
+    #expect(yes == .link(LinkOptions(device: module, relayState: .on, relayStateConfirmation: DatabaseWriteOptions(assumesYes: true))))
+    #expect(dry == .link(LinkOptions(device: module, relayState: .on, relayStateConfirmation: DatabaseWriteOptions(isDryRun: true))))
     #expect(try DatabaseWriteOptions().asksForConfirmation(readsFromTerminal: true, subcommand: "link"))
     #expect(throws: ArgumentError.confirmationNeeded(subcommand: "link")) {
 
@@ -76,9 +76,39 @@ struct RelayStateTextTests {
       "  1. Link it. The relay is already on, so it isn't switched."
     ])
     #expect(RelayLinkText.plan(plan(momentary: true, pulses: true)) == [
-      "1A.2B.3C's momentaryOnBothCommands flag is on, so every On and Off only pulses the relay and the state is ignored.",
+      "1A.2B.3C's relay is momentary with its momentaryOnBothCommands flag on, so every On and Off only pulses it and the state is ignored.",
       "  1. Link it. The relay isn't switched and no flag is written."
     ])
+    #expect(RelayLinkText.plan(plan(pulses: true)) == [
+      "1A.2B.3C's momentaryOnBothCommands flag is on though its relay isn't momentary, a mode whose effect isn't verified, so the relay isn't switched.",
+      "  1. Link it. The relay isn't switched and no flag is written; its record holds the state the relay is in."
+    ])
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func decidesWhetherToShowOnlyAskOrLink() async throws {
+
+    let confirms = { (_: String) async throws -> Bool in true }
+    let declines = { (_: String) async throws -> Bool in false }
+
+    #expect(try await RelayLinkText.decision(plan(), isDryRun: true, asks: true, confirm: confirms) == .dryRun)
+    #expect(try await RelayLinkText.decision(plan(), isDryRun: false, asks: true, confirm: declines) == .declined)
+    #expect(try await RelayLinkText.decision(plan(), isDryRun: false, asks: true, confirm: confirms) == .link)
+    #expect(try await RelayLinkText.decision(plan(), isDryRun: false, asks: false, confirm: declines) == .link)
+    // A plan that switches nothing isn't asked about.
+    #expect(try await RelayLinkText.decision(plan(before: .on), isDryRun: false, asks: true, confirm: declines) == .link)
+
+  }
+
+  @Test func printsThePlanAsJSONForADryRun() throws {
+
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+
+    #expect(String(decoding: try encoder.encode(RelayLinkText.report(plan(momentary: true), isDryRun: true)), as: UTF8.self) == """
+      {"before":"off","clearedFlag":"momentary","device":"1A.2B.3C","dryRun":true,"ignoresState":false,"isMomentary":true,\
+      "leavesUnverifiedMode":false,"opensAfterLinking":true,"pulsesOnBothCommands":false,"state":"on","switchesBackOnFailure":false,"switchesRelay":true}
+      """)
 
   }
 
@@ -161,9 +191,15 @@ struct RelayStateTextTests {
     #expect(notes(.relayState(.settingRelay(module, .on))) == ["Turning 1A.2B.3C's relay on, so it links with the relay on..."])
     #expect(notes(.relayState(.settingRelay(module, .off))) == ["Turning 1A.2B.3C's relay off, so it links with the relay off..."])
     #expect(notes(.relayState(.relayAlreadySet(module, .off))) == ["1A.2B.3C's relay is already off, so it links with the relay off."])
-    #expect(notes(.relayState(.stateIgnored(module, flag: "momentaryOnBothCommands"))) == [
-      "1A.2B.3C's momentaryOnBothCommands flag is on, so every On and Off only pulses the relay and the state is ignored. It's linked without switching the relay."
+    #expect(notes(.relayState(.stateIgnored(module, flag: "momentaryOnBothCommands", isMomentary: true))) == [
+      "1A.2B.3C's relay is momentary with its momentaryOnBothCommands flag on, so every On and Off only pulses it and the state is ignored. "
+        + "It's linked without switching the relay or writing a flag."
     ])
+    #expect(notes(.relayState(.stateIgnored(module, flag: "momentaryOnBothCommands", isMomentary: false))) == [
+      "1A.2B.3C's momentaryOnBothCommands flag is on though its relay isn't momentary, a mode whose effect isn't verified, "
+        + "so it's linked without switching the relay or writing a flag, and records the state the relay is in."
+    ])
+    #expect(notes(.relayState(.relayLeft(module, reads: .off))) == ["1A.2B.3C's relay reads off, so it's left as it is rather than switched again."])
     #expect(notes(.relayState(.relayConfirmed(module, .on))).isEmpty)
     #expect(notes(.relayState(.returningRelay(module, .off))) == ["Turning 1A.2B.3C's relay off after the link..."])
     #expect(notes(.relayState(.restoringFlag(module, flag: "momentary"))) == ["Turning 1A.2B.3C's momentary flag back on..."])
@@ -206,8 +242,14 @@ struct RelayStateTextTests {
       "1A.2B.3C recorded its relay off: a group On turns the relay off, and a group Off turns it on. "
         + "The relay is momentary, so it holds that state only for its momentary time."
     ])
-    // The mode ignores the state, which the note before the link said.
-    #expect(notes(.relayState(.recorded(link(isMomentary: true, pulses: true)))).isEmpty)
+    #expect(notes(.relayState(.recorded(link(isMomentary: true, pulses: true)))) == [
+      "1A.2B.3C linked without switching its relay, whose record holds Data 1 0xFF. "
+        + "Its relay is momentary with momentaryOnBothCommands on, so every On and Off only pulses it and the state is ignored."
+    ])
+    #expect(notes(.relayState(.recorded(link(isMomentary: false, pulses: true)))) == [
+      "1A.2B.3C linked without switching its relay, whose record holds Data 1 0xFF. "
+        + "Its momentaryOnBothCommands flag is on though the relay isn't momentary, a mode whose effect isn't verified."
+    ])
     // The command's failure says what the record holds instead.
     #expect(notes(.relayState(.recorded(link(record: .recordedOtherState(module, group: 2, data1: 0x00, requested: .on))))).isEmpty)
 
