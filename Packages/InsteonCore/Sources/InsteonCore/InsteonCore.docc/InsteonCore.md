@@ -382,6 +382,7 @@ do {
 - ``WakePrompt``
 - ``RelayState``
 - ``RelayStateEvent``
+- ``RelayLinkPlan``
 - ``RelayStateLink``
 - ``RelayStateLinkingError``
 - ``LinkedDevice``

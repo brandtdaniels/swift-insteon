@@ -1,4 +1,5 @@
 import Foundation
+import InsteonDeviceCatalog
 import InsteonProtocol
 
 /// The state a relay records when it links as a responder, such as an I/O Linc's: what a
@@ -38,6 +39,88 @@ public enum RelayState: String, Hashable, Sendable, CaseIterable {
     case .off:
       return 0x00
     }
+
+  }
+
+}
+
+/// What linking a relay with a chosen ``RelayState`` switches and puts back, from its flags
+/// and status, as
+/// ``DeviceLinkingCoordinator/planRelayLink(_:recording:observer:)`` reads them, for a front end
+/// to show and ask about before the relay, and whatever it controls, is switched.
+public struct RelayLinkPlan: Hashable, Sendable {
+
+  /// The relay.
+  public var device: InsteonAddress
+
+  /// The state it's to record.
+  public var state: RelayState
+
+  /// Its state before the link, as its status read.
+  public var before: RelayState
+
+  /// Whether its momentary flag is on.
+  public var isMomentary: Bool
+
+  /// Whether its momentaryOnBothCommands flag is on, so every On and Off only pulses the relay
+  /// and the recorded state is ignored.
+  public var pulsesOnBothCommands: Bool
+
+  /// Creates a plan.
+  ///
+  /// - Parameters:
+  ///   - device: The relay.
+  ///   - state: The state it's to record.
+  ///   - before: Its state before the link.
+  ///   - isMomentary: Whether its momentary flag is on.
+  ///   - pulsesOnBothCommands: Whether its momentaryOnBothCommands flag is on.
+  public init(device: InsteonAddress, state: RelayState, before: RelayState, isMomentary: Bool, pulsesOnBothCommands: Bool) {
+
+    self.device = device
+    self.state = state
+    self.before = before
+    self.isMomentary = isMomentary
+    self.pulsesOnBothCommands = pulsesOnBothCommands
+
+  }
+
+  /// Whether the state is ignored, since every On and Off only pulses the relay, so the relay
+  /// isn't switched and no flag is written.
+  public var ignoresState: Bool {
+
+    pulsesOnBothCommands
+
+  }
+
+  /// Whether the relay is switched to the state: when it isn't in it, or when it's momentary
+  /// and the state is on, since a momentary relay reads on only while it's closed for its
+  /// momentary time. Never when it ignores the state.
+  public var switchesRelay: Bool {
+
+    !ignoresState && (before != state || (isMomentary && state == .on))
+
+  }
+
+  /// The flag turned off for the link, so the relay holds its state, or `nil` when none is.
+  public var clearedFlag: String? {
+
+    switchesRelay && isMomentary ? DeviceLinkingCoordinator.momentaryFlag.rawValue : nil
+
+  }
+
+  /// Whether a momentary relay switched on is switched off right after the link, since it
+  /// rests open.
+  public var opensAfterLinking: Bool {
+
+    clearedFlag != nil && state == .on
+
+  }
+
+  /// Whether a relay that isn't momentary is switched back to its state before when linking
+  /// fails or is canceled. Once linked, it keeps the state it recorded.
+  public var switchesBackOnFailure: Bool {
+
+    switchesRelay && !isMomentary
 
   }
 
@@ -180,6 +263,11 @@ public enum RelayStateEvent: Sendable {
 
   /// The relay's status showed it already in the state, so it wasn't sent a command.
   case relayAlreadySet(InsteonAddress, RelayState)
+
+  /// The relay's flag, such as `momentaryOnBothCommands`, is on, so every On and Off only
+  /// pulses it and the state is ignored. It's linked without being switched, and no flag is
+  /// written.
+  case stateIgnored(InsteonAddress, flag: String)
 
   /// The relay's status, read again, showed it in the state.
   case relayConfirmed(InsteonAddress, RelayState)

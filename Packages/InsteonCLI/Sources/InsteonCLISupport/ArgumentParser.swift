@@ -379,7 +379,12 @@ extension Invocation {
 
     }
 
-    if let databaseOnlyOption {
+    // --relay-state asks before it switches the relay, as --database asks before it writes.
+    if options.relayState != nil {
+
+      options.relayStateWrite = database
+
+    } else if let databaseOnlyOption {
 
       throw ArgumentError.missingArgument("--database with \(databaseOnlyOption)", subcommand: "link")
 

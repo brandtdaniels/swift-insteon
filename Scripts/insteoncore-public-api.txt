@@ -214,6 +214,7 @@ case RelayStateEvent.restoreFailed(_:_:)
 case RelayStateEvent.restoringFlag(_:flag:)
 case RelayStateEvent.returningRelay(_:_:)
 case RelayStateEvent.settingRelay(_:_:)
+case RelayStateEvent.stateIgnored(_:flag:)
 case RelayStateLinkingError.flagNotChanged(_:flag:isSet:)
 case RelayStateLinkingError.flagNotRestored(_:flag:reason:)
 case RelayStateLinkingError.flagRestoreUnconfirmed(_:flag:reason:)
@@ -342,6 +343,7 @@ func DeviceLinkingCoordinator.linkBySETButton(as:group:twoWay:timeout:observer:)
 func DeviceLinkingCoordinator.linkRelay(_:recording:group:twoWay:setButtonTimeout:observer:)
 func DeviceLinkingCoordinator.planDatabaseLink(_:relayState:)
 func DeviceLinkingCoordinator.planDatabaseUnlink(_:removingOrphans:)
+func DeviceLinkingCoordinator.planRelayLink(_:recording:observer:)
 func DeviceLinkingCoordinator.remove(_:scan:forceModemSide:timeout:observer:)
 func DeviceLinkingCoordinator.unlink(_:as:group:timeout:observer:)
 func DeviceLinkingCoordinator.unlinkAll(_:timeout:observer:)
@@ -451,6 +453,7 @@ init ProductCatalog(json:)
 init ProductCatalogStore(catalogPath:versionPath:)
 init ProtectedCommand?(command1:command2:)
 init RegisteredDevice(address:identity:info:)
+init RelayLinkPlan(device:state:before:isMomentary:pulsesOnBothCommands:)
 init RelayStateLink(device:state:group:recordedData1:recordFailure:clearedFlag:isMomentary:pulsesOnBothCommands:restoreFailures:)
 init RemoteUnlinkingError(device:info:underlying:)
 init RemovedLinks(address:device:links:)
@@ -600,6 +603,7 @@ struct ProductCatalog
 struct ProductCatalogStore
 struct ReceivedFrame
 struct RegisteredDevice
+struct RelayLinkPlan
 struct RelayStateLink
 struct RemoteUnlinkingError
 struct RemovedLinks
@@ -879,6 +883,16 @@ var ProductCatalogStoreError.description
 var RegisteredDevice.address
 var RegisteredDevice.identity
 var RegisteredDevice.info
+var RelayLinkPlan.before
+var RelayLinkPlan.clearedFlag
+var RelayLinkPlan.device
+var RelayLinkPlan.ignoresState
+var RelayLinkPlan.isMomentary
+var RelayLinkPlan.opensAfterLinking
+var RelayLinkPlan.pulsesOnBothCommands
+var RelayLinkPlan.state
+var RelayLinkPlan.switchesBackOnFailure
+var RelayLinkPlan.switchesRelay
 var RelayState.data1
 var RelayState.opposite
 var RelayStateLink.clearedFlag

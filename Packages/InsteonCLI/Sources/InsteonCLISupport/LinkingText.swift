@@ -517,6 +517,11 @@ public enum LinkingEventText {
       return ["Turning \(device)'s relay \(state.rawValue), so it links with the relay \(state.rawValue)..."]
     case let .relayAlreadySet(device, state):
       return ["\(device)'s relay is already \(state.rawValue), so it links with the relay \(state.rawValue)."]
+    case let .stateIgnored(device, flag):
+      return [
+        "\(device)'s \(flag) flag is on, so every On and Off only pulses the relay and the state is ignored. "
+          + "It's linked without switching the relay."
+      ]
     case .relayConfirmed, .flagRestored:
       return []
     case let .returningRelay(device, state):
@@ -526,8 +531,9 @@ public enum LinkingEventText {
     case let .restoreFailed(_, failure):
       return [relayStateMessage(failure)]
     case let .recorded(link):
-      // The command's failure says what the record holds instead.
-      return link.recordFailure == nil ? [relayStateRecorded(link)] : []
+      // The command's failure says what the record holds instead, and the note before the link
+      // said a relay that only pulses ignores the state.
+      return link.recordFailure == nil && !link.pulsesOnBothCommands ? [relayStateRecorded(link)] : []
     }
 
   }
@@ -632,11 +638,7 @@ public enum LinkingEventText {
     var line: String = "\(link.device) recorded its relay \(link.state.rawValue): a group On turns the relay \(link.groupOn.rawValue), "
       + "and a group Off turns it \(link.groupOff.rawValue)."
 
-    if link.isMomentary, link.pulsesOnBothCommands {
-
-      line += " Both On and Off pulse the momentary relay, so the state isn't used while it's momentary."
-
-    } else if link.isMomentary {
+    if link.isMomentary {
 
       line += " The relay is momentary, so it holds that state only for its momentary time."
 

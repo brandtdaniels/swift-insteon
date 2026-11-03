@@ -73,7 +73,7 @@ struct InsteonCommand {
       }
     case let .link(options):
       // Asked before the modem is opened, so a command that can't ask fails at once.
-      let asks: Bool = try options.database?.asksForConfirmation(readsFromTerminal: Terminal.readsFromTerminal, subcommand: "link") ?? false
+      let asks: Bool = try (options.database ?? options.relayStateWrite)?.asksForConfirmation(readsFromTerminal: Terminal.readsFromTerminal, subcommand: "link") ?? false
 
       try await withModem(invocation) { modem, names in
 

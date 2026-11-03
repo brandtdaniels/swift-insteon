@@ -429,7 +429,7 @@ struct RelayStateLinkingTests {
 
   }
 
-  @Test func linksWithTheStateWhenBothCommandsPulseAndSaysSo() async throws {
+  @Test func linksWithoutSwitchingAnythingWhenBothCommandsPulse() async throws {
 
     let flags: UInt8 = RelayExample.momentary.bit | RelayExample.bothCommands.bit
     let modem: InMemoryModem = await modem(flags: flags)
@@ -437,9 +437,62 @@ struct RelayStateLinkingTests {
 
     let result: DeviceLinkingResult = try await linkRelay(modem, .on, observer: recorder)
 
-    #expect(result.relayState?.pulsesOnBothCommands == true)
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+
+    // Only reads are sent besides the link: the mode ignores the state.
+    #expect(Array(steps.prefix(2)) == [step(0x1F, 0x00), step(0x19, 0x00)])
+    #expect(changes(in: steps).allSatisfy { (step: InMemoryModem.LinkingStep) -> Bool in
+
+      if case let .device(_, command, _) = step {
+
+        return command.command1 == 0x09
+
+      }
+
+      return true
+
+    })
     #expect(await modem.operatingFlags[module] == flags)
-    #expect(await recorder.lines.last == "relay state: group on gives on, off gives off, momentary true, pulses true")
+    #expect(result.relayState?.pulsesOnBothCommands == true)
+    #expect(result.relayState?.clearedFlag == nil)
+    #expect(result.relayState?.recordFailure == nil)
+    #expect(Array(await recorder.lines.prefix(1)) == ["relay state: \(module) ignores the state"])
+
+  }
+
+  // MARK: - Planning
+
+  @Test func plansWhatItWillSwitchAndSendsOnlyReads() async throws {
+
+    let modem: InMemoryModem = await modem(flags: RelayExample.momentary.bit)
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+
+    let plan: RelayLinkPlan = try await linking.planRelayLink(module, recording: .on, observer: LinkingRecorder())
+
+    #expect(plan.state == .on)
+    #expect(plan.before == .off)
+    #expect(plan.switchesRelay)
+    #expect(plan.clearedFlag == "momentary")
+    #expect(plan.opensAfterLinking)
+    #expect(!plan.switchesBackOnFailure)
+    #expect(!plan.ignoresState)
+    #expect(await modem.linkingSteps == [step(0x1F, 0x00), step(0x19, 0x00)])
+
+  }
+
+  @Test func plansNothingToSwitchForARelayAlreadyInTheStateOrOneThatOnlyPulses() async throws {
+
+    let still: RelayLinkPlan = try await network(await modem(flags: 0x00, relay: 0xFF)).linking.planRelayLink(module, recording: .on, observer: LinkingRecorder())
+    let latching: RelayLinkPlan = try await network(await modem(flags: 0x00)).linking.planRelayLink(module, recording: .on, observer: LinkingRecorder())
+    let pulsing: RelayLinkPlan = try await network(await modem(flags: RelayExample.momentary.bit | RelayExample.bothCommands.bit)).linking.planRelayLink(module, recording: .on, observer: LinkingRecorder())
+
+    #expect(!still.switchesRelay)
+    #expect(latching.switchesRelay)
+    #expect(latching.switchesBackOnFailure)
+    #expect(latching.clearedFlag == nil)
+    #expect(pulsing.ignoresState)
+    #expect(!pulsing.switchesRelay)
+    #expect(pulsing.clearedFlag == nil)
 
   }
 

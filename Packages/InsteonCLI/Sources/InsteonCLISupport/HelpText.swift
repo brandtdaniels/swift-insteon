@@ -156,7 +156,7 @@ public enum HelpText {
   public static let link = """
     Usage: insteon [--hub HOST[:PORT] | --serial PATH] link [ADDRESS] [--group N]
                    [--controller | --responder | --either] [--two-way | --one-way]
-                   [--relay-state on|off] [--timeout SECONDS] [--json]
+                   [--relay-state on|off [--dry-run] [--yes]] [--timeout SECONDS] [--json]
            insteon [--hub HOST[:PORT] | --serial PATH] link ADDRESS --database
                    [--relay-state on|off] [--dry-run] [--yes] [--json]
            insteon [--hub HOST[:PORT] | --serial PATH] link --cancel
@@ -205,9 +205,13 @@ public enum HelpText {
 
     With ADDRESS and --relay-state, the device's main group must be a relay, as the catalog
     describes it, and the device must already be linked to the modem, or nothing is changed.
-    The command reads the relay's flags and status. When the relay isn't in the state, it
-    switches the relay, and whatever it controls, such as a garage door opener, then reads
-    its status again; a relay already in the state is sent nothing. A momentary relay would
+    The command reads the relay's flags and status, shows what it will switch and put back,
+    and asks before it switches anything; --yes skips the question, which is needed without
+    a terminal, and --dry-run shows the plan and sends nothing more. When the relay isn't in
+    the state, it switches the relay, and whatever it controls, such as a garage door opener,
+    a lock or a valve, then reads its status again; a relay already in the state is sent
+    nothing. With the momentaryOnBothCommands flag on, every On and Off only pulses the
+    relay and the state is ignored, so the relay isn't switched and no flag is written. A momentary relay would
     open again before it links, so its momentary flag is turned off first, when the catalog
     lets linking change it and the flag can be turned back on. The device is linked in one
     link, in the --group group, not by the catalog's links to a Hub, and never with its SET
@@ -237,9 +241,11 @@ public enum HelpText {
                           responder record holds the state, 0xFF for on and 0x00 for off,
                           and the relay isn't switched; a responder record already there with
                           the other state is refused.
-      --dry-run           With --database, show the writes and make none.
-      --yes, -y           With --database, write without asking. Needed when standard input
-                          isn't a terminal.
+      --dry-run           With --database, show the writes and make none. With
+                          --relay-state, show the plan and switch and link nothing.
+      --yes, -y           With --database, write without asking; with --relay-state, switch
+                          the relay without asking. Needed when standard input isn't a
+                          terminal.
 
     With --json, prints one object, the same for every device: "links", every link the modem
     reported, in order, and "legs", each of the catalog's links to a Hub with its modemRole,
