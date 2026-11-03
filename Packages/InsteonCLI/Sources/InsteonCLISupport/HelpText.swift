@@ -209,10 +209,12 @@ public enum HelpText {
     switches the relay, and whatever it controls, such as a garage door opener, then reads
     its status again; a relay already in the state is sent nothing. A momentary relay would
     open again before it links, so its momentary flag is turned off first, when the catalog
-    lets linking change it, and the relay is switched back afterward, before the flag is
-    turned back on, even when linking fails or Control-C stops it. The device is linked in
-    one link, in the --group group, not by the catalog's links to a Hub, and never with its
-    SET button. Then its responder record is read back to check the state it holds. Without
+    lets linking change it and the flag can be turned back on. The device is linked in one
+    link, in the --group group, not by the catalog's links to a Hub, and never with its SET
+    button. Then a momentary relay switched on is switched off, since it rests open, and its
+    flag turned back on, even when linking fails or Control-C stops it. A relay that isn't
+    momentary keeps the state it recorded, and is switched back when linking fails or is
+    stopped. Last, its responder record is read back to check the state it holds. Without
     --relay-state, a relay is never switched and its flags are never written.
 
     With ADDRESS and --database, links the device by writing the records of the catalog's

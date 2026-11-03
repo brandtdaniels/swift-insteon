@@ -320,7 +320,7 @@ extension RelayStateLinkingError: CustomStringConvertible, LocalizedError {
     case let .relayNotConfirmed(device, requested):
       "\(device)'s relay didn't read back \(requested.rawValue), so it would record the wrong state. Nothing was linked."
     case let .remoteLinkingFailed(device, reason):
-      "\(device) didn't link without its SET button: \(Self.message(reason)) It isn't linked with its SET button instead, since that records whatever state the relay is in by then. Nothing was linked."
+      "\(device) didn't link without its SET button: \(Self.message(reason)) It isn't linked with its SET button instead, since that records whatever state the relay is in by then. No link was reported."
     case let .recordedOtherState(device, group, data1, requested):
       "\(device)'s responder record for group \(group.rawValue) holds Data 1 \(Self.hex(data1)), not \(Self.hex(requested.data1)) for \(requested.rawValue), so a group On doesn't set the relay \(requested.rawValue). The link stays made; link it again with the relay state."
     case let .recordNotFound(device, group):

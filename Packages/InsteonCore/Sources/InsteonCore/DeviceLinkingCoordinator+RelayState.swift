@@ -31,20 +31,23 @@ extension DeviceLinkingCoordinator {
   /// 2. When the relay isn't in the state, or is momentary and the state is on, it must be
   ///    sent a command. A momentary relay would open again before it links, so its momentary
   ///    flag is turned off first and read back, but only when the catalog's linking changes
-  ///    allow it; otherwise the link is refused. A relay already in the state is sent nothing,
+  ///    allow it, and when the messages that set the flag back and open the relay would be
+  ///    sent; otherwise the link is refused. A relay already in the state is sent nothing,
   ///    and no flag is written.
   /// 3. The relay is sent its group type's On or Off through the device's guarded send path,
   ///    and its status is read again; a relay that doesn't show the state isn't linked.
   /// 4. The device is linked in one link, in the modem's `group`, not by the catalog's legs.
   ///    A device that doesn't link without its SET button isn't linked with it, since that
   ///    records whatever state the relay is in by the time a person presses it.
-  /// 5. The relay's responder record is read back, and its Data 1 compared with the state.
-  /// 6. A momentary relay that was switched is switched back to its state before the link,
-  ///    while its flag is still off, so it isn't left closed; then the flag is turned back on
-  ///    and read back, once more if that fails, and the whole flags byte compared with the one
-  ///    read first.
+  /// 5. A momentary relay rests open, so one switched on is switched off while its flag is
+  ///    still off, once more if that fails; then the flag is turned back on and read back,
+  ///    once more if that fails, and the whole flags byte compared with the one read first.
+  /// 6. The relay's responder record is read back, through the network's cache, and its
+  ///    Data 1 compared with the state the link fixed.
   ///
-  /// Step 6 runs however linking ends, after a failure and when the task is canceled. The
+  /// Step 5 runs however linking ends, after a failure and when the task is canceled. A relay
+  /// that isn't momentary keeps the state it recorded once the link is made; when linking
+  /// fails or is canceled after it was switched, it's switched back to its state before. The
   /// observer gets ``LinkingEvent/relayState(_:)`` for each step, and the result's
   /// ``DeviceLinkingResult/relayState`` says what a group On and a group Off do, and what
   /// didn't go as asked once the link was made, which doesn't throw.
@@ -68,10 +71,10 @@ extension DeviceLinkingCoordinator {
   ///   - observer: What a person is told.
   /// - Returns: The links made, the device, and the relay's ``RelayStateLink``.
   /// - Throws: ``RelayStateLinkingError`` when the relay can't record the state or doesn't
-  ///   link without its SET button, `LinkMismatch` or `LinkingError.unexpectedLink(_:)` when
-  ///   the modem reports another link, the modem's errors, such as
-  ///   `ModemError.deviceTimedOut` when the device doesn't answer, and `CancellationError` if
-  ///   the task is canceled.
+  ///   link without its SET button, ``DeviceControlError`` when a message it needs would be
+  ///   refused, `LinkMismatch` or `LinkingError.unexpectedLink(_:)` when the modem reports
+  ///   another link, the modem's errors, such as `ModemError.deviceTimedOut` when the device
+  ///   doesn't answer, and `CancellationError` if the task is canceled.
   public func linkRelay(
     _ device: InsteonAddress,
     recording state: RelayState,
@@ -96,22 +99,44 @@ extension DeviceLinkingCoordinator {
       // A momentary relay reads on only while it's closed for its momentary time, so it's
       // held on with a command of its own.
       let needsCommand: Bool = before != state || (isMomentary && state == .on)
+      let clears: Bool = isMomentary && needsCommand
       let writableFlags: Set<SettingName> = Self.writableLinkingFlags(of: description)
+      // A momentary relay rests open, so only one switched on is switched back, and only off.
+      let opensAfter: Bool = clears && state == .on
 
-      if isMomentary, needsCommand, !writableFlags.contains(Self.momentaryFlag) {
+      if clears {
 
-        throw RelayStateLinkingError.momentaryNotChangeable(device, flag: Self.momentaryFlag.rawValue)
+        guard let momentary, writableFlags.contains(Self.momentaryFlag) else {
+
+          throw RelayStateLinkingError.momentaryNotChangeable(device, flag: Self.momentaryFlag.rawValue)
+
+        }
+
+        // A flag that couldn't be set back, or a relay that couldn't be opened, is never
+        // cleared: both messages are checked first, and nothing is sent.
+        try await target.refuseUnlessSendable(.flag(DeviceProfile.Group.Condition(flag: momentary.name, isSet: true)), writableFlags: writableFlags, for: .linkingFlags)
+
+        if opensAfter {
+
+          try await target.refuseUnlessSwitchable(on: false)
+
+        }
 
       }
 
-      // What to put back however linking ends: the flag turned off, and the relay's state
-      // before the link when it was switched.
+      // What to put back however linking ends: the flag turned off, and whether the relay
+      // was switched.
       var cleared: OperatingFlag?
       var switched: Bool = false
+      let putBack = { (flag: OperatingFlag, wasSwitched: Bool) async -> Restored in
+
+        await self.putBack(flag, openingRelay: opensAfter && wasSwitched, of: target, originalFlags: flags.bytes[flag.query], writableFlags: writableFlags, observer: observer)
+
+      }
 
       do {
 
-        if isMomentary, needsCommand, let momentary {
+        if clears, let momentary {
 
           await observer.linking(.relayState(.clearingFlag(device, flag: momentary.name.rawValue)))
 
@@ -119,19 +144,15 @@ extension DeviceLinkingCoordinator {
 
             try await Self.write(momentary, isSet: false, of: target, writableFlags: writableFlags)
 
-          } catch let error as DeviceControlError {
-
-            // Refused before anything was sent, so there's nothing to put back.
-            throw error
-
-          } catch let error as FieldError {
-
-            throw error
-
           } catch {
 
-            // The message may have reached the device.
-            cleared = momentary
+            // A refusal comes before anything is sent; any other error may follow the
+            // message reaching the device.
+            if !(error is DeviceControlError || error is FieldError) {
+
+              cleared = momentary
+
+            }
 
             throw error
 
@@ -170,25 +191,30 @@ extension DeviceLinkingCoordinator {
 
         }
 
-        var result: DeviceLinkingResult = try await link(device, group: group, twoWay: twoWay, setButtonTimeout: setButtonTimeout, description: description, observer: observer)
-        let linkedGroup: AllLinkGroupNumber = result.links.first?.group ?? group
-        let recorded: (data1: UInt8?, failure: RelayStateLinkingError?) = try await checkRecord(of: device, group: linkedGroup, state: state)
+        var result: DeviceLinkingResult = try await linkWithoutSETButton(device, group: group, twoWay: twoWay, setButtonTimeout: setButtonTimeout, description: description, observer: observer)
+        // The link fixed the record's Data 1, so from here a relay that isn't momentary keeps
+        // its state, and a momentary one is put back at once, before its record is read.
+        let wasSwitched: Bool = switched
         var restored: Restored = Restored(isMomentary: isMomentary, failures: [])
+
+        switched = false
 
         if let flag = cleared {
 
           cleared = nil
-          restored = await putBack(flag, relayTo: switched ? before : nil, of: target, originalFlags: flags.bytes[flag.query], writableFlags: writableFlags, observer: observer)
+          restored = await putBack(flag, wasSwitched)
 
         }
 
+        let linkedGroup: AllLinkGroupNumber = result.links.first?.group ?? group
+        let recorded: (data1: UInt8?, failure: RelayStateLinkingError?) = try await checkRecord(of: device, group: linkedGroup, state: state)
         let link = RelayStateLink(
           device: device,
           state: state,
           group: linkedGroup,
           recordedData1: recorded.data1,
           recordFailure: recorded.failure,
-          clearedFlag: isMomentary && needsCommand ? momentary?.name.rawValue : nil,
+          clearedFlag: clears ? momentary?.name.rawValue : nil,
           isMomentary: restored.isMomentary,
           pulsesOnBothCommands: flags.states[Self.momentaryOnBothCommandsFlag] ?? false,
           restoreFailures: restored.failures
@@ -201,11 +227,16 @@ extension DeviceLinkingCoordinator {
 
       } catch {
 
+        // What didn't go back is reported, and the error that stopped linking thrown.
         if let flag = cleared {
 
-          // What put back didn't go as it was is reported, and the error that stopped
-          // linking thrown.
-          _ = await putBack(flag, relayTo: switched ? before : nil, of: target, originalFlags: flags.bytes[flag.query], writableFlags: writableFlags, observer: observer)
+          _ = await putBack(flag, switched)
+
+        } else if switched {
+
+          // A relay that isn't momentary goes back to its state before, since nothing
+          // recorded the one it was switched to.
+          _ = await returnRelay(target, to: before, observer: observer)
 
         }
 
@@ -374,7 +405,7 @@ extension DeviceLinkingCoordinator {
 
   /// Links the relay in one link as the modem's responder, without falling back to its SET
   /// button, and records that its databases may have changed when that throws.
-  private func link(
+  private func linkWithoutSETButton(
     _ device: InsteonAddress,
     group: AllLinkGroupNumber,
     twoWay: TwoWayLinking,
@@ -424,7 +455,8 @@ extension DeviceLinkingCoordinator {
     do {
 
       let modem: InsteonAddress = try await network.modemInfo().address
-      let records: [AllLinkRecordResponse] = try await network.modem.readAllLinkDatabase(of: device, timeout: Modem.defaultExtendedRequestTimeout)
+      // Through the network's cache, so the copy read serves what reads the database next.
+      let records: [AllLinkRecordResponse] = try await network.databaseCopy(of: device).records
 
       guard let record = records.map(\.record).first(where: { (record: AllLinkRecord) -> Bool in
 
@@ -456,14 +488,14 @@ extension DeviceLinkingCoordinator {
 
   }
 
-  /// Puts back what linking changed, to its end even when the task is canceled, and tells the
-  /// observer how it went: a momentary relay that was switched goes back to its state before
-  /// the link while its flag is still off, then the flag is turned back on and read back,
-  /// once more if that fails, and the whole flags byte is compared with the one read first.
+  /// Puts back what linking changed on a momentary relay, to its end even when the task is
+  /// canceled, and tells the observer how it went: a relay switched on is switched off while
+  /// its flag is still off, then the flag is turned back on and read back, each once more if
+  /// it fails, and the whole flags byte is compared with the one read first.
   ///
   /// - Parameters:
   ///   - flag: The flag turned off for the link.
-  ///   - before: The relay's state before the link, when it was switched, or `nil`.
+  ///   - opensRelay: Whether the relay was switched on, so it's switched off.
   ///   - target: The relay.
   ///   - originalFlags: The flags byte the flag is in, as read before the link.
   ///   - writableFlags: The flags linking may write.
@@ -471,7 +503,7 @@ extension DeviceLinkingCoordinator {
   /// - Returns: Whether the relay is momentary afterward, and what didn't go back.
   private func putBack(
     _ flag: OperatingFlag,
-    relayTo before: RelayState?,
+    openingRelay opensRelay: Bool,
     of target: Device,
     originalFlags: UInt8?,
     writableFlags: Set<SettingName>,
@@ -485,26 +517,9 @@ extension DeviceLinkingCoordinator {
 
       var failures: [RelayStateLinkingError] = []
 
-      func fail(_ failure: RelayStateLinkingError) async {
+      if opensRelay, let failure = await Self.switchBack(target, to: .off, observer: observer) {
 
         failures.append(failure)
-        await observer.linking(.relayState(.restoreFailed(device, failure)))
-
-      }
-
-      if let before {
-
-        await observer.linking(.relayState(.returningRelay(device, before)))
-
-        do {
-
-          try await Self.switchRelay(target, to: before)
-
-        } catch {
-
-          await fail(.relayNotReturned(device, state: before, reason: error))
-
-        }
 
       }
 
@@ -512,7 +527,8 @@ extension DeviceLinkingCoordinator {
 
       var readBack: UInt8?
       var lastFailure: (any Error)?
-      var lastWasRead: Bool = false
+      // Whether the device acknowledged a write, so the flag may be on though it wasn't read.
+      var wasAcknowledged: Bool = false
 
       // Once more when it fails, since the device may have missed one message.
       for _ in 1...2 where readBack == nil {
@@ -521,16 +537,7 @@ extension DeviceLinkingCoordinator {
 
           try await Self.write(flag, isSet: true, of: target, writableFlags: writableFlags)
 
-        } catch {
-
-          lastFailure = error
-          lastWasRead = false
-
-          continue
-
-        }
-
-        do {
+          wasAcknowledged = true
 
           let byte: UInt8 = try await Self.read(flag, of: target).command.command2
 
@@ -540,15 +547,14 @@ extension DeviceLinkingCoordinator {
 
           } else {
 
+            wasAcknowledged = false
             lastFailure = RelayStateLinkingError.flagNotChanged(device, flag: name, isSet: true)
-            lastWasRead = false
 
           }
 
         } catch {
 
           lastFailure = error
-          lastWasRead = true
 
         }
 
@@ -557,8 +563,12 @@ extension DeviceLinkingCoordinator {
       guard let readBack else {
 
         let reason: any Error = lastFailure ?? RelayStateLinkingError.flagNotChanged(device, flag: name, isSet: true)
+        let failure: RelayStateLinkingError = wasAcknowledged
+          ? .flagRestoreUnconfirmed(device, flag: name, reason: reason)
+          : .flagNotRestored(device, flag: name, reason: reason)
 
-        await fail(lastWasRead ? .flagRestoreUnconfirmed(device, flag: name, reason: reason) : .flagNotRestored(device, flag: name, reason: reason))
+        failures.append(failure)
+        await observer.linking(.relayState(.restoreFailed(device, failure)))
 
         return Restored(isMomentary: false, failures: failures)
 
@@ -568,13 +578,63 @@ extension DeviceLinkingCoordinator {
 
       if let originalFlags, readBack != originalFlags {
 
-        await fail(.otherFlagsChanged(device, before: originalFlags, after: readBack))
+        let failure = RelayStateLinkingError.otherFlagsChanged(device, before: originalFlags, after: readBack)
+
+        failures.append(failure)
+        await observer.linking(.relayState(.restoreFailed(device, failure)))
 
       }
 
       return Restored(isMomentary: true, failures: failures)
 
     }
+
+  }
+
+  /// Switches a relay that isn't momentary back to its state before linking failed, to its
+  /// end even when the task is canceled.
+  ///
+  /// - Returns: Why it wasn't switched back, or `nil` when it was.
+  private func returnRelay(_ target: Device, to state: RelayState, observer: any LinkingObserver) async -> RelayStateLinkingError? {
+
+    await Self.runToEnd { () async -> RelayStateLinkingError? in
+
+      await Self.switchBack(target, to: state, observer: observer)
+
+    }
+
+  }
+
+  /// Switches a relay back to a state, once more if that fails, and tells the observer.
+  ///
+  /// - Returns: Why it wasn't switched back, or `nil` when it was.
+  private static func switchBack(_ target: Device, to state: RelayState, observer: any LinkingObserver) async -> RelayStateLinkingError? {
+
+    await observer.linking(.relayState(.returningRelay(target.address, state)))
+
+    var lastFailure: (any Error)?
+
+    for _ in 1...2 {
+
+      do {
+
+        try await switchRelay(target, to: state)
+
+        return nil
+
+      } catch {
+
+        lastFailure = error
+
+      }
+
+    }
+
+    let failure = RelayStateLinkingError.relayNotReturned(target.address, state: state, reason: lastFailure ?? RelayStateLinkingError.relayNotConfirmed(target.address, requested: state))
+
+    await observer.linking(.relayState(.restoreFailed(target.address, failure)))
+
+    return failure
 
   }
 

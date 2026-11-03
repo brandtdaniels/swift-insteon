@@ -21,6 +21,12 @@ enum RelayExample {
 
   static let stranger = InsteonAddress(0x4A, 0x5B, 0x04)
 
+  /// A module whose catalog gives a command that turns momentary off but none that turns it
+  /// back on.
+  static let oneWayModule = InsteonAddress(0x4A, 0x5B, 0x05)
+
+  static let oneWayModuleIdentity = ReportedIdentity(category: 0x07, subcategory: 0x63, firmwareVersion: 0x41)
+
   static let moduleIdentity = ReportedIdentity(category: 0x07, subcategory: 0x60, firmwareVersion: 0x41)
 
   static let fixedModuleIdentity = ReportedIdentity(category: 0x07, subcategory: 0x61, firmwareVersion: 0x41)
@@ -71,13 +77,13 @@ enum RelayExample {
     ]
   )
 
-  static func moduleCommands(id: CommandSetID, linkingChanges: [LinkingChange]) -> CommandSet {
+  static func moduleCommands(id: CommandSetID, linkingChanges: [LinkingChange], flags: [OperatingFlag] = operatingFlags) -> CommandSet {
 
     CommandSet(
       id: id,
       name: "Example I/O module",
       summary: "A relay with a momentary mode.",
-      operatingFlags: operatingFlags,
+      operatingFlags: flags,
       standardCommands: [ControlExample.lightOn, ControlExample.lightOff, readStatus],
       groupTypes: [relay],
       linkingChanges: linkingChanges
@@ -88,6 +94,12 @@ enum RelayExample {
   static let commands: CommandSet = moduleCommands(id: "exampleIO", linkingChanges: [LinkingChange(flag: "momentary")])
 
   static let fixedCommands: CommandSet = moduleCommands(id: "exampleFixedIO", linkingChanges: [])
+
+  static let oneWayCommands: CommandSet = moduleCommands(
+    id: "exampleOneWayIO",
+    linkingChanges: [LinkingChange(flag: "momentary")],
+    flags: [OperatingFlag(name: "momentary", summary: "The relay closes for a moment, then opens.", query: .operatingFlags, bit: momentary.bit, off: momentary.off, label: "Momentary relay")]
+  )
 
   static let dimmerCommands = CommandSet(
     id: "exampleRelayDimmer",
@@ -114,15 +126,17 @@ enum RelayExample {
     profiles: [
       profile("9601", moduleIdentity, commands: commands, type: "relay"),
       profile("9602", fixedModuleIdentity, commands: fixedCommands, type: "relay"),
-      profile("9603", dimmerIdentity, commands: dimmerCommands, type: "light")
+      profile("9603", dimmerIdentity, commands: dimmerCommands, type: "light"),
+      profile("9604", oneWayModuleIdentity, commands: oneWayCommands, type: "relay")
     ],
-    commandSets: [commands, fixedCommands, dimmerCommands]
+    commandSets: [commands, fixedCommands, dimmerCommands, oneWayCommands]
   )
 
   static let identities: [InsteonAddress: ReportedIdentity] = [
     module: moduleIdentity,
     fixedModule: fixedModuleIdentity,
-    dimmer: dimmerIdentity
+    dimmer: dimmerIdentity,
+    oneWayModule: oneWayModuleIdentity
   ]
 
 }
@@ -220,6 +234,14 @@ struct RelayStateLinkingTests {
 
   }
 
+  /// The steps before the record is checked: the cache asks for the status, whose cmd1 is the
+  /// database delta, before it reads the database.
+  func beforeRecordCheck(_ steps: [InMemoryModem.LinkingStep]) -> [InMemoryModem.LinkingStep] {
+
+    steps.last == step(0x19, 0x00) ? Array(steps.dropLast()) : steps
+
+  }
+
   /// Links the module with a relay state.
   func linkRelay(
     _ modem: InMemoryModem,
@@ -278,7 +300,7 @@ struct RelayStateLinkingTests {
       step(0x19, 0x00)
     ])
     #expect(steps.dropFirst(6).dropLast(3).contains(.modem(.controller, 0x02)))
-    #expect(Array(steps.suffix(3)) == returnAndRestore)
+    #expect(Array(beforeRecordCheck(steps).suffix(3)) == returnAndRestore)
     // The device recorded on, and the relay is off again, as it was.
     #expect(await modem.databases[module]?.values.first?.data1 == 0xFF)
     #expect(await modem.levels[module] == 0x00)
@@ -666,6 +688,311 @@ struct RelayStateLinkingTests {
 
   }
 
+  // MARK: - A momentary relay read mid-pulse
+
+  @Test func leavesAMomentaryRelayReadOnMidPulseOpenWhenRecordingOff() async throws {
+
+    let modem: InMemoryModem = await modem(flags: RelayExample.momentary.bit, relay: 0xFF)
+
+    let result: DeviceLinkingResult = try await linkRelay(modem, .off)
+
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+
+    #expect(!steps.contains(step(0x11, 0xFF)))
+    #expect(steps.contains(step(0x13, 0x00)))
+    #expect(Array(beforeRecordCheck(steps).suffix(2)) == [step(0x20, RelayExample.momentary.on, extended: true), step(0x1F, 0x00)])
+    #expect(await modem.levels[module] == 0x00)
+    #expect(await modem.operatingFlags[module] == RelayExample.momentary.bit)
+    #expect(result.relayState?.recordedData1 == 0x00)
+
+  }
+
+  @Test func opensAMomentaryRelayReadOnMidPulseAfterRecordingOn() async throws {
+
+    let modem: InMemoryModem = await modem(flags: RelayExample.momentary.bit, relay: 0xFF)
+
+    let result: DeviceLinkingResult = try await linkRelay(modem, .on)
+
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+
+    // On once, to hold it, and Off once the link is made: never On again.
+    #expect(steps.filter { $0 == step(0x11, 0xFF) }.count == 1)
+    #expect(Array(beforeRecordCheck(steps).suffix(3)) == returnAndRestore)
+    #expect(await modem.levels[module] == 0x00)
+    #expect(await modem.operatingFlags[module] == RelayExample.momentary.bit)
+    #expect(result.relayState?.recordedData1 == 0xFF)
+
+  }
+
+  // MARK: - A latching relay
+
+  @Test func switchesALatchingRelayBackWhenTheLinkFails() async throws {
+
+    let modem: InMemoryModem = await modem(flags: 0x00)
+    let module: InsteonAddress = self.module
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      if case let .extendedRequest(message) = operation, message.command.command1 == 0x09 {
+
+        throw ModemError.deviceTimedOut(module)
+
+      }
+
+    }
+
+    await expectRefusal({ _ = try await linkRelay(modem, .on) }) { (error: RelayStateLinkingError) -> Bool in
+
+      if case .remoteLinkingFailed = error {
+
+        return true
+
+      }
+
+      return false
+
+    }
+
+    #expect(await modem.linkingSteps.last == step(0x13, 0x00))
+    #expect(await modem.levels[module] == 0x00)
+
+  }
+
+  @Test func switchesALatchingRelayBackWhenTheLinkIsCanceled() async throws {
+
+    let modem: InMemoryModem = await modem(flags: 0x00)
+    await modem.setSilent(module)
+    let network: DeviceNetwork = self.network(modem)
+    let module: InsteonAddress = self.module
+    let linking = Task { () async throws -> DeviceLinkingResult in
+
+      try await network.linking.linkRelay(module, recording: .on, group: 2, twoWay: .never, observer: LinkingRecorder())
+
+    }
+
+    await clock.waitForSleeper(until: Linker.defaultRemoteLinkingTimeout)
+    linking.cancel()
+
+    await #expect(throws: CancellationError.self) {
+
+      _ = try await linking.value
+
+    }
+
+    #expect(await modem.linkingSteps.last == step(0x13, 0x00))
+    #expect(await modem.levels[module] == 0x00)
+
+  }
+
+  @Test func keepsALatchingRelayInTheStateItRecorded() async throws {
+
+    let modem: InMemoryModem = await modem(flags: 0x00)
+
+    _ = try await linkRelay(modem, .on)
+
+    #expect(await modem.levels[module] == 0xFF)
+    #expect(!(await modem.linkingSteps.contains(step(0x13, 0x00))))
+
+  }
+
+  // MARK: - Checking the record
+
+  @Test func reportsARecordThatIsntThere() async throws {
+
+    let modem: InMemoryModem = await modem(flags: 0x00)
+    let module: InsteonAddress = self.module
+    let recorder = LinkingRecorder(reacting: { (event: LinkingEvent) async -> Void in
+
+      if case .linked = event {
+
+        await modem.setDatabase([:], of: module)
+
+      }
+
+    })
+
+    let result: DeviceLinkingResult = try await linkRelay(modem, .on, observer: recorder)
+
+    guard case let .recordNotFound(device, group)? = result.relayState?.recordFailure else {
+
+      Issue.record("Expected no record, got \(String(describing: result.relayState?.recordFailure))")
+
+      return
+
+    }
+
+    #expect(device == module)
+    #expect(group == 2)
+    #expect(result.relayState?.recordedData1 == nil)
+
+  }
+
+  @Test func reportsADatabaseThatCantBeRead() async throws {
+
+    let modem: InMemoryModem = await modem(flags: 0x00)
+    let module: InsteonAddress = self.module
+    let recorder = LinkingRecorder(reacting: { (event: LinkingEvent) async -> Void in
+
+      if case .linked = event {
+
+        await modem.setUnlinked(module)
+
+      }
+
+    })
+
+    let result: DeviceLinkingResult = try await linkRelay(modem, .on, observer: recorder)
+
+    guard case .recordNotRead? = result.relayState?.recordFailure else {
+
+      Issue.record("Expected the database not to be read, got \(String(describing: result.relayState?.recordFailure))")
+
+      return
+
+    }
+
+    #expect(result.links.map(\.mode) == [.controller])
+
+  }
+
+  @Test func checksTheRecordAfterPuttingTheRelayBackAndStopsWhenCanceledThere() async throws {
+
+    let modem: InMemoryModem = await modem(flags: RelayExample.momentary.bit)
+    let restore = Command(command1: 0x20, command2: RelayExample.momentary.on)
+    let restoring = RestoreWatch()
+    // Canceled once everything is put back, as the record check asks for the status.
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      switch operation {
+      case let .extendedRequest(message) where message.command == restore:
+        await restoring.begin()
+      case let .standardRequest(message) where message.command.command1 == 0x19:
+        if await restoring.hasBegun {
+
+          withUnsafeCurrentTask { (task: UnsafeCurrentTask?) -> Void in task?.cancel() }
+
+        }
+      default:
+        break
+      }
+
+    }
+
+    await #expect(throws: CancellationError.self) {
+
+      _ = try await linkRelay(modem, .on)
+
+    }
+
+    // The relay was opened and the flag set back before the record was read.
+    #expect(Array(beforeRecordCheck(await modem.linkingSteps).suffix(3)) == returnAndRestore)
+    #expect(await modem.levels[module] == 0x00)
+    #expect(await modem.operatingFlags[module] == RelayExample.momentary.bit)
+    #expect(await modem.databaseReads[module] == nil)
+
+  }
+
+  @Test func retriesTheRelaysReturnThenReportsIt() async throws {
+
+    let modem: InMemoryModem = await modem(flags: RelayExample.momentary.bit)
+    let module: InsteonAddress = self.module
+    let linked = RestoreWatch()
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      switch operation {
+      case let .extendedRequest(message) where message.command.command1 == 0x09:
+        await linked.begin()
+      case let .standardRequest(message) where message.command.command1 == 0x13:
+        if await linked.hasBegun {
+
+          await linked.count()
+
+          throw ModemError.deviceTimedOut(module)
+
+        }
+      default:
+        break
+      }
+
+    }
+
+    let result: DeviceLinkingResult = try await linkRelay(modem, .on)
+
+    #expect(await linked.attempts == 2)
+    #expect(await modem.operatingFlags[module] == RelayExample.momentary.bit)
+
+    guard case let .relayNotReturned(device, state, _)? = result.relayState?.restoreFailures.first else {
+
+      Issue.record("Expected the relay not to be returned, got \(String(describing: result.relayState?.restoreFailures))")
+
+      return
+
+    }
+
+    #expect(device == module)
+    #expect(state == .off)
+
+  }
+
+  @Test func saysARestoreIsUnconfirmedWhenAnyWriteWasAcknowledged() async throws {
+
+    let modem: InMemoryModem = await modem(flags: RelayExample.momentary.bit)
+    let module: InsteonAddress = self.module
+    let restore = Command(command1: 0x20, command2: RelayExample.momentary.on)
+    let restoring = RestoreWatch()
+    // The first write is acknowledged and its read back times out; the second write times out.
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      switch operation {
+      case let .extendedRequest(message) where message.command == restore:
+        await restoring.count()
+
+        if await restoring.attempts == 2 {
+
+          throw ModemError.deviceTimedOut(module)
+
+        }
+      case let .standardRequest(message) where message.command.command1 == 0x1F:
+        if await restoring.attempts > 0 {
+
+          throw ModemError.deviceTimedOut(module)
+
+        }
+      default:
+        break
+      }
+
+    }
+
+    let result: DeviceLinkingResult = try await linkRelay(modem, .on)
+
+    #expect(await modem.operatingFlags[module] == RelayExample.momentary.bit)
+
+    guard case .flagRestoreUnconfirmed? = result.relayState?.restoreFailures.first else {
+
+      Issue.record("Expected the restore to be unconfirmed, got \(String(describing: result.relayState?.restoreFailures))")
+
+      return
+
+    }
+
+  }
+
+  @Test func refusesBeforeClearingAFlagItCouldntSetBack() async throws {
+
+    let device: InsteonAddress = RelayExample.oneWayModule
+    let modem: InMemoryModem = await modem(device, flags: RelayExample.momentary.bit)
+
+    await #expect(throws: DeviceControlError.self) {
+
+      _ = try await linkRelay(modem, .on, device: device)
+
+    }
+
+    #expect(await modem.linkingSteps == [step(0x1F, 0x00, to: device), step(0x19, 0x00, to: device)])
+    #expect(await modem.operatingFlags[device] == RelayExample.momentary.bit)
+
+  }
+
   // MARK: - Refusing a relay state
 
   @Test func refusesMomentaryTheCatalogDoesntLetLinkingChange() async throws {
@@ -974,9 +1301,17 @@ actor RestoreWatch {
 
   private(set) var hasBegun: Bool = false
 
+  private(set) var attempts: Int = 0
+
   func begin() {
 
     hasBegun = true
+
+  }
+
+  func count() {
+
+    attempts += 1
 
   }
 

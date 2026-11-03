@@ -95,6 +95,35 @@ extension Device {
 
   }
 
+  /// Throws the refusal turning the main group fully on or off would get, for any reason
+  /// ``turnOn(level:group:)`` or ``turnOff(group:)`` refuses, without sending anything.
+  ///
+  /// - Parameter isOn: Whether to check turning it on, rather than off.
+  func refuseUnlessSwitchable(on isOn: Bool) async throws {
+
+    let operation: DeviceOperation = isOn ? .turnOn : .turnOff
+    let name: SettingName = isOn ? DeviceControlModel.onAction : DeviceControlModel.offAction
+    let model: DeviceControlModel = try await controlModel()
+    let target: DeviceControlModel.Group = try controlGroup(nil, in: model, for: operation)
+
+    guard let action = target.type.action(named: name) else {
+
+      throw DeviceControlError.unsupported(operation, product: model.product)
+
+    }
+
+    let message: DeviceControlModel.ActionMessage = try model.message(for: action, of: target, value: isOn ? 0xFF : 0x00, to: address)
+
+    guard model.canAddress(target, with: name) else {
+
+      throw DeviceControlError.unaddressable(operation, group: Int(target.number.rawValue), product: model.product)
+
+    }
+
+    try await refuseUnlessSendable(message, for: operation)
+
+  }
+
   /// Turns some of a group's outputs on, such as one of a ballast dimmer's two relays, with its
   /// type's `on` action, and leaves the others as they are.
   ///

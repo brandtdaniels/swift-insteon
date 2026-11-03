@@ -492,6 +492,26 @@ extension Device {
 
   }
 
+  /// Throws the refusal sending an action's message would get, without sending it.
+  func refuseUnlessSendable(_ message: DeviceControlModel.ActionMessage, for operation: DeviceOperation) async throws {
+
+    switch message {
+    case let .standard(standard):
+      try await refuseIfNeverSent(standard.command, for: .control(operation))
+    case let .extended(extended):
+      try await refuseIfNeverSent(extended.command, userData: extended.userData, for: .control(operation))
+    }
+
+  }
+
+  /// Throws the refusal a message the catalog's linking names would get, for any reason
+  /// ``sendLinkingMessage(_:duration:writableFlags:for:)`` refuses one, without sending it.
+  func refuseUnlessSendable(_ message: DeviceLifecycle.HubLinking.HubMessage, writableFlags: Set<SettingName>, for operation: DeviceOperation) async throws {
+
+    _ = try await resolveLinkingMessage(message, duration: nil, writableFlags: writableFlags, for: operation)
+
+  }
+
   /// The device's model, its main group, and the command a command set lists by a name, for a
   /// command sent to the main group, such as Light On Fast.
   ///
