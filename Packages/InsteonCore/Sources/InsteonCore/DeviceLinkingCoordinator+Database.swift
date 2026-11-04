@@ -49,12 +49,13 @@ extension DeviceLinkingCoordinator {
   /// catalog's fixed values and `0x00` otherwise, as do the modem's records.
   ///
   /// With a `relayState`, a device whose main group is a relay gets the state as Data 1 of its
-  /// responder records for a relay group: `0xFF` for on and `0x00` for off. Its momentary
-  /// flags are read with Get Operating Flags, and the plan's
-  /// ``DatabaseLinkPlan/momentaryFlagsOn`` lists those that are on, since a relay keeps the
-  /// state only with them off. The relay isn't sent a command and no flag is written. A
-  /// responder record already in place with the other state is refused, since the plan leaves
-  /// records in place as they are.
+  /// responder records for a relay group: `0xFF` for on and `0x00` for off. The relay's type
+  /// must say how it holds a state; the flags the catalog names for that are read with Get
+  /// Operating Flags, and the plan's ``DatabaseLinkPlan/relayHolding`` says which are on,
+  /// since a relay keeps the state only while none that keeps it from holding one is, and
+  /// ignores it while a set that makes every On and Off pulse it is. The relay isn't sent a
+  /// command and no flag is written. A responder record already in place with the other state
+  /// is refused, since the plan leaves records in place as they are.
   ///
   /// - Parameters:
   ///   - device: The device.
@@ -62,8 +63,8 @@ extension DeviceLinkingCoordinator {
   ///     Defaults to `nil`.
   /// - Returns: The plan, which ``DeviceLinkingCoordinator/apply(_:)`` carries out.
   /// - Throws: ``DatabaseLinkRefusal`` when the device can't be linked this way,
-  ///   ``RelayStateLinkingError`` when it can't record the relay state or its momentary flags
-  ///   can't be read, the modem's errors, such
+  ///   ``RelayStateLinkingError`` when it can't record the relay state, the catalog doesn't
+  ///   say how the relay holds one, or its flags can't be read, the modem's errors, such
   ///   as `ModemError.deviceTimedOut` when the device doesn't answer, and `CancellationError`
   ///   if the task is canceled.
   public func planDatabaseLink(_ device: InsteonAddress, relayState: RelayState? = nil) async throws -> DatabaseLinkPlan {
@@ -85,6 +86,14 @@ extension DeviceLinkingCoordinator {
 
       }
 
+      // A relay the catalog doesn't say how it holds a state is refused before its flags are
+      // read.
+      if relayState != nil, description.mainGroupType?.stateHolding == nil {
+
+        throw RelayStateLinkingError.stateHoldingNotDescribed(device, product: DeviceControlModel.product(of: description))
+
+      }
+
       guard let legs = HubLinkingLeg.legs(of: reading.description, device: device) else {
 
         throw DatabaseLinkRefusal.noCatalogLinks(device)
@@ -95,7 +104,7 @@ extension DeviceLinkingCoordinator {
 
       if relayState != nil {
 
-        plan.momentaryFlagsOn = try await momentaryFlagsOn(description, of: device)
+        plan.relayHolding = try await readStateHolding(description, of: network.device(device)).holding
 
       }
 
@@ -277,22 +286,6 @@ extension DeviceLinkingCoordinator {
 
     /// The device's group, whose type gives a device's responder record its data.
     var deviceGroup: AllLinkGroupNumber
-
-  }
-
-  /// The relay's momentary flags that read on, read with Get Operating Flags, each request
-  /// once. A command set that gives neither flag reads none.
-  private func momentaryFlagsOn(_ description: DeviceDescription, of device: InsteonAddress) async throws -> [String] {
-
-    let commands: CommandSet? = description.commandSet
-    let flags: [OperatingFlag] = [Self.momentaryFlag, Self.momentaryOnBothCommandsFlag].compactMap { (name: SettingName) -> OperatingFlag? in
-
-      commands?.operatingFlag(named: name)
-
-    }
-    let reading: RelayFlags = try await readFlags(flags, of: network.device(device))
-
-    return flags.filter { (flag: OperatingFlag) -> Bool in reading.states[flag.name] == true }.map(\.name.rawValue)
 
   }
 

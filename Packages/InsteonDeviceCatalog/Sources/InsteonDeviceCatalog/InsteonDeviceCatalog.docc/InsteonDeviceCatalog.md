@@ -85,7 +85,8 @@ groups are: how to read a group's state, what it can be told to do, and what Dat
 Data 3 of an ALL-Link database record hold for it, each a ``LinkDataByte``. A group type can
 also say which bits of a shared status byte mean the group is on, in
 ``GroupType/State/onWhen``, which outputs of its load one action switches together, in
-``GroupType/outputs``, and, for an alarm or arming group, its ``GroupType/armModes``. A
+``GroupType/outputs``, for an alarm or arming group, its ``GroupType/armModes``, and, for
+a relay, how it holds the state it's switched to, in ``GroupType/stateHolding``. A
 profile's ``DeviceLifecycle`` gives the steps to install, link, wake, reset and remove the
 product, for an app to guide people through or do itself, and its
 ``DeviceLifecycle/fromHub`` gives linking to a Hub as data: the links to make with the

@@ -12,30 +12,21 @@ public enum RelayLinkText {
 
     let device: InsteonAddress = plan.device
     let state: String = plan.state.rawValue
+    let cleared: [RelayFlag] = plan.clearedFlags
     var steps: [String] = []
 
     if plan.ignoresState {
 
       return [
-        "\(device)'s relay is momentary with its momentaryOnBothCommands flag on, so every On and Off only pulses it and the state is ignored.",
+        "\(device)'s \(RelayFlagText.are(plan.holding.pulsingFlags)) on, so every On and Off only pulses its relay and the state is ignored.",
         "  1. Link it. The relay isn't switched and no flag is written."
       ]
 
     }
 
-    if plan.leavesUnverifiedMode {
+    if !cleared.isEmpty {
 
-      return [
-        "\(device)'s momentaryOnBothCommands flag is on though its relay isn't momentary, a mode whose effect isn't verified, so the relay isn't switched.",
-        "  1. Link it. No flag is written; its record holds \(plan.before.rawValue), the state the relay is in, "
-          + "so a group On turns the relay \(plan.before.rawValue) and a group Off turns it \(plan.before.opposite.rawValue)."
-      ]
-
-    }
-
-    if let flag = plan.clearedFlag {
-
-      steps.append("Turn its \(flag) flag off for the link, so the relay holds its state.")
+      steps.append("Turn its \(RelayFlagText.named(cleared)) off for the link, so the relay holds its state.")
 
     }
 
@@ -45,17 +36,25 @@ public enum RelayLinkText {
 
     }
 
-    if let flag = plan.clearedFlag {
+    if !cleared.isEmpty {
+
+      let rest: String = plan.holding.restState.rawValue
 
       steps.append(
-        plan.opensAfterLinking
-          ? "Link it, then turn the relay off again, since a momentary relay rests open, and turn its \(flag) flag back on."
-          : "Link it, then turn its \(flag) flag back on."
+        plan.returnsToRestAfterLinking
+          ? "Link it, then turn the relay \(rest) again, since it returns to \(rest) by itself with \(cleared.count > 1 ? "those flags" : "that flag") on, "
+            + "and turn its \(RelayFlagText.named(cleared)) back on."
+          : "Link it, then turn its \(RelayFlagText.named(cleared)) back on."
       )
 
     } else if plan.switchesBackOnFailure {
 
       steps.append("Link it. The relay stays \(state), and is turned back \(plan.before.rawValue) if linking fails or is stopped.")
+
+    } else if plan.switchesRelay {
+
+      // Switched to its rest state, a relay that doesn't hold a state stays there by itself.
+      steps.append("Link it. The relay stays \(state) by itself, its rest state, so no flag is written.")
 
     } else {
 
@@ -82,9 +81,9 @@ public enum RelayLinkText {
 
     }
 
-    if let flag = plan.clearedFlag {
+    if !plan.clearedFlags.isEmpty {
 
-      return "Turn off \(plan.device)'s \(flag) flag, switch its relay \(plan.state.rawValue) and link it? [y/N]"
+      return "Turn off \(plan.device)'s \(RelayFlagText.named(plan.clearedFlags)), switch its relay \(plan.state.rawValue) and link it? [y/N]"
 
     }
 
@@ -145,29 +144,34 @@ public enum RelayLinkText {
     /// The relay's state before the link, as its status read.
     public var before: String
 
-    /// Whether its momentary flag is on.
-    public var isMomentary: Bool
+    /// The state the relay returns to by itself while a flag that keeps it from holding a
+    /// state is on, `"on"` or `"off"`.
+    public var restState: String
 
-    /// Whether its momentaryOnBothCommands flag is on.
-    public var pulsesOnBothCommands: Bool
+    /// The names of the flags the catalog gives for how the relay holds a state that read on.
+    public var flagsOn: [String]
+
+    /// The names of the flags that read on and keep the relay from holding a state.
+    public var releasingFlags: [String]
+
+    /// The names of the flags with which every On and Off only pulses the relay, when all of
+    /// them read on; empty otherwise.
+    public var pulsingFlags: [String]
 
     /// Whether the relay is switched.
     public var switchesRelay: Bool
 
-    /// The flag turned off for the link, or `nil`.
-    public var clearedFlag: String?
+    /// The names of the flags turned off for the link.
+    public var clearedFlags: [String]
 
-    /// Whether a momentary relay switched on is switched off after the link.
-    public var opensAfterLinking: Bool
+    /// Whether the relay is switched to its rest state right after the link.
+    public var returnsToRestAfterLinking: Bool
 
-    /// Whether a relay that isn't momentary is switched back when linking fails.
+    /// Whether a relay that holds a state is switched back when linking fails.
     public var switchesBackOnFailure: Bool
 
-    /// Whether the state is ignored, on a momentary relay with momentaryOnBothCommands on.
+    /// Whether the state is ignored, since every On and Off only pulses the relay.
     public var ignoresState: Bool
-
-    /// Whether momentaryOnBothCommands is on though the relay isn't momentary.
-    public var leavesUnverifiedMode: Bool
 
     /// Whether the plan was only shown.
     public var dryRun: Bool
@@ -186,14 +190,15 @@ public enum RelayLinkText {
       device: "\(plan.device)",
       state: plan.state.rawValue,
       before: plan.before.rawValue,
-      isMomentary: plan.isMomentary,
-      pulsesOnBothCommands: plan.pulsesOnBothCommands,
+      restState: plan.holding.restState.rawValue,
+      flagsOn: plan.holding.flagsOn.map(\.name),
+      releasingFlags: plan.holding.releasingFlags.map(\.name),
+      pulsingFlags: plan.holding.pulsingFlags.map(\.name),
       switchesRelay: plan.switchesRelay,
-      clearedFlag: plan.clearedFlag,
-      opensAfterLinking: plan.opensAfterLinking,
+      clearedFlags: plan.clearedFlags.map(\.name),
+      returnsToRestAfterLinking: plan.returnsToRestAfterLinking,
       switchesBackOnFailure: plan.switchesBackOnFailure,
       ignoresState: plan.ignoresState,
-      leavesUnverifiedMode: plan.leavesUnverifiedMode,
       dryRun: isDryRun
     )
 

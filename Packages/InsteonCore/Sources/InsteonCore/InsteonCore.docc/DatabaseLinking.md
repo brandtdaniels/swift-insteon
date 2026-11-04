@@ -46,12 +46,14 @@ no value for, and for a device the catalog gives no links for.
 
 With a ``RelayState``, a relay's responder record holds the state as Data 1, `0xFF` for on and
 `0x00` for off, so a group On sets the relay to it and a group Off to the opposite. That holds
-only with the relay's momentary flags off, so the plan reads them with Get Operating Flags and
-lists those that are on in ``DatabaseLinkPlan/momentaryFlagsOn``. They're read when the plan is
-made; ``DeviceLinkingCoordinator/apply(_:)`` doesn't read them again, so the list can be out of
-date by the time the plan is carried out. The relay isn't switched and no flag is written. The plan is refused, as a ``RelayStateLinkingError``,
-for a device whose main group isn't a relay, and when a responder record already in place holds
-the other state.
+only while no flag that keeps the relay from holding a state is on, as the catalog's
+`stateHolding` names them, so the plan reads the flags it names with Get Operating Flags and
+says which are on in ``DatabaseLinkPlan/relayHolding``. They're read when the plan is made;
+``DeviceLinkingCoordinator/apply(_:)`` doesn't read them again, so they can be out of date by
+the time the plan is carried out. The relay isn't switched and no flag is written. The plan is
+refused, as a ``RelayStateLinkingError``, for a device whose main group isn't a relay, for a
+relay the catalog doesn't say how it holds a state, and when a responder record already in
+place holds the other state.
 
 ### What an unlink writes
 

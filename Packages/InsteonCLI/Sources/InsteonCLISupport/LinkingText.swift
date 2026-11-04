@@ -512,23 +512,14 @@ public enum LinkingEventText {
 
     switch event {
     case let .clearingFlag(device, flag):
-      return ["Turning \(device)'s \(flag) flag off for the link, so its relay holds its state..."]
+      return ["Turning \(device)'s \(flag.label) flag off for the link, so its relay holds its state..."]
     case let .settingRelay(device, state):
       return ["Turning \(device)'s relay \(state.rawValue), so it links with the relay \(state.rawValue)..."]
     case let .relayAlreadySet(device, state):
       return ["\(device)'s relay is already \(state.rawValue), so it links with the relay \(state.rawValue)."]
-    case let .linkedWithoutSwitching(device, flag, isMomentary):
-      guard isMomentary else {
-
-        return [
-          "\(device)'s \(flag) flag is on though its relay isn't momentary, a mode whose effect isn't verified, "
-            + "so it's linked without switching the relay or writing a flag, and records the state the relay is in."
-        ]
-
-      }
-
+    case let .linkedWithoutSwitching(device, flags):
       return [
-        "\(device)'s relay is momentary with its \(flag) flag on, so every On and Off only pulses it and the state is ignored. "
+        "\(device)'s \(RelayFlagText.are(flags)) on, so every On and Off only pulses its relay and the state is ignored. "
           + "It's linked without switching the relay or writing a flag."
       ]
     case let .relayLeft(device, reads):
@@ -538,7 +529,7 @@ public enum LinkingEventText {
     case let .returningRelay(device, state):
       return ["Turning \(device)'s relay \(state.rawValue) after the link..."]
     case let .restoringFlag(device, flag):
-      return ["Turning \(device)'s \(flag) flag back on..."]
+      return ["Turning \(device)'s \(flag.label) flag back on..."]
     case let .restoreFailed(_, failure):
       return [relayStateMessage(failure)]
     case let .recorded(link):
@@ -554,7 +545,7 @@ public enum LinkingEventText {
   ///   - error: The error.
   ///   - group: The group `--group` gave, for a command that links again, or `nil`.
   /// - Returns: The message, such as the error's description followed by
-  ///   `"Turn it back on with 'insteon device 1A.2B.3C set momentary on'."`.
+  ///   `"Turn it back on with 'insteon device 1A.2B.3C set pulse on'."`.
   public static func relayStateMessage(_ error: RelayStateLinkingError, group: AllLinkGroupNumber? = nil) -> String {
 
     guard let hint = relayStateHint(error, group: group) else {
@@ -576,10 +567,15 @@ public enum LinkingEventText {
     switch error {
     case .notLinkedToModem:
       return "Link it first with 'insteon link \(device)', then run it again with --relay-state."
-    case let .momentaryNotChangeable(_, flag):
-      return "Run 'insteon device \(device) set \(flag) off', link it, then run 'insteon device \(device) set \(flag) on'."
+    case .stateHoldingNotDescribed, .stateHoldingFlagUnknown, .restStateUnknown:
+      return "Link it without a relay state with 'insteon link \(device)'."
+    case .flagNotWritable:
+      // The guard that refused the message would refuse a setting command too.
+      return "See its settings with 'insteon device \(device) settings'; link it without a relay state with 'insteon link \(device)'."
+    case let .flagNotChangeable(_, flag):
+      return "Run 'insteon device \(device) set \(flag.name) off', link it, then run 'insteon device \(device) set \(flag.name) on'."
     case let .flagNotRestored(_, flag, _):
-      return "Turn it back on with 'insteon device \(device) set \(flag) on'."
+      return "Turn it back on with 'insteon device \(device) set \(flag.name) on'."
     case .flagRestoreUnconfirmed, .otherFlagsChanged:
       return "Check it with 'insteon device \(device) settings'."
     case let .relayNotReturned(_, state, _):
@@ -588,8 +584,6 @@ public enum LinkingEventText {
       return "Check it with 'insteon device \(device) status'."
     case let .planChanged(old, _):
       return "Run 'insteon link \(device)\(groupOption) --relay-state \(old.state.rawValue)' again to see the plan as it is."
-    case let .unverifiedModeStateDiffers(_, flag, reads, _):
-      return "Run 'insteon device \(device) set \(flag) off' and link again, or run 'insteon link \(device)\(groupOption) --relay-state \(reads.rawValue)'."
     case let .recordedOtherState(_, group, _, requested):
       return "Run 'insteon link \(device) --group \(group.rawValue) --relay-state \(requested.rawValue)' again."
     case .notIdentified, .notDescribed, .notARelay, .flagUnreadable, .flagNotChanged, .relayNotConfirmed, .remoteLinkingFailed,
@@ -671,20 +665,18 @@ public enum LinkingEventText {
       }
 
       return "\(link.device) linked without switching its relay, \(record). "
-        + "Its relay is momentary with momentaryOnBothCommands on, so every On and Off only pulses it and the state is ignored."
+        + "Its \(RelayFlagText.are(link.holding.pulsingFlags)) on, so every On and Off only pulses it and the state is ignored."
 
     }
 
     var line: String = "\(link.device) recorded its relay \(link.state.rawValue): a group On turns the relay \(link.state.rawValue), "
       + "and a group Off turns it \(link.state.opposite.rawValue)."
 
-    if link.leavesUnverifiedMode {
+    if !link.holding.holdsState {
 
-      line += " Its momentaryOnBothCommands flag is on though the relay isn't momentary, a mode whose effect isn't verified, so the relay wasn't switched."
+      let rest: String = link.holding.restState.rawValue
 
-    } else if link.isMomentary {
-
-      line += " The relay is momentary, so it holds that state only for its momentary time."
+      line += " Its \(RelayFlagText.are(link.holding.releasingFlags)) on, so the relay holds that state only until it returns to \(rest) by itself."
 
     }
 

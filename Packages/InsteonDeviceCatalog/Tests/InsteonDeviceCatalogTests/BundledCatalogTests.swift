@@ -109,4 +109,74 @@ struct BundledCatalogTests {
 
   }
 
+  @Test func saysEveryRelayThatHoldsItsStateCanBeLinkedWithOne() throws {
+
+    let catalog: DeviceCatalog = try DeviceCatalog.bundled()
+    var alwaysHolding: [String] = []
+
+    for commands in catalog.commandSets {
+
+      for type in commands.groupTypes {
+
+        guard let holding = type.stateHolding else {
+
+          continue
+
+        }
+
+        // Whatever a state holding says, its flags are the command set's and its rest state is
+        // one of the type's actions, as a relay link needs.
+        #expect(type.kind == .relay, "\(commands.id) \(type.name)")
+        #expect((holding.releasedBy + holding.pulsesOnEveryCommandWhen.flatMap { $0 }).allSatisfy { commands.operatingFlag(named: $0) != nil }, "\(commands.id) \(type.name)")
+        #expect(type.action(named: holding.restState) != nil, "\(commands.id) \(type.name)")
+
+        if holding.releasedBy.isEmpty {
+
+          alwaysHolding.append("\(commands.id) \(type.name)")
+
+        }
+
+      }
+
+    }
+
+    #expect(alwaysHolding.count == 13)
+
+  }
+
+  @Test func letsAnOrdinaryRelayLinkWithARelayStateByAddressOrDatabase() throws {
+
+    // The On/Off Switch 2477S, as it reports itself.
+    let description: DeviceDescription = try DeviceCatalog.bundled().describe(category: 0x02, subcategory: 0x2A, firmwareVersion: 0x41)
+    let relay: GroupType = try #require(description.mainGroupType)
+    let holding: GroupType.StateHolding = try #require(relay.stateHolding)
+
+    // It always holds its state, so a relay link reads no flag and clears none.
+    #expect(relay.kind == .relay)
+    #expect(holding.releasedBy.isEmpty)
+    #expect(holding.restState == "off")
+    #expect(relay.action(named: "on") != nil)
+    #expect(relay.action(named: "off") != nil)
+    // A database link writes the state as Data 1 of the responder record of its links to a Hub.
+    #expect(relay.linkData.responder.contains { $0.position == 1 })
+    #expect(description.profile?.lifecycle?.fromHub?.legs.isEmpty == false)
+
+  }
+
+  @Test func saysHowTheIOLincsRelayHoldsAState() throws {
+
+    let commands: CommandSet = try #require(try DeviceCatalog.bundled().commandSet(id: "ioLinc"))
+    let holding: GroupType.StateHolding = try #require(commands.groupType(named: "relay")?.stateHolding)
+
+    #expect(holding.releasedBy == ["momentary"])
+    #expect(holding.restState == "off")
+    #expect(holding.pulsesOnEveryCommandWhen == [["momentary", "momentaryOnBothCommands"]])
+    #expect(holding.verification.status == .observed)
+    #expect(holding.verification.firmware == [0x41])
+    // Every flag it names is one of the command set's, and the rest state one of its actions.
+    #expect((holding.releasedBy + holding.pulsesOnEveryCommandWhen.flatMap { $0 }).allSatisfy { commands.operatingFlag(named: $0) != nil })
+    #expect(commands.groupType(named: "relay")?.action(named: holding.restState) != nil)
+
+  }
+
 }

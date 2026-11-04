@@ -246,18 +246,21 @@ for outcome in result.legs {
 }
 ```
 
-A relay, such as an I/O Linc's, records its state as it links: a group On then sets it to that
-state and a group Off to the opposite.
+A relay records its state as it links: a group On then sets it to that state and a group Off
+to the opposite. How the relay holds a state comes from the catalog, in its group type's
+`stateHolding`: the flags that keep it from holding one, the state it returns to by itself, and
+the flags with which every On and Off only pulses it. A relay the catalog says nothing about is
+refused.
 ``DeviceLinkingCoordinator/linkRelay(_:recording:group:twoWay:setButtonTimeout:observer:)``
-puts the relay in a chosen ``RelayState`` first, turning a momentary relay's flag off for the
-link when the catalog lets it, links, reads the record back, and puts back what it changed
-however linking ends. ``DeviceLinkingCoordinator/link(_:as:group:twoWay:setButtonTimeout:usesCatalogLegs:observer:)``
+puts the relay in a chosen ``RelayState`` first, turning off a flag that keeps it from holding
+a state when the catalog lets linking change it, links, reads the record back, and puts back
+what it changed however linking ends. ``DeviceLinkingCoordinator/link(_:as:group:twoWay:setButtonTimeout:usesCatalogLegs:observer:)``
 never switches a relay:
 
 ```swift
-let result = try await network.linking.linkRelay(module, recording: .off, group: 2, observer: prompter)
+let result = try await network.linking.linkRelay(relay, recording: .off, group: 2, observer: prompter)
 
-// `nil` when the relay ignores the state, as a momentary one with momentaryOnBothCommands on does.
+// `nil` when every On and Off only pulses the relay, so the state is ignored.
 print(result.relayState?.groupOn.map(\.rawValue) ?? "ignored")   // off
 ```
 

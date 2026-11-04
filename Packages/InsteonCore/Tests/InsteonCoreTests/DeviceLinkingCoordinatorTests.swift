@@ -202,13 +202,13 @@ actor LinkingRecorder: LinkingObserver {
 
     switch event {
     case let .clearingFlag(device, flag):
-      return "clearing \(flag) \(device)"
+      return "clearing \(flag.name) \(device)"
     case let .settingRelay(device, state):
       return "setting \(device) \(state)"
     case let .relayAlreadySet(device, state):
       return "\(device) already \(state)"
-    case let .linkedWithoutSwitching(device, _, isMomentary):
-      return isMomentary ? "\(device) ignores the state" : "\(device) leaves the state, unverified mode"
+    case let .linkedWithoutSwitching(device, flags):
+      return "\(device) ignores the state, \(flags.map(\.name).joined(separator: " and ")) on"
     case let .relayLeft(device, reads):
       return "\(device) left \(reads)"
     case let .relayConfirmed(device, state):
@@ -216,14 +216,14 @@ actor LinkingRecorder: LinkingObserver {
     case let .returningRelay(device, state):
       return "returning \(device) \(state)"
     case let .restoringFlag(device, flag):
-      return "restoring \(flag) \(device)"
+      return "restoring \(flag.name) \(device)"
     case let .flagRestored(device, flag):
-      return "restored \(flag) \(device)"
+      return "restored \(flag.name) \(device)"
     case let .restoreFailed(device, _):
       return "failed \(device)"
     case let .recorded(link):
       return "group on gives \(link.groupOn.map(\.rawValue) ?? "nothing"), off gives \(link.groupOff.map(\.rawValue) ?? "nothing"), "
-        + "momentary \(link.isMomentary), pulses \(link.pulsesOnBothCommands)"
+        + "holds \(link.holding.holdsState), ignores \(link.ignoresState)"
     }
 
   }

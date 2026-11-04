@@ -200,8 +200,13 @@ public actor InMemoryModem: LinkingModem {
   /// The Set Operating Flags commands each device carries out, by cmd2.
   private var flagCommands: [InsteonAddress: [UInt8: FlagCommand]] = [:]
 
-  /// The bit of each device's operating flags byte that makes its relay momentary.
-  private var momentaryBits: [InsteonAddress: UInt8] = [:]
+  /// The bit of each device's operating flags byte that makes its relay pulse, and the level
+  /// the relay returns to.
+  private var pulsingBits: [InsteonAddress: (bit: UInt8, restLevel: UInt8)] = [:]
+
+  /// The bits of each device's operating flags byte that each Get Operating Flags request
+  /// reports, by the request's cmd2. A request not listed reports the whole byte.
+  private var flagQueryMasks: [InsteonAddress: [UInt8: UInt8]] = [:]
 
   /// Each device's ALL-Link database delta, which changes with every write to its database.
   private var deltas: [InsteonAddress: UInt8] = [:]
@@ -240,6 +245,20 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Makes a device's reply to one Get Operating Flags request carry only some bits of its
+  /// operating flags byte, as a device whose flags are in several bytes reports each byte to
+  /// its own request.
+  ///
+  /// - Parameters:
+  ///   - mask: The bits the request reports.
+  ///   - query: The request's cmd2.
+  ///   - device: The device.
+  public func setOperatingFlagsMask(_ mask: UInt8, forQuery query: UInt8, of device: InsteonAddress) {
+
+    flagQueryMasks[device, default: [:]][query] = mask
+
+  }
+
   /// Makes a device carry out a Set Operating Flags cmd2, standard or extended, by setting or
   /// clearing a bit of the byte it reports to Get Operating Flags.
   ///
@@ -259,16 +278,17 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
-  /// Makes a device's relay momentary while a bit of its operating flags is set: Light On
-  /// closes it only for a moment, so its status reads off again by the time it's asked, as an
-  /// I/O Linc's momentary relay opens again.
+  /// Makes a device's relay pulse while a bit of its operating flags is set: Light On or Light
+  /// Off switches it only for a moment, so its status reads its rest level again by the time
+  /// it's asked, as a relay that doesn't hold a state returns to its rest state by itself.
   ///
   /// - Parameters:
   ///   - bit: The bit.
+  ///   - restLevel: The level the relay returns to. Defaults to `0x00`, off.
   ///   - device: The device.
-  public func setMomentaryBit(_ bit: UInt8, of device: InsteonAddress) {
+  public func setPulsingBit(_ bit: UInt8, restLevel: UInt8 = 0x00, of device: InsteonAddress) {
 
-    momentaryBits[device] = bit
+    pulsingBits[device] = (bit, restLevel)
 
   }
 
@@ -710,8 +730,9 @@ public actor InMemoryModem: LinkingModem {
 
       }
 
-      // A device given operating flags reports them, whatever the query.
-      command2 = flags
+      // A device given operating flags reports them, whatever the query, but for the bits a
+      // request is limited to.
+      command2 = flags & (flagQueryMasks[device]?[message.command.command2] ?? 0xFF)
 
     } else if [0x11, 0x13].contains(message.command.command1) {
 
@@ -725,10 +746,10 @@ public actor InMemoryModem: LinkingModem {
 
       levels[device] = message.command.command1 == 0x11 ? message.command.command2 : 0x00
 
-      // A momentary relay opens again before it's asked for its status.
-      if let bit = momentaryBits[device], operatingFlags[device, default: 0x00] & bit != 0 {
+      // A pulsing relay returns to its rest level before it's asked for its status.
+      if let pulsing = pulsingBits[device], operatingFlags[device, default: 0x00] & pulsing.bit != 0 {
 
-        levels[device] = 0x00
+        levels[device] = pulsing.restLevel
 
       }
 
