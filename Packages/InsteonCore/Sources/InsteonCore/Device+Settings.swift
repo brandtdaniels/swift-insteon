@@ -102,24 +102,36 @@ extension Device {
   /// command the catalog names.
   ///
   /// A write can change other settings as well, as some devices turn a flag on when a value
-  /// that isn't zero is written. So the device's other writable settings, as
-  /// ``DeviceSetting/isWritable`` says, are read before the write and again once it's
-  /// confirmed, with the requests ``readSettings(includingAdvanced:beforeReading:)`` makes, and
-  /// ``DeviceSettingChange/otherSettings`` holds each one whose value differs. A reading or a
-  /// value nothing writes, such as a measure of noise, changes on its own rather than as a side
-  /// effect, so it's left out. Each request is sent once before the write and once after it:
-  /// the write's own read and read-back carry the other settings that share their reply, and
-  /// only button 1 and the button written are asked for values. The other settings aren't read
-  /// when the catalog describes none, when the device doesn't answer the write's own read
-  /// before it, or when the write isn't confirmed or the device reports another value. A
-  /// setting the device didn't report before the write is left out, and one it reported before
-  /// but not after is in ``DeviceSettingChange/OtherSettings/unread``.
+  /// that isn't zero is written. So the device's settings the catalog gives a way to write
+  /// are read before the write and again once it's confirmed, with the requests
+  /// ``readSettings(includingAdvanced:beforeReading:)`` makes, and
+  /// ``DeviceSettingChange/otherSettings`` holds each one whose value differs. A flag that's
+  /// never written, such as one that turns the radio off, is compared too, since a write can
+  /// change it. A reading or a value the catalog gives no way to write, such as a measure of
+  /// noise, changes on its own rather than as a side effect, so it's left out.
+  ///
+  /// Each Get Operating Flags request and extended Get the comparison needs is sent once before
+  /// the write and once after it, and the write's own read and read-back count among them, since
+  /// they carry the other settings that share their reply. The write's other requests are
+  /// separate: Get Insteon Engine Version, and the read of the flag a flag's `extendedWhen`
+  /// names. Values are read for button 1 and, for a setting that's per button, the button
+  /// written, so a flag write or a write to button 1 compares button 1 only; a change to
+  /// another button's values isn't seen. The setting written is compared on every button read
+  /// but the one written. A setting that's per button carries its button, even when only
+  /// button 1 was read.
+  ///
+  /// The other settings aren't read when the catalog describes none, when the device doesn't
+  /// answer the write's own read before it, or when the write isn't confirmed or the device
+  /// reports another value. A setting the device didn't report before the write is left out,
+  /// and one it reported before but not after is in
+  /// ``DeviceSettingChange/OtherSettings/unread``.
   ///
   /// Once the write is confirmed, nothing about the other settings fails it: when they can't be
   /// read again, ``DeviceSettingChange/OtherSettings/rereadFailure`` says why, the connection
   /// closing included. A task canceled while they're read again gets the change, with the
   /// failure ``DeviceSettingChange/OtherSettings/ReadFailure/canceled``, and stays canceled,
-  /// so its next wait throws `CancellationError`.
+  /// so its next wait throws `CancellationError`. A `CancellationError` the modem throws while
+  /// the task isn't canceled is ``DeviceSettingChange/OtherSettings/ReadFailure/failed``.
   ///
   /// - Parameters:
   ///   - key: The setting's key, such as `"rampRate"`, or its label, in any case.
@@ -167,7 +179,7 @@ extension Device {
     }
 
     let setting: DeviceSetting = SettingPresentation.setting(for: item, in: commands)
-    let others = OtherSettingsCheck(device: self, besides: item, button: buttonNumber ?? 0x01, description: description, commands: commands)
+    let others = OtherSettingsCheck(device: self, writing: item, button: buttonNumber ?? 0x01, description: description, commands: commands)
     let change: DeviceSettingChange
 
     switch item.source {

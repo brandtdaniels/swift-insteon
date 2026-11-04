@@ -10,18 +10,35 @@ extension Device {
   /// makes, reusing what the write's own reads already reported.
   struct OtherSettingsCheck {
 
+    /// What was read of the other settings before a write.
+    enum Before {
+
+      /// The reading.
+      case read(DeviceSettingsReading)
+
+      /// Nothing was read, for the reason the outcome gives.
+      case skipped(DeviceSettingChange.OtherSettings.Outcome)
+
+    }
+
     /// The device.
     let device: Device
 
-    /// The settings compared: every one the catalog describes that software can write, as
-    /// ``DeviceSetting/isWritable`` says, but the setting written. A setting nothing writes,
-    /// such as a reading or a value the device measures, changes on its own rather than as a
-    /// write's side effect, so it's left out.
+    /// The settings read: every one the catalog gives a way to write, the setting written
+    /// included. A setting the catalog gives no way to write, such as a reading or a value the
+    /// device measures, changes on its own rather than as a write's side effect, so it's left
+    /// out. A flag that's never written, such as one that turns the radio off, is still read,
+    /// since a write can change it.
     let items: [SettingItem]
 
-    /// The buttons whose values are compared: button 1, which holds the values that aren't
-    /// per button, and the button written when some of the values compared are per button.
-    /// Empty when no value is compared.
+    /// The setting written, as a settings page shows it.
+    let written: DeviceSetting
+
+    /// The button written, for a setting that's per button; otherwise `nil`.
+    let writtenButton: Int?
+
+    /// The buttons whose values are read: button 1, which holds the values that aren't per
+    /// button, and the button written when it isn't button 1. Empty when no value is read.
     let buttons: [UInt8]
 
     /// The device's command set.
@@ -30,29 +47,52 @@ extension Device {
     /// The device's description.
     let description: DeviceDescription
 
-    /// A check of the writable settings other than `written`, for a write to `button`.
-    init(device: Device, besides written: SettingItem, button: UInt8, description: DeviceDescription, commands: CommandSet) {
+    /// A check of the writable settings around a write of `item` to `button`.
+    init(device: Device, writing item: SettingItem, button: UInt8, description: DeviceDescription, commands: CommandSet) {
 
-      let items: [SettingItem] = commands.settingItems.filter { (item: SettingItem) -> Bool in
-
-        item.name != written.name && SettingPresentation.setting(for: item, in: commands).isWritable
-
-      }
+      let items: [SettingItem] = commands.settingItems.filter { (candidate: SettingItem) -> Bool in commands.isWritable(candidate) }
+      let written: DeviceSetting = SettingPresentation.setting(for: item, in: commands)
       let values: [SettingItem] = items.filter(Device.isValue)
-      let isAnyPerButton: Bool = values.contains { (item: SettingItem) -> Bool in commands.extendedSettings?.isValuePerButton(item.name) ?? false }
+      let isAnyPerButton: Bool = values.contains { (value: SettingItem) -> Bool in commands.extendedSettings?.isValuePerButton(value.name) ?? false }
 
       self.device = device
       self.items = items
+      self.written = written
+      self.writtenButton = written.isPerButton ? Int(button) : nil
       self.buttons = values.isEmpty ? [] : (isAnyPerButton && button != 0x01 ? [0x01, button] : [0x01])
       self.commands = commands
       self.description = description
 
     }
 
-    /// Whether there's another setting to compare.
+    /// Whether there's nothing to compare: no setting but the one written, and no other
+    /// button of it.
     var isEmpty: Bool {
 
-      items.isEmpty
+      let others: Bool = items.contains { (item: SettingItem) -> Bool in SettingPresentation.setting(for: item, in: commands) != written }
+
+      return !others && !(writtenButton != nil && buttons.count > 1)
+
+    }
+
+    /// The entries of a reading that are compared, each with its button: every entry but the
+    /// setting written on the button written. A setting that's per button carries its button
+    /// even when only button 1 was read, so it's named the same way every time.
+    func compared(_ reading: DeviceSettingsReading) -> [(entry: DeviceSettingsReading.Entry, button: Int?)] {
+
+      reading.entries.compactMap { (entry: DeviceSettingsReading.Entry) -> (entry: DeviceSettingsReading.Entry, button: Int?)? in
+
+        let button: Int? = entry.button ?? (entry.setting.isPerButton ? 1 : nil)
+
+        if entry.setting == written, button == writtenButton {
+
+          return nil
+
+        }
+
+        return (entry, button)
+
+      }
 
     }
 
@@ -130,7 +170,7 @@ extension Device {
 
       let reading: DeviceSettingsReading = try await read(knowing: flags, values: values)
 
-      guard reading.entries.contains(where: { (entry: DeviceSettingsReading.Entry) -> Bool in entry.text != nil }) else {
+      guard compared(reading).contains(where: { (pair: (entry: DeviceSettingsReading.Entry, button: Int?)) -> Bool in pair.entry.text != nil }) else {
 
         return .skipped(.notReportedBefore)
 
@@ -175,7 +215,8 @@ extension Device {
 
       } catch is CancellationError {
 
-        return .notReread(.canceled)
+        // A modem can throw CancellationError on its own; only a canceled task is canceled.
+        return .notReread(Task.isCancelled ? .canceled : .failed)
 
       } catch ModemError.connectionClosed {
 
@@ -187,69 +228,57 @@ extension Device {
 
       }
 
-      return earlier.otherSettings(after: later)
+      return otherSettings(before: earlier, after: later)
 
     }
 
-  }
+    /// What the compared settings did between two readings of the same items and buttons:
+    /// each one whose value differs, in order; each one the earlier reading reported that the
+    /// later one didn't, as unread; and ``DeviceSettingChange/OtherSettings/ReadFailure/notAnswered``
+    /// when the later reading has none of the values the earlier one has. A setting the
+    /// earlier reading didn't report is left out.
+    func otherSettings(before earlier: DeviceSettingsReading, after later: DeviceSettingsReading) -> DeviceSettingChange.OtherSettings {
 
-  /// What was read of the other settings before a write.
-  enum Before {
+      var changes: [DeviceSettingChange.OtherChange] = []
+      var unread: [DeviceSettingChange.UnreadSetting] = []
+      var reportedBefore: Int = 0
 
-    /// The reading.
-    case read(DeviceSettingsReading)
+      // The readings are of the same items and buttons, so their entries line up one for one.
+      for (first, second) in zip(compared(earlier), compared(later)) {
 
-    /// Nothing was read, for the reason the outcome gives.
-    case skipped(DeviceSettingChange.OtherSettings.Outcome)
+        guard let before = first.entry.text else {
 
-  }
+          continue
 
-}
+        }
 
-extension DeviceSettingsReading {
+        reportedBefore += 1
 
-  /// What the settings did between this reading and a later one of the same items and
-  /// buttons: each entry whose value differs, in order; each one this reading reported that
-  /// the later one didn't, as unread; and ``DeviceSettingChange/OtherSettings/ReadFailure/notAnswered``
-  /// when the later reading has none of the values this one has. An entry this reading didn't
-  /// report is left out.
-  func otherSettings(after later: DeviceSettingsReading) -> DeviceSettingChange.OtherSettings {
+        guard let reported = second.entry.text else {
 
-    var changes: [DeviceSettingChange.OtherChange] = []
-    var unread: [DeviceSettingChange.UnreadSetting] = []
+          unread.append(DeviceSettingChange.UnreadSetting(setting: first.entry.setting, button: first.button))
 
-    // The readings are of the same items and buttons, so their entries line up one for one.
-    for (entry, match) in zip(entries, later.entries) {
+          continue
 
-      guard let before = entry.text else {
+        }
 
-        continue
+        if reported != before {
 
-      }
+          changes.append(DeviceSettingChange.OtherChange(setting: first.entry.setting, button: first.button, before: before, after: reported))
 
-      guard let reported = match.text else {
-
-        unread.append(DeviceSettingChange.UnreadSetting(setting: entry.setting, button: entry.button))
-
-        continue
+        }
 
       }
 
-      if reported != before {
+      if unread.count == reportedBefore {
 
-        changes.append(DeviceSettingChange.OtherChange(setting: entry.setting, button: entry.button, before: before, after: reported))
+        return .notReread(.notAnswered)
 
       }
+
+      return .compared(changes, unread: unread)
 
     }
-
-    if changes.isEmpty, unread.count == entries.count(where: { (entry: Entry) -> Bool in entry.text != nil }) {
-
-      return .notReread(.notAnswered)
-
-    }
-
-    return .compared(changes, unread: unread)
 
   }
 

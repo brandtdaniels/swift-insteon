@@ -11,8 +11,10 @@ import InsteonTestSupport
 /// A made-up catalog whose devices change one setting when another is written: a lamp whose
 /// linger time, once it isn't zero, turns its sparkle flag on, with a murmur reading and a hiss
 /// value it reports but nothing writes; a panel whose hum flag turns its sparkle flag on, with a
-/// drift flag of its own Get Operating Flags request; and keys whose shine and tint are per
-/// button.
+/// drift flag of its own Get Operating Flags request; keys whose shine and tint are per
+/// button; a sealed device with a flag that's never written; a latched device whose hum is
+/// written in an extended message while its latch is set; and mixed keys with a shine per
+/// button and a hue that isn't.
 enum SideEffectExample {
 
   // MARK: - Addresses
@@ -25,6 +27,12 @@ enum SideEffectExample {
 
   static let keys = InsteonAddress(0x5C, 0x6D, 0x04)
 
+  static let sealed = InsteonAddress(0x5C, 0x6D, 0x05)
+
+  static let latched = InsteonAddress(0x5C, 0x6D, 0x06)
+
+  static let mixed = InsteonAddress(0x5C, 0x6D, 0x07)
+
   // MARK: - Identities
 
   static let lampIdentity = ReportedIdentity(category: 0x01, subcategory: 0x71, firmwareVersion: 0x45)
@@ -35,7 +43,21 @@ enum SideEffectExample {
 
   static let keysIdentity = ReportedIdentity(category: 0x01, subcategory: 0x74, firmwareVersion: 0x45)
 
-  static let identities: [InsteonAddress: ReportedIdentity] = [lamp: lampIdentity, panel: panelIdentity, single: singleIdentity, keys: keysIdentity]
+  static let sealedIdentity = ReportedIdentity(category: 0x01, subcategory: 0x75, firmwareVersion: 0x45)
+
+  static let latchedIdentity = ReportedIdentity(category: 0x01, subcategory: 0x76, firmwareVersion: 0x45)
+
+  static let mixedIdentity = ReportedIdentity(category: 0x01, subcategory: 0x77, firmwareVersion: 0x45)
+
+  static let identities: [InsteonAddress: ReportedIdentity] = [
+    lamp: lampIdentity,
+    panel: panelIdentity,
+    single: singleIdentity,
+    keys: keysIdentity,
+    sealed: sealedIdentity,
+    latched: latchedIdentity,
+    mixed: mixedIdentity
+  ]
 
   // MARK: - Settings
 
@@ -44,6 +66,12 @@ enum SideEffectExample {
   static let sparkle = OperatingFlag(name: "sparkle", summary: "Sparkles.", query: .operatingFlags, bit: 0x04, on: 0x04, off: 0x05, label: "Sparkle")
 
   static let drift = OperatingFlag(name: "drift", summary: "Drifts.", query: 0x01, bit: 0x01, on: 0x06, off: 0x07, label: "Drift")
+
+  /// A flag the catalog keeps as it is, so it's never written.
+  static let seal = OperatingFlag(name: "seal", summary: "Seals.", query: .operatingFlags, bit: 0x08, on: 0x08, off: 0x09, label: "Seal", writeGuard: .keep)
+
+  /// A flag nothing writes, which makes the latched device's hum go out in an extended message.
+  static let latch = OperatingFlag(name: "latch", summary: "Latches.", query: .operatingFlags, bit: 0x08, label: "Latch")
 
   static let murmur = OperatingReading(name: "murmur", summary: "How much the device murmurs.", query: 0x02, label: "Murmur")
 
@@ -113,6 +141,52 @@ enum SideEffectExample {
     groupTypes: [ControlExample.light]
   )
 
+  /// A hum and a flag that's never written.
+  static let sealedCommands = CommandSet(
+    id: "exampleSideEffectSealed",
+    name: "Example side effect sealed",
+    summary: "A hum and a seal.",
+    operatingFlags: [hum, seal],
+    standardCommands: [ControlExample.lightOn, ControlExample.lightOff, ControlExample.readLevel],
+    groupTypes: [ControlExample.light]
+  )
+
+  /// The panel's flags, with a hum written in an extended message while the latch is set.
+  static let latchedCommands = CommandSet(
+    id: "exampleSideEffectLatched",
+    name: "Example side effect latched",
+    summary: "A hum guarded by a latch.",
+    operatingFlags: [
+      OperatingFlag(name: "hum", summary: "Hums.", query: .operatingFlags, bit: 0x02, on: 0x0A, off: 0x0B, extendedWhen: "latch", label: "Hum"),
+      sparkle,
+      drift,
+      latch
+    ],
+    standardCommands: [ControlExample.lightOn, ControlExample.lightOff, ControlExample.readLevel],
+    groupTypes: [ControlExample.light]
+  )
+
+  /// Three buttons, each with a shine at D8, written with selector `0x06`, and a hue at D9 for
+  /// the whole device, written with selector `0x07`.
+  static let mixedCommands = CommandSet(
+    id: "exampleSideEffectMixed",
+    name: "Example side effect mixed",
+    summary: "A per-button shine and a device's hue.",
+    extendedSettings: ExtendedSettings(
+      isPerButton: true,
+      values: [
+        SettingValue(name: "shine", summary: "How bright a button shines.", position: 8, label: "Shine"),
+        SettingValue(name: "hue", summary: "The device's hue.", position: 9, label: "Hue")
+      ],
+      writes: [
+        SettingWrite(name: "shine", summary: "Sets a button's shine.", selector: 0x06, isPerButton: true, bytes: [SettingWrite.Byte(position: 3, value: "shine")]),
+        SettingWrite(name: "hue", summary: "Sets the hue.", selector: 0x07, isPerButton: false, bytes: [SettingWrite.Byte(position: 3, value: "hue")])
+      ]
+    ),
+    standardCommands: [ControlExample.lightOn, ControlExample.lightOff, ControlExample.readLevel],
+    groupTypes: [ControlExample.light]
+  )
+
   static let catalog = DeviceCatalog(
     profiles: [
       ControlExample.profile(model: "9201", name: "Example Lamp", identity: lampIdentity, commands: lampCommands, groups: [
@@ -128,9 +202,20 @@ enum SideEffectExample {
         DeviceProfile.Group(number: 1, name: "Button 1", role: .both, type: "light"),
         DeviceProfile.Group(number: 2, name: "Button 2", role: .controller),
         DeviceProfile.Group(number: 3, name: "Button 3", role: .controller)
+      ]),
+      ControlExample.profile(model: "9205", name: "Example Sealed", identity: sealedIdentity, commands: sealedCommands, groups: [
+        DeviceProfile.Group(number: 1, name: "Load", role: .both, type: "light")
+      ]),
+      ControlExample.profile(model: "9206", name: "Example Latched", identity: latchedIdentity, commands: latchedCommands, groups: [
+        DeviceProfile.Group(number: 1, name: "Load", role: .both, type: "light")
+      ]),
+      ControlExample.profile(model: "9207", name: "Example Mixed", identity: mixedIdentity, commands: mixedCommands, groups: [
+        DeviceProfile.Group(number: 1, name: "Button 1", role: .both, type: "light"),
+        DeviceProfile.Group(number: 2, name: "Button 2", role: .controller),
+        DeviceProfile.Group(number: 3, name: "Button 3", role: .controller)
       ])
     ],
-    commandSets: [lampCommands, panelCommands, singleCommands, keysCommands]
+    commandSets: [lampCommands, panelCommands, singleCommands, keysCommands, sealedCommands, latchedCommands, mixedCommands]
   )
 
 }
@@ -298,7 +383,7 @@ struct SettingSideEffectTests {
 
   }
 
-  @Test func reportsAnotherButtonsChangeWithItsButtonAndLeavesOutTheSettingWrittenOnEveryButton() async throws {
+  @Test func reportsChangesOnBothButtonsReadAndLeavesOutOnlyTheSettingWrittenOnTheButtonWritten() async throws {
 
     let modem = SettingsModem(device: SideEffectExample.keys, flags: 0x00, values: [8: 0xFF, 9: 0x00])
     await modem.setValues([8: 0x80, 9: 0x00], ofButton: 0x02)
@@ -311,8 +396,9 @@ struct SettingSideEffectTests {
 
     #expect(change.button == 2)
     #expect(change.after == "0x40")
-    #expect(changes(change) == [["tint", "2", "0x00", "0x22"]])
-    #expect(change.changedSettings.first?.title == "Tint (button 2)")
+    // The shine written on button 2 changed button 1's shine too.
+    #expect(changes(change) == [["shine", "1", "0xFF", "0x11"], ["tint", "2", "0x00", "0x22"]])
+    #expect(change.changedSettings.map(\.title) == ["Shine (button 1)", "Tint (button 2)"])
     // Button 3 isn't read: only button 1 and the button written are compared.
     #expect(await modem.sent == [
       "2E 00 02 00 00",
@@ -589,6 +675,195 @@ struct SettingSideEffectTests {
     #expect(change.isConfirmed)
     #expect(change.otherSettings == .notReread(.canceled))
     #expect(isCanceled)
+    // The confirmed write still records that the device answered.
+    #expect(await network.state(of: SideEffectExample.panel)?.lastSeen != nil)
+
+  }
+
+  // MARK: - Settings that are never written
+
+  @Test func reportsAFlagThatsNeverWrittenWhenAWriteTurnsItOn() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setOperatingFlags(0x00, of: SideEffectExample.sealed)
+    await modem.setOperatingFlagCommand(0x0A, bit: 0x02, isSet: true, of: SideEffectExample.sealed)
+    await modem.setOperatingFlagSideEffect(of: 0x0A, bit: 0x08, isSet: true, of: SideEffectExample.sealed)
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.sealed).writeSetting("hum", to: "on")
+
+    #expect(change.after == "on")
+    #expect(changes(change) == [["seal", "-", "off", "on"]])
+
+  }
+
+  // MARK: - Buttons
+
+  @Test func namesAPerButtonSettingWithItsButtonWhenOnlyButtonOneIsRead() async throws {
+
+    let modem = SettingsModem(device: SideEffectExample.keys, flags: 0x00, values: [8: 0xFF, 9: 0x00])
+    await modem.setValueSideEffect(ofSelector: 0x06, writes: 0x22, at: 9)
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.keys).writeSetting("shine", to: "0x40")
+
+    #expect(changes(change) == [["tint", "1", "0x00", "0x22"]])
+    #expect(await modem.sent == ["2E 00 01 00 00", "2E 00 01 06 40", "2E 00 01 00 00"])
+
+  }
+
+  @Test func reportsASettingThatIsntPerButtonOnceWhenAnotherButtonIsWritten() async throws {
+
+    let modem = SettingsModem(device: SideEffectExample.mixed, flags: 0x00, values: [8: 0xFF, 9: 0x00])
+    await modem.setValues([8: 0x80, 9: 0x00], ofButton: 0x02)
+    await modem.setValueSideEffect(ofSelector: 0x06, writes: 0x33, at: 9, ofButton: 0x01)
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.mixed).writeSetting("shine", to: "0x40", button: 2)
+
+    #expect(changes(change) == [["hue", "-", "0x00", "0x33"]])
+    #expect(await modem.sent == ["2E 00 02 00 00", "2E 00 01 00 00", "2E 00 02 06 40", "2E 00 02 00 00", "2E 00 01 00 00"])
+
+  }
+
+  // MARK: - A flag written in an extended message
+
+  @Test func sendsTheEngineAndGuardingReadsApartFromTheComparison() async throws {
+
+    let modem: InMemoryModem = await panelModem(flags: 0x00, device: SideEffectExample.latched)
+    await modem.setOperatingFlagsMask(0x0E, forQuery: 0x00, of: SideEffectExample.latched)
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.latched).writeSetting("hum", to: "on")
+
+    #expect(change.after == "on")
+    #expect(await commands(sentTo: SideEffectExample.latched, by: modem) == [
+      // The flag written, then the drift, before.
+      Command(command1: 0x1F, command2: 0x00),
+      Command(command1: 0x1F, command2: 0x01),
+      // The write's own requests: the engine, and the latch that decides the form.
+      Command(command1: 0x0D, command2: 0x00),
+      Command(command1: 0x1F, command2: 0x00),
+      Command(command1: 0x20, command2: 0x0A),
+      // The read-back, then the drift, after.
+      Command(command1: 0x1F, command2: 0x00),
+      Command(command1: 0x1F, command2: 0x01)
+    ])
+
+  }
+
+  // MARK: - A value write's reads that fail
+
+  @Test func readsNoOtherSettingWhenTheDeviceDoesntAnswerAValueWritesOwnRead() async throws {
+
+    let modem = SettingsModem(device: SideEffectExample.lamp, flags: 0x00, values: [7: 0x00, 8: 0x10, 9: 0xA2])
+    let gets = Count()
+
+    await modem.setBeforeSending { (bytes: String) throws -> Void in
+
+      if bytes == "2E 00 01 00 00" {
+
+        gets.increment()
+
+        if gets.value == 1 {
+
+          throw ModemError.deviceTimedOut(SideEffectExample.lamp)
+
+        }
+
+      }
+
+    }
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.lamp).writeSetting("lingerTime", to: "0x05")
+
+    #expect(change.before == nil)
+    #expect(change.after == "0x05")
+    #expect(change.otherSettings == DeviceSettingChange.OtherSettings(outcome: .notReportedBefore))
+    #expect(await modem.sent == ["2E 00 01 05 05", "2E 00 01 00 00"])
+
+  }
+
+  /// Makes the settings modem fail, with `error`, every message `failing` after the extended
+  /// Set it's sent.
+  func failAfterTheSet(of modem: SettingsModem, failing: @escaping @Sendable (String) -> Bool, with error: some Error & Sendable) async {
+
+    let written = Count()
+
+    await modem.setBeforeSending { (bytes: String) throws -> Void in
+
+      if bytes.hasPrefix("2E 00"), !bytes.hasSuffix(" 00 00") {
+
+        written.increment()
+
+      } else if written.value > 0, failing(bytes) {
+
+        throw error
+
+      }
+
+    }
+
+  }
+
+  @Test func namesTheFlagsThatWentUnreadAfterAValueWrite() async throws {
+
+    let modem = SettingsModem(device: SideEffectExample.lamp, flags: 0x00, values: [7: 0x00, 8: 0x10, 9: 0xA2])
+    await failAfterTheSet(of: modem, failing: { (bytes: String) -> Bool in bytes == "1F 00" }, with: ModemError.deviceTimedOut(SideEffectExample.lamp))
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.lamp).writeSetting("lingerTime", to: "0x05")
+
+    #expect(change.otherSettings.outcome == .compared)
+    #expect(change.unreadSettings.map(\.title) == ["Hum", "Sparkle"])
+
+  }
+
+  @Test func namesButtonOnesValuesThatWentUnreadAfterAnotherButtonsWrite() async throws {
+
+    let modem = SettingsModem(device: SideEffectExample.keys, flags: 0x00, values: [8: 0xFF, 9: 0x00])
+    await modem.setValues([8: 0x80, 9: 0x00], ofButton: 0x02)
+    await failAfterTheSet(of: modem, failing: { (bytes: String) -> Bool in bytes == "2E 00 01 00 00" }, with: ModemError.deviceTimedOut(SideEffectExample.keys))
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.keys).writeSetting("shine", to: "0x40", button: 2)
+
+    #expect(change.otherSettings.outcome == .compared)
+    #expect(change.unreadSettings.map(\.title) == ["Shine (button 1)", "Tint (button 1)"])
+
+  }
+
+  @Test func saysNoneWereAnsweredWhenButtonOneHoldsEverySettingComparedAfterAnotherButtonsWrite() async throws {
+
+    let modem = SettingsModem(device: SideEffectExample.mixed, flags: 0x00, values: [8: 0xFF, 9: 0x00])
+    await modem.setValues([8: 0x80, 9: 0x00], ofButton: 0x02)
+    await failAfterTheSet(of: modem, failing: { (bytes: String) -> Bool in bytes == "2E 00 01 00 00" }, with: ModemError.deviceTimedOut(SideEffectExample.mixed))
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.mixed).writeSetting("shine", to: "0x40", button: 2)
+
+    #expect(change.isConfirmed)
+    #expect(change.otherSettings == .notReread(.notAnswered))
+
+  }
+
+  struct ExampleFailure: Error {}
+
+  @Test func saysTheReReadFailedWhenTheModemFailsAnotherWay() async throws {
+
+    let modem = SettingsModem(device: SideEffectExample.lamp, flags: 0x00, values: [7: 0x00, 8: 0x10, 9: 0xA2])
+    await failAfterTheSet(of: modem, failing: { (bytes: String) -> Bool in bytes == "1F 00" }, with: ExampleFailure())
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.lamp).writeSetting("lingerTime", to: "0x05")
+
+    #expect(change.isConfirmed)
+    #expect(change.otherSettings == .notReread(.failed))
+
+  }
+
+  @Test func saysTheReReadFailedWhenTheModemThrowsCancellationWithoutTheTaskBeingCanceled() async throws {
+
+    let modem = SettingsModem(device: SideEffectExample.lamp, flags: 0x00, values: [7: 0x00, 8: 0x10, 9: 0xA2])
+    await failAfterTheSet(of: modem, failing: { (bytes: String) -> Bool in bytes == "1F 00" }, with: CancellationError())
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.lamp).writeSetting("lingerTime", to: "0x05")
+
+    #expect(change.isConfirmed)
+    #expect(change.otherSettings == .notReread(.failed))
+    #expect(Task.isCancelled == false)
 
   }
 

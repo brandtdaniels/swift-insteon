@@ -50,7 +50,7 @@ extension Device {
 
     let read = StandardMessage(to: address, command: flag.readCommand)
     let before: UInt8? = try await answer(read)?.command.command2
-    let othersBefore: Device.Before = try await others.readBefore(isOwnReported: before != nil, knowing: before.map { (byte: UInt8) -> [OperatingFlagsRequest: UInt8] in [flag.query: byte] } ?? [:])
+    let othersBefore: OtherSettingsCheck.Before = try await others.readBefore(isOwnReported: before != nil, knowing: before.map { (byte: UInt8) -> [OperatingFlagsRequest: UInt8] in [flag.query: byte] } ?? [:])
 
     switch change {
     case let .setOperatingFlags(command2):
@@ -91,7 +91,7 @@ extension Device {
 
   /// What the other settings did across a write that isn't confirmed: they aren't read
   /// again, and a comparison that ended before the write keeps its outcome.
-  private static func unconfirmed(_ before: Device.Before) -> DeviceSettingChange.OtherSettings {
+  private static func unconfirmed(_ before: OtherSettingsCheck.Before) -> DeviceSettingChange.OtherSettings {
 
     switch before {
     case .read:
@@ -273,7 +273,7 @@ extension Device {
 
     }
 
-    let othersBefore: Device.Before = try await others.readBefore(isOwnReported: before != nil, values: before.map { (values: [SettingName: UInt8]) -> [UInt8: [SettingName: UInt8]] in [target: values] } ?? [:])
+    let othersBefore: OtherSettingsCheck.Before = try await others.readBefore(isOwnReported: before != nil, values: before.map { (values: [SettingName: UInt8]) -> [UInt8: [SettingName: UInt8]] in [target: values] } ?? [:])
 
     _ = try await request(message, timeout: Modem.defaultExtendedRequestTimeout, for: .setting(label: item.label))
 

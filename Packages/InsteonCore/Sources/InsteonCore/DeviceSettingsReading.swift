@@ -254,9 +254,10 @@ public struct DeviceSettingChange: Hashable, Sendable {
   /// What the device's other writable settings did across the write: whether they were
   /// compared, each one that changed, and each one that couldn't be read again.
   ///
-  /// It's a structure rather than an enumeration, and its ``Outcome`` and ``ReadFailure`` are
-  /// open sets of named values, so a later outcome doesn't break code that checks for the
-  /// ones it knows.
+  /// ``Outcome`` and ``ReadFailure`` are open sets of named values rather than enumerations:
+  /// code compares them with the values it handles, and treats any other value the way it
+  /// treats a comparison that didn't happen, so an outcome it doesn't name never stops it
+  /// compiling.
   public struct OtherSettings: Hashable, Sendable {
 
     /// How the comparison of the other settings ended.
