@@ -199,6 +199,66 @@ struct LifecycleAndGroupTypeTests {
 
   }
 
+  /// A command set whose relay group types say how they hold a state, or don't.
+  static let relayCommandSet = #"""
+    {
+      "id": "testRelay",
+      "name": "Test Relay",
+      "description": "A made-up relay.",
+      "groupTypes": [
+        {
+          "name": "relay",
+          "label": "Relay",
+          "kind": "relay",
+          "stateHolding": {
+            "releasedBy": ["pulse"],
+            "restState": "off",
+            "pulsesOnEveryCommandWhen": [["pulse", "pulseBoth"]],
+            "verification": { "status": "observed", "firmware": ["0x41"], "note": "Seen on a made-up device." }
+          }
+        },
+        { "name": "latch", "label": "Latch", "kind": "relay", "stateHolding": { "releasedBy": ["hold"], "restState": "open" } },
+        { "name": "plain", "label": "Plain", "kind": "relay" }
+      ],
+      "sources": ["A"]
+    }
+    """#
+
+  @Test func readsHowARelayHoldsAState() throws {
+
+    let commands = try #require(try Self.catalog(commandSet: Self.relayCommandSet).commandSet(id: "testRelay"))
+
+    #expect(commands.groupType(named: "relay")?.stateHolding == GroupType.StateHolding(
+      releasedBy: ["pulse"],
+      restState: "off",
+      pulsesOnEveryCommandWhen: [["pulse", "pulseBoth"]],
+      verification: Verification(status: .observed, note: "Seen on a made-up device.", firmware: [FirmwareVersion(rawValue: 0x41)])
+    ))
+    // The rest state is an action's name, and the pulsing sets are optional.
+    #expect(commands.groupType(named: "latch")?.stateHolding == GroupType.StateHolding(releasedBy: ["hold"], restState: "open"))
+    // Without it, the catalog doesn't say.
+    #expect(commands.groupType(named: "plain")?.stateHolding == nil)
+
+  }
+
+  @Test(arguments: [
+    #"{ "releasedBy": "pulse", "restState": "off" }"#,
+    #"{ "releasedBy": [], "restState": "off" }"#,
+    #"{ "releasedBy": ["pulse"] }"#,
+    #"{ "restState": "off" }"#,
+  ])
+  func refusesAStateHoldingThatIsntOne(_ holding: String) {
+
+    let commandSet = #"{ "id": "a", "name": "A", "description": "A.", "groupTypes": [{ "name": "a", "label": "A", "kind": "relay", "stateHolding": \#(holding) }], "sources": ["A"] }"#
+
+    #expect(throws: DecodingError.self) {
+
+      try Self.catalog(commandSet: commandSet)
+
+    }
+
+  }
+
   @Test func readsAValueTable() throws {
 
     let commands = try #require(try Self.catalog().commandSet(id: "testKeypad"))

@@ -317,6 +317,60 @@ public struct GroupType: Hashable, Sendable {
 
   }
 
+  /// How a relay holds the state it's switched to: the operating flags that keep it from
+  /// holding one, the state it returns to by itself while they do, and the flags with which
+  /// every On and Off only pulses it.
+  ///
+  /// A front end reads it before it switches a relay to have a link record a state:
+  ///
+  /// ```swift
+  /// guard let holding = relay.stateHolding else {
+  ///   return // The catalog doesn't say how the relay holds a state.
+  /// }
+  ///
+  /// let released: Bool = holding.releasedBy.contains { flagsOn.contains($0) }
+  /// let ignoresState: Bool = holding.pulsesOnEveryCommandWhen.contains { $0.allSatisfy(flagsOn.contains) }
+  /// ```
+  public struct StateHolding: Hashable, Sendable {
+
+    /// The operating flags, in the command set's ``CommandSet/operatingFlags``, that keep the
+    /// relay from holding a state: while any is set, the relay returns to
+    /// ``GroupType/StateHolding/restState`` by itself a time after it's switched.
+    public var releasedBy: [SettingName]
+
+    /// The name of the group type's action, in ``GroupType/actions``, that sets the state the
+    /// relay returns to by itself while a flag of ``GroupType/StateHolding/releasedBy`` is set,
+    /// such as `"off"`.
+    public var restState: SettingName
+
+    /// Sets of operating flags, each of which, when all its flags are set, has every group On
+    /// and Off only pulse the relay, whatever its responder record holds, so the state a link
+    /// records is ignored.
+    public var pulsesOnEveryCommandWhen: [[SettingName]]
+
+    /// How sure the catalog is of how the relay holds a state.
+    public var verification: Verification
+
+    /// Creates how a relay holds a state.
+    ///
+    /// - Parameters:
+    ///   - releasedBy: The flags that keep the relay from holding a state.
+    ///   - restState: The name of the action that sets the state the relay returns to by
+    ///     itself.
+    ///   - pulsesOnEveryCommandWhen: The sets of flags with which every On and Off only pulses
+    ///     the relay. Defaults to none.
+    ///   - verification: How sure the catalog is. Defaults to ``Verification/documented``.
+    public init(releasedBy: [SettingName], restState: SettingName, pulsesOnEveryCommandWhen: [[SettingName]] = [], verification: Verification = .documented) {
+
+      self.releasedBy = releasedBy
+      self.restState = restState
+      self.pulsesOnEveryCommandWhen = pulsesOnEveryCommandWhen
+      self.verification = verification
+
+    }
+
+  }
+
   /// The group type's name, which profiles' groups name.
   public var name: SettingName
 
@@ -349,6 +403,10 @@ public struct GroupType: Hashable, Sendable {
   /// How sure the catalog is of the group type.
   public var verification: Verification
 
+  /// For a ``GroupType/Kind/relay`` group, how it holds the state it's switched to, or `nil`
+  /// if the catalog doesn't say.
+  public var stateHolding: StateHolding?
+
   /// Creates a group type.
   ///
   /// - Parameters:
@@ -361,6 +419,7 @@ public struct GroupType: Hashable, Sendable {
   ///   - verification: How sure the catalog is of the group type. Defaults to ``Verification/documented``.
   ///   - outputs: The parts of the group's load one action can switch together. Defaults to `nil`.
   ///   - armModes: The modes an alarm sounds in or an arming group arms. Defaults to none.
+  ///   - stateHolding: How a relay holds the state it's switched to. Defaults to `nil`.
   public init(
     name: SettingName,
     label: String,
@@ -370,7 +429,8 @@ public struct GroupType: Hashable, Sendable {
     linkData: LinkData = LinkData(),
     verification: Verification = .documented,
     outputs: Outputs? = nil,
-    armModes: [ArmMode] = []
+    armModes: [ArmMode] = [],
+    stateHolding: StateHolding? = nil
   ) {
 
     self.name = name
@@ -382,6 +442,7 @@ public struct GroupType: Hashable, Sendable {
     self.verification = verification
     self.outputs = outputs
     self.armModes = armModes
+    self.stateHolding = stateHolding
 
   }
 
@@ -586,6 +647,7 @@ extension GroupType: Decodable {
     case verification
     case outputs
     case armModes
+    case stateHolding
 
   }
 
@@ -663,6 +725,18 @@ extension GroupType: Decodable {
 
   }
 
+  private struct StateHoldingEntry: Decodable {
+
+    let releasedBy: [String]
+
+    let restState: String
+
+    let pulsesOnEveryCommandWhen: [[String]]?
+
+    let verification: Verification?
+
+  }
+
   private struct LinkDataEntry: Decodable {
 
     let responder: [LinkDataByte]?
@@ -677,8 +751,8 @@ extension GroupType: Decodable {
   ///
   /// - Parameter decoder: The decoder to read from.
   /// - Throws: `DecodingError` if the JSON isn't a group type, a byte isn't written as `0x`
-  ///   and two hexadecimal digits, a range ends before it starts, or a data byte isn't Data 1
-  ///   through Data 3.
+  ///   and two hexadecimal digits, a range ends before it starts, a data byte isn't Data 1
+  ///   through Data 3, or a state holding names no flag that releases the relay.
   public init(from decoder: any Decoder) throws {
 
     let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -739,7 +813,23 @@ extension GroupType: Decodable {
       linkData: LinkData(responder: linkData?.responder ?? [], controller: linkData?.controller ?? []),
       verification: try container.decodeIfPresent(Verification.self, forKey: .verification) ?? .documented,
       outputs: outputs,
-      armModes: (try container.decodeIfPresent([String].self, forKey: .armModes) ?? []).map(ArmMode.init(rawValue:))
+      armModes: (try container.decodeIfPresent([String].self, forKey: .armModes) ?? []).map(ArmMode.init(rawValue:)),
+      stateHolding: try container.decodeIfPresent(StateHoldingEntry.self, forKey: .stateHolding).map { entry in
+
+        guard !entry.releasedBy.isEmpty else {
+
+          throw DecodingError.dataCorruptedError(forKey: .stateHolding, in: container, debugDescription: "A relay's state holding names at least one flag that releases it.")
+
+        }
+
+        return StateHolding(
+          releasedBy: entry.releasedBy.map(SettingName.init(rawValue:)),
+          restState: SettingName(rawValue: entry.restState),
+          pulsesOnEveryCommandWhen: (entry.pulsesOnEveryCommandWhen ?? []).map { $0.map(SettingName.init(rawValue:)) },
+          verification: entry.verification ?? .documented
+        )
+
+      }
     )
 
   }
