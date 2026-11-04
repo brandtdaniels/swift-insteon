@@ -200,6 +200,10 @@ public actor InMemoryModem: LinkingModem {
   /// The Set Operating Flags commands each device carries out, by cmd2.
   private var flagCommands: [InsteonAddress: [UInt8: FlagCommand]] = [:]
 
+  /// The other bits each device's Set Operating Flags commands change as well, by cmd2, in
+  /// the order they were given.
+  private var flagSideEffects: [InsteonAddress: [UInt8: [FlagCommand]]] = [:]
+
   /// The bit of each device's operating flags byte that makes its relay pulse, and the level
   /// the relay returns to.
   private var pulsingBits: [InsteonAddress: (bit: UInt8, restLevel: UInt8)] = [:]
@@ -278,6 +282,23 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Makes a Set Operating Flags cmd2 a device carries out set or clear another bit of its
+  /// operating flags byte as well, as a device whose settings depend on each other does.
+  ///
+  /// The cmd2 needs ``setOperatingFlagCommand(_:bit:isSet:of:)`` too. A cmd2 can be given
+  /// several bits, which it changes in the order they were given.
+  ///
+  /// - Parameters:
+  ///   - command2: The cmd2.
+  ///   - bit: The other bit it changes.
+  ///   - isSet: Whether it sets the other bit, rather than clears it.
+  ///   - device: The device.
+  public func setOperatingFlagSideEffect(of command2: UInt8, bit: UInt8, isSet: Bool, of device: InsteonAddress) {
+
+    flagSideEffects[device, default: [:]][command2, default: []].append(FlagCommand(bit: bit, isSet: isSet))
+
+  }
+
   /// Makes a device's relay pulse while a bit of its operating flags is set: Light On or Light
   /// Off switches it only for a moment, so its status reads its rest level again by the time
   /// it's asked, as a relay that doesn't hold a state returns to its rest state by itself.
@@ -320,9 +341,13 @@ public actor InMemoryModem: LinkingModem {
 
     }
 
-    let flags: UInt8 = operatingFlags[device, default: 0x00]
+    for change in [flag] + flagSideEffects[device, default: [:]][command.command2, default: []] {
 
-    operatingFlags[device] = flag.isSet ? flags | flag.bit : flags & ~flag.bit
+      let flags: UInt8 = operatingFlags[device, default: 0x00]
+
+      operatingFlags[device] = change.isSet ? flags | change.bit : flags & ~change.bit
+
+    }
 
     return true
 

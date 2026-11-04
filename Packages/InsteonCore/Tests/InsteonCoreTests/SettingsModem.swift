@@ -7,7 +7,8 @@ import InsteonProtocol
 /// Operating Flags `0x0A` and `0x0B` set and clear bit `0x02`, an extended Get replies with the
 /// values, and an extended Set with selector `0x05` or `0x06` writes D3 to the value at D7 or D8.
 /// Get Insteon Engine Version reports i2 unless told otherwise, and an extended Get for a
-/// button whose values are set apart replies with that button's values.
+/// button whose values are set apart replies with that button's values. A write can also set
+/// flag bits, as a device whose settings depend on each other does.
 actor SettingsModem: LinkingModem {
 
   /// The modem's own address.
@@ -28,6 +29,9 @@ actor SettingsModem: LinkingModem {
   /// Whether the device acknowledges writes without changing anything.
   private var ignoresWrites: Bool = false
 
+  /// The flag bits an extended Set sets when it writes a value other than zero, by its selector.
+  private var flagSideEffects: [UInt8: UInt8] = [:]
+
   /// The engine the device reports to Get Insteon Engine Version.
   private var engine: InsteonEngine = .i2
 
@@ -39,6 +43,13 @@ actor SettingsModem: LinkingModem {
 
   /// Every extended message sent, in order.
   private(set) var extendedMessages: [ExtendedMessage] = []
+
+  /// Every extended message sent but the extended Gets that read the values, in order.
+  var extendedWrites: [ExtendedMessage] {
+
+    extendedMessages.filter { (message: ExtendedMessage) -> Bool in message.command.command1 != 0x2E || message.userData[2] != 0x00 }
+
+  }
 
   private var subscribers: [Int: AsyncStream<ModemReply>.Continuation] = [:]
 
@@ -87,6 +98,18 @@ actor SettingsModem: LinkingModem {
   func rejectEngineRequests() {
 
     rejectsEngineRequests = true
+
+  }
+
+  /// Makes an extended Set with a selector set flag bits as well when it writes a value other
+  /// than zero.
+  ///
+  /// - Parameters:
+  ///   - bits: The flag bits it sets.
+  ///   - selector: The extended Set's selector, in D2.
+  func setFlagBits(_ bits: UInt8, whenWritingANonZeroValueWith selector: UInt8) {
+
+    flagSideEffects[selector] = bits
 
   }
 
@@ -177,6 +200,12 @@ actor SettingsModem: LinkingModem {
         } else {
 
           values[position] = data[3]
+
+        }
+
+        if data[3] != 0x00, let bits = flagSideEffects[data[2]] {
+
+          flags |= bits
 
         }
 
