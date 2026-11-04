@@ -23,21 +23,21 @@ extension DeviceLinkingCoordinator {
   ///    flag is written, and its record isn't held to the state. Otherwise, when the relay
   ///    isn't in the state, or doesn't hold a state and the state isn't its rest state, it
   ///    must be sent a command. A relay with a flag on that keeps it from holding a state
-  ///    would return to its rest state before it links, so each such flag is turned off first
-  ///    and read back, but only when the catalog's linking changes allow it, and when the
-  ///    messages that turn the flag off, set it back and return the relay would be sent;
-  ///    otherwise the link is refused. A relay already in the state is sent nothing, and no
-  ///    flag is written. ``DeviceLinkingCoordinator/planRelayLink(_:recording:observer:)``
+  ///    would return to its rest state before it links, so, unless the state is its rest
+  ///    state, each such flag is turned off first and read back, but only when the catalog's
+  ///    linking changes allow it, and when the messages that turn the flag off, set it back
+  ///    and return the relay would be sent; otherwise the link is refused. A relay switched to
+  ///    its rest state stays there by itself, so no flag is written for it. A relay already in
+  ///    the state is sent nothing, and no flag is written. ``DeviceLinkingCoordinator/planRelayLink(_:recording:observer:)``
   ///    reads the same and says what will be switched, for a front end to ask first.
   /// 3. The relay is sent its group type's On or Off through the device's guarded send path,
   ///    and its status is read again; a relay that doesn't show the state isn't linked.
   /// 4. The device is linked in one link, in the modem's `group`, not by the catalog's legs.
   ///    A device that doesn't link without its SET button isn't linked with it, since that
   ///    records whatever state the relay is in by the time a person presses it.
-  /// 5. A relay whose flags were turned off is switched to its rest state, when the state
-  ///    isn't that, while its flags are still off, once more if that fails; then each flag is
-  ///    turned back on and read back, once more if that fails, and each whole flags byte
-  ///    compared with the one read first.
+  /// 5. A relay whose flags were turned off is switched to its rest state while its flags are
+  ///    still off, once more if that fails; then each flag is turned back on and read back,
+  ///    once more if that fails, and each whole flags byte compared with the one read first.
   /// 6. The relay's responder record is read back, through the network's cache, and its
   ///    Data 1 compared with the state the link fixed.
   ///
@@ -164,13 +164,7 @@ extension DeviceLinkingCoordinator {
 
       do {
 
-        for flag in plan.clearedFlags {
-
-          guard let operating = prepared.operatingFlags[flag.name] else {
-
-            throw RelayStateLinkingError.flagNotChangeable(device, flag: flag)
-
-          }
+        for (flag, operating) in prepared.clearedFlags {
 
           await observer.linking(.relayState(.clearingFlag(device, flag: flag)))
 
@@ -344,8 +338,8 @@ extension DeviceLinkingCoordinator {
 
     var target: Device
 
-    /// The operating flags the catalog names in how the relay holds a state, by name.
-    var operatingFlags: [String: OperatingFlag]
+    /// The flags the plan turns off, each with its operating flag, in order.
+    var clearedFlags: [(flag: RelayFlag, operating: OperatingFlag)]
 
     var flags: RelayFlags
 
@@ -380,6 +374,8 @@ extension DeviceLinkingCoordinator {
 
     }
 
+    var clearedFlags: [(flag: RelayFlag, operating: OperatingFlag)] = []
+
     for flag in plan.clearedFlags {
 
       guard let operating = read.operatingFlags[flag.name], writableFlags.contains(operating.name) else {
@@ -387,6 +383,8 @@ extension DeviceLinkingCoordinator {
         throw RelayStateLinkingError.flagNotChangeable(device, flag: flag)
 
       }
+
+      clearedFlags.append((flag, operating))
 
       // A flag that couldn't be turned off or set back is never cleared: both messages are
       // checked first, and nothing is sent.
@@ -414,7 +412,7 @@ extension DeviceLinkingCoordinator {
 
     }
 
-    return Preparation(plan: plan, description: description, target: target, operatingFlags: read.operatingFlags, flags: read.flags, writableFlags: writableFlags)
+    return Preparation(plan: plan, description: description, target: target, clearedFlags: clearedFlags, flags: read.flags, writableFlags: writableFlags)
 
   }
 
@@ -465,8 +463,7 @@ extension DeviceLinkingCoordinator {
     }
 
     var names: [SettingName] = []
-    // A relay nothing releases always holds its state, so its pulsing sets don't apply.
-    let pulsing: [SettingName] = described.releasedBy.isEmpty ? [] : described.pulsesOnEveryCommandWhen.flatMap { (set: [SettingName]) -> [SettingName] in set }
+    let pulsing: [SettingName] = described.pulsesOnEveryCommandWhen.flatMap { (set: [SettingName]) -> [SettingName] in set }
 
     for name in described.releasedBy + pulsing where !names.contains(name) {
 
@@ -477,6 +474,8 @@ extension DeviceLinkingCoordinator {
     let commands: CommandSet? = description.commandSet
     var operatingFlags: [OperatingFlag] = []
 
+    // Every flag the catalog names is checked, though a relay nothing releases always holds
+    // its state, so its pulsing sets don't apply and only its releasing flags would be read.
     for name in names {
 
       guard let flag = commands?.operatingFlag(named: name) else {
@@ -485,7 +484,11 @@ extension DeviceLinkingCoordinator {
 
       }
 
-      operatingFlags.append(flag)
+      if !described.releasedBy.isEmpty {
+
+        operatingFlags.append(flag)
+
+      }
 
     }
 

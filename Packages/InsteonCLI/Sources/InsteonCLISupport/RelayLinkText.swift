@@ -51,6 +51,11 @@ public enum RelayLinkText {
 
       steps.append("Link it. The relay stays \(state), and is turned back \(plan.before.rawValue) if linking fails or is stopped.")
 
+    } else if plan.switchesRelay {
+
+      // Switched to its rest state, a relay that doesn't hold a state stays there by itself.
+      steps.append("Link it. The relay stays \(state) by itself, its rest state, so no flag is written.")
+
     } else {
 
       steps.append("Link it. The relay is already \(state), so it isn't switched.")

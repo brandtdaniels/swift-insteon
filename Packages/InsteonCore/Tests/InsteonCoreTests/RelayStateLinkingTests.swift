@@ -655,6 +655,12 @@ struct RelayStateLinkingTests {
     /// A flag the command set doesn't give.
     case flag
 
+    /// A relay nothing releases whose pulsing set names a flag the command set doesn't give.
+    case pulsingFlag
+
+    /// A relay nothing releases whose rest state isn't one of its actions.
+    case restStateOfAHoldingRelay
+
     var holding: GroupType.StateHolding? {
 
       switch self {
@@ -664,6 +670,10 @@ struct RelayStateLinkingTests {
         return GroupType.StateHolding(releasedBy: ["pulse"], restState: "closed")
       case .flag:
         return GroupType.StateHolding(releasedBy: ["pulse", "hum"], restState: "off")
+      case .pulsingFlag:
+        return GroupType.StateHolding(releasedBy: [], restState: "off", pulsesOnEveryCommandWhen: [["pulse", "hum"]])
+      case .restStateOfAHoldingRelay:
+        return GroupType.StateHolding(releasedBy: [], restState: "closed")
       }
 
     }
@@ -675,8 +685,10 @@ struct RelayStateLinkingTests {
         return device == RelayExample.module && product == "Example 9611 9611"
       case let (.restState, .restStateUnknown(device, action)):
         return device == RelayExample.module && action == "closed"
-      case let (.flag, .stateHoldingFlagUnknown(device, flag)):
+      case let (.flag, .stateHoldingFlagUnknown(device, flag)), let (.pulsingFlag, .stateHoldingFlagUnknown(device, flag)):
         return device == RelayExample.module && flag == "hum"
+      case let (.restStateOfAHoldingRelay, .restStateUnknown(device, action)):
+        return device == RelayExample.module && action == "closed"
       default:
         return false
       }
@@ -1002,22 +1014,32 @@ struct RelayStateLinkingTests {
     let modem: InMemoryModem = await twoFlagModem()
     let module: InsteonAddress = self.module
 
-    // The task is canceled as hold is about to be turned off, after pulse was.
+    // The linking task is canceled as hold is about to be turned off, after pulse was; the
+    // modem then refuses the message, as a canceled task's.
     await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
 
       if case let .extendedRequest(message) = operation, message.destination == module, message.command == Command(command1: 0x20, command2: 0x31) {
 
-        throw CancellationError()
+        withUnsafeCurrentTask { (task: UnsafeCurrentTask?) -> Void in task?.cancel() }
 
       }
 
     }
 
-    await #expect(throws: CancellationError.self) {
+    let network: DeviceNetwork = twoFlagNetwork(modem)
+    let linking = Task { () async throws -> DeviceLinkingResult in
 
-      _ = try await self.twoFlagNetwork(modem).linking.linkRelay(module, recording: .on, group: 2, twoWay: .never, observer: LinkingRecorder())
+      try await network.linking.linkRelay(module, recording: .on, group: 2, twoWay: .never, observer: LinkingRecorder())
 
     }
+
+    await #expect(throws: CancellationError.self) {
+
+      _ = try await linking.value
+
+    }
+
+    #expect(linking.isCancelled)
 
     let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
 

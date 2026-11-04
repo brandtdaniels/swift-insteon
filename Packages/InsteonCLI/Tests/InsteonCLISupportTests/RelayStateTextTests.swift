@@ -102,6 +102,20 @@ struct RelayStateTextTests {
 
   }
 
+  @Test func showsThatARelayReadOutOfItsRestStateIsSwitchedToItWithoutAFlag() {
+
+    // Read on mid-pulse, a relay that rests off is switched off and stays there by itself.
+    let midPulse: RelayLinkPlan = plan(before: .on, pulsing: true, state: .off)
+
+    #expect(RelayLinkText.plan(midPulse) == [
+      "Linking 1A.2B.3C so a group On turns its relay off and a group Off turns it on:",
+      "  1. Turn the relay off. Whatever it controls, such as a garage door opener, a lock or a valve, acts on it.",
+      "  2. Link it. The relay stays off by itself, its rest state, so no flag is written."
+    ])
+    #expect(RelayLinkText.question(midPulse) == "Switch 1A.2B.3C's relay off and link it? [y/N]")
+
+  }
+
   @Test(.timeLimit(.minutes(1))) func decidesWhetherToShowOnlyAskOrLink() async throws {
 
     let confirms = { (_: String) async throws -> Bool in true }
