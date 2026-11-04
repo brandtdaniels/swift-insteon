@@ -400,9 +400,9 @@ public struct SettingChangeJSON: Hashable, Sendable, Encodable {
   /// How the comparison of the other settings ended, by the name of its
   /// `DeviceSettingChange.OtherSettings.Outcome`: `"compared"`, `"nothingToCompare"`,
   /// `"notReportedBefore"`, `"notConfirmed"` or `"notReread"`.
-  public var otherSettings: String
+  public var otherSettingsOutcome: String
 
-  /// Why the other settings couldn't be read again, when `otherSettings` is `"notReread"`:
+  /// Why the other settings couldn't be read again, when `otherSettingsOutcome` is `"notReread"`:
   /// `"notAnswered"`, `"connectionClosed"`, `"canceled"` or `"failed"`.
   public var rereadFailure: String?
 
@@ -423,7 +423,7 @@ public struct SettingChangeJSON: Hashable, Sendable, Encodable {
     before = change.before
     requested = change.requested
     after = change.after
-    otherSettings = change.otherSettings.outcome.rawValue
+    otherSettingsOutcome = change.otherSettings.outcome.rawValue
     rereadFailure = change.otherSettings.rereadFailure?.rawValue
     changedSettings = change.changedSettings.map(ChangedSetting.init)
     unreadSettings = change.unreadSettings.map(UnreadSetting.init)

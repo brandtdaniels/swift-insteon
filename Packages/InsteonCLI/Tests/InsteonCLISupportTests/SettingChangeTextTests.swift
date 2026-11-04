@@ -138,7 +138,7 @@ struct SettingChangeTextTests {
     #expect(object["before"] as? String == "0x00")
     #expect(object["requested"] as? String == "0x05")
     #expect(object["after"] as? String == "0x05")
-    #expect(object["otherSettings"] as? String == "compared")
+    #expect(object["otherSettingsOutcome"] as? String == "compared")
     #expect(object["rereadFailure"] == nil)
     #expect(changed.count == 2)
     #expect(changed.first?["name"] as? String == "sparkle")
@@ -166,13 +166,13 @@ struct SettingChangeTextTests {
 
     #expect((unread["changedSettings"] as? [Any])?.isEmpty == true)
     #expect((unread["unreadSettings"] as? [Any])?.isEmpty == true)
-    #expect(unread["otherSettings"] as? String == "notReread")
+    #expect(unread["otherSettingsOutcome"] as? String == "notReread")
     #expect(unread["rereadFailure"] as? String == "connectionClosed")
 
     let outcomes: [DeviceSettingChange.OtherSettings.Outcome] = [.nothingToCompare, .notReportedBefore, .notConfirmed]
     let names: [String?] = try outcomes.map { (outcome: DeviceSettingChange.OtherSettings.Outcome) -> String? in
 
-      try json(change(DeviceSettingChange.OtherSettings(outcome: outcome)))["otherSettings"] as? String
+      try json(change(DeviceSettingChange.OtherSettings(outcome: outcome)))["otherSettingsOutcome"] as? String
 
     }
 
