@@ -213,16 +213,21 @@ extension Device {
 
         later = try await read(knowing: flags, values: values)
 
-      } catch is CancellationError {
-
-        // A modem can throw CancellationError on its own; only a canceled task is canceled.
-        return .notReread(Task.isCancelled ? .canceled : .failed)
-
-      } catch ModemError.connectionClosed {
-
-        return .notReread(.connectionClosed)
-
       } catch {
+
+        // A canceled task is canceled however the modem failed; a CancellationError the modem
+        // throws on its own is a failure like any other.
+        if Task.isCancelled {
+
+          return .notReread(.canceled)
+
+        }
+
+        if case ModemError.connectionClosed? = error as? ModemError {
+
+          return .notReread(.connectionClosed)
+
+        }
 
         return .notReread(.failed)
 

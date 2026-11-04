@@ -680,6 +680,47 @@ struct SettingSideEffectTests {
 
   }
 
+  @Test func saysTheReReadWasCanceledWhenTheTaskIsCanceledHoweverTheModemFails() async throws {
+
+    let modem: InMemoryModem = await panelModem(flags: 0x00)
+    let network: DeviceNetwork = self.network(modem)
+    let written = Count()
+
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      guard case let .standardRequest(message) = operation else {
+
+        return
+
+      }
+
+      if message.command.command1 == 0x20 {
+
+        written.increment()
+
+      } else if message.command == Command(command1: 0x1F, command2: 0x01), written.value > 0 {
+
+        // Cancels the task that asked, and fails the read with another error.
+        withUnsafeCurrentTask { (task: UnsafeCurrentTask?) -> Void in task?.cancel() }
+
+        throw ModemError.connectionClosed
+
+      }
+
+    }
+
+    let task = Task { () async throws -> DeviceSettingChange in
+
+      try await network.device(SideEffectExample.panel).writeSetting("hum", to: "on")
+
+    }
+    let change: DeviceSettingChange = try await task.value
+
+    #expect(change.isConfirmed)
+    #expect(change.otherSettings == .notReread(.canceled))
+
+  }
+
   // MARK: - Settings that are never written
 
   @Test func reportsAFlagThatsNeverWrittenWhenAWriteTurnsItOn() async throws {
@@ -693,6 +734,13 @@ struct SettingSideEffectTests {
 
     #expect(change.after == "on")
     #expect(changes(change) == [["seal", "-", "off", "on"]])
+    // The seal is only read: neither of its Set Operating Flags commands, 0x08 or 0x09, is sent.
+    #expect(await commands(sentTo: SideEffectExample.sealed, by: modem) == [
+      Command(command1: 0x1F, command2: 0x00),
+      Command(command1: 0x0D, command2: 0x00),
+      Command(command1: 0x20, command2: 0x0A),
+      Command(command1: 0x1F, command2: 0x00)
+    ])
 
   }
 

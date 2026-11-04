@@ -182,8 +182,7 @@ public struct DeviceSettingChange: Hashable, Sendable {
     /// The setting.
     public var setting: DeviceSetting
 
-    /// The button or group, for a setting that's per button and was read for more than one;
-    /// otherwise `nil`.
+    /// The button or group, for a setting that's per button; otherwise `nil`.
     public var button: Int?
 
     /// The value before the write, as a settings page shows it.
@@ -225,8 +224,7 @@ public struct DeviceSettingChange: Hashable, Sendable {
     /// The setting.
     public var setting: DeviceSetting
 
-    /// The button or group, for a setting that's per button and was read for more than one;
-    /// otherwise `nil`.
+    /// The button or group, for a setting that's per button; otherwise `nil`.
     public var button: Int?
 
     /// Creates an unread setting.

@@ -416,10 +416,10 @@ public enum HelpText {
                           written, so any other setting it changed is printed as "Also
                           changed"; a reading or a value nothing writes changes on its
                           own, so it's left out, and one that can't be read again is
-                          named. With --json,
-                          prints the setting, its values, "otherSettingsOutcome" (how the
-                          comparison ended), "rereadFailure", "changedSettings", each with
-                          its name, label, button, before and after, and "unreadSettings".
+                          named. With --json, prints the setting, its values,
+                          "otherSettingsOutcome" (how the comparison ended),
+                          "rereadFailure", "changedSettings", each with its name, label,
+                          button, before and after, and "unreadSettings".
                           Turning off the radio or the powerline, and requiring a checksum,
                           are never written, and the programming lock is only turned off,
                           also through a value whose byte holds them.

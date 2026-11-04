@@ -112,9 +112,9 @@ extension Device {
   ///
   /// Each Get Operating Flags request and extended Get the comparison needs is sent once before
   /// the write and once after it, and the write's own read and read-back count among them, since
-  /// they carry the other settings that share their reply. The write's other requests are
-  /// separate: Get Insteon Engine Version, and the read of the flag a flag's `extendedWhen`
-  /// names. Values are read for button 1 and, for a setting that's per button, the button
+  /// they carry the other settings that share their reply. A flag write's other requests are
+  /// separate: Get Insteon Engine Version, and the read of the flag the written flag's
+  /// `extendedWhen` names. A value write sends neither. Values are read for button 1 and, for a setting that's per button, the button
   /// written, so a flag write or a write to button 1 compares button 1 only; a change to
   /// another button's values isn't seen. The setting written is compared on every button read
   /// but the one written. A setting that's per button carries its button, even when only
