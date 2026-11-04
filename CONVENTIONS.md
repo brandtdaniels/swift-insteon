@@ -58,3 +58,12 @@ American English. Name no third-party projects. Every public declaration has a D
 Say what's true, not when it became true: no "now", "currently", "previously", "no longer",
 "newly", or "new" for a change, such as "a new option". The prose outlives the change it
 would date.
+
+## Device knowledge
+
+InsteonCore, the `insteon` command, the in-memory modem and their tests know no device: what a
+device is and does comes from the Insteon device catalog. They don't name a real product or
+operating flag, and a test builds its own catalog with invented names. `Scripts/check-device-neutral.py`
+checks it, with the words taken from the bundled catalog, and CI runs it. An exception is a line
+in `Scripts/check-device-neutral-allowlist.txt`: the path, the word and the reason, separated by
+tabs. The list only shrinks, so CI fails a pull request that adds one.
