@@ -15,7 +15,8 @@ words ruled out come from the bundled catalog as the check runs, so they follow 
   in every command set, matched in any case, so `ioLinc`, `IOLinc` and `iolinc` are all found;
 - the words in `EXPLICIT`, product names the catalog doesn't spell that way, in any case.
 
-A word in `GENERIC` is left out, in any case, even when the catalog uses it, since it's also a
+Words that differ only in case are one word, so one use is one finding. A word in `GENERIC`
+is left out, in any case, even when the catalog uses it, since it's also a
 word of the protocol, such as heartbeat or on-level's `onLevel`, or of plain English. A word
 matches only whole: not as part of a longer word or name, so `pulse` doesn't match `pulseBoth`.
 
@@ -82,11 +83,19 @@ def forbidden_words(catalog_path):
     each with whether it matches in any case."""
 
     catalog = json.loads(pathlib.Path(catalog_path).read_text(encoding="utf-8"))
-    words = {word: True for word in EXPLICIT}
+    # Each word once by its case-folded form, so one use is one finding: the first spelling
+    # found, matched in any case when any of its spellings is.
+    folded = {}
 
     def add(word, any_case):
-        if word and word.casefold() not in GENERIC:
-            words[word] = words.get(word, False) or any_case
+        if not word or word.casefold() in GENERIC:
+            return
+
+        spelling, was_any_case = folded.get(word.casefold(), (word, False))
+        folded[word.casefold()] = (spelling, was_any_case or any_case)
+
+    for word in sorted(EXPLICIT):
+        add(word, True)
 
     for device in catalog.get("devices", []):
         kinds = {capability.get("kind") for capability in device.get("capabilities", [])}
@@ -107,7 +116,7 @@ def forbidden_words(catalog_path):
         for value in (command_set.get("extendedSettings") or {}).get("values", []):
             add(value.get("name"), True)
 
-    return words
+    return dict(folded.values())
 
 
 def pattern(word, any_case=False):

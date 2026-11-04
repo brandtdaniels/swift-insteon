@@ -105,6 +105,21 @@ class CheckDeviceNeutralTests(unittest.TestCase):
 
         self.assertEqual(found, [("IO Linc", 3), ("IOLinc", 3), ("Pulse relay", 2), ("gardenRelay", 1), ("pulse", 2), ("pulseTime", 2)])
 
+    def test_finds_a_word_spelled_several_ways_once(self):
+        # The alias, a command set's id and a flag's name differ only in case.
+        catalog = {
+            "devices": [{"model": "9802", "name": "Pond Relay", "aliases": ["PondLinc"], "capabilities": []}],
+            "commandSets": [{"id": "pondLinc", "operatingFlags": [{"name": "PONDLINC"}]}],
+        }
+        self.catalog.write_text(json.dumps(catalog), encoding="utf-8")
+        self.write("Packages/InsteonCore/Sources/InsteonCore/Pond.swift", "// A pondlinc.\n")
+
+        words = check.forbidden_words(self.catalog)
+        found = check.violations(self.root, words)
+
+        self.assertEqual(sum(1 for word in words if word.casefold() == "pondlinc"), 1)
+        self.assertEqual([word.casefold() for _, word, _ in found], ["pondlinc"])
+
     def test_matches_product_names_only_in_their_own_case(self):
         self.write("Packages/InsteonCore/Sources/InsteonCore/Relay.swift", "// Any garden relay, as plain words.\n")
 
