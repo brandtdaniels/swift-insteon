@@ -54,6 +54,10 @@ actor SettingsModem: LinkingModem {
   /// `"2E 00 01 05 1C"`.
   private(set) var sent: [String] = []
 
+  /// What runs before each message is carried out, given the message as ``sent`` writes it,
+  /// which can throw to fail the message before it's carried out or logged.
+  private var beforeSending: (@Sendable (String) throws -> Void)?
+
   /// The values an extended Set with a selector writes as well, by selector: the user data
   /// byte, the value, and the button whose values it writes, or `nil` for the button written.
   private var valueSideEffects: [UInt8: [(position: Int, value: UInt8, button: UInt8?)]] = [:]
@@ -137,6 +141,14 @@ actor SettingsModem: LinkingModem {
 
   }
 
+  /// Runs `hook` before each message, given the message as ``sent`` writes it; a message the
+  /// hook throws for fails with its error and isn't carried out or logged.
+  func setBeforeSending(_ hook: (@Sendable (String) throws -> Void)?) {
+
+    beforeSending = hook
+
+  }
+
   /// Makes an extended Set with a selector write another value as well.
   ///
   /// - Parameters:
@@ -169,8 +181,12 @@ actor SettingsModem: LinkingModem {
 
   func request(_ message: StandardMessage, timeout: Duration) async throws -> ReceivedMessage {
 
+    let bytes: String = Self.hex([message.command.command1, message.command.command2])
+
+    try beforeSending?(bytes)
+
     standardCommands.append(message.command)
-    sent.append(Self.hex([message.command.command1, message.command.command2]))
+    sent.append(bytes)
 
     var command2: UInt8 = message.command.command2
 
@@ -197,11 +213,13 @@ actor SettingsModem: LinkingModem {
 
   func request(_ message: ExtendedMessage, timeout: Duration) async throws -> ReceivedMessage {
 
-    extendedMessages.append(message)
-
     let data: UserData = message.userData
+    let bytes: String = Self.hex([message.command.command1, message.command.command2, data[1], data[2], data[3]])
 
-    sent.append(Self.hex([message.command.command1, message.command.command2, data[1], data[2], data[3]]))
+    try beforeSending?(bytes)
+
+    extendedMessages.append(message)
+    sent.append(bytes)
 
     if message.command.command1 == 0x2E {
 
