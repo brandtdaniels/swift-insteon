@@ -36,6 +36,9 @@ enum DatabaseLinkingExample {
   /// holding one, and with pulseBoth on too, every On and Off only pulses it.
   static let relay = ReportedIdentity(category: 0x02, subcategory: 0x74, firmwareVersion: 0x41)
 
+  /// A relay whose catalog says nothing releases it, so it always holds its state.
+  static let holdingRelay = ReportedIdentity(category: 0x02, subcategory: 0x75, firmwareVersion: 0x41)
+
   static let relayFlags: [OperatingFlag] = [
     OperatingFlag(name: "pulse", summary: "The relay returns to off by itself.", query: .operatingFlags, bit: 0x08, on: 0x06, off: 0x07, label: "Pulse"),
     OperatingFlag(name: "pulseBoth", summary: "With pulse, every On and Off only pulses the relay.", query: .operatingFlags, bit: 0x10, on: 0x12, off: 0x13, label: "Pulse on both")
@@ -71,6 +74,17 @@ enum DatabaseLinkingExample {
         ],
         linkData: GroupType.LinkData(responder: [LinkDataByte(position: 1, name: "onLevel", summary: "On or off.", table: "onOff")]),
         stateHolding: GroupType.StateHolding(releasedBy: ["pulse"], restState: "off", pulsesOnEveryCommandWhen: [["pulse", "pulseBoth"]])
+      ),
+      GroupType(
+        name: "alwaysHoldingLoad",
+        label: "Relay",
+        kind: .relay,
+        actions: [
+          GroupType.Action(name: "on", label: "On", command: "lightOn", value: 0xFF),
+          GroupType.Action(name: "off", label: "Off", command: "lightOff")
+        ],
+        linkData: GroupType.LinkData(responder: [LinkDataByte(position: 1, name: "onLevel", summary: "On or off.", table: "onOff")]),
+        stateHolding: GroupType.StateHolding(releasedBy: [], restState: "off")
       )
     ]
   )
@@ -107,7 +121,8 @@ enum DatabaseLinkingExample {
       profile("9503", speedy, type: "speedyLoad"),
       profile("9504", older, engines: [DeviceEngine(engine: .i2, category: older.category, subcategory: older.subcategory)]),
       profile("9505", plain, type: "plainLoad"),
-      profile("9506", relay, type: "holdingLoad")
+      profile("9506", relay, type: "holdingLoad"),
+      profile("9507", holdingRelay, type: "alwaysHoldingLoad")
     ],
     commandSets: [commands]
   )
@@ -1019,6 +1034,31 @@ struct DatabaseLinkingTests {
     #expect(holding?.holdsState == false)
     #expect(holding?.ignoresState == false)
     #expect(holding?.restState == .off)
+
+  }
+
+  @Test func writesTheStateOfARelayThatAlwaysHoldsItWithoutReadingAFlag() async throws {
+
+    let modem: InMemoryModem = await modem(identity: DatabaseLinkingExample.holdingRelay)
+    await modem.setDatabase([
+      0x0FFF: controller(0x01, naming: modemAddress),
+      0x0FF7: deleted(responder(0x09, naming: DatabaseLinkingExample.lamp))
+    ], of: device)
+    let log: OperationLog = await OperationLog.logging(modem)
+    let linking: DeviceLinkingCoordinator = network(modem).linking
+
+    let plan: DatabaseLinkPlan = try await linking.planDatabaseLink(device, relayState: .off)
+
+    // Identified and read; no flag is read, and the record holds off.
+    #expect(log.standardCommands == [0x0D, 0x10])
+    #expect(plan.relayHolding?.holdsState == true)
+    #expect(plan.relayHolding?.flagsOn == [])
+    #expect(plan.deviceSteps.map { $0.written } == [responder(0x00, naming: modemAddress, data: [0x00, 0x00, 0x00])])
+
+    let result: DatabaseLinkResult = try await linking.apply(plan)
+
+    #expect(result.isComplete)
+    #expect(await modem.record(of: device, at: 0x0FF7).data1 == 0x00)
 
   }
 

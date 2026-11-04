@@ -117,6 +117,14 @@
               }
             ]
           },
+          "stateHolding": {
+            "releasedBy": [],
+            "restState": "off",
+            "verification": {
+              "note": "No document says whether this relay holds the state a command switches it to. It follows from the command set: none of its operating flags or flag commands is a momentary or pulse setting, so no flag makes the relay return to off by itself.",
+              "status": "inferred"
+            }
+          },
           "verification": {
             "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
             "status": "inferred"
@@ -489,6 +497,14 @@
                 "through": "0xFF"
               }
             ]
+          },
+          "stateHolding": {
+            "releasedBy": [],
+            "restState": "off",
+            "verification": {
+              "note": "No document says whether this relay holds the state a command switches it to. It follows from the command set: none of its operating flags or flag commands is a momentary or pulse setting, so no flag makes the relay return to off by itself.",
+              "status": "inferred"
+            }
           },
           "verification": {
             "firmware": [
@@ -1063,6 +1079,14 @@
           "state": {
             "bitPerGroup": true,
             "command": "readOutlets"
+          },
+          "stateHolding": {
+            "releasedBy": [],
+            "restState": "off",
+            "verification": {
+              "note": "No document says whether this relay holds the state a command switches it to. It follows from the command set: none of its operating flags or flag commands is a momentary or pulse setting, so no flag makes the relay return to off by itself.",
+              "status": "inferred"
+            }
           }
         },
         {
@@ -1113,6 +1137,14 @@
           "state": {
             "bitPerGroup": true,
             "command": "readOutlets"
+          },
+          "stateHolding": {
+            "releasedBy": [],
+            "restState": "off",
+            "verification": {
+              "note": "No document says whether this relay holds the state a command switches it to. It follows from the command set: none of its operating flags or flag commands is a momentary or pulse setting, so no flag makes the relay return to off by itself.",
+              "status": "inferred"
+            }
           }
         }
       ],
@@ -11287,6 +11319,14 @@
               }
             ]
           },
+          "stateHolding": {
+            "releasedBy": [],
+            "restState": "off",
+            "verification": {
+              "note": "No document says whether this relay holds the state a command switches it to. It follows from the command set: none of its operating flags or flag commands is a momentary or pulse setting, so no flag makes the relay return to off by itself.",
+              "status": "inferred"
+            }
+          },
           "verification": {
             "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
             "status": "inferred"
@@ -12740,6 +12780,14 @@
                 "through": "0xFF"
               }
             ]
+          },
+          "stateHolding": {
+            "releasedBy": [],
+            "restState": "off",
+            "verification": {
+              "note": "No document says whether this relay holds the state a command switches it to. It follows from the command set: none of its operating flags or flag commands is a momentary or pulse setting, so no flag makes the relay return to off by itself.",
+              "status": "inferred"
+            }
           },
           "verification": {
             "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
@@ -14251,6 +14299,14 @@
                 "through": "0xFF"
               }
             ]
+          },
+          "stateHolding": {
+            "releasedBy": [],
+            "restState": "off",
+            "verification": {
+              "note": "No document says whether this relay holds the state a command switches it to. It follows from the command set: none of its operating flags or flag commands is a momentary or pulse setting, so no flag makes the relay return to off by itself.",
+              "status": "inferred"
+            }
           },
           "verification": {
             "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
@@ -16016,6 +16072,14 @@
                 "through": "0xFF"
               }
             ]
+          },
+          "stateHolding": {
+            "releasedBy": [],
+            "restState": "off",
+            "verification": {
+              "note": "No document says whether this relay holds the state a command switches it to. It follows from the command set: none of its operating flags or flag commands is a momentary or pulse setting, so no flag makes the relay return to off by itself.",
+              "status": "inferred"
+            }
           },
           "verification": {
             "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
@@ -17783,6 +17847,14 @@
               }
             ]
           },
+          "stateHolding": {
+            "releasedBy": [],
+            "restState": "off",
+            "verification": {
+              "note": "No document says whether this relay holds the state a command switches it to. It follows from the command set: none of its operating flags or flag commands is a momentary or pulse setting, so no flag makes the relay return to off by itself.",
+              "status": "inferred"
+            }
+          },
           "verification": {
             "note": "No document says that every nonzero level means on; the ranges are read from the status reply's level byte.",
             "status": "inferred"
@@ -18057,6 +18129,14 @@
                 "through": "0xFF"
               }
             ]
+          },
+          "stateHolding": {
+            "releasedBy": [],
+            "restState": "off",
+            "verification": {
+              "note": "No document says whether this relay holds the state a command switches it to. It follows from the command set: none of its operating flags or flag commands is a momentary or pulse setting, so no flag makes the relay return to off by itself.",
+              "status": "inferred"
+            }
           },
           "verification": {
             "firmware": [
@@ -19179,6 +19259,14 @@
                 "through": "0xFF"
               }
             ]
+          },
+          "stateHolding": {
+            "releasedBy": [],
+            "restState": "off",
+            "verification": {
+              "note": "No document says whether this relay holds the state a command switches it to. It follows from the command set: none of its operating flags or flag commands is a momentary or pulse setting, so no flag makes the relay return to off by itself.",
+              "status": "inferred"
+            }
           },
           "verification": {
             "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
@@ -21708,6 +21796,14 @@
               }
             ]
           },
+          "stateHolding": {
+            "releasedBy": [],
+            "restState": "off",
+            "verification": {
+              "note": "No document says whether this relay holds the state a command switches it to. It follows from the command set: none of its operating flags or flag commands is a momentary or pulse setting, so no flag makes the relay return to off by itself.",
+              "status": "inferred"
+            }
+          },
           "verification": {
             "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
             "status": "inferred"
@@ -22604,6 +22700,14 @@
                 "through": "0xFF"
               }
             ]
+          },
+          "stateHolding": {
+            "releasedBy": [],
+            "restState": "off",
+            "verification": {
+              "note": "No document says whether this relay holds the state a command switches it to. It follows from the command set: none of its operating flags or flag commands is a momentary or pulse setting, so no flag makes the relay return to off by itself.",
+              "status": "inferred"
+            }
           },
           "verification": {
             "note": "No document says that every nonzero level means on; the ranges are read from Light Status Request's level byte (cmd2), as the Insteon Developer's Guide describes it for on/off devices.",
