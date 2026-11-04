@@ -79,20 +79,25 @@ TRANSPORT_CAPABILITIES = {"modem", "hub"}
 
 
 def forbidden_words(catalog_path):
-    """The words ruled out, from the catalog at a path, with `EXPLICIT` and without `GENERIC`,
-    each with whether it matches in any case."""
+    """The words ruled out, from the catalog at a path, with `EXPLICIT` and without `GENERIC`.
+
+    Each word is keyed by its first spelling found, and gives whether it matches in any case
+    and every spelling the catalog has that differs from it only in case. A word matched in
+    its own case matches each of its spellings, so `EZBridge` and `EZBRIDGE` are both found,
+    and either is one finding for a use.
+    """
 
     catalog = json.loads(pathlib.Path(catalog_path).read_text(encoding="utf-8"))
-    # Each word once by its case-folded form, so one use is one finding: the first spelling
-    # found, matched in any case when any of its spellings is.
+    # By case-folded form: the first spelling, whether any spelling matches in any case, and
+    # every spelling.
     folded = {}
 
     def add(word, any_case):
         if not word or word.casefold() in GENERIC:
             return
 
-        spelling, was_any_case = folded.get(word.casefold(), (word, False))
-        folded[word.casefold()] = (spelling, was_any_case or any_case)
+        first, was_any_case, spellings = folded.get(word.casefold(), (word, False, set()))
+        folded[word.casefold()] = (first, was_any_case or any_case, spellings | {word})
 
     for word in sorted(EXPLICIT):
         add(word, True)
@@ -116,20 +121,23 @@ def forbidden_words(catalog_path):
         for value in (command_set.get("extendedSettings") or {}).get("values", []):
             add(value.get("name"), True)
 
-    return dict(folded.values())
+    return {first: (any_case, tuple(sorted(spellings))) for first, any_case, spellings in folded.values()}
 
 
-def pattern(word, any_case=False):
-    """A pattern that finds a word whole: not inside a longer word, name or number."""
+def pattern(spellings, any_case=False):
+    """A pattern that finds any of a word's spellings whole: not inside a longer word, name or
+    number."""
 
-    return re.compile(r"(?<![A-Za-z0-9_])" + re.escape(word) + r"(?![A-Za-z0-9_])", re.IGNORECASE if any_case else 0)
+    alternatives = "|".join(re.escape(spelling) for spelling in sorted(spellings, key=len, reverse=True))
+
+    return re.compile(r"(?<![A-Za-z0-9_])(?:" + alternatives + r")(?![A-Za-z0-9_])", re.IGNORECASE if any_case else 0)
 
 
 def violations(root, words):
     """Each file and word found, as (path, word, line number of its first use), in path and
     then word order."""
 
-    patterns = {word: pattern(word, any_case) for word, any_case in words.items()}
+    patterns = {word: pattern(spellings, any_case) for word, (any_case, spellings) in words.items()}
     found = []
 
     for directory in CHECKED:

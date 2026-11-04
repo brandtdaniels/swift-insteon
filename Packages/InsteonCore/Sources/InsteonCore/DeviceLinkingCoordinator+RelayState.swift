@@ -474,8 +474,8 @@ extension DeviceLinkingCoordinator {
     let commands: CommandSet? = description.commandSet
     var operatingFlags: [OperatingFlag] = []
 
-    // Every flag the catalog names is checked, though a relay nothing releases always holds
-    // its state, so its pulsing sets don't apply and only its releasing flags would be read.
+    // Every flag the catalog names is checked against the command set. A relay nothing
+    // releases always holds its state, so its pulsing sets don't apply and nothing is read.
     for name in names {
 
       guard let flag = commands?.operatingFlag(named: name) else {

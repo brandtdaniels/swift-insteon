@@ -79,7 +79,7 @@ class CheckDeviceNeutralTests(unittest.TestCase):
     def test_takes_the_words_from_the_catalog(self):
         words = check.forbidden_words(self.catalog)
 
-        self.assertEqual(words, {
+        self.assertEqual({word: any_case for word, (any_case, _) in words.items()}, {
             # Product names and models, in their own case.
             "Garden Relay": False,
             "GardenLinc": False,
@@ -119,6 +119,24 @@ class CheckDeviceNeutralTests(unittest.TestCase):
 
         self.assertEqual(sum(1 for word in words if word.casefold() == "pondlinc"), 1)
         self.assertEqual([word.casefold() for _, word, _ in found], ["pondlinc"])
+
+    def test_finds_each_own_case_spelling_once_per_use(self):
+        # Two aliases differ only in case; each is a product name, matched in its own case.
+        catalog = {"devices": [{"model": "9803", "name": "Brook Bridge", "aliases": ["BrookBridge", "BROOKBRIDGE"], "capabilities": []}], "commandSets": []}
+        self.catalog.write_text(json.dumps(catalog), encoding="utf-8")
+        self.write("Packages/InsteonCore/Sources/InsteonCore/One.swift", "// A BrookBridge.\n")
+        self.write("Packages/InsteonCore/Sources/InsteonCore/Other.swift", "// A brookbridge, then a BROOKBRIDGE.\n")
+        self.write("Packages/InsteonCore/Sources/InsteonCore/Both.swift", "// A BrookBridge and a BROOKBRIDGE.\n")
+
+        words = check.forbidden_words(self.catalog)
+        found = check.violations(self.root, words)
+
+        self.assertEqual(words["BrookBridge"], (False, ("BROOKBRIDGE", "BrookBridge")))
+        self.assertEqual([(path.rsplit("/", 1)[-1], number) for path, word, number in found if word == "BrookBridge"], [
+            ("Both.swift", 1),
+            ("One.swift", 1),
+            ("Other.swift", 1),
+        ])
 
     def test_matches_product_names_only_in_their_own_case(self):
         self.write("Packages/InsteonCore/Sources/InsteonCore/Relay.swift", "// Any garden relay, as plain words.\n")
