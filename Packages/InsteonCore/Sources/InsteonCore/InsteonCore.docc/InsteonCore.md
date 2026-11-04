@@ -130,10 +130,11 @@ Each ``DeviceSetting`` carries what a settings page needs from the catalog: its 
 section, whether it's advanced, its control, and its default as each reading's entry shows it.
 A write can change other settings too, as some devices turn a flag on when a value that isn't
 zero is written, so the device's other writable settings are read before the write and again
-once it's confirmed; a reading or a value nothing writes changes on its own, so it's left out.
-``DeviceSettingChange/changedSettings`` lists each one whose value differs, and
-``DeviceSettingChange/otherSettings`` says when they couldn't be read again after a write that
-succeeded.
+once it's confirmed, each request once; a reading or a value nothing writes changes on its
+own, so it's left out. ``DeviceSettingChange/changedSettings`` lists each one whose value
+differs, ``DeviceSettingChange/unreadSettings`` each one the device didn't report again, and
+``DeviceSettingChange/OtherSettings`` says how the comparison ended, and why the other settings
+couldn't be read again after a write that succeeded.
 
 Some settings are never written: turning off a device's radio or powerline, and requiring a
 checksum in every message, any of which can cut the device off from the modem, and any other

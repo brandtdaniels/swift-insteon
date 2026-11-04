@@ -1,11 +1,13 @@
 import InsteonDeviceCatalog
+import InsteonModem
+import InsteonProtocol
 
 // Reading the device's other settings before and after a write, to say what else it changed.
 extension Device {
 
-  /// The device's settings other than the one a write changes, read before the write and
-  /// again after it, the same way ``readSettings(includingAdvanced:beforeReading:)`` reads
-  /// them.
+  /// The device's writable settings other than the one a write changes, read before the write
+  /// and again after it with the reads ``readSettings(includingAdvanced:beforeReading:)``
+  /// makes, reusing what the write's own reads already reported.
   struct OtherSettingsCheck {
 
     /// The device.
@@ -17,78 +19,188 @@ extension Device {
     /// write's side effect, so it's left out.
     let items: [SettingItem]
 
-    /// The device's description.
-    let description: DeviceDescription
+    /// The buttons whose values are compared: button 1, which holds the values that aren't
+    /// per button, and the button written when some of the values compared are per button.
+    /// Empty when no value is compared.
+    let buttons: [UInt8]
 
     /// The device's command set.
     let commands: CommandSet
 
-    /// A check of the settings other than `written`.
-    init(device: Device, besides written: SettingItem, description: DeviceDescription, commands: CommandSet) {
+    /// The device's description.
+    let description: DeviceDescription
 
-      self.device = device
-      self.items = commands.settingItems.filter { (item: SettingItem) -> Bool in
+    /// A check of the writable settings other than `written`, for a write to `button`.
+    init(device: Device, besides written: SettingItem, button: UInt8, description: DeviceDescription, commands: CommandSet) {
+
+      let items: [SettingItem] = commands.settingItems.filter { (item: SettingItem) -> Bool in
 
         item.name != written.name && SettingPresentation.setting(for: item, in: commands).isWritable
 
       }
-      self.description = description
+      let values: [SettingItem] = items.filter(Device.isValue)
+      let isAnyPerButton: Bool = values.contains { (item: SettingItem) -> Bool in commands.extendedSettings?.isValuePerButton(item.name) ?? false }
+
+      self.device = device
+      self.items = items
+      self.buttons = values.isEmpty ? [] : (isAnyPerButton && button != 0x01 ? [0x01, button] : [0x01])
       self.commands = commands
+      self.description = description
 
     }
 
-    /// Reads the other settings before the write, or sends nothing when there are none.
+    /// Whether there's another setting to compare.
+    var isEmpty: Bool {
+
+      items.isEmpty
+
+    }
+
+    /// Reads the other settings, asking only for what `flags` and `values` don't already hold.
     ///
-    /// - Returns: The reading, or `nil` when there are no other settings or the device reported
-    ///   none of them.
-    func readBefore() async throws -> DeviceSettingsReading? {
+    /// - Parameters:
+    ///   - flags: Get Operating Flags replies already read, by request.
+    ///   - values: Extended Get replies already read, by button.
+    /// - Returns: The reading.
+    func read(knowing flags: [OperatingFlagsRequest: UInt8], values: [UInt8: [SettingName: UInt8]]) async throws -> DeviceSettingsReading {
 
-      guard !items.isEmpty else {
+      var reportedFlags: [OperatingFlagsRequest: UInt8] = flags
+      var reportedValues: [UInt8: [SettingName: UInt8]] = values
 
-        return nil
+      for query in Device.queries(of: items) where reportedFlags[query] == nil {
+
+        if let acknowledgment = try await device.answer(StandardMessage(to: device.address, command: StandardDirectCommand.getOperatingFlags(query))) {
+
+          reportedFlags[query] = acknowledgment.command.command2
+
+        }
 
       }
 
-      let reading: DeviceSettingsReading = try await device.read(items, description: description, commands: commands)
+      if let settings = commands.extendedSettings {
 
-      return reading.entries.contains(where: { (entry: DeviceSettingsReading.Entry) -> Bool in entry.text != nil }) ? reading : nil
+        for button in buttons where reportedValues[button] == nil {
+
+          if let reported = try await device.readValues(settings: settings, button: button) {
+
+            reportedValues[button] = reported
+
+          }
+
+        }
+
+      }
+
+      return DeviceSettingsReading(
+        productName: description.displayName,
+        commandSet: commands,
+        items: items,
+        operatingFlags: reportedFlags.filter { (query: OperatingFlagsRequest, _: UInt8) -> Bool in Device.queries(of: items).contains(query) },
+        values: reportedValues.filter { (button: UInt8, _: [SettingName: UInt8]) -> Bool in buttons.contains(button) },
+        buttons: buttons
+      )
 
     }
 
-    /// Reads the other settings again after a write and compares them with `before`.
+    /// Reads the other settings before the write, once the write's own read was answered.
     ///
-    /// A failure to read them doesn't fail the write, which already succeeded: it's reported as
-    /// ``DeviceSettingChange/OtherSettings/notReread``. Only cancellation is thrown.
+    /// - Parameters:
+    ///   - isOwnReported: Whether the device answered the write's own read. When it didn't,
+    ///     nothing more is asked, so a device that doesn't answer isn't kept waiting on.
+    ///   - flags: Get Operating Flags replies the write's own read already holds.
+    ///   - values: Extended Get replies the write's own read already holds.
+    /// - Returns: The reading, or how the comparison ended before it began.
+    func readBefore(
+      isOwnReported: Bool,
+      knowing flags: [OperatingFlagsRequest: UInt8] = [:],
+      values: [UInt8: [SettingName: UInt8]] = [:]
+    ) async throws -> Before {
+
+      guard !isEmpty else {
+
+        return .skipped(.nothingToCompare)
+
+      }
+
+      guard isOwnReported else {
+
+        return .skipped(.notReportedBefore)
+
+      }
+
+      let reading: DeviceSettingsReading = try await read(knowing: flags, values: values)
+
+      guard reading.entries.contains(where: { (entry: DeviceSettingsReading.Entry) -> Bool in entry.text != nil }) else {
+
+        return .skipped(.notReportedBefore)
+
+      }
+
+      return .read(reading)
+
+    }
+
+    /// Reads the other settings again after a confirmed write and compares them with what was
+    /// read before.
     ///
-    /// - Parameter before: The reading before the write.
+    /// The write already succeeded, so nothing here fails it: a read that throws, or is
+    /// canceled, ends the comparison with ``DeviceSettingChange/OtherSettings/rereadFailure``
+    /// saying why, and a canceled task stays canceled for the caller's next wait.
+    ///
+    /// - Parameters:
+    ///   - before: What was read before the write.
+    ///   - flags: Get Operating Flags replies the write's read-back already holds.
+    ///   - values: Extended Get replies the write's read-back already holds.
     /// - Returns: What the other settings did across the write.
-    func compare(with before: DeviceSettingsReading?) async throws(CancellationError) -> DeviceSettingChange.OtherSettings {
+    func compare(
+      with before: Before,
+      knowing flags: [OperatingFlagsRequest: UInt8] = [:],
+      values: [UInt8: [SettingName: UInt8]] = [:]
+    ) async -> DeviceSettingChange.OtherSettings {
 
-      guard let before else {
+      let earlier: DeviceSettingsReading
 
-        return .notCompared
-
+      switch before {
+      case let .read(reading):
+        earlier = reading
+      case let .skipped(outcome):
+        return DeviceSettingChange.OtherSettings(outcome: outcome)
       }
 
-      let after: DeviceSettingsReading
+      let later: DeviceSettingsReading
 
       do {
 
-        after = try await device.read(items, description: description, commands: commands)
+        later = try await read(knowing: flags, values: values)
 
-      } catch let error as CancellationError {
+      } catch is CancellationError {
 
-        throw error
+        return .notReread(.canceled)
+
+      } catch ModemError.connectionClosed {
+
+        return .notReread(.connectionClosed)
 
       } catch {
 
-        return .notReread
+        return .notReread(.failed)
 
       }
 
-      return before.otherSettings(after: after)
+      return earlier.otherSettings(after: later)
 
     }
+
+  }
+
+  /// What was read of the other settings before a write.
+  enum Before {
+
+    /// The reading.
+    case read(DeviceSettingsReading)
+
+    /// Nothing was read, for the reason the outcome gives.
+    case skipped(DeviceSettingChange.OtherSettings.Outcome)
 
   }
 
@@ -96,29 +208,32 @@ extension Device {
 
 extension DeviceSettingsReading {
 
-  /// What the settings did between this reading and a later one of the same items: each one
-  /// whose value differs, in order, leaving out one either reading didn't report; or
-  /// ``DeviceSettingChange/OtherSettings/notReread`` when the later reading has none of the
-  /// values this one has.
-  func otherSettings(after: DeviceSettingsReading) -> DeviceSettingChange.OtherSettings {
+  /// What the settings did between this reading and a later one of the same items and
+  /// buttons: each entry whose value differs, in order; each one this reading reported that
+  /// the later one didn't, as unread; and ``DeviceSettingChange/OtherSettings/ReadFailure/notAnswered``
+  /// when the later reading has none of the values this one has. An entry this reading didn't
+  /// report is left out.
+  func otherSettings(after later: DeviceSettingsReading) -> DeviceSettingChange.OtherSettings {
 
-    let later: [Entry] = after.entries
-    var isAnyReread: Bool = false
     var changes: [DeviceSettingChange.OtherChange] = []
+    var unread: [DeviceSettingChange.UnreadSetting] = []
 
-    for entry in entries {
+    // The readings are of the same items and buttons, so their entries line up one for one.
+    for (entry, match) in zip(entries, later.entries) {
 
-      guard
-        let before = entry.text,
-        let match = later.first(where: { (other: Entry) -> Bool in other.setting.key == entry.setting.key && other.button == entry.button }),
-        let reported = match.text
-      else {
+      guard let before = entry.text else {
 
         continue
 
       }
 
-      isAnyReread = true
+      guard let reported = match.text else {
+
+        unread.append(DeviceSettingChange.UnreadSetting(setting: entry.setting, button: entry.button))
+
+        continue
+
+      }
 
       if reported != before {
 
@@ -128,7 +243,13 @@ extension DeviceSettingsReading {
 
     }
 
-    return isAnyReread ? .compared(changes) : .notReread
+    if changes.isEmpty, unread.count == entries.count(where: { (entry: Entry) -> Bool in entry.text != nil }) {
+
+      return .notReread(.notAnswered)
+
+    }
+
+    return .compared(changes, unread: unread)
 
   }
 

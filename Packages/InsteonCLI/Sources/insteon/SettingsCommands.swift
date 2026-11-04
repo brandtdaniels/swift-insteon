@@ -106,7 +106,7 @@ enum SettingsCommands {
 
     }
 
-    for line in SettingsText.report(change) {
+    for line in SettingsText.report(change, device: "\(device.address)") {
 
       Output.line(line)
 

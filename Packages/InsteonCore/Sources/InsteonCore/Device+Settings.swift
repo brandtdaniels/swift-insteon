@@ -102,16 +102,24 @@ extension Device {
   /// command the catalog names.
   ///
   /// A write can change other settings as well, as some devices turn a flag on when a value
-  /// that isn't zero is written. So the device's other settings are read just before the write
-  /// is sent and again once it's confirmed, the same way
-  /// ``readSettings(includingAdvanced:beforeReading:)`` reads them, and each one whose value
-  /// differs is in ``DeviceSettingChange/otherSettings``. Only settings software can write, as
-  /// ``DeviceSetting/isWritable`` says, are compared: a reading or a value nothing writes, such
-  /// as a measure of noise, changes on its own rather than as a side effect. A setting the
-  /// device didn't report either time is left out. Nothing more is sent when the catalog
-  /// describes no other writable setting. When the other settings can't be
-  /// read after the write, the write still succeeds, with
-  /// ``DeviceSettingChange/OtherSettings/notReread``.
+  /// that isn't zero is written. So the device's other writable settings, as
+  /// ``DeviceSetting/isWritable`` says, are read before the write and again once it's
+  /// confirmed, with the requests ``readSettings(includingAdvanced:beforeReading:)`` makes, and
+  /// ``DeviceSettingChange/otherSettings`` holds each one whose value differs. A reading or a
+  /// value nothing writes, such as a measure of noise, changes on its own rather than as a side
+  /// effect, so it's left out. Each request is sent once before the write and once after it:
+  /// the write's own read and read-back carry the other settings that share their reply, and
+  /// only button 1 and the button written are asked for values. The other settings aren't read
+  /// when the catalog describes none, when the device doesn't answer the write's own read
+  /// before it, or when the write isn't confirmed or the device reports another value. A
+  /// setting the device didn't report before the write is left out, and one it reported before
+  /// but not after is in ``DeviceSettingChange/OtherSettings/unread``.
+  ///
+  /// Once the write is confirmed, nothing about the other settings fails it: when they can't be
+  /// read again, ``DeviceSettingChange/OtherSettings/rereadFailure`` says why, the connection
+  /// closing included. A task canceled while they're read again gets the change, with the
+  /// failure ``DeviceSettingChange/OtherSettings/ReadFailure/canceled``, and stays canceled,
+  /// so its next wait throws `CancellationError`.
   ///
   /// - Parameters:
   ///   - key: The setting's key, such as `"rampRate"`, or its label, in any case.
@@ -159,7 +167,7 @@ extension Device {
     }
 
     let setting: DeviceSetting = SettingPresentation.setting(for: item, in: commands)
-    let others = OtherSettingsCheck(device: self, besides: item, description: description, commands: commands)
+    let others = OtherSettingsCheck(device: self, besides: item, button: buttonNumber ?? 0x01, description: description, commands: commands)
     let change: DeviceSettingChange
 
     switch item.source {

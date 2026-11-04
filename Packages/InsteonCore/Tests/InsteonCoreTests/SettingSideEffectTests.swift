@@ -9,9 +9,10 @@ import InsteonProtocol
 import InsteonTestSupport
 
 /// A made-up catalog whose devices change one setting when another is written: a lamp whose
-/// linger time, once it isn't zero, turns its sparkle flag on, with a hiss it reports but
-/// can't be written, and a panel whose hum flag turns its sparkle flag on, with a drift flag of
-/// its own Get Operating Flags request.
+/// linger time, once it isn't zero, turns its sparkle flag on, with a murmur reading and a hiss
+/// value it reports but nothing writes; a panel whose hum flag turns its sparkle flag on, with a
+/// drift flag of its own Get Operating Flags request; and keys whose shine and tint are per
+/// button.
 enum SideEffectExample {
 
   // MARK: - Addresses
@@ -22,6 +23,8 @@ enum SideEffectExample {
 
   static let single = InsteonAddress(0x5C, 0x6D, 0x03)
 
+  static let keys = InsteonAddress(0x5C, 0x6D, 0x04)
+
   // MARK: - Identities
 
   static let lampIdentity = ReportedIdentity(category: 0x01, subcategory: 0x71, firmwareVersion: 0x45)
@@ -30,7 +33,9 @@ enum SideEffectExample {
 
   static let singleIdentity = ReportedIdentity(category: 0x01, subcategory: 0x73, firmwareVersion: 0x45)
 
-  static let identities: [InsteonAddress: ReportedIdentity] = [lamp: lampIdentity, panel: panelIdentity, single: singleIdentity]
+  static let keysIdentity = ReportedIdentity(category: 0x01, subcategory: 0x74, firmwareVersion: 0x45)
+
+  static let identities: [InsteonAddress: ReportedIdentity] = [lamp: lampIdentity, panel: panelIdentity, single: singleIdentity, keys: keysIdentity]
 
   // MARK: - Settings
 
@@ -40,14 +45,17 @@ enum SideEffectExample {
 
   static let drift = OperatingFlag(name: "drift", summary: "Drifts.", query: 0x01, bit: 0x01, on: 0x06, off: 0x07, label: "Drift")
 
-  /// The lamp's flags and three values, as ``SettingsModem`` keeps them: the linger time at
-  /// D7, written with selector `0x05`, the glimmer at D8, written with selector `0x06`, and the
-  /// hiss at D9, which nothing writes.
+  static let murmur = OperatingReading(name: "murmur", summary: "How much the device murmurs.", query: 0x02, label: "Murmur")
+
+  /// The lamp's flags, a reading and three values, as ``SettingsModem`` keeps them: the linger
+  /// time at D7, written with selector `0x05`, the glimmer at D8, written with selector `0x06`,
+  /// and the hiss at D9, which nothing writes.
   static let lampCommands = CommandSet(
     id: "exampleSideEffectLamp",
     name: "Example side effect lamp",
     summary: "A linger time that turns the sparkle on.",
     operatingFlags: [hum, sparkle],
+    readings: [murmur],
     extendedSettings: ExtendedSettings(
       isPerButton: false,
       values: [
@@ -84,6 +92,27 @@ enum SideEffectExample {
     groupTypes: [ControlExample.light]
   )
 
+  /// Three buttons, each with a shine at D8, written with selector `0x06`, and a tint at D9,
+  /// written with selector `0x07`.
+  static let keysCommands = CommandSet(
+    id: "exampleSideEffectKeys",
+    name: "Example side effect keys",
+    summary: "Per-button shine and tint.",
+    extendedSettings: ExtendedSettings(
+      isPerButton: true,
+      values: [
+        SettingValue(name: "shine", summary: "How bright a button shines.", position: 8, label: "Shine"),
+        SettingValue(name: "tint", summary: "A button's tint.", position: 9, label: "Tint")
+      ],
+      writes: [
+        SettingWrite(name: "shine", summary: "Sets a button's shine.", selector: 0x06, isPerButton: true, bytes: [SettingWrite.Byte(position: 3, value: "shine")]),
+        SettingWrite(name: "tint", summary: "Sets a button's tint.", selector: 0x07, isPerButton: true, bytes: [SettingWrite.Byte(position: 3, value: "tint")])
+      ]
+    ),
+    standardCommands: [ControlExample.lightOn, ControlExample.lightOff, ControlExample.readLevel],
+    groupTypes: [ControlExample.light]
+  )
+
   static let catalog = DeviceCatalog(
     profiles: [
       ControlExample.profile(model: "9201", name: "Example Lamp", identity: lampIdentity, commands: lampCommands, groups: [
@@ -94,15 +123,20 @@ enum SideEffectExample {
       ]),
       ControlExample.profile(model: "9203", name: "Example Single", identity: singleIdentity, commands: singleCommands, groups: [
         DeviceProfile.Group(number: 1, name: "Load", role: .both, type: "light")
+      ]),
+      ControlExample.profile(model: "9204", name: "Example Keys", identity: keysIdentity, commands: keysCommands, groups: [
+        DeviceProfile.Group(number: 1, name: "Button 1", role: .both, type: "light"),
+        DeviceProfile.Group(number: 2, name: "Button 2", role: .controller),
+        DeviceProfile.Group(number: 3, name: "Button 3", role: .controller)
       ])
     ],
-    commandSets: [lampCommands, panelCommands, singleCommands]
+    commandSets: [lampCommands, panelCommands, singleCommands, keysCommands]
   )
 
 }
 
-/// Writing a setting reports the other settings the write changed, by reading the device's
-/// settings before and after it.
+/// Writing a setting reports the other writable settings the write changed, by reading the
+/// device's settings before and after it.
 @Suite(.timeLimit(.minutes(1)))
 struct SettingSideEffectTests {
 
@@ -140,10 +174,14 @@ struct SettingSideEffectTests {
 
   }
 
-  /// Each other setting's key, value before and value after.
+  /// Each other setting's key, button, value before and value after.
   func changes(_ change: DeviceSettingChange) -> [[String]] {
 
-    change.changedSettings.map { (other: DeviceSettingChange.OtherChange) -> [String] in [other.setting.key, other.before, other.after] }
+    change.changedSettings.map { (other: DeviceSettingChange.OtherChange) -> [String] in
+
+      [other.setting.key, other.button.map(String.init) ?? "-", other.before, other.after]
+
+    }
 
   }
 
@@ -164,11 +202,46 @@ struct SettingSideEffectTests {
 
   }
 
+  /// Makes Get Operating Flags requests fail with `error` once a Set Operating Flags has been
+  /// sent: the request `query`, or any, after `skipping` of them have been answered.
+  func failReads(of modem: InMemoryModem, query: UInt8? = nil, skipping: Int, with error: some Error & Sendable) async {
+
+    let written = Count()
+    let readsAfterWrite = Count()
+
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      guard case let .standardRequest(message) = operation else {
+
+        return
+
+      }
+
+      if message.command.command1 == 0x20 {
+
+        written.increment()
+
+      } else if message.command.command1 == 0x1F, written.value > 0, query == nil || message.command.command2 == query {
+
+        readsAfterWrite.increment()
+
+        if readsAfterWrite.value > skipping {
+
+          throw error
+
+        }
+
+      }
+
+    }
+
+  }
+
   // MARK: - Reporting what else changed
 
   @Test func reportsAFlagAValueWriteTurnedOn() async throws {
 
-    let modem = SettingsModem(device: SideEffectExample.lamp, flags: 0x00, values: [7: 0x00, 8: 0x10])
+    let modem = SettingsModem(device: SideEffectExample.lamp, flags: 0x00, values: [7: 0x00, 8: 0x10, 9: 0xA2])
     await modem.setFlagBits(0x04, whenWritingANonZeroValueWith: 0x05)
 
     let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.lamp).writeSetting("lingerTime", to: "0x05")
@@ -182,12 +255,12 @@ struct SettingSideEffectTests {
         after: "on"
       )
     ]))
-    #expect(changes(change) == [["sparkle", "off", "on"]])
+    #expect(changes(change) == [["sparkle", "-", "off", "on"]])
     #expect(change.changedSettings.first?.title == "Sparkle")
 
   }
 
-  @Test func leavesOutAReadOnlySettingThatChangesOnItsOwnAndReportsAWritableOne() async throws {
+  @Test func leavesOutAReadOnlyValueThatChangesOnItsOwnAndReportsAWritableOne() async throws {
 
     let modem = SettingsModem(device: SideEffectExample.lamp, flags: 0x00, values: [7: 0x00, 8: 0x10, 9: 0xA2])
     await modem.changeValuesOnTheirOwn(at: [8, 9])
@@ -208,7 +281,7 @@ struct SettingSideEffectTests {
 
     #expect(change.before == "off")
     #expect(change.after == "on")
-    #expect(changes(change) == [["sparkle", "off", "on"]])
+    #expect(changes(change) == [["sparkle", "-", "off", "on"]])
 
   }
 
@@ -221,28 +294,86 @@ struct SettingSideEffectTests {
     #expect(change.after == "on")
     #expect(change.otherSettings == .compared([]))
     #expect(change.changedSettings.isEmpty)
+    #expect(change.unreadSettings.isEmpty)
 
   }
 
-  @Test func readsTheOtherSettingsBeforeTheWriteAndAfterItsReadBack() async throws {
+  @Test func reportsAnotherButtonsChangeWithItsButtonAndLeavesOutTheSettingWrittenOnEveryButton() async throws {
+
+    let modem = SettingsModem(device: SideEffectExample.keys, flags: 0x00, values: [8: 0xFF, 9: 0x00])
+    await modem.setValues([8: 0x80, 9: 0x00], ofButton: 0x02)
+    await modem.setValues([8: 0x80, 9: 0x00], ofButton: 0x03)
+    // Writing button 2's shine also writes button 1's shine and button 2's tint.
+    await modem.setValueSideEffect(ofSelector: 0x06, writes: 0x11, at: 8, ofButton: 0x01)
+    await modem.setValueSideEffect(ofSelector: 0x06, writes: 0x22, at: 9)
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.keys).writeSetting("shine", to: "0x40", button: 2)
+
+    #expect(change.button == 2)
+    #expect(change.after == "0x40")
+    #expect(changes(change) == [["tint", "2", "0x00", "0x22"]])
+    #expect(change.changedSettings.first?.title == "Tint (button 2)")
+    // Button 3 isn't read: only button 1 and the button written are compared.
+    #expect(await modem.sent == [
+      "2E 00 02 00 00",
+      "2E 00 01 00 00",
+      "2E 00 02 06 40",
+      "2E 00 02 00 00",
+      "2E 00 01 00 00"
+    ])
+
+  }
+
+  // MARK: - What's sent
+
+  @Test func readsEachRequestOnceAroundAFlagWrite() async throws {
 
     let modem: InMemoryModem = await panelModem(flags: 0x00)
 
     _ = try await network(modem).device(SideEffectExample.panel).writeSetting("hum", to: "on")
 
     #expect(await commands(sentTo: SideEffectExample.panel, by: modem) == [
-      // The flag written.
+      // The flag written, with the sparkle in the same byte.
       Command(command1: 0x1F, command2: 0x00),
-      // The other settings, before.
-      Command(command1: 0x1F, command2: 0x00),
+      // The drift, before.
       Command(command1: 0x1F, command2: 0x01),
-      // The write and its read-back.
+      // The write and its read-back, with the sparkle.
       Command(command1: 0x0D, command2: 0x00),
       Command(command1: 0x20, command2: 0x0A),
       Command(command1: 0x1F, command2: 0x00),
-      // The other settings, after.
-      Command(command1: 0x1F, command2: 0x00),
+      // The drift, after.
       Command(command1: 0x1F, command2: 0x01)
+    ])
+
+  }
+
+  @Test func readsEachRequestOnceAroundAFlagWriteToADeviceWithValues() async throws {
+
+    let modem = SettingsModem(device: SideEffectExample.lamp, flags: 0x00, values: [7: 0x00, 8: 0x10, 9: 0xA2])
+
+    _ = try await network(modem).device(SideEffectExample.lamp).writeSetting("hum", to: "on")
+
+    // The murmur is a reading, so its request, 0x02, is never sent.
+    #expect(await modem.sent == ["1F 00", "2E 00 01 00 00", "0D 00", "20 0A", "1F 00", "2E 00 01 00 00"])
+
+  }
+
+  @Test func readsEachRequestOnceAroundAValueWriteInOrder() async throws {
+
+    let modem = SettingsModem(device: SideEffectExample.lamp, flags: 0x00, values: [7: 0x00, 8: 0x10, 9: 0xA2])
+
+    _ = try await network(modem).device(SideEffectExample.lamp).writeSetting("lingerTime", to: "0x05")
+
+    #expect(await modem.sent == [
+      // The value written, with the glimmer and hiss in the same reply.
+      "2E 00 01 00 00",
+      // The flags, before.
+      "1F 00",
+      // The write and its read-back.
+      "2E 00 01 05 05",
+      "2E 00 01 00 00",
+      // The flags, after.
+      "1F 00"
     ])
 
   }
@@ -256,9 +387,46 @@ struct SettingSideEffectTests {
     let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.single).writeSetting("hum", to: "on")
 
     #expect(change.after == "on")
-    #expect(change.otherSettings == .notCompared)
+    #expect(change.otherSettings == DeviceSettingChange.OtherSettings(outcome: .nothingToCompare))
     #expect(await commands(sentTo: SideEffectExample.single, by: modem) == [
       Command(command1: 0x1F, command2: 0x00),
+      Command(command1: 0x0D, command2: 0x00),
+      Command(command1: 0x20, command2: 0x0A),
+      Command(command1: 0x1F, command2: 0x00)
+    ])
+
+  }
+
+  @Test func readsNoOtherSettingWhenTheDeviceDoesntAnswerTheWritesOwnRead() async throws {
+
+    let modem: InMemoryModem = await panelModem(flags: 0x00)
+    let reads = Count()
+
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      guard case let .standardRequest(message) = operation, message.command.command1 == 0x1F else {
+
+        return
+
+      }
+
+      reads.increment()
+
+      if reads.value == 1 {
+
+        throw ModemError.deviceTimedOut(message.destination)
+
+      }
+
+    }
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.panel).writeSetting("hum", to: "on")
+
+    #expect(change.before == nil)
+    #expect(change.after == "on")
+    #expect(change.otherSettings == DeviceSettingChange.OtherSettings(outcome: .notReportedBefore))
+    // The unanswered read isn't a step; nothing but the write and its read-back follows it.
+    #expect(await commands(sentTo: SideEffectExample.panel, by: modem) == [
       Command(command1: 0x0D, command2: 0x00),
       Command(command1: 0x20, command2: 0x0A),
       Command(command1: 0x1F, command2: 0x00)
@@ -295,17 +463,98 @@ struct SettingSideEffectTests {
     let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.panel).writeSetting("hum", to: "on")
 
     #expect(change.after == "on")
-    #expect(changes(change) == [["sparkle", "off", "on"]])
+    #expect(changes(change) == [["sparkle", "-", "off", "on"]])
+    #expect(change.unreadSettings.isEmpty)
+
+  }
+
+  // MARK: - A write that isn't confirmed
+
+  @Test func readsNothingAgainWhenTheWriteIsntConfirmed() async throws {
+
+    let modem: InMemoryModem = await panelModem(flags: 0x00)
+    await failReads(of: modem, skipping: 0, with: ModemError.deviceTimedOut(SideEffectExample.panel))
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.panel).writeSetting("hum", to: "on")
+
+    #expect(change.isConfirmed == false)
+    #expect(change.otherSettings == DeviceSettingChange.OtherSettings(outcome: .notConfirmed))
+    #expect(await commands(sentTo: SideEffectExample.panel, by: modem) == [
+      Command(command1: 0x1F, command2: 0x00),
+      Command(command1: 0x1F, command2: 0x01),
+      Command(command1: 0x0D, command2: 0x00),
+      Command(command1: 0x20, command2: 0x0A)
+    ])
+
+  }
+
+  @Test func readsNothingAgainWhenTheDeviceReportsAnotherValue() async throws {
+
+    let modem = SettingsModem(device: SideEffectExample.lamp, flags: 0x00, values: [7: 0x00, 8: 0x10, 9: 0xA2])
+    await modem.ignoreWrites()
+    let lamp: Device = network(modem).device(SideEffectExample.lamp)
+
+    await #expect(throws: DeviceSettingError.self) {
+
+      _ = try await lamp.writeSetting("lingerTime", to: "0x05")
+
+    }
+
+    #expect(await modem.sent == ["2E 00 01 00 00", "1F 00", "2E 00 01 05 05", "2E 00 01 00 00"])
 
   }
 
   // MARK: - A re-read that fails
 
-  /// Makes every Get Operating Flags request after the write's read-back fail with `error`.
-  func failReads(after modem: InMemoryModem, with error: some Error & Sendable) async {
+  @Test func namesTheSettingsThatWentUnreadAfterTheWrite() async throws {
 
+    let modem: InMemoryModem = await panelModem(flags: 0x00)
+    await modem.setOperatingFlagSideEffect(of: 0x0A, bit: 0x04, isSet: true, of: SideEffectExample.panel)
+    await failReads(of: modem, query: 0x01, skipping: 0, with: ModemError.deviceTimedOut(SideEffectExample.panel))
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.panel).writeSetting("hum", to: "on")
+
+    #expect(change.otherSettings.outcome == .compared)
+    #expect(changes(change) == [["sparkle", "-", "off", "on"]])
+    #expect(change.unreadSettings.map(\.title) == ["Drift"])
+
+  }
+
+  @Test func keepsTheWriteWhenTheConnectionClosesAsTheOtherSettingsAreReadAgain() async throws {
+
+    let modem: InMemoryModem = await panelModem(flags: 0x00)
+    await modem.setOperatingFlagSideEffect(of: 0x0A, bit: 0x04, isSet: true, of: SideEffectExample.panel)
+    await failReads(of: modem, skipping: 1, with: ModemError.connectionClosed)
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.panel).writeSetting("hum", to: "on")
+
+    #expect(change.after == "on")
+    #expect(change.isConfirmed)
+    #expect(change.otherSettings == .notReread(.connectionClosed))
+    #expect(change.changedSettings.isEmpty)
+    #expect(await modem.operatingFlags[SideEffectExample.panel] == 0x06)
+
+  }
+
+  @Test func saysTheOtherSettingsWerentAnsweredWhenTheDeviceAnswersNoneOfThemAgain() async throws {
+
+    let modem: InMemoryModem = await panelModem(flags: 0x00)
+    await modem.setOperatingFlagCommand(0x06, bit: 0x01, isSet: true, of: SideEffectExample.panel)
+    // The drift's read-back is request 0x01; the hum and sparkle are read again with 0x00.
+    await failReads(of: modem, query: 0x00, skipping: 0, with: ModemError.deviceTimedOut(SideEffectExample.panel))
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.panel).writeSetting("drift", to: "on")
+
+    #expect(change.after == "on")
+    #expect(change.otherSettings == .notReread(.notAnswered))
+
+  }
+
+  @Test func keepsTheWriteAndTheTasksCancellationWhenItsCanceledAsTheOtherSettingsAreReadAgain() async throws {
+
+    let modem: InMemoryModem = await panelModem(flags: 0x00)
+    let network: DeviceNetwork = self.network(modem)
     let written = Count()
-    let readsAfterWrite = Count()
 
     await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
 
@@ -319,47 +568,27 @@ struct SettingSideEffectTests {
 
         written.increment()
 
-      } else if message.command.command1 == 0x1F, written.value > 0 {
+      } else if message.command == Command(command1: 0x1F, command2: 0x01), written.value > 0 {
 
-        readsAfterWrite.increment()
-
-        if readsAfterWrite.value > 1 {
-
-          throw error
-
-        }
+        // Cancels the task that asked, so the modem throws CancellationError.
+        withUnsafeCurrentTask { (task: UnsafeCurrentTask?) -> Void in task?.cancel() }
 
       }
 
     }
 
-  }
+    let task = Task { () async throws -> (DeviceSettingChange, Bool) in
 
-  @Test func keepsTheWriteWhenTheOtherSettingsCantBeReadAgain() async throws {
+      let change: DeviceSettingChange = try await network.device(SideEffectExample.panel).writeSetting("hum", to: "on")
 
-    let modem: InMemoryModem = await panelModem(flags: 0x00)
-    await modem.setOperatingFlagSideEffect(of: 0x0A, bit: 0x04, isSet: true, of: SideEffectExample.panel)
-    await failReads(after: modem, with: ModemError.connectionClosed)
+      return (change, Task.isCancelled)
 
-    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.panel).writeSetting("hum", to: "on")
+    }
+    let (change, isCanceled): (DeviceSettingChange, Bool) = try await task.value
 
-    #expect(change.after == "on")
     #expect(change.isConfirmed)
-    #expect(change.otherSettings == .notReread)
-    #expect(change.changedSettings.isEmpty)
-    #expect(await modem.operatingFlags[SideEffectExample.panel] == 0x06)
-
-  }
-
-  @Test func saysTheOtherSettingsWerentReadAgainWhenTheDeviceStopsAnswering() async throws {
-
-    let modem: InMemoryModem = await panelModem(flags: 0x00)
-    await failReads(after: modem, with: ModemError.deviceTimedOut(SideEffectExample.panel))
-
-    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.panel).writeSetting("hum", to: "on")
-
-    #expect(change.after == "on")
-    #expect(change.otherSettings == .notReread)
+    #expect(change.otherSettings == .notReread(.canceled))
+    #expect(isCanceled)
 
   }
 

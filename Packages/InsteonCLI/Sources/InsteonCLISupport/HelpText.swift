@@ -414,8 +414,10 @@ public enum HelpText {
                           and the device's other writable settings are read before and
                           after the write, so any other setting it changed is printed as
                           "Also changed"; a read-only one changes on its own, so it's left
-                          out. With --json, prints the setting, its values and
-                          "changedSettings", each with its name, label, before and after.
+                          out, and one that can't be read again is named. With --json,
+                          prints the setting, its values, "otherSettings" (how the
+                          comparison ended), "rereadFailure", "changedSettings", each with
+                          its name, label, button, before and after, and "unreadSettings".
                           Turning off the radio or the powerline, and requiring a checksum,
                           are never written, and the programming lock is only turned off,
                           also through a value whose byte holds them.

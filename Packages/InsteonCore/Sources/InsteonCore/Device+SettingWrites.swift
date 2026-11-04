@@ -50,7 +50,7 @@ extension Device {
 
     let read = StandardMessage(to: address, command: flag.readCommand)
     let before: UInt8? = try await answer(read)?.command.command2
-    let othersBefore: DeviceSettingsReading? = try await others.readBefore()
+    let othersBefore: Device.Before = try await others.readBefore(isOwnReported: before != nil, knowing: before.map { (byte: UInt8) -> [OperatingFlagsRequest: UInt8] in [flag.query: byte] } ?? [:])
 
     switch change {
     case let .setOperatingFlags(command2):
@@ -65,7 +65,7 @@ extension Device {
 
     guard let reported = after else {
 
-      return DeviceSettingChange(setting: setting, button: nil, before: beforeText, requested: requested, after: nil)
+      return DeviceSettingChange(setting: setting, button: nil, before: beforeText, requested: requested, after: nil, otherSettings: Self.unconfirmed(othersBefore))
 
     }
 
@@ -84,8 +84,21 @@ extension Device {
       before: beforeText,
       requested: requested,
       after: reportedText,
-      otherSettings: try await others.compare(with: othersBefore)
+      otherSettings: await others.compare(with: othersBefore, knowing: [flag.query: reported])
     )
+
+  }
+
+  /// What the other settings did across a write that isn't confirmed: they aren't read
+  /// again, and a comparison that ended before the write keeps its outcome.
+  private static func unconfirmed(_ before: Device.Before) -> DeviceSettingChange.OtherSettings {
+
+    switch before {
+    case .read:
+      DeviceSettingChange.OtherSettings(outcome: .notConfirmed)
+    case let .skipped(outcome):
+      DeviceSettingChange.OtherSettings(outcome: outcome)
+    }
 
   }
 
@@ -260,7 +273,7 @@ extension Device {
 
     }
 
-    let othersBefore: DeviceSettingsReading? = try await others.readBefore()
+    let othersBefore: Device.Before = try await others.readBefore(isOwnReported: before != nil, values: before.map { (values: [SettingName: UInt8]) -> [UInt8: [SettingName: UInt8]] in [target: values] } ?? [:])
 
     _ = try await request(message, timeout: Modem.defaultExtendedRequestTimeout, for: .setting(label: item.label))
 
@@ -271,7 +284,7 @@ extension Device {
 
     guard let reported = after?[value.name] else {
 
-      return DeviceSettingChange(setting: setting, button: changedButton, before: beforeText, requested: requested, after: nil)
+      return DeviceSettingChange(setting: setting, button: changedButton, before: beforeText, requested: requested, after: nil, otherSettings: Self.unconfirmed(othersBefore))
 
     }
 
@@ -283,7 +296,7 @@ extension Device {
 
     }
 
-    written.otherSettings = try await others.compare(with: othersBefore)
+    written.otherSettings = await others.compare(with: othersBefore, values: [target: after ?? [:]])
 
     return written
 
