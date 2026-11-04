@@ -2,8 +2,8 @@ import Foundation
 import InsteonDeviceCatalog
 import InsteonProtocol
 
-/// The state a relay records when it links as a responder, such as an I/O Linc's: what a
-/// group On from its controller then sets it to. A group Off sets it to the opposite.
+/// The state a relay records when it links as a responder: what a group On from its
+/// controller then sets it to. A group Off sets it to the opposite.
 ///
 /// A relay keeps its state at link time as Data 1 of its responder record: `0xFF` when it was
 /// on, and `0x00` when it was off.
@@ -44,8 +44,118 @@ public enum RelayState: String, Hashable, Sendable, CaseIterable {
 
 }
 
-/// What linking a relay with a chosen ``RelayState`` switches and puts back, from its flags
-/// and status, as
+/// An operating flag the Insteon device catalog names in how a relay holds a state.
+public struct RelayFlag: Hashable, Sendable {
+
+  /// The flag's name in the device's command set, which a setting command takes.
+  public var name: String
+
+  /// What a person calls the flag: the catalog's label for it, or its name when the catalog
+  /// gives none.
+  public var label: String
+
+  /// Creates a flag.
+  ///
+  /// - Parameters:
+  ///   - name: The flag's name in the device's command set.
+  ///   - label: What a person calls the flag.
+  public init(name: String, label: String) {
+
+    self.name = name
+    self.label = label
+
+  }
+
+}
+
+/// How a relay holds the state it's switched to, as the Insteon device catalog describes its
+/// main group's type, with the flags it names that read on.
+///
+/// While a flag of ``RelayStateHolding/releasedBy`` is on, the relay doesn't hold a state: it
+/// returns to ``RelayStateHolding/restState`` by itself a time after it's switched. While every
+/// flag of one of ``RelayStateHolding/pulsesOnEveryCommandWhen`` is on, every group On and Off
+/// only pulses it, whatever its responder record holds, so the state a link records is
+/// ignored. Otherwise it holds the state it's switched to.
+public struct RelayStateHolding: Hashable, Sendable {
+
+  /// The names of the flags that keep the relay from holding a state while any is on.
+  public var releasedBy: [String]
+
+  /// The state the relay returns to by itself while a flag of
+  /// ``RelayStateHolding/releasedBy`` is on.
+  public var restState: RelayState
+
+  /// Sets of flag names, each of which, when all its flags are on, has every On and Off only
+  /// pulse the relay.
+  public var pulsesOnEveryCommandWhen: [[String]]
+
+  /// The flags the catalog names here that read on, in the catalog's order.
+  public var flagsOn: [RelayFlag]
+
+  /// Creates how a relay holds a state.
+  ///
+  /// - Parameters:
+  ///   - releasedBy: The names of the flags that keep the relay from holding a state.
+  ///   - restState: The state the relay returns to by itself.
+  ///   - pulsesOnEveryCommandWhen: The sets of flag names with which every On and Off only
+  ///     pulses the relay. Defaults to none.
+  ///   - flagsOn: The flags that read on. Defaults to none.
+  public init(releasedBy: [String], restState: RelayState, pulsesOnEveryCommandWhen: [[String]] = [], flagsOn: [RelayFlag] = []) {
+
+    self.releasedBy = releasedBy
+    self.restState = restState
+    self.pulsesOnEveryCommandWhen = pulsesOnEveryCommandWhen
+    self.flagsOn = flagsOn
+
+  }
+
+  /// The flags of ``RelayStateHolding/releasedBy`` that are on, which keep the relay from
+  /// holding a state.
+  public var releasingFlags: [RelayFlag] {
+
+    flagsOn.filter { (flag: RelayFlag) -> Bool in releasedBy.contains(flag.name) }
+
+  }
+
+  /// The flags of the first set of ``RelayStateHolding/pulsesOnEveryCommandWhen`` whose flags
+  /// are all on, with which every On and Off only pulses the relay, or none when no set is.
+  public var pulsingFlags: [RelayFlag] {
+
+    for set in pulsesOnEveryCommandWhen where !set.isEmpty {
+
+      let flags: [RelayFlag] = set.compactMap { (name: String) -> RelayFlag? in flagsOn.first { (flag: RelayFlag) -> Bool in flag.name == name } }
+
+      if flags.count == set.count {
+
+        return flags
+
+      }
+
+    }
+
+    return []
+
+  }
+
+  /// Whether the relay holds the state it's switched to: no flag that keeps it from holding
+  /// one is on.
+  public var holdsState: Bool {
+
+    releasingFlags.isEmpty
+
+  }
+
+  /// Whether every On and Off only pulses the relay, so the state a link records is ignored.
+  public var ignoresState: Bool {
+
+    !pulsingFlags.isEmpty
+
+  }
+
+}
+
+/// What linking a relay with a chosen ``RelayState`` switches and puts back, from how it holds
+/// a state and its status, as
 /// ``DeviceLinkingCoordinator/planRelayLink(_:recording:observer:)`` reads them, for a front end
 /// to show and ask about before the relay, and whatever it controls, is switched.
 public struct RelayLinkPlan: Hashable, Sendable {
@@ -59,12 +169,8 @@ public struct RelayLinkPlan: Hashable, Sendable {
   /// Its state before the link, as its status read.
   public var before: RelayState
 
-  /// Whether its momentary flag is on.
-  public var isMomentary: Bool
-
-  /// Whether its momentaryOnBothCommands flag is on. On a momentary relay, every On and Off
-  /// then only pulses it, and the recorded state is ignored.
-  public var pulsesOnBothCommands: Bool
+  /// How it holds a state, with the flags that read on.
+  public var holding: RelayStateHolding
 
   /// Creates a plan.
   ///
@@ -72,64 +178,54 @@ public struct RelayLinkPlan: Hashable, Sendable {
   ///   - device: The relay.
   ///   - state: The state it's to record.
   ///   - before: Its state before the link.
-  ///   - isMomentary: Whether its momentary flag is on.
-  ///   - pulsesOnBothCommands: Whether its momentaryOnBothCommands flag is on.
-  public init(device: InsteonAddress, state: RelayState, before: RelayState, isMomentary: Bool, pulsesOnBothCommands: Bool) {
+  ///   - holding: How it holds a state, with the flags that read on.
+  public init(device: InsteonAddress, state: RelayState, before: RelayState, holding: RelayStateHolding) {
 
     self.device = device
     self.state = state
     self.before = before
-    self.isMomentary = isMomentary
-    self.pulsesOnBothCommands = pulsesOnBothCommands
+    self.holding = holding
 
   }
 
-  /// Whether the state is ignored: on a momentary relay with momentaryOnBothCommands on, every
-  /// On and Off only pulses it. The relay isn't switched and no flag is written.
+  /// Whether the state is ignored, since every On and Off only pulses the relay. The relay
+  /// isn't switched and no flag is written.
   public var ignoresState: Bool {
 
-    isMomentary && pulsesOnBothCommands
+    holding.ignoresState
 
   }
 
-  /// Whether momentaryOnBothCommands is on though the relay isn't momentary, a mode whose
-  /// effect on the relay isn't verified. The relay isn't switched and no flag is written, so
-  /// its record holds the state it's in.
-  public var leavesUnverifiedMode: Bool {
-
-    !isMomentary && pulsesOnBothCommands
-
-  }
-
-  /// Whether the relay is switched to the state: when it isn't in it, or when it's momentary
-  /// and the state is on, since a momentary relay reads on only while it's closed for its
-  /// momentary time. Never with momentaryOnBothCommands on.
+  /// Whether the relay is switched to the state: when it isn't in it, or when it doesn't hold
+  /// a state and the state isn't its rest state, since it reads another state only while it's
+  /// switched, before it returns. Never when the state is ignored.
   public var switchesRelay: Bool {
 
-    !pulsesOnBothCommands && (before != state || (isMomentary && state == .on))
+    !ignoresState && (before != state || (!holding.holdsState && state != holding.restState))
 
   }
 
-  /// The flag turned off for the link, so the relay holds its state, or `nil` when none is.
-  public var clearedFlag: String? {
+  /// The flags turned off for the link, so the relay holds its state: those that keep it from
+  /// holding one, when it's switched.
+  public var clearedFlags: [RelayFlag] {
 
-    switchesRelay && isMomentary ? DeviceLinkingCoordinator.momentaryFlag.rawValue : nil
-
-  }
-
-  /// Whether a momentary relay switched on is switched off right after the link, since it
-  /// rests open.
-  public var opensAfterLinking: Bool {
-
-    clearedFlag != nil && state == .on
+    switchesRelay ? holding.releasingFlags : []
 
   }
 
-  /// Whether a relay that isn't momentary is switched back to its state before when linking
+  /// Whether the relay is switched to its rest state right after the link, while its flags
+  /// are still off: when they were turned off and the state isn't its rest state.
+  public var returnsToRestAfterLinking: Bool {
+
+    !clearedFlags.isEmpty && state != holding.restState
+
+  }
+
+  /// Whether a relay that holds a state is switched back to its state before when linking
   /// fails or is canceled. Once linked, it keeps the state it recorded.
   public var switchesBackOnFailure: Bool {
 
-    switchesRelay && !isMomentary
+    switchesRelay && holding.holdsState
 
   }
 
@@ -160,36 +256,22 @@ public struct RelayStateLink: Sendable {
   /// does.
   public var recordFailure: RelayStateLinkingError?
 
-  /// The operating flag turned off for the link, such as `momentary`, or `nil` when none was.
-  public var clearedFlag: String?
+  /// The flags turned off for the link. Empty when none was.
+  public var clearedFlags: [RelayFlag]
 
-  /// Whether the relay is momentary after the link, as its momentary flag read back. `false`
-  /// when the flag turned off for the link wasn't confirmed back on.
-  public var isMomentary: Bool
+  /// How the relay holds a state after the link. A flag turned off for the link is on only
+  /// when it was confirmed back on.
+  public var holding: RelayStateHolding
 
-  /// Whether both On and Off close the momentary relay, as its momentaryOnBothCommands flag
-  /// says. The relay then only pulses, so the recorded state isn't used while it's momentary.
-  public var pulsesOnBothCommands: Bool
-
-  /// What didn't go back as it was after the link, in order: a momentary relay not switched
-  /// off, the flag not set back or not confirmed, or another flag that changed. Empty when
-  /// everything did.
+  /// What didn't go back as it was after the link, in order: the relay not returned to its
+  /// rest state, a flag not set back or not confirmed, or another flag that changed. Empty
+  /// when everything did.
   public var restoreFailures: [RelayStateLinkingError]
 
-  /// Whether the state was ignored: the relay is momentary with momentaryOnBothCommands on,
-  /// so every On and Off only pulses it.
+  /// Whether the state was ignored, since every On and Off only pulses the relay.
   public var ignoresState: Bool {
 
-    isMomentary && pulsesOnBothCommands
-
-  }
-
-  /// Whether momentaryOnBothCommands is on though the relay isn't momentary, a mode whose
-  /// effect isn't verified: the relay wasn't switched, and was linked only while it read the
-  /// state asked for. ``recordFailure`` says when its record holds another.
-  public var leavesUnverifiedMode: Bool {
-
-    !isMomentary && pulsesOnBothCommands
+    holding.ignoresState
 
   }
 
@@ -209,11 +291,11 @@ public struct RelayStateLink: Sendable {
 
   }
 
-  /// Whether the flag turned off for the link read back on afterward, or `nil` when none was
+  /// Whether the flags turned off for the link read back on afterward, or `nil` when none was
   /// turned off.
   public var isRestored: Bool? {
 
-    guard clearedFlag != nil else {
+    guard !clearedFlags.isEmpty else {
 
       return nil
 
@@ -248,9 +330,8 @@ public struct RelayStateLink: Sendable {
   ///   - group: The modem's group in the link.
   ///   - recordedData1: Data 1 of the responder record read back, or `nil`.
   ///   - recordFailure: Why the record doesn't hold the state, or `nil`. Defaults to `nil`.
-  ///   - clearedFlag: The flag turned off for the link, or `nil`. Defaults to `nil`.
-  ///   - isMomentary: Whether the relay is momentary after the link.
-  ///   - pulsesOnBothCommands: Whether both On and Off close its momentary relay.
+  ///   - clearedFlags: The flags turned off for the link. Defaults to none.
+  ///   - holding: How the relay holds a state after the link.
   ///   - restoreFailures: What didn't go back as it was. Defaults to none.
   public init(
     device: InsteonAddress,
@@ -258,9 +339,8 @@ public struct RelayStateLink: Sendable {
     group: AllLinkGroupNumber,
     recordedData1: UInt8?,
     recordFailure: RelayStateLinkingError? = nil,
-    clearedFlag: String? = nil,
-    isMomentary: Bool,
-    pulsesOnBothCommands: Bool,
+    clearedFlags: [RelayFlag] = [],
+    holding: RelayStateHolding,
     restoreFailures: [RelayStateLinkingError] = []
   ) {
 
@@ -269,9 +349,8 @@ public struct RelayStateLink: Sendable {
     self.group = group
     self.recordedData1 = recordedData1
     self.recordFailure = recordFailure
-    self.clearedFlag = clearedFlag
-    self.isMomentary = isMomentary
-    self.pulsesOnBothCommands = pulsesOnBothCommands
+    self.clearedFlags = clearedFlags
+    self.holding = holding
     self.restoreFailures = restoreFailures
 
   }
@@ -282,9 +361,9 @@ public struct RelayStateLink: Sendable {
 /// and to put back what it changed for that.
 public enum RelayStateEvent: Sendable {
 
-  /// The relay's flag, such as `momentary`, is on, and it's being turned off for the link, so
-  /// the relay holds its state rather than opening again.
-  case clearingFlag(InsteonAddress, flag: String)
+  /// The relay's flag is on, keeping it from holding a state, and it's being turned off for
+  /// the link, so the relay holds its state rather than returning to its rest state.
+  case clearingFlag(InsteonAddress, flag: RelayFlag)
 
   /// The relay is being sent its group type's On or Off for the state.
   case settingRelay(InsteonAddress, RelayState)
@@ -292,10 +371,9 @@ public enum RelayStateEvent: Sendable {
   /// The relay's status showed it already in the state, so it wasn't sent a command.
   case relayAlreadySet(InsteonAddress, RelayState)
 
-  /// The relay's flag, such as `momentaryOnBothCommands`, is on, so it's linked without being
-  /// switched, and no flag is written: on a momentary relay every On and Off only pulses it,
-  /// so the state is ignored; on one that isn't momentary, what the flag does isn't verified.
-  case linkedWithoutSwitching(InsteonAddress, flag: String, isMomentary: Bool)
+  /// The relay's flags given are all on, so every On and Off only pulses it and the state is
+  /// ignored: it's linked without being switched, and no flag is written.
+  case linkedWithoutSwitching(InsteonAddress, flags: [RelayFlag])
 
   /// The relay's status reads the state given, not the one it was switched to, so it's left
   /// as it is rather than switched again.
@@ -304,17 +382,17 @@ public enum RelayStateEvent: Sendable {
   /// The relay's status, read again, showed it in the state.
   case relayConfirmed(InsteonAddress, RelayState)
 
-  /// The relay is being switched to the state given after the link: off, for a momentary
-  /// relay switched on, while its flag is still off, since it rests open; or its state before,
-  /// for a relay that isn't momentary, when linking failed or was canceled.
+  /// The relay is being switched to the state given after the link: its rest state, for a
+  /// relay switched out of it with its flags turned off, while they're still off; or its state
+  /// before, for a relay that holds a state, when linking failed or was canceled.
   case returningRelay(InsteonAddress, RelayState)
 
-  /// The flag turned off for the link is being turned back on: after the link, or after a
+  /// A flag turned off for the link is being turned back on: after the link, or after a
   /// failure or cancellation.
-  case restoringFlag(InsteonAddress, flag: String)
+  case restoringFlag(InsteonAddress, flag: RelayFlag)
 
   /// The flag read back on.
-  case flagRestored(InsteonAddress, flag: String)
+  case flagRestored(InsteonAddress, flag: RelayFlag)
 
   /// Something didn't go back as it was, for the reason given.
   case restoreFailed(InsteonAddress, RelayStateLinkingError)
@@ -330,9 +408,9 @@ public enum RelayStateEvent: Sendable {
 ///
 /// The refusals come before the relay is switched or a flag is written, and change nothing:
 /// ``notIdentified(_:because:)``, ``notLinkedToModem(_:)``, ``notDescribed(_:)``,
-/// ``notARelay(_:product:)``, ``momentaryNotChangeable(_:flag:)``,
-/// ``flagUnreadable(_:flag:)``, ``planChanged(old:new:)`` and
-/// ``unverifiedModeStateDiffers(_:flag:reads:requested:)``. After
+/// ``notARelay(_:product:)``, ``stateHoldingNotDescribed(_:product:)``,
+/// ``flagNotChangeable(_:flag:)``, ``flagUnreadable(_:flag:)`` and ``planChanged(old:new:)``.
+/// After
 /// ``flagNotChanged(_:flag:isSet:)``, ``relayNotConfirmed(_:requested:)`` or
 /// ``remoteLinkingFailed(_:reason:)``, what was changed is put back first, and what didn't go
 /// back, such as ``relayNotReturned(_:state:reason:)`` or
@@ -358,15 +436,21 @@ public enum RelayStateLinkingError: Error, Sendable {
   /// are the device and its product, as a sentence names it.
   case notARelay(InsteonAddress, product: String)
 
-  /// The relay's momentary flag is on, and the catalog doesn't let linking change it, so the
-  /// relay would open again before it links and record off.
-  case momentaryNotChangeable(InsteonAddress, flag: String)
+  /// The catalog doesn't say how the relay holds a state, or names a flag or rest state for it
+  /// that the device's command set doesn't give, so what a link would record isn't known. The
+  /// associated values are the device and its product, as a sentence names it.
+  case stateHoldingNotDescribed(InsteonAddress, product: String)
+
+  /// The relay's flag is on, keeping it from holding a state, and the catalog doesn't let
+  /// linking change it, or gives no command that turns it off and on, so the relay would
+  /// return to its rest state before it links and record that.
+  case flagNotChangeable(InsteonAddress, flag: RelayFlag)
 
   /// The device's reply to Get Operating Flags didn't carry the flag.
-  case flagUnreadable(InsteonAddress, flag: String)
+  case flagUnreadable(InsteonAddress, flag: RelayFlag)
 
   /// The flag didn't read back in the state it was written to.
-  case flagNotChanged(InsteonAddress, flag: String, isSet: Bool)
+  case flagNotChanged(InsteonAddress, flag: RelayFlag, isSet: Bool)
 
   /// The relay's status, read again, didn't show the requested state, so nothing was linked.
   case relayNotConfirmed(InsteonAddress, requested: RelayState)
@@ -388,33 +472,29 @@ public enum RelayStateLinkingError: Error, Sendable {
   /// link was reported.
   case recordNotRead(InsteonAddress, reason: any Error)
 
-  /// The relay wasn't switched to the state given after the link, for the reason given: off
-  /// for a momentary relay switched on, or its state before for a relay that isn't momentary
-  /// when linking failed. It may be left in the state it was switched to.
+  /// The relay wasn't switched to the state given after the link, for the reason given: its
+  /// rest state for a relay switched out of it with its flags turned off, or its state before
+  /// for a relay that holds a state when linking failed. It may be left in the state it was
+  /// switched to.
   case relayNotReturned(InsteonAddress, state: RelayState, reason: any Error)
 
   /// The relay, read again inside the link, isn't as the plan approved for it said, so the
   /// link would switch or put back other than it showed. Nothing was changed.
   case planChanged(old: RelayLinkPlan, new: RelayLinkPlan)
 
-  /// The relay's flag, such as `momentaryOnBothCommands`, is on though the relay isn't
-  /// momentary, a mode whose effect isn't verified, so the relay isn't switched; and it reads
-  /// the other state, so it would record that one. Nothing was changed.
-  case unverifiedModeStateDiffers(InsteonAddress, flag: String, reads: RelayState, requested: RelayState)
-
   /// The relay's status couldn't be read after linking failed, for the reason given, so it
   /// was switched back to the state given without knowing whether someone had switched it.
   case relayReturnUnconfirmed(InsteonAddress, state: RelayState, reason: any Error)
 
-  /// The flag turned off for the link wasn't turned back on, twice, for the reason given.
-  case flagNotRestored(InsteonAddress, flag: String, reason: any Error)
+  /// A flag turned off for the link wasn't turned back on, twice, for the reason given.
+  case flagNotRestored(InsteonAddress, flag: RelayFlag, reason: any Error)
 
-  /// The flag turned off for the link was written back on, but couldn't be read back, twice,
+  /// A flag turned off for the link was written back on, but couldn't be read back, twice,
   /// for the reason given, so it isn't confirmed.
-  case flagRestoreUnconfirmed(InsteonAddress, flag: String, reason: any Error)
+  case flagRestoreUnconfirmed(InsteonAddress, flag: RelayFlag, reason: any Error)
 
-  /// The operating flags byte the flag is in reads otherwise after the link than before it,
-  /// so a flag besides the one linking changed did too.
+  /// An operating flags byte a flag turned off for the link is in reads otherwise after the
+  /// link than before it, so a flag besides those linking changed did too.
   case otherFlagsChanged(InsteonAddress, before: UInt8, after: UInt8)
 
   /// The device already has a responder record of the modem in the group with another state
@@ -426,7 +506,7 @@ public enum RelayStateLinkingError: Error, Sendable {
 
     switch self {
     case let .notIdentified(device, _), let .notLinkedToModem(device), let .notDescribed(device), let .notARelay(device, _),
-      let .momentaryNotChangeable(device, _), let .flagUnreadable(device, _), let .flagNotChanged(device, _, _),
+      let .stateHoldingNotDescribed(device, _), let .flagNotChangeable(device, _), let .flagUnreadable(device, _), let .flagNotChanged(device, _, _),
       let .relayNotConfirmed(device, _), let .remoteLinkingFailed(device, _), let .recordedOtherState(device, _, _, _),
       let .recordNotFound(device, _), let .recordNotRead(device, _), let .relayNotReturned(device, _, _), let .relayReturnUnconfirmed(device, _, _),
       let .flagNotRestored(device, _, _), let .flagRestoreUnconfirmed(device, _, _), let .otherFlagsChanged(device, _, _),
@@ -434,8 +514,6 @@ public enum RelayStateLinkingError: Error, Sendable {
       return device
     case let .planChanged(old, _):
       return old.device
-    case let .unverifiedModeStateDiffers(device, _, _, _):
-      return device
     }
 
   }
@@ -456,12 +534,14 @@ extension RelayStateLinkingError: CustomStringConvertible, LocalizedError {
       "The Insteon device catalog doesn't describe the identity \(device) reported, so whether its main group is a relay isn't known. Nothing was changed."
     case let .notARelay(device, product):
       "\(device), \(product), isn't a relay by the Insteon device catalog, so it records no relay state. Nothing was changed."
-    case let .momentaryNotChangeable(device, flag):
-      "\(device)'s \(flag) flag is on, so its relay opens again before it links, and the Insteon device catalog doesn't let linking change the flag. Nothing was changed. Turn \(flag) off, link, then turn it back on."
+    case let .stateHoldingNotDescribed(device, product):
+      "The Insteon device catalog doesn't say how \(device)'s relay, \(product), holds a state, so what a link would record isn't known. Nothing was changed."
+    case let .flagNotChangeable(device, flag):
+      "\(device)'s \(flag.label) flag is on, so its relay doesn't hold a state and returns to its rest state before it links, and the Insteon device catalog doesn't let linking turn the flag off and on. Nothing was changed. Turn the flag off, link, then turn it back on."
     case let .flagUnreadable(device, flag):
-      "\(device)'s reply to Get Operating Flags didn't carry its \(flag) flag. Nothing was changed."
+      "\(device)'s reply to Get Operating Flags didn't carry its \(flag.label) flag. Nothing was changed."
     case let .flagNotChanged(device, flag, isSet):
-      "\(device)'s \(flag) flag didn't read back \(isSet ? "on" : "off") after it was written."
+      "\(device)'s \(flag.label) flag didn't read back \(isSet ? "on" : "off") after it was written."
     case let .relayNotConfirmed(device, requested):
       "\(device)'s relay didn't read back \(requested.rawValue), so it would record the wrong state. Nothing was linked."
     case let .remoteLinkingFailed(device, reason):
@@ -474,18 +554,16 @@ extension RelayStateLinkingError: CustomStringConvertible, LocalizedError {
       "\(device)'s ALL-Link database couldn't be read to check the state it recorded: \(Self.message(reason))"
     case let .relayNotReturned(device, state, reason):
       "\(device)'s relay wasn't switched \(state.rawValue): \(Self.message(reason)) It may be left \(state.opposite.rawValue)."
-    case let .unverifiedModeStateDiffers(device, flag, reads, requested):
-      "\(device)'s \(flag) flag is on though its relay isn't momentary, a mode whose effect isn't verified, so the relay isn't switched; it reads \(reads.rawValue), so it would record \(reads.rawValue), not \(requested.rawValue). Nothing was changed."
     case let .planChanged(old, new):
       "\(old.device) changed since the plan was shown: \(Self.difference(old, new)). Nothing was changed; plan the link again."
     case let .relayReturnUnconfirmed(device, state, reason):
       "\(device)'s status couldn't be read after linking stopped: \(Self.message(reason)) Its relay was switched \(state.rawValue), as it was before, without knowing whether someone had switched it since."
     case let .flagNotRestored(device, flag, reason):
-      "\(device)'s \(flag) flag wasn't set back on: \(Self.message(reason))"
+      "\(device)'s \(flag.label) flag wasn't set back on: \(Self.message(reason))"
     case let .flagRestoreUnconfirmed(device, flag, reason):
-      "\(device)'s \(flag) flag was written back on, but it couldn't be read back to confirm: \(Self.message(reason))"
+      "\(device)'s \(flag.label) flag was written back on, but it couldn't be read back to confirm: \(Self.message(reason))"
     case let .otherFlagsChanged(device, before, after):
-      "\(device)'s operating flags read \(Self.hex(after)) after linking, not \(Self.hex(before)) as before, so a flag besides the one linking changed did too."
+      "\(device)'s operating flags read \(Self.hex(after)) after linking, not \(Self.hex(before)) as before, so a flag besides those linking changed did too."
     case let .recordInPlace(device, group, data1):
       "\(device) already has a responder record of the modem for group \(group.rawValue) with Data 1 \(Self.hex(data1)), another state, and a database link leaves records in place as they are. Nothing was written; unlink it first."
     }
@@ -524,15 +602,23 @@ extension RelayStateLinkingError: CustomStringConvertible, LocalizedError {
 
     }
 
-    if old.isMomentary != new.isMomentary {
+    // Each flag that reads on in one plan and not the other, in the order they were read.
+    for flag in old.holding.flagsOn + new.holding.flagsOn {
 
-      parts.append("its momentary flag is \(new.isMomentary ? "on" : "off")")
+      let isOn: Bool = new.holding.flagsOn.contains(flag)
+      let clause: String = "its \(flag.label) flag is \(isOn ? "on" : "off")"
+
+      if isOn != old.holding.flagsOn.contains(flag), !parts.contains(clause) {
+
+        parts.append(clause)
+
+      }
 
     }
 
-    if old.pulsesOnBothCommands != new.pulsesOnBothCommands {
+    if parts.isEmpty, old.holding != new.holding {
 
-      parts.append("its momentaryOnBothCommands flag is \(new.pulsesOnBothCommands ? "on" : "off")")
+      parts.append("the catalog says otherwise how its relay holds a state")
 
     }
 

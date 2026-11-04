@@ -200,8 +200,8 @@ public actor InMemoryModem: LinkingModem {
   /// The Set Operating Flags commands each device carries out, by cmd2.
   private var flagCommands: [InsteonAddress: [UInt8: FlagCommand]] = [:]
 
-  /// The bit of each device's operating flags byte that makes its relay momentary.
-  private var momentaryBits: [InsteonAddress: UInt8] = [:]
+  /// The bit of each device's operating flags byte that makes its relay pulse.
+  private var pulsingBits: [InsteonAddress: UInt8] = [:]
 
   /// Each device's ALL-Link database delta, which changes with every write to its database.
   private var deltas: [InsteonAddress: UInt8] = [:]
@@ -259,16 +259,16 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
-  /// Makes a device's relay momentary while a bit of its operating flags is set: Light On
-  /// closes it only for a moment, so its status reads off again by the time it's asked, as an
-  /// I/O Linc's momentary relay opens again.
+  /// Makes a device's relay pulse while a bit of its operating flags is set: Light On closes
+  /// it only for a moment, so its status reads off again by the time it's asked, as a relay
+  /// that doesn't hold a state returns to off by itself.
   ///
   /// - Parameters:
   ///   - bit: The bit.
   ///   - device: The device.
-  public func setMomentaryBit(_ bit: UInt8, of device: InsteonAddress) {
+  public func setPulsingBit(_ bit: UInt8, of device: InsteonAddress) {
 
-    momentaryBits[device] = bit
+    pulsingBits[device] = bit
 
   }
 
@@ -725,8 +725,8 @@ public actor InMemoryModem: LinkingModem {
 
       levels[device] = message.command.command1 == 0x11 ? message.command.command2 : 0x00
 
-      // A momentary relay opens again before it's asked for its status.
-      if let bit = momentaryBits[device], operatingFlags[device, default: 0x00] & bit != 0 {
+      // A pulsing relay opens again before it's asked for its status.
+      if let bit = pulsingBits[device], operatingFlags[device, default: 0x00] & bit != 0 {
 
         levels[device] = 0x00
 

@@ -37,8 +37,8 @@ import InsteonProtocol
 ///
 /// Operating flags aren't read or written around a link or unlink, apart from those the
 /// catalog lets a link change: a flag that keeps a battery-powered device awake while it
-/// links, and a relay's momentary flag while it's linked with a chosen ``RelayState``. Each is
-/// set back afterward.
+/// links, and a relay's flags that keep it from holding a state while it's linked with a chosen
+/// ``RelayState``. Each is set back afterward.
 ///
 /// Canceling the task stops a link or unlink cleanly, as the linking primitives do: the modem
 /// is sent Cancel ALL-Linking, and a device sent Enter Linking Mode is sent Exit Linking Mode.

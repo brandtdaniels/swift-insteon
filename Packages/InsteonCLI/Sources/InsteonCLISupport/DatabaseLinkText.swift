@@ -75,28 +75,28 @@ public enum DatabaseLinkText {
 
     if let state = plan.relayState {
 
-      let flags: [String] = plan.momentaryFlagsOn
+      let holding: RelayStateHolding? = plan.relayHolding
+      let record: String = "Data 1 of the device's responder record is \(Hex.byte(state.data1)), the relay \(state.rawValue)"
 
-      if flags.isEmpty {
+      if let holding, holding.ignoresState {
 
         lines.append(
-          "Data 1 of the device's responder record is \(Hex.byte(state.data1)), the relay \(state.rawValue): "
-            + "a group On turns the relay \(state.rawValue), and a group Off turns it \(state.opposite.rawValue)."
+          "\(record), but its \(RelayFlagText.are(holding.pulsingFlags)) on, so every On and Off only pulses the relay and the state is ignored. "
+            + "This plan writes no flag."
+        )
+
+      } else if let holding, !holding.holdsState {
+
+        let flags: [RelayFlag] = holding.releasingFlags
+
+        lines.append(
+          "\(record), but its \(RelayFlagText.are(flags)) on, so the relay doesn't hold a state: it returns to \(holding.restState.rawValue) by itself. "
+            + "The record holds the state only with \(flags.count > 1 ? "those flags" : "that flag") off, and this plan writes no flag."
         )
 
       } else {
 
-        let named: String = flags.count == 1 ? "\(flags[0]) flag is" : "\(flags.dropLast().joined(separator: ", ")) and \(flags[flags.count - 1]) flags are"
-        // Only a momentary relay is known to pulse; momentaryOnBothCommands alone is a mode
-        // whose effect isn't verified.
-        let effect: String = flags.contains(momentaryFlag)
-          ? "so the relay only pulses and doesn't keep a state."
-          : "and what that flag does on a relay that isn't momentary isn't verified, so what a group On and a group Off do isn't known."
-
-        lines.append(
-          "Data 1 of the device's responder record is \(Hex.byte(state.data1)), the relay \(state.rawValue), but its \(named) on, \(effect) "
-            + "The record holds the state only with the momentary flags off, and this plan writes no flag."
-        )
+        lines.append("\(record): a group On turns the relay \(state.rawValue), and a group Off turns it \(state.opposite.rawValue).")
 
       }
 
@@ -143,9 +143,6 @@ public enum DatabaseLinkText {
     return "Make \(count == 1 ? "this write" : "these \(count) writes") to the ALL-Link databases of \(label(plan)) and the modem? [y/N]"
 
   }
-
-  /// The flag that makes a relay close for a moment and open again.
-  private static let momentaryFlag: String = "momentary"
 
   /// What's printed when the person doesn't confirm.
   public static let declined: String = "Nothing was written."
@@ -387,9 +384,17 @@ public enum DatabaseLinkText {
     /// or `nil` without one.
     public var relayData1: String?
 
-    /// The relay's momentary flags that read on, with which it doesn't keep the state its
-    /// record holds, or `nil` without a relay state.
-    public var momentaryFlagsOn: [String]?
+    /// The names of the flags the catalog gives for how the relay holds a state that read on,
+    /// or `nil` without a relay state.
+    public var relayFlagsOn: [String]?
+
+    /// Whether the relay holds the state its record holds: no flag that keeps it from holding
+    /// one reads on. `nil` without a relay state.
+    public var relayHoldsState: Bool?
+
+    /// Whether every On and Off only pulses the relay, so the state is ignored, or `nil`
+    /// without a relay state.
+    public var relayIgnoresState: Bool?
 
   }
 
@@ -416,7 +421,9 @@ public enum DatabaseLinkText {
       complete: nil,
       relayState: plan.relayState?.rawValue,
       relayData1: plan.relayState.map { (state: RelayState) -> String in Hex.byte(state.data1) },
-      momentaryFlagsOn: plan.relayState == nil ? nil : plan.momentaryFlagsOn
+      relayFlagsOn: plan.relayHolding?.flagsOn.map(\.name),
+      relayHoldsState: plan.relayHolding?.holdsState,
+      relayIgnoresState: plan.relayHolding?.ignoresState
     )
 
   }

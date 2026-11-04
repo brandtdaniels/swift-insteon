@@ -313,14 +313,14 @@ struct KeepAwakeTests {
 
   @Test(.timeLimit(.minutes(1))) func neverSendsAKeepAwakeMessageNamingALinkingChange() async throws {
 
-    // The command set lets a relay link clear momentary, which a plain link never writes,
+    // The command set lets a relay link clear pulse, which a plain link never writes,
     // even when a keep-awake message names it.
     let commands = CommandSet(
       id: "exampleRelaySensor",
       name: "Example",
-      summary: "A relay whose keep-awake message names its momentary flag.",
-      operatingFlags: [OperatingFlag(name: "momentary", summary: "The relay closes for a moment.", query: .operatingFlags, bit: 0x08, on: 0x06, off: 0x07)],
-      linkingChanges: [LinkingChange(flag: "momentary")]
+      summary: "A relay whose keep-awake message names its pulse flag.",
+      operatingFlags: [OperatingFlag(name: "pulse", summary: "The relay returns to off by itself.", query: .operatingFlags, bit: 0x08, on: 0x06, off: 0x07)],
+      linkingChanges: [LinkingChange(flag: "pulse")]
     )
     let catalog = DeviceCatalog(
       profiles: [
@@ -334,7 +334,7 @@ struct KeepAwakeTests {
           lifecycle: DeviceLifecycle(fromHub: DeviceLifecycle.HubLinking(
             legs: [DeviceLifecycle.HubLinking.Leg(modemRole: .responder, modemGroup: 0x01, deviceGroup: 0x01)],
             remoteEnterLinkingMode: DeviceLifecycle.HubLinking.RemoteEnterLinkingMode(works: .yes),
-            keepAwake: DeviceLifecycle.HubLinking.KeepAwake(timing: .afterLinked, send: .flag(DeviceProfile.Group.Condition(flag: "momentary", isSet: false)))
+            keepAwake: DeviceLifecycle.HubLinking.KeepAwake(timing: .afterLinked, send: .flag(DeviceProfile.Group.Condition(flag: "pulse", isSet: false)))
           ))
         )
       ],
@@ -350,7 +350,7 @@ struct KeepAwakeTests {
     let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
     let lines: [String] = await recorder.lines
 
-    // The keep-awake message names momentary, yet it isn't a flag a plain link may write.
+    // The keep-awake message names pulse, yet it isn't a flag a plain link may write.
     #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: catalog.describe(category: 0x10, subcategory: 0x7B, firmwareVersion: 0x41)).isEmpty)
     #expect(result.links.count == 1)
     #expect(await modem.extendedRequests.isEmpty)

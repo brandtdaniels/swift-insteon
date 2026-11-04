@@ -207,7 +207,7 @@ case RelayState.off
 case RelayState.on
 case RelayStateEvent.clearingFlag(_:flag:)
 case RelayStateEvent.flagRestored(_:flag:)
-case RelayStateEvent.linkedWithoutSwitching(_:flag:isMomentary:)
+case RelayStateEvent.linkedWithoutSwitching(_:flags:)
 case RelayStateEvent.recorded(_:)
 case RelayStateEvent.relayAlreadySet(_:_:)
 case RelayStateEvent.relayConfirmed(_:_:)
@@ -216,11 +216,11 @@ case RelayStateEvent.restoreFailed(_:_:)
 case RelayStateEvent.restoringFlag(_:flag:)
 case RelayStateEvent.returningRelay(_:_:)
 case RelayStateEvent.settingRelay(_:_:)
+case RelayStateLinkingError.flagNotChangeable(_:flag:)
 case RelayStateLinkingError.flagNotChanged(_:flag:isSet:)
 case RelayStateLinkingError.flagNotRestored(_:flag:reason:)
 case RelayStateLinkingError.flagRestoreUnconfirmed(_:flag:reason:)
 case RelayStateLinkingError.flagUnreadable(_:flag:)
-case RelayStateLinkingError.momentaryNotChangeable(_:flag:)
 case RelayStateLinkingError.notARelay(_:product:)
 case RelayStateLinkingError.notDescribed(_:)
 case RelayStateLinkingError.notIdentified(_:because:)
@@ -235,7 +235,7 @@ case RelayStateLinkingError.relayNotConfirmed(_:requested:)
 case RelayStateLinkingError.relayNotReturned(_:state:reason:)
 case RelayStateLinkingError.relayReturnUnconfirmed(_:state:reason:)
 case RelayStateLinkingError.remoteLinkingFailed(_:reason:)
-case RelayStateLinkingError.unverifiedModeStateDiffers(_:flag:reads:requested:)
+case RelayStateLinkingError.stateHoldingNotDescribed(_:product:)
 case ResetErasure.links
 case ResetErasure.settings
 case SelfTestCheckKind.answers
@@ -457,8 +457,10 @@ init ProductCatalog(json:)
 init ProductCatalogStore(catalogPath:versionPath:)
 init ProtectedCommand?(command1:command2:)
 init RegisteredDevice(address:identity:info:)
-init RelayLinkPlan(device:state:before:isMomentary:pulsesOnBothCommands:)
-init RelayStateLink(device:state:group:recordedData1:recordFailure:clearedFlag:isMomentary:pulsesOnBothCommands:restoreFailures:)
+init RelayFlag(name:label:)
+init RelayLinkPlan(device:state:before:holding:)
+init RelayStateHolding(releasedBy:restState:pulsesOnEveryCommandWhen:flagsOn:)
+init RelayStateLink(device:state:group:recordedData1:recordFailure:clearedFlags:holding:restoreFailures:)
 init RemoteUnlinkingError(device:info:underlying:)
 init RemovedLinks(address:device:links:)
 init SETButtonPrompt(direction:group:timeout:device:info:steps:modemRole:deviceGroup:)
@@ -476,8 +478,8 @@ internal(set) var DatabaseLinkPlan.engine
 internal(set) var DatabaseLinkPlan.info
 internal(set) var DatabaseLinkPlan.linksInPlace
 internal(set) var DatabaseLinkPlan.modem
-internal(set) var DatabaseLinkPlan.momentaryFlagsOn
 internal(set) var DatabaseLinkPlan.orphans
+internal(set) var DatabaseLinkPlan.relayHolding
 internal(set) var DatabaseLinkPlan.relayState
 internal(set) var DatabaseLinkPlan.steps
 internal(set) var DatabaseLinkStep.kind
@@ -608,7 +610,9 @@ struct ProductCatalog
 struct ProductCatalogStore
 struct ReceivedFrame
 struct RegisteredDevice
+struct RelayFlag
 struct RelayLinkPlan
+struct RelayStateHolding
 struct RelayStateLink
 struct RemoteUnlinkingError
 struct RemovedLinks
@@ -888,30 +892,36 @@ var ProductCatalogStoreError.description
 var RegisteredDevice.address
 var RegisteredDevice.identity
 var RegisteredDevice.info
+var RelayFlag.label
+var RelayFlag.name
 var RelayLinkPlan.before
-var RelayLinkPlan.clearedFlag
+var RelayLinkPlan.clearedFlags
 var RelayLinkPlan.device
+var RelayLinkPlan.holding
 var RelayLinkPlan.ignoresState
-var RelayLinkPlan.isMomentary
-var RelayLinkPlan.leavesUnverifiedMode
-var RelayLinkPlan.opensAfterLinking
-var RelayLinkPlan.pulsesOnBothCommands
+var RelayLinkPlan.returnsToRestAfterLinking
 var RelayLinkPlan.state
 var RelayLinkPlan.switchesBackOnFailure
 var RelayLinkPlan.switchesRelay
 var RelayState.data1
 var RelayState.opposite
-var RelayStateLink.clearedFlag
+var RelayStateHolding.flagsOn
+var RelayStateHolding.holdsState
+var RelayStateHolding.ignoresState
+var RelayStateHolding.pulsesOnEveryCommandWhen
+var RelayStateHolding.pulsingFlags
+var RelayStateHolding.releasedBy
+var RelayStateHolding.releasingFlags
+var RelayStateHolding.restState
+var RelayStateLink.clearedFlags
 var RelayStateLink.device
 var RelayStateLink.group
 var RelayStateLink.groupOff
 var RelayStateLink.groupOn
+var RelayStateLink.holding
 var RelayStateLink.ignoresState
-var RelayStateLink.isMomentary
 var RelayStateLink.isRestored
-var RelayStateLink.leavesUnverifiedMode
 var RelayStateLink.problems
-var RelayStateLink.pulsesOnBothCommands
 var RelayStateLink.recordFailure
 var RelayStateLink.recordedData1
 var RelayStateLink.restoreFailures
