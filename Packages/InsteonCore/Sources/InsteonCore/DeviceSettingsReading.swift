@@ -164,8 +164,220 @@ public struct DeviceSettingsReading: Hashable, Sendable {
 }
 
 /// What ``Device/writeSetting(_:to:button:)`` changed, as the device reported it before and
-/// after.
+/// after: the setting written, and any other setting whose value the write changed as well.
+///
+/// ```swift
+/// let change = try await lamp.writeSetting("rampRate", to: "0.5 s")
+///
+/// for other in change.changedSettings {
+///   print("Also changed: \(other.title): \(other.before) to \(other.after)")
+/// }
+/// ```
 public struct DeviceSettingChange: Hashable, Sendable {
+
+  /// Another setting whose value differs after the write, as the device reported it before
+  /// and after.
+  public struct OtherChange: Hashable, Sendable {
+
+    /// The setting.
+    public var setting: DeviceSetting
+
+    /// The button or group, for a setting that's per button; otherwise `nil`.
+    public var button: Int?
+
+    /// The value before the write, as a settings page shows it.
+    public var before: String
+
+    /// The value after the write, as a settings page shows it.
+    public var after: String
+
+    /// Creates a change to another setting.
+    ///
+    /// - Parameters:
+    ///   - setting: The setting.
+    ///   - button: The button or group, for a setting that's per button.
+    ///   - before: The value before the write.
+    ///   - after: The value after the write.
+    public init(setting: DeviceSetting, button: Int?, before: String, after: String) {
+
+      self.setting = setting
+      self.button = button
+      self.before = before
+      self.after = after
+
+    }
+
+    /// The setting's label, with the button for a setting that's per button, such as
+    /// `"On-level (button 2)"`.
+    public var title: String {
+
+      button.map { (number: Int) -> String in "\(setting.label) (button \(number))" } ?? setting.label
+
+    }
+
+  }
+
+  /// Another setting the device reported before the write but not after it, so whether the
+  /// write changed it isn't known.
+  public struct UnreadSetting: Hashable, Sendable {
+
+    /// The setting.
+    public var setting: DeviceSetting
+
+    /// The button or group, for a setting that's per button; otherwise `nil`.
+    public var button: Int?
+
+    /// Creates an unread setting.
+    ///
+    /// - Parameters:
+    ///   - setting: The setting.
+    ///   - button: The button or group, for a setting that's per button.
+    public init(setting: DeviceSetting, button: Int?) {
+
+      self.setting = setting
+      self.button = button
+
+    }
+
+    /// The setting's label, with the button for a setting that's per button, such as
+    /// `"On-level (button 2)"`.
+    public var title: String {
+
+      button.map { (number: Int) -> String in "\(setting.label) (button \(number))" } ?? setting.label
+
+    }
+
+  }
+
+  /// What the device's other writable settings did across the write: whether they were
+  /// compared, each one that changed, and each one that couldn't be read again.
+  ///
+  /// ``Outcome`` and ``ReadFailure`` are open sets of named values rather than enumerations:
+  /// code compares them with the values it handles, and treats any other value the way it
+  /// treats a comparison that didn't happen, so an outcome it doesn't name never stops it
+  /// compiling.
+  public struct OtherSettings: Hashable, Sendable {
+
+    /// How the comparison of the other settings ended.
+    public struct Outcome: RawRepresentable, Hashable, Sendable {
+
+      /// The name, as `insteon device ADDRESS set --json` prints it, such as `"compared"`.
+      public var rawValue: String
+
+      /// Creates an outcome from its name.
+      ///
+      /// - Parameter rawValue: The name.
+      public init(rawValue: String) {
+
+        self.rawValue = rawValue
+
+      }
+
+      /// The other settings were read before and after the write and compared.
+      public static let compared = Outcome(rawValue: "compared")
+
+      /// The catalog describes no other setting software can write, so nothing more was
+      /// read.
+      public static let nothingToCompare = Outcome(rawValue: "nothingToCompare")
+
+      /// The device didn't answer the write's own read before it, or reported none of the
+      /// other settings, so they weren't compared.
+      public static let notReportedBefore = Outcome(rawValue: "notReportedBefore")
+
+      /// The device didn't report the setting written afterward, so the write isn't confirmed
+      /// and the other settings weren't read again.
+      public static let notConfirmed = Outcome(rawValue: "notConfirmed")
+
+      /// The write succeeded, but the other settings couldn't be read again, for the reason
+      /// ``OtherSettings/rereadFailure`` gives, so what else it changed isn't known.
+      public static let notReread = Outcome(rawValue: "notReread")
+
+    }
+
+    /// Why the other settings couldn't be read again after a write.
+    public struct ReadFailure: RawRepresentable, Hashable, Sendable {
+
+      /// The name, as `insteon device ADDRESS set --json` prints it, such as `"notAnswered"`.
+      public var rawValue: String
+
+      /// Creates a failure from its name.
+      ///
+      /// - Parameter rawValue: The name.
+      public init(rawValue: String) {
+
+        self.rawValue = rawValue
+
+      }
+
+      /// The device answered none of the reads.
+      public static let notAnswered = ReadFailure(rawValue: "notAnswered")
+
+      /// The connection to the modem closed.
+      public static let connectionClosed = ReadFailure(rawValue: "connectionClosed")
+
+      /// The task was canceled. It stays canceled, so the caller's next wait throws
+      /// `CancellationError`.
+      public static let canceled = ReadFailure(rawValue: "canceled")
+
+      /// The modem failed another way.
+      public static let failed = ReadFailure(rawValue: "failed")
+
+    }
+
+    /// How the comparison ended.
+    public var outcome: Outcome
+
+    /// Each other setting whose value differs after the write, in the order a settings page
+    /// shows them; empty unless ``outcome`` is ``Outcome/compared``.
+    public var changes: [OtherChange]
+
+    /// Each other setting the device reported before the write but not after it, in the
+    /// order a settings page shows them; empty unless ``outcome`` is ``Outcome/compared``.
+    public var unread: [UnreadSetting]
+
+    /// Why the other settings couldn't be read again, when ``outcome`` is
+    /// ``Outcome/notReread``; otherwise `nil`.
+    public var rereadFailure: ReadFailure?
+
+    /// Creates what the other settings did.
+    ///
+    /// - Parameters:
+    ///   - outcome: How the comparison ended.
+    ///   - changes: Each other setting that changed. Defaults to none.
+    ///   - unread: Each other setting that couldn't be read again. Defaults to none.
+    ///   - rereadFailure: Why the other settings couldn't be read again. Defaults to `nil`.
+    public init(outcome: Outcome, changes: [OtherChange] = [], unread: [UnreadSetting] = [], rereadFailure: ReadFailure? = nil) {
+
+      self.outcome = outcome
+      self.changes = changes
+      self.unread = unread
+      self.rereadFailure = rereadFailure
+
+    }
+
+    /// The other settings, compared.
+    ///
+    /// - Parameters:
+    ///   - changes: Each one that changed.
+    ///   - unread: Each one that couldn't be read again. Defaults to none.
+    /// - Returns: The comparison.
+    public static func compared(_ changes: [OtherChange], unread: [UnreadSetting] = []) -> OtherSettings {
+
+      OtherSettings(outcome: .compared, changes: changes, unread: unread)
+
+    }
+
+    /// The other settings, not read again after a write that succeeded.
+    ///
+    /// - Parameter failure: Why.
+    /// - Returns: The comparison.
+    public static func notReread(_ failure: ReadFailure) -> OtherSettings {
+
+      OtherSettings(outcome: .notReread, rereadFailure: failure)
+
+    }
+
+  }
 
   /// The setting.
   public var setting: DeviceSetting
@@ -184,6 +396,9 @@ public struct DeviceSettingChange: Hashable, Sendable {
   /// change isn't confirmed.
   public var after: String?
 
+  /// What the device's other settings did across the write.
+  public var otherSettings: OtherSettings
+
   /// Creates a change.
   ///
   /// - Parameters:
@@ -192,13 +407,38 @@ public struct DeviceSettingChange: Hashable, Sendable {
   ///   - before: The value before.
   ///   - requested: The value asked for.
   ///   - after: The value the device reported afterward.
-  public init(setting: DeviceSetting, button: Int?, before: String?, requested: String, after: String?) {
+  ///   - otherSettings: What the device's other settings did across the write. Defaults to
+  ///     ``OtherSettings/Outcome/nothingToCompare``.
+  public init(
+    setting: DeviceSetting,
+    button: Int?,
+    before: String?,
+    requested: String,
+    after: String?,
+    otherSettings: OtherSettings = OtherSettings(outcome: .nothingToCompare)
+  ) {
 
     self.setting = setting
     self.button = button
     self.before = before
     self.requested = requested
     self.after = after
+    self.otherSettings = otherSettings
+
+  }
+
+  /// The other settings whose values differ after the write, or none when they weren't
+  /// compared.
+  public var changedSettings: [OtherChange] {
+
+    otherSettings.changes
+
+  }
+
+  /// The other settings the device reported before the write but not after it.
+  public var unreadSettings: [UnreadSetting] {
+
+    otherSettings.unread
 
   }
 

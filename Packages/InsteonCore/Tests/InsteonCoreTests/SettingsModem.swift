@@ -5,9 +5,11 @@ import InsteonProtocol
 /// A modem with one device that keeps operating flags and extended settings values, as
 /// ``ControlExample/dimmerCommands`` describes them: Get Operating Flags reports the flags, Set
 /// Operating Flags `0x0A` and `0x0B` set and clear bit `0x02`, an extended Get replies with the
-/// values, and an extended Set with selector `0x05` or `0x06` writes D3 to the value at D7 or D8.
+/// values, and an extended Set with selector `0x05`, `0x06` or `0x07` writes D3 to the value at
+/// D7, D8 or D9.
 /// Get Insteon Engine Version reports i2 unless told otherwise, and an extended Get for a
-/// button whose values are set apart replies with that button's values.
+/// button whose values are set apart replies with that button's values. A write can also set
+/// flag bits, as a device whose settings depend on each other does.
 actor SettingsModem: LinkingModem {
 
   /// The modem's own address.
@@ -28,6 +30,13 @@ actor SettingsModem: LinkingModem {
   /// Whether the device acknowledges writes without changing anything.
   private var ignoresWrites: Bool = false
 
+  /// The flag bits an extended Set sets when it writes a value other than zero, by its selector.
+  private var flagSideEffects: [UInt8: UInt8] = [:]
+
+  /// The positions of the values that go up by one with every extended Get, as a value the
+  /// device measures changes on its own.
+  private var changingPositions: Set<Int> = []
+
   /// The engine the device reports to Get Insteon Engine Version.
   private var engine: InsteonEngine = .i2
 
@@ -39,6 +48,26 @@ actor SettingsModem: LinkingModem {
 
   /// Every extended message sent, in order.
   private(set) var extendedMessages: [ExtendedMessage] = []
+
+  /// Every message sent, in order, as its bytes: a standard message's cmd1 and cmd2, such as
+  /// `"1F 00"`, and an extended message's cmd1, cmd2, D1, D2 and D3, such as
+  /// `"2E 00 01 05 1C"`.
+  private(set) var sent: [String] = []
+
+  /// What runs before each message is carried out, given the message as ``sent`` writes it,
+  /// which can throw to fail the message before it's carried out or logged.
+  private var beforeSending: (@Sendable (String) throws -> Void)?
+
+  /// The values an extended Set with a selector writes as well, by selector: the user data
+  /// byte, the value, and the button whose values it writes, or `nil` for the button written.
+  private var valueSideEffects: [UInt8: [(position: Int, value: UInt8, button: UInt8?)]] = [:]
+
+  /// Every extended message sent but the extended Gets that read the values, in order.
+  var extendedWrites: [ExtendedMessage] {
+
+    extendedMessages.filter { (message: ExtendedMessage) -> Bool in message.command.command1 != 0x2E || message.userData[2] != 0x00 }
+
+  }
 
   private var subscribers: [Int: AsyncStream<ModemReply>.Continuation] = [:]
 
@@ -90,6 +119,49 @@ actor SettingsModem: LinkingModem {
 
   }
 
+  /// Makes an extended Set with a selector set flag bits as well when it writes a value other
+  /// than zero.
+  ///
+  /// - Parameters:
+  ///   - bits: The flag bits it sets.
+  ///   - selector: The extended Set's selector, in D2.
+  func setFlagBits(_ bits: UInt8, whenWritingANonZeroValueWith selector: UInt8) {
+
+    flagSideEffects[selector] = bits
+
+  }
+
+  /// Makes values go up by one with every extended Get, as a value the device measures
+  /// changes on its own.
+  ///
+  /// - Parameter positions: The user data bytes that hold them.
+  func changeValuesOnTheirOwn(at positions: Set<Int>) {
+
+    changingPositions = positions
+
+  }
+
+  /// Runs `hook` before each message, given the message as ``sent`` writes it; a message the
+  /// hook throws for fails with its error and isn't carried out or logged.
+  func setBeforeSending(_ hook: (@Sendable (String) throws -> Void)?) {
+
+    beforeSending = hook
+
+  }
+
+  /// Makes an extended Set with a selector write another value as well.
+  ///
+  /// - Parameters:
+  ///   - selector: The extended Set's selector, in D2.
+  ///   - value: The other value it writes.
+  ///   - position: The user data byte that holds the other value.
+  ///   - button: The button whose value it writes, or `nil` for the button written.
+  func setValueSideEffect(ofSelector selector: UInt8, writes value: UInt8, at position: Int, ofButton button: UInt8? = nil) {
+
+    valueSideEffects[selector, default: []].append((position, value, button))
+
+  }
+
   /// Sets the values one button reports, by the user data byte that holds them.
   func setValues(_ values: [Int: UInt8], ofButton button: UInt8) {
 
@@ -109,7 +181,12 @@ actor SettingsModem: LinkingModem {
 
   func request(_ message: StandardMessage, timeout: Duration) async throws -> ReceivedMessage {
 
+    let bytes: String = Self.hex([message.command.command1, message.command.command2])
+
+    try beforeSending?(bytes)
+
     standardCommands.append(message.command)
+    sent.append(bytes)
 
     var command2: UInt8 = message.command.command2
 
@@ -136,9 +213,13 @@ actor SettingsModem: LinkingModem {
 
   func request(_ message: ExtendedMessage, timeout: Duration) async throws -> ReceivedMessage {
 
-    extendedMessages.append(message)
-
     let data: UserData = message.userData
+    let bytes: String = Self.hex([message.command.command1, message.command.command2, data[1], data[2], data[3]])
+
+    try beforeSending?(bytes)
+
+    extendedMessages.append(message)
+    sent.append(bytes)
 
     if message.command.command1 == 0x2E {
 
@@ -147,6 +228,12 @@ actor SettingsModem: LinkingModem {
         var reply = UserData()
         reply[1] = data[1]
         reply[2] = 0x01
+
+        for position in changingPositions {
+
+          values[position, default: 0x00] &+= 1
+
+        }
 
         for (position, value) in buttonValues[data[1]] ?? values {
 
@@ -177,6 +264,18 @@ actor SettingsModem: LinkingModem {
         } else {
 
           values[position] = data[3]
+
+        }
+
+        for effect in valueSideEffects[data[2]] ?? [] {
+
+          setValue(effect.value, at: effect.position, ofButton: effect.button ?? data[1])
+
+        }
+
+        if data[3] != 0x00, let bits = flagSideEffects[data[2]] {
+
+          flags |= bits
 
         }
 
@@ -248,7 +347,29 @@ actor SettingsModem: LinkingModem {
 
   /// The value each extended Set selector writes, by the byte an extended Get's reply holds
   /// it in.
-  private static let positions: [UInt8: Int] = [0x05: 7, 0x06: 8]
+  private static let positions: [UInt8: Int] = [0x05: 7, 0x06: 8, 0x07: 9]
+
+  /// Bytes as space-separated pairs.
+  private static func hex(_ bytes: [UInt8]) -> String {
+
+    bytes.map { (byte: UInt8) -> String in (byte < 0x10 ? "0" : "") + String(byte, radix: 16, uppercase: true) }.joined(separator: " ")
+
+  }
+
+  /// Writes a value of a button, or of the device when the button's values aren't set apart.
+  private func setValue(_ value: UInt8, at position: Int, ofButton button: UInt8) {
+
+    if buttonValues[button] != nil {
+
+      buttonValues[button]?[position] = value
+
+    } else {
+
+      values[position] = value
+
+    }
+
+  }
 
   private func removeSubscriber(_ id: Int) {
 

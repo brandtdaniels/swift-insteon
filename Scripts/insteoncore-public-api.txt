@@ -423,7 +423,12 @@ init DeviceRegistrySnapshot(identities:)
 init DeviceRemovalResult(address:removed:remainingLinks:remoteUnlinkingFailure:deletedModemRecords:forgotten:keptBecause:leftoverRecords:factoryReset:)
 init DeviceSetButtonPress(_:productName:)
 init DeviceSetting(key:label:section:summary:isAdvanced:isWritable:isPerButton:control:)
-init DeviceSettingChange(setting:button:before:requested:after:)
+init DeviceSettingChange(setting:button:before:requested:after:otherSettings:)
+init DeviceSettingChange.OtherChange(setting:button:before:after:)
+init DeviceSettingChange.OtherSettings(outcome:changes:unread:rereadFailure:)
+init DeviceSettingChange.OtherSettings.Outcome(rawValue:)
+init DeviceSettingChange.OtherSettings.ReadFailure(rawValue:)
+init DeviceSettingChange.UnreadSetting(setting:button:)
 init DeviceSettingInput(form:bytes:)
 init DeviceSettingsReading(productName:commandSet:items:operatingFlags:values:buttons:)
 init DeviceSettingsReading.Entry(setting:button:raw:text:defaultText:)
@@ -508,6 +513,8 @@ protocol DeviceRegistryStore
 protocol LinkingObserver
 protocol NetworkSnapshotStore
 static func DeviceMonitor.replyKind(_:)
+static func DeviceSettingChange.OtherSettings.compared(_:unread:)
+static func DeviceSettingChange.OtherSettings.notReread(_:)
 static func HubLinkingLeg.canSucceedOnRetry(after:)
 static func HubSearch.merge(_:into:)
 static func InsteonErrorDescription.didntConfirmSending(to:)
@@ -543,6 +550,15 @@ static let DeviceLinkingCoordinator.defaultModemGroup
 static let DeviceLinkingCoordinator.defaultRemoteTimeout
 static let DeviceLinkingCoordinator.defaultSETButtonTimeout
 static let DeviceLinkingCoordinator.respondingDeviceGroup
+static let DeviceSettingChange.OtherSettings.Outcome.compared
+static let DeviceSettingChange.OtherSettings.Outcome.notConfirmed
+static let DeviceSettingChange.OtherSettings.Outcome.notReportedBefore
+static let DeviceSettingChange.OtherSettings.Outcome.notReread
+static let DeviceSettingChange.OtherSettings.Outcome.nothingToCompare
+static let DeviceSettingChange.OtherSettings.ReadFailure.canceled
+static let DeviceSettingChange.OtherSettings.ReadFailure.connectionClosed
+static let DeviceSettingChange.OtherSettings.ReadFailure.failed
+static let DeviceSettingChange.OtherSettings.ReadFailure.notAnswered
 static let HubLocation.defaultPort
 static let InsteonErrorDescription.hubStoppedAnsweringInline
 static let JSONFileDeviceRegistryStore.formatVersion
@@ -575,6 +591,11 @@ struct DeviceRemovalResult
 struct DeviceSetButtonPress
 struct DeviceSetting
 struct DeviceSettingChange
+struct DeviceSettingChange.OtherChange
+struct DeviceSettingChange.OtherSettings
+struct DeviceSettingChange.OtherSettings.Outcome
+struct DeviceSettingChange.OtherSettings.ReadFailure
+struct DeviceSettingChange.UnreadSetting
 struct DeviceSettingInput
 struct DeviceSettingsReading
 struct DeviceSettingsReading.Entry
@@ -760,13 +781,30 @@ var DeviceSetting.key
 var DeviceSetting.label
 var DeviceSetting.section
 var DeviceSetting.summary
+var DeviceSettingChange.OtherChange.after
+var DeviceSettingChange.OtherChange.before
+var DeviceSettingChange.OtherChange.button
+var DeviceSettingChange.OtherChange.setting
+var DeviceSettingChange.OtherChange.title
+var DeviceSettingChange.OtherSettings.Outcome.rawValue
+var DeviceSettingChange.OtherSettings.ReadFailure.rawValue
+var DeviceSettingChange.OtherSettings.changes
+var DeviceSettingChange.OtherSettings.outcome
+var DeviceSettingChange.OtherSettings.rereadFailure
+var DeviceSettingChange.OtherSettings.unread
+var DeviceSettingChange.UnreadSetting.button
+var DeviceSettingChange.UnreadSetting.setting
+var DeviceSettingChange.UnreadSetting.title
 var DeviceSettingChange.after
 var DeviceSettingChange.before
 var DeviceSettingChange.button
+var DeviceSettingChange.changedSettings
 var DeviceSettingChange.isConfirmed
+var DeviceSettingChange.otherSettings
 var DeviceSettingChange.requested
 var DeviceSettingChange.setting
 var DeviceSettingChange.title
+var DeviceSettingChange.unreadSettings
 var DeviceSettingInput.bytes
 var DeviceSettingInput.form
 var DeviceSettingsReading.Entry.button

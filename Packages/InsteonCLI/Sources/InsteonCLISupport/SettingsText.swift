@@ -199,6 +199,58 @@ public enum SettingsText {
 
   }
 
+  /// Everything `insteon device ADDRESS set` prints about a write: the setting written, as
+  /// ``change(_:)`` says it, then a line for each other setting the write changed, such as
+  /// `"Also changed: Ramp rate: 0.5 s → 0.1 s"`, and a line naming the other settings that
+  /// couldn't be read again, or saying none could.
+  ///
+  /// - Parameters:
+  ///   - change: The change.
+  ///   - device: The device's address, as the command was given it, for the command that
+  ///     reads its settings.
+  /// - Returns: The lines.
+  public static func report(_ change: DeviceSettingChange, device: String) -> [String] {
+
+    let others: DeviceSettingChange.OtherSettings = change.otherSettings
+    let settings: String = "run 'insteon device \(device) settings' to see them"
+    var lines: [String] = [Self.change(change)]
+
+    lines += others.changes.map { (other: DeviceSettingChange.OtherChange) -> String in "Also changed: \(other.title): \(other.before) → \(other.after)" }
+
+    if !others.unread.isEmpty {
+
+      let titles: [String] = others.unread.map(\.title)
+
+      lines.append("Couldn't be read again after the write: \(titles.joined(separator: ", ")); \(settings).")
+
+    }
+
+    if others.outcome == .notReread {
+
+      lines.append("The write succeeded, but the device's other settings couldn't be read again (\(rereadFailure(others.rereadFailure))), so what else it changed isn't known; \(settings).")
+
+    }
+
+    return lines
+
+  }
+
+  /// Why the other settings couldn't be read again, as a phrase.
+  private static func rereadFailure(_ failure: DeviceSettingChange.OtherSettings.ReadFailure?) -> String {
+
+    switch failure {
+    case .notAnswered?:
+      "the device didn't answer"
+    case .connectionClosed?:
+      "the connection to the modem closed"
+    case .canceled?:
+      "the command was canceled"
+    default:
+      "the modem failed"
+    }
+
+  }
+
   /// Why a device's settings couldn't be read or a setting written, as a sentence.
   ///
   /// - Parameters:
@@ -259,6 +311,122 @@ public enum SettingsText {
     case let .missingValue(name):
       "it has no parameter for \(name)"
     }
+
+  }
+
+}
+
+/// What `insteon device ADDRESS set --json` prints: the setting written, its values before
+/// and after, each other setting the write changed, and each that couldn't be read again.
+public struct SettingChangeJSON: Hashable, Sendable, Encodable {
+
+  /// Another setting the write changed.
+  public struct ChangedSetting: Hashable, Sendable, Encodable {
+
+    /// The setting's name in the catalog.
+    public var name: String
+
+    /// What to call the setting.
+    public var label: String
+
+    /// The button or group, for a setting that's per button and was read for more than one.
+    public var button: Int?
+
+    /// The value before the write, as shown.
+    public var before: String
+
+    /// The value after the write, as shown.
+    public var after: String
+
+    /// The JSON for another setting's change.
+    ///
+    /// - Parameter other: The change.
+    public init(_ other: DeviceSettingChange.OtherChange) {
+
+      name = other.setting.key
+      label = other.setting.label
+      button = other.button
+      before = other.before
+      after = other.after
+
+    }
+
+  }
+
+  /// Another setting the device reported before the write but not after it.
+  public struct UnreadSetting: Hashable, Sendable, Encodable {
+
+    /// The setting's name in the catalog.
+    public var name: String
+
+    /// What to call the setting.
+    public var label: String
+
+    /// The button or group, for a setting that's per button and was read for more than one.
+    public var button: Int?
+
+    /// The JSON for an unread setting.
+    ///
+    /// - Parameter unread: The setting.
+    public init(_ unread: DeviceSettingChange.UnreadSetting) {
+
+      name = unread.setting.key
+      label = unread.setting.label
+      button = unread.button
+
+    }
+
+  }
+
+  /// The setting's name in the catalog, such as `"rampRate"`.
+  public var name: String
+
+  /// What to call the setting, such as `"Ramp rate"`.
+  public var label: String
+
+  /// The button or group written, for a setting that's per button.
+  public var button: Int?
+
+  /// The value before, as shown, or `nil` if the device didn't report it.
+  public var before: String?
+
+  /// The value asked for, as shown.
+  public var requested: String
+
+  /// The value the device reported afterward, as shown, or `nil` if it didn't, so the change
+  /// isn't confirmed.
+  public var after: String?
+
+  /// How the comparison of the other settings ended, by the name of its
+  /// `DeviceSettingChange.OtherSettings.Outcome`: `"compared"`, `"nothingToCompare"`,
+  /// `"notReportedBefore"`, `"notConfirmed"` or `"notReread"`.
+  public var otherSettingsOutcome: String
+
+  /// Why the other settings couldn't be read again, when `otherSettingsOutcome` is `"notReread"`:
+  /// `"notAnswered"`, `"connectionClosed"`, `"canceled"` or `"failed"`.
+  public var rereadFailure: String?
+
+  /// Each other setting whose value differs after the write.
+  public var changedSettings: [ChangedSetting]
+
+  /// Each other setting the device reported before the write but not after it.
+  public var unreadSettings: [UnreadSetting]
+
+  /// Creates the JSON for a change.
+  ///
+  /// - Parameter change: The change.
+  public init(_ change: DeviceSettingChange) {
+
+    name = change.setting.key
+    label = change.setting.label
+    button = change.button
+    before = change.before
+    requested = change.requested
+    after = change.after
+    otherSettingsOutcome = change.otherSettings.outcome.rawValue
+    rereadFailure = change.otherSettings.rereadFailure?.rawValue
+    changedSettings = change.changedSettings.map(ChangedSetting.init)
+    unreadSettings = change.unreadSettings.map(UnreadSetting.init)
 
   }
 
