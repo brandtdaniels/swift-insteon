@@ -32,6 +32,10 @@ actor SettingsModem: LinkingModem {
   /// The flag bits an extended Set sets when it writes a value other than zero, by its selector.
   private var flagSideEffects: [UInt8: UInt8] = [:]
 
+  /// The positions of the values that go up by one with every extended Get, as a value the
+  /// device measures changes on its own.
+  private var changingPositions: Set<Int> = []
+
   /// The engine the device reports to Get Insteon Engine Version.
   private var engine: InsteonEngine = .i2
 
@@ -113,6 +117,16 @@ actor SettingsModem: LinkingModem {
 
   }
 
+  /// Makes values go up by one with every extended Get, as a value the device measures
+  /// changes on its own.
+  ///
+  /// - Parameter positions: The user data bytes that hold them.
+  func changeValuesOnTheirOwn(at positions: Set<Int>) {
+
+    changingPositions = positions
+
+  }
+
   /// Sets the values one button reports, by the user data byte that holds them.
   func setValues(_ values: [Int: UInt8], ofButton button: UInt8) {
 
@@ -170,6 +184,12 @@ actor SettingsModem: LinkingModem {
         var reply = UserData()
         reply[1] = data[1]
         reply[2] = 0x01
+
+        for position in changingPositions {
+
+          values[position, default: 0x00] &+= 1
+
+        }
 
         for (position, value) in buttonValues[data[1]] ?? values {
 

@@ -104,10 +104,12 @@ extension Device {
   /// A write can change other settings as well, as some devices turn a flag on when a value
   /// that isn't zero is written. So the device's other settings are read just before the write
   /// is sent and again once it's confirmed, the same way
-  /// ``readSettings(includingAdvanced:beforeReading:)`` reads them, leaving out the readings,
-  /// and each one whose value differs is in ``DeviceSettingChange/otherSettings``. A setting
-  /// the device didn't report either time is left out. Nothing more is sent when the catalog
-  /// describes no other setting the device can be asked for. When the other settings can't be
+  /// ``readSettings(includingAdvanced:beforeReading:)`` reads them, and each one whose value
+  /// differs is in ``DeviceSettingChange/otherSettings``. Only settings software can write, as
+  /// ``DeviceSetting/isWritable`` says, are compared: a reading or a value nothing writes, such
+  /// as a measure of noise, changes on its own rather than as a side effect. A setting the
+  /// device didn't report either time is left out. Nothing more is sent when the catalog
+  /// describes no other writable setting. When the other settings can't be
   /// read after the write, the write still succeeds, with
   /// ``DeviceSettingChange/OtherSettings/notReread``.
   ///

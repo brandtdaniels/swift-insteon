@@ -411,9 +411,10 @@ public enum HelpText {
                           as 0.5s, a number in the setting's unit such as 50%, or a byte such
                           as 0x1C. --button picks the button or group of a per-button
                           setting; it defaults to 1. The setting is read back afterward,
-                          and the device's other settings are read before and after the
-                          write, so any other setting it changed is printed as "Also
-                          changed". With --json, prints the setting, its values and
+                          and the device's other writable settings are read before and
+                          after the write, so any other setting it changed is printed as
+                          "Also changed"; a read-only one changes on its own, so it's left
+                          out. With --json, prints the setting, its values and
                           "changedSettings", each with its name, label, before and after.
                           Turning off the radio or the powerline, and requiring a checksum,
                           are never written, and the programming lock is only turned off,

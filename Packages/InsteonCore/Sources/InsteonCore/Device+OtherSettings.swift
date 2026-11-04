@@ -11,8 +11,10 @@ extension Device {
     /// The device.
     let device: Device
 
-    /// The settings compared: every one the catalog describes but the setting written and the
-    /// readings, which the device reports rather than keeps.
+    /// The settings compared: every one the catalog describes that software can write, as
+    /// ``DeviceSetting/isWritable`` says, but the setting written. A setting nothing writes,
+    /// such as a reading or a value the device measures, changes on its own rather than as a
+    /// write's side effect, so it's left out.
     let items: [SettingItem]
 
     /// The device's description.
@@ -27,13 +29,7 @@ extension Device {
       self.device = device
       self.items = commands.settingItems.filter { (item: SettingItem) -> Bool in
 
-        if case .reading = item.source {
-
-          return false
-
-        }
-
-        return item.name != written.name
+        item.name != written.name && SettingPresentation.setting(for: item, in: commands).isWritable
 
       }
       self.description = description

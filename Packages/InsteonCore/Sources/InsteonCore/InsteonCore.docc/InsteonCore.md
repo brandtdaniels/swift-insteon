@@ -129,8 +129,9 @@ reads the settings, and ``Device/writeSetting(_:to:button:)`` changes one and re
 Each ``DeviceSetting`` carries what a settings page needs from the catalog: its label,
 section, whether it's advanced, its control, and its default as each reading's entry shows it.
 A write can change other settings too, as some devices turn a flag on when a value that isn't
-zero is written, so the device's other settings are read before the write and again once it's
-confirmed. ``DeviceSettingChange/changedSettings`` lists each one whose value differs, and
+zero is written, so the device's other writable settings are read before the write and again
+once it's confirmed; a reading or a value nothing writes changes on its own, so it's left out.
+``DeviceSettingChange/changedSettings`` lists each one whose value differs, and
 ``DeviceSettingChange/otherSettings`` says when they couldn't be read again after a write that
 succeeded.
 

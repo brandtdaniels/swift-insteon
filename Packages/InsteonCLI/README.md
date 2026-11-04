@@ -101,7 +101,7 @@ A setting the device didn't report reads "not reported". Settings the catalog ma
 
 `insteon device ADDRESS set NAME VALUE` takes the catalog's name, such as `rampRate`, or its label in any case, such as `"ramp rate"`. A flag takes `on` or `off`; a value takes a label of its value table, such as `0.5s`, a number in its unit, such as `50%`, buttons such as `1,3`, or a byte such as `0x1C`. `--button N` picks the button or group of a per-button value. The command refuses a setting the catalog gives no way to write, and says why. It never writes the flags that turn off a device's radio or powerline or require a checksum in every message, which can cut the device off from the modem, so `settings` shows them as read-only; and it only turns the programming lock off, never on. A value whose byte holds those flags, such as an open/close sensor's configuration byte, is refused when it would turn the programming lock on or change one of the others. Set Operating Flags goes to an i2CS device as an extended message with a checksum.
 
-A write can change other settings too, as some devices turn a flag on when a value that isn't zero is written. So `set` reads the device's other settings, the same way `settings` does, just before the write and again once it's read back, and prints a line for each one whose value differs:
+A write can change other settings too, as some devices turn a flag on when a value that isn't zero is written. So `set` reads the device's other settings that `settings` shows as writable, the same way `settings` reads them, just before the write and again once it's read back, and prints a line for each one whose value differs. A read-only setting, such as a reading or a value the device measures, changes on its own rather than because of the write, so it isn't compared:
 
 ```
 $ insteon device 4D.5E.6F set "linger time" 0x05
@@ -109,7 +109,7 @@ Linger time: 0x00 → 0x05
 Also changed: Sparkle: off → on
 ```
 
-A setting the device didn't report either time is left out, and nothing more is sent to a device whose catalog entry describes no other setting it can be asked for. When the other settings can't be read after the write, the write still succeeds, and the command says what else it changed isn't known. With `--json`, `set` prints the setting's `name`, `label`, `button`, `before`, `requested` and `after`, `otherSettings` (`compared`, `notCompared` or `notReread`), and `changedSettings`, each with its `name`, `label`, `button`, `before` and `after`.
+A setting the device didn't report either time is left out, and nothing more is sent to a device whose catalog entry describes no other writable setting. When the other settings can't be read after the write, the write still succeeds, and the command says what else it changed isn't known. With `--json`, `set` prints the setting's `name`, `label`, `button`, `before`, `requested` and `after`, `otherSettings` (`compared`, `notCompared` or `notReread`), and `changedSettings`, each with its `name`, `label`, `button`, `before` and `after`.
 
 ### Self-test
 

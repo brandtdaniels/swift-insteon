@@ -221,13 +221,13 @@ public struct DeviceSettingChange: Hashable, Sendable {
   /// What the device's other settings did across the write.
   public enum OtherSettings: Hashable, Sendable {
 
-    /// The other settings weren't compared: the catalog describes none the device can be
-    /// asked for, the device reported none of them before the write, or the write wasn't
+    /// The other settings weren't compared: the catalog describes no other setting software
+    /// can write, the device reported none of them before the write, or the write wasn't
     /// confirmed.
     case notCompared
 
-    /// The other settings were read before and after the write. The associated value holds
-    /// each one whose value differs, in the order a settings page shows them, and is empty
+    /// The other settings software can write were read before and after the write. The
+    /// associated value holds each one whose value differs, in the order a settings page shows them, and is empty
     /// when the write changed none. A setting the device reported only before or only after
     /// is left out.
     case compared([OtherChange])

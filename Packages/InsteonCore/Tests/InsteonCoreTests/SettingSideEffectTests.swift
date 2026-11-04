@@ -9,8 +9,9 @@ import InsteonProtocol
 import InsteonTestSupport
 
 /// A made-up catalog whose devices change one setting when another is written: a lamp whose
-/// linger time, once it isn't zero, turns its sparkle flag on, and a panel whose hum flag turns
-/// its sparkle flag on, with a drift flag of its own Get Operating Flags request.
+/// linger time, once it isn't zero, turns its sparkle flag on, with a hiss it reports but
+/// can't be written, and a panel whose hum flag turns its sparkle flag on, with a drift flag of
+/// its own Get Operating Flags request.
 enum SideEffectExample {
 
   // MARK: - Addresses
@@ -35,12 +36,13 @@ enum SideEffectExample {
 
   static let hum = OperatingFlag(name: "hum", summary: "Hums.", query: .operatingFlags, bit: 0x02, on: 0x0A, off: 0x0B, label: "Hum")
 
-  static let sparkle = OperatingFlag(name: "sparkle", summary: "Sparkles.", query: .operatingFlags, bit: 0x04, label: "Sparkle")
+  static let sparkle = OperatingFlag(name: "sparkle", summary: "Sparkles.", query: .operatingFlags, bit: 0x04, on: 0x04, off: 0x05, label: "Sparkle")
 
-  static let drift = OperatingFlag(name: "drift", summary: "Drifts.", query: 0x01, bit: 0x01, label: "Drift")
+  static let drift = OperatingFlag(name: "drift", summary: "Drifts.", query: 0x01, bit: 0x01, on: 0x06, off: 0x07, label: "Drift")
 
-  /// The lamp's flags and two values, as ``SettingsModem`` keeps them: the linger time at D7,
-  /// written with selector `0x05`, and the glimmer at D8, written with selector `0x06`.
+  /// The lamp's flags and three values, as ``SettingsModem`` keeps them: the linger time at
+  /// D7, written with selector `0x05`, the glimmer at D8, written with selector `0x06`, and the
+  /// hiss at D9, which nothing writes.
   static let lampCommands = CommandSet(
     id: "exampleSideEffectLamp",
     name: "Example side effect lamp",
@@ -50,7 +52,8 @@ enum SideEffectExample {
       isPerButton: false,
       values: [
         SettingValue(name: "lingerTime", summary: "How long the load lingers.", position: 7, label: "Linger time"),
-        SettingValue(name: "glimmer", summary: "How much the load glimmers.", position: 8, label: "Glimmer")
+        SettingValue(name: "glimmer", summary: "How much the load glimmers.", position: 8, label: "Glimmer"),
+        SettingValue(name: "hiss", summary: "How much noise the device hears.", position: 9, label: "Hiss")
       ],
       writes: [
         SettingWrite(name: "lingerTime", summary: "Sets the linger time.", selector: 0x05, isPerButton: false, bytes: [SettingWrite.Byte(position: 3, value: "lingerTime")]),
@@ -181,6 +184,18 @@ struct SettingSideEffectTests {
     ]))
     #expect(changes(change) == [["sparkle", "off", "on"]])
     #expect(change.changedSettings.first?.title == "Sparkle")
+
+  }
+
+  @Test func leavesOutAReadOnlySettingThatChangesOnItsOwnAndReportsAWritableOne() async throws {
+
+    let modem = SettingsModem(device: SideEffectExample.lamp, flags: 0x00, values: [7: 0x00, 8: 0x10, 9: 0xA2])
+    await modem.changeValuesOnTheirOwn(at: [8, 9])
+
+    let change: DeviceSettingChange = try await network(modem).device(SideEffectExample.lamp).writeSetting("hum", to: "on")
+
+    #expect(change.after == "on")
+    #expect(changes(change).map { (other: [String]) -> String in other[0] } == ["glimmer"])
 
   }
 
