@@ -29,6 +29,15 @@ extension Device {
 
     beforeReading()
 
+    return try await read(items, description: description, commands: commands)
+
+  }
+
+  /// Reads items of the device's settings: each Get Operating Flags request they need, once,
+  /// and an extended Get for button 1, then for each of the device's other groups when a value
+  /// is per button. Nothing is sent for an item the catalog gives no way to read.
+  func read(_ items: [SettingItem], description: DeviceDescription, commands: CommandSet) async throws -> DeviceSettingsReading {
+
     var flags: [OperatingFlagsRequest: UInt8] = [:]
 
     for query in Self.queries(of: items) {
@@ -92,13 +101,24 @@ extension Device {
   /// that keeps the other values it writes as the device reported them, or with the extended
   /// command the catalog names.
   ///
+  /// A write can change other settings as well, as some devices turn a flag on when a value
+  /// that isn't zero is written. So the device's other settings are read just before the write
+  /// is sent and again once it's confirmed, the same way
+  /// ``readSettings(includingAdvanced:beforeReading:)`` reads them, leaving out the readings,
+  /// and each one whose value differs is in ``DeviceSettingChange/otherSettings``. A setting
+  /// the device didn't report either time is left out. Nothing more is sent when the catalog
+  /// describes no other setting the device can be asked for. When the other settings can't be
+  /// read after the write, the write still succeeds, with
+  /// ``DeviceSettingChange/OtherSettings/notReread``.
+  ///
   /// - Parameters:
   ///   - key: The setting's key, such as `"rampRate"`, or its label, in any case.
   ///   - text: The value, such as `"on"`, `"0.5 s"`, `"50%"` or `"0x1C"`.
   ///   - button: The button or group, for a setting that's per button, or `nil` for button 1.
   ///     Defaults to `nil`.
-  /// - Returns: The value before and after. A change the device didn't report afterward isn't
-  ///   confirmed.
+  /// - Returns: The value before and after, and the other settings the write changed. A
+  ///   change the device didn't report afterward isn't confirmed, and its other settings
+  ///   aren't compared.
   /// - Throws: ``DeviceSettingError`` when the setting or the value isn't one the device takes,
   ///   ``DeviceSettingError/neverWritten(label:)`` or
   ///   ``DeviceSettingError/leavesProgrammingLocked(label:)`` for a setting that isn't written,
@@ -137,15 +157,16 @@ extension Device {
     }
 
     let setting: DeviceSetting = SettingPresentation.setting(for: item, in: commands)
+    let others = OtherSettingsCheck(device: self, besides: item, description: description, commands: commands)
     let change: DeviceSettingChange
 
     switch item.source {
     case .reading:
       throw DeviceSettingError.isReading(label: item.label)
     case let .flag(flag):
-      change = try await write(flag, item: item, setting: setting, to: text, button: buttonNumber, description: description, commands: commands)
+      change = try await write(flag, item: item, setting: setting, to: text, button: buttonNumber, description: description, commands: commands, others: others)
     case let .value(value):
-      change = try await write(value, item: item, setting: setting, to: text, button: buttonNumber, commands: commands)
+      change = try await write(value, item: item, setting: setting, to: text, button: buttonNumber, commands: commands, others: others)
     }
 
     if change.isConfirmed {

@@ -709,7 +709,7 @@ struct DeviceTests {
 
     #expect(change.isConfirmed)
     #expect(await modem.flags == 0x00)
-    #expect(await modem.extendedMessages == [
+    #expect(await modem.extendedWrites == [
       ExtendedMessage(to: ControlExample.buttons, command: Command(command1: 0x20, command2: 0x0B), integrity: ChecksumIntegrity())
     ])
     #expect(await modem.standardCommands.contains(Command(command1: 0x20, command2: 0x0B)) == false)
@@ -729,7 +729,7 @@ struct DeviceTests {
 
     #expect(change.after == "off")
     #expect(await modem.flags == 0x01)
-    #expect(await modem.extendedMessages == [
+    #expect(await modem.extendedWrites == [
       ExtendedMessage(to: ControlExample.buttons, command: Command(command1: 0x20, command2: 0x0B), userData: userData, integrity: UnprotectedIntegrity())
     ])
 
@@ -741,7 +741,7 @@ struct DeviceTests {
 
     _ = try await self.network(modem).device(ControlExample.buttons).writeSetting("keyBeep", to: "off")
 
-    #expect(await modem.extendedMessages.isEmpty)
+    #expect(await modem.extendedWrites.isEmpty)
     #expect(await modem.standardCommands.contains(Command(command1: 0x20, command2: 0x0B)))
 
   }

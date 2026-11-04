@@ -13,7 +13,8 @@ extension Device {
     to text: String,
     button: UInt8?,
     description: DeviceDescription,
-    commands: CommandSet
+    commands: CommandSet,
+    others: OtherSettingsCheck
   ) async throws -> DeviceSettingChange {
 
     if button != nil {
@@ -49,6 +50,7 @@ extension Device {
 
     let read = StandardMessage(to: address, command: flag.readCommand)
     let before: UInt8? = try await answer(read)?.command.command2
+    let othersBefore: DeviceSettingsReading? = try await others.readBefore()
 
     switch change {
     case let .setOperatingFlags(command2):
@@ -76,7 +78,14 @@ extension Device {
 
     }
 
-    return DeviceSettingChange(setting: setting, button: nil, before: beforeText, requested: requested, after: reportedText)
+    return DeviceSettingChange(
+      setting: setting,
+      button: nil,
+      before: beforeText,
+      requested: requested,
+      after: reportedText,
+      otherSettings: try await others.compare(with: othersBefore)
+    )
 
   }
 
@@ -176,7 +185,8 @@ extension Device {
     setting: DeviceSetting,
     to text: String,
     button: UInt8?,
-    commands: CommandSet
+    commands: CommandSet,
+    others: OtherSettingsCheck
   ) async throws -> DeviceSettingChange {
 
     guard let settings = commands.extendedSettings, let change = commands.change(for: value) else {
@@ -250,6 +260,8 @@ extension Device {
 
     }
 
+    let othersBefore: DeviceSettingsReading? = try await others.readBefore()
+
     _ = try await request(message, timeout: Modem.defaultExtendedRequestTimeout, for: .setting(label: item.label))
 
     let after: [SettingName: UInt8]? = try await readValues(settings: settings, button: target)
@@ -263,13 +275,15 @@ extension Device {
 
     }
 
-    let written = DeviceSettingChange(setting: setting, button: changedButton, before: beforeText, requested: requested, after: requested)
+    var written = DeviceSettingChange(setting: setting, button: changedButton, before: beforeText, requested: requested, after: requested)
 
     guard reported == raw else {
 
       throw DeviceSettingError.notChanged(title: written.title, requested: requested, reported: commands.text(for: value, raw: reported))
 
     }
+
+    written.otherSettings = try await others.compare(with: othersBefore)
 
     return written
 

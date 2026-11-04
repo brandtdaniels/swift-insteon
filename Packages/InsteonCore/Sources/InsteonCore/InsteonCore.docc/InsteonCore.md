@@ -128,6 +128,11 @@ and its settings with their controls. ``Device/readSettings(includingAdvanced:be
 reads the settings, and ``Device/writeSetting(_:to:button:)`` changes one and reads it back.
 Each ``DeviceSetting`` carries what a settings page needs from the catalog: its label,
 section, whether it's advanced, its control, and its default as each reading's entry shows it.
+A write can change other settings too, as some devices turn a flag on when a value that isn't
+zero is written, so the device's other settings are read before the write and again once it's
+confirmed. ``DeviceSettingChange/changedSettings`` lists each one whose value differs, and
+``DeviceSettingChange/otherSettings`` says when they couldn't be read again after a write that
+succeeded.
 
 Some settings are never written: turning off a device's radio or powerline, and requiring a
 checksum in every message, any of which can cut the device off from the modem, and any other
@@ -158,6 +163,9 @@ take throws an error with a ``DeviceSettingInput`` that says what it takes:
 do {
   let change = try await lamp.writeSetting("rampRate", to: "0.5 s")
   print("\(change.title): \(change.before ?? "?") to \(change.after ?? "not confirmed")")
+  for other in change.changedSettings {
+    print("Also changed: \(other.title): \(other.before) to \(other.after)")
+  }
 } catch DeviceSettingError.neverWritten(let label) {
   print("\(label) can't be changed.")
 }

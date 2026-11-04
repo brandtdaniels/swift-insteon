@@ -71,6 +71,9 @@ case DeviceRegistryStoreError.malformedContents
 case DeviceRegistryStoreError.unreadableFile
 case DeviceRegistryStoreError.unsupportedVersion(_:)
 case DeviceRegistryStoreError.writeFailed(code:)
+case DeviceSettingChange.OtherSettings.compared(_:)
+case DeviceSettingChange.OtherSettings.notCompared
+case DeviceSettingChange.OtherSettings.notReread
 case DeviceSettingControl.buttons
 case DeviceSettingControl.byte(range:)
 case DeviceSettingControl.choice(_:)
@@ -290,6 +293,7 @@ enum DeviceKeptReason
 enum DeviceMonitorEvent
 enum DeviceOperation
 enum DeviceRegistryStoreError
+enum DeviceSettingChange.OtherSettings
 enum DeviceSettingControl
 enum DeviceSettingError
 enum DeviceSettingFieldProblem
@@ -423,7 +427,8 @@ init DeviceRegistrySnapshot(identities:)
 init DeviceRemovalResult(address:removed:remainingLinks:remoteUnlinkingFailure:deletedModemRecords:forgotten:keptBecause:leftoverRecords:factoryReset:)
 init DeviceSetButtonPress(_:productName:)
 init DeviceSetting(key:label:section:summary:isAdvanced:isWritable:isPerButton:control:)
-init DeviceSettingChange(setting:button:before:requested:after:)
+init DeviceSettingChange(setting:button:before:requested:after:otherSettings:)
+init DeviceSettingChange.OtherChange(setting:button:before:after:)
 init DeviceSettingInput(form:bytes:)
 init DeviceSettingsReading(productName:commandSet:items:operatingFlags:values:buttons:)
 init DeviceSettingsReading.Entry(setting:button:raw:text:defaultText:)
@@ -575,6 +580,7 @@ struct DeviceRemovalResult
 struct DeviceSetButtonPress
 struct DeviceSetting
 struct DeviceSettingChange
+struct DeviceSettingChange.OtherChange
 struct DeviceSettingInput
 struct DeviceSettingsReading
 struct DeviceSettingsReading.Entry
@@ -760,10 +766,17 @@ var DeviceSetting.key
 var DeviceSetting.label
 var DeviceSetting.section
 var DeviceSetting.summary
+var DeviceSettingChange.OtherChange.after
+var DeviceSettingChange.OtherChange.before
+var DeviceSettingChange.OtherChange.button
+var DeviceSettingChange.OtherChange.setting
+var DeviceSettingChange.OtherChange.title
 var DeviceSettingChange.after
 var DeviceSettingChange.before
 var DeviceSettingChange.button
+var DeviceSettingChange.changedSettings
 var DeviceSettingChange.isConfirmed
+var DeviceSettingChange.otherSettings
 var DeviceSettingChange.requested
 var DeviceSettingChange.setting
 var DeviceSettingChange.title

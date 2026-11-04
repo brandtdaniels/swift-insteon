@@ -164,8 +164,79 @@ public struct DeviceSettingsReading: Hashable, Sendable {
 }
 
 /// What ``Device/writeSetting(_:to:button:)`` changed, as the device reported it before and
-/// after.
+/// after: the setting written, and any other setting whose value the write changed as well.
+///
+/// ```swift
+/// let change = try await lamp.writeSetting("rampRate", to: "0.5 s")
+///
+/// for other in change.changedSettings {
+///   print("Also changed: \(other.title): \(other.before) to \(other.after)")
+/// }
+/// ```
 public struct DeviceSettingChange: Hashable, Sendable {
+
+  /// Another setting whose value differs after the write, as the device reported it before
+  /// and after.
+  public struct OtherChange: Hashable, Sendable {
+
+    /// The setting.
+    public var setting: DeviceSetting
+
+    /// The button or group, for a setting that's per button and was read for more than one;
+    /// otherwise `nil`.
+    public var button: Int?
+
+    /// The value before the write, as a settings page shows it.
+    public var before: String
+
+    /// The value after the write, as a settings page shows it.
+    public var after: String
+
+    /// Creates a change to another setting.
+    ///
+    /// - Parameters:
+    ///   - setting: The setting.
+    ///   - button: The button or group, for a setting that's per button.
+    ///   - before: The value before the write.
+    ///   - after: The value after the write.
+    public init(setting: DeviceSetting, button: Int?, before: String, after: String) {
+
+      self.setting = setting
+      self.button = button
+      self.before = before
+      self.after = after
+
+    }
+
+    /// The setting's label, with the button for a setting that's per button, such as
+    /// `"On-level (button 2)"`.
+    public var title: String {
+
+      button.map { (number: Int) -> String in "\(setting.label) (button \(number))" } ?? setting.label
+
+    }
+
+  }
+
+  /// What the device's other settings did across the write.
+  public enum OtherSettings: Hashable, Sendable {
+
+    /// The other settings weren't compared: the catalog describes none the device can be
+    /// asked for, the device reported none of them before the write, or the write wasn't
+    /// confirmed.
+    case notCompared
+
+    /// The other settings were read before and after the write. The associated value holds
+    /// each one whose value differs, in the order a settings page shows them, and is empty
+    /// when the write changed none. A setting the device reported only before or only after
+    /// is left out.
+    case compared([OtherChange])
+
+    /// The write succeeded, but the device's other settings couldn't be read after it, so
+    /// what else it changed isn't known.
+    case notReread
+
+  }
 
   /// The setting.
   public var setting: DeviceSetting
@@ -184,6 +255,9 @@ public struct DeviceSettingChange: Hashable, Sendable {
   /// change isn't confirmed.
   public var after: String?
 
+  /// What the device's other settings did across the write.
+  public var otherSettings: OtherSettings
+
   /// Creates a change.
   ///
   /// - Parameters:
@@ -192,13 +266,30 @@ public struct DeviceSettingChange: Hashable, Sendable {
   ///   - before: The value before.
   ///   - requested: The value asked for.
   ///   - after: The value the device reported afterward.
-  public init(setting: DeviceSetting, button: Int?, before: String?, requested: String, after: String?) {
+  ///   - otherSettings: What the device's other settings did across the write. Defaults to
+  ///     ``OtherSettings/notCompared``.
+  public init(setting: DeviceSetting, button: Int?, before: String?, requested: String, after: String?, otherSettings: OtherSettings = .notCompared) {
 
     self.setting = setting
     self.button = button
     self.before = before
     self.requested = requested
     self.after = after
+    self.otherSettings = otherSettings
+
+  }
+
+  /// The other settings whose values differ after the write, or none when they weren't
+  /// compared.
+  public var changedSettings: [OtherChange] {
+
+    guard case let .compared(changes) = otherSettings else {
+
+      return []
+
+    }
+
+    return changes
 
   }
 
