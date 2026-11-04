@@ -109,4 +109,20 @@ struct BundledCatalogTests {
 
   }
 
+  @Test func saysHowTheIOLincsRelayHoldsAState() throws {
+
+    let commands: CommandSet = try #require(try DeviceCatalog.bundled().commandSet(id: "ioLinc"))
+    let holding: GroupType.StateHolding = try #require(commands.groupType(named: "relay")?.stateHolding)
+
+    #expect(holding.releasedBy == ["momentary"])
+    #expect(holding.restState == "off")
+    #expect(holding.pulsesOnEveryCommandWhen == [["momentary", "momentaryOnBothCommands"]])
+    #expect(holding.verification.status == .observed)
+    #expect(holding.verification.firmware == [0x41])
+    // Every flag it names is one of the command set's, and the rest state one of its actions.
+    #expect((holding.releasedBy + holding.pulsesOnEveryCommandWhen.flatMap { $0 }).allSatisfy { commands.operatingFlag(named: $0) != nil })
+    #expect(commands.groupType(named: "relay")?.action(named: holding.restState) != nil)
+
+  }
+
 }
