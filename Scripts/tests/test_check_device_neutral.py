@@ -27,7 +27,15 @@ CATALOG = {
         {"model": "9898", "name": "Roof Hub", "capabilities": [{"kind": "modem"}, {"kind": "hub"}]},
     ],
     "commandSets": [
-        {"id": "garden", "operatingFlags": [{"name": "pulse"}, {"name": "pulseBoth"}, {"name": "heartbeat"}]},
+        {
+            "id": "gardenRelay",
+            "operatingFlags": [
+                {"name": "pulse", "label": "Pulse relay"},
+                {"name": "pulseBoth"},
+                {"name": "heartbeat", "label": "Heartbeat"},
+            ],
+            "extendedSettings": {"values": [{"name": "pulseTime"}, {"name": "onLevel"}]},
+        },
     ],
 }
 
@@ -37,7 +45,7 @@ NAMING = textwrap.dedent("""\
     """)
 
 NEUTRAL = textwrap.dedent("""\
-    /// Links a relay through the Window Modem and the Roof Hub, from its heartbeat.
+    /// Links a relay through the Window Modem and the Roof Hub, from its HEARTBEAT and onLevel.
     let flag = "pulseOn"
     let other = "repulse" + "pulseBothWays" + "98010"
     """)
@@ -71,7 +79,38 @@ class CheckDeviceNeutralTests(unittest.TestCase):
     def test_takes_the_words_from_the_catalog(self):
         words = check.forbidden_words(self.catalog)
 
-        self.assertEqual(words, {"Garden Relay", "GardenLinc", "9801", "pulse", "pulseBoth", "I/O Linc", "IOLinc"})
+        self.assertEqual(words, {
+            # Product names and models, in their own case.
+            "Garden Relay": False,
+            "GardenLinc": False,
+            "9801": False,
+            # Command set ids, flag names and labels and setting names, in any case.
+            "gardenRelay": True,
+            "pulse": True,
+            "Pulse relay": True,
+            "pulseBoth": True,
+            "pulseTime": True,
+            "I/O Linc": True,
+            "IOLinc": True,
+            "IO Linc": True,
+        })
+
+    def test_matches_identifiers_and_explicit_words_in_any_case(self):
+        self.write(
+            "Packages/InsteonCore/Sources/InsteonCore/Relay.swift",
+            "let set = \"GARDENRELAY\"\n// Turn its pulse relay flag off, and its PulseTime.\n// An iolinc, or an io linc.\n",
+        )
+
+        found = [(word, number) for _, word, number in check.violations(self.root, check.forbidden_words(self.catalog))]
+
+        self.assertEqual(found, [("IO Linc", 3), ("IOLinc", 3), ("Pulse relay", 2), ("gardenRelay", 1), ("pulse", 2), ("pulseTime", 2)])
+
+    def test_matches_product_names_only_in_their_own_case(self):
+        self.write("Packages/InsteonCore/Sources/InsteonCore/Relay.swift", "// Any garden relay, as plain words.\n")
+
+        status, output = self.run_check()
+
+        self.assertEqual(status, 0, output)
 
     def test_finds_each_word_once_per_file_by_its_first_line(self):
         self.write("Packages/InsteonCore/Sources/InsteonCore/Relay.swift", NAMING)

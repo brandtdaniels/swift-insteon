@@ -9,14 +9,15 @@ of its operating flags: a test builds an invented catalog with invented names in
 words ruled out come from the bundled catalog as the check runs, so they follow it:
 
 - each device's name, aliases and model, apart from a modem's or a Hub's, which the libraries
-  talk through rather than control;
-- each operating flag's name in every command set;
-- the words in `EXPLICIT`, product names the catalog doesn't spell that way.
+  talk through rather than control, matched with the case the catalog gives, since they're
+  proper names and the same words in lowercase, such as "a dimmer switch", are plain English;
+- each command set's id, and each operating flag's name and label and extended setting's name
+  in every command set, matched in any case, so `ioLinc`, `IOLinc` and `iolinc` are all found;
+- the words in `EXPLICIT`, product names the catalog doesn't spell that way, in any case.
 
-A word in `GENERIC` is left out even when the catalog uses it, since it's also a word of the
-protocol or of plain English, such as heartbeat. A word matches with the case it has in the
-catalog, and only whole: not as part of a longer word or name, so `pulse` doesn't match
-`pulseBoth`.
+A word in `GENERIC` is left out, in any case, even when the catalog uses it, since it's also a
+word of the protocol, such as heartbeat or on-level's `onLevel`, or of plain English. A word
+matches only whole: not as part of a longer word or name, so `pulse` doesn't match `pulseBoth`.
 
 It reads every file under `Packages/InsteonCore`, `Packages/InsteonCLI` and
 `Packages/InsteonTestSupport/Sources/InsteonLinkingTestSupport` in the root, and prints each
@@ -51,15 +52,25 @@ CHECKED = [
     pathlib.Path("Packages") / "InsteonTestSupport" / "Sources" / "InsteonLinkingTestSupport",
 ]
 
-# Products the catalog spells otherwise, ruled out too.
-EXPLICIT = {"I/O Linc", "IOLinc"}
+# Products the catalog spells otherwise, ruled out too, in any case.
+EXPLICIT = {"I/O Linc", "IOLinc", "IO Linc"}
 
-# Words the catalog uses that are also the protocol's or plain English, so they're allowed.
+# Words the catalog uses that are also the protocol's or plain English, so they're allowed, in
+# any case.
 GENERIC = {
-    # A message a battery-powered device sends, as the Insteon Developer's Guide names it.
+    # A message a battery-powered device sends, as the Insteon Developer's Guide names it, and
+    # its battery level.
     "heartbeat",
+    "batterylevel",
+    # The Get Operating Flags and Set Operating Flags commands' byte.
+    "operatingflags",
+    # A responder record's on-level and ramp rate, which every dimmer's link data names.
+    "onlevel",
+    "ramprate",
     # Plain English.
     "grouped",
+    "configuration",
+    "beeper",
 }
 
 # A device the libraries talk through, rather than control, has one of these capabilities.
@@ -67,10 +78,15 @@ TRANSPORT_CAPABILITIES = {"modem", "hub"}
 
 
 def forbidden_words(catalog_path):
-    """The words ruled out, from the catalog at a path, with `EXPLICIT` and without `GENERIC`."""
+    """The words ruled out, from the catalog at a path, with `EXPLICIT` and without `GENERIC`,
+    each with whether it matches in any case."""
 
     catalog = json.loads(pathlib.Path(catalog_path).read_text(encoding="utf-8"))
-    words = set(EXPLICIT)
+    words = {word: True for word in EXPLICIT}
+
+    def add(word, any_case):
+        if word and word.casefold() not in GENERIC:
+            words[word] = words.get(word, False) or any_case
 
     for device in catalog.get("devices", []):
         kinds = {capability.get("kind") for capability in device.get("capabilities", [])}
@@ -79,28 +95,32 @@ def forbidden_words(catalog_path):
             continue
 
         for word in [device.get("name"), device.get("model"), *(device.get("aliases") or [])]:
-            if word:
-                words.add(word)
+            add(word, False)
 
     for command_set in catalog.get("commandSets", []):
+        add(command_set.get("id"), True)
+
         for flag in command_set.get("operatingFlags", []):
-            if flag.get("name"):
-                words.add(flag["name"])
+            add(flag.get("name"), True)
+            add(flag.get("label"), True)
 
-    return words - GENERIC
+        for value in (command_set.get("extendedSettings") or {}).get("values", []):
+            add(value.get("name"), True)
+
+    return words
 
 
-def pattern(word):
+def pattern(word, any_case=False):
     """A pattern that finds a word whole: not inside a longer word, name or number."""
 
-    return re.compile(r"(?<![A-Za-z0-9_])" + re.escape(word) + r"(?![A-Za-z0-9_])")
+    return re.compile(r"(?<![A-Za-z0-9_])" + re.escape(word) + r"(?![A-Za-z0-9_])", re.IGNORECASE if any_case else 0)
 
 
 def violations(root, words):
     """Each file and word found, as (path, word, line number of its first use), in path and
     then word order."""
 
-    patterns = {word: pattern(word) for word in words}
+    patterns = {word: pattern(word, any_case) for word, any_case in words.items()}
     found = []
 
     for directory in CHECKED:
