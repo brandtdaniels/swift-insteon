@@ -77,7 +77,7 @@ enum DeviceCommands {
     case let .set(request):
       try await withDevice(device, modem: modem, hub: hub, names: names) { (target: Device) async throws -> Void in
 
-        try await SettingsCommands.set(request, device: target)
+        try await SettingsCommands.set(request, device: target, printsJSON: printsJSON)
 
       }
     case let .send(request):

@@ -66,7 +66,7 @@ The Hub's interface is plain HTTP, so the password is readable on the network: u
 | `device ADDRESS links` | Reads the device's ALL-Link database, with what each record's data means when the catalog describes the device. |
 | `device ADDRESS selftest [--actuate] [--checklist]` | Checks that the device is healthy and set up as the catalog expects, as described below, and fails when a check does. |
 | `device ADDRESS settings [--advanced]` | Reads the settings the catalog describes for the device, grouped by section, as described below. |
-| `device ADDRESS set NAME VALUE [--button N]` | Changes a setting, then reads it back and prints the old and new values. |
+| `device ADDRESS set NAME VALUE [--button N]` | Changes a setting, then reads it back and prints the old and new values, and any other setting the write changed. |
 | `device ADDRESS send CMD1 CMD2 [--extended [D1 ... D14]] [--no-checksum] [--wait SECONDS]` | Sends a direct message as given and prints the ACK or NAK and what the device sends in the next 3 seconds, for exploring. It sends the protected Set Operating Flags only where the device's catalog entry gives them another meaning, and never Poke, as described below. |
 | `scene GROUP on\|off`, `group GROUP on\|off` | Send ALL-Link Command with Light On or Light Off to one of the modem's groups, saying how many responders the modem's ALL-Link database lists for it and which didn't acknowledge their cleanup. |
 | `beep [--double]` | The modem's Beep; `--double` beeps twice on later firmware. |
@@ -75,7 +75,7 @@ The Hub's interface is plain HTTP, so the password is readable on the network: u
 | `catalog` | Prints the version of the bundled Insteon device catalog, the version of the cached copy or `none`, and which copy is in use. Needs no Hub or modem. |
 | `catalog update` | Downloads the latest published Insteon device catalog into the cache directory when it's in the format the command reads and differs from the copy in use, as described below. Needs no Hub or modem. |
 
-The modem's group is 0 unless `--group` is given, as Insteon's Hub app links devices. Links made by earlier versions of the command are in group 1: `insteon unlink ADDRESS` finds them from the modem's records, and `insteon unlink --group 1` removes one without an address. `--json` prints JSON for `discover`, `info`, `links`, `link`, `unlink`, `remove` and `device ... id`, `status`, `links`, `settings` and `selftest`; `link` always prints one object, `{"links":[…],"legs":[…]}`: `links` holds every link the modem reported, in order, and `legs` each of the catalog's links to a Hub with its `modemRole`, `modemGroup`, `deviceGroup`, `status` (`linked`, `failed` or `notRun`), `joinedBy` and `error`, or is empty when the device wasn't linked by them. `unlink --all` prints an array of the links it removed. `insteon --help` and `insteon COMMAND --help` print help.
+The modem's group is 0 unless `--group` is given, as Insteon's Hub app links devices. Links made by earlier versions of the command are in group 1: `insteon unlink ADDRESS` finds them from the modem's records, and `insteon unlink --group 1` removes one without an address. `--json` prints JSON for `discover`, `info`, `links`, `link`, `unlink`, `remove` and `device ... id`, `status`, `links`, `settings`, `set` and `selftest`; `link` always prints one object, `{"links":[…],"legs":[…]}`: `links` holds every link the modem reported, in order, and `legs` each of the catalog's links to a Hub with its `modemRole`, `modemGroup`, `deviceGroup`, `status` (`linked`, `failed` or `notRun`), `joinedBy` and `error`, or is empty when the device wasn't linked by them. `unlink --all` prints an array of the links it removed. `insteon --help` and `insteon COMMAND --help` print help.
 
 Control-C stops a command cleanly: `link`, `unlink` and `remove` take the modem out of linking mode first. Press it again to stop at once.
 
@@ -100,6 +100,16 @@ LEDs
 A setting the device didn't report reads "not reported". Settings the catalog marks advanced, such as the powerline's timing and X10, are shown only with `--advanced`. `--json` prints each setting with its section, name, label, button, value, byte, default and whether it's writable.
 
 `insteon device ADDRESS set NAME VALUE` takes the catalog's name, such as `rampRate`, or its label in any case, such as `"ramp rate"`. A flag takes `on` or `off`; a value takes a label of its value table, such as `0.5s`, a number in its unit, such as `50%`, buttons such as `1,3`, or a byte such as `0x1C`. `--button N` picks the button or group of a per-button value. The command refuses a setting the catalog gives no way to write, and says why. It never writes the flags that turn off a device's radio or powerline or require a checksum in every message, which can cut the device off from the modem, so `settings` shows them as read-only; and it only turns the programming lock off, never on. A value whose byte holds those flags, such as an open/close sensor's configuration byte, is refused when it would turn the programming lock on or change one of the others. Set Operating Flags goes to an i2CS device as an extended message with a checksum.
+
+A write can change other settings too, as some devices turn a flag on when a value that isn't zero is written. So `set` reads the device's other settings, the same way `settings` does, just before the write and again once it's read back, and prints a line for each one whose value differs:
+
+```
+$ insteon device 4D.5E.6F set "linger time" 0x05
+Linger time: 0x00 → 0x05
+Also changed: Sparkle: off → on
+```
+
+A setting the device didn't report either time is left out, and nothing more is sent to a device whose catalog entry describes no other setting it can be asked for. When the other settings can't be read after the write, the write still succeeds, and the command says what else it changed isn't known. With `--json`, `set` prints the setting's `name`, `label`, `button`, `before`, `requested` and `after`, `otherSettings` (`compared`, `notCompared` or `notReread`), and `changedSettings`, each with its `name`, `label`, `button`, `before` and `after`.
 
 ### Self-test
 

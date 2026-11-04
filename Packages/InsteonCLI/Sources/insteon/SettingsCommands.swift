@@ -84,7 +84,7 @@ enum SettingsCommands {
 
   // MARK: - set
 
-  static func set(_ request: SettingRequest, device: Device) async throws {
+  static func set(_ request: SettingRequest, device: Device, printsJSON: Bool) async throws {
 
     let change: DeviceSettingChange
 
@@ -98,7 +98,19 @@ enum SettingsCommands {
 
     }
 
-    Output.line(SettingsText.change(change))
+    if printsJSON {
+
+      try Output.json(SettingChangeJSON(change))
+
+      return
+
+    }
+
+    for line in SettingsText.report(change) {
+
+      Output.line(line)
+
+    }
 
   }
 

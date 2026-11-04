@@ -199,6 +199,30 @@ public enum SettingsText {
 
   }
 
+  /// Everything `insteon device ADDRESS set` prints about a write: the setting written, as
+  /// ``change(_:)`` says it, then a line for each other setting the write changed, such as
+  /// `"Also changed: Ramp rate: 0.5 s → 0.1 s"`, or a line saying the other settings couldn't
+  /// be read again.
+  ///
+  /// - Parameter change: The change.
+  /// - Returns: The lines.
+  public static func report(_ change: DeviceSettingChange) -> [String] {
+
+    var lines: [String] = [Self.change(change)]
+
+    switch change.otherSettings {
+    case .notCompared:
+      break
+    case let .compared(others):
+      lines += others.map { (other: DeviceSettingChange.OtherChange) -> String in "Also changed: \(other.title): \(other.before) → \(other.after)" }
+    case .notReread:
+      lines.append("The write succeeded, but the device's other settings couldn't be read again, so what else it changed isn't known.")
+    }
+
+    return lines
+
+  }
+
   /// Why a device's settings couldn't be read or a setting written, as a sentence.
   ///
   /// - Parameters:
@@ -258,6 +282,97 @@ public enum SettingsText {
       "its parameter \(name) has no such name"
     case let .missingValue(name):
       "it has no parameter for \(name)"
+    }
+
+  }
+
+}
+
+/// What `insteon device ADDRESS set --json` prints: the setting written, its values before
+/// and after, and each other setting the write changed.
+public struct SettingChangeJSON: Hashable, Sendable, Encodable {
+
+  /// Another setting the write changed.
+  public struct ChangedSetting: Hashable, Sendable, Encodable {
+
+    /// The setting's name in the catalog.
+    public var name: String
+
+    /// What to call the setting.
+    public var label: String
+
+    /// The button or group, for a setting that's per button and was read for more than one.
+    public var button: Int?
+
+    /// The value before the write, as shown.
+    public var before: String
+
+    /// The value after the write, as shown.
+    public var after: String
+
+    /// The JSON for another setting's change.
+    ///
+    /// - Parameter other: The change.
+    public init(_ other: DeviceSettingChange.OtherChange) {
+
+      name = other.setting.key
+      label = other.setting.label
+      button = other.button
+      before = other.before
+      after = other.after
+
+    }
+
+  }
+
+  /// The setting's name in the catalog, such as `"rampRate"`.
+  public var name: String
+
+  /// What to call the setting, such as `"Ramp rate"`.
+  public var label: String
+
+  /// The button or group written, for a setting that's per button.
+  public var button: Int?
+
+  /// The value before, as shown, or `nil` if the device didn't report it.
+  public var before: String?
+
+  /// The value asked for, as shown.
+  public var requested: String
+
+  /// The value the device reported afterward, as shown, or `nil` if it didn't, so the change
+  /// isn't confirmed.
+  public var after: String?
+
+  /// What the other settings did: `"compared"` when they were read before and after the
+  /// write, `"notCompared"` when there were none to read or the write wasn't confirmed, and
+  /// `"notReread"` when they couldn't be read after the write.
+  public var otherSettings: String
+
+  /// Each other setting whose value differs after the write; empty unless `otherSettings` is
+  /// `"compared"`.
+  public var changedSettings: [ChangedSetting]
+
+  /// Creates the JSON for a change.
+  ///
+  /// - Parameter change: The change.
+  public init(_ change: DeviceSettingChange) {
+
+    name = change.setting.key
+    label = change.setting.label
+    button = change.button
+    before = change.before
+    requested = change.requested
+    after = change.after
+    changedSettings = change.changedSettings.map(ChangedSetting.init)
+
+    switch change.otherSettings {
+    case .notCompared:
+      otherSettings = "notCompared"
+    case .compared:
+      otherSettings = "compared"
+    case .notReread:
+      otherSettings = "notReread"
     }
 
   }
