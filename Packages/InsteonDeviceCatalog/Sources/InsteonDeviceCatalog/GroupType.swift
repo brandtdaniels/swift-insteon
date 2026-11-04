@@ -335,7 +335,8 @@ public struct GroupType: Hashable, Sendable {
 
     /// The operating flags, in the command set's ``CommandSet/operatingFlags``, that keep the
     /// relay from holding a state: while any is set, the relay returns to
-    /// ``GroupType/StateHolding/restState`` by itself a time after it's switched.
+    /// ``GroupType/StateHolding/restState`` by itself a time after it's switched. Empty for a
+    /// relay that always holds its state, whose pulsing sets then don't apply.
     public var releasedBy: [SettingName]
 
     /// The name of the group type's action, in ``GroupType/actions``, that sets the state the
@@ -752,7 +753,7 @@ extension GroupType: Decodable {
   /// - Parameter decoder: The decoder to read from.
   /// - Throws: `DecodingError` if the JSON isn't a group type, a byte isn't written as `0x`
   ///   and two hexadecimal digits, a range ends before it starts, a data byte isn't Data 1
-  ///   through Data 3, or a state holding names no flag that releases the relay.
+  ///   through Data 3.
   public init(from decoder: any Decoder) throws {
 
     let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -816,13 +817,7 @@ extension GroupType: Decodable {
       armModes: (try container.decodeIfPresent([String].self, forKey: .armModes) ?? []).map(ArmMode.init(rawValue:)),
       stateHolding: try container.decodeIfPresent(StateHoldingEntry.self, forKey: .stateHolding).map { entry in
 
-        guard !entry.releasedBy.isEmpty else {
-
-          throw DecodingError.dataCorruptedError(forKey: .stateHolding, in: container, debugDescription: "A relay's state holding names at least one flag that releases it.")
-
-        }
-
-        return StateHolding(
+        StateHolding(
           releasedBy: entry.releasedBy.map(SettingName.init(rawValue:)),
           restState: SettingName(rawValue: entry.restState),
           pulsesOnEveryCommandWhen: (entry.pulsesOnEveryCommandWhen ?? []).map { $0.map(SettingName.init(rawValue:)) },

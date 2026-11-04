@@ -75,7 +75,8 @@ public struct RelayFlag: Hashable, Sendable {
 /// returns to ``RelayStateHolding/restState`` by itself a time after it's switched. While every
 /// flag of one of ``RelayStateHolding/pulsesOnEveryCommandWhen`` is on, every group On and Off
 /// only pulses it, whatever its responder record holds, so the state a link records is
-/// ignored. Otherwise it holds the state it's switched to.
+/// ignored. Otherwise it holds the state it's switched to. A relay that names no flag in
+/// ``RelayStateHolding/releasedBy`` always holds its state, and its pulsing sets don't apply.
 public struct RelayStateHolding: Hashable, Sendable {
 
   /// The names of the flags that keep the relay from holding a state while any is on.
@@ -118,8 +119,15 @@ public struct RelayStateHolding: Hashable, Sendable {
   }
 
   /// The flags of the first set of ``RelayStateHolding/pulsesOnEveryCommandWhen`` whose flags
-  /// are all on, with which every On and Off only pulses the relay, or none when no set is.
+  /// are all on, with which every On and Off only pulses the relay, or none when no set is or
+  /// the relay always holds its state.
   public var pulsingFlags: [RelayFlag] {
+
+    guard !releasedBy.isEmpty else {
+
+      return []
+
+    }
 
     for set in pulsesOnEveryCommandWhen where !set.isEmpty {
 
@@ -206,18 +214,19 @@ public struct RelayLinkPlan: Hashable, Sendable {
   }
 
   /// The flags turned off for the link, so the relay holds its state: those that keep it from
-  /// holding one, when it's switched.
+  /// holding one, when it's switched to a state other than its rest state. A relay switched to
+  /// its rest state stays there by itself, so no flag is turned off.
   public var clearedFlags: [RelayFlag] {
 
-    switchesRelay ? holding.releasingFlags : []
+    switchesRelay && state != holding.restState ? holding.releasingFlags : []
 
   }
 
   /// Whether the relay is switched to its rest state right after the link, while its flags
-  /// are still off: when they were turned off and the state isn't its rest state.
+  /// are still off: whenever they were turned off, since the state then isn't its rest state.
   public var returnsToRestAfterLinking: Bool {
 
-    !clearedFlags.isEmpty && state != holding.restState
+    !clearedFlags.isEmpty
 
   }
 
@@ -409,8 +418,9 @@ public enum RelayStateEvent: Sendable {
 /// The refusals come before the relay is switched or a flag is written, and change nothing:
 /// ``notIdentified(_:because:)``, ``notLinkedToModem(_:)``, ``notDescribed(_:)``,
 /// ``notARelay(_:product:)``, ``stateHoldingNotDescribed(_:product:)``,
-/// ``flagNotChangeable(_:flag:)``, ``flagUnreadable(_:flag:)`` and ``planChanged(old:new:)``.
-/// After
+/// ``stateHoldingFlagUnknown(_:flag:)``, ``restStateUnknown(_:action:)``,
+/// ``flagNotChangeable(_:flag:)``, ``flagNotWritable(_:flag:reason:)``,
+/// ``flagUnreadable(_:flag:)`` and ``planChanged(old:new:)``. After
 /// ``flagNotChanged(_:flag:isSet:)``, ``relayNotConfirmed(_:requested:)`` or
 /// ``remoteLinkingFailed(_:reason:)``, what was changed is put back first, and what didn't go
 /// back, such as ``relayNotReturned(_:state:reason:)`` or
@@ -436,15 +446,28 @@ public enum RelayStateLinkingError: Error, Sendable {
   /// are the device and its product, as a sentence names it.
   case notARelay(InsteonAddress, product: String)
 
-  /// The catalog doesn't say how the relay holds a state, or names a flag or rest state for it
-  /// that the device's command set doesn't give, so what a link would record isn't known. The
-  /// associated values are the device and its product, as a sentence names it.
+  /// The catalog doesn't say how the relay holds a state, so what a link would record isn't
+  /// known. The associated values are the device and its product, as a sentence names it.
   case stateHoldingNotDescribed(InsteonAddress, product: String)
 
+  /// The catalog names a flag in how the relay holds a state that the device's command set
+  /// doesn't give, so the flag can't be read. The associated values are the device and the
+  /// flag's name.
+  case stateHoldingFlagUnknown(InsteonAddress, flag: String)
+
+  /// The catalog names a rest state for the relay that isn't its group type's On or Off
+  /// action. The associated values are the device and the action's name.
+  case restStateUnknown(InsteonAddress, action: String)
+
   /// The relay's flag is on, keeping it from holding a state, and the catalog doesn't let
-  /// linking change it, or gives no command that turns it off and on, so the relay would
-  /// return to its rest state before it links and record that.
+  /// linking change it, so the relay would return to its rest state before it links and
+  /// record that.
   case flagNotChangeable(InsteonAddress, flag: RelayFlag)
+
+  /// The relay's flag is on, keeping it from holding a state, and the message that turns it
+  /// off or back on would be refused, for the reason given, such as a command the catalog
+  /// doesn't give or a guard it puts on the flag.
+  case flagNotWritable(InsteonAddress, flag: RelayFlag, reason: any Error)
 
   /// The device's reply to Get Operating Flags didn't carry the flag.
   case flagUnreadable(InsteonAddress, flag: RelayFlag)
@@ -506,7 +529,8 @@ public enum RelayStateLinkingError: Error, Sendable {
 
     switch self {
     case let .notIdentified(device, _), let .notLinkedToModem(device), let .notDescribed(device), let .notARelay(device, _),
-      let .stateHoldingNotDescribed(device, _), let .flagNotChangeable(device, _), let .flagUnreadable(device, _), let .flagNotChanged(device, _, _),
+      let .stateHoldingNotDescribed(device, _), let .stateHoldingFlagUnknown(device, _), let .restStateUnknown(device, _),
+      let .flagNotChangeable(device, _), let .flagNotWritable(device, _, _), let .flagUnreadable(device, _), let .flagNotChanged(device, _, _),
       let .relayNotConfirmed(device, _), let .remoteLinkingFailed(device, _), let .recordedOtherState(device, _, _, _),
       let .recordNotFound(device, _), let .recordNotRead(device, _), let .relayNotReturned(device, _, _), let .relayReturnUnconfirmed(device, _, _),
       let .flagNotRestored(device, _, _), let .flagRestoreUnconfirmed(device, _, _), let .otherFlagsChanged(device, _, _),
@@ -536,8 +560,14 @@ extension RelayStateLinkingError: CustomStringConvertible, LocalizedError {
       "\(device), \(product), isn't a relay by the Insteon device catalog, so it records no relay state. Nothing was changed."
     case let .stateHoldingNotDescribed(device, product):
       "The Insteon device catalog doesn't say how \(device)'s relay, \(product), holds a state, so what a link would record isn't known. Nothing was changed."
+    case let .stateHoldingFlagUnknown(device, flag):
+      "The Insteon device catalog names a flag, \(flag), in how \(device)'s relay holds a state, but its command set doesn't give that flag, so it can't be read. Nothing was changed."
+    case let .restStateUnknown(device, action):
+      "The Insteon device catalog gives \(device)'s relay the rest state \(action), which isn't its On or Off action, so the state it returns to isn't known. Nothing was changed."
     case let .flagNotChangeable(device, flag):
-      "\(device)'s \(flag.label) flag is on, so its relay doesn't hold a state and returns to its rest state before it links, and the Insteon device catalog doesn't let linking turn the flag off and on. Nothing was changed. Turn the flag off, link, then turn it back on."
+      "\(device)'s \(flag.label) flag is on, so its relay doesn't hold a state and returns to its rest state before it links, and the Insteon device catalog doesn't let linking change the flag. Nothing was changed. Turn the flag off, link, then turn it back on."
+    case let .flagNotWritable(device, flag, reason):
+      "\(device)'s \(flag.label) flag is on, so its relay doesn't hold a state, and the message that turns the flag off or back on would be refused: \(Self.message(reason)) Nothing was changed."
     case let .flagUnreadable(device, flag):
       "\(device)'s reply to Get Operating Flags didn't carry its \(flag.label) flag. Nothing was changed."
     case let .flagNotChanged(device, flag, isSet):

@@ -299,8 +299,22 @@ struct RelayStateTextTests {
       + " Link it first with 'insteon link 1A.2B.3C', then run it again with --relay-state.")
     #expect(LinkingEventText.relayStateMessage(.flagNotChangeable(module, flag: pulse)) == RelayStateLinkingError.flagNotChangeable(module, flag: pulse).description
       + " Run 'insteon device 1A.2B.3C set pulse off', link it, then run 'insteon device 1A.2B.3C set pulse on'.")
-    #expect(LinkingEventText.relayStateMessage(.stateHoldingNotDescribed(module, product: "Example")) == RelayStateLinkingError.stateHoldingNotDescribed(module, product: "Example").description
-      + " Link it without a relay state with 'insteon link 1A.2B.3C'.")
+    for undescribed in [
+      RelayStateLinkingError.stateHoldingNotDescribed(module, product: "Example"),
+      .stateHoldingFlagUnknown(module, flag: "hum"),
+      .restStateUnknown(module, action: "closed")
+    ] {
+
+      #expect(LinkingEventText.relayStateMessage(undescribed) == undescribed.description + " Link it without a relay state with 'insteon link 1A.2B.3C'.")
+
+    }
+
+    // A guard refused the message, so no setting command is suggested.
+    let notWritable = RelayStateLinkingError.flagNotWritable(module, flag: pulse, reason: Failure())
+
+    #expect(LinkingEventText.relayStateMessage(notWritable) == notWritable.description
+      + " See its settings with 'insteon device 1A.2B.3C settings'; link it without a relay state with 'insteon link 1A.2B.3C'.")
+    #expect(!LinkingEventText.relayStateMessage(notWritable).contains(" set pulse"))
     #expect(LinkingEventText.relayStateMessage(.notARelay(module, product: "Example")) == RelayStateLinkingError.notARelay(module, product: "Example").description)
 
   }

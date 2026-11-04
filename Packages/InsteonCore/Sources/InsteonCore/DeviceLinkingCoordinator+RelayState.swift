@@ -396,9 +396,9 @@ extension DeviceLinkingCoordinator {
 
           try await target.refuseUnlessSendable(.flag(DeviceProfile.Group.Condition(flag: operating.name, isSet: isSet)), writableFlags: writableFlags, for: .linkingFlags)
 
-        } catch is DeviceControlError {
+        } catch let error as DeviceControlError {
 
-          throw RelayStateLinkingError.flagNotChangeable(device, flag: flag)
+          throw RelayStateLinkingError.flagNotWritable(device, flag: flag, reason: error)
 
         }
 
@@ -433,18 +433,21 @@ extension DeviceLinkingCoordinator {
   /// Reads the flags the catalog names in how a relay holds a state with Get Operating Flags,
   /// each request once.
   ///
+  /// A relay that names no flag that releases it always holds its state: nothing is read, and
+  /// its pulsing sets don't apply.
+  ///
   /// - Throws: ``RelayStateLinkingError/stateHoldingNotDescribed(_:product:)`` when the catalog
-  ///   doesn't say how the relay holds a state, names a flag its command set doesn't give, or
-  ///   names a rest state other than the group type's On or Off action; and the errors of
+  ///   doesn't say how the relay holds a state,
+  ///   ``RelayStateLinkingError/stateHoldingFlagUnknown(_:flag:)`` when it names a flag its
+  ///   command set doesn't give, ``RelayStateLinkingError/restStateUnknown(_:action:)`` when
+  ///   it names a rest state other than the group type's On or Off action, and the errors of
   ///   ``readFlags(_:of:)``.
   func readStateHolding(_ description: DeviceDescription, of target: Device) async throws -> StateHoldingReading {
 
     let device: InsteonAddress = target.address
-    let notDescribed = RelayStateLinkingError.stateHoldingNotDescribed(device, product: DeviceControlModel.product(of: description))
-
     guard let described = description.mainGroupType?.stateHolding else {
 
-      throw notDescribed
+      throw RelayStateLinkingError.stateHoldingNotDescribed(device, product: DeviceControlModel.product(of: description))
 
     }
 
@@ -458,12 +461,14 @@ extension DeviceLinkingCoordinator {
     case DeviceControlModel.offAction:
       restState = .off
     default:
-      throw notDescribed
+      throw RelayStateLinkingError.restStateUnknown(device, action: described.restState.rawValue)
     }
 
     var names: [SettingName] = []
+    // A relay nothing releases always holds its state, so its pulsing sets don't apply.
+    let pulsing: [SettingName] = described.releasedBy.isEmpty ? [] : described.pulsesOnEveryCommandWhen.flatMap { (set: [SettingName]) -> [SettingName] in set }
 
-    for name in described.releasedBy + described.pulsesOnEveryCommandWhen.flatMap({ (set: [SettingName]) -> [SettingName] in set }) where !names.contains(name) {
+    for name in described.releasedBy + pulsing where !names.contains(name) {
 
       names.append(name)
 
@@ -476,7 +481,7 @@ extension DeviceLinkingCoordinator {
 
       guard let flag = commands?.operatingFlag(named: name) else {
 
-        throw notDescribed
+        throw RelayStateLinkingError.stateHoldingFlagUnknown(device, flag: name.rawValue)
 
       }
 

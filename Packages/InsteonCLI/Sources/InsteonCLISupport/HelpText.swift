@@ -199,9 +199,9 @@ public enum HelpText {
       --timeout SECONDS   How long to wait for the SET button. Defaults to 240, the time the
                           modem stays in linking mode.
       --relay-state on|off
-                          With ADDRESS, the state a relay records, so
-                          a group On from the modem sets the relay to it and a group Off sets
-                          the opposite. See below. Not with --responder, --either or --cancel.
+                          With ADDRESS, the state a relay records, so a group On from the
+                          modem sets the relay to it and a group Off sets the opposite. See
+                          below. Not with --responder, --either or --cancel.
       --cancel            Take the modem out of linking mode with Cancel ALL-Linking.
 
     With ADDRESS and --relay-state, the device's main group must be a relay whose type the
@@ -210,21 +210,21 @@ public enum HelpText {
     relay's status, shows what it will switch and put back, and asks before it switches
     anything; --yes skips the question, which is needed without a terminal, and --dry-run
     shows the plan and sends nothing more. When the relay isn't in the state, it
-    switches the relay, and whatever it controls, such as a garage door opener, a lock or a
-    valve, then reads its status again; a relay already in the state is sent nothing. When
-    the flags of
-    one of the catalog's sets that make every On and Off pulse the relay are all on, the
-    state is ignored, the relay isn't switched and no flag is written. A relay with a flag on
-    that keeps it from holding a state would return to its rest state before it links, so
-    that flag is turned off first, when the catalog lets linking change it and the flag can
-    be turned back on. The relay is read again as it links, and nothing is switched when it
-    doesn't match the plan shown. The device is linked in one link, in the --group group,
-    not by the catalog's links to a Hub, and never with its SET button. Then a relay whose
-    flag was turned off is returned to its rest state and its flag turned back on, even when
-    linking fails or Control-C stops it. A relay that holds a state keeps the state it
-    recorded, and is switched back when linking fails or is stopped. Last, its responder
-    record is read back to check the state it holds. Without --relay-state, a relay is never
-    switched and its flags are never written.
+    switches the relay, and whatever it controls, such as a garage door opener, a lock or
+    a valve, then reads its status again; a relay already in the state is sent nothing.
+    When the flags of one of the catalog's sets that make every On and Off pulse the relay
+    are all on, the state is ignored, the relay isn't switched and no flag is written. A
+    relay with a flag on that keeps it from holding a state would return to its rest state
+    before it links, so to record the other state, that flag is turned off first, when the
+    catalog lets linking change it and the flag can be turned back on. The relay is read
+    again as it links, and nothing is switched when it doesn't match the plan shown. The
+    device is linked in one link, in the --group group, not by the catalog's links to a
+    Hub, and never with its SET button. Then a relay whose flag was turned off is returned
+    to its rest state and its flag turned back on, even when linking fails or Control-C
+    stops it. A relay that holds a state keeps the state it recorded, and is switched back
+    when linking fails or is stopped. Last, its responder record is read back to check the
+    state it holds. Without --relay-state, a relay is never switched and its flags are
+    never written.
 
     With ADDRESS and --database, links the device by writing the records of the catalog's
     links to a Hub straight into its ALL-Link database and the modem's, without linking mode

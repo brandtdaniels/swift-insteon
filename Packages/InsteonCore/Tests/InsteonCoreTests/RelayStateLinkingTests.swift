@@ -455,6 +455,8 @@ struct RelayStateLinkingTests {
 
     let flags: UInt8 = RelayExample.pulse.bit | RelayExample.pulseBoth.bit
     let modem: InMemoryModem = await modem(flags: flags)
+    // Its pulse flag, whatever its name, doesn't make this relay pulse.
+    await modem.setPulsingBit(0x80, of: module)
     let recorder = LinkingRecorder()
 
     let result: DeviceLinkingResult = try await linkRelay(modem, .on, observer: recorder)
@@ -641,36 +643,128 @@ struct RelayStateLinkingTests {
 
   }
 
-  @Test(arguments: [
-    // The catalog says nothing.
-    nil,
-    // A rest state that isn't one of the relay's actions.
-    GroupType.StateHolding(releasedBy: ["pulse"], restState: "closed"),
-    // A flag the command set doesn't give.
-    GroupType.StateHolding(releasedBy: ["pulse", "hum"], restState: "off")
-  ])
-  func refusesARelayTheCatalogDoesntSayHowItHoldsAState(_ holding: GroupType.StateHolding?) async throws {
+  /// What a catalog that doesn't say how its relay holds a state is refused with.
+  enum Undescribed: CaseIterable, Sendable {
 
-    let modem: InMemoryModem = await modem(flags: 0x00)
-    let linking: DeviceLinkingCoordinator = network(modem, catalog: catalog(relayType: relay(holding: holding))).linking
-    let matches = { (error: RelayStateLinkingError) -> Bool in
+    /// The catalog says nothing.
+    case absent
 
-      guard case let .stateHoldingNotDescribed(device, product) = error else {
+    /// A rest state that isn't one of the relay's actions.
+    case restState
 
-        return false
+    /// A flag the command set doesn't give.
+    case flag
 
+    var holding: GroupType.StateHolding? {
+
+      switch self {
+      case .absent:
+        return nil
+      case .restState:
+        return GroupType.StateHolding(releasedBy: ["pulse"], restState: "closed")
+      case .flag:
+        return GroupType.StateHolding(releasedBy: ["pulse", "hum"], restState: "off")
       }
-
-      return device == RelayExample.module && product == "Example 9611 9611"
 
     }
 
-    await expectRefusal({ _ = try await linking.planRelayLink(module, recording: .on, observer: LinkingRecorder()) }, matches)
-    await expectRefusal({ _ = try await linking.linkRelay(module, recording: .on, group: 2, twoWay: .never, observer: LinkingRecorder()) }, matches)
+    func matches(_ error: RelayStateLinkingError) -> Bool {
+
+      switch (self, error) {
+      case let (.absent, .stateHoldingNotDescribed(device, product)):
+        return device == RelayExample.module && product == "Example 9611 9611"
+      case let (.restState, .restStateUnknown(device, action)):
+        return device == RelayExample.module && action == "closed"
+      case let (.flag, .stateHoldingFlagUnknown(device, flag)):
+        return device == RelayExample.module && flag == "hum"
+      default:
+        return false
+      }
+
+    }
+
+  }
+
+  @Test(arguments: Undescribed.allCases)
+  func refusesARelayTheCatalogDoesntSayHowItHoldsAState(_ undescribed: Undescribed) async throws {
+
+    let modem: InMemoryModem = await modem(flags: 0x00)
+    let linking: DeviceLinkingCoordinator = network(modem, catalog: catalog(relayType: relay(holding: undescribed.holding))).linking
+
+    await expectRefusal({ _ = try await linking.planRelayLink(module, recording: .on, observer: LinkingRecorder()) }, undescribed.matches)
+    await expectRefusal({ _ = try await linking.linkRelay(module, recording: .on, group: 2, twoWay: .never, observer: LinkingRecorder()) }, undescribed.matches)
 
     // Nothing is sent, not even a read of the flags or the relay.
     #expect(await modem.linkingSteps.isEmpty)
     #expect(await modem.operatingFlags[module] == 0x00)
+
+  }
+
+  @Test func linksARelayNothingReleasesAsOneThatHoldsItsState() async throws {
+
+    // No flag releases the relay, so its pulsing set doesn't apply even with both flags on,
+    // and no flag is read.
+    let holding = GroupType.StateHolding(releasedBy: [], restState: "off", pulsesOnEveryCommandWhen: [["pulse", "pulseBoth"]])
+    let flags: UInt8 = RelayExample.pulse.bit | RelayExample.pulseBoth.bit
+    let modem: InMemoryModem = await modem(flags: flags)
+    // Its pulse flag, whatever its name, doesn't make this relay pulse.
+    await modem.setPulsingBit(0x80, of: module)
+    let linking: DeviceLinkingCoordinator = network(modem, catalog: catalog(relayType: relay(holding: holding))).linking
+
+    let plan: RelayLinkPlan = try await linking.planRelayLink(module, recording: .on, observer: LinkingRecorder())
+
+    #expect(await modem.linkingSteps == [statusRequest])
+    #expect(plan.holding.flagsOn.isEmpty)
+    #expect(plan.holding.holdsState)
+    #expect(!plan.ignoresState)
+    #expect(plan.switchesRelay)
+    #expect(plan.clearedFlags.isEmpty)
+    #expect(plan.switchesBackOnFailure)
+
+    let result: DeviceLinkingResult = try await linking.linkRelay(plan, group: 2, twoWay: .never, observer: LinkingRecorder())
+
+    #expect(!writesFlags(await modem.linkingSteps))
+    #expect(await modem.operatingFlags[module] == flags)
+    #expect(await modem.levels[module] == 0xFF)
+    #expect(result.relayState?.groupOn == .on)
+    #expect(result.relayState?.recordedData1 == 0xFF)
+
+  }
+
+  @Test func returnsARelayThatRestsOnToOnAfterRecordingOff() async throws {
+
+    // The relay rests on: while pulse is on, it returns to on by itself.
+    let holding = GroupType.StateHolding(releasedBy: ["pulse"], restState: "on")
+    let modem: InMemoryModem = await modem(flags: RelayExample.pulse.bit, relay: 0xFF)
+    await modem.setPulsingBit(RelayExample.pulse.bit, restLevel: 0xFF, of: module)
+    let linking: DeviceLinkingCoordinator = network(modem, catalog: catalog(relayType: relay(holding: holding))).linking
+
+    let result: DeviceLinkingResult = try await linking.linkRelay(module, recording: .off, group: 2, twoWay: .never, observer: LinkingRecorder())
+
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+
+    // Pulse is turned off and the relay switched off, so it records off; then it's switched
+    // back on, its rest state, before pulse is turned back on.
+    #expect(Array(steps.prefix(6)) == [
+      step(0x1F, 0x00),
+      statusRequest,
+      step(0x20, RelayExample.pulse.off, extended: true),
+      step(0x1F, 0x00),
+      step(0x13, 0x00),
+      statusRequest
+    ])
+    #expect(Array(steps.suffix(4)) == [step(0x11, 0xFF), step(0x20, RelayExample.pulse.on, extended: true), step(0x1F, 0x00), statusRequest])
+    #expect(await modem.databases[module]?.values.first?.data1 == 0x00)
+    #expect(await modem.levels[module] == 0xFF)
+    #expect(await modem.operatingFlags[module] == RelayExample.pulse.bit)
+    #expect(result.relayState?.groupOn == .off)
+    #expect(result.relayState?.holding.restState == .on)
+
+    // Asked for on, its rest state, it isn't switched and no flag is written.
+    let rests: RelayLinkPlan = try await linking.planRelayLink(module, recording: .on, observer: LinkingRecorder())
+
+    #expect(!rests.switchesRelay)
+    #expect(rests.clearedFlags.isEmpty)
 
   }
 
@@ -692,23 +786,58 @@ struct RelayStateLinkingTests {
 
   }
 
-  @Test func clearsAndRestoresEachFlagThatReleasesTheRelay() async throws {
+  /// The made-up hold flag, a second flag that releases the relay, in the request given.
+  func hold(in query: OperatingFlagsRequest = .operatingFlags) -> OperatingFlag {
 
-    // Two made-up flags release the relay, both of which linking may change.
-    let hold = OperatingFlag(name: "hold", summary: "A made-up flag that also releases the relay.", query: .operatingFlags, bit: 0x01, on: 0x30, off: 0x31, label: "Hold")
+    OperatingFlag(name: "hold", summary: "A made-up flag that also releases the relay.", query: query, bit: 0x01, on: 0x30, off: 0x31, label: "Hold")
+
+  }
+
+  /// A network on which the module is released by pulse and hold, both of which linking may
+  /// change.
+  func twoFlagNetwork(_ modem: InMemoryModem, holdQuery: OperatingFlagsRequest = .operatingFlags) -> DeviceNetwork {
+
     let commands: CommandSet = RelayExample.moduleCommands(
       id: "exampleTwoFlagRelay",
       linkingChanges: [LinkingChange(flag: "pulse"), LinkingChange(flag: "hold")],
-      flags: RelayExample.operatingFlags + [hold],
+      flags: RelayExample.operatingFlags + [hold(in: holdQuery)],
       relayType: relay(holding: GroupType.StateHolding(releasedBy: ["pulse", "hold"], restState: "off"))
     )
-    let catalog = DeviceCatalog(profiles: [RelayExample.profile("9612", RelayExample.moduleIdentity, commands: commands, type: "relay")], commandSets: [commands])
+
+    return network(modem, catalog: DeviceCatalog(profiles: [RelayExample.profile("9612", RelayExample.moduleIdentity, commands: commands, type: "relay")], commandSets: [commands]))
+
+  }
+
+  /// A modem whose module has pulse and hold on, and carries out hold's commands unless told
+  /// not to turn it off.
+  func twoFlagModem(turnsHoldOff: Bool = true) async -> InMemoryModem {
+
     let modem: InMemoryModem = await modem(flags: RelayExample.pulse.bit | 0x01)
     await modem.setOperatingFlagCommand(0x30, bit: 0x01, isSet: true, of: module)
-    await modem.setOperatingFlagCommand(0x31, bit: 0x01, isSet: false, of: module)
+
+    if turnsHoldOff {
+
+      await modem.setOperatingFlagCommand(0x31, bit: 0x01, isSet: false, of: module)
+
+    }
+
+    return modem
+
+  }
+
+  /// The steps that turn pulse back on and read it back.
+  var restorePulse: [InMemoryModem.LinkingStep] {
+
+    [step(0x20, RelayExample.pulse.on, extended: true), step(0x1F, 0x00)]
+
+  }
+
+  @Test func clearsAndRestoresEachFlagThatReleasesTheRelay() async throws {
+
+    let modem: InMemoryModem = await twoFlagModem()
     let recorder = LinkingRecorder()
 
-    let result: DeviceLinkingResult = try await network(modem, catalog: catalog).linking.linkRelay(module, recording: .on, group: 2, twoWay: .never, observer: recorder)
+    let result: DeviceLinkingResult = try await twoFlagNetwork(modem).linking.linkRelay(module, recording: .on, group: 2, twoWay: .never, observer: recorder)
 
     let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
 
@@ -723,20 +852,179 @@ struct RelayStateLinkingTests {
       step(0x11, 0xFF)
     ])
     // Then returned to rest, and both set back in the same order.
-    #expect(Array(steps.suffix(6)) == [
-      step(0x13, 0x00),
-      step(0x20, RelayExample.pulse.on, extended: true),
-      step(0x1F, 0x00),
-      step(0x20, 0x30, extended: true),
-      step(0x1F, 0x00),
-      statusRequest
-    ])
+    #expect(Array(steps.suffix(6)) == [step(0x13, 0x00)] + restorePulse + [step(0x20, 0x30, extended: true), step(0x1F, 0x00), statusRequest])
     #expect(await modem.operatingFlags[module] == RelayExample.pulse.bit | 0x01)
     #expect(await modem.databases[module]?.values.first?.data1 == 0xFF)
     #expect(result.relayState?.clearedFlags.map(\.name) == ["pulse", "hold"])
     #expect(result.relayState?.isRestored == true)
     #expect(result.relayState?.restoreFailures.isEmpty == true)
     #expect(result.relayState?.holding.releasingFlags.map(\.name) == ["pulse", "hold"])
+
+  }
+
+  @Test func readsAndRestoresReleasingFlagsInDifferentRequests() async throws {
+
+    // hold is in another Get Operating Flags request, so each request is read and compared.
+    let modem: InMemoryModem = await twoFlagModem()
+    await modem.setOperatingFlagsMask(0xFE, forQuery: 0x00, of: module)
+    await modem.setOperatingFlagsMask(0x01, forQuery: 0x05, of: module)
+
+    let result: DeviceLinkingResult = try await twoFlagNetwork(modem, holdQuery: OperatingFlagsRequest(rawValue: 0x05)).linking.linkRelay(module, recording: .on, group: 2, twoWay: .never, observer: LinkingRecorder())
+
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+
+    #expect(Array(steps.prefix(7)) == [
+      step(0x1F, 0x00),
+      step(0x1F, 0x05),
+      statusRequest,
+      step(0x20, RelayExample.pulse.off, extended: true),
+      step(0x1F, 0x00),
+      step(0x20, 0x31, extended: true),
+      step(0x1F, 0x05)
+    ])
+    #expect(Array(steps.suffix(6)) == [step(0x13, 0x00)] + restorePulse + [step(0x20, 0x30, extended: true), step(0x1F, 0x05), statusRequest])
+    #expect(await modem.operatingFlags[module] == RelayExample.pulse.bit | 0x01)
+    #expect(result.relayState?.restoreFailures.isEmpty == true)
+
+  }
+
+  @Test func reportsAnotherFlagThatChangedInTheSecondRequestsByte() async throws {
+
+    // Setting hold back on also sets another bit of its byte, which only its own request
+    // reports.
+    let modem: InMemoryModem = await twoFlagModem()
+    await modem.setOperatingFlagCommand(0x30, bit: 0x03, isSet: true, of: module)
+    await modem.setOperatingFlagsMask(0xFC, forQuery: 0x00, of: module)
+    await modem.setOperatingFlagsMask(0x03, forQuery: 0x05, of: module)
+
+    let result: DeviceLinkingResult = try await twoFlagNetwork(modem, holdQuery: OperatingFlagsRequest(rawValue: 0x05)).linking.linkRelay(module, recording: .on, group: 2, twoWay: .never, observer: LinkingRecorder())
+
+    let failures: [RelayStateLinkingError] = result.relayState?.restoreFailures ?? []
+
+    #expect(failures.count == 1)
+
+    guard case let .otherFlagsChanged(device, before, after)? = failures.first else {
+
+      Issue.record("Expected another flag that changed, got \(failures)")
+
+      return
+
+    }
+
+    #expect(device == module)
+    #expect(before == 0x01)
+    #expect(after == 0x03)
+
+  }
+
+  @Test func putsTheFirstFlagBackWhenTheSecondDoesntReadBackOff() async throws {
+
+    // The module acknowledges turning hold off but doesn't, so hold still reads on.
+    let modem: InMemoryModem = await twoFlagModem(turnsHoldOff: false)
+
+    await expectRefusal({ _ = try await twoFlagNetwork(modem).linking.linkRelay(module, recording: .on, group: 2, twoWay: .never, observer: LinkingRecorder()) }) { (error: RelayStateLinkingError) -> Bool in
+
+      guard case let .flagNotChanged(device, flag, isSet) = error else {
+
+        return false
+
+      }
+
+      return device == module && flag.name == "hold" && !isSet
+
+    }
+
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+
+    // The relay is never switched, nothing is linked, and pulse goes back on before hold is
+    // written back on.
+    #expect(!steps.contains(step(0x11, 0xFF)))
+    #expect(!steps.contains { (step: InMemoryModem.LinkingStep) -> Bool in
+
+      if case .modem = step {
+
+        return true
+
+      }
+
+      return false
+
+    })
+    #expect(Array(steps.suffix(4)) == restorePulse + [step(0x20, 0x30, extended: true), step(0x1F, 0x00)])
+    #expect(await modem.operatingFlags[module] == RelayExample.pulse.bit | 0x01)
+
+  }
+
+  /// A made-up error the modem throws for one message.
+  struct WriteFailed: Error {}
+
+  @Test func putsTheFirstFlagBackWhenTheSecondsWriteFails() async throws {
+
+    let modem: InMemoryModem = await twoFlagModem()
+    let module: InsteonAddress = self.module
+    let failures = RestoreWatch()
+
+    // The first write that turns hold off fails, as a modem's error after the message left.
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      if case let .extendedRequest(message) = operation, message.destination == module, message.command == Command(command1: 0x20, command2: 0x31) {
+
+        if await failures.attempts == 0 {
+
+          await failures.count()
+
+          throw WriteFailed()
+
+        }
+
+      }
+
+    }
+
+    await #expect(throws: WriteFailed.self) {
+
+      _ = try await self.twoFlagNetwork(modem).linking.linkRelay(module, recording: .on, group: 2, twoWay: .never, observer: LinkingRecorder())
+
+    }
+
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+
+    // hold may have reached the device, so both are set back, pulse first; the relay is never
+    // switched.
+    #expect(!steps.contains(step(0x11, 0xFF)))
+    #expect(Array(steps.suffix(4)) == restorePulse + [step(0x20, 0x30, extended: true), step(0x1F, 0x00)])
+    #expect(await modem.operatingFlags[module] == RelayExample.pulse.bit | 0x01)
+
+  }
+
+  @Test func putsTheFirstFlagBackWhenCanceledBetweenFlags() async throws {
+
+    let modem: InMemoryModem = await twoFlagModem()
+    let module: InsteonAddress = self.module
+
+    // The task is canceled as hold is about to be turned off, after pulse was.
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      if case let .extendedRequest(message) = operation, message.destination == module, message.command == Command(command1: 0x20, command2: 0x31) {
+
+        throw CancellationError()
+
+      }
+
+    }
+
+    await #expect(throws: CancellationError.self) {
+
+      _ = try await self.twoFlagNetwork(modem).linking.linkRelay(module, recording: .on, group: 2, twoWay: .never, observer: LinkingRecorder())
+
+    }
+
+    let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
+
+    // pulse is set back to its end; hold, whose message may have left, is written back too.
+    #expect(!steps.contains(step(0x11, 0xFF)))
+    #expect(Array(steps.suffix(4)) == restorePulse + [step(0x20, 0x30, extended: true), step(0x1F, 0x00)])
+    #expect(await modem.operatingFlags[module] == RelayExample.pulse.bit | 0x01)
 
   }
 
@@ -1039,9 +1327,11 @@ struct RelayStateLinkingTests {
 
     let steps: [InMemoryModem.LinkingStep] = await modem.linkingSteps
 
+    // Switched to its rest state, it stays there by itself, so no flag is turned off.
     #expect(!steps.contains(step(0x11, 0xFF)))
     #expect(steps.contains(step(0x13, 0x00)))
-    #expect(Array(steps.suffix(3)) == [step(0x20, RelayExample.pulse.on, extended: true), step(0x1F, 0x00), statusRequest])
+    #expect(!writesFlags(steps))
+    #expect(result.relayState?.clearedFlags.isEmpty == true)
     #expect(await modem.levels[module] == 0x00)
     #expect(await modem.operatingFlags[module] == RelayExample.pulse.bit)
     #expect(result.relayState?.recordedData1 == 0x00)
@@ -1328,7 +1618,7 @@ struct RelayStateLinkingTests {
     // The flag can't be turned back on, so the relay can't be made to hold a state.
     await expectRefusal({ _ = try await linkRelay(modem, .on, device: device) }) { (error: RelayStateLinkingError) -> Bool in
 
-      guard case let .flagNotChangeable(refused, flag) = error else {
+      guard case let .flagNotWritable(refused, flag, _) = error else {
 
         return false
 
@@ -1518,7 +1808,7 @@ struct RelayStateLinkingTests {
     // found before anything but reads is sent.
     await expectRefusal({ _ = try await linkRelay(modem, .on, device: device) }) { (error: RelayStateLinkingError) -> Bool in
 
-      guard case let .flagNotChangeable(refused, flag) = error else {
+      guard case let .flagNotWritable(refused, flag, _) = error else {
 
         return false
 
@@ -1925,6 +2215,9 @@ struct RelayStateLinkingTests {
     let notRestored = RelayStateLinkingError.flagNotRestored(module, flag: pulseFlag, reason: ModemError.deviceTimedOut(module))
     let unconfirmed = RelayStateLinkingError.flagRestoreUnconfirmed(module, flag: pulseFlag, reason: ModemError.deviceTimedOut(module))
     let undescribed = RelayStateLinkingError.stateHoldingNotDescribed(module, product: "Example 9611 9611")
+    let unknownFlag = RelayStateLinkingError.stateHoldingFlagUnknown(module, flag: "hum")
+    let unknownRest = RelayStateLinkingError.restStateUnknown(module, action: "closed")
+    let notWritable = RelayStateLinkingError.flagNotWritable(module, flag: pulseFlag, reason: ModemError.deviceTimedOut(module))
     let inPlace = RelayStateLinkingError.recordInPlace(module, group: 0, data1: 0xFF)
 
     #expect(InsteonErrorDescription.message(for: refused) == refused.description)
@@ -1934,6 +2227,12 @@ struct RelayStateLinkingTests {
     #expect(undescribed.description == "The Insteon device catalog doesn't say how \(module)'s relay, Example 9611 9611, holds a state, "
       + "so what a link would record isn't known. Nothing was changed.")
     #expect(undescribed.device == module)
+    #expect(unknownFlag.description == "The Insteon device catalog names a flag, hum, in how \(module)'s relay holds a state, "
+      + "but its command set doesn't give that flag, so it can't be read. Nothing was changed.")
+    #expect(unknownRest.description == "The Insteon device catalog gives \(module)'s relay the rest state closed, which isn't its On or Off action, "
+      + "so the state it returns to isn't known. Nothing was changed.")
+    #expect(notWritable.description.hasPrefix("\(module)'s Pulse flag is on, so its relay doesn't hold a state, and the message that turns the flag off or back on would be refused: "))
+    #expect([unknownFlag.device, unknownRest.device, notWritable.device] == [module, module, module])
     #expect(inPlace.description.contains("Data 1 0xFF"))
 
   }
@@ -1983,6 +2282,10 @@ struct RelayStateLinkingTests {
     let whole = RelayStateHolding(releasedBy: ["pulse"], restState: .off, pulsesOnEveryCommandWhen: both, flagsOn: [pulseBothFlag, pulseFlag])
     #expect(whole.ignoresState)
     #expect(whole.pulsingFlags == [pulseFlag, pulseBothFlag])
+    // A relay nothing releases always holds its state: its pulsing sets don't apply.
+    let neverReleased = RelayStateHolding(releasedBy: [], restState: .off, pulsesOnEveryCommandWhen: both, flagsOn: [pulseFlag, pulseBothFlag])
+    #expect(neverReleased.holdsState)
+    #expect(!neverReleased.ignoresState)
     // An empty set never pulses, and doesn't hide a set after it.
     #expect(!RelayStateHolding(releasedBy: ["pulse"], restState: .off, pulsesOnEveryCommandWhen: [[]]).ignoresState)
     #expect(RelayStateHolding(releasedBy: ["pulse"], restState: .off, pulsesOnEveryCommandWhen: [[], ["pulse"]], flagsOn: [pulseFlag]).pulsingFlags == [pulseFlag])
@@ -1995,6 +2298,11 @@ struct RelayStateLinkingTests {
 
     // A released relay at rest, asked for its rest state, isn't switched.
     #expect(!RelayLinkPlan(device: module, state: .off, before: .off, holding: holding).switchesRelay)
+    // Read mid-pulse, it's switched to its rest state without turning a flag off.
+    let midPulse = RelayLinkPlan(device: module, state: .off, before: .on, holding: holding)
+    #expect(midPulse.switchesRelay)
+    #expect(midPulse.clearedFlags.isEmpty)
+    #expect(!midPulse.returnsToRestAfterLinking)
     // Asked for the other state, it's switched with its flag off, then returned to rest.
     let on = RelayLinkPlan(device: module, state: .on, before: .on, holding: holding)
     #expect(on.switchesRelay)

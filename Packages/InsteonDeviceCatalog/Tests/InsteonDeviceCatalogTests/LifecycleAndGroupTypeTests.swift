@@ -218,6 +218,7 @@ struct LifecycleAndGroupTypeTests {
           }
         },
         { "name": "latch", "label": "Latch", "kind": "relay", "stateHolding": { "releasedBy": ["hold"], "restState": "open" } },
+        { "name": "holding", "label": "Holding", "kind": "relay", "stateHolding": { "releasedBy": [], "restState": "off", "pulsesOnEveryCommandWhen": [["pulse"]] } },
         { "name": "plain", "label": "Plain", "kind": "relay" }
       ],
       "sources": ["A"]
@@ -236,6 +237,8 @@ struct LifecycleAndGroupTypeTests {
     ))
     // The rest state is an action's name, and the pulsing sets are optional.
     #expect(commands.groupType(named: "latch")?.stateHolding == GroupType.StateHolding(releasedBy: ["hold"], restState: "open"))
+    // A relay nothing releases always holds its state; its pulsing sets are read as given.
+    #expect(commands.groupType(named: "holding")?.stateHolding == GroupType.StateHolding(releasedBy: [], restState: "off", pulsesOnEveryCommandWhen: [["pulse"]]))
     // Without it, the catalog doesn't say.
     #expect(commands.groupType(named: "plain")?.stateHolding == nil)
 
@@ -243,7 +246,6 @@ struct LifecycleAndGroupTypeTests {
 
   @Test(arguments: [
     #"{ "releasedBy": "pulse", "restState": "off" }"#,
-    #"{ "releasedBy": [], "restState": "off" }"#,
     #"{ "releasedBy": ["pulse"] }"#,
     #"{ "restState": "off" }"#,
   ])

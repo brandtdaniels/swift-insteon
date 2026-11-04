@@ -567,8 +567,11 @@ public enum LinkingEventText {
     switch error {
     case .notLinkedToModem:
       return "Link it first with 'insteon link \(device)', then run it again with --relay-state."
-    case .stateHoldingNotDescribed:
+    case .stateHoldingNotDescribed, .stateHoldingFlagUnknown, .restStateUnknown:
       return "Link it without a relay state with 'insteon link \(device)'."
+    case .flagNotWritable:
+      // The guard that refused the message would refuse a setting command too.
+      return "See its settings with 'insteon device \(device) settings'; link it without a relay state with 'insteon link \(device)'."
     case let .flagNotChangeable(_, flag):
       return "Run 'insteon device \(device) set \(flag.name) off', link it, then run 'insteon device \(device) set \(flag.name) on'."
     case let .flagNotRestored(_, flag, _):
