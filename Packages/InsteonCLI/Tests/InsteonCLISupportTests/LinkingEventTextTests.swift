@@ -176,7 +176,7 @@ struct LinkingEventTextTests {
     #expect(notes(.keepAwake(.releasing(lamp))) == ["Letting 1A.2B.3C sleep again..."])
     #expect(notes(.keepAwake(.released(lamp))).isEmpty)
     #expect(notes(.keepAwake(.notReleased(lamp, reason: Failure()))) == [
-      "1A.2B.3C wasn't let sleep again: It failed. It may stay awake and use its batteries until it sleeps on its own "
+      "1A.2B.3C wasn't let sleep again: It failed. It may remain awake and use its batteries until it sleeps on its own "
         + "or is woken and linked again."
     ])
 

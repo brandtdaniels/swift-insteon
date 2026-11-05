@@ -115,10 +115,10 @@ if try await lamp.capabilities().canDim {
 }
 ```
 
-A group whose state shares a command with other groups, such as each of an EZFlora's zones in
+A group whose state shares a command with other groups, such as each of a sprinkler's zones in
 its valve status, is on only when the reply's bits match the pattern the catalog gives it, so
-each zone reads on its own. A load made of outputs, such as a ballast dimmer's two relays in
-relay mode, lists them in ``DeviceGroup/outputs``, and
+each zone reads on its own. A load made of outputs, such as a dimmer's two relays while a mode
+flag is set, lists them in ``DeviceGroup/outputs``, and
 ``Device/turnOn(outputs:group:)`` and ``Device/turnOff(outputs:group:)`` switch them by their
 bits, once the device reports the operating flag state the catalog names. An alarm or arming
 group lists its ``DeviceGroup/armModes``.

@@ -85,21 +85,21 @@ Control-C stops a command cleanly: `link`, `unlink` and `remove` take the modem 
 
 ```text
 $ insteon device 4D.5E.6F settings
-Settings of 4D.5E.6F, Dimmer Switch 2477D (SwitchLinc Dimmer):
+Settings of 4D.5E.6F, Example Dimmer 9101 (DemoLinc Dimmer):
 
 Load
-  Resume dim:              off    writable
+  Remember level:          off    writable
   Ramp rate:               0.5 s  writable
   On-level:                100%   writable
 
 LEDs
-  Blink LED when sending:  on     writable
+  Flash LED when sending:  on     writable
   LED brightness:          64     writable
 ```
 
 A setting the device didn't report reads "not reported". Settings the catalog marks advanced, such as the powerline's timing and X10, are shown only with `--advanced`. `--json` prints each setting with its section, name, label, button, value, byte, default and whether it's writable.
 
-`insteon device ADDRESS set NAME VALUE` takes the catalog's name, such as `rampRate`, or its label in any case, such as `"ramp rate"`. A flag takes `on` or `off`; a value takes a label of its value table, such as `0.5s`, a number in its unit, such as `50%`, buttons such as `1,3`, or a byte such as `0x1C`. `--button N` picks the button or group of a per-button value. The command refuses a setting the catalog gives no way to write, and says why. It never writes the flags that turn off a device's radio or powerline or require a checksum in every message, which can cut the device off from the modem, so `settings` shows them as read-only; and it only turns the programming lock off, never on. A value whose byte holds those flags, such as an open/close sensor's configuration byte, is refused when it would turn the programming lock on or change one of the others. Set Operating Flags goes to an i2CS device as an extended message with a checksum.
+`insteon device ADDRESS set NAME VALUE` takes the catalog's name, such as `rampRate`, or its label in any case, such as `"ramp rate"`. A flag takes `on` or `off`; a value takes a label of its value table, such as `0.5s`, a number in its unit, such as `50%`, buttons such as `1,3`, or a byte such as `0x1C`. `--button N` picks the button or group of a per-button value. The command refuses a setting the catalog gives no way to write, and says why. It never writes a flag the catalog keeps, such as one that turns off a device's radio or powerline or requires a checksum in every message, which can cut the device off from the modem, so `settings` shows them as read-only; and a flag the catalog guards as never set, such as one that locks linking from the device itself, it only turns off, never on. A value whose byte holds those flags, such as a sensor's configuration byte, is refused when it would turn a never-set flag on or change a kept one. Set Operating Flags goes to an i2CS device as an extended message with a checksum.
 
 A write can change other settings too, as some devices turn a flag on when a value that isn't zero is written. So `set` reads the device's settings the Insteon device catalog gives a way to write, the same way `settings` reads them, just before the write and again once it's read back, and prints a line for each one whose value differs. A flag that's never written, such as one that turns the radio off, is compared too. A reading, or a value the catalog gives no way to write, such as a measure of noise, changes on its own rather than because of the write, so it isn't compared:
 
@@ -138,7 +138,7 @@ The device must run i2CS and accept the modem, as it does once it holds any reco
 
 ### Exploring
 
-`device ADDRESS send` and `modem send` send what you give them, to learn what a device or modem does that the catalog doesn't describe yet, with exceptions that nothing forces. Set Operating Flags (`0x20`) with cmd2 `0x0C`, `0x0E`, `0x19` or `0x00`, which on most devices turns the radio or powerline off, requires a checksum in every message or turns the programming lock on, goes only to a device the identity cache knows whose catalog entry names that cmd2 for a flag or command it doesn't guard, such as an i3 Keypad's lock buttons flag, turned on with `0x19`. A cmd2 the catalog entry names for a guarded flag, such as radio off, or doesn't name at all, is refused. Poke (`0x29`), which writes a device's memory, its ALL-Link database included, is never sent; Set Address MSB (`0x28`) and Peek (`0x2B`) write nothing and are sent. `modem send` has no device to look up, so it refuses those four Set Operating Flags and Poke in any message to a device (`0x62`) or a group (`0x61`) it's given, and never writes such a message cut short. For a device the identity cache knows, `device ADDRESS send` also refuses a message its catalog entry never sends, and an extended message that writes a byte holding a flag the catalog guards, which only `device ADDRESS set` writes, once it has read the byte. To a device the identity cache doesn't know, or whose catalog entry gives no command set, it refuses an extended Set (`0x2E` with D2 other than `0x00`), since which bits it writes, such as an open/close sensor's programming lock, can't be told.
+`device ADDRESS send` and `modem send` send what you give them, to learn what a device or modem does that the catalog doesn't describe yet, with exceptions that nothing forces. Set Operating Flags (`0x20`) with cmd2 `0x0C`, `0x0E`, `0x19` or `0x00`, which on most devices turns the radio or powerline off, requires a checksum in every message or locks linking from the device itself, goes only to a device the identity cache knows whose catalog entry names that cmd2 for a flag or command it doesn't guard, such as a keypad whose button lock is turned on with `0x19`. A cmd2 the catalog entry names for a guarded flag, such as radio off, or doesn't name at all, is refused. Poke (`0x29`), which writes a device's memory, its ALL-Link database included, is never sent; Set Address MSB (`0x28`) and Peek (`0x2B`) write nothing and are sent. `modem send` has no device to look up, so it refuses those four Set Operating Flags and Poke in any message to a device (`0x62`) or a group (`0x61`) it's given, and never writes such a message cut short. For a device the identity cache knows, `device ADDRESS send` also refuses a message its catalog entry never sends, and an extended message that writes a byte holding a flag the catalog guards, which only `device ADDRESS set` writes, once it has read the byte. To a device the identity cache doesn't know, or whose catalog entry gives no command set, it refuses an extended Set (`0x2E` with D2 other than `0x00`), since which bits it writes, such as one that locks linking, can't be told.
 
 `modem send` also refuses, without `--force`, a command number the package doesn't know and commands that change or erase what the modem keeps or stop it answering, such as Reset the IM (`0x67`), Manage ALL-Link Record (`0x6F`) and Write Database (`0x76`). It also refuses Start ALL-Linking (`0x64`) with link code `0xFF`, which deletes links, and a message (`0x62`) that writes to a device, which `device ADDRESS set` and `device ADDRESS send` are for: Read/Write ALL-Link Database (`0x2F`), any other Set Operating Flags (`0x20`) and Extended Set/Get (`0x2E`) with D2 other than `0x00`. A command must have the length its number calls for, counting `0x02`: 8 bytes for a standard message and 22 for an extended one, and 2 or 3 for Beep (`0x77`). What you learn belongs in the catalog, marked as observed.
 
@@ -193,7 +193,7 @@ Linked 4D.5E.6F in group 0, modem as controller.
 Category:     0x01 (Dimmable Lighting Control)
 Subcategory:  0x20
 Firmware:     0x41
-Product:      Dimmer Switch 2477D (SwitchLinc Dimmer)
+Product:      Example Dimmer 9101 (DemoLinc Dimmer)
 
 $ swift run insteon --hub 192.168.1.20 device 4D.5E.6F on 50%
 Connecting to the Hub at 192.168.1.20:25105

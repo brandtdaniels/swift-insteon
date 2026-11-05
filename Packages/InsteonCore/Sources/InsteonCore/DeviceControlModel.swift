@@ -105,7 +105,7 @@ struct DeviceControlModel: Sendable {
   }
 
   /// A product as a sentence names it: the catalog's display name, such as
-  /// `"Dimmer Switch 2477D (SwitchLinc Dimmer)"`, or else its identity, such as
+  /// `"Example Dimmer 9101 (DemoLinc Dimmer)"`, or else its identity, such as
   /// `"category 0x07, subcategory 0x1A"`.
   static func product(of description: DeviceDescription) -> String {
 
@@ -227,7 +227,7 @@ struct DeviceControlModel: Sendable {
   /// Whether an action of a group sends a message that reaches the group: the group is the
   /// main group, or no other group's action of the same name sends the same message.
   ///
-  /// A KeypadLinc's detached load, whose `on` action names Light On without a group, sends
+  /// A keypad's detached load, whose `on` action names Light On without a group, sends
   /// the main group's message, so it can't be reached on its own.
   func canAddress(_ group: Group, with name: SettingName) -> Bool {
 
@@ -310,8 +310,8 @@ struct DeviceControlModel: Sendable {
   /// Whether a group's state can be read as its type says: its state command is a standard
   /// command the command set describes, and its reply is about the group. A reply with a bit
   /// per group is about groups 1 through 8, and a reply whose bits the group's
-  /// `GroupType.State.onWhen` names is about the group that pattern names, such as each of an
-  /// EZFlora's zones in its shared valve status; any other reply is about the main group, or
+  /// `GroupType.State.onWhen` names is about the group that pattern names, such as each of a
+  /// sprinkler's zones in its shared valve status; any other reply is about the main group, or
   /// about a group whose state command no other group's state shares.
   func canRead(_ group: Group) -> Bool {
 

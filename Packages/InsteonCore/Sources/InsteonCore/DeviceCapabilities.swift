@@ -147,7 +147,7 @@ public struct DeviceGroup: Hashable, Sendable {
   public var outputs: [DeviceOutput]
 
   /// The operating flag, by its key, and the state it must be in for ``DeviceGroup/outputs``
-  /// to be switched on their own, such as `relayMode` set, or `nil` when they always can be.
+  /// to be switched on their own, such as `outputMode` set, or `nil` when they always can be.
   public var outputsActiveWhen: DeviceFlagCondition?
 
   /// The modes an alarm group sounds in, or an arming group arms the device in, as the
@@ -201,7 +201,7 @@ public struct DeviceGroup: Hashable, Sendable {
 
 }
 
-/// An operating flag, by its key, and a state it's in, such as `relayMode` set.
+/// An operating flag, by its key, and a state it's in, such as `outputMode` set.
 public struct DeviceFlagCondition: Hashable, Sendable {
 
   /// The flag's key in the catalog.

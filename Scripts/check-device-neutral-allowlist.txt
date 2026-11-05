@@ -1,50 +1,18 @@
 # Files that Scripts/check-device-neutral.py knows name a real product or operating flag, each
 # with a reason. Each entry is a path from the repository's root, the word, and why it stays,
 # separated by tabs. Entries only go: CI fails a pull request that adds one.
-Packages/InsteonCLI/README.md	2477D	Docs or help that name a real product as an example; to be replaced with an invented one.
-Packages/InsteonCLI/README.md	Blink LED when sending	Docs or help that name a real product or flag as an example; to be replaced with an invented one.
-Packages/InsteonCLI/README.md	Dimmer Switch	Docs or help that name a real product as an example; to be replaced with an invented one.
-Packages/InsteonCLI/README.md	Lock buttons	Docs or help that name a real product or flag as an example; to be replaced with an invented one.
 Packages/InsteonCLI/README.md	Programming lock	Docs or help that name a real product or flag as an example; to be replaced with an invented one.
-Packages/InsteonCLI/README.md	Resume dim	Docs or help that name a real product or flag as an example; to be replaced with an invented one.
-Packages/InsteonCLI/README.md	SwitchLinc Dimmer	Docs or help that name a real product as an example; to be replaced with an invented one.
-Packages/InsteonCLI/README.md	i3 Keypad	Docs or help that name a real product as an example; to be replaced with an invented one.
-Packages/InsteonCLI/Sources/InsteonCLISupport/HelpText.swift	Lock buttons	Docs or help that name a real product or flag as an example; to be replaced with an invented one.
-Packages/InsteonCLI/Sources/InsteonCLISupport/HelpText.swift	Programming lock	Docs or help that name a real product or flag as an example; to be replaced with an invented one.
-Packages/InsteonCLI/Sources/InsteonCLISupport/HelpText.swift	i3 Keypad	Docs or help that name a real product as an example; to be replaced with an invented one.
-Packages/InsteonCLI/Sources/InsteonCLISupport/LinkingText.swift	2477D	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCLI/Sources/InsteonCLISupport/LinkingText.swift	Dimmer Switch	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCLI/Sources/InsteonCLISupport/LinkingText.swift	Stay awake	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCLI/Sources/InsteonCLISupport/SelfTestText.swift	Programming lock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCLI/Sources/InsteonCLISupport/SelfTestText.swift	programmingLock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCLI/Sources/InsteonCLISupport/SendRefusalText.swift	Programming lock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCLI/Sources/InsteonCLISupport/SendRefusalText.swift	powerLineOff	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCLI/Sources/InsteonCLISupport/SendRefusalText.swift	radioOff	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCLI/Sources/InsteonCLISupport/WatchText.swift	2477D	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCLI/Sources/InsteonCLISupport/WatchText.swift	Dimmer Switch	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCLI/Sources/insteon/Names.swift	2477D	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCLI/Sources/insteon/Names.swift	Dimmer Switch	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCLI/Sources/insteon/Names.swift	SwitchLinc Dimmer	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
 Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	powerLineOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
 Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	radioOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCLI/Tests/InsteonCLISupportTests/LinkingEventTextTests.swift	Stay awake	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
 Packages/InsteonCLI/Tests/InsteonCLISupportTests/SelfTestTextTests.swift	Programming lock	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
 Packages/InsteonCLI/Tests/InsteonCLISupportTests/SelfTestTextTests.swift	programmingLock	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCore/README.md	Programming lock	Docs or help that name a real product or flag as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/Device+Control.swift	Relay mode	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCore/Sources/InsteonCore/Device+SelfTest.swift	programmingLock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/Device+Sending.swift	EZFlora	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/Device+Sending.swift	Stay awake	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCore/Sources/InsteonCore/Device+SettingWrites.swift	Programming lock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCore/Sources/InsteonCore/Device+Settings.swift	Programming lock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceCapabilities.swift	relayMode	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceControlModel.swift	2477D	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/DeviceControlModel.swift	Dimmer Switch	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/DeviceControlModel.swift	EZFlora	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/DeviceControlModel.swift	SwitchLinc Dimmer	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/DeviceControlModel.swift	keypadLinc	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceInfo.swift	2477D	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/DeviceInfo.swift	Dimmer Switch	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
 Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	Lock buttons	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	Programming lock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	checksumRequired	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
@@ -55,21 +23,9 @@ Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	powerLineOff	
 Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	programmingLock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	radioOff	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCore/Sources/InsteonCore/DeviceSettingsReading.swift	Programming lock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceStatus.swift	2477D	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/DeviceStatus.swift	Dimmer Switch	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/DeviceStatus.swift	Relay mode	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceStatus.swift	SwitchLinc Dimmer	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/InsteonCore.docc/InsteonCore.md	EZFlora	Docs or help that name a real product as an example; to be replaced with an invented one.
 Packages/InsteonCore/Sources/InsteonCore/InsteonCore.docc/InsteonCore.md	Lock buttons	Docs or help that name a real product or flag as an example; to be replaced with an invented one.
 Packages/InsteonCore/Sources/InsteonCore/InsteonCore.docc/InsteonCore.md	Programming lock	Docs or help that name a real product or flag as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/InsteonCore.docc/InsteonCore.md	Relay mode	Docs or help that name a real product or flag as an example; to be replaced with an invented one.
 Packages/InsteonCore/Sources/InsteonCore/InsteonCore.docc/InsteonCore.md	i3 Keypad	Docs or help that name a real product as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/ProductCatalog.swift	2477D	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/ProductCatalog.swift	Dimmer Switch	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/ProductCatalog.swift	SwitchLinc Dimmer	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/ProtectedCommand.swift	Lock buttons	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/ProtectedCommand.swift	Programming lock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/ProtectedCommand.swift	i3 Keypad	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCore/Sources/InsteonCore/ProtectedCommand.swift	powerLineOff	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCore/Sources/InsteonCore/ProtectedCommand.swift	radioOff	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCore/Sources/InsteonCore/SelfTest.swift	Programming lock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.

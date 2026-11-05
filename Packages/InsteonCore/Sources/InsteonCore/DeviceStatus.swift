@@ -267,7 +267,7 @@ public enum DeviceControlError: Error, Hashable, Sendable {
 
   /// Neither the Insteon device catalog nor the device's category gives a way to do the
   /// operation. The associated values are the operation and the product, as a sentence names
-  /// it, such as `"Dimmer Switch 2477D (SwitchLinc Dimmer)"` or
+  /// it, such as `"Example Dimmer 9101 (DemoLinc Dimmer)"` or
   /// `"category 0x07, subcategory 0x1A"`.
   case unsupported(DeviceOperation, product: String)
 
@@ -290,8 +290,9 @@ public enum DeviceControlError: Error, Hashable, Sendable {
   case noSuchOutput(String, group: Int, product: String)
 
   /// The group's load isn't its outputs while the operating flag its type names isn't in the
-  /// state it names, such as a ballast dimmer that's not in relay mode, so an output can't be
-  /// switched on its own. The associated values are the group and the product.
+  /// state it names, such as a dimmer whose load is two relays only while a mode flag is set,
+  /// so an output can't be switched on its own. The associated values are the group and the
+  /// product.
   case outputsInactive(group: Int, product: String)
 
 }
