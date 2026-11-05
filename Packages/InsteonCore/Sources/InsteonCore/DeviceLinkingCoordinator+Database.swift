@@ -6,21 +6,6 @@ import InsteonProtocol
 // Linking and unlinking a device by writing ALL-Link database records directly.
 extension DeviceLinkingCoordinator {
 
-  /// The address of the lowest record in a device's database. Insteon's Data Base Format
-  /// sheet places device records from `0x0FFF` down to `0x0300`.
-  static let lowestRecordAddress: UInt16 = 0x0307
-
-  /// The flags of a record in use that a database link writes: `0xE2` for a controller record
-  /// and `0xA2` for a responder record, which also set the product-dependent bit 5.
-  static func inUseFlags(isController: Bool) -> AllLinkRecordFlags {
-
-    AllLinkRecordFlags(rawValue: isController ? 0xE2 : 0xA2)
-
-  }
-
-  /// A record that has never been used, which marks the end of a device's database.
-  static let endOfDatabase: AllLinkRecord = AllLinkRecord(flags: [], group: 0x00, address: InsteonAddress(0x00, 0x00, 0x00))
-
   /// The on-level a responder record holds for a byte the catalog names `onLevel` without a
   /// value: full on, the level linking by the device's address records.
   static let fullOnLevel: UInt8 = 0xFF
@@ -364,13 +349,9 @@ extension DeviceLinkingCoordinator {
     // Room for the device's records: its slots not in use, then one more for each slot the
     // end can move down.
     let deviceAdds: Int = missing.filter { (record: NeededRecord) -> Bool in !record.isModems }.count
-    var free: [UInt16] = reading.deviceRecords.filter { (response: AllLinkRecordResponse) -> Bool in
-
-      !response.isEndOfDatabase && !response.record.flags.contains(.inUse)
-
-    }.map(\.address)
-    var end: UInt16 = reading.deviceRecords.last?.address ?? 0x0FFF
-    let roomBelowEnd: Int = end >= lowestRecordAddress + 8 ? Int((end - lowestRecordAddress) / 8) : 0
+    var free: [UInt16] = reading.deviceRecords.filter(\.isReusable).map(\.address)
+    var end: UInt16 = reading.deviceRecords.last?.address ?? DeviceDatabaseLayout.firstRecordAddress
+    let roomBelowEnd: Int = DeviceDatabaseLayout.recordCount(below: end)
 
     guard deviceAdds <= free.count + roomBelowEnd else {
 
@@ -386,7 +367,7 @@ extension DeviceLinkingCoordinator {
 
         let data: [UInt8] = modemData(reading.modemLinkData, isController: record.isController, identity: reading.identification.identity)
         let written = AllLinkRecord(
-          flags: inUseFlags(isController: record.isController),
+          flags: .linked(isController: record.isController),
           group: record.group,
           address: device,
           data1: data[0],
@@ -410,7 +391,7 @@ extension DeviceLinkingCoordinator {
 
       }
       let written = AllLinkRecord(
-        flags: inUseFlags(isController: record.isController),
+        flags: .linked(isController: record.isController),
         group: record.group,
         address: modem,
         data1: data[0],
@@ -426,9 +407,15 @@ extension DeviceLinkingCoordinator {
 
         // The slot below the end becomes the new end before the end's slot is written, so the
         // database always has an end, even if the second write fails.
-        steps.append(DatabaseLinkStep(kind: .markEndOfDatabase, written: endOfDatabase, memoryAddress: end - 8))
+        guard let newEnd: UInt16 = DeviceDatabaseLayout.address(below: end) else {
+
+          preconditionFailure("The room below the end is counted before any step is planned.")
+
+        }
+
+        steps.append(DatabaseLinkStep(kind: .markEndOfDatabase, written: .endOfDatabase, memoryAddress: newEnd))
         steps.append(DatabaseLinkStep(kind: .addDeviceRecord, written: written, memoryAddress: end))
-        end -= 8
+        end = newEnd
 
       }
 
@@ -681,7 +668,7 @@ extension DeviceLinkingCoordinator {
 
       guard
         modemAddress == plan.modem,
-        Self.isSame(records, plan.deviceRecords),
+        Self.equalsIgnoringDeviceMaintained(records, plan.deviceRecords),
         Self.isSameModemRecords(modemRecords, plan.allModemRecords)
       else {
 
@@ -828,19 +815,17 @@ extension DeviceLinkingCoordinator {
   /// - Throws: The device's timeout or rejection, and the modem's errors.
   func slotHolds(_ expected: AllLinkRecord, at address: UInt16, of device: InsteonAddress, engine: InsteonEngine) async throws -> Bool {
 
-    let current: AllLinkRecordResponse = try await readRecord(at: address, of: device, engine: engine)
-
-    return Self.isSame(current.record, expected)
+    try await network.modem.slotHolds(expected, at: address, of: device, timeout: Modem.defaultExtendedRequestTimeout, checkingIntegrity: engine == .i2cs)
 
   }
 
   /// Whether a device's records read as a plan's did, but for the flags a device may change
   /// on its own.
-  static func isSame(_ records: [AllLinkRecordResponse], _ planned: [AllLinkRecordResponse]) -> Bool {
+  static func equalsIgnoringDeviceMaintained(_ records: [AllLinkRecordResponse], _ planned: [AllLinkRecordResponse]) -> Bool {
 
     records.count == planned.count && zip(records, planned).allSatisfy { (pair: (AllLinkRecordResponse, AllLinkRecordResponse)) -> Bool in
 
-      pair.0.address == pair.1.address && isSame(pair.0.record, pair.1.record)
+      pair.0.address == pair.1.address && pair.0.record.equalsIgnoringDeviceMaintained(pair.1.record)
 
     }
 
@@ -854,18 +839,6 @@ extension DeviceLinkingCoordinator {
       records.filter { (other: AllLinkRecord) -> Bool in other == record }.count == planned.filter { (other: AllLinkRecord) -> Bool in other == record }.count
 
     }
-
-  }
-
-  /// Whether two records are the same but for the flags a device may change on its own, such
-  /// as its smart hop count.
-  static func isSame(_ record: AllLinkRecord, _ other: AllLinkRecord) -> Bool {
-
-    var record: AllLinkRecord = record, other: AllLinkRecord = other
-    record.flags.subtract(.deviceMaintained)
-    other.flags.subtract(.deviceMaintained)
-
-    return record == other
 
   }
 
@@ -899,7 +872,6 @@ extension DeviceLinkingCoordinator {
     }
 
     let modem: any LinkingModem = network.modem
-    let message: ExtendedMessage = AllLinkDatabaseRequest.write(step.written, address: address).message(to: device)
     var rejections: Int = 0
 
     for attempt in 1...2 {
@@ -908,7 +880,7 @@ extension DeviceLinkingCoordinator {
 
       do {
 
-        _ = try await modem.request(message, timeout: Modem.defaultExtendedRequestTimeout)
+        try await modem.writeAllLinkRecord(step.written, at: address, of: device, timeout: Modem.defaultExtendedRequestTimeout)
         isAcknowledged = true
 
       } catch ModemError.deviceRejected {
@@ -939,7 +911,7 @@ extension DeviceLinkingCoordinator {
 
       }
 
-      if Self.isSame(readBack.record, step.written) {
+      if readBack.record.equalsIgnoringDeviceMaintained(step.written) {
 
         return attempt == 1 ? .written : .writtenOnRetry
 
@@ -956,23 +928,10 @@ extension DeviceLinkingCoordinator {
   func readRecord(at address: UInt16, of device: InsteonAddress, engine: InsteonEngine) async throws -> AllLinkRecordResponse {
 
     let modem: any LinkingModem = network.modem
-    let first: AllLinkRecordResponse = try await modem.readAllLinkRecord(of: device, at: address, timeout: Modem.defaultExtendedRequestTimeout)
 
-    guard engine == .i2cs, !first.hasIntactChecksum else {
-
-      return first
-
-    }
-
-    let second: AllLinkRecordResponse = try await modem.readAllLinkRecord(of: device, at: address, timeout: Modem.defaultExtendedRequestTimeout)
-
-    guard second.hasIntactChecksum else {
-
-      throw ModemError.deviceTimedOut(device)
-
-    }
-
-    return second
+    return engine == .i2cs
+      ? try await modem.readAllLinkRecordCheckingIntegrity(of: device, at: address, timeout: Modem.defaultExtendedRequestTimeout)
+      : try await modem.readAllLinkRecord(of: device, at: address, timeout: Modem.defaultExtendedRequestTimeout)
 
   }
 
@@ -988,16 +947,11 @@ extension DeviceLinkingCoordinator {
 
     for attempt in 1...2 {
 
-      let command: SerialCommand
-
-      switch step.kind {
-      case .addModemRecord:
-        command = .manageAllLinkRecord(action: isController ? .modifyFirstControllerOrAdd : .modifyFirstResponderOrAdd, record: record)
-      default:
-        // The modem deletes the first record of the group that names the device, whatever its
-        // role; the plan deletes each of them.
-        command = .manageAllLinkRecord(action: .deleteFirst, record: AllLinkRecord(flags: [], group: record.group, address: device))
-      }
+      // The modem deletes the first record of the group that names the device, whatever its
+      // role; the plan deletes each of them.
+      let command: SerialCommand = step.kind == .addModemRecord
+        ? .addAllLinkRecord(record)
+        : .deleteFirstAllLinkRecord(group: record.group, address: device)
 
       do {
 
@@ -1066,14 +1020,14 @@ extension DeviceLinkingCoordinator {
 
       let records: [AllLinkRecordResponse] = try await modem.readAllLinkDatabase(of: device, timeout: Modem.defaultExtendedRequestTimeout)
       let found: [UInt16: AllLinkRecordResponse] = Dictionary(records.map { (response: AllLinkRecordResponse) -> (UInt16, AllLinkRecordResponse) in (response.address, response) }) { (first: AllLinkRecordResponse, _: AllLinkRecordResponse) -> AllLinkRecordResponse in first }
-      let end: UInt16 = records.last?.address ?? 0x0FFF
+      let end: UInt16 = records.last?.address ?? DeviceDatabaseLayout.firstRecordAddress
 
       for address in Set(expected.keys).union(found.keys).sorted(by: >) {
 
         let want: AllLinkRecord? = expected[address]
         let got: AllLinkRecordResponse? = found[address]
 
-        if let want, let got, Self.isSame(got.record, want) {
+        if let want, let got, got.record.equalsIgnoringDeviceMaintained(want) {
 
           continue
 

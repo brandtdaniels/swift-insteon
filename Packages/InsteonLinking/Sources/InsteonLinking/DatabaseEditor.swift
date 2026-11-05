@@ -54,21 +54,6 @@ struct DatabaseEditor {
 
   }
 
-  /// The flags of a record in use: `0xE2` for a controller
-  /// record and `0xA2` for a responder record, which also set the product-dependent bit 5.
-  static func flags(isController: Bool) -> AllLinkRecordFlags {
-
-    AllLinkRecordFlags(rawValue: isController ? 0xE2 : 0xA2)
-
-  }
-
-  /// The address of the lowest record in a device's database. Insteon's Data Base Format
-  /// sheet places device records from `0x0FFF` down to `0x0300`.
-  static let lowestRecordAddress: UInt16 = 0x0307
-
-  /// A record that has never been used, which marks the end of a database.
-  private static let endOfDatabase = AllLinkRecord(flags: [], group: 0x00, address: InsteonAddress(0x00, 0x00, 0x00))
-
   /// The addresses of a group's controller and responders, reading the modem's own address
   /// when the group includes it.
   func addresses(for group: AllLinkGroup) async throws -> Addresses {
@@ -180,29 +165,27 @@ struct DatabaseEditor {
 
       }
 
-      for index in matches where !Self.isSame(records[index].record, record) {
+      for index in matches where !records[index].record.equalsIgnoringDeviceMaintained(record) {
 
         try await write(record, at: records[index].address, in: device)
         records[index].record = record
 
       }
 
-    } else if let index = records.firstIndex(where: { !$0.isEndOfDatabase && !$0.record.flags.contains(.inUse) }) {
+    } else if let index = records.firstIndex(where: \.isReusable) {
 
       try await write(record, at: records[index].address, in: device)
       records[index].record = record
 
-    } else if let end = records.last, end.isEndOfDatabase, end.address >= Self.lowestRecordAddress + 8 {
+    } else if let end = records.last, end.isEndOfDatabase, let newEnd = DeviceDatabaseLayout.address(below: end.address) {
 
       // The record below the end becomes the new end before the end is overwritten, so the
       // database always has an end even if the second write fails.
-      let newEnd = end.address - 8
-
-      try await write(Self.endOfDatabase, at: newEnd, in: device)
+      try await write(.endOfDatabase, at: newEnd, in: device)
       try await write(record, at: end.address, in: device)
 
       records[records.count - 1].record = record
-      records.append(AllLinkRecordResponse(sender: device, address: newEnd, record: Self.endOfDatabase))
+      records.append(AllLinkRecordResponse(sender: device, address: newEnd, record: .endOfDatabase))
 
     } else {
 
@@ -218,26 +201,12 @@ struct DatabaseEditor {
 
   }
 
-  /// Whether two records are the same but for the flags a device may change on its own, such
-  /// as its smart hop count.
-  private static func isSame(_ record: AllLinkRecord, _ other: AllLinkRecord) -> Bool {
-
-    var record = record, other = other
-    record.flags.subtract(.deviceMaintained)
-    other.flags.subtract(.deviceMaintained)
-
-    return record == other
-
-  }
-
-  /// Writes a record at an address and reads it back.
+  /// Writes a record at an address and reads it back once, whatever its checksum.
   private func write(_ record: AllLinkRecord, at address: UInt16, in device: InsteonAddress) async throws {
 
-    _ = try await modem.request(AllLinkDatabaseRequest.write(record, address: address).message(to: device), timeout: timeout)
+    try await modem.writeAllLinkRecord(record, at: address, of: device, timeout: timeout)
 
-    let written = try await modem.readAllLinkRecord(of: device, at: address, timeout: timeout)
-
-    guard Self.isSame(written.record, record) else {
+    guard try await modem.slotHolds(record, at: address, of: device, timeout: timeout, checkingIntegrity: false) else {
 
       throw LinkingError.recordNotWritten(device, address: address)
 
@@ -297,10 +266,7 @@ struct DatabaseEditor {
 
     }
 
-    try await modem.send(.manageAllLinkRecord(
-      action: isController ? .modifyFirstControllerOrAdd : .modifyFirstResponderOrAdd,
-      record: record
-    ))
+    try await modem.send(.addAllLinkRecord(record))
 
     await cache?.invalidateModem()
 
@@ -318,20 +284,19 @@ struct DatabaseEditor {
 
     // The modem deletes the first record matching a group and address whatever its role, so
     // every match is deleted and those of the other role are added back.
-    let key = AllLinkRecord(flags: [], group: group, address: address)
     let otherRole: [AllLinkRecord] = existing.filter { (record: AllLinkRecord) -> Bool in record.flags.contains(.controller) != isController }
 
     do {
 
       for _ in existing {
 
-        try await modem.send(.manageAllLinkRecord(action: .deleteFirst, record: key))
+        try await modem.send(.deleteFirstAllLinkRecord(group: group, address: address))
 
       }
 
       for record in otherRole {
 
-        try await modem.send(.manageAllLinkRecord(action: Self.addAction(for: record), record: record))
+        try await modem.send(.addAllLinkRecord(record))
 
       }
 
@@ -364,13 +329,6 @@ struct DatabaseEditor {
 
   }
 
-  /// The action that adds a record to the modem's database in its role.
-  private static func addAction(for record: AllLinkRecord) -> AllLinkRecordAction {
-
-    record.flags.contains(.controller) ? .modifyFirstControllerOrAdd : .modifyFirstResponderOrAdd
-
-  }
-
   /// Adds back each record that isn't in the modem's database as it was. If the database
   /// can't be read, each one is added: adding updates a record of the same role in place.
   ///
@@ -390,7 +348,7 @@ struct DatabaseEditor {
 
       do {
 
-        try await modem.send(.manageAllLinkRecord(action: addAction(for: record), record: record))
+        try await modem.send(.addAllLinkRecord(record))
 
       } catch {
 

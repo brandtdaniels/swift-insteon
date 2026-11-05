@@ -38,9 +38,7 @@ extension Unlinker {
 
       for record in records {
 
-        let key = AllLinkRecord(flags: [], group: record.group, address: device)
-
-        try await modem.send(.manageAllLinkRecord(action: .deleteFirst, record: key))
+        try await modem.send(.deleteFirstAllLinkRecord(group: record.group, address: device))
 
       }
 
