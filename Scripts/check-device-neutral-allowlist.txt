@@ -25,16 +25,9 @@ Packages/InsteonCLI/Sources/InsteonCLISupport/WatchText.swift	Dimmer Switch	A Do
 Packages/InsteonCLI/Sources/insteon/Names.swift	2477D	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
 Packages/InsteonCLI/Sources/insteon/Names.swift	Dimmer Switch	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
 Packages/InsteonCLI/Sources/insteon/Names.swift	SwitchLinc Dimmer	A DocC or code comment that names a real product as an example; to be replaced with an invented one.
-Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	Beep on button press	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	Load sense	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	Programming lock	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	Turn off radio	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	keyBeep	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	loadSense	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
 Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	powerLineOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
 Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	radioOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
 Packages/InsteonCLI/Tests/InsteonCLISupportTests/LinkingEventTextTests.swift	Stay awake	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCLI/Tests/InsteonCLISupportTests/LinkingEventTextTests.swift	linkToAllGroups	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
 Packages/InsteonCLI/Tests/InsteonCLISupportTests/SelfTestTextTests.swift	Programming lock	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
 Packages/InsteonCLI/Tests/InsteonCLISupportTests/SelfTestTextTests.swift	programmingLock	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
 Packages/InsteonCore/README.md	Programming lock	Docs or help that name a real product or flag as an example; to be replaced with an invented one.
