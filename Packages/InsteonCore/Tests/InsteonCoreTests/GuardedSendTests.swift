@@ -243,7 +243,23 @@ struct GuardedSendTests {
 
     }
 
+    var guardedValues: Int = 0
+
+    for commands in catalog.commandSets {
+
+      for value in commands.extendedSettings?.values ?? [] where value.flagsQuery != nil {
+
+        // A value that holds an operating flags byte guards its bits.
+        guardedValues += 1
+
+        #expect(!DeviceSettingSafety.guardedBits(in: value, of: commands).isEmpty, "\(commands.id) \(value.name)")
+
+      }
+
+    }
+
     // The bundled catalog gives guards of every kind, so none of the loops above is empty.
+    #expect(guardedValues > 0)
     #expect(guardedFlags > 0)
     #expect(guardedFlagCommands > 0)
     #expect(guardedExtendedCommands > 0)

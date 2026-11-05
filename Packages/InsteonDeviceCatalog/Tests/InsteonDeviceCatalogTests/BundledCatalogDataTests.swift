@@ -72,8 +72,11 @@ struct BundledCatalogDataTests {
           checked += 1
           #expect(flag.writeGuard == .neverSet || flag.writeGuard == .keep, "\(commands.id) \(flag.name)")
         default:
-          // Any other flag so named that's turned on with a protected cmd2 is guarded too.
-          if Self.meansLockingOrIsolating(flag.name), let on = flag.on, Self.protectedCommand2s.contains(on) {
+          // Any other flag so named that's turned on or off with a protected cmd2 is guarded
+          // too.
+          let protectedBytes: Bool = [flag.on, flag.off].contains { (command2: UInt8?) -> Bool in command2.map(Self.protectedCommand2s.contains) ?? false }
+
+          if Self.meansLockingOrIsolating(flag.name), protectedBytes {
 
             #expect(flag.writeGuard != nil, "\(commands.id) \(flag.name)")
 
@@ -134,17 +137,84 @@ struct BundledCatalogDataTests {
 
   }
 
-  @Test func marksEveryValueNamedForTheOperatingFlagsByte() throws {
+  @Test func marksEveryValueThatHoldsAnOperatingFlagsByte() throws {
+
+    var marked: Int = 0
 
     for commands in try Self.catalog().commandSets {
 
-      for value in commands.extendedSettings?.values ?? [] where value.name == "operatingFlags" {
+      for value in commands.extendedSettings?.values ?? [] {
 
-        #expect(value.flagsQuery == .operatingFlags, "\(commands.id) \(value.name)")
+        if value.name == "operatingFlags" {
+
+          #expect(value.flagsQuery == .operatingFlags, "\(commands.id) \(value.name)")
+
+        }
+
+        guard value.flagsQuery != nil else {
+
+          continue
+
+        }
+
+        // A marked value holds flags of its query, and the guarded ones among them.
+        marked += 1
+
+        let held: [OperatingFlag] = commands.flagsHeld(by: value)
+
+        #expect(!held.isEmpty, "\(commands.id) \(value.name)")
+        #expect(held.contains { (flag: OperatingFlag) -> Bool in flag.writeGuard != nil }, "\(commands.id) \(value.name)")
 
       }
 
     }
+
+    #expect(marked > 0)
+
+  }
+
+  @Test func guardsEveryFlagsParameterBitThatCutsADeviceOffOrLocksIt() throws {
+
+    var checked: Int = 0
+
+    for commands in try Self.catalog().commandSets {
+
+      for command in commands.extendedCommands {
+
+        for parameter in command.parameters {
+
+          guard case let .flags(bits) = parameter.kind else {
+
+            continue
+
+          }
+
+          for bit in bits {
+
+            switch bit.name.rawValue {
+            case "radioOff", "powerLineOff", "powerlineOff", "checksumRequired":
+              checked += 1
+              #expect(bit.writeGuard == .keep, "\(commands.id) \(command.name) \(bit.name)")
+            case "programmingLock":
+              checked += 1
+              #expect(bit.writeGuard == .neverSet || bit.writeGuard == .keep, "\(commands.id) \(command.name) \(bit.name)")
+            default:
+              if Self.meansLockingOrIsolating(bit.name) {
+
+                #expect(bit.writeGuard != nil, "\(commands.id) \(command.name) \(bit.name)")
+
+              }
+            }
+
+          }
+
+        }
+
+      }
+
+    }
+
+    #expect(checked > 0)
 
   }
 
