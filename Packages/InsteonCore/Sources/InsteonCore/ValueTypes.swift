@@ -66,3 +66,6 @@ public typealias DeviceCatalogVersion = InsteonDeviceCatalog.DeviceCatalogVersio
 /// A guard that a catalog gives more weakly than the copy the package ships with, such as
 /// `exampleSwitch flag lockout`, which a front end reports when it keeps the bundled copy.
 public typealias GuardWeakening = InsteonDeviceCatalog.GuardWeakening
+
+/// A name the catalog gives a setting, command or flag, such as `rampRate`.
+public typealias SettingName = InsteonDeviceCatalog.SettingName

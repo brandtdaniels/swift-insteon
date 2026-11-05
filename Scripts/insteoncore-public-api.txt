@@ -258,7 +258,7 @@ case SelfTestFix.factoryReset
 case SelfTestFix.link(modemRole:group:)
 case SelfTestFix.readAgain
 case SelfTestFix.reviewRecords(_:)
-case SelfTestFix.turnOff(setting:)
+case SelfTestFix.turnOff(setting:label:)
 case SelfTestFix.updateCatalog
 case SelfTestOutcome.failed
 case SelfTestOutcome.passed
@@ -668,6 +668,7 @@ typealias ModemRole
 typealias NAKReason
 typealias ProductKey
 typealias ReportedIdentity
+typealias SettingName
 var DatabaseLinkPlan.deviceSteps
 var DatabaseLinkPlan.isEmpty
 var DatabaseLinkPlan.modemSteps

@@ -439,7 +439,7 @@ struct SelfTestTests {
 
     #expect(flags.outcome == .warning)
     #expect(flags.detail == "Lockout is on, which the Insteon device catalog says is never turned on, since it locks the device.")
-    #expect(flags.fixes == [.turnOff(setting: "lockout")])
+    #expect(flags.fixes == [.turnOff(setting: "lockout", label: "Lockout")])
     // The flags are read with Get Operating Flags, and nothing sets them.
     #expect(log.standardCommands.contains(0x1F))
     #expect(!log.standardCommands.contains(0x20))
@@ -496,13 +496,14 @@ struct SelfTestTests {
     let check: SelfTestCheck = Device.flagsCheck(reading(commands, flags: 0x0F))
 
     #expect(check.outcome == .warning)
-    // A kept flag with no default is taken to leave the factory off.
-    #expect(check.detail == "Radio mute is on, which can cut the device off from the modem, and isn't written; "
-      + "Button lock is on, which the Insteon device catalog says is never turned on, since it locks the device; "
+    // Radio mute is kept, but the catalog gives no default to compare it with, so it isn't
+    // reported, whichever state it's in.
+    #expect(check.detail == "Button lock is on, which the Insteon device catalog says is never turned on, since it locks the device; "
       + "Message form is on, unlike the device as it leaves the factory, and isn't written.")
-    #expect(check.fixes == [.turnOff(setting: "buttonLock"), .factoryReset])
+    #expect(check.fixes == [.turnOff(setting: "buttonLock", label: "Button lock"), .factoryReset])
 
     #expect(Device.flagsCheck(reading(commands, flags: 0x08)).outcome == .passed)
+    #expect(Device.flagsCheck(reading(commands, flags: 0x09)).outcome == .passed)
 
   }
 

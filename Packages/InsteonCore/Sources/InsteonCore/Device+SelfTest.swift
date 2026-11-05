@@ -607,8 +607,8 @@ extension Device {
 
   /// Whether a reading shows a flag the catalog guards in a state that locks the device or can
   /// cut it off: a never-set flag that's on, which can be turned off, and a kept flag that
-  /// isn't as the device leaves the factory, which only a factory reset puts back. A kept flag
-  /// the catalog gives no default for is taken to leave the factory off.
+  /// isn't in the default the catalog gives, which only a factory reset puts back. A kept flag
+  /// with no default isn't reported, since either state may be the device's own.
   static func flagsCheck(_ reading: DeviceSettingsReading) -> SelfTestCheck {
 
     var reported: Int = 0
@@ -641,10 +641,7 @@ extension Device {
       switch DeviceSettingSafety.rule(for: flag) {
       case .neverSet? where isOn:
         problems.append("\(label) is on, which the Insteon device catalog says is never turned on, since it locks the device")
-        add(.turnOff(setting: flag.name.rawValue))
-      case .keep? where flag.defaultValue == nil && isOn:
-        problems.append("\(label) is on, which can cut the device off from the modem, and isn't written")
-        add(.factoryReset)
+        add(.turnOff(setting: flag.name, label: label))
       case .keep? where flag.defaultValue.map({ (value: Bool) -> Bool in value != isOn }) == true:
         problems.append("\(label) is \(isOn ? "on" : "off"), unlike the device as it leaves the factory, and isn't written")
         add(.factoryReset)

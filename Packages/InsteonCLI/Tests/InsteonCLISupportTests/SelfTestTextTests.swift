@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import InsteonCLISupport
 import InsteonCore
+import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonProtocol
 
@@ -68,8 +69,8 @@ struct SelfTestTextTests {
 
   @Test func suggestsTurningANeverSetFlagOffWithSet() {
 
-    #expect(SelfTestText.fix(.turnOff(setting: "lockout"), device: lamp) == "Turn the setting off: 'insteon device 1A.2B.3C set lockout off'.")
-    #expect(SelfTestText.id(.turnOff(setting: "lockout")) == "turnOff")
+    #expect(SelfTestText.fix(.turnOff(setting: "lockout", label: "Lockout"), device: lamp) == "Turn Lockout off: 'insteon device 1A.2B.3C set lockout off'.")
+    #expect(SelfTestText.id(.turnOff(setting: "lockout", label: "Lockout")) == "turnOff")
 
   }
 
@@ -77,7 +78,7 @@ struct SelfTestTextTests {
 
     let locked = SelfTestReport(
       device: lamp,
-      checks: [SelfTestCheck(kind: .operatingFlags, outcome: .warning, detail: "", fixes: [.turnOff(setting: "lockout")])]
+      checks: [SelfTestCheck(kind: .operatingFlags, outcome: .warning, detail: "", fixes: [.turnOff(setting: "lockout", label: "Lockout")])]
     )
 
     let data: Data = try JSONEncoder().encode(SelfTestText.JSON(locked))
@@ -87,7 +88,7 @@ struct SelfTestTextTests {
 
     #expect(fix["id"] as? String == "turnOff")
     #expect(fix["setting"] as? String == "lockout")
-    #expect(fix["text"] as? String == "Turn the setting off: 'insteon device 1A.2B.3C set lockout off'.")
+    #expect(fix["text"] as? String == "Turn Lockout off: 'insteon device 1A.2B.3C set lockout off'.")
 
   }
 

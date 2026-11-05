@@ -107,8 +107,8 @@ public enum SelfTestText {
       "Look over the records for \(others.map { (other: InsteonAddress) -> String in "\(other)" }.joined(separator: ", ")) "
         + "with 'insteon device \(device) links'. Records for a device that's gone are cleared when this "
         + "device is reset to its factory settings."
-    case let .turnOff(setting):
-      "Turn the setting off: 'insteon device \(device) set \(setting) off'."
+    case let .turnOff(setting, label):
+      "Turn \(label) off: 'insteon device \(device) set \(setting) off'."
     case .updateCatalog:
       "Download the latest compatible Insteon device catalog: 'insteon catalog update'."
     case .factoryReset:
@@ -350,8 +350,8 @@ public enum SelfTestText {
         group = number
       case let .reviewRecords(others):
         addresses = others.map { (other: InsteonAddress) -> String in "\(other)" }
-      case let .turnOff(key):
-        setting = key
+      case let .turnOff(key, _):
+        setting = key.rawValue
       default:
         break
       }
