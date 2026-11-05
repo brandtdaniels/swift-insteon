@@ -133,4 +133,24 @@ struct CatalogCacheTests {
 
   }
 
+  // MARK: - Weakened guards
+
+  @Test func saysWhichGuardsAPublishedOrCachedCatalogWeakens() {
+
+    let weakenings: [GuardWeakening] = [
+      GuardWeakening(commandSet: "exampleGuarded", kind: .flag, name: "lockout"),
+      GuardWeakening(commandSet: "exampleGuarded", kind: .flagsQuery, name: "configuration")
+    ]
+    let current = DeviceCatalogVersion(major: 0, minor: 6, patch: 21)
+
+    #expect(CatalogText.publishedWeakensGuards(weakenings, current: current) == "The published Insteon device catalog weakens guards the bundled copy gives, "
+      + "which keep a device reachable and unlocked (exampleGuarded flag lockout, exampleGuarded flagsQuery configuration), "
+      + "so it isn't used and the current copy, 0.6.21, stays.")
+    #expect(CatalogText.cachedWeakensGuards(path: "/home/example/.cache/insteon/catalog.json", weakenings) == "insteon: warning: the cached Insteon device catalog "
+      + "at /home/example/.cache/insteon/catalog.json weakens guards the bundled copy gives, which keep a device reachable and unlocked "
+      + "(exampleGuarded flag lockout, exampleGuarded flagsQuery configuration), so the bundled copy is used. "
+      + "'insteon catalog update' downloads it again.")
+
+  }
+
 }

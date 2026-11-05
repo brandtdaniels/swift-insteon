@@ -9,7 +9,7 @@ Keep track of the Insteon devices on a network: the library an app or a command 
 - `ModemSession`: opens a Hub's modem, only at a private IPv4 address, or a PowerLinc Modem on a serial port, and makes the `DeviceNetwork` for it; writes a raw serial command only once `SerialCommandPolicy` allows it
 - `SerialCommandPolicy`: which raw serial commands are written, refused unless forced, or never written
 - `HubSearch`: finds Hubs on the local network or through Insteon Connect, and identifies them with their credentials
-- `ProductCatalog`: the Insteon device catalog, bundled or saved, and its update, which never goes back to an older version
+- `ProductCatalog`: the Insteon device catalog, bundled or saved, and its update, which never goes back to an older version; a saved, supplied or downloaded catalog that gives any guard more weakly than the bundled copy, for a command set both have, is refused, and the bundled copy stays in use
 - `ProductCatalogStore`: a downloaded copy of the catalog and its version, kept in files readable only by the current user
 - `InsteonErrorDescription`, `SendFailure`: a message for a person from the lower-level modules' errors, and what a failed send means
 

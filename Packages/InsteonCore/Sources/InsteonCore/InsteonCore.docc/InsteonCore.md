@@ -151,7 +151,11 @@ kept. Under every guard is a floor of bytes, the ``ProtectedCommand``s. Set Oper
 with cmd2 `0x0C`, `0x0E`, `0x19` or `0x00` is refused for a device the catalog doesn't know or
 gives no command set, and for a command set that doesn't name the cmd2; it's sent only where
 the command set names it for a flag or command it doesn't guard, such as a keypad's button
-lock flag, turned on with `0x19`. Poke is never sent. A flag is shown as writable when at least
+lock flag, turned on with `0x19`; a command set that names a protected cmd2 through an
+unguarded entry unlocks it. Poke is never sent. ``ProductCatalog`` refuses a saved or
+supplied catalog, and its update a downloaded one, that gives any guard more weakly than the
+copy the package ships with for a command set both have, so a catalog used in place of the
+bundled copy can't unlock what the bundled copy guards. A flag is shown as writable when at least
 one of its states is sent. Every message a ``Device`` sends is checked by the bytes it carries,
 after any value is filled in: the Set Operating Flags bytes that turn a kept flag on or off or
 a never-set flag on, and those of a command the catalog guards, are never sent under any name,
@@ -453,6 +457,7 @@ do {
 - ``ProductCatalog``
 - ``ProductCatalogUpdate``
 - ``ProductCatalogUpdateError``
+- ``ProductCatalogError``
 - ``ProductCatalogStore``
 - ``ProductCatalogStoreError``
 

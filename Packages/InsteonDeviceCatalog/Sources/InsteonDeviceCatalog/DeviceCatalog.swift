@@ -67,6 +67,10 @@ public struct DeviceCatalog: Hashable, Sendable {
 
   /// Reads a catalog from the JSON the Insteon device catalog publishes as `catalog.json`.
   ///
+  /// Reading doesn't compare the catalog's guards with the bundled copy's; an app that uses a
+  /// catalog in place of the bundled copy calls ``checkGuards(against:)`` first, as
+  /// ``DeviceCatalogUpdater`` does for a download.
+  ///
   /// The catalog doesn't carry its version; its manifest does. Read only a catalog whose
   /// version has the same MAJOR.MINOR as ``DeviceCatalog/bundledVersion()``, as
   /// ``DeviceCatalogUpdater`` makes sure of, since a catalog in another format may not read, or
@@ -212,6 +216,11 @@ public enum DeviceCatalogError: Error, Hashable, Sendable {
   /// when a command was copied without the bundle beside it.
   case missingBundledCatalog
 
+  /// The catalog gives guards more weakly than the copy the package ships with, for command
+  /// sets both have, so it isn't used: the bundled copy is. The associated value is each
+  /// weakened guard, as ``DeviceCatalog/guardWeakenings(comparedTo:)`` finds it.
+  case weakensGuards([GuardWeakening])
+
 }
 
 extension DeviceCatalogError: LocalizedError {
@@ -224,6 +233,10 @@ extension DeviceCatalogError: LocalizedError {
     case .missingBundledCatalog:
       let names: String = DeviceCatalog.bundleNames.joined(separator: " or ")
       return "The Insteon device catalog isn't found. Its bundle, \(names), must be beside the program or in its resources."
+
+    case let .weakensGuards(weakenings):
+      let guards: String = weakenings.map(\.description).joined(separator: ", ")
+      return "The Insteon device catalog weakens guards the bundled copy gives (\(guards)), so it isn't used."
 
     }
 

@@ -6,7 +6,13 @@ import InsteonProtocol
 ///
 /// The Insteon device catalog marks them: an operating flag's or flags parameter bit's
 /// `FlagGuard`, a command's `CommandGuard`, and a value's `SettingValue.flagsQuery`. Under
-/// them is a floor of bytes, the ``ProtectedCommand``s, which holds whatever the catalog says.
+/// them is a floor of bytes, the ``ProtectedCommand``s: a protected Set Operating Flags cmd2
+/// is refused unless the device's command set names it through a flag or command it doesn't
+/// guard, and Poke is always refused. So the floor holds for a device the catalog doesn't
+/// know, and for a cmd2 its command set doesn't name, but a command set that names a protected
+/// cmd2 through an unguarded entry unlocks it. A catalog loaded in place of the bundled copy,
+/// saved or downloaded, is refused when it gives any guard more weakly than the bundled copy
+/// for a command set both have, so it can't unlock a cmd2 the bundled copy guards.
 enum DeviceSettingSafety {
 
   /// How a write treats a bit.
