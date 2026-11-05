@@ -65,6 +65,30 @@ struct DatabaseWriteTrafficTests {
 
   }
 
+  @Test func linkingReadsEachWriteBackOnceWhateverItsChecksum() async throws {
+
+    let memory = InMemoryModem()
+
+    await memory.setDamaged(true, record: 0x0FF7, of: lamp)
+    await memory.setDamaged(true, record: 0x0FFF, of: lamp)
+
+    let modem = RecordingModem(memory)
+
+    try await Linker(modem: modem, timeout: timeout).link(group)
+
+    #expect(await modem.calls == [
+      .modemInfo,
+      .readAllLinkDatabase(lamp, timeout: timeout),
+      write(end, at: 0x0FF7),
+      read(at: 0x0FF7),
+      write(responderRecord, at: 0x0FFF),
+      read(at: 0x0FFF),
+      .readModemRecords(group: 0x05, device: lamp),
+      .send(.manageAllLinkRecord(action: .modifyFirstControllerOrAdd, record: controllerRecord))
+    ])
+
+  }
+
   @Test func linkingUpdatesARecordInPlaceAndReusesNoSlot() async throws {
 
     let memory = InMemoryModem()

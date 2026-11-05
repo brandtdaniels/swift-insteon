@@ -40,18 +40,25 @@ struct DeviceDatabaseAccessTests {
 
   }
 
-  @Test func returnsADamagedRecordWhenNotAskedToReadItAgain() async throws {
+  @Test func returnsTheSecondReadWhenADamagedRecordArrivesIntact() async throws {
 
     let memory = InMemoryModem()
 
     await memory.setDatabase([0x0FFF: record], of: lamp)
-    await memory.setDamaged(true, record: 0x0FFF, of: lamp)
 
-    let modem = RecordingModem(memory)
-    let read = try await modem.readAllLinkRecord(of: lamp, at: 0x0FFF, timeout: timeout)
+    let damaging = DamagingModem(memory)
 
-    #expect(!read.hasIntactChecksum)
-    #expect(await modem.calls == [.readAllLinkRecord(lamp, address: 0x0FFF, timeout: timeout)])
+    await damaging.setDamagedReads([true, false], at: 0x0FFF, of: lamp)
+
+    let modem = RecordingModem(damaging)
+    let read = try await modem.readAllLinkRecordCheckingIntegrity(of: lamp, at: 0x0FFF, timeout: timeout)
+
+    #expect(read.record == record)
+    #expect(read.hasIntactChecksum)
+    #expect(await modem.calls == [
+      .readAllLinkRecord(lamp, address: 0x0FFF, timeout: timeout),
+      .readAllLinkRecord(lamp, address: 0x0FFF, timeout: timeout)
+    ])
 
   }
 
@@ -89,6 +96,40 @@ struct DeviceDatabaseAccessTests {
 
     #expect(try await memory.slotHolds(record, at: 0x0FFF, of: lamp, timeout: timeout, checkingIntegrity: false))
     #expect(try await !memory.slotHolds(other, at: 0x0FFF, of: lamp, timeout: timeout, checkingIntegrity: false))
+
+  }
+
+  @Test func aSlotReadWithoutCheckingIntegrityIsReadOnceWhateverItsChecksum() async throws {
+
+    let memory = InMemoryModem()
+
+    await memory.setDatabase([0x0FFF: record], of: lamp)
+    await memory.setDamaged(true, record: 0x0FFF, of: lamp)
+
+    let modem = RecordingModem(memory)
+
+    #expect(try await modem.slotHolds(record, at: 0x0FFF, of: lamp, timeout: timeout, checkingIntegrity: false))
+    #expect(await modem.calls == [.readAllLinkRecord(lamp, address: 0x0FFF, timeout: timeout)])
+
+  }
+
+  @Test func aSlotReadCheckingIntegrityReadsADamagedRecordOnceMore() async throws {
+
+    let memory = InMemoryModem()
+
+    await memory.setDatabase([0x0FFF: record], of: lamp)
+
+    let damaging = DamagingModem(memory)
+
+    await damaging.setDamagedReads([true, false], at: 0x0FFF, of: lamp)
+
+    let modem = RecordingModem(damaging)
+
+    #expect(try await modem.slotHolds(record, at: 0x0FFF, of: lamp, timeout: timeout, checkingIntegrity: true))
+    #expect(await modem.calls == [
+      .readAllLinkRecord(lamp, address: 0x0FFF, timeout: timeout),
+      .readAllLinkRecord(lamp, address: 0x0FFF, timeout: timeout)
+    ])
 
   }
 

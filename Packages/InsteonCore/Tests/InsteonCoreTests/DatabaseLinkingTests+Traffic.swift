@@ -41,18 +41,33 @@ extension DatabaseLinkingTests {
   func applyCalls(
     _ memory: InMemoryModem,
     plan: (DeviceLinkingCoordinator) async throws -> DatabaseLinkPlan,
-    beforeApplying: () async -> Void = {}
+    beforeApplying: (DamagingModem) async -> Void = { _ in }
   ) async throws -> [RecordingModem.Call] {
 
-    let modem = RecordingModem(memory)
+    try await applying(memory, plan: plan, beforeApplying: beforeApplying).calls
+
+  }
+
+  /// Plans with `plan` on a recording modem, then applies the plan, and returns the calls the
+  /// apply made and its result. `beforeApplying` runs after the plan, and can set the
+  /// single-record reads that arrive damaged.
+  func applying(
+    _ memory: InMemoryModem,
+    plan: (DeviceLinkingCoordinator) async throws -> DatabaseLinkPlan,
+    beforeApplying: (DamagingModem) async -> Void = { _ in }
+  ) async throws -> (calls: [RecordingModem.Call], result: DatabaseLinkResult) {
+
+    let damaging = DamagingModem(memory)
+    let modem = RecordingModem(damaging)
     let linking: DeviceLinkingCoordinator = DeviceNetwork(modem: modem, catalog: DatabaseLinkingExample.catalog, clock: clock).linking
     let planned: DatabaseLinkPlan = try await plan(linking)
 
-    await beforeApplying()
+    await beforeApplying(damaging)
     await modem.clear()
-    _ = try await linking.apply(planned)
 
-    return await modem.calls
+    let result: DatabaseLinkResult = try await linking.apply(planned)
+
+    return (await modem.calls, result)
 
   }
 
@@ -107,7 +122,7 @@ extension DatabaseLinkingTests {
 
       try await $0.planDatabaseLink(device)
 
-    } beforeApplying: {
+    } beforeApplying: { _ in
 
       await memory.setForgetful(device, writes: 1)
 
@@ -128,13 +143,11 @@ extension DatabaseLinkingTests {
     let memory: InMemoryModem = await partlyLinked()
     let device: InsteonAddress = self.device
 
-    await memory.setModemRecords([controller(0x00, naming: device), responder(0x01, naming: device)])
-
-    let calls: [RecordingModem.Call] = try await applyCalls(memory) {
+    let (calls, result): ([RecordingModem.Call], DatabaseLinkResult) = try await applying(memory) {
 
       try await $0.planDatabaseLink(device)
 
-    } beforeApplying: {
+    } beforeApplying: { _ in
 
       // The slot arrives damaged once both databases are checked against the plan.
       await memory.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
@@ -153,6 +166,71 @@ extension DatabaseLinkingTests {
       read(at: 0x0FF7),
       read(at: 0x0FF7)
     ] + verifies)
+    #expect(result.steps.map { $0.outcome } == [.unanswered, .notReached, .notReached])
+    #expect(!result.isComplete)
+
+  }
+
+  @Test func applyingReadsADamagedSlotOfAnI2CSDeviceOnceMoreThenWrites() async throws {
+
+    let memory: InMemoryModem = await partlyLinked()
+    let device: InsteonAddress = self.device
+
+    await memory.setModemRecords([controller(0x00, naming: device), responder(0x01, naming: device)])
+
+    let added: AllLinkRecord = responder(0x00, naming: modemAddress, data: [0xFF, 0x1C, 0x01])
+    let (calls, result): ([RecordingModem.Call], DatabaseLinkResult) = try await applying(memory) {
+
+      try await $0.planDatabaseLink(device)
+
+    } beforeApplying: { (damaging: DamagingModem) async -> Void in
+
+      // The slot check and the read-back each arrive damaged, then intact.
+      await damaging.setDamagedReads([true, false, true, false], at: 0x0FF7, of: device)
+
+    }
+
+    #expect(calls == checksThePlan + [
+      read(at: 0x0FF7),
+      read(at: 0x0FF7),
+      write(added, at: 0x0FF7),
+      read(at: 0x0FF7),
+      read(at: 0x0FF7)
+    ] + verifies)
+    #expect(result.steps.map { $0.outcome } == [.written])
+
+  }
+
+  @Test func applyingReadsADamagedSlotOfAnI2DeviceOnce() async throws {
+
+    let memory: InMemoryModem = await modem(identity: DatabaseLinkingExample.older, engine: .i2)
+    let device: InsteonAddress = self.device
+
+    await memory.setDatabase([
+      0x0FFF: controller(0x01, naming: modemAddress),
+      0x0FF7: deleted(responder(0x09, naming: DatabaseLinkingExample.lamp))
+    ], of: device)
+    await memory.setModemRecords([controller(0x00, naming: device), responder(0x01, naming: device)])
+
+    let added: AllLinkRecord = responder(0x00, naming: modemAddress, data: [0xFF, 0x1C, 0x01])
+    let (calls, result): ([RecordingModem.Call], DatabaseLinkResult) = try await applying(memory) {
+
+      try await $0.planDatabaseLink(device)
+
+    } beforeApplying: { (damaging: DamagingModem) async -> Void in
+
+      // The slot check and the read-back each arrive damaged; a read after either would
+      // arrive intact.
+      await damaging.setDamagedReads([true, true, false], at: 0x0FF7, of: device)
+
+    }
+
+    #expect(calls == checksThePlan + [
+      read(at: 0x0FF7),
+      write(added, at: 0x0FF7),
+      read(at: 0x0FF7)
+    ] + verifies)
+    #expect(result.steps.map { $0.outcome } == [.written])
 
   }
 
