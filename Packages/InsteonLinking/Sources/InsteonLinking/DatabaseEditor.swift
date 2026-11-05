@@ -206,7 +206,7 @@ struct DatabaseEditor {
 
     try await modem.writeAllLinkRecord(record, at: address, of: device, timeout: timeout)
 
-    guard try await modem.slot(at: address, of: device, holds: record, timeout: timeout, rereadingDamaged: false) else {
+    guard try await modem.slotHolds(record, at: address, of: device, timeout: timeout, checkingIntegrity: false) else {
 
       throw LinkingError.recordNotWritten(device, address: address)
 

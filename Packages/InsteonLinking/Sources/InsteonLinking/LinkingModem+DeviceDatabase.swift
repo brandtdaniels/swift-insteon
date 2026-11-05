@@ -20,22 +20,21 @@ extension LinkingModem {
 
   }
 
-  /// Reads one record of a device's database, reading it once more when asked to and its
-  /// checksum fails, as an i2CS device's record damaged on the way does.
+  /// Reads one record of a device's database and checks its checksum, reading it once more
+  /// when the checksum fails, as an i2CS device's record damaged on the way does.
   ///
   /// - Parameters:
   ///   - device: The device.
   ///   - address: The slot's address.
   ///   - timeout: How long to wait for the device.
-  ///   - rereadingDamaged: Whether a record whose checksum fails is read once more.
-  /// - Returns: The record.
+  /// - Returns: The record, with an intact checksum.
   /// - Throws: `ModemError.deviceTimedOut` when the second read's checksum fails too, and the
   ///   modem's errors.
-  package func readAllLinkRecord(of device: InsteonAddress, at address: UInt16, timeout: Duration, rereadingDamaged: Bool) async throws -> AllLinkRecordResponse {
+  package func readAllLinkRecordCheckingIntegrity(of device: InsteonAddress, at address: UInt16, timeout: Duration) async throws -> AllLinkRecordResponse {
 
     let first: AllLinkRecordResponse = try await readAllLinkRecord(of: device, at: address, timeout: timeout)
 
-    guard rereadingDamaged, !first.hasIntactChecksum else {
+    guard !first.hasIntactChecksum else {
 
       return first
 
@@ -61,12 +60,16 @@ extension LinkingModem {
   ///   - address: The slot's address.
   ///   - device: The device.
   ///   - timeout: How long to wait for the device.
-  ///   - rereadingDamaged: Whether a record whose checksum fails is read once more.
+  ///   - checkingIntegrity: Whether the record is read with
+  ///     ``LinkingModem/readAllLinkRecordCheckingIntegrity(of:at:timeout:)``, which reads a
+  ///     record whose checksum fails once more, rather than read once whatever its checksum.
   /// - Returns: Whether the slot holds the record.
-  /// - Throws: The errors of ``LinkingModem/readAllLinkRecord(of:at:timeout:rereadingDamaged:)``.
-  package func slot(at address: UInt16, of device: InsteonAddress, holds expected: AllLinkRecord, timeout: Duration, rereadingDamaged: Bool) async throws -> Bool {
+  /// - Throws: The errors of the read.
+  package func slotHolds(_ expected: AllLinkRecord, at address: UInt16, of device: InsteonAddress, timeout: Duration, checkingIntegrity: Bool) async throws -> Bool {
 
-    let current: AllLinkRecordResponse = try await readAllLinkRecord(of: device, at: address, timeout: timeout, rereadingDamaged: rereadingDamaged)
+    let current: AllLinkRecordResponse = checkingIntegrity
+      ? try await readAllLinkRecordCheckingIntegrity(of: device, at: address, timeout: timeout)
+      : try await readAllLinkRecord(of: device, at: address, timeout: timeout)
 
     return current.record.equalsIgnoringDeviceMaintained(expected)
 

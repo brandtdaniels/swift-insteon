@@ -668,7 +668,7 @@ extension DeviceLinkingCoordinator {
 
       guard
         modemAddress == plan.modem,
-        Self.isSame(records, plan.deviceRecords),
+        Self.equalsIgnoringDeviceMaintained(records, plan.deviceRecords),
         Self.isSameModemRecords(modemRecords, plan.allModemRecords)
       else {
 
@@ -815,13 +815,13 @@ extension DeviceLinkingCoordinator {
   /// - Throws: The device's timeout or rejection, and the modem's errors.
   func slotHolds(_ expected: AllLinkRecord, at address: UInt16, of device: InsteonAddress, engine: InsteonEngine) async throws -> Bool {
 
-    try await network.modem.slot(at: address, of: device, holds: expected, timeout: Modem.defaultExtendedRequestTimeout, rereadingDamaged: engine == .i2cs)
+    try await network.modem.slotHolds(expected, at: address, of: device, timeout: Modem.defaultExtendedRequestTimeout, checkingIntegrity: engine == .i2cs)
 
   }
 
   /// Whether a device's records read as a plan's did, but for the flags a device may change
   /// on its own.
-  static func isSame(_ records: [AllLinkRecordResponse], _ planned: [AllLinkRecordResponse]) -> Bool {
+  static func equalsIgnoringDeviceMaintained(_ records: [AllLinkRecordResponse], _ planned: [AllLinkRecordResponse]) -> Bool {
 
     records.count == planned.count && zip(records, planned).allSatisfy { (pair: (AllLinkRecordResponse, AllLinkRecordResponse)) -> Bool in
 
@@ -927,7 +927,11 @@ extension DeviceLinkingCoordinator {
   /// checksum fails.
   func readRecord(at address: UInt16, of device: InsteonAddress, engine: InsteonEngine) async throws -> AllLinkRecordResponse {
 
-    try await network.modem.readAllLinkRecord(of: device, at: address, timeout: Modem.defaultExtendedRequestTimeout, rereadingDamaged: engine == .i2cs)
+    let modem: any LinkingModem = network.modem
+
+    return engine == .i2cs
+      ? try await modem.readAllLinkRecordCheckingIntegrity(of: device, at: address, timeout: Modem.defaultExtendedRequestTimeout)
+      : try await modem.readAllLinkRecord(of: device, at: address, timeout: Modem.defaultExtendedRequestTimeout)
 
   }
 

@@ -33,7 +33,7 @@ struct DeviceDatabaseAccessTests {
     await memory.setDatabase([0x0FFF: record], of: lamp)
 
     let modem = RecordingModem(memory)
-    let read = try await modem.readAllLinkRecord(of: lamp, at: 0x0FFF, timeout: timeout, rereadingDamaged: true)
+    let read = try await modem.readAllLinkRecordCheckingIntegrity(of: lamp, at: 0x0FFF, timeout: timeout)
 
     #expect(read.record == record)
     #expect(await modem.calls == [.readAllLinkRecord(lamp, address: 0x0FFF, timeout: timeout)])
@@ -48,7 +48,7 @@ struct DeviceDatabaseAccessTests {
     await memory.setDamaged(true, record: 0x0FFF, of: lamp)
 
     let modem = RecordingModem(memory)
-    let read = try await modem.readAllLinkRecord(of: lamp, at: 0x0FFF, timeout: timeout, rereadingDamaged: false)
+    let read = try await modem.readAllLinkRecord(of: lamp, at: 0x0FFF, timeout: timeout)
 
     #expect(!read.hasIntactChecksum)
     #expect(await modem.calls == [.readAllLinkRecord(lamp, address: 0x0FFF, timeout: timeout)])
@@ -66,7 +66,7 @@ struct DeviceDatabaseAccessTests {
 
     await #expect(throws: ModemError.deviceTimedOut(lamp)) {
 
-      _ = try await modem.readAllLinkRecord(of: self.lamp, at: 0x0FFF, timeout: self.timeout, rereadingDamaged: true)
+      _ = try await modem.readAllLinkRecordCheckingIntegrity(of: self.lamp, at: 0x0FFF, timeout: self.timeout)
 
     }
 
@@ -87,8 +87,8 @@ struct DeviceDatabaseAccessTests {
 
     await memory.setDatabase([0x0FFF: hopped], of: lamp)
 
-    #expect(try await memory.slot(at: 0x0FFF, of: lamp, holds: record, timeout: timeout, rereadingDamaged: false))
-    #expect(try await !memory.slot(at: 0x0FFF, of: lamp, holds: other, timeout: timeout, rereadingDamaged: false))
+    #expect(try await memory.slotHolds(record, at: 0x0FFF, of: lamp, timeout: timeout, checkingIntegrity: false))
+    #expect(try await !memory.slotHolds(other, at: 0x0FFF, of: lamp, timeout: timeout, checkingIntegrity: false))
 
   }
 
