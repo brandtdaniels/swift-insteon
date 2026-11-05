@@ -101,7 +101,7 @@ enum HubLinkingExample {
           modemRole: .responder,
           modemGroup: 0x02,
           deviceGroup: 0x02,
-          allGroupsWhen: DeviceProfile.Group.Condition(flag: "linkToAllGroups", isSet: true)
+          allGroupsWhen: DeviceProfile.Group.Condition(flag: "linkEveryGroup", isSet: true)
         ),
         DeviceLifecycle.HubLinking.Leg(modemRole: .responder, modemGroup: 0x03, deviceGroup: 0x03)
       ],
@@ -236,7 +236,7 @@ struct HubLinkingTests {
     let result: DeviceLinkingResult = try await network.linking.link(keypad, as: .controller, observer: recorder)
 
     #expect(result.links.map(\.group) == [0x00, 0x02, 0x03])
-    #expect(await recorder.lines.contains("leg 2 all groups when linkToAllGroups true"))
+    #expect(await recorder.lines.contains("leg 2 all groups when linkEveryGroup true"))
     // Only linking commands went to the keypad: no Get or Set Operating Flags.
     let flagCommands: [InMemoryModem.LinkingStep] = await modem.linkingSteps.filter { (step: InMemoryModem.LinkingStep) -> Bool in
 

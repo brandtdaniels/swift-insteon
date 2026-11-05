@@ -37,7 +37,7 @@ struct CatalogGuardTests {
           { "name": "beeperLock", "description": "Locks the beeper.", "query": "0x00", "bit": "0x02", "on": "0x0A", "off": "0x0B", "guard": "neverSet", "label": "Beeper lock" },
           { "name": "extendedOnly", "description": "Takes only extended messages.", "query": "0x00", "bit": "0x04", "on": "0x02", "off": "0x03", "guard": "keep", "label": "Extended only" },
           { "name": "newerGuard", "description": "Guarded by a later version.", "query": "0x00", "bit": "0x08", "on": "0x06", "off": "0x07", "guard": "somethingNewer", "label": "Newer guard" },
-          { "name": "keyBeep", "description": "Beeps.", "query": "0x00", "bit": "0x01", "on": "0x0C", "off": "0x0D", "label": "Key beep" },
+          { "name": "pressTone", "description": "Beeps.", "query": "0x00", "bit": "0x01", "on": "0x0C", "off": "0x0D", "label": "Press tone" },
           { "name": "chime", "description": "Chimes.", "query": "0x00", "bit": "0x20", "onCommand": "chimeOn", "offCommand": "chimeOff", "label": "Chime" },
           { "name": "radioOff", "description": "Turns the radio off.", "query": "0x00", "bit": "0x40", "on": "0x0E", "off": "0x0F", "guard": "neverSet", "label": "Radio off" },
           { "name": "programmingLock", "description": "Locks programming.", "query": "0x00", "bit": "0x80", "on": "0x10", "off": "0x11", "label": "Programming lock" }
@@ -223,15 +223,15 @@ struct CatalogGuardTests {
 
   @Test(.timeLimit(.minutes(1))) func neverSendsAFlagsCommandWithTheBytesOfOneTheCatalogNeverSends() async throws {
 
-    // Key beep on is Set Operating Flags 0x0C, the bytes of the never-sent lockOn.
+    // Press tone on is Set Operating Flags 0x0C, the bytes of the never-sent lockOn.
     let modem = SettingsModem(device: Self.address, flags: 0x00, values: [:])
-    let error: DeviceSettingError? = try await refusal("keyBeep", to: "on", on: modem)
+    let error: DeviceSettingError? = try await refusal("pressTone", to: "on", on: modem)
 
-    #expect(Self.neverWrittenLabel(error) == "Key beep")
+    #expect(Self.neverWrittenLabel(error) == "Press tone")
     #expect(await modem.standardCommands.isEmpty)
 
     // Its off command isn't guarded.
-    let off: DeviceSettingChange = try await device(modem).writeSetting("keyBeep", to: "off")
+    let off: DeviceSettingChange = try await device(modem).writeSetting("pressTone", to: "off")
 
     #expect(off.isConfirmed)
     #expect(await modem.standardCommands.contains(Command(command1: 0x20, command2: 0x0D)))
@@ -286,7 +286,7 @@ struct CatalogGuardTests {
 
   @Test(.timeLimit(.minutes(1))) func writesAValueThatHoldsTheFlagsWhenItLeavesTheGuardedBitsAsTheyAre() async throws {
 
-    // The radio's bit is set already and stays set; bit 0x01 is key beep, which isn't guarded.
+    // The radio's bit is set already and stays set; bit 0x01 is press tone, which isn't guarded.
     let modem = SettingsModem(device: Self.address, flags: 0x00, values: [7: 0x40])
 
     let change: DeviceSettingChange = try await device(modem).writeSetting("configuration", to: "0x41")
@@ -343,7 +343,7 @@ struct CatalogGuardTests {
       "beeperLock": true,
       "extendedOnly": false,
       "newerGuard": false,
-      "keyBeep": true,
+      "pressTone": true,
       "chime": true,
       "radioOff": false,
       "programmingLock": true,

@@ -7,7 +7,7 @@ import InsteonModem
 import InsteonProtocol
 import InsteonTestSupport
 
-/// A made-up leak sensor, whose model and identity no real product has.
+/// A made-up water sensor, whose model and identity no real product has.
 enum MonitorExample {
 
   static let sensor = InsteonAddress(0x5C, 0x6D, 0x01)
@@ -20,7 +20,7 @@ enum MonitorExample {
 
   static let sensorProfile = DeviceProfile(
     model: "9201",
-    name: "Example Leak Sensor",
+    name: "Example Water Sensor",
     identities: [DeviceIdentity(category: 0x10, subcategory: 0x7A)],
     groups: [
       DeviceProfile.Group(number: 1, name: "Dry", role: .controller),
@@ -243,7 +243,7 @@ struct DeviceMonitorTests {
       commandName: "Light On",
       event: "wet",
       isOn: true,
-      productName: "Example Leak Sensor 9201"
+      productName: "Example Water Sensor 9201"
     )))
     #expect(acknowledgment == .message(DeviceMessageSummary(MonitorExample.acknowledgment(from: MonitorExample.sensor))))
     // Hearing a device isn't recorded: its last-seen time is when it last answered a command.
@@ -291,7 +291,7 @@ struct DeviceMonitorTests {
     #expect(press.identity == MonitorExample.sensorIdentity)
     #expect(press.command1 == 0x01)
     #expect(press.role == "responder")
-    #expect(press.productName == "Example Leak Sensor 9201")
+    #expect(press.productName == "Example Water Sensor 9201")
     #expect(command.event == "dry")
     #expect(await network.registry.device(MonitorExample.sensor)?.identity == MonitorExample.sensorIdentity)
     #expect(await network.snapshot().registry.identities[MonitorExample.sensor] == MonitorExample.sensorIdentity)

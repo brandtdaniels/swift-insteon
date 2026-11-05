@@ -16,17 +16,132 @@ struct KeepAwakeTests {
 
   let times: FixedTimes = FixedTimes()
 
-  /// The bundled Open/Close Sensor 2843, whose catalog keeps it awake with the extended Set
-  /// its command set names, right after its first link, and gives no message to release it.
-  static let openClose = (address: InsteonAddress(0x5A, 0x6B, 0x01), identity: ReportedIdentity(category: 0x10, subcategory: 0x02, firmwareVersion: 0x41))
+  /// A made-up contact sensor whose catalog keeps it awake with the extended Set its command
+  /// set names, right after its first link, and gives no message to release it.
+  static let contact = (address: InsteonAddress(0x5A, 0x6B, 0x01), identity: ReportedIdentity(category: 0x10, subcategory: 0x71, firmwareVersion: 0x41))
 
-  /// The bundled RemoteLinc 2 2444A2WH4, kept awake with its stay awake flag after its first
-  /// link, and released by clearing it.
-  static let remote = (address: InsteonAddress(0x5A, 0x6B, 0x02), identity: ReportedIdentity(category: 0x00, subcategory: 0x10, firmwareVersion: 0x37))
+  /// A made-up remote, kept awake with its hold-awake flag after its first link, and released
+  /// by clearing it.
+  static let remote = (address: InsteonAddress(0x5A, 0x6B, 0x02), identity: ReportedIdentity(category: 0x00, subcategory: 0x71, firmwareVersion: 0x37))
 
-  /// The bundled Wireless Zone Thermostat 2441ZTH, kept awake by Set Operating Flags given by
-  /// its bytes before it goes into linking mode, and released the same way.
-  static let thermostat = (address: InsteonAddress(0x5A, 0x6B, 0x03), identity: ReportedIdentity(category: 0x05, subcategory: 0x0A, firmwareVersion: 0x41))
+  /// A made-up climate sensor, kept awake by Set Operating Flags given by its bytes before it
+  /// goes into linking mode, and released the same way.
+  static let climate = (address: InsteonAddress(0x5A, 0x6B, 0x03), identity: ReportedIdentity(category: 0x05, subcategory: 0x71, firmwareVersion: 0x41))
+
+  /// The contact sensor's command set: hold awake is an extended Set with D1 `0x01` and D2
+  /// `0x04`, and the seconds to remain awake in D3.
+  static let contactCommands = CommandSet(
+    id: "exampleContact",
+    name: "Example contact sensor",
+    summary: "A sensor kept awake by an extended Set.",
+    extendedCommands: [
+      DeviceExtendedCommand(
+        name: "holdAwake",
+        summary: "Keeps the sensor awake.",
+        command: Command(command1: 0x2E, command2: 0x00),
+        fixedBytes: [FixedUserDataByte(position: 1, value: 0x01), FixedUserDataByte(position: 2, value: 0x04)],
+        parameters: [MessageField(name: "duration", summary: "How long it remains awake.", location: .userData([3]), kind: .number(unit: .seconds), range: 0...255)],
+        integrity: .checksum
+      )
+    ]
+  )
+
+  /// The remote's command set: hold awake is a flag, set with Set Operating Flags `0x06` and
+  /// cleared with `0x07`.
+  static let remoteCommands = CommandSet(
+    id: "exampleRemote",
+    name: "Example remote",
+    summary: "A remote kept awake by a flag.",
+    operatingFlags: [
+      OperatingFlag(name: "holdAwake", summary: "The remote remains awake.", query: .operatingFlags, bit: 0x08, on: 0x06, off: 0x07, label: "Hold awake")
+    ]
+  )
+
+  /// The climate sensor's command set, with no flags: its keep-awake messages are given by
+  /// their bytes.
+  static let climateCommands = CommandSet(id: "exampleClimate", name: "Example climate sensor", summary: "A sensor kept awake by bytes.")
+
+  /// One leg in which the modem responds to a device's group.
+  static func leg(_ group: AllLinkGroupNumber) -> DeviceLifecycle.HubLinking.Leg {
+
+    DeviceLifecycle.HubLinking.Leg(modemRole: .responder, modemGroup: group, deviceGroup: group)
+
+  }
+
+  /// A battery-powered profile linked from a Hub with the device going first.
+  static func sleepy(
+    model: String,
+    name: String,
+    identity: ReportedIdentity,
+    commands: CommandSet,
+    groups: [AllLinkGroupNumber],
+    waking: DeviceLifecycle.Procedure? = nil,
+    keepAwake: DeviceLifecycle.HubLinking.KeepAwake
+  ) -> DeviceProfile {
+
+    DeviceProfile(
+      model: ProductModel(rawValue: model),
+      name: name,
+      identities: [DeviceIdentity(category: identity.category, subcategory: identity.subcategory)],
+      commandSets: [CommandSetEntry(commandSet: commands.id, category: identity.category, subcategory: identity.subcategory)],
+      isBatteryPowered: true,
+      groups: groups.map { (number: AllLinkGroupNumber) -> DeviceProfile.Group in DeviceProfile.Group(number: number, name: "Group \(number.rawValue)", role: .controller) },
+      lifecycle: DeviceLifecycle(
+        waking: waking,
+        fromHub: DeviceLifecycle.HubLinking(
+          legs: groups.map(leg),
+          isDeviceFirst: true,
+          remoteEnterLinkingMode: DeviceLifecycle.HubLinking.RemoteEnterLinkingMode(works: .unknown),
+          keepAwake: keepAwake
+        )
+      )
+    )
+
+  }
+
+  /// The made-up catalog of the three sleepy devices.
+  static let catalog = DeviceCatalog(
+    profiles: [
+      sleepy(
+        model: "9411",
+        name: "Example Contact Sensor",
+        identity: contact.identity,
+        commands: contactCommands,
+        groups: [1],
+        keepAwake: DeviceLifecycle.HubLinking.KeepAwake(timing: .afterLinked, send: .command("holdAwake"))
+      ),
+      sleepy(
+        model: "9412",
+        name: "Example Remote",
+        identity: remote.identity,
+        commands: remoteCommands,
+        groups: [1],
+        keepAwake: DeviceLifecycle.HubLinking.KeepAwake(
+          timing: .afterLinked,
+          send: .flag(DeviceProfile.Group.Condition(flag: "holdAwake", isSet: true)),
+          release: .flag(DeviceProfile.Group.Condition(flag: "holdAwake", isSet: false))
+        )
+      ),
+      sleepy(
+        model: "9413",
+        name: "Example Climate Sensor",
+        identity: climate.identity,
+        commands: climateCommands,
+        groups: [1, 2, 3, 4],
+        waking: DeviceLifecycle.Procedure(steps: [
+          DeviceLifecycle.Step(text: "Press the wake button.", action: .press, control: "wake button"),
+          DeviceLifecycle.Step(text: "Send Set Operating Flags with cmd2 0x06.", command: "Set Operating Flags")
+        ]),
+        keepAwake: DeviceLifecycle.HubLinking.KeepAwake(
+          timing: .beforeLinking,
+          send: .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x06), isExtended: true, integrity: .checksum)),
+          release: .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x07), isExtended: true, integrity: .checksum)),
+          duration: .seconds(240)
+        )
+      )
+    ],
+    commandSets: [contactCommands, remoteCommands, climateCommands]
+  )
 
   func network(_ modem: InMemoryModem, catalog: DeviceCatalog, identities: [InsteonAddress: ReportedIdentity]) -> DeviceNetwork {
 
@@ -62,19 +177,19 @@ struct KeepAwakeTests {
 
   // MARK: - Sending and releasing
 
-  @Test(.timeLimit(.minutes(1))) func keepsTheBundledOpenCloseSensorAwakeAfterItsFirstLink() async throws {
+  @Test(.timeLimit(.minutes(1))) func keepsAContactSensorAwakeAfterItsFirstLink() async throws {
 
     let modem = InMemoryModem()
-    let (sensor, identity): (InsteonAddress, ReportedIdentity) = Self.openClose
+    let (sensor, identity): (InsteonAddress, ReportedIdentity) = Self.contact
     await modem.setEngine(.i2cs, of: sensor)
-    let network: DeviceNetwork = self.network(modem, catalog: try DeviceCatalog.bundled(), identities: [sensor: identity])
+    let network: DeviceNetwork = self.network(modem, catalog: Self.catalog, identities: [sensor: identity])
     let recorder: LinkingRecorder = readying(sensor, on: modem)
 
     _ = try await network.linking.link(sensor, as: .controller, observer: recorder)
 
     let sent: [InMemoryModem.ExtendedRequest] = await modem.extendedRequests.filter { (request: InMemoryModem.ExtendedRequest) -> Bool in request.device == sensor }
 
-    // The command set's stayAwake: extended Set with D1 0x01 and D2 0x04, and the longest
+    // The command set's holdAwake: extended Set with D1 0x01 and D2 0x04, and the longest
     // time its parameter takes in D3, since the catalog gives no seconds.
     #expect(sent.map(\.command) == [Command(command1: 0x2E, command2: 0x00)])
     #expect(sent.first.map { (request: InMemoryModem.ExtendedRequest) -> [UInt8] in [request.userData[1], request.userData[2], request.userData[3]] } == [0x01, 0x04, 0xFF])
@@ -90,17 +205,17 @@ struct KeepAwakeTests {
 
   }
 
-  @Test(.timeLimit(.minutes(1))) func setsAndClearsTheBundledRemotesStayAwakeFlag() async throws {
+  @Test(.timeLimit(.minutes(1))) func setsAndClearsARemotesHoldAwakeFlag() async throws {
 
     let modem = InMemoryModem()
     let (remote, identity): (InsteonAddress, ReportedIdentity) = Self.remote
     await modem.setEngine(.i2cs, of: remote)
-    let network: DeviceNetwork = self.network(modem, catalog: try DeviceCatalog.bundled(), identities: [remote: identity])
+    let network: DeviceNetwork = self.network(modem, catalog: Self.catalog, identities: [remote: identity])
     let recorder: LinkingRecorder = readying(remote, on: modem)
 
     let result: DeviceLinkingResult = try await network.linking.link(remote, as: .controller, observer: recorder)
 
-    // Set Operating Flags, extended for the i2CS remote: stay awake on, then off once linked.
+    // Set Operating Flags, extended for the i2CS remote: hold awake on, then off once linked.
     #expect(await extendedCommands(to: remote, on: modem) == [Command(command1: 0x20, command2: 0x06), Command(command1: 0x20, command2: 0x07)])
     #expect(result.links.count == 1)
     #expect(await recorder.lines.suffix(3) == [
@@ -111,28 +226,28 @@ struct KeepAwakeTests {
 
   }
 
-  @Test(.timeLimit(.minutes(1))) func wakesTheBundledThermostatAndKeepsItAwakeBeforeLinking() async throws {
+  @Test(.timeLimit(.minutes(1))) func wakesAClimateSensorAndKeepsItAwakeBeforeLinking() async throws {
 
     let modem = InMemoryModem()
-    let (thermostat, identity): (InsteonAddress, ReportedIdentity) = Self.thermostat
-    let catalog: DeviceCatalog = try DeviceCatalog.bundled()
-    let network: DeviceNetwork = self.network(modem, catalog: catalog, identities: [thermostat: identity])
-    let recorder: LinkingRecorder = readying(thermostat, on: modem)
-    let wakingSteps: Int = catalog.describe(category: 0x05, subcategory: 0x0A, firmwareVersion: 0x41).profile?.lifecycle?.waking?.steps
+    let (climate, identity): (InsteonAddress, ReportedIdentity) = Self.climate
+    let catalog: DeviceCatalog = Self.catalog
+    let network: DeviceNetwork = self.network(modem, catalog: catalog, identities: [climate: identity])
+    let recorder: LinkingRecorder = readying(climate, on: modem)
+    let wakingSteps: Int = catalog.describe(category: 0x05, subcategory: 0x71, firmwareVersion: 0x41).profile?.lifecycle?.waking?.steps
       .filter { (step: DeviceLifecycle.Step) -> Bool in !step.isOnOtherDevice }.count ?? 0
 
-    let result: DeviceLinkingResult = try await network.linking.link(thermostat, as: .controller, observer: recorder)
+    let result: DeviceLinkingResult = try await network.linking.link(climate, as: .controller, observer: recorder)
 
     let lines: [String] = await recorder.lines
 
-    // The message given by its bytes, extended with a checksum: stay awake, then sleep.
-    #expect(await extendedCommands(to: thermostat, on: modem) == [Command(command1: 0x20, command2: 0x06), Command(command1: 0x20, command2: 0x07)])
+    // The message given by its bytes, extended with a checksum: hold awake, then sleep.
+    #expect(await extendedCommands(to: climate, on: modem) == [Command(command1: 0x20, command2: 0x06), Command(command1: 0x20, command2: 0x07)])
     #expect(Array(lines.prefix(3)) == [
-      "wake \(thermostat) steps \(wakingSteps)",
-      "keep awake: sending \(thermostat) beforeLinking",
-      "keep awake: sent \(thermostat)"
+      "wake \(climate) steps \(wakingSteps)",
+      "keep awake: sending \(climate) beforeLinking",
+      "keep awake: sent \(climate)"
     ])
-    #expect(lines.suffix(2) == ["keep awake: releasing \(thermostat)", "keep awake: released \(thermostat)"])
+    #expect(lines.suffix(2) == ["keep awake: releasing \(climate)", "keep awake: released \(climate)"])
     // It's kept awake before the modem starts ALL-Linking for its first leg.
     #expect(await modem.linkingSteps.first == .modem(.responder, 0x01))
     #expect(result.links.map(\.group.rawValue) == [0x01, 0x02, 0x03, 0x04])
@@ -142,30 +257,30 @@ struct KeepAwakeTests {
   @Test(.timeLimit(.minutes(1))) func releasesTheDeviceWhenALaterLegFails() async throws {
 
     let modem = InMemoryModem()
-    let (thermostat, identity): (InsteonAddress, ReportedIdentity) = Self.thermostat
-    let network: DeviceNetwork = self.network(modem, catalog: try DeviceCatalog.bundled(), identities: [thermostat: identity])
+    let (climate, identity): (InsteonAddress, ReportedIdentity) = Self.climate
+    let network: DeviceNetwork = self.network(modem, catalog: Self.catalog, identities: [climate: identity])
     let recorder = LinkingRecorder(
       readying: { (_: DeviceFirstPrompt) async throws -> Void in
 
-        await modem.pressSetButton(of: thermostat)
+        await modem.pressSetButton(of: climate)
 
       },
       reacting: { (event: LinkingEvent) async -> Void in
 
         if case let .hubLinkingLegStarted(leg) = event, leg.index == 1 {
 
-          await modem.setUnanswering(thermostat)
+          await modem.setUnanswering(climate)
 
         }
 
       }
     )
 
-    let result: DeviceLinkingResult = try await network.linking.link(thermostat, as: .controller, observer: recorder)
+    let result: DeviceLinkingResult = try await network.linking.link(climate, as: .controller, observer: recorder)
 
     #expect(result.failedLeg?.leg.index == 1)
-    #expect(await extendedCommands(to: thermostat, on: modem).last == Command(command1: 0x20, command2: 0x07))
-    #expect(await recorder.lines.suffix(2) == ["keep awake: releasing \(thermostat)", "keep awake: released \(thermostat)"])
+    #expect(await extendedCommands(to: climate, on: modem).last == Command(command1: 0x20, command2: 0x07))
+    #expect(await recorder.lines.suffix(2) == ["keep awake: releasing \(climate)", "keep awake: released \(climate)"])
 
   }
 
@@ -174,9 +289,9 @@ struct KeepAwakeTests {
     struct Unready: Error {}
 
     let modem = InMemoryModem()
-    let (thermostat, identity): (InsteonAddress, ReportedIdentity) = Self.thermostat
-    let network: DeviceNetwork = self.network(modem, catalog: try DeviceCatalog.bundled(), identities: [thermostat: identity])
-    // The person never puts the thermostat in linking mode.
+    let (climate, identity): (InsteonAddress, ReportedIdentity) = Self.climate
+    let network: DeviceNetwork = self.network(modem, catalog: Self.catalog, identities: [climate: identity])
+    // The person never puts the climate sensor in linking mode.
     let recorder = LinkingRecorder(readying: { (_: DeviceFirstPrompt) async throws -> Void in
 
       throw Unready()
@@ -185,11 +300,11 @@ struct KeepAwakeTests {
 
     await #expect(throws: Unready.self) {
 
-      _ = try await network.linking.link(thermostat, as: .controller, observer: recorder)
+      _ = try await network.linking.link(climate, as: .controller, observer: recorder)
 
     }
 
-    #expect(await extendedCommands(to: thermostat, on: modem) == [Command(command1: 0x20, command2: 0x06), Command(command1: 0x20, command2: 0x07)])
+    #expect(await extendedCommands(to: climate, on: modem) == [Command(command1: 0x20, command2: 0x06), Command(command1: 0x20, command2: 0x07)])
     #expect(await modem.linkingSteps.isEmpty)
     // A first leg that throws reports no leg failure, so nothing suggests linking again.
     #expect(await !recorder.lines.contains { (line: String) -> Bool in line.contains("failed") })
@@ -199,20 +314,20 @@ struct KeepAwakeTests {
   @Test(.timeLimit(.minutes(1))) func releasesTheDeviceWhenTheLinkIsCanceled() async throws {
 
     let modem = InMemoryModem()
-    let (thermostat, identity): (InsteonAddress, ReportedIdentity) = Self.thermostat
-    let network: DeviceNetwork = self.network(modem, catalog: try DeviceCatalog.bundled(), identities: [thermostat: identity])
-    // The thermostat links its first leg, then never completes the second.
+    let (climate, identity): (InsteonAddress, ReportedIdentity) = Self.climate
+    let network: DeviceNetwork = self.network(modem, catalog: Self.catalog, identities: [climate: identity])
+    // The climate sensor links its first leg, then never completes the second.
     let recorder = LinkingRecorder(
       readying: { (_: DeviceFirstPrompt) async throws -> Void in
 
-        await modem.pressSetButton(of: thermostat)
+        await modem.pressSetButton(of: climate)
 
       },
       reacting: { (event: LinkingEvent) async -> Void in
 
         if case let .hubLinkingLegStarted(leg) = event, leg.index == 1 {
 
-          await modem.setSilent(thermostat)
+          await modem.setSilent(climate)
 
         }
 
@@ -220,7 +335,7 @@ struct KeepAwakeTests {
     )
     let linking = Task { () async throws -> DeviceLinkingResult in
 
-      try await network.linking.link(thermostat, as: .controller, observer: recorder)
+      try await network.linking.link(climate, as: .controller, observer: recorder)
 
     }
 
@@ -233,8 +348,8 @@ struct KeepAwakeTests {
 
     }
 
-    #expect(await extendedCommands(to: thermostat, on: modem).last == Command(command1: 0x20, command2: 0x07))
-    #expect(await recorder.lines.suffix(2) == ["keep awake: releasing \(thermostat)", "keep awake: released \(thermostat)"])
+    #expect(await extendedCommands(to: climate, on: modem).last == Command(command1: 0x20, command2: 0x07))
+    #expect(await recorder.lines.suffix(2) == ["keep awake: releasing \(climate)", "keep awake: released \(climate)"])
 
   }
 
@@ -246,10 +361,13 @@ struct KeepAwakeTests {
     let commands = CommandSet(
       id: "exampleGuarded",
       name: "Example",
-      summary: "A command set with guarded flags.",
+      summary: "A command set with guarded flags and a guarded command.",
       operatingFlags: [
-        OperatingFlag(name: "programmingLock", summary: "Locks programming.", query: .operatingFlags, bit: 0x01, on: 0x00, off: 0x01),
-        OperatingFlag(name: "radioOff", summary: "Turns the radio off.", query: .operatingFlags, bit: 0x40, on: 0x0C, off: 0x0D)
+        OperatingFlag(name: "lockout", summary: "Locks out linking from the device.", query: .operatingFlags, bit: 0x01, on: 0x00, off: 0x01, writeGuard: .neverSet),
+        OperatingFlag(name: "radioMute", summary: "Mutes the radio.", query: .operatingFlags, bit: 0x40, on: 0x0C, off: 0x0D, writeGuard: .keep)
+      ],
+      standardCommands: [
+        DeviceStandardCommand(name: "muteRadio", summary: "Mutes the radio.", command1: 0x20, command2: .fixed(0x0C), sendGuard: .never)
       ]
     )
 
@@ -277,9 +395,9 @@ struct KeepAwakeTests {
   @Test(
     .timeLimit(.minutes(1)),
     arguments: [
-      DeviceLifecycle.HubLinking.HubMessage.flag(DeviceProfile.Group.Condition(flag: "programmingLock", isSet: true)),
+      DeviceLifecycle.HubLinking.HubMessage.flag(DeviceProfile.Group.Condition(flag: "lockout", isSet: true)),
       DeviceLifecycle.HubLinking.HubMessage.bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x0C))),
-      DeviceLifecycle.HubLinking.HubMessage.command("radioOff")
+      DeviceLifecycle.HubLinking.HubMessage.command("muteRadio")
     ]
   )
   func neverSendsAKeepAwakeMessageTheGuardsRefuse(_ send: DeviceLifecycle.HubLinking.HubMessage) async throws {
@@ -374,7 +492,7 @@ struct KeepAwakeTests {
     let duration = MessageField(name: "duration", summary: "How long.", location: .userData([3]), kind: .number(unit: .seconds), range: 0...255)
     let mode = MessageField(name: "mode", summary: "Something else.", location: .userData([4]), range: 0...255)
     let command = DeviceExtendedCommand(
-      name: "stayAwake",
+      name: "holdAwake",
       summary: "Keeps it awake.",
       command: Command(command1: 0x2E, command2: 0x00),
       fixedBytes: [FixedUserDataByte(position: 1, value: 0x01)],
@@ -392,7 +510,7 @@ struct KeepAwakeTests {
     #expect([userData[1], userData[3], userData[4]] == [0x01, 0xFF, 0x00])
 
     // With no unit, a command's only number takes it.
-    let only = DeviceExtendedCommand(name: "stayAwake", summary: "Keeps it awake.", command: Command(command1: 0x2E, command2: 0x00), parameters: [mode])
+    let only = DeviceExtendedCommand(name: "holdAwake", summary: "Keeps it awake.", command: Command(command1: 0x2E, command2: 0x00), parameters: [mode])
 
     #expect(Device.durationParameter(of: only) == mode)
 
@@ -400,15 +518,14 @@ struct KeepAwakeTests {
 
   @Test func writesOnlyTheFlagsTheKeepAwakeMessagesName() throws {
 
-    let catalog: DeviceCatalog = try DeviceCatalog.bundled()
-    let remote: DeviceDescription = catalog.describe(category: 0x00, subcategory: 0x10, firmwareVersion: 0x37)
-    let openClose: DeviceDescription = catalog.describe(category: 0x10, subcategory: 0x02, firmwareVersion: 0x41)
-    let plug: DeviceDescription = catalog.describe(category: 0x02, subcategory: 0x38, firmwareVersion: 0x42)
+    let remote: DeviceDescription = Self.catalog.describe(category: Self.remote.identity.category, subcategory: Self.remote.identity.subcategory, firmwareVersion: 0x37)
+    let contact: DeviceDescription = Self.catalog.describe(category: Self.contact.identity.category, subcategory: Self.contact.identity.subcategory, firmwareVersion: 0x41)
+    let dimmer: DeviceDescription = ControlExample.catalog.describe(category: ControlExample.dimmerIdentity.category, subcategory: ControlExample.dimmerIdentity.subcategory, firmwareVersion: 0x45)
 
-    #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: remote) == ["stayAwake"])
+    #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: remote) == ["holdAwake"])
     // An extended Set writes no operating flag, and a device without keep-awake writes none.
-    #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: openClose).isEmpty)
-    #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: plug).isEmpty)
+    #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: contact).isEmpty)
+    #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: dimmer).isEmpty)
     #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: nil).isEmpty)
 
   }
