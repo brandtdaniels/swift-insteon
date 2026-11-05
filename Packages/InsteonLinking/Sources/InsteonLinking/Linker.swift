@@ -86,7 +86,7 @@ public struct Linker: Sendable {
       // device that isn't linked to the modem, doesn't leave the controller with a link to it.
       try await editor.write(
         AllLinkRecord(
-          flags: DatabaseEditor.flags(isController: false),
+          flags: .linked(isController: false),
           group: group.number,
           address: controller,
           data1: responder.data1,
@@ -98,7 +98,7 @@ public struct Linker: Sendable {
 
       try await editor.write(
         AllLinkRecord(
-          flags: DatabaseEditor.flags(isController: true),
+          flags: .linked(isController: true),
           group: group.number,
           address: addresses.address(of: responder.endpoint)
         ),
