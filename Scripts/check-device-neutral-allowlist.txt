@@ -1,13 +1,13 @@
 # Files that Scripts/check-device-neutral.py knows name a real product or operating flag, each
 # with a reason. Each entry is a path from the repository's root, the word, and why it stays,
 # separated by tabs. Entries only go: CI fails a pull request that adds one.
-Packages/InsteonCLI/Sources/InsteonCLISupport/SendRefusalText.swift	powerLineOff	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCLI/Sources/InsteonCLISupport/SendRefusalText.swift	radioOff	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	powerLineOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	radioOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCore/Sources/InsteonCore/ProtectedCommand.swift	powerLineOff	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/ProtectedCommand.swift	radioOff	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Tests/InsteonCoreTests/GuardedBytesTests.swift	powerLineOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCore/Tests/InsteonCoreTests/GuardedBytesTests.swift	radioOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCore/Tests/InsteonCoreTests/SerialCommandPolicyTests.swift	powerLineOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCore/Tests/InsteonCoreTests/SerialCommandPolicyTests.swift	radioOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
+Packages/InsteonCLI/Sources/InsteonCLISupport/SendRefusalText.swift	powerLineOff	Names a ProtectedCommand case, which is public API; it goes once the catalog gives the protected commands.
+Packages/InsteonCLI/Sources/InsteonCLISupport/SendRefusalText.swift	radioOff	Names a ProtectedCommand case, which is public API; it goes once the catalog gives the protected commands.
+Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	powerLineOff	A test of the protected commands that names a ProtectedCommand case, which is public API; it goes once the catalog gives the protected commands.
+Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	radioOff	A test of the protected commands that names a ProtectedCommand case, which is public API; it goes once the catalog gives the protected commands.
+Packages/InsteonCore/Sources/InsteonCore/ProtectedCommand.swift	powerLineOff	Names a ProtectedCommand case, which is public API; it goes once the catalog gives the protected commands.
+Packages/InsteonCore/Sources/InsteonCore/ProtectedCommand.swift	radioOff	Names a ProtectedCommand case, which is public API; it goes once the catalog gives the protected commands.
+Packages/InsteonCore/Tests/InsteonCoreTests/GuardedBytesTests.swift	powerLineOff	A test of the protected commands that names a ProtectedCommand case, which is public API; it goes once the catalog gives the protected commands.
+Packages/InsteonCore/Tests/InsteonCoreTests/GuardedBytesTests.swift	radioOff	A test of the protected commands that names a ProtectedCommand case, which is public API; it goes once the catalog gives the protected commands.
+Packages/InsteonCore/Tests/InsteonCoreTests/SerialCommandPolicyTests.swift	powerLineOff	A test of the protected commands that names a ProtectedCommand case, which is public API; it goes once the catalog gives the protected commands.
+Packages/InsteonCore/Tests/InsteonCoreTests/SerialCommandPolicyTests.swift	radioOff	A test of the protected commands that names a ProtectedCommand case, which is public API; it goes once the catalog gives the protected commands.
