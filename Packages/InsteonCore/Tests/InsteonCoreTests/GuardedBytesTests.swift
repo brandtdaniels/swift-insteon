@@ -552,35 +552,6 @@ struct GuardedBytesTests {
 
   }
 
-  @Test func neverUnlocksAByteForANameThatMeansAGuardedFlag() {
-
-    // A catalog that forgets the guard on a checksum flag, under a name the floor doesn't list.
-    let commands = CommandSet(
-      id: "exampleMisguarded",
-      name: "Example",
-      summary: "A checksum flag without its guard.",
-      operatingFlags: [
-        OperatingFlag(name: "checksumRequired2", summary: "Requires a checksum.", query: .operatingFlags, bit: 0x01, on: 0x19, off: 0x18),
-        OperatingFlag(name: "PowerLineOffToo", summary: "Turns the powerline off.", query: .operatingFlags, bit: 0x02, on: 0x0E, off: 0x0F),
-        OperatingFlag(name: "buttonLock", summary: "Locks the buttons.", query: .operatingFlags, bit: 0x04, on: 0x0C, off: 0x0D)
-      ]
-    )
-
-    #expect(DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x19), in: commands))
-    #expect(DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x0E), in: commands))
-    // A name with no guarded meaning still unlocks its byte.
-    #expect(!DeviceSettingSafety.isNeverSent(Command(command1: 0x20, command2: 0x0C), in: commands))
-
-    #expect(DeviceSettingSafety.namesGuardedMeaning("checksumRequired2"))
-    #expect(DeviceSettingSafety.namesGuardedMeaning("PowerLineOffToo"))
-    #expect(DeviceSettingSafety.namesGuardedMeaning("powerlineOff"))
-    #expect(DeviceSettingSafety.namesGuardedMeaning("RADIOOFF"))
-    #expect(DeviceSettingSafety.namesGuardedMeaning("programmingLockOn"))
-    #expect(!DeviceSettingSafety.namesGuardedMeaning("buttonLock"))
-    #expect(!DeviceSettingSafety.namesGuardedMeaning("stayAwakeOff"))
-
-  }
-
   @Test(.timeLimit(.minutes(1))) func sendsAKeypadsButtonLockOnAsGiven() async throws {
 
     let modem = SettingsModem(device: Self.keypad.address, flags: 0x00, values: [:])
@@ -711,13 +682,13 @@ struct GuardedBytesTests {
     let modem = SettingsModem(device: CatalogGuardTests.address, flags: 0x00, values: [:])
     let network: DeviceNetwork = try guardedNetwork(modem)
 
-    // The catalog's radioOff flag is turned on with Set Operating Flags 0x0E, which the floor
-    // holds, and off with 0x0F, which only the catalog's flag keeps.
-    let radioOn = DirectMessage(to: CatalogGuardTests.address, command1: 0x20, command2: 0x0F, data: nil, hasChecksum: false)
+    // The catalog's extendedOnly flag is kept, so its off, Set Operating Flags 0x03, which the
+    // floor doesn't hold, is never sent.
+    let extendedOnlyOff = DirectMessage(to: CatalogGuardTests.address, command1: 0x20, command2: 0x03, data: nil, hasChecksum: false)
 
     let error: SendRefusal? = await #expect(throws: SendRefusal.self) {
 
-      _ = try await network.send(radioOn, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+      _ = try await network.send(extendedOnlyOff, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
 
     }
 

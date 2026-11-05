@@ -39,6 +39,115 @@ struct BundledCatalogDataTests {
 
   // MARK: - Guards
 
+  /// The parts of a name, in lowercase, that mean a flag that cuts a device off from the
+  /// modem or locks it: turning off its radio or powerline, requiring a checksum, and locking
+  /// its programming.
+  static let lockingOrIsolatingMeanings: [String] = ["radiooff", "powerlineoff", "checksum", "programminglock"]
+
+  /// The Set Operating Flags cmd2s that cut most devices off from the modem or lock them.
+  static let protectedCommand2s: Set<UInt8> = [0x00, 0x0C, 0x0E, 0x19]
+
+  /// Whether a name means a flag that cuts a device off from the modem or locks it.
+  static func meansLockingOrIsolating(_ name: SettingName) -> Bool {
+
+    let lowercased: String = name.rawValue.lowercased()
+
+    return lockingOrIsolatingMeanings.contains { (meaning: String) -> Bool in lowercased.contains(meaning) }
+
+  }
+
+  @Test func guardsEveryFlagThatCutsADeviceOffOrLocksIt() throws {
+
+    var checked: Int = 0
+
+    for commands in try Self.catalog().commandSets {
+
+      for flag in commands.operatingFlags {
+
+        switch flag.name.rawValue {
+        case "radioOff", "powerLineOff", "powerlineOff", "checksumRequired":
+          checked += 1
+          #expect(flag.writeGuard == .keep, "\(commands.id) \(flag.name)")
+        case "programmingLock":
+          checked += 1
+          #expect(flag.writeGuard == .neverSet || flag.writeGuard == .keep, "\(commands.id) \(flag.name)")
+        default:
+          // Any other flag so named that's turned on with a protected cmd2 is guarded too.
+          if Self.meansLockingOrIsolating(flag.name), let on = flag.on, Self.protectedCommand2s.contains(on) {
+
+            #expect(flag.writeGuard != nil, "\(commands.id) \(flag.name)")
+
+          }
+        }
+
+      }
+
+    }
+
+    #expect(checked > 0)
+
+  }
+
+  @Test func neverSendsACommandThatCutsADeviceOffOrLocksIt() throws {
+
+    var checked: Int = 0
+
+    for commands in try Self.catalog().commandSets {
+
+      var named: [(SettingName, Command?, CommandGuard?)] = commands.flagCommands.map { (command: OperatingFlagCommand) -> (SettingName, Command?, CommandGuard?) in
+
+        (command.name, command.command.command, command.sendGuard)
+
+      }
+
+      named += commands.standardCommands.map { (command: DeviceStandardCommand) -> (SettingName, Command?, CommandGuard?) in
+
+        guard case let .fixed(command2) = command.command2 else {
+
+          return (command.name, nil, command.sendGuard)
+
+        }
+
+        return (command.name, Command(command1: command.command1, command2: command2), command.sendGuard)
+
+      }
+
+      named += commands.extendedCommands.map { (command: DeviceExtendedCommand) -> (SettingName, Command?, CommandGuard?) in (command.name, command.command, command.sendGuard) }
+
+      for (name, command, sendGuard) in named {
+
+        let isNamedProtected: Bool = ["programmingLockOn", "radioOff", "powerLineOff", "powerlineOff", "checksumOn", "checksumRequiredOn"].contains(name.rawValue)
+        let isProtectedBytes: Bool = command.map { (command: Command) -> Bool in command.command1 == 0x20 && Self.protectedCommand2s.contains(command.command2) } ?? false
+
+        if isNamedProtected || (Self.meansLockingOrIsolating(name) && isProtectedBytes) {
+
+          checked += 1
+          #expect(sendGuard == .never, "\(commands.id) \(name)")
+
+        }
+
+      }
+
+    }
+
+    #expect(checked > 0)
+
+  }
+
+  @Test func marksEveryValueNamedForTheOperatingFlagsByte() throws {
+
+    for commands in try Self.catalog().commandSets {
+
+      for value in commands.extendedSettings?.values ?? [] where value.name == "operatingFlags" {
+
+        #expect(value.flagsQuery == .operatingFlags, "\(commands.id) \(value.name)")
+
+      }
+
+    }
+
+  }
+
   @Test func guardsTheFlagsThatShareAProtectedCmd2WithAnUnguardedOne() throws {
 
     let i3Keypad: CommandSet = try Self.commands("i3Keypad")

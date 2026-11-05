@@ -7,11 +7,10 @@ import InsteonProtocol
 /// modem or leave them locked. Each is refused for a device the catalog doesn't know or gives
 /// no command set, and for a command set that doesn't say what its cmd2 means. It's sent only
 /// where the device's command set names that cmd2 for a flag or command it doesn't guard, such
-/// as a keypad's button lock flag, turned on with cmd2 `0x19`; a cmd2 the command set
-/// names for a guarded flag, such as radio off, or only under a name that means one, such as
-/// one with `checksum` in it, stays refused. Poke writes any byte of a device's memory
-/// and is never sent. Every message InsteonCore sends, raw or not, is checked by its bytes,
-/// and nothing forces one through. A raw serial command has no device to look up, so
+/// as a keypad's button lock flag, turned on with cmd2 `0x19`; a cmd2 the command set names
+/// only for a flag or command it guards stays refused. Poke writes any byte of a device's
+/// memory and is never sent. Every message InsteonCore sends, raw or not, is checked by its
+/// bytes, and nothing forces one through. A raw serial command has no device to look up, so
 /// ``SerialCommandPolicy`` refuses all of them in it. The catalog's guards add more commands
 /// that are never sent to a device.
 ///

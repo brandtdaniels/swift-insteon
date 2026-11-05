@@ -5,28 +5,8 @@ Packages/InsteonCLI/Sources/InsteonCLISupport/SendRefusalText.swift	powerLineOff
 Packages/InsteonCLI/Sources/InsteonCLISupport/SendRefusalText.swift	radioOff	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	powerLineOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
 Packages/InsteonCLI/Tests/InsteonCLISupportTests/DeviceSettingsTextTests.swift	radioOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCore/Sources/InsteonCore/Device+SettingWrites.swift	Programming lock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/Device+Settings.swift	Programming lock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	Lock buttons	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	Programming lock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	checksumRequired	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	hiddenDoorSensor	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	i3 Keypad	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	openCloseSensor	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	powerLineOff	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	programmingLock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceSettingSafety.swift	radioOff	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/DeviceSettingsReading.swift	Programming lock	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Sources/InsteonCore/InsteonCore.docc/InsteonCore.md	Lock buttons	Docs or help that name a real product or flag as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/InsteonCore.docc/InsteonCore.md	Programming lock	Docs or help that name a real product or flag as an example; to be replaced with an invented one.
-Packages/InsteonCore/Sources/InsteonCore/InsteonCore.docc/InsteonCore.md	i3 Keypad	Docs or help that name a real product as an example; to be replaced with an invented one.
 Packages/InsteonCore/Sources/InsteonCore/ProtectedCommand.swift	powerLineOff	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
 Packages/InsteonCore/Sources/InsteonCore/ProtectedCommand.swift	radioOff	Code outside the relay link that names a flag or product in its docs or logic; to move to the catalog.
-Packages/InsteonCore/Tests/InsteonCoreTests/CatalogGuardTests.swift	Open/Close Sensor	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCore/Tests/InsteonCoreTests/CatalogGuardTests.swift	Programming lock	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCore/Tests/InsteonCoreTests/CatalogGuardTests.swift	openCloseSensor	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCore/Tests/InsteonCoreTests/CatalogGuardTests.swift	programmingLock	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
-Packages/InsteonCore/Tests/InsteonCoreTests/CatalogGuardTests.swift	radioOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
 Packages/InsteonCore/Tests/InsteonCoreTests/GuardedBytesTests.swift	powerLineOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
 Packages/InsteonCore/Tests/InsteonCoreTests/GuardedBytesTests.swift	radioOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.
 Packages/InsteonCore/Tests/InsteonCoreTests/SerialCommandPolicyTests.swift	powerLineOff	A test outside the relay link that uses a real product or flag; to be converted to an invented catalog.

@@ -80,18 +80,17 @@ extension Device {
 
   /// Changes one of the device's settings, and reads it back to confirm the change.
   ///
-  /// Some settings are never written: turning off the device's radio or powerline, and
-  /// requiring a checksum in every message, any of which can cut the device off from the
-  /// modem, and any other flag the catalog guards with `FlagGuard.keep`. The programming lock,
-  /// and any flag the catalog guards with `FlagGuard.neverSet`, is only turned off, never on,
-  /// so a device is never left locked. A command the catalog guards with `CommandGuard.never`
-  /// is never sent, nor is a Set Operating Flags command with the same bytes. All of these are
-  /// refused before anything is sent, and the radio, powerline, checksum and programming lock
-  /// flags are refused even when the catalog gives no guard. A value whose byte holds
-  /// operating flags, which the catalog marks with `SettingValue.flagsQuery`, such as an
-  /// open/close sensor's configuration byte, is refused before it's written when it would set
-  /// a bit that's never set, or change a bit that's kept; the device is asked for the byte
-  /// first, to compare. The guarded bits of an extended command's flags parameter are checked
+  /// Some settings are never written: a flag the catalog guards with `FlagGuard.keep`, such
+  /// as one that turns off the device's radio or powerline or requires a checksum in every
+  /// message, any of which can cut the device off from the modem. A flag the catalog guards
+  /// with `FlagGuard.neverSet`, such as one that locks linking from the device itself, is only
+  /// turned off, never on, so a device is never left locked. A command the catalog guards with
+  /// `CommandGuard.never` is never sent, nor is a Set Operating Flags command with the same
+  /// bytes. All of these are refused before anything is sent. A value whose byte holds
+  /// operating flags, which the catalog marks with `SettingValue.flagsQuery`, such as a
+  /// sensor's configuration byte, is refused before it's written when it would set a bit
+  /// that's never set, or change a bit that's kept; the device is asked for the byte first,
+  /// to compare. The guarded bits of an extended command's flags parameter are checked
   /// the same way.
   ///
   /// A flag is changed with Set Operating Flags, in the form the device takes: extended with a
@@ -157,7 +156,7 @@ extension Device {
 
     }
 
-    // Refused before anything is sent, whatever the catalog says about writing it.
+    // Refused before anything is sent, whatever else the catalog says about writing it.
     if DeviceSettingSafety.isNeverWritten(item, in: commands) {
 
       throw DeviceSettingError.neverWritten(label: item.label)

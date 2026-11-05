@@ -57,7 +57,8 @@ extension Device {
   /// with `duration`'s whole seconds, or else its parameter's largest value, for a parameter;
   /// or an operating flag, set or cleared with Set Operating Flags in the form the device takes.
   /// A message given by its bytes is sent as given. Nothing else is written: no other flag,
-  /// and never one the catalog or the floor guards, nor a command the catalog never sends.
+  /// and never one the catalog guards, nor a command the catalog never sends or the byte floor
+  /// holds.
   ///
   /// - Parameters:
   ///   - message: The message.
@@ -208,7 +209,7 @@ extension Device {
 
       if let flagCommand = commands.flagCommands.first(where: { (entry: OperatingFlagCommand) -> Bool in entry.name == name }) {
 
-        guard !DeviceSettingSafety.isNeverSent(flagCommand.sendGuard), !DeviceSettingSafety.neverSentNames.contains(name) else {
+        guard !DeviceSettingSafety.isNeverSent(flagCommand.sendGuard) else {
 
           throw refused
 

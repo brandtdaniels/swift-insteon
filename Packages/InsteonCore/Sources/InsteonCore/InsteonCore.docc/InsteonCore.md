@@ -136,28 +136,26 @@ differs, ``DeviceSettingChange/unreadSettings`` each one the device didn't repor
 ``DeviceSettingChange/OtherSettings`` says how the comparison ended, and why the other settings
 couldn't be read again after a write that succeeded.
 
-Some settings are never written: turning off a device's radio or powerline, and requiring a
-checksum in every message, any of which can cut the device off from the modem, and any other
-flag the catalog guards with `FlagGuard.keep`. They're shown as read-only, and writing one
-throws ``DeviceSettingError/neverWritten(label:)``, as does writing a setting whose command
-the catalog guards with `CommandGuard.never`. The programming lock, and any flag the catalog
-guards with `FlagGuard.neverSet`, is only ever turned off, so a device is never left locked;
-turning it on throws ``DeviceSettingError/leavesProgrammingLocked(label:)``. The same holds for
-a value whose byte holds those flags, such as an open/close sensor's configuration byte, which
-the catalog marks with `SettingValue.flagsQuery`, and for the guarded bits of an extended
-command's flags parameter: it's refused before it's written when it would set a bit that's
-never set or change one that's kept. The radio, powerline, checksum and programming lock flags
-are guarded even where the catalog gives no guard; the catalog adds guards, and never removes
-these. Under every guard is a floor of bytes, the ``ProtectedCommand``s. Set Operating Flags
-with cmd2 `0x0C`, `0x0E`, `0x19` or `0x00` is refused for a device the catalog doesn't know
-or gives no command set, and for a command set that doesn't name the cmd2; it's sent only
-where the command set names it for a flag or command it doesn't guard, under a name that
-doesn't mean a guarded flag, such as an i3 Keypad's lock buttons flag, turned on with `0x19`. Poke is never sent. A flag is shown as writable when at
-least one of its states is sent. A catalog that names a flags byte's query differently from the floor is checked against
-both. Every message a ``Device`` sends is checked by the bytes it carries, after any value is
-filled in: the Set Operating Flags bytes that turn a kept flag on or off or a never-set flag on,
-those of a command the catalog guards, and those of a command named for one of these, such as
-`programmingLockOn`, are never sent under any name, and the operation throws
+The Insteon device catalog says which settings are guarded. A flag it guards with
+`FlagGuard.keep`, such as one that turns off a device's radio or powerline or requires a
+checksum in every message, any of which can cut the device off from the modem, is never
+written: it's shown as read-only, and writing one throws
+``DeviceSettingError/neverWritten(label:)``, as does writing a setting whose command the
+catalog guards with `CommandGuard.never`. A flag it guards with `FlagGuard.neverSet`, such as
+one that locks linking from the device itself, is only ever turned off, so a device is never
+left locked; turning it on throws ``DeviceSettingError/leavesProgrammingLocked(label:)``. The
+same holds for a value whose byte holds those flags, which the catalog marks with
+`SettingValue.flagsQuery`, and for the guarded bits of an extended command's flags parameter:
+it's refused before it's written when it would set a bit that's never set or change one that's
+kept. Under every guard is a floor of bytes, the ``ProtectedCommand``s. Set Operating Flags
+with cmd2 `0x0C`, `0x0E`, `0x19` or `0x00` is refused for a device the catalog doesn't know or
+gives no command set, and for a command set that doesn't name the cmd2; it's sent only where
+the command set names it for a flag or command it doesn't guard, such as a keypad's button
+lock flag, turned on with `0x19`. Poke is never sent. A flag is shown as writable when at least
+one of its states is sent. Every message a ``Device`` sends is checked by the bytes it carries,
+after any value is filled in: the Set Operating Flags bytes that turn a kept flag on or off or
+a never-set flag on, and those of a command the catalog guards, are never sent under any name,
+and the operation throws
 ``DeviceControlError/unsupported(_:product:)``. A value a setting doesn't
 take throws an error with a ``DeviceSettingInput`` that says what it takes:
 

@@ -231,7 +231,7 @@ struct GuardedSendTests {
 
             guardedBits += 1
 
-            let rule: DeviceSettingSafety.Rule? = DeviceSettingSafety.rule(named: bit.name, writeGuard: writeGuard)
+            let rule: DeviceSettingSafety.Rule? = DeviceSettingSafety.rule(for: writeGuard)
 
             #expect(rule == .keep || (writeGuard == .neverSet && rule == .neverSet), "\(commands.id) \(extended.name) \(bit.name)")
 
