@@ -410,13 +410,13 @@ struct SelfTestTests {
 
   // MARK: - Operating flags
 
-  /// A command set with a programming lock and a press tone in one flags byte.
+  /// A command set with a lockout the catalog never sets and a press tone in one flags byte.
   static let lockedCommands = CommandSet(
     id: "exampleLock",
     name: "Example lock",
-    summary: "A programming lock and a press tone.",
+    summary: "A lockout and a press tone.",
     operatingFlags: [
-      OperatingFlag(name: "programmingLock", summary: "Locks programming.", query: .operatingFlags, bit: 0x01, label: "Programming lock"),
+      OperatingFlag(name: "lockout", summary: "Locks out linking from the device.", query: .operatingFlags, bit: 0x01, label: "Lockout", writeGuard: .neverSet),
       OperatingFlag(name: "pressTone", summary: "Beeps on every button press.", query: .operatingFlags, bit: 0x02, label: "Press tone")
     ]
   )
@@ -428,7 +428,7 @@ struct SelfTestTests {
     commandSets: [lockedCommands]
   )
 
-  @Test func warnsOfAProgrammingLockTheDeviceReportsOn() async throws {
+  @Test func warnsOfANeverSetFlagTheDeviceReportsOnAndSuggestsTurningItOff() async throws {
 
     let modem: InMemoryModem = await linked(identity: Self.lockedIdentity)
     await modem.setOperatingFlags(0x01, of: Example.plug)
@@ -438,8 +438,8 @@ struct SelfTestTests {
     let flags: SelfTestCheck = try #require(report.check(.operatingFlags))
 
     #expect(flags.outcome == .warning)
-    #expect(flags.detail == "Programming lock is on, so the device's buttons can't change its links or settings.")
-    #expect(flags.fixes == [.turnOffProgrammingLock])
+    #expect(flags.detail == "Lockout is on, which the Insteon device catalog says is never turned on, since it locks the device.")
+    #expect(flags.fixes == [.turnOff(setting: "lockout")])
     // The flags are read with Get Operating Flags, and nothing sets them.
     #expect(log.standardCommands.contains(0x1F))
     #expect(!log.standardCommands.contains(0x20))
@@ -479,14 +479,14 @@ struct SelfTestTests {
 
   }
 
-  @Test func warnsOfRadioOffAndOfGuardedFlagsInAStateTheyreNeverWrittenTo() {
+  @Test func warnsOfGuardedFlagsInAStateThatLocksTheDeviceOrCutsItOff() {
 
     let commands = CommandSet(
       id: "exampleGuarded",
       name: "Example guarded",
       summary: "Flags the catalog guards.",
       operatingFlags: [
-        OperatingFlag(name: "radioOff", summary: "Turns the radio off.", query: .operatingFlags, bit: 0x01, label: "Radio off"),
+        OperatingFlag(name: "radioMute", summary: "Mutes the radio.", query: .operatingFlags, bit: 0x01, label: "Radio mute", writeGuard: .keep),
         OperatingFlag(name: "buttonLock", summary: "Locks the buttons.", query: .operatingFlags, bit: 0x02, label: "Button lock", writeGuard: .neverSet),
         OperatingFlag(name: "messageForm", summary: "The message form.", query: .operatingFlags, bit: 0x04, label: "Message form", defaultValue: false, writeGuard: .keep),
         OperatingFlag(name: "pressTone", summary: "Beeps on every button press.", query: .operatingFlags, bit: 0x08, label: "Press tone")
@@ -496,10 +496,11 @@ struct SelfTestTests {
     let check: SelfTestCheck = Device.flagsCheck(reading(commands, flags: 0x0F))
 
     #expect(check.outcome == .warning)
-    #expect(check.detail == "Radio off is on, which cuts the device off from the modem; "
-      + "Button lock is on, which the Insteon device catalog says is never turned on; "
+    // A kept flag with no default is taken to leave the factory off.
+    #expect(check.detail == "Radio mute is on, which can cut the device off from the modem, and isn't written; "
+      + "Button lock is on, which the Insteon device catalog says is never turned on, since it locks the device; "
       + "Message form is on, unlike the device as it leaves the factory, and isn't written.")
-    #expect(check.fixes == [.factoryReset])
+    #expect(check.fixes == [.turnOff(setting: "buttonLock"), .factoryReset])
 
     #expect(Device.flagsCheck(reading(commands, flags: 0x08)).outcome == .passed)
 

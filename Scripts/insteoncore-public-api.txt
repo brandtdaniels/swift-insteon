@@ -256,7 +256,7 @@ case SelfTestFix.factoryReset
 case SelfTestFix.link(modemRole:group:)
 case SelfTestFix.readAgain
 case SelfTestFix.reviewRecords(_:)
-case SelfTestFix.turnOffProgrammingLock
+case SelfTestFix.turnOff(setting:)
 case SelfTestFix.updateCatalog
 case SelfTestOutcome.failed
 case SelfTestOutcome.passed

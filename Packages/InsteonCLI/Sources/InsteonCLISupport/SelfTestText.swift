@@ -26,7 +26,7 @@ public enum SelfTestText {
   /// A fix's stable name, as `--json` prints it.
   ///
   /// - Parameter fix: The fix.
-  /// - Returns: Such as `"link"` or `"turnOffProgrammingLock"`.
+  /// - Returns: Such as `"link"` or `"turnOff"`.
   public static func id(_ fix: SelfTestFix) -> String {
 
     switch fix {
@@ -38,8 +38,8 @@ public enum SelfTestText {
       "readAgain"
     case .reviewRecords:
       "reviewRecords"
-    case .turnOffProgrammingLock:
-      "turnOffProgrammingLock"
+    case .turnOff:
+      "turnOff"
     case .updateCatalog:
       "updateCatalog"
     case .factoryReset:
@@ -107,8 +107,8 @@ public enum SelfTestText {
       "Look over the records for \(others.map { (other: InsteonAddress) -> String in "\(other)" }.joined(separator: ", ")) "
         + "with 'insteon device \(device) links'. Records for a device that's gone are cleared when this "
         + "device is reset to its factory settings."
-    case .turnOffProgrammingLock:
-      "Turn the programming lock off: 'insteon device \(device) set programmingLock off'."
+    case let .turnOff(setting):
+      "Turn the setting off: 'insteon device \(device) set \(setting) off'."
     case .updateCatalog:
       "Download the latest compatible Insteon device catalog: 'insteon catalog update'."
     case .factoryReset:
@@ -229,6 +229,9 @@ public enum SelfTestText {
       /// For `reviewRecords`, the devices the records name.
       public let addresses: [String]?
 
+      /// For `turnOff`, the setting's key.
+      public let setting: String?
+
     }
 
     /// One check.
@@ -339,6 +342,7 @@ public enum SelfTestText {
       var modemRole: String?
       var group: Int?
       var addresses: [String]?
+      var setting: String?
 
       switch fix {
       case let .link(role, number):
@@ -346,6 +350,8 @@ public enum SelfTestText {
         group = number
       case let .reviewRecords(others):
         addresses = others.map { (other: InsteonAddress) -> String in "\(other)" }
+      case let .turnOff(key):
+        setting = key
       default:
         break
       }
@@ -355,7 +361,8 @@ public enum SelfTestText {
         text: SelfTestText.fix(fix, device: device),
         modemRole: modemRole,
         group: group,
-        addresses: addresses
+        addresses: addresses,
+        setting: setting
       )
 
     }

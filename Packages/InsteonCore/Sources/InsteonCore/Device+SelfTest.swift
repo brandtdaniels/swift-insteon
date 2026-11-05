@@ -605,8 +605,10 @@ extension Device {
 
   }
 
-  /// Whether a reading shows a flag set that locks the device or cuts it off, or a flag the
-  /// catalog guards in a state it's never written to or doesn't leave the factory in.
+  /// Whether a reading shows a flag the catalog guards in a state that locks the device or can
+  /// cut it off: a never-set flag that's on, which can be turned off, and a kept flag that
+  /// isn't as the device leaves the factory, which only a factory reset puts back. A kept flag
+  /// the catalog gives no default for is taken to leave the factory off.
   static func flagsCheck(_ reading: DeviceSettingsReading) -> SelfTestCheck {
 
     var reported: Int = 0
@@ -636,36 +638,18 @@ extension Device {
       let isOn: Bool = raw & flag.bit != 0
       let label: String = flag.label ?? flag.name.rawValue
 
-      if flag.name == DeviceSettingSafety.programmingLock {
-
-        if isOn {
-
-          problems.append("\(label) is on, so the device's buttons can't change its links or settings")
-          add(.turnOffProgrammingLock)
-
-        }
-
-      } else if DeviceSettingSafety.neverWritten.contains(flag.name) {
-
-        if isOn {
-
-          problems.append("\(label) is on, which cuts the device off from the modem")
-          add(.factoryReset)
-
-        }
-
-      } else if let rule = DeviceSettingSafety.rule(for: flag) {
-
-        switch rule {
-        case .neverSet where isOn:
-          problems.append("\(label) is on, which the Insteon device catalog says is never turned on")
-        case .keep where flag.defaultValue.map({ (value: Bool) -> Bool in value != isOn }) == true:
-          problems.append("\(label) is \(isOn ? "on" : "off"), unlike the device as it leaves the factory, and isn't written")
-          add(.factoryReset)
-        default:
-          break
-        }
-
+      switch DeviceSettingSafety.rule(for: flag) {
+      case .neverSet? where isOn:
+        problems.append("\(label) is on, which the Insteon device catalog says is never turned on, since it locks the device")
+        add(.turnOff(setting: flag.name.rawValue))
+      case .keep? where flag.defaultValue == nil && isOn:
+        problems.append("\(label) is on, which can cut the device off from the modem, and isn't written")
+        add(.factoryReset)
+      case .keep? where flag.defaultValue.map({ (value: Bool) -> Bool in value != isOn }) == true:
+        problems.append("\(label) is \(isOn ? "on" : "off"), unlike the device as it leaves the factory, and isn't written")
+        add(.factoryReset)
+      default:
+        break
       }
 
     }
@@ -678,7 +662,10 @@ extension Device {
 
     guard problems.isEmpty else {
 
-      return SelfTestCheck(kind: .operatingFlags, outcome: .warning, detail: problems.joined(separator: "; ") + ".", fixes: fixes)
+      // A factory reset is the last resort, after a flag that can be turned off.
+      let ordered: [SelfTestFix] = fixes.filter { (fix: SelfTestFix) -> Bool in fix != .factoryReset } + fixes.filter { (fix: SelfTestFix) -> Bool in fix == .factoryReset }
+
+      return SelfTestCheck(kind: .operatingFlags, outcome: .warning, detail: problems.joined(separator: "; ") + ".", fixes: ordered)
 
     }
 
