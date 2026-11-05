@@ -44,7 +44,7 @@ public struct DeviceInfo: Hashable, Sendable {
 
   }
 
-  /// The product's name for a person, such as `"Dimmer Switch 2477D"`, or `nil` if the
+  /// The product's name for a person, such as `"Example Dimmer 9101"`, or `nil` if the
   /// catalog doesn't have the device.
   public var displayName: String? {
 
@@ -52,7 +52,7 @@ public struct DeviceInfo: Hashable, Sendable {
 
   }
 
-  /// The product's name, such as `"Dimmer Switch"`, or `nil` if the catalog doesn't have the
+  /// The product's name, such as `"Example Dimmer"`, or `nil` if the catalog doesn't have the
   /// device.
   public var productName: String? {
 
@@ -60,7 +60,7 @@ public struct DeviceInfo: Hashable, Sendable {
 
   }
 
-  /// The product's model, such as `"2477D"`, or `nil` if the catalog doesn't have the device.
+  /// The product's model, such as `"9101"`, or `nil` if the catalog doesn't have the device.
   public var model: String? {
 
     catalogDescription.profile.map { (profile: DeviceProfile) -> String in "\(profile.model)" }

@@ -52,7 +52,7 @@ public enum WatchText {
   }
 
   /// A SET Button Pressed broadcast, in words, such as
-  /// `"1A.2B.3C SET button pressed (cmd1 0x01, links as a responder); identified as Dimmer Switch 2477D"`.
+  /// `"1A.2B.3C SET button pressed (cmd1 0x01, links as a responder); identified as Example Dimmer 9101"`.
   ///
   /// - Parameter press: The broadcast, with the product the catalog has for its identity.
   /// - Returns: The line.

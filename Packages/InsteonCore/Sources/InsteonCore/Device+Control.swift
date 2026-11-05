@@ -129,7 +129,7 @@ extension Device {
   ///
   /// The catalog's ``DeviceGroup/outputs`` give each output a bit; the bits of the outputs
   /// named are ORed together into the action's parameter. When the catalog says the outputs
-  /// are the load only while an operating flag is in a state, such as relay mode, the device is
+  /// are the load only while an operating flag is in a state, such as a mode flag set, the device is
   /// asked for the flag with Get Operating Flags first, and nothing is switched otherwise.
   ///
   /// - Parameters:

@@ -182,6 +182,7 @@ case ModemRecordDeletionReason.modemLinksUnreadable(_:)
 case ModemRecordDeletionReason.noAnswer
 case ModemRecordDeletionReason.remoteLinkingUnsupported
 case ModemRecordDeletionReason.remoteUnlinkingFailed(_:)
+case ProductCatalogError.weakensGuards(_:)
 case ProductCatalogStoreError.writeFailed(code:)
 case ProductCatalogUpdate.unchanged
 case ProductCatalogUpdate.updated(json:version:)
@@ -194,6 +195,7 @@ case ProductCatalogUpdateError.olderThanCurrent(_:)
 case ProductCatalogUpdateError.redirectRefused
 case ProductCatalogUpdateError.unexpectedStatus(_:)
 case ProductCatalogUpdateError.unreadableCatalog
+case ProductCatalogUpdateError.weakensGuards(_:)
 case ProtectedCommand.checksumOn
 case ProtectedCommand.poke
 case ProtectedCommand.powerlineOff
@@ -256,7 +258,7 @@ case SelfTestFix.factoryReset
 case SelfTestFix.link(modemRole:group:)
 case SelfTestFix.readAgain
 case SelfTestFix.reviewRecords(_:)
-case SelfTestFix.turnOffProgrammingLock
+case SelfTestFix.turnOff(setting:label:)
 case SelfTestFix.updateCatalog
 case SelfTestOutcome.failed
 case SelfTestOutcome.passed
@@ -309,6 +311,7 @@ enum LinkingFallback
 enum ModemLinksPurpose
 enum ModemNotice
 enum ModemRecordDeletionReason
+enum ProductCatalogError
 enum ProductCatalogStoreError
 enum ProductCatalogUpdate
 enum ProductCatalogUpdateError
@@ -654,6 +657,7 @@ typealias DeviceCatalogVersion
 typealias DeviceCategory
 typealias DeviceSubcategory
 typealias FirmwareVersion
+typealias GuardWeakening
 typealias InsteonAddress
 typealias InsteonEngine
 typealias LinkingDirection
@@ -664,6 +668,7 @@ typealias ModemRole
 typealias NAKReason
 typealias ProductKey
 typealias ReportedIdentity
+typealias SettingName
 var DatabaseLinkPlan.deviceSteps
 var DatabaseLinkPlan.isEmpty
 var DatabaseLinkPlan.modemSteps

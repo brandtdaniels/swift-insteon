@@ -232,4 +232,39 @@ public enum CatalogText {
 
   }
 
+  /// What `insteon catalog update` says when the published copy gives guards more weakly than
+  /// the bundled copy, so it isn't used.
+  ///
+  /// - Parameters:
+  ///   - weakenings: The weakened guards.
+  ///   - current: The version of the copy in use, which stays.
+  /// - Returns: The message.
+  public static func publishedWeakensGuards(_ weakenings: [GuardWeakening], current: DeviceCatalogVersion) -> String {
+
+    "The published Insteon device catalog weakens guards the bundled copy gives, which keep a device reachable and unlocked "
+      + "(\(list(weakenings))), so it isn't used and the current copy, \(current), stays."
+
+  }
+
+  /// The warning when the cached copy gives guards more weakly than the bundled copy, so the
+  /// bundled copy is used.
+  ///
+  /// - Parameters:
+  ///   - path: The cached copy's file.
+  ///   - weakenings: The weakened guards.
+  /// - Returns: The warning.
+  public static func cachedWeakensGuards(path: String, _ weakenings: [GuardWeakening]) -> String {
+
+    "insteon: warning: the cached Insteon device catalog at \(path) weakens guards the bundled copy gives, which keep a device "
+      + "reachable and unlocked (\(list(weakenings))), so the bundled copy is used. 'insteon catalog update' downloads it again."
+
+  }
+
+  /// Weakened guards as a list, such as `exampleSwitch flag lockout, exampleSwitch command lockOn`.
+  static func list(_ weakenings: [GuardWeakening]) -> String {
+
+    weakenings.map(\.description).joined(separator: ", ")
+
+  }
+
 }

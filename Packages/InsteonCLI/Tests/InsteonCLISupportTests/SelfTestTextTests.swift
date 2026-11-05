@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import InsteonCLISupport
 import InsteonCore
+import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonProtocol
 
@@ -66,12 +67,28 @@ struct SelfTestTextTests {
 
   }
 
-  @Test func suggestsTurningTheProgrammingLockOffWithSet() {
+  @Test func suggestsTurningANeverSetFlagOffWithSet() {
 
-    #expect(
-      SelfTestText.fix(.turnOffProgrammingLock, device: lamp)
-        == "Turn the programming lock off: 'insteon device 1A.2B.3C set programmingLock off'."
+    #expect(SelfTestText.fix(.turnOff(setting: "lockout", label: "Lockout"), device: lamp) == "Turn Lockout off: 'insteon device 1A.2B.3C set lockout off'.")
+    #expect(SelfTestText.id(.turnOff(setting: "lockout", label: "Lockout")) == "turnOff")
+
+  }
+
+  @Test func printsTheTurnOffFixWithItsSetting() throws {
+
+    let locked = SelfTestReport(
+      device: lamp,
+      checks: [SelfTestCheck(kind: .operatingFlags, outcome: .warning, detail: "", fixes: [.turnOff(setting: "lockout", label: "Lockout")])]
     )
+
+    let data: Data = try JSONEncoder().encode(SelfTestText.JSON(locked))
+    let object: [String: Any] = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let checks: [[String: Any]] = try #require(object["checks"] as? [[String: Any]])
+    let fix: [String: Any] = try #require((checks.first?["fixes"] as? [[String: Any]])?.first)
+
+    #expect(fix["id"] as? String == "turnOff")
+    #expect(fix["setting"] as? String == "lockout")
+    #expect(fix["text"] as? String == "Turn Lockout off: 'insteon device 1A.2B.3C set lockout off'.")
 
   }
 

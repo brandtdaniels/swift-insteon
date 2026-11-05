@@ -7,11 +7,10 @@ import InsteonProtocol
 /// modem or leave them locked. Each is refused for a device the catalog doesn't know or gives
 /// no command set, and for a command set that doesn't say what its cmd2 means. It's sent only
 /// where the device's command set names that cmd2 for a flag or command it doesn't guard, such
-/// as an i3 Keypad's lock buttons flag, turned on with cmd2 `0x19`; a cmd2 the command set
-/// names for a guarded flag, such as radio off, or only under a name that means one, such as
-/// one with `checksum` in it, stays refused. Poke writes any byte of a device's memory
-/// and is never sent. Every message InsteonCore sends, raw or not, is checked by its bytes,
-/// and nothing forces one through. A raw serial command has no device to look up, so
+/// as a keypad's button lock flag, turned on with cmd2 `0x19`; a cmd2 the command set names
+/// only for a flag or command it guards stays refused. Poke writes any byte of a device's
+/// memory and is never sent. Every message InsteonCore sends, raw or not, is checked by its
+/// bytes, and nothing forces one through. A raw serial command has no device to look up, so
 /// ``SerialCommandPolicy`` refuses all of them in it. The catalog's guards add more commands
 /// that are never sent to a device.
 ///
@@ -22,8 +21,8 @@ import InsteonProtocol
 /// ```
 public enum ProtectedCommand: Hashable, Sendable, CaseIterable {
 
-  /// Set Operating Flags with cmd2 `0x00`, which turns a device's programming lock on, so its
-  /// SET button doesn't link it.
+  /// Set Operating Flags with cmd2 `0x00`, which locks linking and programming from the device
+  /// itself, so its SET button doesn't link it.
   case programmingLockOn
 
   /// Set Operating Flags with cmd2 `0x0C`, which turns a dual-band device's radio off, so it
@@ -145,8 +144,8 @@ public enum SendRefusal: Error, Hashable, Sendable {
   case writesGuardedFlags(label: String)
 
   /// The message is an extended Set (cmd1 `0x2E` with D2 other than `0x00`) to a device the
-  /// catalog doesn't know or gives no command set, so which bits it writes, such as a
-  /// programming lock's, can't be told.
+  /// catalog doesn't know or gives no command set, so which bits it writes, such as one that
+  /// locks linking, can't be told.
   case extendedSetWithoutCommandSet
 
   /// The bytes don't start with Start of Text (`0x02`), as every serial command does.

@@ -110,7 +110,7 @@ struct DeviceTests {
     #expect(capabilities.canTurnOnAndOff)
     #expect(capabilities.canBeep)
     #expect(capabilities.mainGroup?.kind == .dimmer)
-    #expect(capabilities.settings.map(\.key) == ["rampRate", "onLevel", "keyBeep"])
+    #expect(capabilities.settings.map(\.key) == ["rampRate", "onLevel", "pressTone"])
     #expect(capabilities.settings.first?.control == .choice(["0.5 s", "0.1 s"]))
     #expect(capabilities.settings.last?.control == .toggle)
 
@@ -662,8 +662,8 @@ struct DeviceTests {
     #expect(reading.operatingFlags[.operatingFlags] == 0x02)
     #expect(reading.values[0x01]?["rampRate"] == 0x1C)
     #expect(reading.buttons == [0x01])
-    #expect(texts == ["keyBeep": "on", "rampRate": "0.5 s", "onLevel": "100%"])
-    #expect(reading.entries.first(where: { (entry: DeviceSettingsReading.Entry) -> Bool in entry.setting.key == "keyBeep" })?.defaultText == "off")
+    #expect(texts == ["pressTone": "on", "rampRate": "0.5 s", "onLevel": "100%"])
+    #expect(reading.entries.first(where: { (entry: DeviceSettingsReading.Entry) -> Bool in entry.setting.key == "pressTone" })?.defaultText == "off")
 
   }
 
@@ -705,7 +705,7 @@ struct DeviceTests {
     let modem = SettingsModem(device: ControlExample.buttons, flags: 0x02, values: [:])
     await modem.setEngine(.i2cs)
 
-    let change: DeviceSettingChange = try await self.network(modem).device(ControlExample.buttons).writeSetting("keyBeep", to: "off")
+    let change: DeviceSettingChange = try await self.network(modem).device(ControlExample.buttons).writeSetting("pressTone", to: "off")
 
     #expect(change.isConfirmed)
     #expect(await modem.flags == 0x00)
@@ -718,11 +718,11 @@ struct DeviceTests {
 
   @Test func writesAFlagAsAnExtendedMessageWhileItsGuardingFlagIsSet() async throws {
 
-    // The program lock, bit 0x01, is set, so the key beep is set with the command repeated in
+    // The program lock, bit 0x01, is set, so the press tone is set with the command repeated in
     // D1 and D2.
     let modem = SettingsModem(device: ControlExample.buttons, flags: 0x03, values: [:])
 
-    let change: DeviceSettingChange = try await self.network(modem).device(ControlExample.buttons).writeSetting("keyBeep", to: "off")
+    let change: DeviceSettingChange = try await self.network(modem).device(ControlExample.buttons).writeSetting("pressTone", to: "off")
     var userData = UserData()
     userData[1] = 0x20
     userData[2] = 0x0B
@@ -739,7 +739,7 @@ struct DeviceTests {
 
     let modem = SettingsModem(device: ControlExample.buttons, flags: 0x02, values: [:])
 
-    _ = try await self.network(modem).device(ControlExample.buttons).writeSetting("keyBeep", to: "off")
+    _ = try await self.network(modem).device(ControlExample.buttons).writeSetting("pressTone", to: "off")
 
     #expect(await modem.extendedWrites.isEmpty)
     #expect(await modem.standardCommands.contains(Command(command1: 0x20, command2: 0x0B)))
@@ -755,7 +755,7 @@ struct DeviceTests {
 
     let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
 
-      _ = try await buttons.writeSetting("keyBeep", to: "off")
+      _ = try await buttons.writeSetting("pressTone", to: "off")
 
     }
 
@@ -775,13 +775,13 @@ struct DeviceTests {
 
     let modem = SettingsModem(device: ControlExample.dimmer, flags: 0x02, values: [:])
 
-    let change: DeviceSettingChange = try await self.network(modem).device(ControlExample.dimmer).writeSetting("key beep", to: "off")
+    let change: DeviceSettingChange = try await self.network(modem).device(ControlExample.dimmer).writeSetting("press tone", to: "off")
 
     #expect(change.before == "on")
     #expect(change.requested == "off")
     #expect(change.after == "off")
     #expect(change.isConfirmed)
-    #expect(change.title == "Key beep")
+    #expect(change.title == "Press tone")
     #expect(await modem.flags == 0x00)
     // The device runs i2, as Get Insteon Engine Version says, so Set Operating Flags is
     // standard.
@@ -837,7 +837,7 @@ struct DeviceTests {
 
     let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
 
-      _ = try await lamp.writeSetting("nightMode", to: "on")
+      _ = try await lamp.writeSetting("dawnMode", to: "on")
 
     }
 
@@ -849,7 +849,7 @@ struct DeviceTests {
 
     }
 
-    #expect(name == "nightMode")
+    #expect(name == "dawnMode")
     #expect(product == "Example Dimmer 9101")
 
     #expect(await modem.extendedMessages.isEmpty)
@@ -887,7 +887,7 @@ struct DeviceTests {
 
   }
 
-  @Test(.timeLimit(.minutes(1)), arguments: ["radioOff", "powerLineOff", "checksumRequired"])
+  @Test(.timeLimit(.minutes(1)), arguments: ["radioMute", "powerlineMute", "strictChecksum"])
   func neverWritesAFlagThatCutsTheDeviceOff(key: String) async throws {
 
     for state in ["on", "off"] {
@@ -917,14 +917,14 @@ struct DeviceTests {
 
   }
 
-  @Test(.timeLimit(.minutes(1))) func neverTurnsTheProgrammingLockOn() async throws {
+  @Test(.timeLimit(.minutes(1))) func neverTurnsALockoutOn() async throws {
 
     let modem = SettingsModem(device: ControlExample.guarded, flags: 0x00, values: [:])
     let device: Device = guardedNetwork(modem).device(ControlExample.guarded)
 
     let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
 
-      _ = try await device.writeSetting("programmingLock", to: "on")
+      _ = try await device.writeSetting("lockout", to: "on")
 
     }
 
@@ -936,17 +936,17 @@ struct DeviceTests {
 
     }
 
-    #expect(label == "Programming lock")
+    #expect(label == "Lockout")
     #expect(await modem.standardCommands.isEmpty)
     #expect(await modem.flags == 0x00)
 
   }
 
-  @Test(.timeLimit(.minutes(1))) func turnsTheProgrammingLockOff() async throws {
+  @Test(.timeLimit(.minutes(1))) func turnsALockoutOff() async throws {
 
     let modem = SettingsModem(device: ControlExample.guarded, flags: 0x02, values: [:])
 
-    let change: DeviceSettingChange = try await guardedNetwork(modem).device(ControlExample.guarded).writeSetting("programmingLock", to: "off")
+    let change: DeviceSettingChange = try await guardedNetwork(modem).device(ControlExample.guarded).writeSetting("lockout", to: "off")
 
     #expect(change.before == "on")
     #expect(change.after == "off")
@@ -964,7 +964,7 @@ struct DeviceTests {
 
     })
 
-    #expect(writable == ["programmingLock": true, "radioOff": false, "powerLineOff": false, "checksumRequired": false, "operatingFlags": true])
+    #expect(writable == ["lockout": true, "radioMute": false, "powerlineMute": false, "strictChecksum": false, "operatingFlags": true])
 
   }
 
@@ -975,7 +975,7 @@ struct DeviceTests {
 
     let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
 
-      _ = try await device.writeSetting("radio off", to: "off")
+      _ = try await device.writeSetting("radio mute", to: "off")
 
     }
 
@@ -987,21 +987,21 @@ struct DeviceTests {
 
     }
 
-    #expect(label == "Radio off")
+    #expect(label == "Radio mute")
     #expect(await modem.standardCommands.isEmpty)
 
   }
 
   // MARK: - A value whose byte holds operating flags
 
-  @Test(.timeLimit(.minutes(1))) func neverTurnsTheProgrammingLockOnThroughAValueThatHoldsTheFlags() async throws {
+  @Test(.timeLimit(.minutes(1))) func neverTurnsALockoutOnThroughAValueThatHoldsTheFlags() async throws {
 
     let modem = SettingsModem(device: ControlExample.guarded, flags: 0x00, values: [7: 0x00])
     let device: Device = guardedNetwork(modem).device(ControlExample.guarded)
 
     let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
 
-      // Bit 0x02 is the programming lock.
+      // Bit 0x02 is the lockout.
       _ = try await device.writeSetting("operatingFlags", to: "0x03")
 
     }
@@ -1014,7 +1014,7 @@ struct DeviceTests {
 
     }
 
-    #expect(label == "Programming lock")
+    #expect(label == "Lockout")
     // Refused before anything is sent: not even the byte is read.
     #expect(await modem.extendedMessages.isEmpty)
     #expect(await modem.values[7] == 0x00)
@@ -1063,40 +1063,6 @@ struct DeviceTests {
 
   }
 
-  @Test(.timeLimit(.minutes(1))) func neverLocksAnOpenCloseSensorThroughItsConfigurationByte() async throws {
-
-    // The bundled catalog's open/close sensor: its configuration byte is Get Operating Flags
-    // 0x00's, whose bit 0x80 is the programming lock.
-    let sensor = InsteonAddress(0x3A, 0x4B, 0x0C)
-    let modem = SettingsModem(device: sensor, flags: 0x00, values: [:])
-    let catalog: DeviceCatalog = try DeviceCatalog.bundled()
-    let network = DeviceNetwork(
-      modem: modem,
-      catalog: catalog,
-      snapshot: NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: [sensor: ReportedIdentity(category: 0x10, subcategory: 0x02, firmwareVersion: 0x45)])),
-      clock: clock
-    )
-    let device: Device = network.device(sensor)
-
-    let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
-
-      _ = try await device.writeSetting("configuration", to: "0xC3")
-
-    }
-
-    guard case .leavesProgrammingLocked? = error else {
-
-      Issue.record("Expected leavesProgrammingLocked, got \(String(describing: error)).")
-
-      return
-
-    }
-
-    #expect(await modem.standardCommands.isEmpty)
-    #expect(await modem.extendedMessages.isEmpty)
-
-  }
-
   // MARK: - Refusals that are kept
 
   @Test(.timeLimit(.minutes(1))) func refusesAButtonForAWholeDeviceSettingAndAnUnreadableStateBeforeSending() async throws {
@@ -1106,13 +1072,13 @@ struct DeviceTests {
 
     let button: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
 
-      _ = try await lamp.writeSetting("keyBeep", to: "off", button: 2)
+      _ = try await lamp.writeSetting("pressTone", to: "off", button: 2)
 
     }
 
     let state: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
 
-      _ = try await lamp.writeSetting("keyBeep", to: "loud")
+      _ = try await lamp.writeSetting("pressTone", to: "loud")
 
     }
 
@@ -1130,7 +1096,7 @@ struct DeviceTests {
 
     }
 
-    #expect(label == "Key beep")
+    #expect(label == "Press tone")
     #expect(text == "loud")
     #expect(await modem.standardCommands.isEmpty)
     #expect(await modem.extendedMessages.isEmpty)

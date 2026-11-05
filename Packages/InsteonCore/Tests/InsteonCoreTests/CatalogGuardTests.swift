@@ -37,10 +37,10 @@ struct CatalogGuardTests {
           { "name": "beeperLock", "description": "Locks the beeper.", "query": "0x00", "bit": "0x02", "on": "0x0A", "off": "0x0B", "guard": "neverSet", "label": "Beeper lock" },
           { "name": "extendedOnly", "description": "Takes only extended messages.", "query": "0x00", "bit": "0x04", "on": "0x02", "off": "0x03", "guard": "keep", "label": "Extended only" },
           { "name": "newerGuard", "description": "Guarded by a later version.", "query": "0x00", "bit": "0x08", "on": "0x06", "off": "0x07", "guard": "somethingNewer", "label": "Newer guard" },
-          { "name": "keyBeep", "description": "Beeps.", "query": "0x00", "bit": "0x01", "on": "0x0C", "off": "0x0D", "label": "Key beep" },
+          { "name": "pressTone", "description": "Beeps.", "query": "0x00", "bit": "0x01", "on": "0x0C", "off": "0x0D", "label": "Press tone" },
           { "name": "chime", "description": "Chimes.", "query": "0x00", "bit": "0x20", "onCommand": "chimeOn", "offCommand": "chimeOff", "label": "Chime" },
-          { "name": "radioOff", "description": "Turns the radio off.", "query": "0x00", "bit": "0x40", "on": "0x0E", "off": "0x0F", "guard": "neverSet", "label": "Radio off" },
-          { "name": "programmingLock", "description": "Locks programming.", "query": "0x00", "bit": "0x80", "on": "0x10", "off": "0x11", "label": "Programming lock" }
+          { "name": "quietMode", "description": "Quiets the device.", "query": "0x00", "bit": "0x40", "on": "0x0E", "off": "0x0F", "guard": "neverSet", "label": "Quiet mode" },
+          { "name": "panelLock", "description": "Locks the panel.", "query": "0x00", "bit": "0x80", "on": "0x10", "off": "0x11", "label": "Panel lock" }
         ],
         "flagCommands": [
           { "name": "lockOn", "description": "Locks the device.", "command2": "0x0C", "guard": "never" }
@@ -204,34 +204,17 @@ struct CatalogGuardTests {
 
   }
 
-  @Test(.timeLimit(.minutes(1))) func keepsTheFloorWhereTheCatalogsGuardIsWeakerOrMissing() async throws {
-
-    // The catalog guards the radio only as never set, and gives the programming lock no guard.
-    let radio = SettingsModem(device: Self.address, flags: 0x40, values: [:])
-    let radioError: DeviceSettingError? = try await refusal("radioOff", to: "off", on: radio)
-
-    #expect(Self.neverWrittenLabel(radioError) == "Radio off")
-    #expect(await radio.standardCommands.isEmpty)
-
-    let lock = SettingsModem(device: Self.address, flags: 0x00, values: [:])
-    let lockError: DeviceSettingError? = try await refusal("programmingLock", to: "on", on: lock)
-
-    #expect(Self.lockedLabel(lockError) == "Programming lock")
-    #expect(await lock.standardCommands.isEmpty)
-
-  }
-
   @Test(.timeLimit(.minutes(1))) func neverSendsAFlagsCommandWithTheBytesOfOneTheCatalogNeverSends() async throws {
 
-    // Key beep on is Set Operating Flags 0x0C, the bytes of the never-sent lockOn.
+    // Press tone on is Set Operating Flags 0x0C, the bytes of the never-sent lockOn.
     let modem = SettingsModem(device: Self.address, flags: 0x00, values: [:])
-    let error: DeviceSettingError? = try await refusal("keyBeep", to: "on", on: modem)
+    let error: DeviceSettingError? = try await refusal("pressTone", to: "on", on: modem)
 
-    #expect(Self.neverWrittenLabel(error) == "Key beep")
+    #expect(Self.neverWrittenLabel(error) == "Press tone")
     #expect(await modem.standardCommands.isEmpty)
 
     // Its off command isn't guarded.
-    let off: DeviceSettingChange = try await device(modem).writeSetting("keyBeep", to: "off")
+    let off: DeviceSettingChange = try await device(modem).writeSetting("pressTone", to: "off")
 
     #expect(off.isConfirmed)
     #expect(await modem.standardCommands.contains(Command(command1: 0x20, command2: 0x0D)))
@@ -250,7 +233,7 @@ struct CatalogGuardTests {
 
   // MARK: - Values
 
-  @Test(.timeLimit(.minutes(1)), arguments: [(UInt8(0x02), "Beeper lock"), (0x80, "Programming lock")])
+  @Test(.timeLimit(.minutes(1)), arguments: [(UInt8(0x02), "Beeper lock"), (0x40, "Quiet mode")])
   func neverSetsANeverSetBitThroughAValueThatHoldsTheFlags(bit: UInt8, label: String) async throws {
 
     let modem = SettingsModem(device: Self.address, flags: 0x00, values: [7: 0x00])
@@ -263,7 +246,7 @@ struct CatalogGuardTests {
 
   }
 
-  @Test(.timeLimit(.minutes(1)), arguments: [UInt8(0x04), 0x08, 0x40])
+  @Test(.timeLimit(.minutes(1)), arguments: [UInt8(0x04), 0x08])
   func neverChangesAKeptBitThroughAValueThatHoldsTheFlags(bit: UInt8) async throws {
 
     let modem = SettingsModem(device: Self.address, flags: 0x00, values: [7: 0x00])
@@ -286,13 +269,14 @@ struct CatalogGuardTests {
 
   @Test(.timeLimit(.minutes(1))) func writesAValueThatHoldsTheFlagsWhenItLeavesTheGuardedBitsAsTheyAre() async throws {
 
-    // The radio's bit is set already and stays set; bit 0x01 is key beep, which isn't guarded.
-    let modem = SettingsModem(device: Self.address, flags: 0x00, values: [7: 0x40])
+    // Extended only's bit is set already and stays set; bit 0x01 is press tone, which isn't
+    // guarded.
+    let modem = SettingsModem(device: Self.address, flags: 0x00, values: [7: 0x04])
 
-    let change: DeviceSettingChange = try await device(modem).writeSetting("configuration", to: "0x41")
+    let change: DeviceSettingChange = try await device(modem).writeSetting("configuration", to: "0x05")
 
     #expect(change.isConfirmed)
-    #expect(await modem.values[7] == 0x41)
+    #expect(await modem.values[7] == 0x05)
 
   }
 
@@ -343,10 +327,10 @@ struct CatalogGuardTests {
       "beeperLock": true,
       "extendedOnly": false,
       "newerGuard": false,
-      "keyBeep": true,
+      "pressTone": true,
       "chime": true,
-      "radioOff": false,
-      "programmingLock": true,
+      "quietMode": true,
+      "panelLock": true,
       "configuration": true,
       "flagsByte": true,
       "sleep": false
@@ -364,68 +348,6 @@ struct CatalogGuardTests {
     #expect(model.standardCommand(named: "chimeOff") != nil)
     #expect(model.extendedCommand(named: "writeFlags") != nil)
     #expect(model.extendedCommand(named: "sleepNever") == nil)
-
-  }
-
-  // MARK: - A catalog that names the wrong query
-
-  /// An open/close sensor whose catalog names the wrong Get Operating Flags query for its
-  /// configuration byte, which holds the programming lock in bit `0x80`.
-  static let wrongQueryJSON = #"""
-    {
-      "devices": [{
-        "model": "9202",
-        "name": "Example Open/Close Sensor",
-        "identities": [{ "category": "0x10", "subcategory": "0x7E" }],
-        "commandSets": [{ "commandSet": "openCloseSensor", "category": "0x10", "subcategory": "0x7E" }],
-        "capabilities": [],
-        "sources": ["A"]
-      }],
-      "commandSets": [{
-        "id": "openCloseSensor",
-        "name": "Example open/close sensor",
-        "description": "A configuration byte whose query the catalog gives wrongly.",
-        "operatingFlags": [
-          { "name": "programmingLock", "description": "Locks programming.", "query": "0x00", "bit": "0x80", "label": "Programming lock" },
-          { "name": "other", "description": "Another query's.", "query": "0x05", "bit": "0x01" }
-        ],
-        "extendedSettings": {
-          "perButton": false,
-          "values": [
-            { "name": "configuration", "description": "The operating flags byte.", "byte": 7, "flagsQuery": "0x05" }
-          ],
-          "writes": [
-            { "name": "configuration", "description": "Sets the configuration.", "selector": "0x05", "perButton": false,
-              "bytes": [{ "position": 3, "value": "configuration" }] }
-          ]
-        },
-        "sources": ["A"]
-      }]
-    }
-    """#
-
-  @Test(.timeLimit(.minutes(1))) func keepsTheFloorsQueryWhenTheCatalogNamesAnother() async throws {
-
-    let sensor = InsteonAddress(0x3A, 0x4B, 0x22)
-    let modem = SettingsModem(device: sensor, flags: 0x00, values: [7: 0x00])
-    let network = DeviceNetwork(
-      modem: modem,
-      catalog: try DeviceCatalog(json: Data(Self.wrongQueryJSON.utf8)),
-      snapshot: NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: [sensor: ReportedIdentity(category: 0x10, subcategory: 0x7E, firmwareVersion: 0x45)])),
-      clock: clock,
-      now: { () -> Date in Date(timeIntervalSince1970: 1_800_000_000) }
-    )
-    let device: Device = network.device(sensor)
-
-    let error: DeviceSettingError? = await #expect(throws: DeviceSettingError.self) {
-
-      _ = try await device.writeSetting("configuration", to: "0x80")
-
-    }
-
-    #expect(Self.lockedLabel(error) == "Programming lock")
-    #expect(await modem.extendedMessages.isEmpty)
-    #expect(await modem.values[7] == 0x00)
 
   }
 

@@ -510,16 +510,17 @@ public enum DeviceSettingError: Error, Sendable {
   case unwritableValue(DeviceSettingFieldProblem, label: String, value: String)
 
   /// The setting is one that's never written, because a wrong value can cut the device off
-  /// from the modem or change the messages it understands: turning its radio or its
-  /// powerline off, requiring a checksum in every message, or another flag the catalog guards
-  /// with `FlagGuard.keep`; or writing it sends a command the catalog guards with
+  /// from the modem or change the messages it understands: a flag the catalog guards with
+  /// `FlagGuard.keep`, such as one that turns its radio or its powerline off or requires a
+  /// checksum in every message; or writing it sends a command the catalog guards with
   /// `CommandGuard.never`. The associated value is its label. A value whose byte holds one of
   /// these flags is refused with the flag's label when writing it would change the flag, or
   /// when the device didn't report the byte before.
   case neverWritten(label: String)
 
-  /// The setting is the programming lock, or another flag the catalog guards with
-  /// `FlagGuard.neverSet`, which is never turned on, so a device is never left locked.
+  /// The setting is a flag the catalog guards with `FlagGuard.neverSet`, such as one that
+  /// locks linking from the device itself, which is never turned on, so a device is never
+  /// left locked.
   /// Turning it off is allowed. The associated value is its label. A value whose byte holds
   /// such a flag is refused with the flag's label when it would set the flag's bit.
   case leavesProgrammingLocked(label: String)

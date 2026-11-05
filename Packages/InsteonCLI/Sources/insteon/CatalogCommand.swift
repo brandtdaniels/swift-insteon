@@ -98,9 +98,23 @@ enum CatalogStore {
 
     if CatalogCache.source(bundled: bundled, cached: cached) == .cached {
 
-      if let json = cachedJSON(), let catalog = try? ProductCatalog(json: json) {
+      do {
 
-        return Loaded(catalog: catalog, source: .cached)
+        if let json = cachedJSON() {
+
+          return Loaded(catalog: try ProductCatalog(json: json), source: .cached)
+
+        }
+
+      } catch let ProductCatalogError.weakensGuards(weakenings) {
+
+        Output.note(CatalogText.cachedWeakensGuards(path: catalogPath() ?? CatalogCache.relativePath, weakenings))
+
+        return bundledCatalog().map { (catalog: ProductCatalog) -> Loaded in Loaded(catalog: catalog, source: .bundled) }
+
+      } catch {
+
+        // Unreadable, so the warning below says so.
 
       }
 
@@ -340,6 +354,8 @@ enum CatalogCommand {
       )
     case .unreadableCatalog:
       throw CommandFailure(description: "The published Insteon device catalog couldn't be read, so the current copy, \(current), stays.")
+    case let .weakensGuards(weakenings):
+      throw CommandFailure(description: CatalogText.publishedWeakensGuards(weakenings, current: current))
     }
 
   }

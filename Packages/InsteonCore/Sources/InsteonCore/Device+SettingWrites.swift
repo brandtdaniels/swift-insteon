@@ -237,7 +237,7 @@ extension Device {
     }
 
     // A byte that holds operating flags writes them all, so it never sets a bit that's never
-    // set, such as the programming lock's, and never changes a bit that's kept.
+    // set, such as one that locks linking, and never changes a bit that's kept.
     let guardedBits: [DeviceSettingSafety.GuardedBit] = DeviceSettingSafety.guardedBits(in: value, of: commands)
 
     for bit in guardedBits where bit.rule == .neverSet && raw & bit.mask != 0 {

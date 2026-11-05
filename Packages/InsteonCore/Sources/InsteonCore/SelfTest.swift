@@ -114,8 +114,9 @@ public enum SelfTestFix: Hashable, Sendable {
   /// and remove those that are unwanted.
   case reviewRecords([InsteonAddress])
 
-  /// Turn the device's programming lock off.
-  case turnOffProgrammingLock
+  /// Turn off a setting, by its key and its label: an operating flag the catalog guards as
+  /// never set, which locks the device while it's on and may always be turned off.
+  case turnOff(setting: SettingName, label: String)
 
   /// Get the latest Insteon device catalog, which may describe the device.
   case updateCatalog
