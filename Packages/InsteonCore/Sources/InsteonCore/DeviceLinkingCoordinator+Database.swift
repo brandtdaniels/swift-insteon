@@ -407,7 +407,11 @@ extension DeviceLinkingCoordinator {
 
         // The slot below the end becomes the new end before the end's slot is written, so the
         // database always has an end, even if the second write fails.
-        let newEnd: UInt16 = end - DeviceDatabaseLayout.recordLength
+        guard let newEnd: UInt16 = DeviceDatabaseLayout.address(below: end) else {
+
+          preconditionFailure("The room below the end is counted before any step is planned.")
+
+        }
 
         steps.append(DatabaseLinkStep(kind: .markEndOfDatabase, written: .endOfDatabase, memoryAddress: newEnd))
         steps.append(DatabaseLinkStep(kind: .addDeviceRecord, written: written, memoryAddress: end))

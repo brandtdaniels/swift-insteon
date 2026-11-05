@@ -638,13 +638,13 @@ public actor Modem: SerialCommandSender {
 
       // Addresses count down by 8, and 0x0000 asks for the first record again, so the read
       // ends at the bottom of the database's memory.
-      guard response.address > 8 else {
+      guard response.address > DeviceDatabaseLayout.recordLength else {
 
         return responses
 
       }
 
-      address = response.address - 8
+      address = response.address - DeviceDatabaseLayout.recordLength
 
     }
 
