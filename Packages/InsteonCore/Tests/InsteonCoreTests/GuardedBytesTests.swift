@@ -154,6 +154,10 @@ struct GuardedBytesTests {
 
     }
 
+    // The catalog's comparison of two catalogs uses the same floor.
+    #expect(ProtectedCommand.setOperatingFlagsCommands == DeviceSettingSafety.protectedSetOperatingFlags)
+    #expect(ProtectedCommand(command1: DeviceSettingSafety.pokeCommand1, command2: 0x00) == .poke)
+
     // Set Address MSB and Peek write nothing.
     #expect(ProtectedCommand(command1: 0x28, command2: 0xFF) == nil)
     #expect(ProtectedCommand(command1: 0x2B, command2: 0x00) == nil)

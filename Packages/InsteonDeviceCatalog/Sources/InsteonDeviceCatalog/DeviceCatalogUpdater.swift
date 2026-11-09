@@ -46,8 +46,9 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
   /// cache or a rolled-back site can't take back data a newer copy has.
   case olderThanCurrent(DeviceCatalogVersion)
 
-  /// The downloaded catalog gives guards more weakly than the guard baseline, the copy the
-  /// package ships with by default, for command sets both have, so the app keeps its copy.
+  /// The downloaded catalog would let an app send or write more to a device the guard
+  /// baseline knows than the baseline does, the copy the package ships with by default, so the
+  /// app keeps its copy.
   /// The associated value is each weakened guard.
   case weakensGuards([GuardWeakening])
 
@@ -164,7 +165,8 @@ public struct DeviceCatalogUpdater: Sendable {
   ///   download fails its checks; `HTTPClientError.responseTooLarge(limit:)` for a file larger
   ///   than ``DeviceCatalogUpdater/maximumResponseSize``;
   ///   ``DeviceCatalogUpdateError/weakensGuards(_:)`` if the download gives a guard more
-  ///   weakly than ``guardBaseline``; `DecodingError` if a catalog that
+  ///   weakly than ``guardBaseline``; `DeviceCatalogError.unreadableBundledCatalog` if the
+  ///   shipped copy, the default baseline, can't be read, so nothing is compared or used; `DecodingError` if a catalog that
   ///   matches its SHA-256 doesn't read as a catalog; `DeviceCatalogError.missingBundledCatalog`
   ///   if the shipped copy or its manifest is missing; or the client's error if a request gets
   ///   no response or is redirected somewhere its policy refuses, such as

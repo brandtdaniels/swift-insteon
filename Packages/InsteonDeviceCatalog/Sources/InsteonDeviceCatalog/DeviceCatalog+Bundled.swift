@@ -84,8 +84,8 @@ extension DeviceCatalog {
   /// rather than stopping the process.
   ///
   /// - Returns: The catalog.
-  /// - Throws: ``DeviceCatalogError/missingBundledCatalog`` if the copy isn't found, or the
-  ///   error reading it.
+  /// - Throws: ``DeviceCatalogError/missingBundledCatalog`` if the copy isn't found, or
+  ///   ``DeviceCatalogError/unreadableBundledCatalog`` if it's found but can't be read.
   public static func bundled() throws -> DeviceCatalog {
 
     try bundledCopy.get()
@@ -115,7 +115,15 @@ extension DeviceCatalog {
 
     let url: URL = try bundledCatalogURL()
 
-    return try load(contentsOf: url)
+    do {
+
+      return try load(contentsOf: url)
+
+    } catch {
+
+      throw DeviceCatalogError.unreadableBundledCatalog
+
+    }
 
   }
 

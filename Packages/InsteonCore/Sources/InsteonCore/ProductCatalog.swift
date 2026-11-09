@@ -29,14 +29,16 @@ public struct ProductCatalog: Sendable {
 
   /// Reads a catalog from its JSON, such as a copy a front end saved.
   ///
-  /// A catalog that gives any guard more weakly than the copy the package ships with, for a
-  /// command set both have, is refused, so the front end keeps the bundled copy. When the
-  /// bundled copy isn't found, there's nothing to compare with, and the catalog is read as it
-  /// is.
+  /// A catalog that would let an app send or write more to a device the copy the package ships
+  /// with knows, as `DeviceCatalog.guardWeakenings(comparedTo:)` finds it, is refused, so the
+  /// front end keeps the bundled copy. Without a readable bundled copy there's nothing to
+  /// compare with, so the catalog is refused too.
   ///
   /// - Parameter json: The catalog's JSON.
-  /// - Throws: `DecodingError` if it isn't a catalog, or
-  ///   ``ProductCatalogError/weakensGuards(_:)`` if it weakens a guard.
+  /// - Throws: `DecodingError` if it isn't a catalog,
+  ///   ``ProductCatalogError/weakensGuards(_:)`` if it weakens a guard, or
+  ///   ``ProductCatalogError/bundledCopyMissing`` or
+  ///   ``ProductCatalogError/bundledCopyUnreadable`` if there's no bundled copy to compare with.
   public init(json: Data) throws {
 
     self.catalog = try Self.checked(DeviceCatalog(json: json))
@@ -45,34 +47,59 @@ public struct ProductCatalog: Sendable {
 
   /// Loads a catalog from a file, such as the one ``bundledCatalogURL()`` finds.
   ///
-  /// A catalog that gives any guard more weakly than the copy the package ships with is
-  /// refused, as ``init(json:)`` refuses it.
+  /// The bundled copy's own file is the bundled copy, read once and not compared with itself.
+  /// Any other file is refused as ``init(json:)`` refuses it.
   ///
   /// - Parameter url: The file's URL.
   /// - Returns: The catalog.
-  /// - Throws: The error reading the file, `DecodingError` if it isn't a catalog, or
-  ///   ``ProductCatalogError/weakensGuards(_:)`` if it weakens a guard.
+  /// - Throws: The error reading the file, `DecodingError` if it isn't a catalog, or an error
+  ///   ``init(json:)`` throws.
   public static func load(contentsOf url: URL) throws -> ProductCatalog {
 
-    try ProductCatalog(checked(DeviceCatalog.load(contentsOf: url)))
+    if let bundledURL = try? DeviceCatalog.bundledCatalogURL(), bundledURL.standardizedFileURL == url.standardizedFileURL {
 
-  }
-
-  /// A catalog, once it's shown to give every guard at least as strictly as the bundled copy.
-  ///
-  /// - Parameters:
-  ///   - catalog: The catalog.
-  ///   - baseline: The catalog to compare with, or `nil` for the bundled copy, if it's found.
-  /// - Returns: The catalog.
-  /// - Throws: ``ProductCatalogError/weakensGuards(_:)`` if it weakens a guard.
-  static func checked(_ catalog: DeviceCatalog, against baseline: DeviceCatalog? = nil) throws -> DeviceCatalog {
-
-    guard let baseline = baseline ?? (try? DeviceCatalog.bundled()) else {
-
-      return catalog
+      return ProductCatalog(try baseline())
 
     }
 
+    return try ProductCatalog(checked(DeviceCatalog.load(contentsOf: url)))
+
+  }
+
+  /// The bundled copy, to compare another catalog's guards with.
+  ///
+  /// - Throws: ``ProductCatalogError/bundledCopyMissing`` or
+  ///   ``ProductCatalogError/bundledCopyUnreadable``.
+  static func baseline() throws -> DeviceCatalog {
+
+    do {
+
+      return try DeviceCatalog.bundled()
+
+    } catch DeviceCatalogError.missingBundledCatalog {
+
+      throw ProductCatalogError.bundledCopyMissing
+
+    } catch {
+
+      throw ProductCatalogError.bundledCopyUnreadable
+
+    }
+
+  }
+
+  /// A catalog, once it's shown to give every device the bundled copy knows guards at least
+  /// as strict as the bundled copy's.
+  ///
+  /// - Parameters:
+  ///   - catalog: The catalog.
+  ///   - baseline: The catalog to compare with, or `nil` for the bundled copy.
+  /// - Returns: The catalog.
+  /// - Throws: ``ProductCatalogError/weakensGuards(_:)`` if it weakens a guard, or an error
+  ///   ``baseline()`` throws.
+  static func checked(_ catalog: DeviceCatalog, against baseline: DeviceCatalog? = nil) throws -> DeviceCatalog {
+
+    let baseline: DeviceCatalog = try baseline ?? Self.baseline()
     let weakenings: [GuardWeakening] = catalog.guardWeakenings(comparedTo: baseline)
 
     guard weakenings.isEmpty else {
@@ -232,6 +259,19 @@ public struct ProductCatalog: Sendable {
 
     }
 
+    if let error = error as? DeviceCatalogError {
+
+      switch error {
+      case .missingBundledCatalog:
+        return ProductCatalogError.bundledCopyMissing
+      case .unreadableBundledCatalog:
+        return ProductCatalogError.bundledCopyUnreadable
+      case let .weakensGuards(weakenings):
+        return ProductCatalogUpdateError.weakensGuards(weakenings)
+      }
+
+    }
+
     if let error = error as? HTTPClientError {
 
       switch error {
@@ -260,10 +300,37 @@ public struct ProductCatalog: Sendable {
 /// Why a catalog a front end saved or supplied isn't used.
 public enum ProductCatalogError: Error, Hashable, Sendable {
 
-  /// The catalog gives guards more weakly than the copy the package ships with, for command
-  /// sets both have, so the bundled copy stays in use. The associated value is each weakened
+  /// The catalog would let an app send or write more to a device the copy the package ships
+  /// with knows, so the bundled copy stays in use. The associated value is each weakened
   /// guard.
   case weakensGuards([GuardWeakening])
+
+  /// The copy of the catalog the package ships with isn't found, so no other catalog's guards
+  /// can be compared with it, and none is used.
+  case bundledCopyMissing
+
+  /// The copy of the catalog the package ships with is found but can't be read, so no other
+  /// catalog's guards can be compared with it, and none is used.
+  case bundledCopyUnreadable
+
+}
+
+extension ProductCatalogError: LocalizedError {
+
+  /// The error as a sentence.
+  public var errorDescription: String? {
+
+    switch self {
+    case let .weakensGuards(weakenings):
+      let guards: String = weakenings.map(\.description).joined(separator: ", ")
+      return "The Insteon device catalog would let more be sent or written to a device than the bundled copy does (\(guards)), so it isn't used."
+    case .bundledCopyMissing:
+      return "The Insteon device catalog the package ships with isn't found, so no other copy can be checked against it, and none is used."
+    case .bundledCopyUnreadable:
+      return "The Insteon device catalog the package ships with couldn't be read, so no other copy can be checked against it, and none is used."
+    }
+
+  }
 
 }
 
@@ -310,8 +377,9 @@ public enum ProductCatalogUpdateError: Error, Hashable, Sendable {
   /// The published catalog matched its SHA-256 but couldn't be read as a catalog.
   case unreadableCatalog
 
-  /// The published catalog gives guards more weakly than the copy the package ships with, for
-  /// command sets both have, so it isn't used. The associated value is each weakened guard.
+  /// The published catalog would let an app send or write more to a device the copy the
+  /// package ships with knows than that copy does, so it isn't used. The associated value is
+  /// each weakened guard.
   case weakensGuards([GuardWeakening])
 
 }

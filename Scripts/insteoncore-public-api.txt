@@ -182,6 +182,8 @@ case ModemRecordDeletionReason.modemLinksUnreadable(_:)
 case ModemRecordDeletionReason.noAnswer
 case ModemRecordDeletionReason.remoteLinkingUnsupported
 case ModemRecordDeletionReason.remoteUnlinkingFailed(_:)
+case ProductCatalogError.bundledCopyMissing
+case ProductCatalogError.bundledCopyUnreadable
 case ProductCatalogError.weakensGuards(_:)
 case ProductCatalogStoreError.writeFailed(code:)
 case ProductCatalogUpdate.unchanged
@@ -930,6 +932,7 @@ var NetworkSnapshot.hub
 var NetworkSnapshot.isEmpty
 var NetworkSnapshot.modemDatabase
 var NetworkSnapshot.registry
+var ProductCatalogError.errorDescription
 var ProductCatalogStore.catalogPath
 var ProductCatalogStore.directory
 var ProductCatalogStore.hasCachedCopy

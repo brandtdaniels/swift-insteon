@@ -48,10 +48,12 @@ Below 1.0 any MINOR can change the catalog's format, so a catalog with another M
 waits for an update of the package. A published version older than the app's copy, whose
 version the app passes to ``DeviceCatalogUpdater/update(replacing:currentVersion:)``, or than
 the bundled copy is refused with ``DeviceCatalogUpdateError/olderThanCurrent(_:)``, so a stale
-cache or a rolled-back site never takes back newer data. A download that gives any guard more
-weakly than the bundled copy, for a command set both have, is refused with
-``DeviceCatalogUpdateError/weakensGuards(_:)``; ``DeviceCatalog/guardWeakenings(comparedTo:)``
-and ``DeviceCatalog/checkGuards(against:)`` compare any catalog an app loads the same way.
+cache or a rolled-back site never takes back newer data. A download that would let an app send
+or write more to a device the bundled copy knows, at any firmware version, than the bundled
+copy does is refused with ``DeviceCatalogUpdateError/weakensGuards(_:)``;
+``DeviceCatalog/guardWeakenings(comparedTo:)`` and ``DeviceCatalog/checkGuards(against:)``
+compare any catalog an app loads the same way. ``DeviceCatalog/init(json:)`` and
+``DeviceCatalog/load(contentsOf:)`` read a catalog without comparing it.
 Updating is optional.
 
 The catalog isn't signed, so a download's integrity rests on HTTPS to the expected host plus

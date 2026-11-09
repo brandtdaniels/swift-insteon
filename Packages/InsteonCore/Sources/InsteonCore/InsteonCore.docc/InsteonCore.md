@@ -153,9 +153,14 @@ gives no command set, and for a command set that doesn't name the cmd2; it's sen
 the command set names it for a flag or command it doesn't guard, such as a keypad's button
 lock flag, turned on with `0x19`; a command set that names a protected cmd2 through an
 unguarded entry unlocks it. Poke is never sent. ``ProductCatalog`` refuses a saved or
-supplied catalog, and its update a downloaded one, that gives any guard more weakly than the
-copy the package ships with for a command set both have, so a catalog used in place of the
-bundled copy can't unlock what the bundled copy guards. A flag is shown as writable when at least
+supplied catalog, and its update a downloaded one, unless, for every device the copy the
+package ships with knows and every firmware version, the command set the catalog gives the
+device is at least as strict as the bundled copy's by these same rules: it never sends every
+byte the bundled copy never sends, unlocks no protected cmd2 it keeps refused, guards every
+flag bit, flags parameter bit and value byte at least as strictly, keeps every flags byte's
+`SettingValue.flagsQuery`, and sends no command's bytes the bundled copy guards without a
+guard. A device only the loaded catalog knows isn't compared, and a `DeviceCatalog` handed to
+``DeviceNetwork/init(modem:catalog:snapshot:hub:timeout:clock:now:)`` is used as given. A flag is shown as writable when at least
 one of its states is sent. Every message a ``Device`` sends is checked by the bytes it carries,
 after any value is filled in: the Set Operating Flags bytes that turn a kept flag on or off or
 a never-set flag on, and those of a command the catalog guards, are never sent under any name,

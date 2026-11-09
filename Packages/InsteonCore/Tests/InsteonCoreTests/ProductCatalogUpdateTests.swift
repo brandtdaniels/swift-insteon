@@ -27,7 +27,7 @@ struct ProductCatalogUpdateTests {
   @Test func throwsItsOwnErrorForEachOfTheUpdatersAndTheRedirects() {
 
     let version = DeviceCatalogVersion(major: 1, minor: 2, patch: 3)
-    let weakening = GuardWeakening(commandSet: "exampleGuarded", kind: .flag, name: "lockout")
+    let weakening = GuardWeakening(category: 0x01, subcategory: 0x7A, firmwareVersion: nil, kind: .flagBits, detail: "Get Operating Flags 0x00 never-set bits 0x01")
     let notACatalog = DecodingError.dataCorrupted(DecodingError.Context(codingPath: [], debugDescription: "Not a catalog."))
     let cases: [(any Error, ProductCatalogUpdateError)] = [
       (DeviceCatalogUpdateError.incompatibleVersion(version), .incompatibleVersion(version)),
@@ -64,7 +64,14 @@ struct ProductCatalogUpdateTests {
   static func catalog(lockout: FlagGuard?) -> DeviceCatalog {
 
     DeviceCatalog(
-      profiles: [],
+      profiles: [
+        DeviceProfile(
+          model: "9701",
+          name: "Example Guarded Switch",
+          identities: [DeviceIdentity(category: 0x01, subcategory: 0x7A)],
+          commandSets: [CommandSetEntry(commandSet: "exampleGuarded", category: 0x01, subcategory: 0x7A)]
+        )
+      ],
       commandSets: [
         CommandSet(
           id: "exampleGuarded",
@@ -81,7 +88,7 @@ struct ProductCatalogUpdateTests {
 
     let baseline: DeviceCatalog = Self.catalog(lockout: .neverSet)
 
-    #expect(throws: ProductCatalogError.weakensGuards([GuardWeakening(commandSet: "exampleGuarded", kind: .flag, name: "lockout")])) {
+    #expect(throws: ProductCatalogError.weakensGuards(Self.catalog(lockout: nil).guardWeakenings(comparedTo: baseline))) {
 
       try ProductCatalog.checked(Self.catalog(lockout: nil), against: baseline)
 

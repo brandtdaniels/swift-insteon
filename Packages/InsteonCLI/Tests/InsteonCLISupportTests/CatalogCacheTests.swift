@@ -3,6 +3,7 @@ import Testing
 import InsteonCLISupport
 import InsteonCore
 import InsteonDeviceCatalog
+import InsteonProtocol
 
 struct CatalogCacheTests {
 
@@ -46,11 +47,11 @@ struct CatalogCacheTests {
 
   }
 
-  @Test func usesACachedCopyWithoutABundledOne() {
+  @Test func usesNoCachedCopyWithoutABundledOneToCheckItAgainst() {
 
     let cached = DeviceCatalogVersion(major: 0, minor: 6, patch: 3)
 
-    #expect(CatalogCache.source(bundled: nil, cached: cached) == .cached)
+    #expect(CatalogCache.source(bundled: nil, cached: cached) == .bundled)
     #expect(CatalogCache.source(bundled: nil, cached: nil) == .bundled)
 
   }
@@ -138,18 +139,18 @@ struct CatalogCacheTests {
   @Test func saysWhichGuardsAPublishedOrCachedCatalogWeakens() {
 
     let weakenings: [GuardWeakening] = [
-      GuardWeakening(commandSet: "exampleGuarded", kind: .flag, name: "lockout"),
-      GuardWeakening(commandSet: "exampleGuarded", kind: .flagsQuery, name: "configuration")
+      GuardWeakening(category: 0x01, subcategory: 0x7A, firmwareVersion: nil, kind: .unlocksProtectedCommand, detail: "Set Operating Flags 0x0C"),
+      GuardWeakening(category: 0x01, subcategory: 0x7A, firmwareVersion: nil, kind: .flagsQuery, detail: "D7 Get Operating Flags 0x00")
     ]
     let current = DeviceCatalogVersion(major: 0, minor: 6, patch: 21)
 
-    #expect(CatalogText.publishedWeakensGuards(weakenings, current: current) == "The published Insteon device catalog weakens guards the bundled copy gives, "
-      + "which keep a device reachable and unlocked (exampleGuarded flag lockout, exampleGuarded flagsQuery configuration), "
+    #expect(CatalogText.publishedWeakensGuards(weakenings, current: current) == "The published Insteon device catalog would let more be sent or written to a device than the bundled copy does, "
+      + "weakening the guards that keep it reachable and unlocked (0x01/0x7A unlocksProtectedCommand Set Operating Flags 0x0C, 0x01/0x7A flagsQuery D7 Get Operating Flags 0x00), "
       + "so it isn't used and the current copy, 0.6.21, stays.")
     #expect(CatalogText.cachedWeakensGuards(path: "/home/example/.cache/insteon/catalog.json", weakenings) == "insteon: warning: the cached Insteon device catalog "
-      + "at /home/example/.cache/insteon/catalog.json weakens guards the bundled copy gives, which keep a device reachable and unlocked "
-      + "(exampleGuarded flag lockout, exampleGuarded flagsQuery configuration), so the bundled copy is used. "
-      + "'insteon catalog update' downloads it again.")
+      + "at /home/example/.cache/insteon/catalog.json would let more be sent or written to a device than the bundled copy does, "
+      + "weakening the guards that keep it reachable and unlocked (0x01/0x7A unlocksProtectedCommand Set Operating Flags 0x0C, 0x01/0x7A flagsQuery D7 Get Operating Flags 0x00), so the bundled copy is used. "
+      + "'insteon catalog update' replaces it.")
 
   }
 

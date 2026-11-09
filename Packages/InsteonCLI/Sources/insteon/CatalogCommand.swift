@@ -265,9 +265,11 @@ enum CatalogCommand {
     var cachedVersion: DeviceCatalogVersion? = nil
     var currentVersion: DeviceCatalogVersion = bundled
 
+    // A cached copy that fails the guard check isn't in use, so the published copy replaces it.
     if let cached = CatalogStore.cachedVersion(),
       CatalogCache.source(bundled: bundled, cached: cached) == .cached,
-      let json = CatalogStore.cachedJSON()
+      let json = CatalogStore.cachedJSON(),
+      (try? ProductCatalog(json: json)) != nil
     {
 
       current = json

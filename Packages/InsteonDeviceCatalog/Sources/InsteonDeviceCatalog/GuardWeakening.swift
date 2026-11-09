@@ -1,11 +1,11 @@
 import InsteonProtocol
 
-/// A guard that a catalog gives more weakly than a baseline catalog, such as the copy the
-/// package ships with, for a command set both have.
+/// A way a catalog would let an app send or write more to a device than a baseline catalog,
+/// such as the copy the package ships with, lets it.
 ///
 /// The guards keep a device reachable and unlocked, so a catalog an app loads in place of the
-/// bundled copy, downloaded or saved, may add guards but never weaken one.
-/// ``DeviceCatalog/guardWeakenings(comparedTo:)`` finds them:
+/// bundled copy, downloaded or saved, may make them stricter but never weaker for a device the
+/// bundled copy knows. ``DeviceCatalog/guardWeakenings(comparedTo:)`` finds where it would:
 ///
 /// ```swift
 /// let weakenings = downloaded.guardWeakenings(comparedTo: try DeviceCatalog.bundled())
@@ -16,133 +16,169 @@ import InsteonProtocol
 /// ```
 public struct GuardWeakening: Hashable, Sendable, CustomStringConvertible {
 
-  /// What kind of guard is weakened.
+  /// What the catalog would let through that the baseline doesn't.
   public enum Kind: String, Hashable, Sendable {
 
-    /// An operating flag's ``FlagGuard``.
-    case flag
+    /// Bytes the baseline never sends to the device, which the catalog would send.
+    case sendsNeverSentBytes
 
-    /// The ``FlagGuard`` of a bit of an extended command's flags parameter.
-    case flagsBit
+    /// A protected Set Operating Flags cmd2 the baseline keeps refused, which the catalog
+    /// would send because its command set names it through an unguarded flag or command.
+    case unlocksProtectedCommand
 
-    /// A flag, standard or extended command's ``CommandGuard``.
-    case command
+    /// Bits of an operating flags byte the baseline keeps or never sets, which the catalog
+    /// guards less.
+    case flagBits
 
-    /// An extended settings value's ``SettingValue/flagsQuery``.
+    /// Bits of an extended command's flags parameter the baseline keeps or never sets, which
+    /// the catalog guards less.
+    case parameterBits
+
+    /// Bits of an extended settings value's byte that a write of the value keeps or never sets
+    /// in the baseline, which the catalog guards less, such as when another command writes it.
+    case valueBits
+
+    /// A value whose byte the baseline marks as an operating flags byte, which the catalog
+    /// doesn't mark with the same query.
     case flagsQuery
+
+    /// An extended Set selector whose bytes hold guarded flags in the baseline but not in the
+    /// catalog.
+    case writeSelector
+
+    /// A command the baseline guards, whose bytes the catalog sends with no guard.
+    case commandGuard
 
   }
 
-  /// The command set both catalogs have.
-  public var commandSet: CommandSetID
+  /// The category of the device it's for.
+  public var category: DeviceCategory
 
-  /// What kind of guard is weakened.
+  /// The subcategory of the device it's for.
+  public var subcategory: DeviceSubcategory
+
+  /// The first firmware version it's found for, or `nil` for a device that reports none.
+  public var firmwareVersion: FirmwareVersion?
+
+  /// What the catalog would let through.
   public var kind: Kind
 
-  /// The flag, bit, command or value, by its name in the baseline catalog.
-  public var name: SettingName
+  /// The bytes, bits or selector, such as `Set Operating Flags 0x0C`.
+  public var detail: String
 
   /// Creates a weakened guard.
   ///
   /// - Parameters:
-  ///   - commandSet: The command set both catalogs have.
-  ///   - kind: What kind of guard is weakened.
-  ///   - name: The flag, bit, command or value, by its name in the baseline catalog.
-  public init(commandSet: CommandSetID, kind: Kind, name: SettingName) {
+  ///   - category: The category of the device it's for.
+  ///   - subcategory: The subcategory of the device it's for.
+  ///   - firmwareVersion: The first firmware version it's found for, or `nil` for a device
+  ///     that reports none.
+  ///   - kind: What the catalog would let through.
+  ///   - detail: The bytes, bits or selector.
+  public init(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?, kind: Kind, detail: String) {
 
-    self.commandSet = commandSet
+    self.category = category
+    self.subcategory = subcategory
+    self.firmwareVersion = firmwareVersion
     self.kind = kind
-    self.name = name
+    self.detail = detail
 
   }
 
-  /// The guard as `commandSet kind name`, such as `exampleSwitch flag lockout`.
-  public var description: String { "\(commandSet) \(kind.rawValue) \(name)" }
+  /// The weakened guard as one phrase, such as
+  /// `0x01/0x24 sendsNeverSentBytes Set Operating Flags 0x0C`.
+  public var description: String { "\(category)/\(subcategory) \(kind.rawValue) \(detail)" }
 
 }
 
 extension DeviceCatalog {
 
-  /// The guards this catalog gives more weakly than a baseline, for each command set id both
-  /// catalogs have. A command set only one of them has isn't compared.
+  /// Where this catalog would let an app send or write more to a device than a baseline does.
   ///
-  /// A guard is weakened when, in the same command set:
-  /// - a flag the baseline guards is missing, or a flag with its name or its query and bit, or
-  ///   with a Set Operating Flags cmd2 the baseline's guard covers, has a weaker guard: no
-  ///   guard is weaker than `neverSet`, which is weaker than `keep` or a guard this package
-  ///   doesn't know;
-  /// - a guarded bit of an extended command's flags parameter is missing or has a weaker
-  ///   guard;
-  /// - a command the baseline guards is missing or has no guard, or another command with its
-  ///   Set Operating Flags bytes has none;
-  /// - a value the baseline marks with a ``SettingValue/flagsQuery`` is missing, or a value
-  ///   with its name or position has another query or none.
+  /// For every category and subcategory a profile of the baseline has an identity for, and
+  /// for every firmware version `0x00` through `0xFF` and none, each catalog's command set for
+  /// that device is found as an app finds it, whatever its id, and summarized with the rules
+  /// InsteonCore applies when it sends (``CommandSetSafety``): the bytes it never sends, the
+  /// protected Set Operating Flags cmd2s it unlocks, the operating flag and flags parameter
+  /// bits it keeps or never sets, the values it marks as operating flags bytes, the extended
+  /// Set selectors that write guarded flags, and the commands it guards. This catalog is at
+  /// least as strict when it never sends every byte the baseline never sends, unlocks no
+  /// protected cmd2 the baseline keeps refused, guards every bit the baseline guards at least
+  /// as strictly, marks every flags byte the baseline marks with the same query, and sends no
+  /// bytes the baseline guards from an unguarded command. A device the baseline knows that
+  /// this catalog gives no command set is compared as having no guards. A device only this
+  /// catalog knows isn't compared.
   ///
   /// - Parameter baseline: The catalog whose guards are the least this one gives, such as
   ///   ``DeviceCatalog/bundled()``.
-  /// - Returns: The weakened guards, in the baseline's order, or none.
+  /// - Returns: Each way it's weaker, once per device, kind and detail, ordered by category
+  ///   and subcategory; none when it's at least as strict.
   public func guardWeakenings(comparedTo baseline: DeviceCatalog) -> [GuardWeakening] {
 
-    baseline.commandSets.flatMap { (old: CommandSet) -> [GuardWeakening] in
+    let firmwareVersions: [FirmwareVersion?] = [nil] + (UInt8.min...UInt8.max).map { (version: UInt8) -> FirmwareVersion? in FirmwareVersion(rawValue: version) }
+    let identities = baseline.indexedIdentities.sorted { (left, right) -> Bool in
 
-      commandSet(id: old.id).map { (new: CommandSet) -> [GuardWeakening] in Self.weakenings(of: old, in: new) } ?? []
+      (left.category.rawValue, left.subcategory.rawValue) < (right.category.rawValue, right.subcategory.rawValue)
 
     }
+    let oldByID: [CommandSetID: CommandSet] = Self.commandSetsByID(baseline)
+    let newByID: [CommandSetID: CommandSet] = Self.commandSetsByID(self)
+    var oldSummaries: [CommandSetID: SafetySummary] = [:]
+    var newSummaries: [CommandSetID: SafetySummary] = [:]
+    var comparisons: [CommandSetPair: [Finding]] = [:]
+    var weakenings: [GuardWeakening] = []
 
-  }
+    func summary(of commands: CommandSet?, in cache: inout [CommandSetID: SafetySummary]) -> SafetySummary {
 
-  /// How strict a flag guard is: none, never set, then kept, with a guard this package doesn't
-  /// know as strict as kept.
-  static func strictness(_ writeGuard: FlagGuard?) -> Int {
+      guard let commands else {
 
-    switch writeGuard {
-    case nil:
-      0
-    case .neverSet?:
-      1
-    case _?:
-      2
-    }
-
-  }
-
-  /// The guards of one command set that another version of it weakens.
-  static func weakenings(of old: CommandSet, in new: CommandSet) -> [GuardWeakening] {
-
-    var found: [GuardWeakening] = []
-
-    func add(_ kind: GuardWeakening.Kind, _ name: SettingName) {
-
-      let weakening = GuardWeakening(commandSet: old.id, kind: kind, name: name)
-
-      if !found.contains(weakening) {
-
-        found.append(weakening)
+        return SafetySummary(nil)
 
       }
 
-    }
+      if let known = cache[commands.id] {
 
-    for flag in old.operatingFlags where flag.writeGuard != nil {
-
-      let strictness: Int = Self.strictness(flag.writeGuard)
-      let isKept: Bool = strictness > 1
-
-      if new.operatingFlag(named: flag.name) == nil {
-
-        add(.flag, flag.name)
+        return known
 
       }
 
-      for candidate in new.operatingFlags where Self.strictness(candidate.writeGuard) < strictness {
+      let made = SafetySummary(commands)
 
-        let sameFlag: Bool = candidate.name == flag.name || (candidate.query == flag.query && candidate.bit == flag.bit)
-        let sameOn: Bool = flag.on != nil && candidate.on == flag.on
-        let sameOff: Bool = isKept && flag.off != nil && candidate.off == flag.off
+      cache[commands.id] = made
 
-        if sameFlag || sameOn || sameOff {
+      return made
 
-          add(.flag, flag.name)
+    }
+
+    for identity in identities {
+
+      var found: Set<Finding> = []
+      // With no profile narrowed to some firmware in either catalog, every version finds what
+      // a device that reports none finds.
+      let isNarrowed: Bool = baseline.selectsByFirmware(category: identity.category, subcategory: identity.subcategory)
+        || selectsByFirmware(category: identity.category, subcategory: identity.subcategory)
+
+      for firmware in isNarrowed ? firmwareVersions : [nil] {
+
+        let old: CommandSet? = baseline.commandSet(category: identity.category, subcategory: identity.subcategory, firmwareVersion: firmware, byID: oldByID)
+        let new: CommandSet? = commandSet(category: identity.category, subcategory: identity.subcategory, firmwareVersion: firmware, byID: newByID)
+        let pair = CommandSetPair(old: old?.id, new: new?.id)
+        let findings: [Finding]
+
+        if let known = comparisons[pair] {
+
+          findings = known
+
+        } else {
+
+          findings = summary(of: new, in: &newSummaries).weakenings(comparedTo: summary(of: old, in: &oldSummaries))
+          comparisons[pair] = findings
+
+        }
+
+        for finding in findings where found.insert(finding).inserted {
+
+          weakenings.append(GuardWeakening(category: identity.category, subcategory: identity.subcategory, firmwareVersion: firmware, kind: finding.kind, detail: finding.detail))
 
         }
 
@@ -150,158 +186,45 @@ extension DeviceCatalog {
 
     }
 
-    for command in old.extendedCommands {
-
-      for parameter in command.parameters {
-
-        guard case let .flags(bits) = parameter.kind else {
-
-          continue
-
-        }
-
-        let newBits: [FieldBit] = new.extendedCommand(named: command.name)?.parameters
-          .first { (field: MessageField) -> Bool in field.name == parameter.name }
-          .map { (field: MessageField) -> [FieldBit] in
-
-            if case let .flags(newBits) = field.kind {
-
-              return newBits
-
-            }
-
-            return []
-
-          } ?? []
-
-        for bit in bits where bit.writeGuard != nil {
-
-          let matching: [FieldBit] = newBits.filter { (other: FieldBit) -> Bool in other.mask == bit.mask || other.name == bit.name }
-
-          if matching.isEmpty || matching.contains(where: { (other: FieldBit) -> Bool in Self.strictness(other.writeGuard) < Self.strictness(bit.writeGuard) }) {
-
-            add(.flagsBit, bit.name)
-
-          }
-
-        }
-
-      }
-
-    }
-
-    let oldCommands: [GuardedCommand] = Self.commands(of: old)
-    let newCommands: [GuardedCommand] = Self.commands(of: new)
-
-    for command in oldCommands where command.isGuarded {
-
-      let sameName: [GuardedCommand] = newCommands.filter { (other: GuardedCommand) -> Bool in other.kind == command.kind && other.name == command.name }
-      let sameBytes: [GuardedCommand] = command.setOperatingFlags.map { (bytes: Command) -> [GuardedCommand] in
-
-        newCommands.filter { (other: GuardedCommand) -> Bool in other.setOperatingFlags == bytes }
-
-      } ?? []
-
-      if sameName.isEmpty || (sameName + sameBytes).contains(where: { (other: GuardedCommand) -> Bool in !other.isGuarded }) {
-
-        add(.command, command.name)
-
-      }
-
-    }
-
-    for value in old.extendedSettings?.values ?? [] {
-
-      guard let query = value.flagsQuery else {
-
-        continue
-
-      }
-
-      let newValues: [SettingValue] = new.extendedSettings?.values ?? []
-      let matching: [SettingValue] = newValues.filter { (other: SettingValue) -> Bool in other.name == value.name || other.position == value.position }
-
-      if !newValues.contains(where: { (other: SettingValue) -> Bool in other.name == value.name })
-        || matching.contains(where: { (other: SettingValue) -> Bool in other.flagsQuery != query }) {
-
-        add(.flagsQuery, value.name)
-
-      }
-
-    }
-
-    return found
+    return weakenings
 
   }
 
-  /// A flag, standard or extended command, with its guard and its Set Operating Flags bytes.
-  struct GuardedCommand {
+  /// A catalog's command sets by their ids, the first of each id, as ``commandSet(id:)`` finds
+  /// it.
+  static func commandSetsByID(_ catalog: DeviceCatalog) -> [CommandSetID: CommandSet] {
 
-    /// Which list of the command set the command is in.
-    enum Kind {
+    var byID: [CommandSetID: CommandSet] = [:]
 
-      case flag
-      case standard
-      case extended
+    for commands in catalog.commandSets where byID[commands.id] == nil {
+
+      byID[commands.id] = commands
 
     }
 
-    let kind: Kind
-
-    let name: SettingName
-
-    let isGuarded: Bool
-
-    /// The command's bytes when it's Set Operating Flags (cmd1 `0x20`) with a fixed cmd2.
-    let setOperatingFlags: Command?
+    return byID
 
   }
 
-  /// Every flag, standard and extended command of a command set.
-  static func commands(of commands: CommandSet) -> [GuardedCommand] {
+  /// The command set of a device, as ``commandSet(category:subcategory:firmwareVersion:)``
+  /// finds it, with the command sets looked up by id.
+  func commandSet(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?, byID: [CommandSetID: CommandSet]) -> CommandSet? {
 
-    let setOperatingFlags: UInt8 = 0x20
+    guard
+      let profile = profile(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion),
+      let entry = profile.commandSets.first(where: { (entry: CommandSetEntry) -> Bool in entry.covers(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion) })
+    else {
 
-    func ifSetOperatingFlags(_ command: Command) -> Command? {
-
-      command.command1 == setOperatingFlags ? command : nil
-
-    }
-
-    let flags: [GuardedCommand] = commands.flagCommands.map { (command: OperatingFlagCommand) -> GuardedCommand in
-
-      GuardedCommand(kind: .flag, name: command.name, isGuarded: command.sendGuard != nil, setOperatingFlags: ifSetOperatingFlags(command.command.command))
-
-    }
-    let standards: [GuardedCommand] = commands.standardCommands.map { (command: DeviceStandardCommand) -> GuardedCommand in
-
-      var bytes: Command?
-
-      if case let .fixed(command2) = command.command2 {
-
-        bytes = ifSetOperatingFlags(Command(command1: command.command1, command2: command2))
-
-      }
-
-      return GuardedCommand(kind: .standard, name: command.name, isGuarded: command.sendGuard != nil, setOperatingFlags: bytes)
-
-    }
-    let extendeds: [GuardedCommand] = commands.extendedCommands.map { (command: DeviceExtendedCommand) -> GuardedCommand in
-
-      GuardedCommand(kind: .extended, name: command.name, isGuarded: command.sendGuard != nil, setOperatingFlags: ifSetOperatingFlags(command.command))
+      return nil
 
     }
 
-    return flags + standards + extendeds
+    return byID[entry.commandSet]
 
   }
 
-}
-
-extension DeviceCatalog {
-
-  /// Throws if this catalog gives any guard more weakly than a baseline, as
-  /// ``guardWeakenings(comparedTo:)`` finds them, so an app keeps using the baseline.
+  /// Throws if this catalog would let an app send or write more to any device than a baseline
+  /// does, as ``guardWeakenings(comparedTo:)`` finds it, so an app keeps using the baseline.
   ///
   /// - Parameter baseline: The catalog whose guards are the least this one gives, such as
   ///   ``DeviceCatalog/bundled()``.
@@ -315,6 +238,310 @@ extension DeviceCatalog {
       throw DeviceCatalogError.weakensGuards(weakenings)
 
     }
+
+  }
+
+}
+
+/// The ids of the command sets a device has in each catalog, or `nil` for none.
+private struct CommandSetPair: Hashable {
+
+  let old: CommandSetID?
+
+  let new: CommandSetID?
+
+}
+
+/// One way a command set is weaker than another, before it's tied to a device.
+private struct Finding: Hashable {
+
+  let kind: GuardWeakening.Kind
+
+  let detail: String
+
+}
+
+/// A byte as `0x0C`.
+private func hex(_ byte: UInt8) -> String {
+
+  let digits: String = String(byte, radix: 16, uppercase: true)
+
+  return "0x" + (digits.count == 1 ? "0" : "") + digits
+
+}
+
+/// What the send-time rules of ``CommandSetSafety`` make of a command set, or of a device with
+/// none, which only the byte floor guards.
+struct SafetySummary: Hashable {
+
+  /// Where a guarded bit is: an operating flags byte by its query, or an extended command's
+  /// flags parameter by the command's bytes, its fixed bytes and the parameter's location.
+  enum BitsKey: Hashable {
+
+    case query(OperatingFlagsRequest)
+
+    case parameter(Command, [FixedUserDataByte], FieldLocation)
+
+    /// An extended settings value's byte, by its position, through whatever command writes it.
+    case value(Int)
+
+  }
+
+  /// A command by the bytes it sends: a standard message's cmd1 and its fixed cmd2, if any,
+  /// or an extended message's cmd1, cmd2 and fixed bytes.
+  enum CommandKey: Hashable {
+
+    case standard(UInt8, UInt8?)
+
+    case extended(Command, [FixedUserDataByte])
+
+  }
+
+  /// The bytes never sent, the byte floor's included.
+  var neverSent: Set<Command> = []
+
+  /// The protected Set Operating Flags cmd2s the command set unlocks.
+  var unlockedFloor: Set<UInt8> = []
+
+  /// The kept bits, by where they are.
+  var keptBits: [BitsKey: UInt8] = [:]
+
+  /// The never-set bits, by where they are.
+  var neverSetBits: [BitsKey: UInt8] = [:]
+
+  /// The query of each value whose byte is an operating flags byte, by its position.
+  var flagsQueries: [Int: OperatingFlagsRequest] = [:]
+
+  /// The extended Set selectors that write a byte holding guarded flags.
+  var guardedSelectors: Set<UInt8> = []
+
+  /// The commands guarded, and those not, by their bytes.
+  var guardedCommands: Set<CommandKey> = []
+
+  var unguardedCommands: Set<CommandKey> = []
+
+  init(_ commands: CommandSet?) {
+
+    neverSent = CommandSetSafety.neverSentCommands(in: commands)
+
+    // A protected cmd2 is unlocked when the command set never refuses it, by the floor or by a
+    // guard.
+    unlockedFloor = Set(CommandSetSafety.protectedSetOperatingFlags.subtracting(neverSent).map(\.command2))
+
+    guard let commands else {
+
+      return
+
+    }
+
+    func addBits(_ mask: UInt8, at key: BitsKey, rule: CommandSetSafety.Rule) {
+
+      switch rule {
+      case .keep:
+        keptBits[key, default: 0] |= mask
+      case .neverSet:
+        neverSetBits[key, default: 0] |= mask
+      }
+
+    }
+
+    for flag in commands.operatingFlags {
+
+      if let rule = CommandSetSafety.rule(for: flag) {
+
+        addBits(flag.bit, at: .query(flag.query), rule: rule)
+
+      }
+
+    }
+
+    for command in commands.extendedCommands {
+
+      for parameter in command.parameters {
+
+        guard case let .flags(bits) = parameter.kind else {
+
+          continue
+
+        }
+
+        for bit in bits {
+
+          if let rule = CommandSetSafety.rule(for: bit.writeGuard) {
+
+            addBits(bit.mask, at: .parameter(command.command, command.fixedBytes, parameter.location), rule: rule)
+
+          }
+
+        }
+
+      }
+
+    }
+
+    let settings: ExtendedSettings? = commands.extendedSettings
+
+    for value in settings?.values ?? [] {
+
+      if let query = value.flagsQuery {
+
+        flagsQueries[value.position] = query
+
+      }
+
+      // The bits a write of the value guards, as the write itself finds them.
+      for bit in CommandSetSafety.guardedBits(in: value, of: commands) {
+
+        addBits(bit.mask, at: .value(value.position), rule: bit.rule)
+
+      }
+
+    }
+
+    for write in settings?.writes ?? [] {
+
+      let isGuarded: Bool = write.bytes.contains { (byte: SettingWrite.Byte) -> Bool in
+
+        settings?.value(named: byte.value).map { (value: SettingValue) -> Bool in !CommandSetSafety.guardedBits(in: value, of: commands).isEmpty } ?? false
+
+      }
+
+      if isGuarded {
+
+        guardedSelectors.insert(write.selector)
+
+      }
+
+    }
+
+    func add(_ key: CommandKey, isGuarded: Bool) {
+
+      if isGuarded {
+
+        guardedCommands.insert(key)
+
+      } else {
+
+        unguardedCommands.insert(key)
+
+      }
+
+    }
+
+    for command in commands.flagCommands {
+
+      add(.standard(command.command.command.command1, command.command.command.command2), isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
+
+    }
+
+    for command in commands.standardCommands {
+
+      var command2: UInt8?
+
+      if case let .fixed(fixed) = command.command2 {
+
+        command2 = fixed
+
+      }
+
+      add(.standard(command.command1, command2), isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
+
+    }
+
+    for command in commands.extendedCommands {
+
+      add(.extended(command.command, command.fixedBytes), isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
+
+    }
+
+  }
+
+  /// Each way this summary is weaker than a baseline's.
+  fileprivate func weakenings(comparedTo baseline: SafetySummary) -> [Finding] {
+
+    var findings: [Finding] = []
+
+    for command in baseline.neverSent.subtracting(neverSent).sorted(by: { ($0.command1, $0.command2) < ($1.command1, $1.command2) }) {
+
+      let name: String = command.command1 == CommandSetSafety.setOperatingFlagsCommand1 ? "Set Operating Flags" : "cmd1 \(hex(command.command1))"
+
+      findings.append(Finding(kind: .sendsNeverSentBytes, detail: "\(name) \(hex(command.command2))"))
+
+    }
+
+    for command2 in unlockedFloor.subtracting(baseline.unlockedFloor).sorted() {
+
+      findings.append(Finding(kind: .unlocksProtectedCommand, detail: "Set Operating Flags \(hex(command2))"))
+
+    }
+
+    func describe(_ key: BitsKey) -> (GuardWeakening.Kind, String) {
+
+      switch key {
+      case let .query(query):
+        return (.flagBits, "Get Operating Flags \(hex(query.rawValue))")
+      case let .parameter(command, fixed, location):
+        let bytes: String = fixed.map { (byte: FixedUserDataByte) -> String in " D\(byte.position) \(hex(byte.value))" }.joined()
+        return (.parameterBits, "cmd1 \(hex(command.command1)) cmd2 \(hex(command.command2))\(bytes) \(location)")
+      case let .value(position):
+        return (.valueBits, "D\(position)")
+      }
+
+    }
+
+    for (key, kept) in baseline.keptBits {
+
+      let missing: UInt8 = kept & ~(keptBits[key] ?? 0)
+
+      if missing != 0 {
+
+        let (kind, place): (GuardWeakening.Kind, String) = describe(key)
+
+        findings.append(Finding(kind: kind, detail: "\(place) kept bits \(hex(missing))"))
+
+      }
+
+    }
+
+    for (key, neverSet) in baseline.neverSetBits {
+
+      let missing: UInt8 = neverSet & ~((neverSetBits[key] ?? 0) | (keptBits[key] ?? 0))
+
+      if missing != 0 {
+
+        let (kind, place): (GuardWeakening.Kind, String) = describe(key)
+
+        findings.append(Finding(kind: kind, detail: "\(place) never-set bits \(hex(missing))"))
+
+      }
+
+    }
+
+    for (position, query) in baseline.flagsQueries.sorted(by: { $0.key < $1.key }) where flagsQueries[position] != query {
+
+      findings.append(Finding(kind: .flagsQuery, detail: "D\(position) Get Operating Flags \(hex(query.rawValue))"))
+
+    }
+
+    for selector in baseline.guardedSelectors.subtracting(guardedSelectors).sorted() {
+
+      findings.append(Finding(kind: .writeSelector, detail: "extended Set selector \(hex(selector))"))
+
+    }
+
+    for key in unguardedCommands.intersection(baseline.guardedCommands) {
+
+      switch key {
+      case let .standard(command1, command2):
+        findings.append(Finding(kind: .commandGuard, detail: "cmd1 \(hex(command1))" + (command2.map { " cmd2 \(hex($0))" } ?? "")))
+      case let .extended(command, fixed):
+        let bytes: String = fixed.map { (byte: FixedUserDataByte) -> String in " D\(byte.position) \(hex(byte.value))" }.joined()
+        findings.append(Finding(kind: .commandGuard, detail: "extended cmd1 \(hex(command.command1)) cmd2 \(hex(command.command2))\(bytes)"))
+      }
+
+    }
+
+    return findings.sorted { ($0.kind.rawValue, $0.detail) < ($1.kind.rawValue, $1.detail) }
 
   }
 

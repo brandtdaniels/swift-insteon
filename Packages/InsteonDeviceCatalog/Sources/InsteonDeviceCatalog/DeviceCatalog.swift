@@ -40,6 +40,28 @@ public struct DeviceCatalog: Hashable, Sendable {
 
   }
 
+  /// Whether any profile with an identity for a category and subcategory narrows that
+  /// identity, or its command set entry for it, to some firmware versions.
+  func selectsByFirmware(category: DeviceCategory, subcategory: DeviceSubcategory) -> Bool {
+
+    index[Key(category: category, subcategory: subcategory), default: []].contains { (offset: Int) -> Bool in
+
+      let profile: DeviceProfile = profiles[offset]
+
+      return profile.identities.contains { (identity: DeviceIdentity) -> Bool in identity.firmware != nil }
+        || profile.commandSets.contains { (entry: CommandSetEntry) -> Bool in entry.firmware != nil }
+
+    }
+
+  }
+
+  /// Every category and subcategory a profile has an identity for, in no particular order.
+  var indexedIdentities: [(category: DeviceCategory, subcategory: DeviceSubcategory)] {
+
+    index.keys.map { (key: Key) -> (category: DeviceCategory, subcategory: DeviceSubcategory) in (key.category, key.subcategory) }
+
+  }
+
   /// Creates a catalog of profiles.
   ///
   /// - Parameters:
@@ -216,9 +238,13 @@ public enum DeviceCatalogError: Error, Hashable, Sendable {
   /// when a command was copied without the bundle beside it.
   case missingBundledCatalog
 
-  /// The catalog gives guards more weakly than the copy the package ships with, for command
-  /// sets both have, so it isn't used: the bundled copy is. The associated value is each
-  /// weakened guard, as ``DeviceCatalog/guardWeakenings(comparedTo:)`` finds it.
+  /// The copy of the catalog the package ships with is found but can't be read, as when it's
+  /// damaged, so there's no baseline to compare another catalog's guards with.
+  case unreadableBundledCatalog
+
+  /// The catalog would let an app send or write more to a device the baseline knows than the
+  /// baseline does, so it isn't used. The associated value is each weakened guard, as
+  /// ``DeviceCatalog/guardWeakenings(comparedTo:)`` finds it.
   case weakensGuards([GuardWeakening])
 
 }
@@ -234,9 +260,12 @@ extension DeviceCatalogError: LocalizedError {
       let names: String = DeviceCatalog.bundleNames.joined(separator: " or ")
       return "The Insteon device catalog isn't found. Its bundle, \(names), must be beside the program or in its resources."
 
+    case .unreadableBundledCatalog:
+      return "The Insteon device catalog the package ships with couldn't be read."
+
     case let .weakensGuards(weakenings):
       let guards: String = weakenings.map(\.description).joined(separator: ", ")
-      return "The Insteon device catalog weakens guards the bundled copy gives (\(guards)), so it isn't used."
+      return "The Insteon device catalog would let more be sent or written to a device than the bundled copy does (\(guards)), so it isn't used."
 
     }
 
