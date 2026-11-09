@@ -134,6 +134,67 @@ struct CatalogCacheTests {
 
   }
 
+  // MARK: - The cached copy
+
+  @Test func usesNoCachedCopyWhenTheBundledCopyIsMissingOrUnreadable() {
+
+    let path = "/home/example/.cache/insteon/catalog.json"
+
+    for (error, isMissing) in [(ProductCatalogError.bundledCopyMissing, true), (.bundledCopyUnreadable, false)] {
+
+      guard case let .useNone(warning) = CatalogCache.cachedCatalog(Data(), path: path, reading: { (_: Data) throws -> ProductCatalog in throw error }) else {
+
+        Issue.record("Expected no catalog for \(error).")
+
+        continue
+
+      }
+
+      #expect(warning == CatalogText.cachedUnchecked(path: path, bundledIsMissing: isMissing))
+
+    }
+
+  }
+
+  @Test func usesTheBundledCopyWhenTheCachedOneWeakensItsGuards() {
+
+    let weakenings = [GuardWeakening(category: 0x01, subcategory: 0x7A, firmwareVersion: nil, kind: .flagBits, detail: "Get Operating Flags 0x00 kept bits 0x40")]
+    let outcome = CatalogCache.cachedCatalog(Data(), path: "/c.json", reading: { (_: Data) throws -> ProductCatalog in throw ProductCatalogError.weakensGuards(weakenings) })
+
+    guard case let .useBundled(warning) = outcome else {
+
+      Issue.record("Expected the bundled copy, got \(outcome).")
+
+      return
+
+    }
+
+    #expect(warning == CatalogText.cachedWeakensGuards(path: "/c.json", weakenings))
+
+  }
+
+  @Test func readsTheBundledCopyAsTheCachedOne() throws {
+
+    let json: Data = try Data(contentsOf: ProductCatalog.bundledCatalogURL())
+
+    guard case .use = CatalogCache.cachedCatalog(json, path: "/c.json", reading: ProductCatalog.init(json:)) else {
+
+      Issue.record("Expected the cached copy to be used.")
+
+      return
+
+    }
+
+    guard case .unreadable = CatalogCache.cachedCatalog(Data("{}".utf8), path: "/c.json", reading: ProductCatalog.init(json:)) else {
+
+      Issue.record("Expected an unreadable copy.")
+
+      return
+
+    }
+
+  }
+
   // MARK: - Weakened guards
 
   @Test func blamesTheBundledCopyWhenTheCachedOneCantBeChecked() {

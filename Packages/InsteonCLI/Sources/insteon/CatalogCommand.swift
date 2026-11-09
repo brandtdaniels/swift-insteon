@@ -98,35 +98,20 @@ enum CatalogStore {
 
     if CatalogCache.source(bundled: bundled, cached: cached) == .cached {
 
-      do {
+      if let json = cachedJSON() {
 
-        if let json = cachedJSON() {
-
-          return Loaded(catalog: try ProductCatalog(json: json), source: .cached)
-
+        switch CatalogCache.cachedCatalog(json, path: catalogPath() ?? CatalogCache.relativePath, reading: ProductCatalog.init(json:)) {
+        case let .use(catalog):
+          return Loaded(catalog: catalog, source: .cached)
+        case let .useBundled(warning):
+          Output.note(warning)
+          return bundledCatalog().map { (catalog: ProductCatalog) -> Loaded in Loaded(catalog: catalog, source: .bundled) }
+        case let .useNone(warning):
+          Output.note(warning)
+          return nil
+        case .unreadable:
+          break
         }
-
-      } catch let ProductCatalogError.weakensGuards(weakenings) {
-
-        Output.note(CatalogText.cachedWeakensGuards(path: catalogPath() ?? CatalogCache.relativePath, weakenings))
-
-        return bundledCatalog().map { (catalog: ProductCatalog) -> Loaded in Loaded(catalog: catalog, source: .bundled) }
-
-      } catch ProductCatalogError.bundledCopyMissing {
-
-        Output.note(CatalogText.cachedUnchecked(path: catalogPath() ?? CatalogCache.relativePath, bundledIsMissing: true))
-
-        return nil
-
-      } catch ProductCatalogError.bundledCopyUnreadable {
-
-        Output.note(CatalogText.cachedUnchecked(path: catalogPath() ?? CatalogCache.relativePath, bundledIsMissing: false))
-
-        return nil
-
-      } catch {
-
-        // Unreadable, so the warning below says so.
 
       }
 

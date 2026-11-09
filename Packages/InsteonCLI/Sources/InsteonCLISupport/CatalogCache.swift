@@ -92,6 +92,58 @@ public enum CatalogCache {
 
   }
 
+  /// What to do with the cached copy of the catalog, once it's read and checked against the
+  /// bundled copy.
+  public enum CachedCatalog {
+
+    /// Use the cached copy.
+    case use(ProductCatalog)
+
+    /// Use the bundled copy, after the warning, as the cached copy weakens its guards.
+    case useBundled(warning: String)
+
+    /// Use no catalog, after the warning, as the bundled copy, which the cached one is checked
+    /// against, is missing or can't be read.
+    case useNone(warning: String)
+
+    /// The cached copy can't be read as a catalog.
+    case unreadable
+
+  }
+
+  /// Reads the cached copy of the catalog and says which copy to use.
+  ///
+  /// - Parameters:
+  ///   - json: The cached copy's JSON.
+  ///   - path: The cached copy's file, for a warning.
+  ///   - reading: Reads and checks a catalog, as `ProductCatalog.init(json:)` does.
+  /// - Returns: What to do.
+  public static func cachedCatalog(_ json: Data, path: String, reading: (Data) throws -> ProductCatalog) -> CachedCatalog {
+
+    do {
+
+      return .use(try reading(json))
+
+    } catch let ProductCatalogError.weakensGuards(weakenings) {
+
+      return .useBundled(warning: CatalogText.cachedWeakensGuards(path: path, weakenings))
+
+    } catch ProductCatalogError.bundledCopyMissing {
+
+      return .useNone(warning: CatalogText.cachedUnchecked(path: path, bundledIsMissing: true))
+
+    } catch ProductCatalogError.bundledCopyUnreadable {
+
+      return .useNone(warning: CatalogText.cachedUnchecked(path: path, bundledIsMissing: false))
+
+    } catch {
+
+      return .unreadable
+
+    }
+
+  }
+
   /// Reads the cached catalog's version from its file's JSON, a string such as `"0.6.26"`.
   ///
   /// - Parameter json: The file's contents.
