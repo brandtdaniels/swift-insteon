@@ -507,6 +507,26 @@ struct SelfTestTests {
 
   }
 
+  @Test func warnsOfAKeptFlagThatsOnWhereTheCatalogsDefaultIsOff() {
+
+    let commands = CommandSet(
+      id: "exampleKept",
+      name: "Example kept",
+      summary: "A kept flag that's off as the device leaves the factory.",
+      operatingFlags: [
+        OperatingFlag(name: "radioMute", summary: "Mutes the radio.", query: .operatingFlags, bit: 0x01, label: "Radio mute", defaultValue: false, writeGuard: .keep)
+      ]
+    )
+
+    let check: SelfTestCheck = Device.flagsCheck(reading(commands, flags: 0x01))
+
+    #expect(check.outcome == .warning)
+    #expect(check.detail == "Radio mute is on, unlike the device as it leaves the factory, and isn't written.")
+    #expect(check.fixes == [.factoryReset])
+    #expect(Device.flagsCheck(reading(commands, flags: 0x00)).outcome == .passed)
+
+  }
+
   // MARK: - Beep
 
   /// A relay whose command set lists Beep.
