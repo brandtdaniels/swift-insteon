@@ -597,6 +597,7 @@
         {
           "advanced": true,
           "bit": "0x40",
+          "default": false,
           "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
           "guard": "keep",
           "label": "Turn off radio",
@@ -609,6 +610,7 @@
         {
           "advanced": true,
           "bit": "0x80",
+          "default": false,
           "description": "Insteon communication over the powerline is off. The device turns it back on whenever it powers up.",
           "guard": "keep",
           "label": "Turn off powerline",
@@ -1223,6 +1225,7 @@
         {
           "advanced": true,
           "bit": "0x40",
+          "default": false,
           "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
           "guard": "keep",
           "label": "Turn off radio",
@@ -1235,6 +1238,7 @@
         {
           "advanced": true,
           "bit": "0x80",
+          "default": false,
           "description": "Insteon communication over the powerline is off. The device turns it back on whenever it powers up.",
           "guard": "keep",
           "label": "Turn off powerline",
@@ -5472,6 +5476,7 @@
         {
           "advanced": true,
           "bit": "0x40",
+          "default": false,
           "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
           "guard": "keep",
           "label": "Turn off radio",
@@ -5484,6 +5489,7 @@
         {
           "advanced": true,
           "bit": "0x80",
+          "default": false,
           "description": "Insteon communication over the powerline is off. The device turns it back on whenever it powers up.",
           "guard": "keep",
           "label": "Turn off powerline",
@@ -6187,6 +6193,7 @@
         {
           "advanced": true,
           "bit": "0x40",
+          "default": false,
           "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
           "guard": "keep",
           "label": "Turn off radio",
@@ -6199,6 +6206,7 @@
         {
           "advanced": true,
           "bit": "0x80",
+          "default": false,
           "description": "Insteon communication over the powerline is off. The device turns it back on whenever it powers up.",
           "guard": "keep",
           "label": "Turn off powerline",
@@ -6254,6 +6262,7 @@
         {
           "advanced": true,
           "bit": "0x10",
+          "default": false,
           "description": "Extended Set and ALL-Link database write messages must carry a checksum in D14.",
           "guard": "keep",
           "label": "Require checksums",
@@ -12053,6 +12062,7 @@
         {
           "advanced": true,
           "bit": "0x40",
+          "default": false,
           "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
           "guard": "keep",
           "label": "Turn off radio",
@@ -12065,6 +12075,7 @@
         {
           "advanced": true,
           "bit": "0x80",
+          "default": false,
           "description": "Insteon communication over the powerline is off. The device turns it back on whenever it powers up.",
           "guard": "keep",
           "label": "Turn off powerline",
@@ -12865,6 +12876,7 @@
         {
           "advanced": true,
           "bit": "0x40",
+          "default": false,
           "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
           "guard": "keep",
           "label": "Turn off radio",
@@ -12877,6 +12889,7 @@
         {
           "advanced": true,
           "bit": "0x80",
+          "default": false,
           "description": "Insteon communication over the powerline is off. The device turns it back on whenever it powers up.",
           "guard": "keep",
           "label": "Turn off powerline",
@@ -14435,6 +14448,7 @@
         {
           "advanced": true,
           "bit": "0x40",
+          "default": false,
           "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
           "guard": "keep",
           "label": "Turn off radio",
@@ -14447,6 +14461,7 @@
         {
           "advanced": true,
           "bit": "0x80",
+          "default": false,
           "description": "Insteon communication over the powerline is off. The device turns it back on whenever it powers up.",
           "guard": "keep",
           "label": "Turn off powerline",
@@ -18703,6 +18718,7 @@
         {
           "advanced": true,
           "bit": "0x40",
+          "default": false,
           "description": "The device doesn't originate RF messages. It still repeats the RF messages it hears.",
           "guard": "keep",
           "label": "Turn off radio",
@@ -18715,6 +18731,7 @@
         {
           "advanced": true,
           "bit": "0x80",
+          "default": false,
           "description": "Insteon communication over the powerline is off. The device turns it back on whenever it powers up.",
           "guard": "keep",
           "label": "Turn off powerline",
