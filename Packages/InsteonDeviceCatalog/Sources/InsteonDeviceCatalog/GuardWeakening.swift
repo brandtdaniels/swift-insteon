@@ -98,7 +98,7 @@ extension DeviceCatalog {
   /// For every category and subcategory a profile of the baseline has an identity for, and
   /// for every firmware version `0x00` through `0xFF` and none, each catalog's command set for
   /// that device is found as an app finds it, whatever its id, and summarized with the rules
-  /// InsteonCore applies when it sends (``CommandSetSafety``): the bytes it never sends, the
+  /// InsteonCore applies when it sends (`CommandSetSafety`): the bytes it never sends, the
   /// protected Set Operating Flags cmd2s it unlocks, the operating flag and flags parameter
   /// bits it keeps or never sets, the values it marks as operating flags bytes, the extended
   /// Set selectors that write guarded flags, and the commands it guards. This catalog is at
@@ -270,7 +270,7 @@ private func hex(_ byte: UInt8) -> String {
 
 }
 
-/// What the send-time rules of ``CommandSetSafety`` make of a command set, or of a device with
+/// What the send-time rules of `CommandSetSafety` make of a command set, or of a device with
 /// none, which only the byte floor guards.
 struct SafetySummary: Hashable {
 
