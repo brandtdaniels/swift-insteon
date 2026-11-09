@@ -136,6 +136,17 @@ struct CatalogCacheTests {
 
   // MARK: - Weakened guards
 
+  @Test func blamesTheBundledCopyWhenTheCachedOneCantBeChecked() {
+
+    #expect(CatalogText.cachedUnchecked(path: "/home/example/.cache/insteon/catalog.json", bundledIsMissing: true) == "insteon: warning: the cached "
+      + "Insteon device catalog at /home/example/.cache/insteon/catalog.json isn't used: the catalog the command ships with isn't next to it, "
+      + "so nothing can check the cached copy's guards. Scripts/install-insteon.sh installs the command with it.")
+    #expect(CatalogText.cachedUnchecked(path: "/home/example/.cache/insteon/catalog.json", bundledIsMissing: false) == "insteon: warning: the cached "
+      + "Insteon device catalog at /home/example/.cache/insteon/catalog.json isn't used: the catalog the command ships with couldn't be read, "
+      + "so nothing can check the cached copy's guards. Scripts/install-insteon.sh installs the command with it.")
+
+  }
+
   @Test func saysWhichGuardsAPublishedOrCachedCatalogWeakens() {
 
     let weakenings: [GuardWeakening] = [

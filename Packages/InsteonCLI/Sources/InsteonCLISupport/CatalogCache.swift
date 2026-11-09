@@ -262,6 +262,22 @@ public enum CatalogText {
 
   }
 
+  /// The warning when the cached copy can't be checked, since the bundled copy is missing or
+  /// can't be read, so it isn't used.
+  ///
+  /// - Parameters:
+  ///   - path: The cached copy's file.
+  ///   - bundledIsMissing: Whether the bundled copy is missing, rather than unreadable.
+  /// - Returns: The warning.
+  public static func cachedUnchecked(path: String, bundledIsMissing: Bool) -> String {
+
+    let problem: String = bundledIsMissing ? "isn't next to it" : "couldn't be read"
+
+    return "insteon: warning: the cached Insteon device catalog at \(path) isn't used: the catalog the command ships with \(problem), "
+      + "so nothing can check the cached copy's guards. Scripts/install-insteon.sh installs the command with it."
+
+  }
+
   /// Weakened guards as a list, such as `0x01/0x7A flagBits Get Operating Flags 0x00 kept bits 0x40`.
   static func list(_ weakenings: [GuardWeakening]) -> String {
 

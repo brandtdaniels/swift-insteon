@@ -128,7 +128,7 @@ struct GuardWeakeningTests {
 
   /// Every kind a fully stripped command set shows.
   static let everyKind: Set<GuardWeakening.Kind> = [
-    .sendsNeverSentBytes, .unlocksProtectedCommand, .flagBits, .parameterBits, .valueBits, .flagsQuery, .writeSelector, .commandGuard
+    .sendsNeverSentBytes, .unlocksProtectedCommand, .flagBits, .parameterBits, .valueBits, .flagsQuery, .writeSelector, .commandGuard, .rawWrite
   ]
 
   // MARK: - Refused
@@ -217,7 +217,7 @@ struct GuardWeakeningTests {
     // Its on, 0x00, stays never sent, as the guarded lockOn names it too.
     #expect(Self.kinds(Self.weakenings(Self.guarded(lockout: nil))) == [.flagBits, .valueBits])
     #expect(Self.kinds(Self.weakenings(Self.guarded(radioMute: .neverSet))).contains(.flagBits))
-    #expect(Self.kinds(Self.weakenings(Self.guarded(lockoutBit: nil))) == [.parameterBits, .valueBits])
+    #expect(Self.kinds(Self.weakenings(Self.guarded(lockoutBit: nil))) == [.parameterBits, .valueBits, .rawWrite])
     #expect(Self.kinds(Self.weakenings(Self.guarded(flagsQuery: nil))) == [.flagsQuery, .valueBits, .writeSelector])
     #expect(Self.kinds(Self.weakenings(Self.guarded(flagsQuery: OperatingFlagsRequest(rawValue: 0x05)))).contains(.flagsQuery))
 
@@ -227,7 +227,7 @@ struct GuardWeakeningTests {
 
     // The command is renamed and its bit loses its guard; bit guards follow the command's
     // bytes and the parameter's place, not its name.
-    #expect(Self.kinds(Self.weakenings(Self.guarded(lockoutBit: nil, writeFlagsName: "writeBits"))) == [.parameterBits, .valueBits])
+    #expect(Self.kinds(Self.weakenings(Self.guarded(lockoutBit: nil, writeFlagsName: "writeBits"))) == [.parameterBits, .valueBits, .rawWrite])
 
   }
 
@@ -261,8 +261,133 @@ struct GuardWeakeningTests {
 
     #expect(weaker.guardWeakenings(comparedTo: Self.baseline).map(\.description) == [
       "0x01/0x7A parameterBits cmd1 0x2E cmd2 0x00 D2 0x07 userData([3]) never-set bits 0x01",
-      "0x01/0x7A valueBits D8 never-set bits 0x01"
+      "0x01/0x7A rawWrite extended cmd1 0x2E cmd2 0x00 D2 0x07",
+      "0x01/0x7A valueBits flagsByte D8 never-set bits 0x01"
     ])
+
+  }
+
+  // MARK: - Refused: a byte written as given
+
+  /// A made-up switch whose flags byte, D7, which holds a kept radio mute bit, is written by
+  /// an extended command, `0x4B 0x00`, with the byte in D3.
+  static func written(
+    id: CommandSetID = "exampleWritten",
+    flagsQuery: OperatingFlagsRequest? = .operatingFlags,
+    write: SettingName? = "writeConfig",
+    hasWriteCommand: Bool = true,
+    decoy: Bool = false,
+    decoyWrite: SettingName? = nil,
+    selectorWrite: Bool = false,
+    unguardedFlag: Bool = false
+  ) -> CommandSet {
+
+    var values: [SettingValue] = [SettingValue(name: "configuration", summary: "The flags byte.", position: 7, label: "Configuration", write: write, flagsQuery: flagsQuery)]
+    var writes: [SettingWrite] = []
+
+    if decoy {
+
+      values.append(SettingValue(name: "decoy", summary: "The same byte.", position: 7, label: "Decoy", write: decoyWrite, flagsQuery: .operatingFlags))
+
+    }
+
+    if selectorWrite {
+
+      writes.append(SettingWrite(
+        name: "configuration",
+        summary: "Writes the flags byte.",
+        selector: 0x05,
+        isPerButton: false,
+        bytes: [SettingWrite.Byte(position: 3, value: "configuration")] + (decoy ? [SettingWrite.Byte(position: 4, value: "decoy")] : [])
+      ))
+
+    }
+
+    var flags: [OperatingFlag] = [OperatingFlag(name: "radioMute", summary: "Mutes the radio.", query: .operatingFlags, bit: 0x40, on: 0x7C, off: 0x7D, writeGuard: .keep)]
+
+    if unguardedFlag {
+
+      flags.append(OperatingFlag(name: "quiet", summary: "Quiets.", query: .operatingFlags, bit: 0x08, on: 0x0C, off: 0x0D))
+
+    }
+
+    return CommandSet(
+      id: id,
+      name: "Example written",
+      summary: "A flags byte an extended command writes.",
+      operatingFlags: flags,
+      extendedSettings: ExtendedSettings(isPerButton: false, values: values, writes: writes),
+      extendedCommands: hasWriteCommand
+        ? [DeviceExtendedCommand(name: "writeConfig", summary: "Writes the byte.", command: Command(command1: 0x4B, command2: 0x00), parameters: [MessageField(name: "configuration", summary: "The byte.", location: .userData([3]))])]
+        : []
+    )
+
+  }
+
+  /// The weakenings of the written switch's command set against its baseline.
+  static func writtenWeakenings(_ commands: CommandSet, baseline: CommandSet = written()) -> [GuardWeakening] {
+
+    catalog([profile([commands.id])], [commands]).guardWeakenings(comparedTo: catalog([profile([baseline.id])], [baseline]))
+
+  }
+
+  @Test func refusesAGuardedByteWhoseWriteIsUnlinked() {
+
+    // The value doesn't name the command that writes it, so a raw message with that command's
+    // bytes isn't refused.
+    #expect(Self.kinds(Self.writtenWeakenings(Self.written(write: nil))).contains(.rawWrite))
+
+  }
+
+  @Test func refusesAGuardedByteWhoseWriteCommandIsGone() {
+
+    #expect(Self.kinds(Self.writtenWeakenings(Self.written(hasWriteCommand: false))).contains(.rawWrite))
+
+  }
+
+  @Test func refusesAValueThatLosesItsGuardBehindADecoyAtItsPosition() {
+
+    // The value loses its flags query, and a decoy at D7 has it.
+    let weakenings: [GuardWeakening] = Self.writtenWeakenings(Self.written(flagsQuery: nil, decoy: true, decoyWrite: "writeConfig"))
+
+    #expect(weakenings.contains { (weakening: GuardWeakening) -> Bool in weakening.kind == .valueBits && weakening.detail.hasPrefix("configuration") })
+
+  }
+
+  @Test func refusesAValueThatLosesItsGuardBehindADecoyInTheSameSelectorWrite() {
+
+    let baseline: CommandSet = Self.written(selectorWrite: true)
+    let weakenings: [GuardWeakening] = Self.writtenWeakenings(Self.written(flagsQuery: nil, decoy: true, selectorWrite: true), baseline: baseline)
+
+    #expect(weakenings.contains { (weakening: GuardWeakening) -> Bool in weakening.kind == .valueBits && weakening.detail.hasPrefix("configuration") })
+
+  }
+
+  @Test func refusesACommandSetForADeviceTheBaselineGivesNone() {
+
+    // With no command set, an extended Set as given is refused; with one, it's sent unless a
+    // write it names holds guarded flags.
+    let baseline: DeviceCatalog = Self.catalog([Self.profile([])], [])
+    let empty = CommandSet(id: "exampleEmpty", name: "Example empty", summary: "No settings.")
+    let given: DeviceCatalog = Self.catalog([Self.profile(["exampleEmpty"])], [empty])
+
+    #expect(Self.kinds(given.guardWeakenings(comparedTo: baseline)) == [.extendedSetRefusal])
+
+  }
+
+  @Test func refusesADeviceOnlyTheCatalogKnowsWhenItUnlocksAProtectedByte() {
+
+    let other = DeviceProfile(
+      model: "9798",
+      name: "Example Loose",
+      identities: [DeviceIdentity(category: 0x01, subcategory: 0x7B)],
+      commandSets: [CommandSetEntry(commandSet: "exampleLoose", category: 0x01, subcategory: 0x7B)]
+    )
+    let weakenings: [GuardWeakening] = Self.catalog([Self.profile(["exampleGuarded"]), other], [Self.guarded(), Self.written(id: "exampleLoose", unguardedFlag: true)])
+      .guardWeakenings(comparedTo: Self.baseline)
+
+    #expect(weakenings.contains(GuardWeakening(category: 0x01, subcategory: 0x7B, firmwareVersion: nil, kind: .unlocksProtectedCommand, detail: "Set Operating Flags 0x0C")))
+    #expect(weakenings.allSatisfy { (weakening: GuardWeakening) -> Bool in weakening.subcategory == 0x7B })
 
   }
 
@@ -290,16 +415,13 @@ struct GuardWeakeningTests {
 
   }
 
-  @Test func acceptsADeviceOnlyTheCatalogHas() {
+  @Test func acceptsADeviceOnlyTheCatalogHasWithNoCommandSet() {
 
-    let other = DeviceProfile(
-      model: "9799",
-      name: "Example Other",
-      identities: [DeviceIdentity(category: 0x02, subcategory: 0x7A)],
-      commandSets: [CommandSetEntry(commandSet: "exampleStripped", category: 0x02, subcategory: 0x7A)]
-    )
+    // A profile with no command set leaves the device as guarded as one the catalog doesn't
+    // know; one with a command set doesn't, as an extended Set as given is then sent.
+    let other = DeviceProfile(model: "9799", name: "Example Other", identities: [DeviceIdentity(category: 0x02, subcategory: 0x7A)], commandSets: [])
 
-    #expect(Self.weakenings(Self.catalog([Self.profile(["exampleGuarded"]), other], [Self.guarded(), Self.stripped(id: "exampleStripped")])).isEmpty)
+    #expect(Self.weakenings(Self.catalog([Self.profile(["exampleGuarded"]), other], [Self.guarded()])).isEmpty)
 
   }
 
@@ -329,7 +451,8 @@ struct GuardWeakeningTests {
     }
 
     // The same download is used with a baseline it doesn't weaken.
-    let update = try await DeviceCatalogUpdater(client: files, guardBaseline: Self.catalog([], [])).update(replacing: nil, currentVersion: nil)
+    let unguarded: DeviceCatalog = try DeviceCatalog(json: Data(Self.catalogJSON(lockOnGuard: nil).utf8))
+    let update = try await DeviceCatalogUpdater(client: files, guardBaseline: unguarded).update(replacing: nil, currentVersion: nil)
 
     guard case .updated = update else {
 

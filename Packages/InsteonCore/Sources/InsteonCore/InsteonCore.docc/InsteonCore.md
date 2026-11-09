@@ -153,13 +153,15 @@ gives no command set, and for a command set that doesn't name the cmd2; it's sen
 the command set names it for a flag or command it doesn't guard, such as a keypad's button
 lock flag, turned on with `0x19`; a command set that names a protected cmd2 through an
 unguarded entry unlocks it. Poke is never sent. ``ProductCatalog`` refuses a saved or
-supplied catalog, and its update a downloaded one, unless, for every device the copy the
-package ships with knows and every firmware version, the command set the catalog gives the
-device is at least as strict as the bundled copy's by these same rules: it never sends every
-byte the bundled copy never sends, unlocks no protected cmd2 it keeps refused, guards every
-flag bit, flags parameter bit and value byte at least as strictly, keeps every flags byte's
-`SettingValue.flagsQuery`, and sends no command's bytes the bundled copy guards without a
-guard. A device only the loaded catalog knows isn't compared, and a `DeviceCatalog` handed to
+supplied catalog, and its update a downloaded one, unless, for every device either catalog
+knows and every firmware version, the command set the catalog gives the device is at least as
+strict as the bundled copy's by these same rules, as `DeviceCatalog.guardWeakenings(comparedTo:)`
+lists them: the bytes never sent, the protected cmd2s refused, the guarded bits of each flags
+query, flags parameter and value, each value's `SettingValue.flagsQuery`, the messages sent as
+given that are refused for writing guarded flags, and the guarded commands. A device the
+bundled copy doesn't know, or gives no command set, counts as one with none, so a catalog that
+gives such a device a command set is refused; it comes with an update of the bundled copy.
+Linking changes and keep-awake messages aren't compared, and a `DeviceCatalog` handed to
 ``DeviceNetwork/init(modem:catalog:snapshot:hub:timeout:clock:now:)`` is used as given. A flag is shown as writable when at least
 one of its states is sent. Every message a ``Device`` sends is checked by the bytes it carries,
 after any value is filled in: the Set Operating Flags bytes that turn a kept flag on or off or

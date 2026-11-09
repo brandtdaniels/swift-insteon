@@ -112,6 +112,18 @@ enum CatalogStore {
 
         return bundledCatalog().map { (catalog: ProductCatalog) -> Loaded in Loaded(catalog: catalog, source: .bundled) }
 
+      } catch ProductCatalogError.bundledCopyMissing {
+
+        Output.note(CatalogText.cachedUnchecked(path: catalogPath() ?? CatalogCache.relativePath, bundledIsMissing: true))
+
+        return nil
+
+      } catch ProductCatalogError.bundledCopyUnreadable {
+
+        Output.note(CatalogText.cachedUnchecked(path: catalogPath() ?? CatalogCache.relativePath, bundledIsMissing: false))
+
+        return nil
+
       } catch {
 
         // Unreadable, so the warning below says so.

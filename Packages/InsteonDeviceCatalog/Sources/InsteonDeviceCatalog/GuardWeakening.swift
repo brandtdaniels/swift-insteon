@@ -35,12 +35,20 @@ public struct GuardWeakening: Hashable, Sendable, CustomStringConvertible {
     case parameterBits
 
     /// Bits of an extended settings value's byte that a write of the value keeps or never sets
-    /// in the baseline, which the catalog guards less, such as when another command writes it.
+    /// in the baseline, which a write of a value of the same name or position guards less.
     case valueBits
 
     /// A value whose byte the baseline marks as an operating flags byte, which the catalog
     /// doesn't mark with the same query.
     case flagsQuery
+
+    /// An extended message, sent as given with an extended command's bytes, that the baseline
+    /// refuses because it writes a byte holding guarded flags, which the catalog would send.
+    case rawWrite
+
+    /// An extended Set sent as given, which the baseline refuses whatever its selector, as it
+    /// gives the device no command set, and the catalog would send.
+    case extendedSetRefusal
 
     /// An extended Set selector whose bytes hold guarded flags in the baseline but not in the
     /// catalog.
@@ -95,19 +103,29 @@ extension DeviceCatalog {
 
   /// Where this catalog would let an app send or write more to a device than a baseline does.
   ///
-  /// For every category and subcategory a profile of the baseline has an identity for, and
-  /// for every firmware version `0x00` through `0xFF` and none, each catalog's command set for
-  /// that device is found as an app finds it, whatever its id, and summarized with the rules
-  /// InsteonCore applies when it sends (`CommandSetSafety`): the bytes it never sends, the
-  /// protected Set Operating Flags cmd2s it unlocks, the operating flag and flags parameter
-  /// bits it keeps or never sets, the values it marks as operating flags bytes, the extended
-  /// Set selectors that write guarded flags, and the commands it guards. This catalog is at
-  /// least as strict when it never sends every byte the baseline never sends, unlocks no
-  /// protected cmd2 the baseline keeps refused, guards every bit the baseline guards at least
-  /// as strictly, marks every flags byte the baseline marks with the same query, and sends no
-  /// bytes the baseline guards from an unguarded command. A device the baseline knows that
-  /// this catalog gives no command set is compared as having no guards. A device only this
-  /// catalog knows isn't compared.
+  /// For every category and subcategory a profile of either catalog has an identity for, and
+  /// for every firmware version `0x00` through `0xFF` and none where a profile narrows by
+  /// firmware, each catalog's command set for that device is found as an app finds it,
+  /// whatever its id, and summarized with the rules InsteonCore applies when it sends
+  /// (`CommandSetSafety`). This catalog is at least as strict for the device when:
+  /// - it never sends every byte the baseline never sends, and unlocks no protected Set
+  ///   Operating Flags cmd2 the baseline keeps refused;
+  /// - it keeps or never sets every operating flag bit, per query, and every flags parameter
+  ///   bit, per command bytes, fixed bytes and parameter place, the baseline does;
+  /// - each value guards, as a write of it finds its bits, every bit the baseline's value of
+  ///   the same name or the same position guards, with the same flags query;
+  /// - it keeps every extended Set selector, and every extended command's bytes, that a
+  ///   message sent as given is refused for because it writes guarded flags;
+  /// - it sends no bytes of a command the baseline guards from an unguarded command;
+  /// - it refuses every extended Set sent as given where the baseline does, as for a device
+  ///   with no command set.
+  ///
+  /// A device either catalog gives no command set, or doesn't know, is compared as one with
+  /// none, which only the byte floor guards and to which no extended Set is sent as given. So
+  /// a catalog that gives a device the baseline doesn't know a command set, or one the
+  /// baseline gives none, is refused: such a device comes with an update of the bundled copy.
+  /// The comparison covers what the send path decides from a device's command set; profile
+  /// data such as linking changes and keep-awake messages isn't compared.
   ///
   /// - Parameter baseline: The catalog whose guards are the least this one gives, such as
   ///   ``DeviceCatalog/bundled()``.
@@ -116,7 +134,14 @@ extension DeviceCatalog {
   public func guardWeakenings(comparedTo baseline: DeviceCatalog) -> [GuardWeakening] {
 
     let firmwareVersions: [FirmwareVersion?] = [nil] + (UInt8.min...UInt8.max).map { (version: UInt8) -> FirmwareVersion? in FirmwareVersion(rawValue: version) }
-    let identities = baseline.indexedIdentities.sorted { (left, right) -> Bool in
+    // A device only this catalog knows is compared with a device the baseline doesn't know,
+    // which only the byte floor guards.
+    var seen: Set<[UInt8]> = []
+    let identities = (baseline.indexedIdentities + indexedIdentities).filter { (identity) -> Bool in
+
+      seen.insert([identity.category.rawValue, identity.subcategory.rawValue]).inserted
+
+    }.sorted { (left, right) -> Bool in
 
       (left.category.rawValue, left.subcategory.rawValue) < (right.category.rawValue, right.subcategory.rawValue)
 
@@ -282,9 +307,6 @@ struct SafetySummary: Hashable {
 
     case parameter(Command, [FixedUserDataByte], FieldLocation)
 
-    /// An extended settings value's byte, by its position, through whatever command writes it.
-    case value(Int)
-
   }
 
   /// A command by the bytes it sends: a standard message's cmd1 and its fixed cmd2, if any,
@@ -309,8 +331,32 @@ struct SafetySummary: Hashable {
   /// The never-set bits, by where they are.
   var neverSetBits: [BitsKey: UInt8] = [:]
 
-  /// The query of each value whose byte is an operating flags byte, by its position.
-  var flagsQueries: [Int: OperatingFlagsRequest] = [:]
+  /// What a write of one extended settings value guards, as the write finds it.
+  struct ValueGuard: Hashable {
+
+    let name: SettingName
+
+    let position: Int
+
+    /// The Get Operating Flags query the value's byte is the reply of, if any.
+    let flagsQuery: OperatingFlagsRequest?
+
+    let kept: UInt8
+
+    let neverSet: UInt8
+
+  }
+
+  /// Each extended settings value's guards, in the command set's order.
+  var values: [ValueGuard] = []
+
+  /// The extended commands, by their bytes and fixed bytes, that a message sent as given with
+  /// those bytes is refused for, because it writes a byte holding guarded flags.
+  var rawWriteRefusals: Set<CommandKey> = []
+
+  /// Whether an extended Set (cmd1 `0x2E`, D2 other than `0x00`) sent as given is refused
+  /// whatever its selector, as it is to a device with no command set.
+  var refusesExtendedSet: Bool = false
 
   /// The extended Set selectors that write a byte holding guarded flags.
   var guardedSelectors: Set<UInt8> = []
@@ -329,6 +375,8 @@ struct SafetySummary: Hashable {
     unlockedFloor = Set(CommandSetSafety.protectedSetOperatingFlags.subtracting(neverSent).map(\.command2))
 
     guard let commands else {
+
+      refusesExtendedSet = true
 
       return
 
@@ -383,16 +431,30 @@ struct SafetySummary: Hashable {
 
     for value in settings?.values ?? [] {
 
-      if let query = value.flagsQuery {
+      // The bits a write of the value guards, as the write itself finds them.
+      let bits: [CommandSetSafety.GuardedBit] = CommandSetSafety.guardedBits(in: value, of: commands)
+      let kept: UInt8 = bits.filter { (bit: CommandSetSafety.GuardedBit) -> Bool in bit.rule == .keep }.reduce(0) { $0 | $1.mask }
+      let neverSet: UInt8 = bits.filter { (bit: CommandSetSafety.GuardedBit) -> Bool in bit.rule == .neverSet }.reduce(0) { $0 | $1.mask }
 
-        flagsQueries[value.position] = query
+      values.append(ValueGuard(name: value.name, position: value.position, flagsQuery: value.flagsQuery, kept: kept, neverSet: neverSet))
+
+    }
+
+    // A message sent as given with an extended command's bytes is refused when it writes a
+    // guarded flag, as the send path finds it.
+    for command in commands.extendedCommands {
+
+      var userData = UserData()
+
+      for byte in command.fixedBytes {
+
+        userData[byte.position] = byte.value
 
       }
 
-      // The bits a write of the value guards, as the write itself finds them.
-      for bit in CommandSetSafety.guardedBits(in: value, of: commands) {
+      if CommandSetSafety.guardedFlagWritten(by: command.command, userData: userData, in: commands) != nil {
 
-        addBits(bit.mask, at: .value(value.position), rule: bit.rule)
+        rawWriteRefusals.insert(.extended(command.command, command.fixedBytes))
 
       }
 
@@ -483,8 +545,6 @@ struct SafetySummary: Hashable {
       case let .parameter(command, fixed, location):
         let bytes: String = fixed.map { (byte: FixedUserDataByte) -> String in " D\(byte.position) \(hex(byte.value))" }.joined()
         return (.parameterBits, "cmd1 \(hex(command.command1)) cmd2 \(hex(command.command2))\(bytes) \(location)")
-      case let .value(position):
-        return (.valueBits, "D\(position)")
       }
 
     }
@@ -517,9 +577,54 @@ struct SafetySummary: Hashable {
 
     }
 
-    for (position, query) in baseline.flagsQueries.sorted(by: { $0.key < $1.key }) where flagsQueries[position] != query {
+    // Each value is compared with the baseline's value of its name and every baseline value
+    // at its position, so a value at the same byte can't stand in for one that lost a guard.
+    for value in values {
 
-      findings.append(Finding(kind: .flagsQuery, detail: "D\(position) Get Operating Flags \(hex(query.rawValue))"))
+      for old in baseline.values where old.name == value.name || old.position == value.position {
+
+        let place: String = "\(value.name) D\(value.position)"
+
+        if let query = old.flagsQuery, value.flagsQuery != query {
+
+          findings.append(Finding(kind: .flagsQuery, detail: "\(place) Get Operating Flags \(hex(query.rawValue))"))
+
+        }
+
+        let missingKept: UInt8 = old.kept & ~value.kept
+        let missingNeverSet: UInt8 = old.neverSet & ~(value.neverSet | value.kept)
+
+        if missingKept != 0 {
+
+          findings.append(Finding(kind: .valueBits, detail: "\(place) kept bits \(hex(missingKept))"))
+
+        }
+
+        if missingNeverSet != 0 {
+
+          findings.append(Finding(kind: .valueBits, detail: "\(place) never-set bits \(hex(missingNeverSet))"))
+
+        }
+
+      }
+
+    }
+
+    for key in baseline.rawWriteRefusals.subtracting(rawWriteRefusals) {
+
+      if case let .extended(command, fixed) = key {
+
+        let bytes: String = fixed.map { (byte: FixedUserDataByte) -> String in " D\(byte.position) \(hex(byte.value))" }.joined()
+
+        findings.append(Finding(kind: .rawWrite, detail: "extended cmd1 \(hex(command.command1)) cmd2 \(hex(command.command2))\(bytes)"))
+
+      }
+
+    }
+
+    if baseline.refusesExtendedSet, !refusesExtendedSet {
+
+      findings.append(Finding(kind: .extendedSetRefusal, detail: "extended Set as given"))
 
     }
 

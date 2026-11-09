@@ -49,7 +49,7 @@ waits for an update of the package. A published version older than the app's cop
 version the app passes to ``DeviceCatalogUpdater/update(replacing:currentVersion:)``, or than
 the bundled copy is refused with ``DeviceCatalogUpdateError/olderThanCurrent(_:)``, so a stale
 cache or a rolled-back site never takes back newer data. A download that would let an app send
-or write more to a device the bundled copy knows, at any firmware version, than the bundled
+or write more to a device, at any firmware version, than the bundled
 copy does is refused with ``DeviceCatalogUpdateError/weakensGuards(_:)``;
 ``DeviceCatalog/guardWeakenings(comparedTo:)`` and ``DeviceCatalog/checkGuards(against:)``
 compare any catalog an app loads the same way. ``DeviceCatalog/init(json:)`` and
