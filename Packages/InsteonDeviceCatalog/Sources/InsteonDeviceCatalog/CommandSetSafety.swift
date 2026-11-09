@@ -449,13 +449,34 @@ package enum CommandSetSafety {
 
   }
 
-  /// Every route the command set describes, with the guards on each: the union of the guards of
-  /// every value written on the route, each with where it's read, and of every flags parameter
-  /// bit on it. A route with no guards is listed with none, so its selector is known.
+  /// Every route the command set describes, with the guards on each, by route.
   package static func routeGuards(in commands: CommandSet) -> [ByteRoute: [RouteGuard]] {
 
+    Dictionary(uniqueKeysWithValues: orderedRouteGuards(in: commands).map { (entry: (route: ByteRoute, guards: [RouteGuard])) -> (ByteRoute, [RouteGuard]) in (entry.route, entry.guards) })
+
+  }
+
+  /// Every route the command set describes, with the guards on each, in the command set's
+  /// order: its extended settings writes and their bytes, then its extended commands and their
+  /// parameters. A route's guards are the union of the guards of every value written on it,
+  /// each with where it's read, and of every flags parameter bit on it. A route with no guards
+  /// is listed with none, so its selector is known.
+  package static func orderedRouteGuards(in commands: CommandSet) -> [(route: ByteRoute, guards: [RouteGuard])] {
+
     var routes: [ByteRoute: [RouteGuard]] = [:]
+    var order: [ByteRoute] = []
     let settings: ExtendedSettings? = commands.extendedSettings
+
+    func list(_ route: ByteRoute) {
+
+      if routes[route] == nil {
+
+        routes[route] = []
+        order.append(route)
+
+      }
+
+    }
 
     func add(_ guardOnRoute: RouteGuard, to route: ByteRoute) {
 
@@ -473,7 +494,7 @@ package enum CommandSetSafety {
 
         let route: ByteRoute = .extendedSet(selector: write.selector, position: byte.position)
 
-        routes[route, default: []] += []
+        list(route)
 
         if let value = settings?.value(named: byte.value) {
 
@@ -498,7 +519,7 @@ package enum CommandSetSafety {
 
           let route: ByteRoute = .extendedCommand(command.command, command.fixedBytes, position: position)
 
-          routes[route, default: []] += []
+          list(route)
 
           // A value written through the parameter is read where the value is; a flags
           // parameter no value reads is reported nowhere.
@@ -520,22 +541,25 @@ package enum CommandSetSafety {
 
     }
 
-    return routes
+    return order.map { (route: ByteRoute) -> (route: ByteRoute, guards: [RouteGuard]) in (route, routes[route] ?? []) }
 
   }
 
   /// The routes a message writes, with the byte it writes on each: an extended Set's selector
-  /// routes, and the routes of every extended command with its cmd1, cmd2 and fixed bytes.
-  package static func routes(writtenBy command: Command, userData: UserData, in routeGuards: [ByteRoute: [RouteGuard]]) -> [(route: ByteRoute, byte: UInt8)] {
+  /// routes, and the routes of every extended command with its cmd1, cmd2 and fixed bytes, in
+  /// the command set's order, each with its guards.
+  package static func routes(writtenBy command: Command, userData: UserData, in routeGuards: [(route: ByteRoute, guards: [RouteGuard])]) -> [(route: ByteRoute, byte: UInt8, guards: [RouteGuard])] {
 
-    routeGuards.keys.compactMap { (route: ByteRoute) -> (route: ByteRoute, byte: UInt8)? in
+    routeGuards.compactMap { (entry: (route: ByteRoute, guards: [RouteGuard])) -> (route: ByteRoute, byte: UInt8, guards: [RouteGuard])? in
+
+      let route: ByteRoute = entry.route
 
       switch route {
       case let .extendedSet(selector, position):
-        return isExtendedSet(command, userData: userData) && userData[2] == selector ? (route, userData[position]) : nil
+        return isExtendedSet(command, userData: userData) && userData[2] == selector ? (route, userData[position], entry.guards) : nil
       case let .extendedCommand(routeCommand, fixed, position):
         let matches: Bool = routeCommand == command && fixed.allSatisfy { (byte: FixedUserDataByte) -> Bool in userData[byte.position] == byte.value }
-        return matches ? (route, userData[position]) : nil
+        return matches ? (route, userData[position], entry.guards) : nil
       }
 
     }
@@ -545,11 +569,13 @@ package enum CommandSetSafety {
   /// The guarded bit an extended message writes as its guard forbids, or `nil` if it writes
   /// none: every message a device is sent is checked here.
   ///
-  /// On every route the message writes, each guarded bit of every value or flags parameter on
-  /// it is checked against the byte written: a never-set bit may not be set, and a kept bit
-  /// must match the byte as the device reported it, by where the value is read. Without the
-  /// device's report, as for a message sent as given or a control action, or for a bit nothing
-  /// reports, any kept bit on a route the message writes refuses it.
+  /// With the device's report, as for a setting write, each guarded bit of every value or flags
+  /// parameter on every route the message writes is checked against the byte written: a
+  /// never-set bit may not be set, and a kept bit must match the byte as the device reported
+  /// it, by where the value is read, or refuses the message if nothing reports it. Without the
+  /// device's report, as for a message sent as given, a keep-awake message or a control
+  /// action, any guarded bit, kept or never set, on a route the message writes refuses it,
+  /// whatever the bit's value, and the first in the command set's order is named.
   ///
   /// - Parameters:
   ///   - command: The message's cmd1 and cmd2.
@@ -560,13 +586,18 @@ package enum CommandSetSafety {
   /// - Returns: The guarded bit, or `nil`.
   package static func guardViolation(by command: Command, userData: UserData, in commands: CommandSet, current: [Int: UInt8]?) -> GuardedBit? {
 
-    let guards: [ByteRoute: [RouteGuard]] = routeGuards(in: commands)
+    for (_, byte, guards) in routes(writtenBy: command, userData: userData, in: orderedRouteGuards(in: commands)) {
 
-    for (route, byte) in routes(writtenBy: command, userData: userData, in: guards) {
-
-      for guardOnRoute in guards[route] ?? [] {
+      for guardOnRoute in guards {
 
         for bit in guardOnRoute.bits {
+
+          // Without a report, a byte's bits can't be told from what the device holds.
+          guard let current else {
+
+            return bit
+
+          }
 
           switch bit.rule {
           case .neverSet:
@@ -576,7 +607,7 @@ package enum CommandSetSafety {
 
             }
           case .keep:
-            guard let position = guardOnRoute.readPosition, let reported = current?[position], reported & bit.mask == byte & bit.mask else {
+            guard let position = guardOnRoute.readPosition, let reported = current[position], reported & bit.mask == byte & bit.mask else {
 
               return bit
 

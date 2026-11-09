@@ -317,6 +317,37 @@ struct BundledCatalogDataTests {
 
   }
 
+  // MARK: - Messages sent as given
+
+  @Test func refusesAsGivenAMessageThatWritesAGuardedByteWhateverItsBits() throws {
+
+    // The thermostat's setFlags writes the byte that holds the never-set programming lock, in
+    // D4, and the open/close sensor's selector 0x05 writes its configuration byte, whose bit
+    // 0x80 is the programming lock, in D3: with those bits clear, each is still refused.
+    let tempLinc: CommandSet = try Self.commands("tempLinc")
+    let setFlags: DeviceExtendedCommand = try #require(tempLinc.extendedCommand(named: "setFlags"))
+    var flagsData = UserData()
+
+    for byte in setFlags.fixedBytes {
+
+      flagsData[byte.position] = byte.value
+
+    }
+
+    flagsData[4] = 0x00
+
+    #expect(CommandSetSafety.guardedFlagWritten(by: setFlags.command, userData: flagsData, in: tempLinc) != nil)
+
+    var configurationData = UserData()
+
+    configurationData[1] = 0x01
+    configurationData[2] = 0x05
+    configurationData[3] = 0x00
+
+    #expect(CommandSetSafety.guardedFlagWritten(by: Command(command1: 0x2E, command2: 0x00), userData: configurationData, in: try Self.commands("openCloseSensor")) != nil)
+
+  }
+
   // MARK: - Flags bytes
 
   @Test func marksTheValuesThatHoldTheOperatingFlagsByte() throws {

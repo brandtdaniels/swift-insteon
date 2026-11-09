@@ -167,9 +167,9 @@ aren't compared, and a `DeviceCatalog` handed to
 one of its states is sent. Every message a ``Device`` sends is checked by the bytes it carries,
 after any value is filled in, whatever setting, command or action built it: on every route an
 extended message writes a byte, a never-set bit isn't set, and a kept bit matches the byte the
-device reported where its value is read, or, for a message not built from that report, any kept
-bit refuses it; an extended Set whose selector the command set doesn't list, or to a device
-with no command set, is refused as given; and the Set Operating Flags bytes that turn a kept flag on or off or
+device reported where its value is read, or, for a message not built from that report, any
+guarded bit, kept or never set, refuses it; an extended Set whose selector the command set
+doesn't list, or to a device with no command set, is refused whatever built it; and the Set Operating Flags bytes that turn a kept flag on or off or
 a never-set flag on, and those of a command the catalog guards, are never sent under any name,
 and the operation throws
 ``DeviceControlError/unsupported(_:product:)``. A value a setting doesn't
