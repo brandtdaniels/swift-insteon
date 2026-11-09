@@ -32,6 +32,9 @@ public enum SendRefusalText {
       return "The Insteon device catalog marks this message as one never sent to \(product); insteon never sends it."
     case let .writesGuardedFlags(label):
       return "This message writes the byte that holds \(label), which only 'insteon device ADDRESS set' changes, once it has read the byte; insteon never sends it as given."
+    case let .unlistedExtendedSet(selector):
+      let hex: String = String(selector, radix: 16, uppercase: true)
+      return "The device's catalog entry lists no extended Set with selector \(hex.count == 1 ? "0" : "")\(hex), so which bytes it writes can't be told; insteon doesn't send it as given."
     case .extendedSetWithoutCommandSet:
       return "Without the device's catalog entry, insteon can't tell which bits an extended Set writes, such as one that locks linking, so it doesn't send one as given; run 'insteon device ADDRESS id' first, so the identity cache knows the device."
     case .notSerialCommand:

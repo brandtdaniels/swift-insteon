@@ -30,9 +30,11 @@ public struct GuardWeakening: Hashable, Sendable, CustomStringConvertible {
     /// guards less.
     case flagBits
 
-    /// Bits of an extended command's flags parameter the baseline keeps or never sets, which
-    /// the catalog guards less.
-    case parameterBits
+    /// Bits of a byte written on a route, an extended Set's selector and D position or an
+    /// extended command's bytes and D position, that the baseline keeps or never sets for a
+    /// value read at some D position or for a flags parameter, which the catalog guards less on
+    /// that route.
+    case writtenBits
 
     /// Bits of an extended settings value's byte that a write of the value keeps or never sets
     /// in the baseline, which a write of a value of the same name or position guards less.
@@ -41,18 +43,6 @@ public struct GuardWeakening: Hashable, Sendable, CustomStringConvertible {
     /// A value whose byte the baseline marks as an operating flags byte, which the catalog
     /// doesn't mark with the same query.
     case flagsQuery
-
-    /// An extended message, sent as given with an extended command's bytes, that the baseline
-    /// refuses because it writes a byte holding guarded flags, which the catalog would send.
-    case rawWrite
-
-    /// An extended Set sent as given, which the baseline refuses whatever its selector, as it
-    /// gives the device no command set, and the catalog would send.
-    case extendedSetRefusal
-
-    /// An extended Set selector whose bytes hold guarded flags in the baseline but not in the
-    /// catalog.
-    case writeSelector
 
     /// A command the baseline guards, whose bytes the catalog sends with no guard.
     case commandGuard
@@ -110,22 +100,23 @@ extension DeviceCatalog {
   /// (`CommandSetSafety`). This catalog is at least as strict for the device when:
   /// - it never sends every byte the baseline never sends, and unlocks no protected Set
   ///   Operating Flags cmd2 the baseline keeps refused;
-  /// - it keeps or never sets every operating flag bit, per query, and every flags parameter
-  ///   bit, per command bytes, fixed bytes and parameter place, the baseline does;
+  /// - it keeps or never sets every operating flag bit, per Get Operating Flags query, the
+  ///   baseline does;
+  /// - on every route a byte is written on, an extended Set's selector and D position or an
+  ///   extended command's bytes, fixed bytes and D position, it guards every bit the baseline
+  ///   guards there at least as strictly, for the same place the byte is read from, or for no
+  ///   place; these routes and their guards are what the send path checks every extended
+  ///   message against (`CommandSetSafety.guardViolation(by:userData:in:current:)`);
   /// - each value guards, as a write of it finds its bits, every bit the baseline's value of
   ///   the same name or the same position guards, with the same flags query;
-  /// - it keeps every extended Set selector, and every extended command's bytes, that a
-  ///   message sent as given is refused for because it writes guarded flags;
-  /// - it sends no bytes of a command the baseline guards from an unguarded command;
-  /// - it refuses every extended Set sent as given where the baseline does, as for a device
-  ///   with no command set.
+  /// - it sends no bytes of a command the baseline guards from an unguarded command.
   ///
   /// A device either catalog gives no command set, or doesn't know, is compared as one with
-  /// none, which only the byte floor guards and to which no extended Set is sent as given. So
-  /// a catalog that gives a device the baseline doesn't know a command set, or one the
-  /// baseline gives none, is refused: such a device comes with an update of the bundled copy.
-  /// The comparison covers what the send path decides from a device's command set; profile
-  /// data such as linking changes and keep-awake messages isn't compared.
+  /// none, which only the byte floor guards. The send path refuses an extended Set as given to
+  /// a device with no command set, and one whose selector a command set doesn't list, so a
+  /// command set refuses at least that much: a catalog may give a device a command set, as
+  /// long as it unlocks no protected cmd2 for it. Profile data, such as linking changes,
+  /// keep-awake messages and relay state holding, isn't compared.
   ///
   /// - Parameter baseline: The catalog whose guards are the least this one gives, such as
   ///   ``DeviceCatalog/bundled()``.
@@ -299,15 +290,25 @@ private func hex(_ byte: UInt8) -> String {
 /// none, which only the byte floor guards.
 struct SafetySummary: Hashable {
 
-  /// Where a guarded bit is: an operating flags byte by its query, or an extended command's
-  /// flags parameter by the command's bytes, its fixed bytes and the parameter's location.
+  /// Where a guarded operating flag bit is: its flags byte, by the Get Operating Flags query
+  /// that reads it, which Set Operating Flags writes.
   enum BitsKey: Hashable {
 
     case query(OperatingFlagsRequest)
 
-    case parameter(Command, [FixedUserDataByte], FieldLocation)
+  }
+
+  /// The kept and never-set bits of the bytes written on each route, by where the byte is
+  /// read, or `nil` for a flags parameter nothing reads.
+  struct Masks: Hashable {
+
+    var kept: UInt8 = 0
+
+    var neverSet: UInt8 = 0
 
   }
+
+  var routeMasks: [CommandSetSafety.ByteRoute: [Int?: Masks]] = [:]
 
   /// A command by the bytes it sends: a standard message's cmd1 and its fixed cmd2, if any,
   /// or an extended message's cmd1, cmd2 and fixed bytes.
@@ -350,17 +351,6 @@ struct SafetySummary: Hashable {
   /// Each extended settings value's guards, in the command set's order.
   var values: [ValueGuard] = []
 
-  /// The extended commands, by their bytes and fixed bytes, that a message sent as given with
-  /// those bytes is refused for, because it writes a byte holding guarded flags.
-  var rawWriteRefusals: Set<CommandKey> = []
-
-  /// Whether an extended Set (cmd1 `0x2E`, D2 other than `0x00`) sent as given is refused
-  /// whatever its selector, as it is to a device with no command set.
-  var refusesExtendedSet: Bool = false
-
-  /// The extended Set selectors that write a byte holding guarded flags.
-  var guardedSelectors: Set<UInt8> = []
-
   /// The commands guarded, and those not, by their bytes.
   var guardedCommands: Set<CommandKey> = []
 
@@ -375,8 +365,6 @@ struct SafetySummary: Hashable {
     unlockedFloor = Set(CommandSetSafety.protectedSetOperatingFlags.subtracting(neverSent).map(\.command2))
 
     guard let commands else {
-
-      refusesExtendedSet = true
 
       return
 
@@ -403,27 +391,27 @@ struct SafetySummary: Hashable {
 
     }
 
-    for command in commands.extendedCommands {
+    // The guards of every byte written, by route, as the send path decides them.
+    for (route, guards) in CommandSetSafety.routeGuards(in: commands) {
 
-      for parameter in command.parameters {
+      var byPosition: [Int?: Masks] = [:]
 
-        guard case let .flags(bits) = parameter.kind else {
+      for guardOnRoute in guards {
 
-          continue
+        for bit in guardOnRoute.bits {
 
-        }
-
-        for bit in bits {
-
-          if let rule = CommandSetSafety.rule(for: bit.writeGuard) {
-
-            addBits(bit.mask, at: .parameter(command.command, command.fixedBytes, parameter.location), rule: rule)
-
+          switch bit.rule {
+          case .keep:
+            byPosition[guardOnRoute.readPosition, default: Masks()].kept |= bit.mask
+          case .neverSet:
+            byPosition[guardOnRoute.readPosition, default: Masks()].neverSet |= bit.mask
           }
 
         }
 
       }
+
+      routeMasks[route] = byPosition
 
     }
 
@@ -437,42 +425,6 @@ struct SafetySummary: Hashable {
       let neverSet: UInt8 = bits.filter { (bit: CommandSetSafety.GuardedBit) -> Bool in bit.rule == .neverSet }.reduce(0) { $0 | $1.mask }
 
       values.append(ValueGuard(name: value.name, position: value.position, flagsQuery: value.flagsQuery, kept: kept, neverSet: neverSet))
-
-    }
-
-    // A message sent as given with an extended command's bytes is refused when it writes a
-    // guarded flag, as the send path finds it.
-    for command in commands.extendedCommands {
-
-      var userData = UserData()
-
-      for byte in command.fixedBytes {
-
-        userData[byte.position] = byte.value
-
-      }
-
-      if CommandSetSafety.guardedFlagWritten(by: command.command, userData: userData, in: commands) != nil {
-
-        rawWriteRefusals.insert(.extended(command.command, command.fixedBytes))
-
-      }
-
-    }
-
-    for write in settings?.writes ?? [] {
-
-      let isGuarded: Bool = write.bytes.contains { (byte: SettingWrite.Byte) -> Bool in
-
-        settings?.value(named: byte.value).map { (value: SettingValue) -> Bool in !CommandSetSafety.guardedBits(in: value, of: commands).isEmpty } ?? false
-
-      }
-
-      if isGuarded {
-
-        guardedSelectors.insert(write.selector)
-
-      }
 
     }
 
@@ -542,9 +494,43 @@ struct SafetySummary: Hashable {
       switch key {
       case let .query(query):
         return (.flagBits, "Get Operating Flags \(hex(query.rawValue))")
-      case let .parameter(command, fixed, location):
+      }
+
+    }
+
+    // A route's guards, by where its byte is read, are kept at least as strictly: a guard
+    // read elsewhere, or by no report, isn't the same guard.
+    for (route, byPosition) in baseline.routeMasks {
+
+      let place: String
+
+      switch route {
+      case let .extendedSet(selector, position):
+        place = "extended Set selector \(hex(selector)) D\(position)"
+      case let .extendedCommand(command, fixed, position):
         let bytes: String = fixed.map { (byte: FixedUserDataByte) -> String in " D\(byte.position) \(hex(byte.value))" }.joined()
-        return (.parameterBits, "cmd1 \(hex(command.command1)) cmd2 \(hex(command.command2))\(bytes) \(location)")
+        place = "cmd1 \(hex(command.command1)) cmd2 \(hex(command.command2))\(bytes) D\(position)"
+      }
+
+      for (readPosition, masks) in byPosition {
+
+        let new: Masks = routeMasks[route]?[readPosition] ?? Masks()
+        let read: String = readPosition.map { (position: Int) -> String in "read at D\(position)" } ?? "read nowhere"
+        let missingKept: UInt8 = masks.kept & ~new.kept
+        let missingNeverSet: UInt8 = masks.neverSet & ~(new.neverSet | new.kept)
+
+        if missingKept != 0 {
+
+          findings.append(Finding(kind: .writtenBits, detail: "\(place) \(read) kept bits \(hex(missingKept))"))
+
+        }
+
+        if missingNeverSet != 0 {
+
+          findings.append(Finding(kind: .writtenBits, detail: "\(place) \(read) never-set bits \(hex(missingNeverSet))"))
+
+        }
+
       }
 
     }
@@ -607,30 +593,6 @@ struct SafetySummary: Hashable {
         }
 
       }
-
-    }
-
-    for key in baseline.rawWriteRefusals.subtracting(rawWriteRefusals) {
-
-      if case let .extended(command, fixed) = key {
-
-        let bytes: String = fixed.map { (byte: FixedUserDataByte) -> String in " D\(byte.position) \(hex(byte.value))" }.joined()
-
-        findings.append(Finding(kind: .rawWrite, detail: "extended cmd1 \(hex(command.command1)) cmd2 \(hex(command.command2))\(bytes)"))
-
-      }
-
-    }
-
-    if baseline.refusesExtendedSet, !refusesExtendedSet {
-
-      findings.append(Finding(kind: .extendedSetRefusal, detail: "extended Set as given"))
-
-    }
-
-    for selector in baseline.guardedSelectors.subtracting(guardedSelectors).sorted() {
-
-      findings.append(Finding(kind: .writeSelector, detail: "extended Set selector \(hex(selector))"))
 
     }
 

@@ -656,7 +656,8 @@ struct GuardedBytesTests {
 
     let configuration = DirectMessage(to: device, command1: 0x2E, command2: 0x00, data: [0x01, 0x05, 0x00], hasChecksum: true)
 
-    await #expect(throws: SendRefusal.writesGuardedFlags(label: "Beeper lock")) {
+    // Without the device's report, the kept extended-only bit on the byte refuses it.
+    await #expect(throws: SendRefusal.writesGuardedFlags(label: "Extended only")) {
 
       _ = try await network.send(configuration, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
 
@@ -664,7 +665,7 @@ struct GuardedBytesTests {
 
     let flagsByte = DirectMessage(to: device, command1: 0x2E, command2: 0x00, data: [0x00, 0x07, 0x00], hasChecksum: true)
 
-    await #expect(throws: SendRefusal.writesGuardedFlags(label: "lockBit")) {
+    await #expect(throws: SendRefusal.writesGuardedFlags(label: "keepBit")) {
 
       _ = try await network.send(flagsByte, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
 

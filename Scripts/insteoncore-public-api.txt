@@ -276,6 +276,7 @@ case SendRefusal.neverSentToDevice(product:)
 case SendRefusal.notSerialCommand
 case SendRefusal.protected(_:)
 case SendRefusal.serialCommand(_:)
+case SendRefusal.unlistedExtendedSet(selector:)
 case SendRefusal.writesGuardedFlags(label:)
 case TwoWayLinking.always
 case TwoWayLinking.never

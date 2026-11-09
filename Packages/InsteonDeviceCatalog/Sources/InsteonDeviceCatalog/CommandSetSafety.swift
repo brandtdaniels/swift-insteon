@@ -391,36 +391,126 @@ package enum CommandSetSafety {
 
   }
 
-  /// The label of a guarded flag that an extended message sent as it's given writes, or `nil`
-  /// if it writes none the command set knows of.
-  ///
-  /// Such a message comes from a raw passthrough or the catalog's keep-awake message, so its
-  /// bytes aren't checked against what the device reported first, as
-  /// `Device.writeSetting(_:to:button:)` checks them: any guarded bit in a byte it writes
-  /// refuses it, whatever the bit's value. A byte is written by an extended Set whose D2 is the
-  /// selector of one of the command set's extended settings writes, and by an extended command
-  /// of the command set with the same cmd1 and cmd2 and fixed bytes: through the values it
-  /// writes, and through a flags parameter.
-  ///
-  /// - Parameters:
-  ///   - command: The message's cmd1 and cmd2.
-  ///   - userData: The message's user data.
-  ///   - commands: The device's command set.
-  /// - Returns: The label of a guarded flag, or `nil`.
-  package static func guardedFlagWritten(by command: Command, userData: UserData, in commands: CommandSet) -> String? {
+  /// Where a written byte goes: an extended Set's selector and the byte's D position, or an
+  /// extended command's cmd1, cmd2 and fixed bytes and the byte's D position. Every message
+  /// that writes a byte the command set describes writes it on one of these.
+  package enum ByteRoute: Hashable, Sendable {
 
+    case extendedSet(selector: UInt8, position: Int)
+
+    case extendedCommand(Command, [FixedUserDataByte], position: Int)
+
+  }
+
+  /// The guarded bits of a byte on a route, with where an extended Get reports the byte's
+  /// current value, or `nil` when nothing reports it.
+  package struct RouteGuard: Hashable, Sendable {
+
+    /// The D position of the extended Get reply that reports the byte, or `nil` if none does.
+    package let readPosition: Int?
+
+    /// The guarded bits.
+    package let bits: [GuardedBit]
+
+  }
+
+  /// The guarded operating flag bits a value's byte holds, as its `SettingValue.flagsQuery`
+  /// says.
+  package static func flagsQueryBits(of value: SettingValue, in commands: CommandSet) -> [GuardedBit] {
+
+    commands.flagsHeld(by: value).compactMap { (flag: OperatingFlag) -> GuardedBit? in
+
+      rule(for: flag).map { (flagRule: Rule) -> GuardedBit in GuardedBit(mask: flag.bit, label: SettingItem(flag: flag).label, rule: flagRule) }
+
+    }
+
+  }
+
+  /// The guarded bits of an extended command's flags parameter.
+  private static func parameterBits(of parameter: MessageField, in commands: CommandSet) -> [GuardedBit] {
+
+    guard case let .flags(fieldBits) = parameter.kind else {
+
+      return []
+
+    }
+
+    return fieldBits.compactMap { (bit: FieldBit) -> GuardedBit? in
+
+      rule(for: bit.writeGuard).map { (bitRule: Rule) -> GuardedBit in
+
+        let label: String = commands.operatingFlag(named: bit.name).map { (flag: OperatingFlag) -> String in SettingItem(flag: flag).label } ?? bit.name.rawValue
+
+        return GuardedBit(mask: bit.mask, label: label, rule: bitRule)
+
+      }
+
+    }
+
+  }
+
+  /// Every route the command set describes, with the guards on each: the union of the guards of
+  /// every value written on the route, each with where it's read, and of every flags parameter
+  /// bit on it. A route with no guards is listed with none, so its selector is known.
+  package static func routeGuards(in commands: CommandSet) -> [ByteRoute: [RouteGuard]] {
+
+    var routes: [ByteRoute: [RouteGuard]] = [:]
     let settings: ExtendedSettings? = commands.extendedSettings
 
-    // An extended Set (cmd1 0x2E, cmd2 0x00) with a selector in D2; 0x00 is the Get.
-    if command == Command(command1: 0x2E, command2: 0x00), userData[2] != 0x00, let settings {
+    func add(_ guardOnRoute: RouteGuard, to route: ByteRoute) {
 
-      for write in settings.writes where write.selector == userData[2] {
+      if !guardOnRoute.bits.isEmpty, routes[route]?.contains(guardOnRoute) != true {
 
-        for byte in write.bytes {
+        routes[route, default: []].append(guardOnRoute)
 
-          if let value = settings.value(named: byte.value), let bit = guardedBits(in: value, of: commands).first {
+      }
 
-            return bit.label
+    }
+
+    for write in settings?.writes ?? [] {
+
+      for byte in write.bytes {
+
+        let route: ByteRoute = .extendedSet(selector: write.selector, position: byte.position)
+
+        routes[route, default: []] += []
+
+        if let value = settings?.value(named: byte.value) {
+
+          add(RouteGuard(readPosition: value.position, bits: flagsQueryBits(of: value, in: commands)), to: route)
+
+        }
+
+      }
+
+    }
+
+    for command in commands.extendedCommands {
+
+      let written: [SettingValue] = (settings?.values ?? []).filter { (value: SettingValue) -> Bool in value.write == command.name }
+
+      for parameter in command.parameters {
+
+        let paramBits: [GuardedBit] = parameterBits(of: parameter, in: commands)
+        let values: [SettingValue] = written.filter { (value: SettingValue) -> Bool in Self.parameter(of: command, for: value) == parameter }
+
+        for position in parameter.positions {
+
+          let route: ByteRoute = .extendedCommand(command.command, command.fixedBytes, position: position)
+
+          routes[route, default: []] += []
+
+          // A value written through the parameter is read where the value is; a flags
+          // parameter no value reads is reported nowhere.
+          for value in values {
+
+            add(RouteGuard(readPosition: value.position, bits: flagsQueryBits(of: value, in: commands) + paramBits), to: route)
+
+          }
+
+          if values.isEmpty {
+
+            add(RouteGuard(readPosition: nil, bits: paramBits), to: route)
 
           }
 
@@ -430,37 +520,68 @@ package enum CommandSetSafety {
 
     }
 
-    for extended in commands.extendedCommands where extended.command == command {
+    return routes
 
-      let matches: Bool = extended.fixedBytes.allSatisfy { (byte: FixedUserDataByte) -> Bool in userData[byte.position] == byte.value }
+  }
 
-      guard matches else {
+  /// The routes a message writes, with the byte it writes on each: an extended Set's selector
+  /// routes, and the routes of every extended command with its cmd1, cmd2 and fixed bytes.
+  package static func routes(writtenBy command: Command, userData: UserData, in routeGuards: [ByteRoute: [RouteGuard]]) -> [(route: ByteRoute, byte: UInt8)] {
 
-        continue
+    routeGuards.keys.compactMap { (route: ByteRoute) -> (route: ByteRoute, byte: UInt8)? in
 
+      switch route {
+      case let .extendedSet(selector, position):
+        return isExtendedSet(command, userData: userData) && userData[2] == selector ? (route, userData[position]) : nil
+      case let .extendedCommand(routeCommand, fixed, position):
+        let matches: Bool = routeCommand == command && fixed.allSatisfy { (byte: FixedUserDataByte) -> Bool in userData[byte.position] == byte.value }
+        return matches ? (route, userData[position]) : nil
       }
 
-      for parameter in extended.parameters {
+    }
 
-        guard case let .flags(bits) = parameter.kind else {
+  }
 
-          continue
+  /// The guarded bit an extended message writes as its guard forbids, or `nil` if it writes
+  /// none: every message a device is sent is checked here.
+  ///
+  /// On every route the message writes, each guarded bit of every value or flags parameter on
+  /// it is checked against the byte written: a never-set bit may not be set, and a kept bit
+  /// must match the byte as the device reported it, by where the value is read. Without the
+  /// device's report, as for a message sent as given or a control action, or for a bit nothing
+  /// reports, any kept bit on a route the message writes refuses it.
+  ///
+  /// - Parameters:
+  ///   - command: The message's cmd1 and cmd2.
+  ///   - userData: The message's user data.
+  ///   - commands: The device's command set.
+  ///   - current: The bytes the device reported, by their D position in the extended Get
+  ///     reply, or `nil` if it wasn't asked.
+  /// - Returns: The guarded bit, or `nil`.
+  package static func guardViolation(by command: Command, userData: UserData, in commands: CommandSet, current: [Int: UInt8]?) -> GuardedBit? {
 
-        }
+    let guards: [ByteRoute: [RouteGuard]] = routeGuards(in: commands)
 
-        for bit in bits where rule(for: bit.writeGuard) != nil {
+    for (route, byte) in routes(writtenBy: command, userData: userData, in: guards) {
 
-          return commands.operatingFlag(named: bit.name).map { (flag: OperatingFlag) -> String in SettingItem(flag: flag).label } ?? bit.name.rawValue
+      for guardOnRoute in guards[route] ?? [] {
 
-        }
+        for bit in guardOnRoute.bits {
 
-      }
+          switch bit.rule {
+          case .neverSet:
+            if byte & bit.mask != 0 {
 
-      for value in settings?.values ?? [] where value.write == extended.name {
+              return bit
 
-        if let bit = guardedBits(in: value, of: commands).first {
+            }
+          case .keep:
+            guard let position = guardOnRoute.readPosition, let reported = current?[position], reported & bit.mask == byte & bit.mask else {
 
-          return bit.label
+              return bit
+
+            }
+          }
 
         }
 
@@ -469,6 +590,37 @@ package enum CommandSetSafety {
     }
 
     return nil
+
+  }
+
+  /// The label of a guarded flag that an extended message sent as it's given writes, or `nil`
+  /// if it writes none: ``guardViolation(by:userData:in:current:)`` with no report.
+  package static func guardedFlagWritten(by command: Command, userData: UserData, in commands: CommandSet) -> String? {
+
+    guardViolation(by: command, userData: userData, in: commands, current: nil)?.label
+
+  }
+
+  /// Whether a message is an extended Set whose selector the command set doesn't list, in an
+  /// extended settings write or an extended command's fixed D2, so which bytes it writes
+  /// can't be told.
+  package static func isUnlistedExtendedSet(_ command: Command, userData: UserData, in commands: CommandSet) -> Bool {
+
+    guard isExtendedSet(command, userData: userData) else {
+
+      return false
+
+    }
+
+    let selector: UInt8 = userData[2]
+    let isWrite: Bool = commands.extendedSettings?.writes.contains { (write: SettingWrite) -> Bool in write.selector == selector } ?? false
+    let isCommand: Bool = commands.extendedCommands.contains { (extended: DeviceExtendedCommand) -> Bool in
+
+      extended.command == command && extended.fixedBytes.contains { (byte: FixedUserDataByte) -> Bool in byte.position == 2 && byte.value == selector }
+
+    }
+
+    return !isWrite && !isCommand
 
   }
 
@@ -482,7 +634,7 @@ package enum CommandSetSafety {
 
   /// The parameter of an extended command a value is written into: the value's own, or else
   /// the command's only one, as `ValueChange.message(to:button:setting:to:current:)` chooses it.
-  private static func parameter(of command: DeviceExtendedCommand, for value: SettingValue) -> MessageField? {
+  package static func parameter(of command: DeviceExtendedCommand, for value: SettingValue) -> MessageField? {
 
     let named: MessageField? = command.parameters.first { (field: MessageField) -> Bool in field.name == value.name }
 

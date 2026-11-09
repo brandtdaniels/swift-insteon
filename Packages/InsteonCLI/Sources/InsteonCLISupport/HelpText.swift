@@ -439,8 +439,9 @@ public enum HelpText {
                           never sent. Nor is a message the device's catalog entry never
                           sends, an extended message that writes a byte holding a guarded
                           flag, which only 'set' writes, or an extended Set (2E with D2
-                          other than 00) to a device the catalog doesn't describe, since
-                          which bits it writes can't be told. Nothing forces them.
+                          other than 00) to a device the catalog doesn't describe or with a
+                          selector its catalog entry doesn't list, since which bits it
+                          writes can't be told. Nothing forces them.
 
     'on', 'off', 'instant', 'status', 'beep', 'links', 'settings' and 'set' use the device's
     identity, from the identity cache or, for a device the cache doesn't know, an ID Request

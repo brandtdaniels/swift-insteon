@@ -157,14 +157,19 @@ supplied catalog, and its update a downloaded one, unless, for every device eith
 knows and every firmware version, the command set the catalog gives the device is at least as
 strict as the bundled copy's by these same rules, as `DeviceCatalog.guardWeakenings(comparedTo:)`
 lists them: the bytes never sent, the protected cmd2s refused, the guarded bits of each flags
-query, flags parameter and value, each value's `SettingValue.flagsQuery`, the messages sent as
-given that are refused for writing guarded flags, and the guarded commands. A device the
-bundled copy doesn't know, or gives no command set, counts as one with none, so a catalog that
-gives such a device a command set is refused; it comes with an update of the bundled copy.
-Linking changes and keep-awake messages aren't compared, and a `DeviceCatalog` handed to
+query, the guarded bits of every byte written on each extended Set selector or extended
+command route, by where the byte is read, each value's guarded bits and
+`SettingValue.flagsQuery`, and the guarded commands. A device the bundled copy doesn't know,
+or gives no command set, counts as one with none, so a catalog may give it a command set that
+unlocks no protected cmd2. Linking changes, keep-awake messages and relay state holding
+aren't compared, and a `DeviceCatalog` handed to
 ``DeviceNetwork/init(modem:catalog:snapshot:hub:timeout:clock:now:)`` is used as given. A flag is shown as writable when at least
 one of its states is sent. Every message a ``Device`` sends is checked by the bytes it carries,
-after any value is filled in: the Set Operating Flags bytes that turn a kept flag on or off or
+after any value is filled in, whatever setting, command or action built it: on every route an
+extended message writes a byte, a never-set bit isn't set, and a kept bit matches the byte the
+device reported where its value is read, or, for a message not built from that report, any kept
+bit refuses it; an extended Set whose selector the command set doesn't list, or to a device
+with no command set, is refused as given; and the Set Operating Flags bytes that turn a kept flag on or off or
 a never-set flag on, and those of a command the catalog guards, are never sent under any name,
 and the operation throws
 ``DeviceControlError/unsupported(_:product:)``. A value a setting doesn't

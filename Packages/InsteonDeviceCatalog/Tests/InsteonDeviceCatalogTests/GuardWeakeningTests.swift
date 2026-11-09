@@ -127,9 +127,7 @@ struct GuardWeakeningTests {
   }
 
   /// Every kind a fully stripped command set shows.
-  static let everyKind: Set<GuardWeakening.Kind> = [
-    .sendsNeverSentBytes, .unlocksProtectedCommand, .flagBits, .parameterBits, .valueBits, .flagsQuery, .writeSelector, .commandGuard, .rawWrite
-  ]
+  static let everyKind: Set<GuardWeakening.Kind> = [.sendsNeverSentBytes, .unlocksProtectedCommand, .flagBits, .writtenBits, .valueBits, .flagsQuery, .commandGuard]
 
   // MARK: - Refused
 
@@ -215,10 +213,10 @@ struct GuardWeakeningTests {
   @Test func refusesEachGuardLostOnItsOwn() {
 
     // Its on, 0x00, stays never sent, as the guarded lockOn names it too.
-    #expect(Self.kinds(Self.weakenings(Self.guarded(lockout: nil))) == [.flagBits, .valueBits])
+    #expect(Self.kinds(Self.weakenings(Self.guarded(lockout: nil))) == [.flagBits, .valueBits, .writtenBits])
     #expect(Self.kinds(Self.weakenings(Self.guarded(radioMute: .neverSet))).contains(.flagBits))
-    #expect(Self.kinds(Self.weakenings(Self.guarded(lockoutBit: nil))) == [.parameterBits, .valueBits, .rawWrite])
-    #expect(Self.kinds(Self.weakenings(Self.guarded(flagsQuery: nil))) == [.flagsQuery, .valueBits, .writeSelector])
+    #expect(Self.kinds(Self.weakenings(Self.guarded(lockoutBit: nil))) == [.writtenBits, .valueBits])
+    #expect(Self.kinds(Self.weakenings(Self.guarded(flagsQuery: nil))) == [.flagsQuery, .valueBits, .writtenBits])
     #expect(Self.kinds(Self.weakenings(Self.guarded(flagsQuery: OperatingFlagsRequest(rawValue: 0x05)))).contains(.flagsQuery))
 
   }
@@ -227,7 +225,7 @@ struct GuardWeakeningTests {
 
     // The command is renamed and its bit loses its guard; bit guards follow the command's
     // bytes and the parameter's place, not its name.
-    #expect(Self.kinds(Self.weakenings(Self.guarded(lockoutBit: nil, writeFlagsName: "writeBits"))) == [.parameterBits, .valueBits, .rawWrite])
+    #expect(Self.kinds(Self.weakenings(Self.guarded(lockoutBit: nil, writeFlagsName: "writeBits"))) == [.writtenBits, .valueBits])
 
   }
 
@@ -243,7 +241,7 @@ struct GuardWeakeningTests {
       parameters: [MessageField(name: "flags", summary: "The flags.", location: .userData([3]), kind: .flags([FieldBit(mask: 0x01, name: "lockout")]))]
     )
 
-    #expect(Self.kinds(Self.weakenings(Self.guarded(flagsByteWrite: "writeFlagsTwin", extraExtendedCommands: [twin]))) == [.valueBits])
+    #expect(Self.kinds(Self.weakenings(Self.guarded(flagsByteWrite: "writeFlagsTwin", extraExtendedCommands: [twin]))) == [.valueBits, .writtenBits])
     // With the value still written through the guarded command, the twin changes nothing.
     #expect(Self.weakenings(Self.guarded(extraExtendedCommands: [twin])).isEmpty)
 
@@ -260,9 +258,8 @@ struct GuardWeakeningTests {
     }
 
     #expect(weaker.guardWeakenings(comparedTo: Self.baseline).map(\.description) == [
-      "0x01/0x7A parameterBits cmd1 0x2E cmd2 0x00 D2 0x07 userData([3]) never-set bits 0x01",
-      "0x01/0x7A rawWrite extended cmd1 0x2E cmd2 0x00 D2 0x07",
-      "0x01/0x7A valueBits flagsByte D8 never-set bits 0x01"
+      "0x01/0x7A valueBits flagsByte D8 never-set bits 0x01",
+      "0x01/0x7A writtenBits cmd1 0x2E cmd2 0x00 D2 0x07 D3 read at D8 never-set bits 0x01"
     ])
 
   }
@@ -335,13 +332,13 @@ struct GuardWeakeningTests {
 
     // The value doesn't name the command that writes it, so a raw message with that command's
     // bytes isn't refused.
-    #expect(Self.kinds(Self.writtenWeakenings(Self.written(write: nil))).contains(.rawWrite))
+    #expect(Self.kinds(Self.writtenWeakenings(Self.written(write: nil))).contains(.writtenBits))
 
   }
 
   @Test func refusesAGuardedByteWhoseWriteCommandIsGone() {
 
-    #expect(Self.kinds(Self.writtenWeakenings(Self.written(hasWriteCommand: false))).contains(.rawWrite))
+    #expect(Self.kinds(Self.writtenWeakenings(Self.written(hasWriteCommand: false))).contains(.writtenBits))
 
   }
 
@@ -363,15 +360,29 @@ struct GuardWeakeningTests {
 
   }
 
-  @Test func refusesACommandSetForADeviceTheBaselineGivesNone() {
+  @Test func acceptsACommandSetForADeviceTheBaselineGivesNone() {
 
-    // With no command set, an extended Set as given is refused; with one, it's sent unless a
-    // write it names holds guarded flags.
+    // The send path refuses an extended Set whose selector a command set doesn't list, so a
+    // command set refuses at least what no command set does.
     let baseline: DeviceCatalog = Self.catalog([Self.profile([])], [])
     let empty = CommandSet(id: "exampleEmpty", name: "Example empty", summary: "No settings.")
     let given: DeviceCatalog = Self.catalog([Self.profile(["exampleEmpty"])], [empty])
 
-    #expect(Self.kinds(given.guardWeakenings(comparedTo: baseline)) == [.extendedSetRefusal])
+    #expect(given.guardWeakenings(comparedTo: baseline).isEmpty)
+
+  }
+
+  @Test func refusesAGuardedValueWhoseReadPositionMoves() {
+
+    // The value is read at D12 rather than D7, so a kept bit would be compared with the wrong
+    // byte while the write still goes to D7's route.
+    var moved: CommandSet = Self.guarded()
+
+    moved.extendedSettings?.values[0].position = 12
+
+    let weakenings: [GuardWeakening] = Self.weakenings(moved)
+
+    #expect(weakenings.contains { (weakening: GuardWeakening) -> Bool in weakening.kind == .writtenBits && weakening.detail.contains("read at D7") })
 
   }
 

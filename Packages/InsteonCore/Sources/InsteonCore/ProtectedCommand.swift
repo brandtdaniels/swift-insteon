@@ -148,6 +148,10 @@ public enum SendRefusal: Error, Hashable, Sendable {
   /// locks linking, can't be told.
   case extendedSetWithoutCommandSet
 
+  /// The message is an extended Set whose selector, in D2, the device's command set doesn't
+  /// list, so which bytes it writes can't be told. The associated value is the selector.
+  case unlistedExtendedSet(selector: UInt8)
+
   /// The bytes don't start with Start of Text (`0x02`), as every serial command does.
   case notSerialCommand
 
