@@ -1,3 +1,5 @@
+import InsteonCore
+
 /// The environment variables the `insteon` command reads.
 public enum EnvironmentKey {
 
@@ -122,6 +124,32 @@ public enum ModemTarget: Hashable, Sendable {
     }
 
     return port
+
+  }
+
+  /// Where to connect for a Hub: its host, on the Hub's port, 25105, when no port is given.
+  ///
+  /// The Hub's password goes only to a private IPv4 address, as
+  /// `HubLocation.acceptsCredentials` says. `ModemSession.withHub` refuses any other too;
+  /// refusing here, before connecting, keeps the command from naming a host the password
+  /// never reaches.
+  ///
+  /// - Parameters:
+  ///   - host: The Hub's host.
+  ///   - port: The Hub's port, or `nil` for the Hub's port.
+  /// - Returns: The Hub's location.
+  /// - Throws: `HubAddressRefused` for a host that isn't a private IPv4 address.
+  public static func hubLocation(host: String, port: Int?) throws(HubAddressRefused) -> HubLocation {
+
+    let location = HubLocation(host: host, port: port ?? HubLocation.defaultPort)
+
+    guard location.acceptsCredentials else {
+
+      throw HubAddressRefused(host: host)
+
+    }
+
+    return location
 
   }
 

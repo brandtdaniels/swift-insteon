@@ -37,15 +37,9 @@ enum CommandSession {
     switch target {
     case let .hub(host, port):
       let credentials = try HubCredentials(environment: environment)
-      let hubPort: Int = port ?? HubLocation.defaultPort
-
-      // The password goes only to a private IPv4 address; ModemSession.withHub refuses any
-      // other, and saying so here keeps the note below from naming a host it never reaches.
-      guard HubLocation(host: host, port: hubPort).acceptsCredentials else {
-
-        throw HubAddressRefused(host: host)
-
-      }
+      // Refused before connecting, so the note below never names a host the password doesn't
+      // reach.
+      let hubPort: Int = try ModemTarget.hubLocation(host: host, port: port).port
 
       // The address can come from the environment file, so say where the password is going.
       Output.note("Connecting to the Hub at \(host):\(hubPort)")
