@@ -25,6 +25,25 @@ public struct Invocation: Hashable, Sendable {
   /// The subcommand to run.
   public var subcommand: Subcommand
 
+  /// The device the subcommand is for, if it's for one: `insteon device ADDRESS`, and
+  /// `insteon link`, `unlink` and `remove` with an address.
+  public var device: InsteonAddress? {
+
+    switch subcommand {
+    case let .device(address, _):
+      address
+    case let .link(options):
+      options.device
+    case let .unlink(options):
+      options.device
+    case let .remove(options):
+      options.device
+    default:
+      nil
+    }
+
+  }
+
   /// Creates an invocation.
   ///
   /// - Parameters:

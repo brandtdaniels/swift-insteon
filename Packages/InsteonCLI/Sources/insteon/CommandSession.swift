@@ -58,18 +58,13 @@ enum CommandSession {
 
       } catch {
 
-        switch HubFailure(error) {
-        case .stoppedAnswering?:
-          // The Hub answered earlier in the run, so it's busy rather than gone, most likely
-          // with a device that doesn't answer; 'insteon discover' wouldn't help.
-          throw CommandFailure(description: HubText.stoppedAnswering(host: host, port: hubPort, device: device(of: invocation)))
-        case .unanswered?:
-          // URLSession's own message, such as "The request timed out.", doesn't say it was the
-          // Hub.
-          throw CommandFailure(description: HubText.unanswered(host: host, port: hubPort))
-        case nil:
-          throw error
+        if let failure = HubText.failure(error, host: host, port: hubPort, device: invocation.device) {
+
+          throw CommandFailure(description: failure)
+
         }
+
+        throw error
 
       }
     case let .serial(path):
@@ -88,24 +83,6 @@ enum CommandSession {
 
       throw ConfigurationError.serialUnavailable
       #endif
-    }
-
-  }
-
-  /// The device a command line's command is for, if it's for one.
-  private static func device(of invocation: Invocation) -> InsteonAddress? {
-
-    switch invocation.subcommand {
-    case let .device(address, _):
-      return address
-    case let .link(options):
-      return options.device
-    case let .unlink(options):
-      return options.device
-    case let .remove(options):
-      return options.device
-    default:
-      return nil
     }
 
   }

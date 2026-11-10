@@ -37,6 +37,33 @@ public enum HubText {
 
   }
 
+  /// The message for a Hub that stopped answering partway through a command, or never
+  /// answered, or `nil` for any other error, which describes itself.
+  ///
+  /// - Parameters:
+  ///   - error: The error the session with the Hub threw.
+  ///   - host: The Hub's host.
+  ///   - port: The Hub's port.
+  ///   - device: The device the command was for, if it was for one, which a Hub that stopped
+  ///     answering is most likely waiting on.
+  /// - Returns: The message, or `nil`.
+  public static func failure(_ error: any Error, host: String, port: Int, device: InsteonAddress?) -> String? {
+
+    switch HubFailure(error) {
+    case .stoppedAnswering?:
+      // The Hub answered earlier in the run, so it's busy rather than gone, most likely
+      // with a device that doesn't answer; 'insteon discover' wouldn't help.
+      stoppedAnswering(host: host, port: port, device: device)
+    case .unanswered?:
+      // URLSession's own message, such as "The request timed out.", doesn't say it was the
+      // Hub.
+      unanswered(host: host, port: port)
+    case nil:
+      nil
+    }
+
+  }
+
   /// What `insteon discover --identify` says about a Hub it asked, or didn't ask, for Get IM
   /// Info, without its credentials, or `nil` when there's nothing to say: the Hub was
   /// identified, which the table shows, or the person declined.
