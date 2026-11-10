@@ -5,8 +5,8 @@ import InsteonCore
 ///
 /// The reusable parts, running local and Insteon Connect discovery, stopping at the first Hub,
 /// merging duplicates, and the password policy for confirming a Hub, live in InsteonCore's
-/// `HubSearch`. This command is the argument parsing, the progress and prompts, and the output
-/// around them.
+/// `HubSearch`, and the order of the searches and when they fail in InsteonCLISupport's
+/// `HubDiscovery`. This command is the progress and prompts, and the output around them.
 enum DiscoverCommand {
 
   /// A Hub as `--json` prints it. The identity is left out when it isn't known.
@@ -49,73 +49,14 @@ enum DiscoverCommand {
 
     let names = ProductNames()
     let search = HubSearch()
-    var hubs: [HubCandidate] = []
-    var failures: [any Error] = []
-
-    if options.asksInsteonConnect {
-
-      Output.note("Asking Insteon Connect...")
-
-      do {
-
-        for hub in try await search.insteonConnectHubs() {
-
-          HubSearch.merge(hub, into: &hubs)
-
-        }
-
-      } catch {
-
-        Output.note("Insteon Connect: \(Names.message(for: error))")
-        failures.append(error)
-
-      }
-
-    }
-
-    if options.searchesLocalNetwork {
-
-      do {
-
-        let found = try await searchLocalNetwork(search, stoppingAtFirst: !options.searchesAllAddresses)
-
-        for hub in found {
-
-          HubSearch.merge(hub, into: &hubs)
-
-        }
-
-        // Insteon Connect sees the network's public IP address, so it's only suggested.
-        if found.isEmpty, !options.asksInsteonConnect {
-
-          Output.note(
-            "No Hub answered on the local network. 'insteon discover --insteon-connect' asks Insteon Connect "
-              + "for the Hubs that reported from this network, which shares the network's public IP address with Insteon."
-          )
-
-        }
-
-      } catch let error as CancellationError {
-
-        throw error
-
-      } catch {
-
-        Output.note("Local network: \(Names.message(for: error))")
-        failures.append(error)
-
-      }
-
-    }
-
-    // Fail only when every way of looking failed, rather than reporting no Hubs.
-    let ways = (options.asksInsteonConnect ? 1 : 0) + (options.searchesLocalNetwork ? 1 : 0)
-
-    if let failure = failures.last, failures.count == ways {
-
-      throw failure
-
-    }
+    var hubs: [HubCandidate] = try await HubDiscovery.search(
+      options,
+      insteonConnect: { () async throws -> [HubCandidate] in try await search.insteonConnectHubs() },
+      localNetwork: { (stoppingAtFirst: Bool) async throws -> [HubCandidate] in try await searchLocalNetwork(search, stoppingAtFirst: stoppingAtFirst) },
+      merge: { (hub: HubCandidate, hubs: inout [HubCandidate]) -> Void in HubSearch.merge(hub, into: &hubs) },
+      note: Output.note,
+      message: Names.message(for:)
+    )
 
     if let credentials {
 
