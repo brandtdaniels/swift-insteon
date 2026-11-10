@@ -58,7 +58,9 @@ public enum SelfTestCheckKind: String, Hashable, Sendable, CaseIterable {
 
   /// The device and the modem hold both records of each link between them: each link the
   /// catalog gives the device to a Hub, or, without those, each link either side's records
-  /// show, of which there must be at least one.
+  /// show, of which there must be at least one. A link the catalog says covers every group
+  /// the device controls while an operating flag is in a state gets a check of its own for
+  /// each of those groups, with the group in ``SelfTestCheck/group``.
   case modemLinks
 
   /// Every record of the device names the modem or a device the modem is linked to.
@@ -132,11 +134,38 @@ public enum SelfTestFix: Hashable, Sendable {
 
 }
 
+/// The ALL-Link group a ``SelfTestCheck`` is about.
+public struct SelfTestGroup: Hashable, Sendable {
+
+  /// The group's number.
+  public var number: Int
+
+  /// The group's name in the Insteon device catalog, such as `"Button A"`, or `nil` if the
+  /// catalog gives none.
+  public var name: String?
+
+  /// Creates a group.
+  ///
+  /// - Parameters:
+  ///   - number: The group's number.
+  ///   - name: The group's name in the catalog, if it gives one.
+  public init(number: Int, name: String?) {
+
+    self.number = number
+    self.name = name
+
+  }
+
+}
+
 /// One check of a ``SelfTestReport``.
 public struct SelfTestCheck: Hashable, Sendable {
 
   /// Which check it is.
   public var kind: SelfTestCheckKind
+
+  /// The group the check is about, or `nil` for a check of the whole device.
+  public var group: SelfTestGroup?
 
   /// How it came out.
   public var outcome: SelfTestOutcome
@@ -154,19 +183,30 @@ public struct SelfTestCheck: Hashable, Sendable {
   ///   - outcome: How it came out.
   ///   - detail: What the check found.
   ///   - fixes: What may put it right. Defaults to none.
-  public init(kind: SelfTestCheckKind, outcome: SelfTestOutcome, detail: String, fixes: [SelfTestFix] = []) {
+  ///   - group: The group the check is about. Defaults to `nil`, the whole device.
+  public init(kind: SelfTestCheckKind, outcome: SelfTestOutcome, detail: String, fixes: [SelfTestFix] = [], group: SelfTestGroup? = nil) {
 
     self.kind = kind
     self.outcome = outcome
     self.detail = detail
     self.fixes = fixes
+    self.group = group
 
   }
 
-  /// The check's title, from its kind.
+  /// The check's title, from its kind and its group, such as
+  /// `"Links with the modem, group 2 (Button B)"`.
   public var title: String {
 
-    kind.title
+    guard let group else {
+
+      return kind.title
+
+    }
+
+    let name: String = group.name.map { (name: String) -> String in " (\(name))" } ?? ""
+
+    return "\(kind.title), group \(group.number)\(name)"
 
   }
 

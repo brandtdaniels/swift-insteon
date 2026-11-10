@@ -523,6 +523,227 @@ struct SelfTestTests {
 
   }
 
+  // MARK: - Groups one link covers
+
+  static let sensor = InsteonAddress(0x3C, 0x4D, 0x70)
+
+  static let sensorIdentity = ReportedIdentity(category: 0x10, subcategory: 0x70, firmwareVersion: 0x45)
+
+  static let sensorCommands = CommandSet(
+    id: "exampleSensor",
+    name: "Example sensor",
+    summary: "A sensor whose one link may cover every group it controls.",
+    operatingFlags: [
+      OperatingFlag(name: "coverEveryGroup", summary: "One link covers every group.", query: .operatingFlags, bit: 0x40, label: "Cover every group"),
+      OperatingFlag(name: "useSpare", summary: "Puts the spare group in use.", query: .operatingFlags, bit: 0x01, label: "Use spare")
+    ]
+  )
+
+  static let coveringLeg = DeviceLifecycle.HubLinking.Leg(
+    modemRole: .responder,
+    modemGroup: 0x01,
+    deviceGroup: 0x01,
+    allGroupsWhen: DeviceProfile.Group.Condition(flag: "coverEveryGroup", isSet: true)
+  )
+
+  /// A sensor that controls groups 1, 2 and 4, and group 3 while its spare is in use, and
+  /// whose one link from a Hub covers them all while a flag is set.
+  static let sensorGroups: [DeviceProfile.Group] = [
+    DeviceProfile.Group(number: 1, name: "Open", role: .controller),
+    DeviceProfile.Group(number: 2, name: "Shut", role: .controller),
+    DeviceProfile.Group(number: 3, name: "Spare", role: .controller, activeWhen: DeviceProfile.Group.Condition(flag: "useSpare", isSet: true)),
+    DeviceProfile.Group(number: 4, name: "Pulse", role: .controller)
+  ]
+
+  static let sensorCatalog = DeviceCatalog(
+    profiles: [
+      DeviceProfile(
+        model: "9190",
+        name: "Example Sensor",
+        identities: [DeviceIdentity(category: 0x10, subcategory: 0x70)],
+        commandSets: [CommandSetEntry(commandSet: "exampleSensor", category: 0x10, subcategory: 0x70)],
+        groups: sensorGroups,
+        lifecycle: DeviceLifecycle(fromHub: DeviceLifecycle.HubLinking(legs: [coveringLeg]))
+      )
+    ],
+    commandSets: [sensorCommands]
+  )
+
+  /// A modem and the sensor, its flags as given, linked with the modem as responder in each
+  /// group given.
+  func sensorModem(flags: UInt8, linkedGroups: [AllLinkGroupNumber]) async -> InMemoryModem {
+
+    let modem = InMemoryModem()
+    await modem.setEngine(.i2cs, of: Self.sensor)
+    await modem.setIdentity(pressed(Self.sensor, Self.sensorIdentity))
+    await modem.setOperatingFlags(flags, of: Self.sensor)
+    await modem.setModemRecords(linkedGroups.map { (group: AllLinkGroupNumber) -> AllLinkRecord in responds(to: Self.sensor, group: group) })
+
+    var records: [UInt16: AllLinkRecord] = [:]
+
+    for (index, group) in linkedGroups.enumerated() {
+
+      records[0x0FFF - UInt16(index * 8)] = controls(modemAddress, group: group)
+
+    }
+
+    await modem.setDatabase(records, of: Self.sensor)
+
+    return modem
+
+  }
+
+  func linkChecks(_ report: SelfTestReport) -> [SelfTestCheck] {
+
+    report.checks.filter { (check: SelfTestCheck) -> Bool in check.kind == .modemLinks }
+
+  }
+
+  @Test func checksEachGroupALinkCoversWhileItsFlagIsSet() async throws {
+
+    let modem: InMemoryModem = await sensorModem(flags: 0x40, linkedGroups: [0x01, 0x02, 0x04])
+    let log: OperationLog = await OperationLog.logging(modem)
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.sensorCatalog).device(Self.sensor).selfTest()
+    let links: [SelfTestCheck] = linkChecks(report)
+
+    // The spare group isn't in use, so it isn't checked.
+    #expect(report.checks.map(\.kind) == [.answers, .catalog, .productKey, .status, .linkDatabase, .modemLinks, .modemLinks, .modemLinks, .leftoverRecords, .operatingFlags])
+    #expect(links.map(\.group) == [SelfTestGroup(number: 1, name: "Open"), SelfTestGroup(number: 2, name: "Shut"), SelfTestGroup(number: 4, name: "Pulse")])
+    #expect(links.map(\.title) == ["Links with the modem, group 1 (Open)", "Links with the modem, group 2 (Shut)", "Links with the modem, group 4 (Pulse)"])
+    #expect(links.map(\.outcome) == [.passed, .passed, .passed])
+    #expect(links[1].detail == "The device and the modem hold both records of group 2.")
+    #expect(report.check(.operatingFlags)?.group == nil)
+    // The flags are read once, for both checks.
+    #expect(log.standardCommands.filter { (command1: UInt8) -> Bool in command1 == 0x1F }.count == 1)
+
+  }
+
+  @Test func warnsOfGroupsALinkDoesntCoverWhileItsFlagIsClear() async throws {
+
+    let modem: InMemoryModem = await sensorModem(flags: 0x00, linkedGroups: [0x01])
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.sensorCatalog).device(Self.sensor).selfTest()
+    let links: [SelfTestCheck] = linkChecks(report)
+
+    #expect(links.map { (check: SelfTestCheck) -> Int? in check.group?.number } == [1, 2, 4])
+    #expect(links.map(\.outcome) == [.passed, .warning, .warning])
+    #expect(links[1].detail == "Cover every group is off, so the Insteon device catalog's link covers group 1 alone, "
+      + "and this group is missing the device's controller record for group 2, the modem's responder record for group 2.")
+    #expect(links[1].fixes.isEmpty)
+    #expect(report.outcome == .warning)
+
+  }
+
+  @Test func failsAGroupALinkShouldCoverWhileItsFlagIsSet() async throws {
+
+    // The spare is in use, and the link covers it, but neither side holds its records.
+    let modem: InMemoryModem = await sensorModem(flags: 0x41, linkedGroups: [0x01, 0x02, 0x04])
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.sensorCatalog).device(Self.sensor).selfTest()
+    let links: [SelfTestCheck] = linkChecks(report)
+
+    #expect(links.map { (check: SelfTestCheck) -> Int? in check.group?.number } == [1, 2, 3, 4])
+    #expect(links.map(\.outcome) == [.passed, .passed, .failed, .passed])
+    #expect(links[2].detail == "The Insteon device catalog's link covers this group while Cover every group is on, and it is, "
+      + "but a record is missing: the device's controller record for group 3, the modem's responder record for group 3.")
+    #expect(links[2].fixes == [.link(modemRole: nil, group: nil), .checkSignal])
+    #expect(report.outcome == .failed)
+
+  }
+
+  /// The sensor's covering leg.
+  var sensorLeg: HubLinkingLeg {
+
+    HubLinkingLeg(
+      device: Self.sensor,
+      index: 0,
+      count: 1,
+      modemRole: .responder,
+      modemGroup: 0x01,
+      deviceGroup: 0x01,
+      allGroupsWhen: DeviceProfile.Group.Condition(flag: "coverEveryGroup", isSet: true)
+    )
+
+  }
+
+  func controllerRecord(_ group: AllLinkGroupNumber) -> LinkRecord {
+
+    LinkRecord(isController: true, isInUse: true, group: group, address: modemAddress, data: [0, 0, 0])
+
+  }
+
+  func modemResponderRecord(_ group: AllLinkGroupNumber) -> LinkRecord {
+
+    LinkRecord(isController: false, isInUse: true, group: group, address: Self.sensor, data: [0, 0, 0])
+
+  }
+
+  @Test func warnsOfAGroupALinkMayCoverWhenItsFlagWasntRead() {
+
+    let checks: [SelfTestCheck] = Device.linksChecks(
+      device: Self.sensor,
+      modem: modemAddress,
+      deviceRecords: [controllerRecord(0x01), controllerRecord(0x02), controllerRecord(0x04)],
+      modemRecords: [modemResponderRecord(0x01), modemResponderRecord(0x04)],
+      legs: [sensorLeg],
+      groups: Self.sensorGroups,
+      flags: Device.FlagStates(nil, commandSet: Self.sensorCommands)
+    )
+
+    #expect(checks.map(\.outcome) == [.passed, .warning, .passed])
+    #expect(checks[1].detail == "A record is missing, and whether the Insteon device catalog's link covers this group depends on Cover every group, "
+      + "which wasn't read: the modem's responder record for group 2.")
+    #expect(checks[1].fixes == [.readAgain])
+
+  }
+
+  @Test func failsTheGroupALinkIsMadeInWhateverItsFlag() {
+
+    for isSet in [true, false] {
+
+      let checks: [SelfTestCheck] = Device.linksChecks(
+        device: Self.sensor,
+        modem: modemAddress,
+        deviceRecords: [],
+        modemRecords: [modemResponderRecord(0x01)],
+        legs: [sensorLeg],
+        groups: Self.sensorGroups,
+        flags: Device.FlagStates(states: ["coverEveryGroup": isSet], labels: ["coverEveryGroup": "Cover every group"])
+      )
+
+      #expect(checks.first?.group == SelfTestGroup(number: 1, name: "Open"))
+      #expect(checks.first?.outcome == .failed)
+      #expect(checks.first?.detail == "A link is missing a record, so it works one way only, or not at all: the device's controller record for group 1.")
+      #expect(checks.first?.fixes == [.link(modemRole: nil, group: nil), .checkSignal])
+
+    }
+
+  }
+
+  @Test func checksTheCatalogsOtherLegsTogetherBeforeEachCoveredGroup() {
+
+    let controllerLeg = HubLinkingLeg(device: Self.sensor, index: 0, count: 2, modemRole: .controller, modemGroup: 0x00, deviceGroup: 0x01)
+    var covering: HubLinkingLeg = sensorLeg
+    covering.index = 1
+    covering.count = 2
+
+    let checks: [SelfTestCheck] = Device.linksChecks(
+      device: Self.sensor,
+      modem: modemAddress,
+      deviceRecords: [LinkRecord(isController: false, isInUse: true, group: 0x00, address: modemAddress, data: [0, 0, 0]), controllerRecord(0x01)],
+      modemRecords: [LinkRecord(isController: true, isInUse: true, group: 0x00, address: Self.sensor, data: [0, 0, 0]), modemResponderRecord(0x01)],
+      legs: [controllerLeg, covering],
+      groups: [DeviceProfile.Group(number: 1, name: "Open", role: .both)],
+      flags: Device.FlagStates(states: [:], labels: [:])
+    )
+
+    #expect(checks.map(\.group) == [nil, SelfTestGroup(number: 1, name: "Open")])
+    #expect(checks.first?.detail == "The device and the modem hold both records of the link the Insteon device catalog gives.")
+    #expect(checks.map(\.outcome) == [.passed, .passed])
+
+  }
+
   @Test func failsADeviceNeitherSideHasARecordOf() {
 
     let check: SelfTestCheck = Device.linksCheck(device: Example.plug, modem: modemAddress, deviceRecords: [], modemRecords: [], legs: nil)

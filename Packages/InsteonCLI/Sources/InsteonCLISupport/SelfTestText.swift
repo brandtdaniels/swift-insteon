@@ -240,8 +240,14 @@ public enum SelfTestText {
       /// The check's kind, such as `"modemLinks"`.
       public let id: String
 
-      /// What the check is.
+      /// What the check is, with its group when it has one.
       public let title: String
+
+      /// The group the check is about, or `nil` for a check of the whole device.
+      public let group: Int?
+
+      /// The group's name in the Insteon device catalog, or `nil` if it gives none.
+      public let groupName: String?
 
       /// `"passed"`, `"warning"`, `"failed"` or `"skipped"`.
       public let outcome: String
@@ -324,6 +330,8 @@ public enum SelfTestText {
         Check(
           id: check.kind.rawValue,
           title: check.title,
+          group: check.group?.number,
+          groupName: check.group?.name,
           outcome: check.outcome.rawValue,
           detail: check.detail,
           fixes: check.fixes.map { (each: SelfTestFix) -> Fix in Self.fix(each, device: device) }

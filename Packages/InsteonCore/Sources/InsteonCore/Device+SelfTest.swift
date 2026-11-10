@@ -24,7 +24,9 @@ extension Device {
   /// answer, or rejects the modem, fails the first check, and the checks that need it to
   /// answer are skipped. A check the device doesn't answer fails or warns with what may put it
   /// right; it doesn't stop the test. Checksums are checked only for an i2CS device, since
-  /// older devices may send none.
+  /// older devices may send none. A link the catalog says covers every group the device
+  /// controls while an operating flag is in a state is checked group by group, with the flag
+  /// as the device reported it.
   ///
   /// ```swift
   /// let report = try await network.device(lamp).selfTest()
@@ -168,15 +170,21 @@ extension Device {
     let isDamaged: Bool = checksChecksums && deviceRecords?.contains { (record: LinkRecord) -> Bool in !record.hasIntactChecksum } == true
     let legs: [HubLinkingLeg]? = HubLinkingLeg.legs(of: description, device: address)
 
+    // The flags are read before the links are checked, since the catalog may say a link
+    // covers more groups while one of them is in a state; their check is reported last.
+    let flags: (check: SelfTestCheck, reading: DeviceSettingsReading?) = try await flagsCheck(description: description)
+
     if let deviceRecords, !isDamaged {
 
-      report.checks.append(Self.linksCheck(
+      report.checks += Self.linksChecks(
         device: address,
         modem: modemAddress,
         deviceRecords: deviceRecords,
         modemRecords: modemRecords,
-        legs: legs
-      ))
+        legs: legs,
+        groups: description?.profile?.groups ?? [],
+        flags: FlagStates(flags.reading, commandSet: description?.commandSet)
+      )
       report.checks.append(Self.leftoversCheck(modem: modemAddress, deviceRecords: deviceRecords, modemRecords: modemRecords))
 
     } else if isDamaged {
@@ -206,9 +214,7 @@ extension Device {
 
     // MARK: Operating flags
 
-    let flags: SelfTestCheck = try await flagsCheck(description: description)
-
-    report.checks.append(flags)
+    report.checks.append(flags.check)
 
     // MARK: Beep
 
@@ -613,6 +619,225 @@ extension Device {
 
   }
 
+  /// The operating flags a reading shows, by name, and the labels the catalog gives them.
+  struct FlagStates {
+
+    /// Whether each flag the device reported is set.
+    var states: [SettingName: Bool] = [:]
+
+    /// Each flag's label, by name.
+    var labels: [SettingName: String] = [:]
+
+    /// The flags a reading shows, labeled from a command set; none without a reading.
+    init(_ reading: DeviceSettingsReading?, commandSet: CommandSet?) {
+
+      for flag in commandSet?.operatingFlags ?? [] {
+
+        labels[flag.name] = flag.label
+
+      }
+
+      guard let reading else {
+
+        return
+
+      }
+
+      for item in reading.items {
+
+        guard case let .flag(flag) = item.source, let raw = reading.raw(for: item) else {
+
+          continue
+
+        }
+
+        states[flag.name] = raw & flag.bit != 0
+
+      }
+
+    }
+
+    /// Flags in the states given, with their labels.
+    init(states: [SettingName: Bool], labels: [SettingName: String]) {
+
+      self.states = states
+      self.labels = labels
+
+    }
+
+    /// Whether a condition holds, or `nil` if its flag wasn't read.
+    func holds(_ condition: DeviceProfile.Group.Condition) -> Bool? {
+
+      states[condition.flag].map { (isSet: Bool) -> Bool in isSet == condition.isSet }
+
+    }
+
+    /// A flag's label, or its name when the catalog gives none.
+    func label(_ flag: SettingName) -> String {
+
+      labels[flag] ?? flag.rawValue
+
+    }
+
+  }
+
+  /// The link checks: one for the links the catalog gives a group each, or for every link
+  /// without the catalog's legs, then one for each group a responder leg covers while an
+  /// operating flag is in a state.
+  static func linksChecks(
+    device: InsteonAddress,
+    modem: InsteonAddress,
+    deviceRecords: [LinkRecord],
+    modemRecords: [LinkRecord],
+    legs: [HubLinkingLeg]?,
+    groups: [DeviceProfile.Group],
+    flags: FlagStates
+  ) -> [SelfTestCheck] {
+
+    guard let legs else {
+
+      return [linksCheck(device: device, modem: modem, deviceRecords: deviceRecords, modemRecords: modemRecords, legs: nil)]
+
+    }
+
+    let covering: [HubLinkingLeg] = legs.filter { (leg: HubLinkingLeg) -> Bool in leg.allGroupsWhen != nil && leg.modemRole == .responder }
+    let single: [HubLinkingLeg] = legs.filter { (leg: HubLinkingLeg) -> Bool in !covering.contains(leg) }
+    var checks: [SelfTestCheck] = []
+
+    if !single.isEmpty {
+
+      checks.append(linksCheck(device: device, modem: modem, deviceRecords: deviceRecords, modemRecords: modemRecords, legs: single))
+
+    }
+
+    for leg in covering {
+
+      for group in coveredGroups(by: leg, groups: groups, flags: flags) {
+
+        checks.append(groupLinkCheck(
+          group,
+          leg: leg,
+          device: device,
+          modem: modem,
+          deviceRecords: deviceRecords,
+          modemRecords: modemRecords,
+          flags: flags
+        ))
+
+      }
+
+    }
+
+    return checks
+
+  }
+
+  /// The groups a leg's one link may cover, in order: the leg's own group, and each group the
+  /// catalog gives the device as a controller that's in use, by the flags the device reported.
+  static func coveredGroups(by leg: HubLinkingLeg, groups: [DeviceProfile.Group], flags: FlagStates) -> [SelfTestGroup] {
+
+    var covered: [SelfTestGroup] = []
+
+    for group in groups where group.role != .responder {
+
+      if let condition = group.activeWhen, flags.holds(condition) != true {
+
+        continue
+
+      }
+
+      covered.append(SelfTestGroup(number: Int(group.number.rawValue), name: group.name))
+
+    }
+
+    let own: Int = Int(leg.deviceGroup.rawValue)
+
+    if !covered.contains(where: { (group: SelfTestGroup) -> Bool in group.number == own }) {
+
+      covered.append(SelfTestGroup(number: own, name: nil))
+
+    }
+
+    return covered.sorted { (first: SelfTestGroup, second: SelfTestGroup) -> Bool in first.number < second.number }
+
+  }
+
+  /// Whether the device and the modem hold both records of one group a leg covers: the
+  /// device's controller record and the modem's responder record. A record missing from the
+  /// leg's own group, or from another while the leg's flag is in its state, fails; one missing
+  /// from another group while the flag isn't, or wasn't read, warns.
+  static func groupLinkCheck(
+    _ group: SelfTestGroup,
+    leg: HubLinkingLeg,
+    device: InsteonAddress,
+    modem: InsteonAddress,
+    deviceRecords: [LinkRecord],
+    modemRecords: [LinkRecord],
+    flags: FlagStates
+  ) -> SelfTestCheck {
+
+    let number = AllLinkGroupNumber(rawValue: UInt8(group.number))
+    let missing: [ExpectedRecord] = records(modemRole: .responder, modemGroup: leg.modemGroup, deviceGroup: number).filter { (expected: ExpectedRecord) -> Bool in
+
+      expected.isModems
+        ? !expected.isIn(modemRecords, naming: device)
+        : !expected.isIn(deviceRecords, naming: modem)
+
+    }
+
+    guard !missing.isEmpty else {
+
+      return SelfTestCheck(kind: .modemLinks, outcome: .passed, detail: "The device and the modem hold both records of group \(group.number).", group: group)
+
+    }
+
+    let list: String = missing.map(\.text).joined(separator: ", ")
+    let relink: [SelfTestFix] = [.link(modemRole: nil, group: nil), .checkSignal]
+
+    guard let condition = leg.allGroupsWhen, number != leg.deviceGroup else {
+
+      return SelfTestCheck(
+        kind: .modemLinks,
+        outcome: .failed,
+        detail: "A link is missing a record, so it works one way only, or not at all: \(list).",
+        fixes: relink,
+        group: group
+      )
+
+    }
+
+    let label: String = flags.label(condition.flag)
+    let state: String = SettingPresentation.flagText(condition.isSet)
+
+    switch flags.holds(condition) {
+    case true?:
+      return SelfTestCheck(
+        kind: .modemLinks,
+        outcome: .failed,
+        detail: "The Insteon device catalog's link covers this group while \(label) is \(state), and it is, but a record is missing: \(list).",
+        fixes: relink,
+        group: group
+      )
+    case false?:
+      return SelfTestCheck(
+        kind: .modemLinks,
+        outcome: .warning,
+        detail: "\(label) is \(SettingPresentation.flagText(!condition.isSet)), so the Insteon device catalog's link covers group \(leg.deviceGroup.rawValue) alone, "
+          + "and this group is missing \(list).",
+        group: group
+      )
+    case nil:
+      return SelfTestCheck(
+        kind: .modemLinks,
+        outcome: .warning,
+        detail: "A record is missing, and whether the Insteon device catalog's link covers this group depends on \(label), which wasn't read: \(list).",
+        fixes: [.readAgain],
+        group: group
+      )
+    }
+
+  }
+
   /// Whether every record of the device names the modem or a device the modem holds a
   /// record for.
   static func leftoversCheck(modem: InsteonAddress, deviceRecords: [LinkRecord], modemRecords: [LinkRecord]) -> SelfTestCheck {
@@ -644,18 +869,18 @@ extension Device {
   }
 
   /// Whether an operating flag locks the device or cuts it off, from its flags the catalog
-  /// describes.
-  func flagsCheck(description: DeviceDescription?) async throws -> SelfTestCheck {
+  /// describes, and the reading the check made, if the device answered.
+  func flagsCheck(description: DeviceDescription?) async throws -> (check: SelfTestCheck, reading: DeviceSettingsReading?) {
 
     guard let description else {
 
-      return SelfTestCheck(kind: .operatingFlags, outcome: .skipped, detail: Self.withoutIdentity)
+      return (SelfTestCheck(kind: .operatingFlags, outcome: .skipped, detail: Self.withoutIdentity), nil)
 
     }
 
     guard description.commandSet?.operatingFlags.isEmpty == false else {
 
-      return SelfTestCheck(kind: .operatingFlags, outcome: .skipped, detail: "The Insteon device catalog describes no operating flags for the device.")
+      return (SelfTestCheck(kind: .operatingFlags, outcome: .skipped, detail: "The Insteon device catalog describes no operating flags for the device."), nil)
 
     }
 
@@ -667,15 +892,15 @@ extension Device {
 
     } catch is DeviceSettingError {
 
-      return SelfTestCheck(kind: .operatingFlags, outcome: .skipped, detail: "The Insteon device catalog describes no settings for the device.")
+      return (SelfTestCheck(kind: .operatingFlags, outcome: .skipped, detail: "The Insteon device catalog describes no settings for the device."), nil)
 
     } catch {
 
-      return try Self.unanswered(.operatingFlags, error, outcome: .warning, what: "Get Operating Flags")
+      return (try Self.unanswered(.operatingFlags, error, outcome: .warning, what: "Get Operating Flags"), nil)
 
     }
 
-    return Self.flagsCheck(reading)
+    return (Self.flagsCheck(reading), reading)
 
   }
 

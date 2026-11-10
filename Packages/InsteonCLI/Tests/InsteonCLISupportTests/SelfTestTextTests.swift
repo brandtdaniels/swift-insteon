@@ -124,7 +124,7 @@ struct SelfTestTextTests {
     let linkFixes: [[String: Any]] = try #require(checks[2]["fixes"] as? [[String: Any]])
     let reviewFixes: [[String: Any]] = try #require(checks[3]["fixes"] as? [[String: Any]])
 
-    // A report without product keys leaves their keys out.
+    // A report without product keys leaves their keys out, and a check without a group its group.
     #expect(object.keys.sorted() == ["address", "category", "checklist", "checks", "engine", "firmwareVersion", "outcome", "product", "subcategory"])
     #expect(object["address"] as? String == "1A.2B.3C")
     #expect(object["engine"] as? String == "i2CS")
@@ -179,6 +179,36 @@ struct SelfTestTextTests {
 
     #expect(unkeyedObject["productKey"] == nil)
     #expect(unkeyedObject["catalogProductKey"] as? String == "none")
+
+  }
+
+  @Test func namesTheGroupOfAGroupsLinkCheck() throws {
+
+    let grouped = SelfTestReport(
+      device: lamp,
+      checks: [
+        SelfTestCheck(kind: .modemLinks, outcome: .passed, detail: "The device and the modem hold both records of group 1.", group: SelfTestGroup(number: 1, name: "Open")),
+        SelfTestCheck(kind: .modemLinks, outcome: .warning, detail: "Group 2 isn't linked.", group: SelfTestGroup(number: 2, name: "Shut")),
+        SelfTestCheck(kind: .modemLinks, outcome: .passed, detail: "Linked.", group: SelfTestGroup(number: 4, name: nil))
+      ]
+    )
+
+    let lines: [String] = SelfTestText.checkLines(grouped)
+    let data: Data = try JSONEncoder().encode(SelfTestText.JSON(grouped))
+    let object: [String: Any] = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let checks: [[String: Any]] = try #require(object["checks"] as? [[String: Any]])
+
+    #expect(lines == [
+      "PASS  Links with the modem, group 1 (Open)  The device and the modem hold both records of group 1.",
+      "WARN  Links with the modem, group 2 (Shut)  Group 2 isn't linked.",
+      "PASS  Links with the modem, group 4         Linked."
+    ])
+    #expect(checks.map { (check: [String: Any]) -> String? in check["id"] as? String } == ["modemLinks", "modemLinks", "modemLinks"])
+    #expect(checks[1]["title"] as? String == "Links with the modem, group 2 (Shut)")
+    #expect(checks[1]["group"] as? Int == 2)
+    #expect(checks[1]["groupName"] as? String == "Shut")
+    #expect(checks[2]["group"] as? Int == 4)
+    #expect(checks[2]["groupName"] == nil)
 
   }
 

@@ -391,7 +391,8 @@ public enum HelpText {
                           catalog describes it, that it reports the product key the
                           catalog gives, that it reports its state, that its ALL-Link
                           database reads with every checksum intact, that it and the
-                          modem hold both records of each link the catalog gives it,
+                          modem hold both records of each link the catalog gives it, each
+                          group of a link that covers several on a check of its own,
                           that its records name only the modem and devices the modem is
                           linked to, and that no operating flag locks it or cuts it off.
                           Each check passes, warns, fails or is skipped, with what may put
