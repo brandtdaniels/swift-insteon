@@ -12,9 +12,11 @@ public enum IdentityText {
   ///   - answered: Whether the device answered Product Data Request at all.
   ///   - catalog: What the catalog says the product reports, or `nil` if it doesn't say or
   ///     doesn't have the device.
+  ///   - isCatalogKeyObserved: Whether a device was seen reporting the catalog's key, rather
+  ///     than the key being known from documents only. Defaults to `false`.
   /// - Returns: The text, such as `"0x00001A"`, or
   ///   `"not reported; the Insteon device catalog says this product doesn't report one"`.
-  public static func productKey(reported: ProductKey?, answered: Bool, catalog: ExpectedProductKey?) -> String {
+  public static func productKey(reported: ProductKey?, answered: Bool, catalog: ExpectedProductKey?, isCatalogKeyObserved: Bool = false) -> String {
 
     if let reported {
 
@@ -36,6 +38,9 @@ public enum IdentityText {
     switch catalog {
     case .notReported?:
       return "\(missing); the Insteon device catalog says this product doesn't report one"
+    case let .key(expected)? where !answered && !isCatalogKeyObserved:
+      // A key known from documents only may be one the device never sends.
+      return "\(missing); the Insteon device catalog gives \(expected) for this product from documents only, not from a device seen reporting it"
     case let .key(expected)?:
       return "\(missing); the Insteon device catalog gives \(expected) for this product"
     case nil:

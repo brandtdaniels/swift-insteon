@@ -17,7 +17,7 @@ Keep track of the Insteon devices on a network: the library an app or a command 
 
 - `DeviceRegistry`: the devices an app knows, each with the identity it reported and what the Insteon device catalog says about it; it never sends anything to a modem or a device, and describes every device again when given a newer catalog
 - `RegisteredDevice`: a device's address, identity and `DeviceInfo`
-- `DeviceInfo`: what the catalog says about a device: its product's name and model, the product key it's expected to report, and what its link records' data bytes mean, as `LinkDataMeaning`
+- `DeviceInfo`: what the catalog says about a device: its product's name and model, the product key it's expected to report and whether a device was seen reporting it, and what its link records' data bytes mean, as `LinkDataMeaning`
 - `DeviceRegistrySnapshot`: a registry's devices as a value to save and restore
 - `DeviceRegistryStore`: somewhere an app keeps a registry's devices between launches
 - `JSONFileDeviceRegistryStore`: keeps them in a versioned JSON file only the current user can read, replaced whole on every save; it also reads the `insteon` command's identity cache, and never replaces a file it can't read

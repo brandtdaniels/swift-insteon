@@ -105,7 +105,11 @@ extension Device {
 
     report.expectedProductKey = info?.expectedProductKey
 
-    let productKey: (check: SelfTestCheck, reported: ProductKey?) = try await productKeyCheck(isDescribed: description != nil, expected: report.expectedProductKey)
+    let productKey: (check: SelfTestCheck, reported: ProductKey?) = try await productKeyCheck(
+      isDescribed: description != nil,
+      expected: report.expectedProductKey,
+      isObserved: info?.isExpectedProductKeyObserved == true
+    )
 
     report.productKey = productKey.reported
     report.checks.append(productKey.check)
@@ -339,8 +343,8 @@ extension Device {
   }
 
   /// Whether the device reports the product key the catalog gives, asked with Product Data
-  /// Request only when the catalog gives one.
-  func productKeyCheck(isDescribed: Bool, expected: ExpectedProductKey?) async throws -> (check: SelfTestCheck, reported: ProductKey?) {
+  /// Request only when the catalog gives one, and whether a device was seen reporting that key.
+  func productKeyCheck(isDescribed: Bool, expected: ExpectedProductKey?, isObserved: Bool) async throws -> (check: SelfTestCheck, reported: ProductKey?) {
 
     guard isDescribed else {
 
@@ -357,13 +361,26 @@ extension Device {
     case let .key(key)?:
       let data: DeviceProductData? = try await network.productData(of: address)
 
-      return (Self.productKeyCheck(expected: key, data: data), data?.productKey)
+      return (Self.productKeyCheck(expected: key, isObserved: isObserved, data: data), data?.productKey)
     }
 
   }
 
-  /// Whether a device's Product Data Response gives the key the catalog does.
-  static func productKeyCheck(expected: ProductKey, data: DeviceProductData?) -> SelfTestCheck {
+  /// Whether a device's Product Data Response gives the key the catalog does. No response is
+  /// a warning only when a device was seen reporting the key: a key known from documents only
+  /// may be one the device never sends.
+  static func productKeyCheck(expected: ProductKey, isObserved: Bool, data: DeviceProductData?) -> SelfTestCheck {
+
+    if data == nil, !isObserved {
+
+      return SelfTestCheck(
+        kind: .productKey,
+        outcome: .skipped,
+        detail: "The device didn't answer Product Data Request, and the Insteon device catalog's key for this product, \(expected), "
+          + "is known from documents only, not from a device seen reporting it, so the missing answer isn't taken for a fault."
+      )
+
+    }
 
     guard let data else {
 

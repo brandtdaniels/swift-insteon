@@ -60,6 +60,15 @@ public struct DeviceIdentity: Hashable, Sendable {
   /// too.
   public var productKeyVerification: Verification?
 
+  /// How sure the catalog is of ``DeviceIdentity/productKey``: its
+  /// ``DeviceIdentity/productKeyVerification`` where it gives one, else the identity's
+  /// ``DeviceIdentity/verification``, or `nil` when it gives no key.
+  public var productKeyVerificationInEffect: Verification? {
+
+    productKey == nil ? nil : productKeyVerification ?? verification
+
+  }
+
   /// Creates an identity.
   ///
   /// - Parameters:

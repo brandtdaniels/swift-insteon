@@ -300,11 +300,22 @@ struct SelfTestTests {
 
   static let keylessIdentity = ReportedIdentity(category: 0x02, subcategory: 0x63, firmwareVersion: 0x45)
 
+  static let seenKeyIdentity = ReportedIdentity(category: 0x02, subcategory: 0x64, firmwareVersion: 0x45)
+
   static let expectedKey = ProductKey(0x00, 0xAB, 0xCD)
 
-  /// A product the catalog gives a key, and one it says reports none.
+  /// A product the catalog gives a key from documents, one whose key was seen on a device,
+  /// and one it says reports none.
   static let keyedCatalog = DeviceCatalog(profiles: [
     DeviceProfile(model: "9180", name: "Example Keyed", identities: [DeviceIdentity(category: 0x02, subcategory: 0x62, productKey: .key(expectedKey))]),
+    DeviceProfile(model: "9182", name: "Example Seen Key", identities: [
+      DeviceIdentity(
+        category: 0x02,
+        subcategory: 0x64,
+        productKey: .key(expectedKey),
+        productKeyVerification: Verification(status: .observed, note: "Seen in a Product Data Response.")
+      )
+    ]),
     DeviceProfile(model: "9181", name: "Example Keyless", identities: [DeviceIdentity(category: 0x02, subcategory: 0x63, productKey: .notReported)])
   ])
 
@@ -368,10 +379,41 @@ struct SelfTestTests {
 
   }
 
+  /// The self-test of a device that acknowledges Product Data Request and sends no response.
+  func unansweredProductData(_ identity: ReportedIdentity) async throws -> SelfTestReport {
+
+    let modem: InMemoryModem = await linked(identity: identity)
+    let network: DeviceNetwork = self.network(modem, catalog: Self.keyedCatalog)
+
+    let test = Task { () async throws -> SelfTestReport in try await network.device(Example.plug).selfTest() }
+
+    await clock.waitForSleeper(until: Modem.defaultExtendedRequestTimeout)
+    clock.advance(by: Modem.defaultExtendedRequestTimeout)
+
+    return try await test.value
+
+  }
+
+  @Test func skipsAKeyNoDeviceWasSeenReportingWhenTheDeviceSendsNoProductData() async throws {
+
+    let report: SelfTestReport = try await unansweredProductData(Self.keyedIdentity)
+    let check: SelfTestCheck = try #require(report.check(.productKey))
+
+    // A key known from documents only may be one the device never sends, so its silence isn't a fault.
+    #expect(check.outcome == .skipped)
+    #expect(check.detail == "The device didn't answer Product Data Request, and the Insteon device catalog's key for this product, 0x00ABCD, "
+      + "is known from documents only, not from a device seen reporting it, so the missing answer isn't taken for a fault.")
+    #expect(check.fixes.isEmpty)
+    #expect(report.productKey == nil)
+    #expect(report.outcome == .passed)
+
+  }
+
   @Test func warnsWhenTheDeviceSendsNoProductData() async throws {
 
-    // The device acknowledges Product Data Request and sends no response.
-    let modem: InMemoryModem = await linked(identity: Self.keyedIdentity)
+    // The device acknowledges Product Data Request and sends no response, though a device
+    // was seen reporting the catalog's key.
+    let modem: InMemoryModem = await linked(identity: Self.seenKeyIdentity)
     let network: DeviceNetwork = self.network(modem, catalog: Self.keyedCatalog)
 
     let test = Task { () async throws -> SelfTestReport in try await network.device(Example.plug).selfTest() }

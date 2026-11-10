@@ -192,8 +192,8 @@ do {
 ``Device/selfTest(_:)`` checks that a device is healthy and set up as the catalog expects, and
 returns a ``SelfTestReport`` of ``SelfTestCheck``s in the order they ran: the device answers
 and accepts the modem, the catalog describes the identity it reports in the test, it reports
-the product key the catalog gives its product, it reports its state, its ALL-Link database,
-read from the device rather than from a copy the network holds, ends whole, with every
+the product key the catalog gives its product (no answer counts against it only when a device
+was seen reporting the key), it reports its state, its ALL-Link database, read from the device rather than from a copy the network holds, ends whole, with every
 checksum intact for an i2CS device, it and the modem hold both records of each link the
 catalog gives it, its records name only the modem and devices the modem is linked to, and no
 operating flag locks it or cuts it off. A damaged record isn't taken for a missing link. A

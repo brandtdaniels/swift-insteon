@@ -22,8 +22,17 @@ struct IdentityTextTests {
     #expect(IdentityText.productKey(reported: key, answered: true, catalog: .key(key)) == "0x00001A")
     #expect(IdentityText.productKey(reported: key, answered: true, catalog: .key(ProductKey(0x00, 0x00, 0x20)))
       == "0x00001A; the Insteon device catalog gives 0x000020 for this product")
-    #expect(IdentityText.productKey(reported: nil, answered: false, catalog: .key(key))
+    #expect(IdentityText.productKey(reported: nil, answered: false, catalog: .key(key), isCatalogKeyObserved: true)
       == "not reported; the Insteon device catalog gives 0x00001A for this product")
+
+  }
+
+  @Test func saysWhenTheCatalogsKeyIsKnownFromDocumentsOnly() {
+
+    #expect(IdentityText.productKey(reported: nil, answered: false, catalog: .key(key), isCatalogKeyObserved: false)
+      == "not reported; the Insteon device catalog gives 0x00001A for this product from documents only, not from a device seen reporting it")
+    // A key the device reported is compared the same way however the catalog knows its own.
+    #expect(IdentityText.productKey(reported: key, answered: true, catalog: .key(key), isCatalogKeyObserved: false) == "0x00001A")
 
   }
 

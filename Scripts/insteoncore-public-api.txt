@@ -736,6 +736,7 @@ var DeviceInfo.displayName
 var DeviceInfo.engine
 var DeviceInfo.expectedProductKey
 var DeviceInfo.firmwareVersion
+var DeviceInfo.isExpectedProductKeyObserved
 var DeviceInfo.isInCatalog
 var DeviceInfo.model
 var DeviceInfo.productName

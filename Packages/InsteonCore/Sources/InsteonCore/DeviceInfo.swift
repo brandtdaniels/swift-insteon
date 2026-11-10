@@ -89,6 +89,14 @@ public struct DeviceInfo: Hashable, Sendable {
 
   }
 
+  /// Whether a device was seen reporting the product key the catalog gives, rather than the
+  /// key being known from documents or inferred. `false` when the catalog gives no key.
+  public var isExpectedProductKeyObserved: Bool {
+
+    catalogDescription.identity?.productKeyVerificationInEffect?.status == .observed
+
+  }
+
   /// What a record's data bytes mean for the device, as the catalog gives them.
   ///
   /// A controller record's bytes are read by the group type of the record's group, and a

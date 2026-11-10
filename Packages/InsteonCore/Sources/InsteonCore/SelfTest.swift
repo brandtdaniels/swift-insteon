@@ -46,7 +46,9 @@ public enum SelfTestCheckKind: String, Hashable, Sendable, CaseIterable {
   case catalog
 
   /// The product key the device reports to Product Data Request is the one the catalog gives
-  /// its product. Product Data Request is sent only when the catalog gives a key.
+  /// its product. Product Data Request is sent only when the catalog gives a key. A device
+  /// that doesn't answer warns only when a device was seen reporting the catalog's key; for a
+  /// key known from documents only, the check is skipped.
   case productKey
 
   /// The device reports its state.
