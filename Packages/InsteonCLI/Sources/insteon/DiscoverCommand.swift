@@ -164,7 +164,7 @@ enum DiscoverCommand {
     if let target {
 
       let port: Int = target.port ?? HubLocation.defaultPort
-      let index: Int? = hubs.firstIndex { $0.host == target.host && $0.port == port }
+      let index: Int? = hubs.firstIndex { target.matches(host: $0.host, port: $0.port) }
 
       guard let index else {
 
@@ -232,22 +232,10 @@ enum DiscoverCommand {
   /// Prints what came of asking a candidate for Get IM Info, without its credentials.
   private static func report(_ outcome: HubIdentification, for hub: HubCandidate) {
 
-    let address = "\(hub.host):\(hub.port)"
+    if let note = HubText.identification(outcome, host: hub.host, port: hub.port, message: Names.message(for:)) {
 
-    switch outcome {
-    case .identified, .declined:
-      break
-    case .skippedNonPrivateAddress:
-      Output.note("\(hub.host) isn't a private address, so it wasn't sent the password.")
-    case .skippedNonHubPort:
-      Output.note(
-        "\(address) isn't on the Hub's port, \(HubLocation.defaultPort), so it wasn't sent the password. "
-          + "'insteon discover --identify \(address)' sends it."
-      )
-    case .didNotAnswer:
-      Output.note("\(address) didn't answer Get IM Info in time.")
-    case let .rejected(error), let .failed(error):
-      Output.note("\(address): \(Names.message(for: error))")
+      Output.note(note)
+
     }
 
   }

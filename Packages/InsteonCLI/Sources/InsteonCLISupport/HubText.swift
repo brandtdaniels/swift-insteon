@@ -1,7 +1,7 @@
 import InsteonCore
 
-/// What the command says when a request to the Hub gets no answer. Neither message carries
-/// the Hub's credentials.
+/// What the command says about a Hub: when a request to it gets no answer, and what came of
+/// asking it for Get IM Info. No message carries the Hub's credentials.
 public enum HubText {
 
   /// For a Hub that didn't answer any request, as when its address changed.
@@ -34,6 +34,53 @@ public enum HubText {
     }
 
     return "The Hub stopped answering while it was waiting for \(device). Check that the device is powered and in range, then try again."
+
+  }
+
+  /// What `insteon discover --identify` says about a Hub it asked, or didn't ask, for Get IM
+  /// Info, without its credentials, or `nil` when there's nothing to say: the Hub was
+  /// identified, which the table shows, or the person declined.
+  ///
+  /// - Parameters:
+  ///   - outcome: What came of it.
+  ///   - host: The Hub's host.
+  ///   - port: The Hub's port.
+  ///   - message: Describes an error.
+  /// - Returns: The note, or `nil`.
+  public static func identification(_ outcome: HubIdentification, host: String, port: Int, message: (any Error) -> String) -> String? {
+
+    let address = "\(host):\(port)"
+
+    switch outcome {
+    case .identified, .declined:
+      return nil
+    case .skippedNonPrivateAddress:
+      return "\(host) isn't a private address, so it wasn't sent the password."
+    case .skippedNonHubPort:
+      return "\(address) isn't on the Hub's port, \(HubLocation.defaultPort), so it wasn't sent the password. "
+        + "'insteon discover --identify \(address)' sends it."
+    case .didNotAnswer:
+      return "\(address) didn't answer Get IM Info in time."
+    case let .rejected(error), let .failed(error):
+      return "\(address): \(message(error))"
+    }
+
+  }
+
+}
+
+extension HubAddress {
+
+  /// Whether this is the Hub at a host and port, with the Hub's port, 25105, when the address
+  /// gives none.
+  ///
+  /// - Parameters:
+  ///   - host: The Hub's host.
+  ///   - port: The Hub's port.
+  /// - Returns: `true` if it's the same Hub.
+  public func matches(host: String, port: Int) -> Bool {
+
+    self.host == host && (self.port ?? HubLocation.defaultPort) == port
 
   }
 
