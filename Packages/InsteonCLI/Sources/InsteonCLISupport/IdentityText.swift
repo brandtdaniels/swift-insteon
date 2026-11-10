@@ -1,8 +1,9 @@
 import InsteonCore
 
-/// What `insteon device ADDRESS id` prints about a device's product key: what the device
-/// reported to Product Data Request, next to what the Insteon device catalog says it reports,
-/// so a key that's missing is explained.
+/// What `insteon device ADDRESS id` and `insteon links --identify` print about a device's
+/// identity: why a device named nothing, and its product key, what the device reported to
+/// Product Data Request, next to what the Insteon device catalog says it reports, so a key
+/// that's missing is explained.
 public enum IdentityText {
 
   /// The product key row's text.
@@ -65,6 +66,34 @@ public enum IdentityText {
     case nil:
       return nil
     }
+
+  }
+
+  /// What `insteon links --identify` says about a device that answered ID Request without an
+  /// identity: an i2CS device that isn't linked to the modem won't say what it is.
+  ///
+  /// - Parameters:
+  ///   - device: The device.
+  ///   - acceptsModem: Whether the device takes commands from the modem.
+  /// - Returns: The note.
+  public static func unreported(_ device: InsteonAddress, acceptsModem: Bool) -> String {
+
+    acceptsModem
+      ? "\(device) didn't report its identity."
+      : "\(device) runs i2CS and has no link to the modem, so it won't say what it is."
+
+  }
+
+  /// What `insteon device ADDRESS id` adds about a device that doesn't take commands from the
+  /// modem, or `nil` for one that does.
+  ///
+  /// - Parameters:
+  ///   - device: The device.
+  ///   - acceptsModem: Whether the device takes commands from the modem.
+  /// - Returns: The note, or `nil`.
+  public static func notLinkedNote(_ device: InsteonAddress, acceptsModem: Bool) -> String? {
+
+    acceptsModem ? nil : "The device runs i2CS and isn't linked to the modem, so it won't say more. Link it first with 'insteon link \(device)'."
 
   }
 

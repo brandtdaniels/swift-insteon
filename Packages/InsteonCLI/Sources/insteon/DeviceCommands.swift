@@ -297,9 +297,9 @@ enum DeviceCommands {
 
     Output.table(rows)
 
-    if !identification.acceptsModem {
+    if let note = IdentityText.notLinkedNote(device, acceptsModem: identification.acceptsModem) {
 
-      Output.note("The device runs i2CS and isn't linked to the modem, so it won't say more. Link it first with 'insteon link \(device)'.")
+      Output.note(note)
 
     }
 

@@ -199,11 +199,7 @@ enum ModemCommands {
 
       }
 
-      Output.note(
-        identification.acceptsModem
-          ? "\(device) didn't report its identity."
-          : "\(device) runs i2CS and has no link to the modem, so it won't say what it is."
-      )
+      Output.note(IdentityText.unreported(device, acceptsModem: identification.acceptsModem))
 
     } catch let error as CancellationError {
 
