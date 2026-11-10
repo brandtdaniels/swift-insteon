@@ -418,10 +418,9 @@ enum DeviceCommands {
 
     }
 
-    // A failed check fails the command, so a script can tell.
-    if report.outcome == .failed {
+    if let failure = SelfTestText.failure(report) {
 
-      throw CommandFailure(description: "The self-test of \(device.address) found a problem.")
+      throw failure
 
     }
 
