@@ -90,7 +90,7 @@ struct SelfTestTests {
   let modemAddress = InsteonAddress(0x11, 0x22, 0x33)
 
   /// The kinds of the checks a test without Beep runs, in order.
-  let kinds: [SelfTestCheckKind] = [.answers, .catalog, .status, .linkDatabase, .modemLinks, .leftoverRecords, .operatingFlags]
+  let kinds: [SelfTestCheckKind] = [.answers, .catalog, .productKey, .status, .linkDatabase, .modemLinks, .leftoverRecords, .operatingFlags]
 
   func pressed(_ device: InsteonAddress, _ identity: ReportedIdentity) -> SetButtonPressed {
 
@@ -143,9 +143,10 @@ struct SelfTestTests {
     let product: String = try #require(report.productName)
 
     #expect(report.checks.map(\.kind) == kinds)
-    #expect(report.checks.map(\.outcome) == [.passed, .passed, .passed, .passed, .passed, .passed, .skipped])
+    #expect(report.checks.map(\.outcome) == [.passed, .passed, .skipped, .passed, .passed, .passed, .passed, .skipped])
     #expect(report.check(.answers)?.detail == "The device answered and accepts the modem.")
     #expect(report.check(.catalog)?.detail == "The Insteon device catalog describes the device as \(product).")
+    #expect(report.check(.productKey)?.detail == "The Insteon device catalog gives no product key for the device, so none was asked for.")
     #expect(report.check(.status)?.detail == "The device reported its state.")
     #expect(report.check(.linkDatabase)?.detail == "1 record in use, each with its checksum intact.")
     #expect(report.check(.modemLinks)?.detail == "The device and the modem hold both records of the link.")
@@ -293,6 +294,172 @@ struct SelfTestTests {
 
   }
 
+  // MARK: - The product key
+
+  static let keyedIdentity = ReportedIdentity(category: 0x02, subcategory: 0x62, firmwareVersion: 0x45)
+
+  static let keylessIdentity = ReportedIdentity(category: 0x02, subcategory: 0x63, firmwareVersion: 0x45)
+
+  static let seenKeyIdentity = ReportedIdentity(category: 0x02, subcategory: 0x64, firmwareVersion: 0x45)
+
+  static let expectedKey = ProductKey(0x00, 0xAB, 0xCD)
+
+  /// A product the catalog gives a key from documents, one whose key was seen on a device,
+  /// and one it says reports none.
+  static let keyedCatalog = DeviceCatalog(profiles: [
+    DeviceProfile(model: "9180", name: "Example Keyed", identities: [DeviceIdentity(category: 0x02, subcategory: 0x62, productKey: .key(expectedKey))]),
+    DeviceProfile(model: "9182", name: "Example Seen Key", identities: [
+      DeviceIdentity(
+        category: 0x02,
+        subcategory: 0x64,
+        productKey: .key(expectedKey),
+        productKeyVerification: Verification(status: .observed, note: "Seen in a Product Data Response.")
+      )
+    ]),
+    DeviceProfile(model: "9181", name: "Example Keyless", identities: [DeviceIdentity(category: 0x02, subcategory: 0x63, productKey: .notReported)])
+  ])
+
+  /// A modem whose keyed device answers Product Data Request with a key.
+  func keyed(reporting key: ProductKey) async -> InMemoryModem {
+
+    let modem: InMemoryModem = await linked(identity: Self.keyedIdentity)
+    await modem.setProductData(ProductData(sender: Example.plug, productKey: key, category: 0x02, subcategory: 0x62, userDefined: []))
+
+    return modem
+
+  }
+
+  @Test func passesAProductKeyThatMatchesTheCatalogs() async throws {
+
+    let modem: InMemoryModem = await keyed(reporting: Self.expectedKey)
+    let log: OperationLog = await OperationLog.logging(modem)
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.keyedCatalog).device(Example.plug).selfTest()
+    let check: SelfTestCheck = try #require(report.check(.productKey))
+
+    #expect(report.checks.map(\.kind) == kinds)
+    #expect(check.outcome == .passed)
+    #expect(check.detail == "The device reported product key 0x00ABCD, as the Insteon device catalog gives.")
+    #expect(check.fixes.isEmpty)
+    #expect(report.productKey == Self.expectedKey)
+    #expect(report.expectedProductKey == .key(Self.expectedKey))
+    // Product Data Request is sent once, as a standard message, and nothing is written.
+    #expect(log.standardCommands.filter { (command1: UInt8) -> Bool in command1 == 0x03 }.count == 1)
+    #expect(log.writesAndExtendedMessages == 0)
+
+  }
+
+  @Test func warnsOfAProductKeyThatDiffersFromTheCatalogs() async throws {
+
+    let modem: InMemoryModem = await keyed(reporting: ProductKey(0x00, 0xAB, 0xCE))
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.keyedCatalog).device(Example.plug).selfTest()
+    let check: SelfTestCheck = try #require(report.check(.productKey))
+
+    #expect(check.outcome == .warning)
+    #expect(check.detail == "The device reported product key 0x00ABCE, but the Insteon device catalog gives 0x00ABCD for this product.")
+    #expect(check.fixes == [.updateCatalog])
+    #expect(report.productKey == ProductKey(0x00, 0xAB, 0xCE))
+    #expect(report.outcome == .warning)
+
+  }
+
+  @Test func warnsOfAMissingProductKeyTheCatalogGives() async throws {
+
+    // A key of zeros is no key.
+    let modem: InMemoryModem = await keyed(reporting: ProductKey(0x00, 0x00, 0x00))
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.keyedCatalog).device(Example.plug).selfTest()
+    let check: SelfTestCheck = try #require(report.check(.productKey))
+
+    #expect(check.outcome == .warning)
+    #expect(check.detail == "The device reported no product key, but the Insteon device catalog gives 0x00ABCD for this product.")
+    #expect(check.fixes == [.updateCatalog])
+    #expect(report.productKey == nil)
+
+  }
+
+  /// The self-test of a device that acknowledges Product Data Request and sends no response.
+  func unansweredProductData(_ identity: ReportedIdentity) async throws -> SelfTestReport {
+
+    let modem: InMemoryModem = await linked(identity: identity)
+    let network: DeviceNetwork = self.network(modem, catalog: Self.keyedCatalog)
+
+    let test = Task { () async throws -> SelfTestReport in try await network.device(Example.plug).selfTest() }
+
+    await clock.waitForSleeper(until: Modem.defaultExtendedRequestTimeout)
+    clock.advance(by: Modem.defaultExtendedRequestTimeout)
+
+    return try await test.value
+
+  }
+
+  @Test func skipsAKeyNoDeviceWasSeenReportingWhenTheDeviceSendsNoProductData() async throws {
+
+    let report: SelfTestReport = try await unansweredProductData(Self.keyedIdentity)
+    let check: SelfTestCheck = try #require(report.check(.productKey))
+
+    // A key known from documents only may be one the device never sends, so its silence isn't a fault.
+    #expect(check.outcome == .skipped)
+    #expect(check.detail == "The device didn't answer Product Data Request, and the Insteon device catalog's key for this product, 0x00ABCD, "
+      + "is known from documents only, not from a device seen reporting it, so the missing answer isn't taken for a fault.")
+    #expect(check.fixes.isEmpty)
+    #expect(report.productKey == nil)
+    #expect(report.outcome == .passed)
+
+  }
+
+  @Test func warnsWhenTheDeviceSendsNoProductData() async throws {
+
+    // The device acknowledges Product Data Request and sends no response, though a device
+    // was seen reporting the catalog's key.
+    let modem: InMemoryModem = await linked(identity: Self.seenKeyIdentity)
+    let network: DeviceNetwork = self.network(modem, catalog: Self.keyedCatalog)
+
+    let test = Task { () async throws -> SelfTestReport in try await network.device(Example.plug).selfTest() }
+
+    await clock.waitForSleeper(until: Modem.defaultExtendedRequestTimeout)
+    clock.advance(by: Modem.defaultExtendedRequestTimeout)
+
+    let report: SelfTestReport = try await test.value
+    let check: SelfTestCheck = try #require(report.check(.productKey))
+
+    #expect(check.outcome == .warning)
+    #expect(check.detail == "The device didn't answer Product Data Request, so its product key wasn't compared with the 0x00ABCD the Insteon device catalog gives.")
+    #expect(check.fixes == [.readAgain, .checkSignal])
+    #expect(report.productKey == nil)
+
+  }
+
+  @Test func asksForNoProductKeyTheCatalogSaysTheDeviceDoesntReport() async throws {
+
+    let modem: InMemoryModem = await linked(identity: Self.keylessIdentity)
+    let log: OperationLog = await OperationLog.logging(modem)
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.keyedCatalog).device(Example.plug).selfTest()
+    let check: SelfTestCheck = try #require(report.check(.productKey))
+
+    #expect(check.outcome == .skipped)
+    #expect(check.detail == "The Insteon device catalog says the device reports no product key, so none was asked for.")
+    #expect(report.expectedProductKey == .notReported)
+    #expect(!log.standardCommands.contains(0x03))
+
+  }
+
+  @Test func asksForNoProductKeyWithoutTheCatalog() async throws {
+
+    let modem: InMemoryModem = await linked(identity: ReportedIdentity(category: 0x02, subcategory: 0x55, firmwareVersion: 0x41))
+    let log: OperationLog = await OperationLog.logging(modem)
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.keyedCatalog).device(Example.plug).selfTest()
+
+    #expect(report.check(.productKey)?.outcome == .skipped)
+    #expect(report.check(.productKey)?.detail == "The Insteon device catalog gives no product key for the device, so none was asked for.")
+    #expect(report.expectedProductKey == nil)
+    #expect(!log.standardCommands.contains(0x03))
+
+  }
+
   // MARK: - The database
 
   @Test func failsADamagedRecordWithoutCallingItAMissingLink() async throws {
@@ -395,6 +562,227 @@ struct SelfTestTests {
     #expect(check.detail == "A link is missing a record, so it works one way only, or not at all: the modem's responder record for group 2.")
     // With the catalog's legs, linking again makes them all.
     #expect(check.fixes == [.link(modemRole: nil, group: nil), .checkSignal])
+
+  }
+
+  // MARK: - Groups one link covers
+
+  static let sensor = InsteonAddress(0x3C, 0x4D, 0x70)
+
+  static let sensorIdentity = ReportedIdentity(category: 0x10, subcategory: 0x70, firmwareVersion: 0x45)
+
+  static let sensorCommands = CommandSet(
+    id: "exampleSensor",
+    name: "Example sensor",
+    summary: "A sensor whose one link may cover every group it controls.",
+    operatingFlags: [
+      OperatingFlag(name: "coverEveryGroup", summary: "One link covers every group.", query: .operatingFlags, bit: 0x40, label: "Cover every group"),
+      OperatingFlag(name: "useSpare", summary: "Puts the spare group in use.", query: .operatingFlags, bit: 0x01, label: "Use spare")
+    ]
+  )
+
+  static let coveringLeg = DeviceLifecycle.HubLinking.Leg(
+    modemRole: .responder,
+    modemGroup: 0x01,
+    deviceGroup: 0x01,
+    allGroupsWhen: DeviceProfile.Group.Condition(flag: "coverEveryGroup", isSet: true)
+  )
+
+  /// A sensor that controls groups 1, 2 and 4, and group 3 while its spare is in use, and
+  /// whose one link from a Hub covers them all while a flag is set.
+  static let sensorGroups: [DeviceProfile.Group] = [
+    DeviceProfile.Group(number: 1, name: "Open", role: .controller),
+    DeviceProfile.Group(number: 2, name: "Shut", role: .controller),
+    DeviceProfile.Group(number: 3, name: "Spare", role: .controller, activeWhen: DeviceProfile.Group.Condition(flag: "useSpare", isSet: true)),
+    DeviceProfile.Group(number: 4, name: "Pulse", role: .controller)
+  ]
+
+  static let sensorCatalog = DeviceCatalog(
+    profiles: [
+      DeviceProfile(
+        model: "9190",
+        name: "Example Sensor",
+        identities: [DeviceIdentity(category: 0x10, subcategory: 0x70)],
+        commandSets: [CommandSetEntry(commandSet: "exampleSensor", category: 0x10, subcategory: 0x70)],
+        groups: sensorGroups,
+        lifecycle: DeviceLifecycle(fromHub: DeviceLifecycle.HubLinking(legs: [coveringLeg]))
+      )
+    ],
+    commandSets: [sensorCommands]
+  )
+
+  /// A modem and the sensor, its flags as given, linked with the modem as responder in each
+  /// group given.
+  func sensorModem(flags: UInt8, linkedGroups: [AllLinkGroupNumber]) async -> InMemoryModem {
+
+    let modem = InMemoryModem()
+    await modem.setEngine(.i2cs, of: Self.sensor)
+    await modem.setIdentity(pressed(Self.sensor, Self.sensorIdentity))
+    await modem.setOperatingFlags(flags, of: Self.sensor)
+    await modem.setModemRecords(linkedGroups.map { (group: AllLinkGroupNumber) -> AllLinkRecord in responds(to: Self.sensor, group: group) })
+
+    var records: [UInt16: AllLinkRecord] = [:]
+
+    for (index, group) in linkedGroups.enumerated() {
+
+      records[0x0FFF - UInt16(index * 8)] = controls(modemAddress, group: group)
+
+    }
+
+    await modem.setDatabase(records, of: Self.sensor)
+
+    return modem
+
+  }
+
+  func linkChecks(_ report: SelfTestReport) -> [SelfTestCheck] {
+
+    report.checks.filter { (check: SelfTestCheck) -> Bool in check.kind == .modemLinks }
+
+  }
+
+  @Test func checksEachGroupALinkCoversWhileItsFlagIsSet() async throws {
+
+    let modem: InMemoryModem = await sensorModem(flags: 0x40, linkedGroups: [0x01, 0x02, 0x04])
+    let log: OperationLog = await OperationLog.logging(modem)
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.sensorCatalog).device(Self.sensor).selfTest()
+    let links: [SelfTestCheck] = linkChecks(report)
+
+    // The spare group isn't in use, so it isn't checked.
+    #expect(report.checks.map(\.kind) == [.answers, .catalog, .productKey, .status, .linkDatabase, .modemLinks, .modemLinks, .modemLinks, .leftoverRecords, .operatingFlags])
+    #expect(links.map(\.group) == [SelfTestGroup(number: 1, name: "Open"), SelfTestGroup(number: 2, name: "Shut"), SelfTestGroup(number: 4, name: "Pulse")])
+    #expect(links.map(\.title) == ["Links with the modem, group 1 (Open)", "Links with the modem, group 2 (Shut)", "Links with the modem, group 4 (Pulse)"])
+    #expect(links.map(\.outcome) == [.passed, .passed, .passed])
+    #expect(links[1].detail == "The device and the modem hold both records of group 2.")
+    #expect(report.check(.operatingFlags)?.group == nil)
+    // The flags are read once, for both checks.
+    #expect(log.standardCommands.filter { (command1: UInt8) -> Bool in command1 == 0x1F }.count == 1)
+
+  }
+
+  @Test func warnsOfGroupsALinkDoesntCoverWhileItsFlagIsClear() async throws {
+
+    let modem: InMemoryModem = await sensorModem(flags: 0x00, linkedGroups: [0x01])
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.sensorCatalog).device(Self.sensor).selfTest()
+    let links: [SelfTestCheck] = linkChecks(report)
+
+    #expect(links.map { (check: SelfTestCheck) -> Int? in check.group?.number } == [1, 2, 4])
+    #expect(links.map(\.outcome) == [.passed, .warning, .warning])
+    #expect(links[1].detail == "Cover every group is off, so the Insteon device catalog's link covers group 1 alone, "
+      + "and this group is missing the device's controller record for group 2, the modem's responder record for group 2.")
+    #expect(links[1].fixes.isEmpty)
+    #expect(report.outcome == .warning)
+
+  }
+
+  @Test func failsAGroupALinkShouldCoverWhileItsFlagIsSet() async throws {
+
+    // The spare is in use, and the link covers it, but neither side holds its records.
+    let modem: InMemoryModem = await sensorModem(flags: 0x41, linkedGroups: [0x01, 0x02, 0x04])
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.sensorCatalog).device(Self.sensor).selfTest()
+    let links: [SelfTestCheck] = linkChecks(report)
+
+    #expect(links.map { (check: SelfTestCheck) -> Int? in check.group?.number } == [1, 2, 3, 4])
+    #expect(links.map(\.outcome) == [.passed, .passed, .failed, .passed])
+    #expect(links[2].detail == "The Insteon device catalog's link covers this group while Cover every group is on, and it is, "
+      + "but a record is missing: the device's controller record for group 3, the modem's responder record for group 3.")
+    #expect(links[2].fixes == [.link(modemRole: nil, group: nil), .checkSignal])
+    #expect(report.outcome == .failed)
+
+  }
+
+  /// The sensor's covering leg.
+  var sensorLeg: HubLinkingLeg {
+
+    HubLinkingLeg(
+      device: Self.sensor,
+      index: 0,
+      count: 1,
+      modemRole: .responder,
+      modemGroup: 0x01,
+      deviceGroup: 0x01,
+      allGroupsWhen: DeviceProfile.Group.Condition(flag: "coverEveryGroup", isSet: true)
+    )
+
+  }
+
+  func controllerRecord(_ group: AllLinkGroupNumber) -> LinkRecord {
+
+    LinkRecord(isController: true, isInUse: true, group: group, address: modemAddress, data: [0, 0, 0])
+
+  }
+
+  func modemResponderRecord(_ group: AllLinkGroupNumber) -> LinkRecord {
+
+    LinkRecord(isController: false, isInUse: true, group: group, address: Self.sensor, data: [0, 0, 0])
+
+  }
+
+  @Test func warnsOfAGroupALinkMayCoverWhenItsFlagWasntRead() {
+
+    let checks: [SelfTestCheck] = Device.linksChecks(
+      device: Self.sensor,
+      modem: modemAddress,
+      deviceRecords: [controllerRecord(0x01), controllerRecord(0x02), controllerRecord(0x04)],
+      modemRecords: [modemResponderRecord(0x01), modemResponderRecord(0x04)],
+      legs: [sensorLeg],
+      groups: Self.sensorGroups,
+      flags: Device.FlagStates(nil, commandSet: Self.sensorCommands)
+    )
+
+    #expect(checks.map(\.outcome) == [.passed, .warning, .passed])
+    #expect(checks[1].detail == "A record is missing, and whether the Insteon device catalog's link covers this group depends on Cover every group, "
+      + "which wasn't read: the modem's responder record for group 2.")
+    #expect(checks[1].fixes == [.readAgain])
+
+  }
+
+  @Test func failsTheGroupALinkIsMadeInWhateverItsFlag() {
+
+    for isSet in [true, false] {
+
+      let checks: [SelfTestCheck] = Device.linksChecks(
+        device: Self.sensor,
+        modem: modemAddress,
+        deviceRecords: [],
+        modemRecords: [modemResponderRecord(0x01)],
+        legs: [sensorLeg],
+        groups: Self.sensorGroups,
+        flags: Device.FlagStates(states: ["coverEveryGroup": isSet], labels: ["coverEveryGroup": "Cover every group"])
+      )
+
+      #expect(checks.first?.group == SelfTestGroup(number: 1, name: "Open"))
+      #expect(checks.first?.outcome == .failed)
+      #expect(checks.first?.detail == "A link is missing a record, so it works one way only, or not at all: the device's controller record for group 1.")
+      #expect(checks.first?.fixes == [.link(modemRole: nil, group: nil), .checkSignal])
+
+    }
+
+  }
+
+  @Test func checksTheCatalogsOtherLegsTogetherBeforeEachCoveredGroup() {
+
+    let controllerLeg = HubLinkingLeg(device: Self.sensor, index: 0, count: 2, modemRole: .controller, modemGroup: 0x00, deviceGroup: 0x01)
+    var covering: HubLinkingLeg = sensorLeg
+    covering.index = 1
+    covering.count = 2
+
+    let checks: [SelfTestCheck] = Device.linksChecks(
+      device: Self.sensor,
+      modem: modemAddress,
+      deviceRecords: [LinkRecord(isController: false, isInUse: true, group: 0x00, address: modemAddress, data: [0, 0, 0]), controllerRecord(0x01)],
+      modemRecords: [LinkRecord(isController: true, isInUse: true, group: 0x00, address: Self.sensor, data: [0, 0, 0]), modemResponderRecord(0x01)],
+      legs: [controllerLeg, covering],
+      groups: [DeviceProfile.Group(number: 1, name: "Open", role: .both)],
+      flags: Device.FlagStates(states: [:], labels: [:])
+    )
+
+    #expect(checks.map(\.group) == [nil, SelfTestGroup(number: 1, name: "Open")])
+    #expect(checks.first?.detail == "The device and the modem hold both records of the link the Insteon device catalog gives.")
+    #expect(checks.map(\.outcome) == [.passed, .passed])
 
   }
 

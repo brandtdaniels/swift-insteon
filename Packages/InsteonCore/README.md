@@ -17,7 +17,7 @@ Keep track of the Insteon devices on a network: the library an app or a command 
 
 - `DeviceRegistry`: the devices an app knows, each with the identity it reported and what the Insteon device catalog says about it; it never sends anything to a modem or a device, and describes every device again when given a newer catalog
 - `RegisteredDevice`: a device's address, identity and `DeviceInfo`
-- `DeviceInfo`: what the catalog says about a device: its product's name and model, the product key it's expected to report, and what its link records' data bytes mean, as `LinkDataMeaning`
+- `DeviceInfo`: what the catalog says about a device: its product's name and model, the product key it's expected to report and whether a device was seen reporting it, and what its link records' data bytes mean, as `LinkDataMeaning`
 - `DeviceRegistrySnapshot`: a registry's devices as a value to save and restore
 - `DeviceRegistryStore`: somewhere an app keeps a registry's devices between launches
 - `JSONFileDeviceRegistryStore`: keeps them in a versioned JSON file only the current user can read, replaced whole on every save; it also reads the `insteon` command's identity cache, and never replaces a file it can't read
@@ -36,7 +36,7 @@ Keep track of the Insteon devices on a network: the library an app or a command 
 - `ProtectedCommand`: Set Operating Flags with the cmd2s that turn most devices' radio or powerline off, require a checksum or lock linking from the device, sent only to a device whose command set names the cmd2 for a flag it doesn't guard, and Poke, never sent; every message InsteonCore sends is checked against them by its bytes
 - `SendRefusal`: why `DeviceNetwork.send(_:collectingFor:onAcknowledgment:)`, which sends a device a message as it's given through the same guards as `Device`, or `ModemSession.write(rawCommand:forcing:collectingFor:clock:)`, which writes a serial command once `SerialCommandPolicy` allows it, refused before sending anything; only a refusal the policy makes unless forced can be forced
 - `DeviceCapabilities`: what a device can do, for a front end to decide what to show
-- `SelfTestReport`: what `Device.selfTest(_:)` found: each check's outcome, what it found and what may put it right, and what only a person can check; the test only reads, the device's database from the device itself, unless asked to send Beep
+- `SelfTestReport`: what `Device.selfTest(_:)` found: each check's outcome, what it found and what may put it right, the group it's about when a link covers several, the product key the device reported next to the one the catalog gives, and what only a person can check; the test only reads, the device's database from the device itself, unless asked to send Beep
 
 ### Linking and scenes
 

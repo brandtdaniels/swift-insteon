@@ -177,6 +177,20 @@ struct HubLinkingAndGuardTests {
 
   }
 
+  @Test func givesTheVerificationThatCoversAProductKey() {
+
+    let seen = Verification(status: .observed, note: "Seen on a device.")
+    let listed = Verification(status: .documented, note: "A list gives it.")
+    let key = ProductKey(0x00, 0x00, 0x1A)
+
+    // The key's own verification, where the catalog gives one, over the identity's.
+    #expect(DeviceIdentity(category: 0x10, subcategory: 0x01, verification: seen, productKey: .key(key), productKeyVerification: listed).productKeyVerificationInEffect == listed)
+    #expect(DeviceIdentity(category: 0x10, subcategory: 0x01, verification: seen, productKey: .key(key)).productKeyVerificationInEffect == seen)
+    // Without a key, nothing covers it.
+    #expect(DeviceIdentity(category: 0x10, subcategory: 0x01, verification: seen, productKeyVerification: listed).productKeyVerificationInEffect == nil)
+
+  }
+
   // MARK: - Linking from a Hub
 
   @Test func readsTheLegsOfLinkingFromAHub() throws {

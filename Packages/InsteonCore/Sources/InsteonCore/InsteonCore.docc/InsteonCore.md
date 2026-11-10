@@ -192,11 +192,14 @@ do {
 ``Device/selfTest(_:)`` checks that a device is healthy and set up as the catalog expects, and
 returns a ``SelfTestReport`` of ``SelfTestCheck``s in the order they ran: the device answers
 and accepts the modem, the catalog describes the identity it reports in the test, it reports
-its state, its ALL-Link database, read from the device rather than from a copy the network
-holds, ends whole, with every checksum intact for an i2CS device, it and the modem hold both
-records of each link the catalog gives it, its records name only the modem and devices the
-modem is linked to, and no operating flag locks it or cuts it off. A damaged record isn't
-taken for a missing link. Each check has a ``SelfTestOutcome``, a sentence saying what it found, and the
+the product key the catalog gives its product (no answer counts against it only when a device
+was seen reporting the key), it reports its state, its ALL-Link database, read from the device rather than from a copy the network holds, ends whole, with every
+checksum intact for an i2CS device, it and the modem hold both records of each link the
+catalog gives it, its records name only the modem and devices the modem is linked to, and no
+operating flag locks it or cuts it off. A damaged record isn't taken for a missing link. A
+link the catalog says covers every group the device controls while an operating flag is in a
+state is checked group by group, each check naming its ``SelfTestGroup``, with the flag as
+the device reported it. Each check has a ``SelfTestOutcome``, a sentence saying what it found, and the
 ``SelfTestFix``es that may put it right, from Insteon's troubleshooting steps, for a front end
 to say how to carry out. The test only reads; ``SelfTestOptions/actuates`` also sends Beep when
 the catalog lists a Beep that's sent to the device. A device that doesn't answer fails the
@@ -354,6 +357,7 @@ do {
 - ``SelfTestReport``
 - ``SelfTestCheck``
 - ``SelfTestCheckKind``
+- ``SelfTestGroup``
 - ``SelfTestOutcome``
 - ``SelfTestFix``
 - ``SelfTestChecklistItem``

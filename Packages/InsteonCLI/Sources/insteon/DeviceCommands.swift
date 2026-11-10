@@ -245,7 +245,8 @@ enum DeviceCommands {
     }
 
     // What the catalog says the product reports explains a key that's missing.
-    let catalogKey: ExpectedProductKey? = await network.registry.device(device)?.info.expectedProductKey
+    let catalogInfo: DeviceInfo? = await network.registry.device(device)?.info
+    let catalogKey: ExpectedProductKey? = catalogInfo?.expectedProductKey
 
     // Newer devices leave the product key out, or report zeros; that's expected, not a failure.
     let productKey = productData?.productKey
@@ -273,7 +274,12 @@ enum DeviceCommands {
     let categoryText: String = category.map(Names.category) ?? "not reported"
     let subcategoryText: String = subcategory.map { "\($0)" } ?? "not reported"
     let firmwareText: String = identity?.firmwareVersion.map { "\($0)" } ?? "not reported"
-    let productKeyText: String = IdentityText.productKey(reported: productKey, answered: productData != nil, catalog: catalogKey)
+    let productKeyText: String = IdentityText.productKey(
+      reported: productKey,
+      answered: productData != nil,
+      catalog: catalogKey,
+      isCatalogKeyObserved: catalogInfo?.isExpectedProductKeyObserved == true
+    )
     var rows: [[String]] = [
       ["Device:", "\(device)"],
       ["Engine:", Names.engine(identification.engine)],
@@ -361,7 +367,7 @@ enum DeviceCommands {
 
     if !printsJSON {
 
-      Output.note("Testing \(device.address): reading its identity, state, ALL-Link database and operating flags, and the modem's database...")
+      Output.note("Testing \(device.address): reading its identity, product key, state, ALL-Link database and operating flags, and the modem's database...")
 
     }
 

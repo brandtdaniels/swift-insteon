@@ -149,6 +149,10 @@ public actor InMemoryModem: LinkingModem {
   /// listed don't reply.
   public var identities: [InsteonAddress: SetButtonPressed] = [:]
 
+  /// The Product Data Response each device sends after it acknowledges Product Data Request.
+  /// Devices not listed acknowledge the request and send none.
+  public private(set) var productData: [InsteonAddress: ProductData] = [:]
+
   /// Devices that never complete a link.
   public var silentDevices: Set<InsteonAddress> = []
 
@@ -454,6 +458,49 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Sets the Product Data Response a device sends after it acknowledges Product Data Request.
+  public func setProductData(_ data: ProductData) {
+
+    productData[data.sender] = data
+
+  }
+
+  /// A device sends its Product Data Response, if it has one: an extended direct message
+  /// with cmd1 `0x03` and cmd2 `0x00`, its key in D2 through D4 and its category and
+  /// subcategory in D5 and D6.
+  private func sendProductData(of device: InsteonAddress) {
+
+    guard let data = productData[device] else {
+
+      return
+
+    }
+
+    let bytes: [UInt8] = [0x00] + data.productKey.bytes + [data.category.rawValue, data.subcategory.rawValue, 0xFF, 0xFF]
+      + (data.userDefined + Array(repeating: 0x00, count: 6)).prefix(6)
+
+    guard let userData = try? UserData(bytes) else {
+
+      return
+
+    }
+
+    let response = ReceivedMessage(
+      sender: device,
+      destination: address,
+      flags: MessageFlags(messageType: .direct),
+      command: Command(command1: 0x03, command2: 0x00),
+      userData: userData
+    )
+
+    for subscriber in subscribers.values {
+
+      subscriber.yield(.messageReceived(response))
+
+    }
+
+  }
+
   /// A device broadcasts its identity, if it has one.
   public func broadcastIdentity(of device: InsteonAddress) {
 
@@ -739,6 +786,17 @@ public actor InMemoryModem: LinkingModem {
 
       // The device acknowledges, then broadcasts its identity.
       broadcastIdentity(of: device)
+
+    } else if message.command == Command(command1: 0x03, command2: 0x00) {
+
+      guard !unlinkedDevices.contains(device) else {
+
+        throw ModemError.deviceRejected(device, .notLinked)
+
+      }
+
+      // The device acknowledges, then sends its product data.
+      sendProductData(of: device)
 
     } else if message.command.command1 == 0x1F, let flags = operatingFlags[device] {
 

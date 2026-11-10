@@ -240,8 +240,14 @@ public enum SelfTestText {
       /// The check's kind, such as `"modemLinks"`.
       public let id: String
 
-      /// What the check is.
+      /// What the check is, with its group when it has one.
       public let title: String
+
+      /// The group the check is about, or `nil` for a check of the whole device.
+      public let group: Int?
+
+      /// The group's name in the Insteon device catalog, or `nil` if it gives none.
+      public let groupName: String?
 
       /// `"passed"`, `"warning"`, `"failed"` or `"skipped"`.
       public let outcome: String
@@ -286,6 +292,14 @@ public enum SelfTestText {
     /// The product the Insteon device catalog has for the device.
     public let product: String?
 
+    /// The product key the device reported to Product Data Request, such as `"0x00001A"`, or
+    /// `nil` if it wasn't asked, didn't answer, or reported none.
+    public let productKey: String?
+
+    /// The product key the Insteon device catalog gives, `"none"` for a product it says
+    /// reports none, or `nil` when it doesn't say.
+    public let catalogProductKey: String?
+
     /// The test's outcome as a whole.
     public let outcome: String
 
@@ -308,12 +322,16 @@ public enum SelfTestText {
       subcategory = report.identity.map { (identity: ReportedIdentity) -> String in "\(identity.subcategory)" }
       firmwareVersion = report.identity?.firmwareVersion.map { (version: FirmwareVersion) -> String in "\(version)" }
       product = report.productName
+      productKey = report.productKey.map { (key: ProductKey) -> String in "\(key)" }
+      catalogProductKey = IdentityText.catalogProductKey(report.expectedProductKey)
       outcome = report.outcome.rawValue
       checks = report.checks.map { (check: SelfTestCheck) -> Check in
 
         Check(
           id: check.kind.rawValue,
           title: check.title,
+          group: check.group?.number,
+          groupName: check.group?.name,
           outcome: check.outcome.rawValue,
           detail: check.detail,
           fixes: check.fixes.map { (each: SelfTestFix) -> Fix in Self.fix(each, device: device) }
