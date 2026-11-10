@@ -464,7 +464,7 @@ struct SafetySummary: Hashable {
 
     for command in commands.extendedCommands {
 
-      add(.extended(command.command, command.fixedBytes), isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
+      add(.extended(command.command, CommandSetSafety.keyBytes(of: command)), isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
 
     }
 

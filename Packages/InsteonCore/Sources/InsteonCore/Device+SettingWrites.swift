@@ -327,7 +327,7 @@ extension Device {
     case let .extendedCommand(command)?:
       let positions: [Int] = DeviceSettingSafety.parameter(of: command, for: value)?.positions ?? []
 
-      routes = positions.map { (position: Int) -> DeviceSettingSafety.ByteRoute in .extendedCommand(command.command, command.fixedBytes, position: position) }
+      routes = positions.map { (position: Int) -> DeviceSettingSafety.ByteRoute in .extendedCommand(command.command, DeviceSettingSafety.keyBytes(of: command), position: position) }
     case nil:
       break
     }

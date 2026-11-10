@@ -402,6 +402,32 @@ struct GuardWeakeningTests {
 
   }
 
+  @Test func refusesACommandSentUnguardedWithTheSameBytesInAnotherOrder() {
+
+    // A twin of the guarded writeLock with no guard, its fixed bytes reversed and an extra
+    // D14 its checksum overwrites, sends the same bytes.
+    let guardedWrite = DeviceExtendedCommand(
+      name: "writeTwin",
+      summary: "Writes.",
+      command: Command(command1: 0x2E, command2: 0x00),
+      fixedBytes: [FixedUserDataByte(position: 1, value: 0x01), FixedUserDataByte(position: 2, value: 0x09)],
+      integrity: .checksum,
+      sendGuard: .never
+    )
+    let twin = DeviceExtendedCommand(
+      name: "writeTwin",
+      summary: "Writes.",
+      command: Command(command1: 0x2E, command2: 0x00),
+      fixedBytes: [FixedUserDataByte(position: 14, value: 0x00), FixedUserDataByte(position: 2, value: 0x09), FixedUserDataByte(position: 1, value: 0x01)],
+      integrity: .checksum
+    )
+    let baseline: DeviceCatalog = Self.catalog([Self.profile(["exampleGuarded"])], [Self.guarded(extraExtendedCommands: [guardedWrite])])
+    let weakenings: [GuardWeakening] = Self.catalog([Self.profile(["exampleGuarded"])], [Self.guarded(extraExtendedCommands: [twin])]).guardWeakenings(comparedTo: baseline)
+
+    #expect(Self.kinds(weakenings) == [.commandGuard])
+
+  }
+
   // MARK: - Accepted
 
   @Test func acceptsAnEqualOrStricterCatalog() {

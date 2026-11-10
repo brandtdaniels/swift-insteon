@@ -220,4 +220,71 @@ struct CommandSetTests {
 
   }
 
+  // MARK: - Fixed bytes and guards
+
+  /// A command set in the catalog's JSON with one extended or standard command.
+  static func catalog(extended: String = "", standard: String = "") throws -> DeviceCatalog {
+
+    let extendedJSON: String = extended.isEmpty ? "" : #", "extendedCommands": [\#(extended)]"#
+    let standardJSON: String = standard.isEmpty ? "" : #", "standardCommands": [\#(standard)]"#
+
+    return try DeviceCatalog(json: Data(#"{ "devices": [], "commandSets": [{ "id": "exampleFixed", "name": "A", "description": "A.", "sources": ["A"]\#(extendedJSON)\#(standardJSON) }] }"#.utf8))
+
+  }
+
+  @Test func keepsFixedBytesInDOrder() throws {
+
+    let catalog: DeviceCatalog = try Self.catalog(extended: #"{ "name": "write", "description": "W.", "command1": "0x2E", "command2": "0x00", "fixed": [{ "position": 2, "value": "0x05" }, { "position": 1, "value": "0x01" }] }"#)
+
+    #expect(catalog.commandSet(id: "exampleFixed")?.extendedCommand(named: "write")?.fixedBytes == [FixedUserDataByte(position: 1, value: 0x01), FixedUserDataByte(position: 2, value: 0x05)])
+
+  }
+
+  @Test(arguments: [
+    // A byte fixed twice.
+    #"{ "name": "write", "description": "W.", "command1": "0x2E", "command2": "0x00", "fixed": [{ "position": 2, "value": "0x05" }, { "position": 2, "value": "0x06" }] }"#,
+    // D14, which a checksum overwrites.
+    #"{ "name": "write", "description": "W.", "command1": "0x2E", "command2": "0x00", "integrity": "checksum", "fixed": [{ "position": 14, "value": "0x00" }] }"#,
+    // D13, which a CRC overwrites.
+    #"{ "name": "write", "description": "W.", "command1": "0x2E", "command2": "0x00", "integrity": "crc", "fixed": [{ "position": 13, "value": "0x00" }] }"#
+  ])
+  func refusesFixedBytesThatCantBeSentAsGiven(_ command: String) {
+
+    #expect(throws: DecodingError.self) {
+
+      try Self.catalog(extended: command)
+
+    }
+
+  }
+
+  @Test func refusesAGuardOnAStandardCommandsCmd2() {
+
+    let guarded = #"{ "name": "setBits", "description": "S.", "command1": "0x20", "parameter": { "name": "bits", "description": "B.", "kind": "flags", "bits": [{ "mask": "0x01", "name": "lockout", "guard": "neverSet" }] } }"#
+
+    do {
+
+      _ = try Self.catalog(standard: guarded)
+      Issue.record("Expected the guarded cmd2 to be refused.")
+
+    } catch let DecodingError.dataCorrupted(context) {
+
+      #expect(context.debugDescription.contains("exampleFixed"))
+      #expect(context.debugDescription.contains("setBits"))
+
+    } catch {
+
+      Issue.record("Expected dataCorrupted, got \(error).")
+
+    }
+
+    // The same bits with no guard read.
+    #expect(throws: Never.self) {
+
+      try Self.catalog(standard: guarded.replacingOccurrences(of: #", "guard": "neverSet""#, with: ""))
+
+    }
+
+  }
+
 }

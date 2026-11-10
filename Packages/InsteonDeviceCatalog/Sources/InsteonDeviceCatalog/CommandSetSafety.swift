@@ -414,6 +414,34 @@ package enum CommandSetSafety {
 
   }
 
+  /// An extended command's fixed bytes as a route or command key: in D order, each position
+  /// once, the last given winning, and without the bytes its integrity check overwrites, so
+  /// two commands that send the same bytes have the same key.
+  package static func keyBytes(of command: DeviceExtendedCommand) -> [FixedUserDataByte] {
+
+    let reserved: Set<Int>
+
+    switch command.integrity {
+    case .unprotected:
+      reserved = []
+    case .checksum:
+      reserved = [14]
+    case .crc:
+      reserved = [13, 14]
+    }
+
+    var byPosition: [Int: UInt8] = [:]
+
+    for byte in command.fixedBytes where !reserved.contains(byte.position) {
+
+      byPosition[byte.position] = byte.value
+
+    }
+
+    return byPosition.keys.sorted().map { (position: Int) -> FixedUserDataByte in FixedUserDataByte(position: position, value: byPosition[position] ?? 0) }
+
+  }
+
   /// The guarded operating flag bits a value's byte holds, as its `SettingValue.flagsQuery`
   /// says.
   package static func flagsQueryBits(of value: SettingValue, in commands: CommandSet) -> [GuardedBit] {
@@ -517,7 +545,7 @@ package enum CommandSetSafety {
 
         for position in parameter.positions {
 
-          let route: ByteRoute = .extendedCommand(command.command, command.fixedBytes, position: position)
+          let route: ByteRoute = .extendedCommand(command.command, keyBytes(of: command), position: position)
 
           list(route)
 
