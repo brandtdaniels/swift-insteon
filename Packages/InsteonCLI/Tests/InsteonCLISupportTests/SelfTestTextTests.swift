@@ -124,6 +124,7 @@ struct SelfTestTextTests {
     let linkFixes: [[String: Any]] = try #require(checks[2]["fixes"] as? [[String: Any]])
     let reviewFixes: [[String: Any]] = try #require(checks[3]["fixes"] as? [[String: Any]])
 
+    // A report without product keys leaves their keys out.
     #expect(object.keys.sorted() == ["address", "category", "checklist", "checks", "engine", "firmwareVersion", "outcome", "product", "subcategory"])
     #expect(object["address"] as? String == "1A.2B.3C")
     #expect(object["engine"] as? String == "i2CS")
@@ -140,6 +141,44 @@ struct SelfTestTextTests {
     #expect(checklist.map { (item: [String: Any]) -> String? in item["id"] as? String } == ["pressButton", "powerCycle"])
     #expect(checklist.first?["group"] as? Int == 1)
     #expect(checklist.last?["group"] == nil)
+
+  }
+
+  @Test func printsTheProductKeyCheckAndBothKeys() throws {
+
+    var keyed = SelfTestReport(
+      device: lamp,
+      checks: [
+        SelfTestCheck(
+          kind: .productKey,
+          outcome: .warning,
+          detail: "The device reported product key 0x00ABCE, but the Insteon device catalog gives 0x00ABCD for this product.",
+          fixes: [.updateCatalog]
+        )
+      ]
+    )
+    keyed.productKey = ProductKey(0x00, 0xAB, 0xCE)
+    keyed.expectedProductKey = .key(ProductKey(0x00, 0xAB, 0xCD))
+
+    let lines: [String] = SelfTestText.checkLines(keyed)
+    let data: Data = try JSONEncoder().encode(SelfTestText.JSON(keyed))
+    let object: [String: Any] = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let checks: [[String: Any]] = try #require(object["checks"] as? [[String: Any]])
+
+    #expect(lines.first == "WARN  Product key  The device reported product key 0x00ABCE, but the Insteon device catalog gives 0x00ABCD for this product.")
+    #expect(object["productKey"] as? String == "0x00ABCE")
+    #expect(object["catalogProductKey"] as? String == "0x00ABCD")
+    #expect(checks.first?["id"] as? String == "productKey")
+    #expect(checks.first?["title"] as? String == "Product key")
+
+    keyed.productKey = nil
+    keyed.expectedProductKey = .notReported
+
+    let unkeyed: Data = try JSONEncoder().encode(SelfTestText.JSON(keyed))
+    let unkeyedObject: [String: Any] = try #require(try JSONSerialization.jsonObject(with: unkeyed) as? [String: Any])
+
+    #expect(unkeyedObject["productKey"] == nil)
+    #expect(unkeyedObject["catalogProductKey"] as? String == "none")
 
   }
 

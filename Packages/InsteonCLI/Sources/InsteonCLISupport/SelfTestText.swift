@@ -286,6 +286,14 @@ public enum SelfTestText {
     /// The product the Insteon device catalog has for the device.
     public let product: String?
 
+    /// The product key the device reported to Product Data Request, such as `"0x00001A"`, or
+    /// `nil` if it wasn't asked, didn't answer, or reported none.
+    public let productKey: String?
+
+    /// The product key the Insteon device catalog gives, `"none"` for a product it says
+    /// reports none, or `nil` when it doesn't say.
+    public let catalogProductKey: String?
+
     /// The test's outcome as a whole.
     public let outcome: String
 
@@ -308,6 +316,8 @@ public enum SelfTestText {
       subcategory = report.identity.map { (identity: ReportedIdentity) -> String in "\(identity.subcategory)" }
       firmwareVersion = report.identity?.firmwareVersion.map { (version: FirmwareVersion) -> String in "\(version)" }
       product = report.productName
+      productKey = report.productKey.map { (key: ProductKey) -> String in "\(key)" }
+      catalogProductKey = IdentityText.catalogProductKey(report.expectedProductKey)
       outcome = report.outcome.rawValue
       checks = report.checks.map { (check: SelfTestCheck) -> Check in
 

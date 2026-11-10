@@ -6,17 +6,18 @@ import InsteonProtocol
 // Checking that a device is healthy and set up as the catalog expects.
 extension Device {
 
-  /// Checks that the device answers, that the Insteon device catalog describes it, that its
-  /// ALL-Link database reads intact, that it and the modem hold both records of each link
-  /// between them, that its records name only the modem and devices the modem knows, and that
-  /// no operating flag locks it or cuts it off.
+  /// Checks that the device answers, that the Insteon device catalog describes it, that it
+  /// reports the product key the catalog gives, that its ALL-Link database reads intact, that
+  /// it and the modem hold both records of each link between them, that its records name only
+  /// the modem and devices the modem knows, and that no operating flag locks it or cuts it off.
   ///
-  /// The test only reads: it sends Get Insteon Engine Version, ID Request, the catalog's
-  /// status request, the requests that read the device's ALL-Link database and its operating
-  /// flags, and reads the modem's own database. It writes no record and no setting. The
-  /// device's database is read from the device every time, never from a copy the network
-  /// holds. With ``SelfTestOptions/actuates``, it also sends Beep when the catalog lists a
-  /// Beep that's sent to the device, and nothing to a device the catalog doesn't describe.
+  /// The test only reads: it sends Get Insteon Engine Version, ID Request, Product Data
+  /// Request when the catalog gives the product a key, the catalog's status request, the
+  /// requests that read the device's ALL-Link database and its operating flags, and reads the
+  /// modem's own database. It writes no record and no setting. The device's database is read
+  /// from the device every time, never from a copy the network holds. With
+  /// ``SelfTestOptions/actuates``, it also sends Beep when the catalog lists a Beep that's sent
+  /// to the device, and nothing to a device the catalog doesn't describe.
   ///
   /// What the catalog says comes from the identity the device reports to ID Request during
   /// the test; a device that reports none is tested without the catalog. A device that doesn't
@@ -97,6 +98,15 @@ extension Device {
 
     report.productName = info?.displayName
     report.checks.append(Self.catalogCheck(identity: report.identity, info: info))
+
+    // MARK: Product key
+
+    report.expectedProductKey = info?.expectedProductKey
+
+    let productKey: (check: SelfTestCheck, reported: ProductKey?) = try await productKeyCheck(isDescribed: description != nil, expected: report.expectedProductKey)
+
+    report.productKey = productKey.reported
+    report.checks.append(productKey.check)
 
     // MARK: Status
 
@@ -319,6 +329,70 @@ extension Device {
       detail: "The Insteon device catalog doesn't describe the identity the device reported, so the checks that need it are skipped.",
       fixes: [.updateCatalog]
     )
+
+  }
+
+  /// Whether the device reports the product key the catalog gives, asked with Product Data
+  /// Request only when the catalog gives one.
+  func productKeyCheck(isDescribed: Bool, expected: ExpectedProductKey?) async throws -> (check: SelfTestCheck, reported: ProductKey?) {
+
+    guard isDescribed else {
+
+      return (SelfTestCheck(kind: .productKey, outcome: .skipped, detail: Self.withoutIdentity), nil)
+
+    }
+
+    switch expected {
+    case nil:
+      return (SelfTestCheck(kind: .productKey, outcome: .skipped, detail: "The Insteon device catalog gives no product key for the device, so none was asked for."), nil)
+    case .notReported?:
+      // A product that reports no key doesn't answer Product Data Request, so it isn't asked.
+      return (SelfTestCheck(kind: .productKey, outcome: .skipped, detail: "The Insteon device catalog says the device reports no product key, so none was asked for."), nil)
+    case let .key(key)?:
+      let data: DeviceProductData? = try await network.productData(of: address)
+
+      return (Self.productKeyCheck(expected: key, data: data), data?.productKey)
+    }
+
+  }
+
+  /// Whether a device's Product Data Response gives the key the catalog does.
+  static func productKeyCheck(expected: ProductKey, data: DeviceProductData?) -> SelfTestCheck {
+
+    guard let data else {
+
+      return SelfTestCheck(
+        kind: .productKey,
+        outcome: .warning,
+        detail: "The device didn't answer Product Data Request, so its product key wasn't compared with the \(expected) the Insteon device catalog gives.",
+        fixes: [.readAgain, .checkSignal]
+      )
+
+    }
+
+    guard let reported = data.productKey else {
+
+      return SelfTestCheck(
+        kind: .productKey,
+        outcome: .warning,
+        detail: "The device reported no product key, but the Insteon device catalog gives \(expected) for this product.",
+        fixes: [.updateCatalog]
+      )
+
+    }
+
+    guard reported == expected else {
+
+      return SelfTestCheck(
+        kind: .productKey,
+        outcome: .warning,
+        detail: "The device reported product key \(reported), but the Insteon device catalog gives \(expected) for this product.",
+        fixes: [.updateCatalog]
+      )
+
+    }
+
+    return SelfTestCheck(kind: .productKey, outcome: .passed, detail: "The device reported product key \(reported), as the Insteon device catalog gives.")
 
   }
 

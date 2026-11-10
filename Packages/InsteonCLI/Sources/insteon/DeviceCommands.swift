@@ -361,7 +361,7 @@ enum DeviceCommands {
 
     if !printsJSON {
 
-      Output.note("Testing \(device.address): reading its identity, state, ALL-Link database and operating flags, and the modem's database...")
+      Output.note("Testing \(device.address): reading its identity, product key, state, ALL-Link database and operating flags, and the modem's database...")
 
     }
 

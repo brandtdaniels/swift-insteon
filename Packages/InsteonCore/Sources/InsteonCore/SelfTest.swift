@@ -45,6 +45,10 @@ public enum SelfTestCheckKind: String, Hashable, Sendable, CaseIterable {
   /// The Insteon device catalog describes the identity the device reports to ID Request.
   case catalog
 
+  /// The product key the device reports to Product Data Request is the one the catalog gives
+  /// its product. Product Data Request is sent only when the catalog gives a key.
+  case productKey
+
   /// The device reports its state.
   case status
 
@@ -75,6 +79,8 @@ public enum SelfTestCheckKind: String, Hashable, Sendable, CaseIterable {
       "Answers the modem"
     case .catalog:
       "Insteon device catalog"
+    case .productKey:
+      "Product key"
     case .status:
       "Reports its state"
     case .linkDatabase:
@@ -196,6 +202,14 @@ public struct SelfTestReport: Hashable, Sendable {
   /// The product the Insteon device catalog has for the device, or `nil` if it has none.
   public var productName: String?
 
+  /// The product key the device reported to Product Data Request, or `nil` if it wasn't
+  /// asked, didn't answer, or reported none.
+  public var productKey: ProductKey?
+
+  /// The product key the catalog gives the device's product, or that it reports none, or
+  /// `nil` if the catalog doesn't say.
+  public var expectedProductKey: ExpectedProductKey?
+
   /// The state the device reported, or `nil` if it wasn't read.
   public var status: DeviceStatus?
 
@@ -212,6 +226,8 @@ public struct SelfTestReport: Hashable, Sendable {
   ///   - engine: The engine the device reported. Defaults to `nil`.
   ///   - identity: The identity the device reported. Defaults to `nil`.
   ///   - productName: The product the catalog has for the device. Defaults to `nil`.
+  ///   - productKey: The product key the device reported. Defaults to `nil`.
+  ///   - expectedProductKey: The product key the catalog gives. Defaults to `nil`.
   ///   - status: The state the device reported. Defaults to `nil`.
   ///   - checks: The checks, in order.
   ///   - checklist: What only a person can do. Defaults to none.
@@ -220,6 +236,8 @@ public struct SelfTestReport: Hashable, Sendable {
     engine: InsteonEngine? = nil,
     identity: ReportedIdentity? = nil,
     productName: String? = nil,
+    productKey: ProductKey? = nil,
+    expectedProductKey: ExpectedProductKey? = nil,
     status: DeviceStatus? = nil,
     checks: [SelfTestCheck],
     checklist: [SelfTestChecklistItem] = []
@@ -229,6 +247,8 @@ public struct SelfTestReport: Hashable, Sendable {
     self.engine = engine
     self.identity = identity
     self.productName = productName
+    self.productKey = productKey
+    self.expectedProductKey = expectedProductKey
     self.status = status
     self.checks = checks
     self.checklist = checklist

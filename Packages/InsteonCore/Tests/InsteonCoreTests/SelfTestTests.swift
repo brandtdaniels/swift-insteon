@@ -90,7 +90,7 @@ struct SelfTestTests {
   let modemAddress = InsteonAddress(0x11, 0x22, 0x33)
 
   /// The kinds of the checks a test without Beep runs, in order.
-  let kinds: [SelfTestCheckKind] = [.answers, .catalog, .status, .linkDatabase, .modemLinks, .leftoverRecords, .operatingFlags]
+  let kinds: [SelfTestCheckKind] = [.answers, .catalog, .productKey, .status, .linkDatabase, .modemLinks, .leftoverRecords, .operatingFlags]
 
   func pressed(_ device: InsteonAddress, _ identity: ReportedIdentity) -> SetButtonPressed {
 
@@ -143,9 +143,10 @@ struct SelfTestTests {
     let product: String = try #require(report.productName)
 
     #expect(report.checks.map(\.kind) == kinds)
-    #expect(report.checks.map(\.outcome) == [.passed, .passed, .passed, .passed, .passed, .passed, .skipped])
+    #expect(report.checks.map(\.outcome) == [.passed, .passed, .skipped, .passed, .passed, .passed, .passed, .skipped])
     #expect(report.check(.answers)?.detail == "The device answered and accepts the modem.")
     #expect(report.check(.catalog)?.detail == "The Insteon device catalog describes the device as \(product).")
+    #expect(report.check(.productKey)?.detail == "The Insteon device catalog gives no product key for the device, so none was asked for.")
     #expect(report.check(.status)?.detail == "The device reported its state.")
     #expect(report.check(.linkDatabase)?.detail == "1 record in use, each with its checksum intact.")
     #expect(report.check(.modemLinks)?.detail == "The device and the modem hold both records of the link.")
@@ -290,6 +291,130 @@ struct SelfTestTests {
     // One ID Request, and no Beep.
     #expect(log.standardCommands.filter { (command1: UInt8) -> Bool in command1 == 0x10 }.count == 1)
     #expect(!log.standardCommands.contains(0x30))
+
+  }
+
+  // MARK: - The product key
+
+  static let keyedIdentity = ReportedIdentity(category: 0x02, subcategory: 0x62, firmwareVersion: 0x45)
+
+  static let keylessIdentity = ReportedIdentity(category: 0x02, subcategory: 0x63, firmwareVersion: 0x45)
+
+  static let expectedKey = ProductKey(0x00, 0xAB, 0xCD)
+
+  /// A product the catalog gives a key, and one it says reports none.
+  static let keyedCatalog = DeviceCatalog(profiles: [
+    DeviceProfile(model: "9180", name: "Example Keyed", identities: [DeviceIdentity(category: 0x02, subcategory: 0x62, productKey: .key(expectedKey))]),
+    DeviceProfile(model: "9181", name: "Example Keyless", identities: [DeviceIdentity(category: 0x02, subcategory: 0x63, productKey: .notReported)])
+  ])
+
+  /// A modem whose keyed device answers Product Data Request with a key.
+  func keyed(reporting key: ProductKey) async -> InMemoryModem {
+
+    let modem: InMemoryModem = await linked(identity: Self.keyedIdentity)
+    await modem.setProductData(ProductData(sender: Example.plug, productKey: key, category: 0x02, subcategory: 0x62, userDefined: []))
+
+    return modem
+
+  }
+
+  @Test func passesAProductKeyThatMatchesTheCatalogs() async throws {
+
+    let modem: InMemoryModem = await keyed(reporting: Self.expectedKey)
+    let log: OperationLog = await OperationLog.logging(modem)
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.keyedCatalog).device(Example.plug).selfTest()
+    let check: SelfTestCheck = try #require(report.check(.productKey))
+
+    #expect(report.checks.map(\.kind) == kinds)
+    #expect(check.outcome == .passed)
+    #expect(check.detail == "The device reported product key 0x00ABCD, as the Insteon device catalog gives.")
+    #expect(check.fixes.isEmpty)
+    #expect(report.productKey == Self.expectedKey)
+    #expect(report.expectedProductKey == .key(Self.expectedKey))
+    // Product Data Request is sent once, as a standard message, and nothing is written.
+    #expect(log.standardCommands.filter { (command1: UInt8) -> Bool in command1 == 0x03 }.count == 1)
+    #expect(log.writesAndExtendedMessages == 0)
+
+  }
+
+  @Test func warnsOfAProductKeyThatDiffersFromTheCatalogs() async throws {
+
+    let modem: InMemoryModem = await keyed(reporting: ProductKey(0x00, 0xAB, 0xCE))
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.keyedCatalog).device(Example.plug).selfTest()
+    let check: SelfTestCheck = try #require(report.check(.productKey))
+
+    #expect(check.outcome == .warning)
+    #expect(check.detail == "The device reported product key 0x00ABCE, but the Insteon device catalog gives 0x00ABCD for this product.")
+    #expect(check.fixes == [.updateCatalog])
+    #expect(report.productKey == ProductKey(0x00, 0xAB, 0xCE))
+    #expect(report.outcome == .warning)
+
+  }
+
+  @Test func warnsOfAMissingProductKeyTheCatalogGives() async throws {
+
+    // A key of zeros is no key.
+    let modem: InMemoryModem = await keyed(reporting: ProductKey(0x00, 0x00, 0x00))
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.keyedCatalog).device(Example.plug).selfTest()
+    let check: SelfTestCheck = try #require(report.check(.productKey))
+
+    #expect(check.outcome == .warning)
+    #expect(check.detail == "The device reported no product key, but the Insteon device catalog gives 0x00ABCD for this product.")
+    #expect(check.fixes == [.updateCatalog])
+    #expect(report.productKey == nil)
+
+  }
+
+  @Test func warnsWhenTheDeviceSendsNoProductData() async throws {
+
+    // The device acknowledges Product Data Request and sends no response.
+    let modem: InMemoryModem = await linked(identity: Self.keyedIdentity)
+    let network: DeviceNetwork = self.network(modem, catalog: Self.keyedCatalog)
+
+    let test = Task { () async throws -> SelfTestReport in try await network.device(Example.plug).selfTest() }
+
+    await clock.waitForSleeper(until: Modem.defaultExtendedRequestTimeout)
+    clock.advance(by: Modem.defaultExtendedRequestTimeout)
+
+    let report: SelfTestReport = try await test.value
+    let check: SelfTestCheck = try #require(report.check(.productKey))
+
+    #expect(check.outcome == .warning)
+    #expect(check.detail == "The device didn't answer Product Data Request, so its product key wasn't compared with the 0x00ABCD the Insteon device catalog gives.")
+    #expect(check.fixes == [.readAgain, .checkSignal])
+    #expect(report.productKey == nil)
+
+  }
+
+  @Test func asksForNoProductKeyTheCatalogSaysTheDeviceDoesntReport() async throws {
+
+    let modem: InMemoryModem = await linked(identity: Self.keylessIdentity)
+    let log: OperationLog = await OperationLog.logging(modem)
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.keyedCatalog).device(Example.plug).selfTest()
+    let check: SelfTestCheck = try #require(report.check(.productKey))
+
+    #expect(check.outcome == .skipped)
+    #expect(check.detail == "The Insteon device catalog says the device reports no product key, so none was asked for.")
+    #expect(report.expectedProductKey == .notReported)
+    #expect(!log.standardCommands.contains(0x03))
+
+  }
+
+  @Test func asksForNoProductKeyWithoutTheCatalog() async throws {
+
+    let modem: InMemoryModem = await linked(identity: ReportedIdentity(category: 0x02, subcategory: 0x55, firmwareVersion: 0x41))
+    let log: OperationLog = await OperationLog.logging(modem)
+
+    let report: SelfTestReport = try await network(modem, catalog: Self.keyedCatalog).device(Example.plug).selfTest()
+
+    #expect(report.check(.productKey)?.outcome == .skipped)
+    #expect(report.check(.productKey)?.detail == "The Insteon device catalog gives no product key for the device, so none was asked for.")
+    #expect(report.expectedProductKey == nil)
+    #expect(!log.standardCommands.contains(0x03))
 
   }
 
