@@ -232,7 +232,8 @@ struct GuardWeakeningTests {
   @Test func refusesAValueWrittenThroughAnUnguardedCommandWithTheSameBytes() {
 
     // A second command with the guarded command's bytes, whose bit has no guard, writes the
-    // value; bit guards are kept per command bytes and parameter, and per value.
+    // value. The route keeps the guarded command's never-set bit, which the send path checks
+    // whichever command writes it, so only the value's own guard is lost.
     let twin = DeviceExtendedCommand(
       name: "writeFlagsTwin",
       summary: "Writes the flags.",
@@ -241,7 +242,7 @@ struct GuardWeakeningTests {
       parameters: [MessageField(name: "flags", summary: "The flags.", location: .userData([3]), kind: .flags([FieldBit(mask: 0x01, name: "lockout")]))]
     )
 
-    #expect(Self.kinds(Self.weakenings(Self.guarded(flagsByteWrite: "writeFlagsTwin", extraExtendedCommands: [twin]))) == [.valueBits, .writtenBits])
+    #expect(Self.kinds(Self.weakenings(Self.guarded(flagsByteWrite: "writeFlagsTwin", extraExtendedCommands: [twin]))) == [.valueBits])
     // With the value still written through the guarded command, the twin changes nothing.
     #expect(Self.weakenings(Self.guarded(extraExtendedCommands: [twin])).isEmpty)
 
@@ -259,7 +260,7 @@ struct GuardWeakeningTests {
 
     #expect(weaker.guardWeakenings(comparedTo: Self.baseline).map(\.description) == [
       "0x01/0x7A valueBits flagsByte D8 never-set bits 0x01",
-      "0x01/0x7A writtenBits cmd1 0x2E cmd2 0x00 D2 0x07 D3 read at D8 never-set bits 0x01"
+      "0x01/0x7A writtenBits cmd1 0x2E cmd2 0x00 D2 0x07 D3 never-set bits 0x01"
     ])
 
   }
@@ -441,6 +442,29 @@ struct GuardWeakeningTests {
     stricter.operatingFlags[2].writeGuard = .keep
 
     #expect(Self.weakenings(stricter).isEmpty)
+
+  }
+
+  @Test func acceptsAMovedReadPositionForAValueWithOnlyNeverSetBits() {
+
+    // A never-set bit is refused when a write sets it, wherever its byte is read.
+    let baseline: CommandSet = Self.guarded(radioMute: nil)
+    var moved: CommandSet = baseline
+
+    moved.extendedSettings?.values[0].position = 12
+
+    #expect(Self.catalog([Self.profile([moved.id])], [moved]).guardWeakenings(comparedTo: Self.catalog([Self.profile([baseline.id])], [baseline])).isEmpty)
+
+  }
+
+  @Test func acceptsAReadableValueOnAFlagsParameterNothingReadBefore() {
+
+    // A kept bit nothing read was refused in every write; read at D8 it's compared with the
+    // device's report, as strictly.
+    let unread: CommandSet = Self.guarded(flagsByteWrite: "noSuchCommand")
+    let read: CommandSet = Self.guarded()
+
+    #expect(Self.catalog([Self.profile([read.id])], [read]).guardWeakenings(comparedTo: Self.catalog([Self.profile([unread.id])], [unread])).isEmpty)
 
   }
 

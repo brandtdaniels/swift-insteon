@@ -512,22 +512,32 @@ struct SafetySummary: Hashable {
         place = "cmd1 \(hex(command.command1)) cmd2 \(hex(command.command2))\(bytes) D\(position)"
       }
 
-      for (readPosition, masks) in byPosition {
+      let new: [Int?: Masks] = routeMasks[route] ?? [:]
+      let newKeptAnywhere: UInt8 = new.values.reduce(0) { $0 | $1.kept }
+      let newGuardedAnywhere: UInt8 = new.values.reduce(0) { $0 | $1.kept | $1.neverSet }
 
-        let new: Masks = routeMasks[route]?[readPosition] ?? Masks()
+      // A never-set bit is refused when a write sets it, wherever its byte is read, so it's
+      // compared on the route as a whole.
+      let oldNeverSet: UInt8 = byPosition.values.reduce(0) { $0 | $1.neverSet }
+      let missingNeverSet: UInt8 = oldNeverSet & ~newGuardedAnywhere
+
+      if missingNeverSet != 0 {
+
+        findings.append(Finding(kind: .writtenBits, detail: "\(place) never-set bits \(hex(missingNeverSet))"))
+
+      }
+
+      // A kept bit is compared with the device's report where its byte is read: the same place,
+      // or none, which refuses every write. One read nowhere is kept as strictly anywhere.
+      for (readPosition, masks) in byPosition where masks.kept != 0 {
+
+        let keptThere: UInt8 = readPosition.map { (position: Int) -> UInt8 in (new[position]?.kept ?? 0) | (new[Int?.none]?.kept ?? 0) } ?? newKeptAnywhere
+        let missingKept: UInt8 = masks.kept & ~keptThere
         let read: String = readPosition.map { (position: Int) -> String in "read at D\(position)" } ?? "read nowhere"
-        let missingKept: UInt8 = masks.kept & ~new.kept
-        let missingNeverSet: UInt8 = masks.neverSet & ~(new.neverSet | new.kept)
 
         if missingKept != 0 {
 
           findings.append(Finding(kind: .writtenBits, detail: "\(place) \(read) kept bits \(hex(missingKept))"))
-
-        }
-
-        if missingNeverSet != 0 {
-
-          findings.append(Finding(kind: .writtenBits, detail: "\(place) \(read) never-set bits \(hex(missingNeverSet))"))
 
         }
 
