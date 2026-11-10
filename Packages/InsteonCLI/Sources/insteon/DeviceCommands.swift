@@ -171,14 +171,13 @@ enum DeviceCommands {
 
     } catch {
 
-      switch SendFailure(error) {
-      case let .deviceRejected(_, reason)?:
-        throw CommandFailure(description: DeviceText.beepRejected(address, reason: reason))
-      case .deviceUnanswered?:
-        throw CommandFailure(description: DeviceText.beepUnanswered(address))
-      default:
-        throw error
+      if let failure = DeviceText.beepFailure(SendFailure(error), device: address) {
+
+        throw CommandFailure(description: failure)
+
       }
+
+      throw error
 
     }
 

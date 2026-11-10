@@ -113,6 +113,26 @@ public enum DeviceText {
 
   }
 
+  /// What to print when Beep failed in a way the command explains: the device rejected it
+  /// or didn't answer.
+  ///
+  /// - Parameters:
+  ///   - failure: How the send failed, as `SendFailure` reads the error, or `nil`.
+  ///   - device: The device.
+  /// - Returns: The sentence, or `nil` for a failure that describes itself.
+  public static func beepFailure(_ failure: SendFailure?, device: InsteonAddress) -> String? {
+
+    switch failure {
+    case let .deviceRejected(_, reason)?:
+      beepRejected(device, reason: reason)
+    case .deviceUnanswered?:
+      beepUnanswered(device)
+    default:
+      nil
+    }
+
+  }
+
   /// What to print for a device's status.
   ///
   /// - Parameters:
