@@ -2,9 +2,9 @@ import InsteonCLISupport
 import InsteonCore
 
 /// What `insteon link`, `insteon unlink` and `insteon remove` show as a
-/// `DeviceLinkingCoordinator` works: its progress and instructions on standard error, worded
-/// by `LinkingEventText`, and each link made or removed, a device forgotten, the records other
-/// devices hold for it and its factory reset steps on standard output, or as JSON.
+/// `DeviceLinkingCoordinator` works: what `LinkingOutput.outputs(for:printsJSON:namesProducts:message:)`
+/// says to do with each event, progress and instructions on standard error, and results on
+/// standard output, or as JSON.
 ///
 /// When the device goes first, the instructions end by asking for Return when standard input
 /// is a terminal, and the modem joins once it's pressed; Control-C stops the wait.
@@ -27,85 +27,36 @@ struct LinkingPrompter: LinkingObserver {
 
   func linking(_ event: LinkingEvent) async {
 
-    switch event {
-    case let .linked(linked):
-      if linked.leg == .first {
+    let outputs: [LinkingOutput] = LinkingOutput.outputs(
+      for: event,
+      printsJSON: printsJSON,
+      namesProducts: names.catalog != nil,
+      message: Names.message(for:)
+    )
 
+    for output in outputs {
+
+      switch output {
+      case .saveIdentities:
         await cached.save()
-
-      }
-
-      guard !printsJSON else {
-
-        return
-
-      }
-
-      // The first leg prints the device's identity, and the link back the link alone.
-      ModemCommands.report(linked.link, known: linked.leg == .first ? linked.device?.info : nil, names: names)
-    case let .unlinked(unlinked):
-      if !printsJSON {
-
-        report(unlinked)
-
-      }
-    case let .unlinkedAll(removed):
-      if !printsJSON {
-
-        report(removed)
-
-      }
-    case let .forgotten(forgotten):
-      if !printsJSON {
-
-        lines(RemovalText.forgotten(forgotten))
-
-      }
-    case let .leftoverRecords(scan):
-      if !printsJSON {
-
-        lines(RemovalText.leftoverRecords(scan, message: Names.message(for:)))
-
-      }
-    case let .modemRecordsDeleted(device, records):
-      if !printsJSON {
-
-        lines(RemovalText.modemRecordsDeleted(device, records))
-
-      }
-    case let .hubLinkingStopped(result, _):
-      // The links made before linking stopped, so --json shows them with the error.
-      if printsJSON {
-
+      case let .line(text):
+        Output.line(text)
+      case let .table(rows):
+        Output.table(rows)
+      case let .note(text):
+        Output.note(text)
+      case let .json(report):
         do {
 
-          try Output.json(LinkingJSON.report(result, message: Names.message(for:)))
+          try Output.json(report)
 
         } catch {
 
           Output.note(Names.message(for: error))
 
         }
-
       }
 
-      for line in LinkingEventText.notes(for: event, message: Names.message(for:)) {
-
-        Output.note(line)
-
-      }
-    case let .factoryReset(reset):
-      if !printsJSON {
-
-        lines(RemovalText.factoryReset(reset))
-
-      }
-    default:
-      for line in LinkingEventText.notes(for: event, message: Names.message(for:)) {
-
-        Output.note(line)
-
-      }
     }
 
   }
@@ -141,51 +92,6 @@ struct LinkingPrompter: LinkingObserver {
     if waits {
 
       try await Terminal.waitForReturn()
-
-    }
-
-  }
-
-  /// Prints lines on standard output.
-  private func lines(_ lines: [String]) {
-
-    for line in lines {
-
-      Output.line(line)
-
-    }
-
-  }
-
-  /// Prints a removed link. A removed link carries no identity, so the device is named only
-  /// if it was known before.
-  private func report(_ unlinked: UnlinkedLink) {
-
-    let link: LinkMade = unlinked.link
-    let known: DeviceInfo? = unlinked.device?.info
-
-    Output.line("Unlinked \(LinkingInstructions.deviceLabel(link.address, info: known)) from group \(link.group).")
-
-  }
-
-  /// Prints the links removed without the device's SET button.
-  private func report(_ removed: RemovedLinks) {
-
-    let known: DeviceInfo? = removed.device?.info
-    let label: String = LinkingInstructions.deviceLabel(removed.address, info: known)
-    let reports: [LinkingJSON.RemovedLink] = LinkingJSON.removedLinks(removed)
-
-    guard !reports.isEmpty else {
-
-      Output.line("The modem has no links with \(label).")
-
-      return
-
-    }
-
-    for report in reports {
-
-      Output.line("Unlinked \(label) from group \(report.group), modem as \(report.modemRole).")
 
     }
 

@@ -570,34 +570,4 @@ enum ModemCommands {
 
   }
 
-  // MARK: - Helpers
-
-  /// Prints a new link, with the device's identity when it's known. Pass `nil` for `known` to
-  /// print the link alone.
-  static func report(_ link: LinkMade, known: DeviceInfo?, names: ProductNames) {
-
-    Output.line("Linked \(link.address) in group \(link.group), modem as \(Names.mode(link.mode)).")
-
-    guard let known else {
-
-      return
-
-    }
-
-    var rows = [
-      ["Category:", Names.category(known.category)],
-      ["Subcategory:", "\(known.subcategory)"],
-      ["Firmware:", known.firmwareVersion.map { "\($0)" } ?? "not reported"]
-    ]
-
-    if names.catalog != nil {
-
-      rows.append(["Product:", known.displayName ?? "not in the Insteon device catalog"])
-
-    }
-
-    Output.table(rows)
-
-  }
-
 }
