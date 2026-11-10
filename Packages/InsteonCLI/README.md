@@ -203,5 +203,5 @@ Turned 4D.5E.6F on at 50%.
 
 ## Layout
 
-- `Sources/insteon`: the command, which runs what the command line asks for
-- `Sources/InsteonCLISupport`: reading the command line, finding and checking the environment file and reading its variables, choosing the modem, where the identity cache is kept, choosing between the bundled and cached catalogs, and the text the command prints from the catalog, as plain functions the tests in `Tests/InsteonCLISupportTests` cover
+- `Sources/insteon`: the command's front end, which parses the command line, calls InsteonCore and InsteonCLISupport, prints what they return, asks at the terminal, handles Control-C and sets the exit status
+- `Sources/InsteonCLISupport`: everything the command decides, as plain functions the tests in `Tests/InsteonCLISupportTests` cover, with the files, network and terminal passed in: reading the command line, finding and checking the environment file and reading its variables, choosing the modem and refusing a Hub that wouldn't be sent the password, where the identity cache is kept and how changes are merged into it, choosing between the bundled and cached catalogs and whether `catalog update` saves the published one, how `discover` searches and where it sends the password, what the linking commands save and print for each step and when they fail, the exit status for each error, and the text the command prints from the catalog
