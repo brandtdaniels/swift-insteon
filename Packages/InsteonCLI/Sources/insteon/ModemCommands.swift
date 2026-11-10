@@ -269,9 +269,11 @@ enum ModemCommands {
 
     DatabaseLinkText.plan(plan).forEach(say)
 
-    if plan.isEmpty || options.isDryRun {
+    let decision: DatabaseLinkText.Decision = try await DatabaseLinkText.decision(plan, isDryRun: options.isDryRun, asks: asks, confirm: Terminal.confirm)
 
-      if options.isDryRun, !plan.isEmpty {
+    switch decision {
+    case .nothingToWrite, .dryRun:
+      if decision == .dryRun {
 
         say(DatabaseLinkText.dryRun)
 
@@ -284,17 +286,10 @@ enum ModemCommands {
       }
 
       return
-
-    }
-
-    if asks {
-
-      guard try await Terminal.confirm(DatabaseLinkText.question(plan)) else {
-
-        throw CommandFailure(description: DatabaseLinkText.declined)
-
-      }
-
+    case .declined:
+      throw CommandFailure(description: DatabaseLinkText.declined)
+    case .write:
+      break
     }
 
     let result: DatabaseLinkResult
@@ -314,13 +309,7 @@ enum ModemCommands {
 
       }
 
-      if interrupted.cause is CancellationError {
-
-        throw CancellationError()
-
-      }
-
-      throw CommandFailure(description: "The writes to the ALL-Link databases stopped partway: \(Names.message(for: interrupted.cause))")
+      throw DatabaseLinkText.failure(interrupted, message: Names.message(for:))
 
     }
 
@@ -332,9 +321,9 @@ enum ModemCommands {
 
     }
 
-    guard result.isComplete else {
+    if let failure = DatabaseLinkText.failure(result) {
 
-      throw CommandFailure(description: "Not every write to the ALL-Link databases went as planned.")
+      throw failure
 
     }
 
