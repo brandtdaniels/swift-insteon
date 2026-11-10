@@ -114,7 +114,7 @@ public enum CatalogUpdate {
 
     }
 
-    guard location.scheme == "https" else {
+    guard location.scheme?.lowercased() == "https" else {
 
       throw CommandFailure(description: "The Insteon device catalog's address, \(location.absoluteString), isn't HTTPS, so it isn't asked.")
 

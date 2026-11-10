@@ -113,6 +113,18 @@ struct CatalogUpdateTests {
 
   }
 
+  @Test func asksAnHTTPSAddressWhateverTheSchemesCase() async throws {
+
+    let download = Download(.success(.unchanged))
+    let upper = URL(string: "HTTPS://catalog.example/insteon/")!
+
+    let outcome = try await update(Copies(bundled: bundled), download, location: upper)
+
+    #expect(download.asked.count == 1)
+    #expect(outcome == .keep("The Insteon device catalog is up to date (0.6.20)."))
+
+  }
+
   // MARK: - Which copy is current
 
   @Test func comparesTheCachedCopyWhenItsInUse() async throws {
