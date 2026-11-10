@@ -76,86 +76,33 @@ enum IdentityStore {
 
   }
 
-  /// Writes to the cache only what changed from `start` to `learned`, such as what a network
-  /// learned since it started or since it last saved.
-  ///
-  /// The cache is read again first, and the changes are merged into it with
-  /// `NetworkSnapshot.merging(changesFrom:to:)`: each identity, each field of each device's
-  /// state, the modem's ALL-Link database and the Hub are written only when they changed, so
-  /// what another command saved in the meantime is kept unless this one changed the same
-  /// value. A cache that can't be read isn't replaced, so it isn't lost, and the warning about
-  /// it is printed only when a device reported an identity that would have been remembered.
+  /// Writes to the cache only what changed from `start` to `learned`, as
+  /// `IdentityCache.save(_:since:to:path:)` decides, printing its warning at most once a run.
   ///
   /// - Returns: `false` if the changes couldn't be written, so they're still to be saved, and
   ///   `true` otherwise.
   @discardableResult
   static func save(_ learned: NetworkSnapshot, since start: NetworkSnapshot) -> Bool {
 
-    guard learned != start, let path = path() else {
+    guard let path = path() else {
 
       return true
 
     }
 
     let store = JSONFileDeviceRegistryStore(fileURL: URL(fileURLWithPath: path))
-    let current: NetworkSnapshot
 
-    do {
+    switch IdentityCache.save(learned, since: start, to: store, path: path) {
+    case .unchanged, .saved:
+      return true
+    case let .notSaved(warning):
+      if let warning, self.warning.claim() {
 
-      current = try store.loadNetwork()
-
-    } catch {
-
-      if learned.registry != start.registry {
-
-        warn(about: error, path: path)
+        Output.note(warning)
 
       }
 
       return false
-
-    }
-
-    let merged: NetworkSnapshot = current.merging(changesFrom: start, to: learned)
-
-    guard merged != current else {
-
-      return true
-
-    }
-
-    do {
-
-      try store.saveNetwork(merged)
-
-      return true
-
-    } catch {
-
-      warn(about: error, path: path)
-
-      return false
-
-    }
-
-  }
-
-  /// Prints a warning that identities won't be remembered, the first time it's called in a run.
-  private static func warn(about error: any Error, path: String) {
-
-    guard warning.claim() else {
-
-      return
-
-    }
-
-    switch error as? DeviceRegistryStoreError {
-    case .malformedContents?, .unsupportedVersion(_)?:
-      Output.note("insteon: warning: the identity cache \(path) isn't in a format this command reads, so it's left as it is and the identities devices report won't be remembered. Delete it to start a new one.")
-    case .unreadableFile?:
-      Output.note("insteon: warning: the identity cache \(path) couldn't be read, so it's left as it is and the identities devices report won't be remembered.")
-    default:
-      Output.note("insteon: warning: the identity cache \(path) couldn't be written, so the identities devices report won't be remembered.")
     }
 
   }
