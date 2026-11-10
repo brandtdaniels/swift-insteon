@@ -391,7 +391,7 @@ enum ModemCommands {
 
       result = try await coordinator.link(
         device,
-        as: options.role == .responder ? .responder : .controller,
+        as: options.role.modemRole,
         group: options.group,
         twoWay: twoWay,
         setButtonTimeout: timeout,
@@ -401,7 +401,7 @@ enum ModemCommands {
 
     } else {
 
-      result = try await coordinator.linkBySETButton(as: manualRole(options.role), group: options.group, twoWay: twoWay, timeout: timeout, observer: observer)
+      result = try await coordinator.linkBySETButton(as: options.role.manualRole, group: options.group, twoWay: twoWay, timeout: timeout, observer: observer)
 
     }
 
@@ -416,20 +416,6 @@ enum ModemCommands {
 
       throw CommandFailure(description: failure)
 
-    }
-
-  }
-
-  /// The modem's role in a SET button link.
-  private static func manualRole(_ role: LinkingRole) -> ManualLinkingRole {
-
-    switch role {
-    case .controller:
-      return .controller
-    case .responder:
-      return .responder
-    case .either:
-      return .either
     }
 
   }
@@ -466,7 +452,7 @@ enum ModemCommands {
 
       let result: DeviceUnlinkingResult = try await coordinator.unlink(
         options.device,
-        as: options.role == .responder ? .responder : .controller,
+        as: options.role.modemRole,
         group: options.group,
         timeout: timeout,
         observer: observer

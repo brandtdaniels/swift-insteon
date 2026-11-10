@@ -311,6 +311,28 @@ public enum LinkingRole: String, Hashable, Sendable, CaseIterable {
   /// for.
   case either
 
+  /// The modem's role when a device is linked or unlinked by its address: responder when
+  /// asked, and controller otherwise, since only a SET button can choose.
+  public var modemRole: ModemRole {
+
+    self == .responder ? .responder : .controller
+
+  }
+
+  /// The modem's role when a device is linked with its SET button.
+  public var manualRole: ManualLinkingRole {
+
+    switch self {
+    case .controller:
+      .controller
+    case .responder:
+      .responder
+    case .either:
+      .either
+    }
+
+  }
+
 }
 
 /// How `insteon link --database` and `insteon unlink --database` write ALL-Link databases.
