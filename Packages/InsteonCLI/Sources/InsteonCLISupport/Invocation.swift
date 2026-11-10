@@ -251,6 +251,28 @@ public struct DiscoverOptions: Hashable, Sendable {
 
   }
 
+  /// Checks that the Hub's password goes only where the person chose: to the one Hub
+  /// `--identify HOST[:PORT]` names, or to each Hub found after asking at a terminal.
+  ///
+  /// - Parameter readsFromTerminal: Whether standard input is a terminal, so the person can
+  ///   be asked.
+  /// - Throws: `CommandFailure` when the Hubs found would be identified with no Hub named
+  ///   and no terminal to ask.
+  public func checkIdentifying(readsFromTerminal: Bool) throws(CommandFailure) {
+
+    guard identifiesHubs, identifyTarget == nil, !readsFromTerminal else {
+
+      return
+
+    }
+
+    throw CommandFailure(
+      description: "'--identify' sends the Hub's password, and there's no terminal to ask before sending it to each Hub found. "
+        + "Name the one Hub to send it to with '--identify HOST[:PORT]'."
+    )
+
+  }
+
 }
 
 /// A Hub named on the command line by its host and, optionally, its port.

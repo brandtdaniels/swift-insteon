@@ -45,14 +45,7 @@ enum DiscoverCommand {
 
     // Without a person to ask before each Hub is sent the password, it's sent only to the one
     // Hub named.
-    if options.identifiesHubs, options.identifyTarget == nil, !Terminal.readsFromTerminal {
-
-      throw CommandFailure(
-        description: "'--identify' sends the Hub's password, and there's no terminal to ask before sending it to each Hub found. "
-          + "Name the one Hub to send it to with '--identify HOST[:PORT]'."
-      )
-
-    }
+    try options.checkIdentifying(readsFromTerminal: Terminal.readsFromTerminal)
 
     let names = ProductNames()
     let search = HubSearch()
