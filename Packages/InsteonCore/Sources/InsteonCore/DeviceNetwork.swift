@@ -102,7 +102,9 @@ public actor DeviceNetwork {
   /// - Parameters:
   ///   - modem: The modem the devices are reached through.
   ///   - catalog: The catalog to describe devices with, or `nil` to describe them by their
-  ///     identities alone.
+  ///     identities alone. It's used as given: a front end that loads a catalog in place of
+  ///     the bundled copy reads it through ``ProductCatalog``, or calls
+  ///     `DeviceCatalog.checkGuards(against:)`, so it lets no more be sent than the bundled copy.
   ///   - snapshot: What the network knew before, such as a snapshot a ``NetworkSnapshotStore``
   ///     loaded. Defaults to nothing.
   ///   - hub: The Hub the modem is reached through, or `nil` for a modem that isn't a Hub's,
@@ -471,8 +473,9 @@ public actor DeviceNetwork {
   /// names the cmd2 for a flag or command it doesn't guard. Nor are the bytes the device's
   /// command set never sends, or an extended message that writes a byte holding a flag the
   /// catalog guards, which only ``Device/writeSetting(_:to:button:)`` writes. An extended Set
-  /// to a device with no command set isn't sent either, since which bits it writes can't be
-  /// told. The device isn't asked for its identity first.
+  /// to a device with no command set, or with a selector its command set doesn't list, isn't
+  /// sent either, since which bits it writes can't be told. The device isn't asked for its
+  /// identity first.
   ///
   /// Listening starts before the message, so nothing the device sends is missed. The
   /// device's acknowledgment is handed to `onAcknowledgment` as soon as it arrives, and isn't

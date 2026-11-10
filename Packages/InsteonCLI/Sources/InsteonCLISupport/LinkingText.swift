@@ -47,7 +47,7 @@ public enum LinkingInstructions {
   }
 
   /// A device's address, then its product's name and model in parentheses when the catalog
-  /// has its product, such as `"1A.2B.3C (Dimmer Switch 2477D)"`, to name it in a sentence.
+  /// has its product, such as `"1A.2B.3C (Example Dimmer 9101)"`, to name it in a sentence.
   ///
   /// The product's alias is left out, so the parentheses don't nest.
   ///
@@ -73,7 +73,7 @@ public enum LinkingInstructions {
   /// - Parameters:
   ///   - mode: Whether the device is to link or unlink.
   ///   - device: The device, as ``deviceLabel(_:info:)`` writes it, such as
-  ///     `"1A.2B.3C (Dimmer Switch 2477D)"`, or `nil` for any device.
+  ///     `"1A.2B.3C (Example Dimmer 9101)"`, or `nil` for any device.
   ///   - steps: The device's own steps for the mode, from ``steps(of:)``, or empty if the
   ///     catalog doesn't have them.
   ///   - waitsForReturn: Whether the command waits for Return before starting the modem,
@@ -499,7 +499,7 @@ public enum LinkingEventText {
       return ["Letting \(device) sleep again..."]
     case let .notReleased(device, reason):
       return [
-        "\(device) wasn't let sleep again: \(message(reason)) It may stay awake and use its batteries until it sleeps on its own "
+        "\(device) wasn't let sleep again: \(message(reason)) It may remain awake and use its batteries until it sleeps on its own "
           + "or is woken and linked again."
       ]
     }

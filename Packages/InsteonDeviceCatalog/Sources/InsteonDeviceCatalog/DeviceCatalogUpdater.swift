@@ -46,6 +46,12 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
   /// cache or a rolled-back site can't take back data a newer copy has.
   case olderThanCurrent(DeviceCatalogVersion)
 
+  /// The downloaded catalog would let an app send or write more to a device the guard
+  /// baseline knows than the baseline does, the copy the package ships with by default, so the
+  /// app keeps its copy.
+  /// The associated value is each weakened guard.
+  case weakensGuards([GuardWeakening])
+
 }
 
 /// Downloads the published device catalog when it differs from the app's copy.
@@ -120,18 +126,26 @@ public struct DeviceCatalogUpdater: Sendable {
   ///     ``DeviceCatalogUpdater/maximumResponseSize`` bytes.
   ///   - location: The directory the manifest and catalog are published in. Defaults to
   ///     ``DeviceCatalogUpdater/defaultLocation``.
+  ///   - guardBaseline: The catalog whose guards a download must give at least as strictly,
+  ///     or `nil` for the copy the package ships with.
   public init(
     client: any HTTPClient = URLSessionHTTPClient(
       redirectPolicy: DeviceCatalogUpdater.redirectPolicy,
       maximumResponseSize: DeviceCatalogUpdater.maximumResponseSize
     ),
-    location: URL = DeviceCatalogUpdater.defaultLocation
+    location: URL = DeviceCatalogUpdater.defaultLocation,
+    guardBaseline: DeviceCatalog? = nil
   ) {
 
     self.client = client
     self.location = location
+    self.guardBaseline = guardBaseline
 
   }
+
+  /// The catalog whose guards a download must give at least as strictly, or `nil` for the
+  /// copy the package ships with.
+  public let guardBaseline: DeviceCatalog?
 
   /// Downloads the published catalog if it differs from the app's copy and is at least as new
   /// as both the app's copy and the copy the package ships with.
@@ -149,7 +163,10 @@ public struct DeviceCatalogUpdater: Sendable {
   ///   ``DeviceCatalogUpdateError/olderThanCurrent(_:)`` if it's older than the app's copy or
   ///   the bundled copy, before it's downloaded; another ``DeviceCatalogUpdateError`` if a
   ///   download fails its checks; `HTTPClientError.responseTooLarge(limit:)` for a file larger
-  ///   than ``DeviceCatalogUpdater/maximumResponseSize``; `DecodingError` if a catalog that
+  ///   than ``DeviceCatalogUpdater/maximumResponseSize``;
+  ///   ``DeviceCatalogUpdateError/weakensGuards(_:)`` if the download gives a guard more
+  ///   weakly than ``guardBaseline``; `DeviceCatalogError.unreadableBundledCatalog` if the
+  ///   shipped copy, the default baseline, can't be read, so nothing is compared or used; `DecodingError` if a catalog that
   ///   matches its SHA-256 doesn't read as a catalog; `DeviceCatalogError.missingBundledCatalog`
   ///   if the shipped copy or its manifest is missing; or the client's error if a request gets
   ///   no response or is redirected somewhere its policy refuses, such as
@@ -196,7 +213,16 @@ public struct DeviceCatalogUpdater: Sendable {
 
     }
 
-    return .updated(json: json, catalog: try DeviceCatalog(json: json), version: manifest.version)
+    let catalog: DeviceCatalog = try DeviceCatalog(json: json)
+    let weakenings: [GuardWeakening] = catalog.guardWeakenings(comparedTo: try guardBaseline ?? DeviceCatalog.bundled())
+
+    guard weakenings.isEmpty else {
+
+      throw DeviceCatalogUpdateError.weakensGuards(weakenings)
+
+    }
+
+    return .updated(json: json, catalog: catalog, version: manifest.version)
 
   }
 

@@ -420,9 +420,10 @@ public enum HelpText {
                           "otherSettingsOutcome" (how the comparison ended),
                           "rereadFailure", "changedSettings", each with its name, label,
                           button, before and after, and "unreadSettings".
-                          Turning off the radio or the powerline, and requiring a checksum,
-                          are never written, and the programming lock is only turned off,
-                          also through a value whose byte holds them.
+                          A flag the catalog keeps, such as turning off the radio or the
+                          powerline or requiring a checksum, is never written, and one it
+                          guards as never set, such as a lock on linking from the device,
+                          is only turned off, also through a value whose byte holds them.
       send CMD1 CMD2 [--extended [D1 ... D14]] [--no-checksum] [--wait SECONDS]
                           Send the device a direct message as given, for exploring, and print
                           its ACK or NAK and the messages it sends in the next SECONDS,
@@ -431,15 +432,16 @@ public enum HelpText {
                           0x00 after; unless all 14 are given or --no-checksum is, D14 holds
                           the checksum i2CS devices require. Set Operating Flags (20) with
                           cmd2 0C, 0E, 19 or 00, which turn most devices' radio or
-                          powerline off, require a checksum or turn the programming lock
-                          on, is sent only to a device the identity cache knows whose
+                          powerline off, require a checksum or lock linking from the
+                          device, is sent only to a device the identity cache knows whose
                           catalog entry names that cmd2 for a flag or command it doesn't
-                          guard, such as an i3 Keypad's lock buttons (19). Poke (29) is
+                          guard, such as a keypad's button lock (19). Poke (29) is
                           never sent. Nor is a message the device's catalog entry never
                           sends, an extended message that writes a byte holding a guarded
                           flag, which only 'set' writes, or an extended Set (2E with D2
-                          other than 00) to a device the catalog doesn't describe, since
-                          which bits it writes can't be told. Nothing forces them.
+                          other than 00) to a device the catalog doesn't describe or with a
+                          selector its catalog entry doesn't list, since which bits it
+                          writes can't be told. Nothing forces them.
 
     'on', 'off', 'instant', 'status', 'beep', 'links', 'settings' and 'set' use the device's
     identity, from the identity cache or, for a device the cache doesn't know, an ID Request
@@ -476,7 +478,7 @@ public enum HelpText {
 
     A message to a device (0x62) or a group (0x61) is never written, with or without
     --force, when it's Set Operating Flags (0x20) that turns the radio (0C) or the powerline
-    (0E) off, requires a checksum (19) or turns the programming lock on (00), or Poke
+    (0E) off, requires a checksum (19) or locks linking from the device (00), or Poke
     (0x29), which writes a device's memory. Nor is one cut short. 'insteon device ADDRESS
     send' sends those Set Operating Flags to a device whose catalog entry gives the byte
     another meaning.

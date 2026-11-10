@@ -12,23 +12,27 @@ extension Device {
     /// An operation, refused with ``DeviceControlError/unsupported(_:product:)``.
     case control(DeviceOperation)
 
-    /// Writing a setting, refused with ``DeviceSettingError/neverWritten(label:)``.
-    case setting(label: String)
+    /// Writing a setting, refused with ``DeviceSettingError/neverWritten(label:)`` or, for a
+    /// bit that's never set, ``DeviceSettingError/leavesProgrammingLocked(label:)``. The
+    /// associated values are the setting's label and the bytes the device reported, by their
+    /// D position in the extended Get reply, which a kept bit is compared with, or `nil`.
+    case setting(label: String, current: [Int: UInt8]? = nil)
 
     /// A message sent as it's given, through a raw passthrough, refused with the
     /// ``SendRefusal`` itself.
     case asGiven
 
-    /// Whether the message's bytes are sent as they're given, rather than built and checked
-    /// against what the device reported, so any guarded flag in a byte it writes refuses it.
-    var sendsBytesAsGiven: Bool {
+    /// The bytes the device reported, which a kept bit a message writes must match; `nil` for
+    /// any message not built from a report, so any kept bit it writes refuses it.
+    var current: [Int: UInt8]? {
 
-      switch self {
-      case .asGiven, .control(.keepAwake):
-        return true
-      case .control, .setting:
-        return false
+      if case let .setting(_, current) = self {
+
+        return current
+
       }
+
+      return nil
 
     }
 
@@ -57,7 +61,8 @@ extension Device {
   /// with `duration`'s whole seconds, or else its parameter's largest value, for a parameter;
   /// or an operating flag, set or cleared with Set Operating Flags in the form the device takes.
   /// A message given by its bytes is sent as given. Nothing else is written: no other flag,
-  /// and never one the catalog or the floor guards, nor a command the catalog never sends.
+  /// and never one the catalog guards, nor a command the catalog never sends or the byte floor
+  /// holds.
   ///
   /// - Parameters:
   ///   - message: The message.
@@ -208,7 +213,7 @@ extension Device {
 
       if let flagCommand = commands.flagCommands.first(where: { (entry: OperatingFlagCommand) -> Bool in entry.name == name }) {
 
-        guard !DeviceSettingSafety.isNeverSent(flagCommand.sendGuard), !DeviceSettingSafety.neverSentNames.contains(name) else {
+        guard !DeviceSettingSafety.isNeverSent(flagCommand.sendGuard) else {
 
           throw refused
 
@@ -331,7 +336,7 @@ extension Device {
 
   }
 
-  /// The parameter of a keep-awake extended command that takes how long to stay awake: the
+  /// The parameter of a keep-awake extended command that takes how long to remain awake: the
   /// one in seconds, or else its only number, or `nil` when neither says.
   static func durationParameter(of command: DeviceExtendedCommand) -> MessageField? {
 
@@ -409,12 +414,13 @@ extension Device {
   /// Refuses a message whose bytes are never sent to the device, as
   /// `DeviceSettingSafety.isNeverSent(_:in:)` says from its command set: Poke, a
   /// ``ProtectedCommand`` the command set doesn't name for a flag it doesn't guard, and the
-  /// bytes the catalog's guards add; and, for a
-  /// message sent as it's given, an extended message that writes a byte holding a guarded
-  /// flag, as `DeviceSettingSafety.guardedFlagWritten(by:userData:in:)` finds it, or any
-  /// extended Set to a device with no command set. Every
-  /// message the device is sent is checked here, with the bytes it actually carries, so a
-  /// command filled in with a value, or listed under another name, can't send them.
+  /// bytes the catalog's guards add; an extended message that writes a guarded bit as its
+  /// guard forbids, on whatever route it writes the byte, as
+  /// `DeviceSettingSafety.guardViolation(by:userData:in:current:)` decides it, for every
+  /// purpose; and an extended Set to a device with no command set, or with a selector its
+  /// command set doesn't list. Every message the device is sent is checked here, with the
+  /// bytes it actually carries, so a command filled in with a value, listed under another
+  /// name, or named by a control action, can't send them.
   private func refuseIfNeverSent(_ command: Command, userData: UserData? = nil, for purpose: SendPurpose) async throws {
 
     let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription
@@ -432,15 +438,26 @@ extension Device {
 
       refusal = .neverSentToDevice(product: product)
 
-    } else if purpose.sendsBytesAsGiven, let userData, let commands, let label = DeviceSettingSafety.guardedFlagWritten(by: command, userData: userData, in: commands) {
+    } else if let userData, let commands, let bit = DeviceSettingSafety.guardViolation(by: command, userData: userData, in: commands, current: purpose.current) {
 
-      refusal = .writesGuardedFlags(label: label)
+      if case .setting = purpose {
 
-    } else if purpose.sendsBytesAsGiven, commands == nil, let userData, DeviceSettingSafety.isExtendedSet(command, userData: userData) {
+        throw bit.rule == .neverSet ? DeviceSettingError.leavesProgrammingLocked(label: bit.label) : DeviceSettingError.neverWritten(label: bit.label)
 
-      // Without a command set, which bits an extended Set writes, such as the programming
-      // lock's in an open/close sensor's configuration byte, can't be told.
+      }
+
+      refusal = .writesGuardedFlags(label: bit.label)
+
+    } else if commands == nil, let userData, DeviceSettingSafety.isExtendedSet(command, userData: userData) {
+
+      // Without a command set, which bits an extended Set writes, such as a lock on linking in
+      // a sensor's configuration byte, can't be told.
       refusal = .extendedSetWithoutCommandSet
+
+    } else if let userData, let commands, DeviceSettingSafety.isUnlistedExtendedSet(command, userData: userData, in: commands) {
+
+      // A selector the command set doesn't list writes bytes it doesn't describe.
+      refusal = .unlistedExtendedSet(selector: userData[2])
 
     } else {
 
@@ -451,7 +468,7 @@ extension Device {
     switch purpose {
     case let .control(operation):
       throw DeviceControlError.unsupported(operation, product: product)
-    case let .setting(label):
+    case let .setting(label, _):
       throw DeviceSettingError.neverWritten(label: label)
     case .asGiven:
       throw refusal
@@ -598,7 +615,7 @@ extension Device {
 
     }
 
-    // A reply whose bits carry more than the group's state, such as an EZFlora's valve status,
+    // A reply whose bits carry more than the group's state, such as a sprinkler's valve status,
     // is on only when the bits the catalog names match.
     if let onWhen = state.onWhen {
 

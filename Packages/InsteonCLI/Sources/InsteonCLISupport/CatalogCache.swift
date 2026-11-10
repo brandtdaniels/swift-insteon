@@ -52,8 +52,9 @@ public enum CatalogCache {
   ///
   /// The cached copy is used when it has the same MAJOR.MINOR as the bundled copy, so the
   /// package reads its format, and a PATCH at least as high, so it's at least as new.
-  /// Without a bundled copy, a cached one is used whatever its version; without a cached
-  /// copy, the bundled one is.
+  /// Without a bundled copy, nothing can check a cached copy's guards, so the bundled copy is
+  /// still the answer and the cached one isn't used; without a cached copy, the bundled one
+  /// is.
   ///
   /// ```swift
   /// let bundled = DeviceCatalogVersion(major: 0, minor: 6, patch: 25)
@@ -77,7 +78,7 @@ public enum CatalogCache {
 
     guard let bundled else {
 
-      return .cached
+      return .bundled
 
     }
 
@@ -88,6 +89,58 @@ public enum CatalogCache {
     }
 
     return .cached
+
+  }
+
+  /// What to do with the cached copy of the catalog, once it's read and checked against the
+  /// bundled copy.
+  public enum CachedCatalog {
+
+    /// Use the cached copy.
+    case use(ProductCatalog)
+
+    /// Use the bundled copy, after the warning, as the cached copy weakens its guards.
+    case useBundled(warning: String)
+
+    /// Use no catalog, after the warning, as the bundled copy, which the cached one is checked
+    /// against, is missing or can't be read.
+    case useNone(warning: String)
+
+    /// The cached copy can't be read as a catalog.
+    case unreadable
+
+  }
+
+  /// Reads the cached copy of the catalog and says which copy to use.
+  ///
+  /// - Parameters:
+  ///   - json: The cached copy's JSON.
+  ///   - path: The cached copy's file, for a warning.
+  ///   - reading: Reads and checks a catalog, as `ProductCatalog.init(json:)` does.
+  /// - Returns: What to do.
+  public static func cachedCatalog(_ json: Data, path: String, reading: (Data) throws -> ProductCatalog) -> CachedCatalog {
+
+    do {
+
+      return .use(try reading(json))
+
+    } catch let ProductCatalogError.weakensGuards(weakenings) {
+
+      return .useBundled(warning: CatalogText.cachedWeakensGuards(path: path, weakenings))
+
+    } catch ProductCatalogError.bundledCopyMissing {
+
+      return .useNone(warning: CatalogText.cachedUnchecked(path: path, bundledIsMissing: true))
+
+    } catch ProductCatalogError.bundledCopyUnreadable {
+
+      return .useNone(warning: CatalogText.cachedUnchecked(path: path, bundledIsMissing: false))
+
+    } catch {
+
+      return .unreadable
+
+    }
 
   }
 
@@ -229,6 +282,58 @@ public enum CatalogText {
 
     return "The published Insteon device catalog, \(published), is in an older format than this command reads, "
       + "catalog \(format), so the current copy, \(current), stays."
+
+  }
+
+  /// What `insteon catalog update` says when the published copy would let more be sent or
+  /// written to a device than the bundled copy does, so it isn't used.
+  ///
+  /// - Parameters:
+  ///   - weakenings: The weakened guards.
+  ///   - current: The version of the copy in use, which stays.
+  /// - Returns: The message.
+  public static func publishedWeakensGuards(_ weakenings: [GuardWeakening], current: DeviceCatalogVersion) -> String {
+
+    "The published Insteon device catalog would let more be sent or written to a device than the bundled copy does, "
+      + "weakening the guards that keep it reachable and unlocked (\(list(weakenings))), so it isn't used and the current copy, \(current), stays."
+
+  }
+
+  /// The warning when the cached copy would let more be sent or written to a device than the
+  /// bundled copy does, so the bundled copy is used.
+  ///
+  /// - Parameters:
+  ///   - path: The cached copy's file.
+  ///   - weakenings: The weakened guards.
+  /// - Returns: The warning.
+  public static func cachedWeakensGuards(path: String, _ weakenings: [GuardWeakening]) -> String {
+
+    "insteon: warning: the cached Insteon device catalog at \(path) would let more be sent or written to a device than the bundled copy does, "
+      + "weakening the guards that keep it reachable and unlocked (\(list(weakenings))), so the bundled copy is used. "
+      + "'insteon catalog update' replaces it."
+
+  }
+
+  /// The warning when the cached copy can't be checked, since the bundled copy is missing or
+  /// can't be read, so it isn't used.
+  ///
+  /// - Parameters:
+  ///   - path: The cached copy's file.
+  ///   - bundledIsMissing: Whether the bundled copy is missing, rather than unreadable.
+  /// - Returns: The warning.
+  public static func cachedUnchecked(path: String, bundledIsMissing: Bool) -> String {
+
+    let problem: String = bundledIsMissing ? "isn't next to it" : "couldn't be read"
+
+    return "insteon: warning: the cached Insteon device catalog at \(path) isn't used: the catalog the command ships with \(problem), "
+      + "so nothing can check the cached copy's guards. Scripts/install-insteon.sh installs the command with it."
+
+  }
+
+  /// Weakened guards as a list, such as `0x01/0x7A flagBits Get Operating Flags 0x00 kept bits 0x40`.
+  static func list(_ weakenings: [GuardWeakening]) -> String {
+
+    weakenings.map(\.description).joined(separator: ", ")
 
   }
 

@@ -3,6 +3,7 @@ import Testing
 @testable import InsteonCore
 import InsteonDeviceCatalog
 import InsteonNetworking
+import InsteonProtocol
 
 /// Updating the Insteon device catalog from its published copy.
 struct ProductCatalogUpdateTests {
@@ -26,6 +27,7 @@ struct ProductCatalogUpdateTests {
   @Test func throwsItsOwnErrorForEachOfTheUpdatersAndTheRedirects() {
 
     let version = DeviceCatalogVersion(major: 1, minor: 2, patch: 3)
+    let weakening = GuardWeakening(category: 0x01, subcategory: 0x7A, firmwareVersion: nil, kind: .flagBits, detail: "Get Operating Flags 0x00 never-set bits 0x01")
     let notACatalog = DecodingError.dataCorrupted(DecodingError.Context(codingPath: [], debugDescription: "Not a catalog."))
     let cases: [(any Error, ProductCatalogUpdateError)] = [
       (DeviceCatalogUpdateError.incompatibleVersion(version), .incompatibleVersion(version)),
@@ -36,6 +38,7 @@ struct ProductCatalogUpdateTests {
       (HTTPClientError.insecureRedirect, .insecureRedirect),
       (HTTPClientError.redirectRefused, .redirectRefused),
       (notACatalog, .unreadableCatalog),
+      (DeviceCatalogUpdateError.weakensGuards([weakening]), .weakensGuards([weakening])),
     ]
 
     for (error, expected) in cases {
@@ -52,6 +55,61 @@ struct ProductCatalogUpdateTests {
     #expect((ProductCatalog.updateError(for: HTTPClientError.responseTooLarge(limit: 16)) as? HTTPClientError) == .responseTooLarge(limit: 16))
     #expect((ProductCatalog.updateError(for: HTTPClientError.nonHTTPResponse) as? HTTPClientError) == .nonHTTPResponse)
     #expect((ProductCatalog.updateError(for: Unrelated()) as? Unrelated) == Unrelated())
+
+  }
+
+  // MARK: - A saved or supplied catalog
+
+  /// A made-up command set whose lockout flag is guarded as `lockout` says.
+  static func catalog(lockout: FlagGuard?) -> DeviceCatalog {
+
+    DeviceCatalog(
+      profiles: [
+        DeviceProfile(
+          model: "9701",
+          name: "Example Guarded Switch",
+          identities: [DeviceIdentity(category: 0x01, subcategory: 0x7A)],
+          commandSets: [CommandSetEntry(commandSet: "exampleGuarded", category: 0x01, subcategory: 0x7A)]
+        )
+      ],
+      commandSets: [
+        CommandSet(
+          id: "exampleGuarded",
+          name: "Example guarded",
+          summary: "A lockout.",
+          operatingFlags: [OperatingFlag(name: "lockout", summary: "Locks out linking.", query: .operatingFlags, bit: 0x01, on: 0x00, off: 0x01, writeGuard: lockout)]
+        )
+      ]
+    )
+
+  }
+
+  @Test func refusesASavedCatalogThatWeakensTheBaselinesGuards() throws {
+
+    let baseline: DeviceCatalog = Self.catalog(lockout: .neverSet)
+
+    #expect(throws: ProductCatalogError.weakensGuards(Self.catalog(lockout: nil).guardWeakenings(comparedTo: baseline))) {
+
+      try ProductCatalog.checked(Self.catalog(lockout: nil), against: baseline)
+
+    }
+
+    // Equal and stricter guards are kept.
+    #expect(try ProductCatalog.checked(Self.catalog(lockout: .neverSet), against: baseline) == Self.catalog(lockout: .neverSet))
+    #expect(try ProductCatalog.checked(Self.catalog(lockout: .keep), against: baseline) == Self.catalog(lockout: .keep))
+
+  }
+
+  @Test func readsTheBundledCopyAsGuardedAsItself() throws {
+
+    let json: Data = try DeviceCatalog.bundledJSON()
+
+    #expect(throws: Never.self) {
+
+      _ = try ProductCatalog(json: json)
+      _ = try ProductCatalog.load(contentsOf: ProductCatalog.bundledCatalogURL())
+
+    }
 
   }
 

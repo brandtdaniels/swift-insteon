@@ -162,7 +162,7 @@ public struct MessageField: Hashable, Sendable {
   }
 
   /// The user data bytes the field is in, or an empty list for cmd2.
-  var positions: [Int] {
+  package var positions: [Int] {
 
     if case let .userData(positions) = location {
 

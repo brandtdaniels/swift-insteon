@@ -237,26 +237,29 @@ extension Device {
     }
 
     // A byte that holds operating flags writes them all, so it never sets a bit that's never
-    // set, such as the programming lock's, and never changes a bit that's kept.
-    let guardedBits: [DeviceSettingSafety.GuardedBit] = DeviceSettingSafety.guardedBits(in: value, of: commands)
-
-    for bit in guardedBits where bit.rule == .neverSet && raw & bit.mask != 0 {
+    // set, such as one that locks linking: refused before the byte is read, for every value
+    // and flags parameter on the routes the write takes.
+    if let bit = Self.guardedBitWritten(raw, writing: value, in: commands, current: nil, checkingKept: false) {
 
       throw DeviceSettingError.leavesProgrammingLocked(label: bit.label)
 
     }
 
     let before: [SettingName: UInt8]? = try await readValues(settings: settings, button: target)
+    // The bytes the device reported, by where an extended Get reply holds them, which a kept
+    // bit on the routes the write takes must match.
+    let current: [Int: UInt8]? = before.map { (values: [SettingName: UInt8]) -> [Int: UInt8] in
 
-    for bit in guardedBits where bit.rule == .keep {
-
-      guard let current = before?[value.name], current & bit.mask == raw & bit.mask else {
-
-        throw DeviceSettingError.neverWritten(label: bit.label)
-
-      }
+      Dictionary(values.compactMap { (name: SettingName, byte: UInt8) -> (Int, UInt8)? in settings.value(named: name).map { (found: SettingValue) -> (Int, UInt8) in (found.position, byte) } }, uniquingKeysWith: { (first: UInt8, _: UInt8) -> UInt8 in first })
 
     }
+
+    if let bit = Self.guardedBitWritten(raw, writing: value, in: commands, current: current, checkingKept: true) {
+
+      throw DeviceSettingError.neverWritten(label: bit.label)
+
+    }
+
     let message: ExtendedMessage
 
     do {
@@ -275,7 +278,9 @@ extension Device {
 
     let othersBefore: OtherSettingsCheck.Before = try await others.readBefore(isOwnReported: before != nil, values: before.map { (values: [SettingName: UInt8]) -> [UInt8: [SettingName: UInt8]] in [target: values] } ?? [:])
 
-    _ = try await request(message, timeout: Modem.defaultExtendedRequestTimeout, for: .setting(label: item.label))
+    // The send path checks every guarded bit on every route the message writes again, a kept
+    // bit against the byte the device reported where its value is read.
+    _ = try await request(message, timeout: Modem.defaultExtendedRequestTimeout, for: .setting(label: item.label, current: current))
 
     let after: [SettingName: UInt8]? = try await readValues(settings: settings, button: target)
     let changedButton: Int? = isPerButton ? Int(target) : nil
@@ -299,6 +304,60 @@ extension Device {
     written.otherSettings = await others.compare(with: othersBefore, values: [target: after ?? [:]])
 
     return written
+
+  }
+
+  /// A guarded bit a value write would change as its guard forbids, on any route the write
+  /// takes, as the send path decides it: a never-set bit it sets, and, when `checkingKept`, a
+  /// kept bit that doesn't match the byte the device reported where its value is read.
+  static func guardedBitWritten(
+    _ raw: UInt8,
+    writing value: SettingValue,
+    in commands: CommandSet,
+    current: [Int: UInt8]?,
+    checkingKept: Bool
+  ) -> DeviceSettingSafety.GuardedBit? {
+
+    let guards: [DeviceSettingSafety.ByteRoute: [DeviceSettingSafety.RouteGuard]] = DeviceSettingSafety.routeGuards(in: commands)
+    var routes: [DeviceSettingSafety.ByteRoute] = []
+
+    switch commands.change(for: value) {
+    case let .extendedSet(write)?:
+      routes = write.bytes.filter { (byte: SettingWrite.Byte) -> Bool in byte.value == value.name }.map { (byte: SettingWrite.Byte) -> DeviceSettingSafety.ByteRoute in .extendedSet(selector: write.selector, position: byte.position) }
+    case let .extendedCommand(command)?:
+      let positions: [Int] = DeviceSettingSafety.parameter(of: command, for: value)?.positions ?? []
+
+      routes = positions.map { (position: Int) -> DeviceSettingSafety.ByteRoute in .extendedCommand(command.command, DeviceSettingSafety.keyBytes(of: command), position: position) }
+    case nil:
+      break
+    }
+
+    for route in routes {
+
+      for guardOnRoute in guards[route] ?? [] {
+
+        for bit in guardOnRoute.bits {
+
+          switch bit.rule {
+          case .neverSet where raw & bit.mask != 0:
+            return bit
+          case .keep where checkingKept:
+            guard let position = guardOnRoute.readPosition, let reported = current?[position], reported & bit.mask == raw & bit.mask else {
+
+              return bit
+
+            }
+          default:
+            break
+          }
+
+        }
+
+      }
+
+    }
+
+    return nil
 
   }
 

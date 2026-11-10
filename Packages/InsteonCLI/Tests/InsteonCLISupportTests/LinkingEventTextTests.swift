@@ -108,8 +108,8 @@ struct LinkingEventTextTests {
     #expect(notes(.hubLinkingLegJoined(leg, by: .deviceFirst)) == ["1A.2B.3C is in linking mode."])
     #expect(notes(.hubLinkingLegJoined(leg, by: .setButton)).isEmpty)
     #expect(notes(.hubLinkingLegCompleted(leg, link: link)).isEmpty)
-    #expect(notes(.allGroupsWhen(leg, condition: DeviceProfile.Group.Condition(flag: "linkToAllGroups", isSet: true))) == [
-      "Leg 2 of 3 links every group 1A.2B.3C controls while its linkToAllGroups setting is on. "
+    #expect(notes(.allGroupsWhen(leg, condition: DeviceProfile.Group.Condition(flag: "linkEveryGroup", isSet: true))) == [
+      "Leg 2 of 3 links every group 1A.2B.3C controls while its linkEveryGroup setting is on. "
         + "The setting isn't read or changed here; with it off, each group needs a link of its own."
     ])
 
@@ -176,7 +176,7 @@ struct LinkingEventTextTests {
     #expect(notes(.keepAwake(.releasing(lamp))) == ["Letting 1A.2B.3C sleep again..."])
     #expect(notes(.keepAwake(.released(lamp))).isEmpty)
     #expect(notes(.keepAwake(.notReleased(lamp, reason: Failure()))) == [
-      "1A.2B.3C wasn't let sleep again: It failed. It may stay awake and use its batteries until it sleeps on its own "
+      "1A.2B.3C wasn't let sleep again: It failed. It may remain awake and use its batteries until it sleeps on its own "
         + "or is woken and linked again."
     ])
 

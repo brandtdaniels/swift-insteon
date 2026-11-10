@@ -7,30 +7,31 @@ import InsteonProtocol
 /// A made-up dimmer's settings, whose names and values no real product's are.
 enum ExampleSettings {
 
-  static let keyBeep = OperatingFlag(
-    name: "keyBeep",
+  static let pressTone = OperatingFlag(
+    name: "pressTone",
     summary: "Buttons beep.",
     query: 0x00,
     bit: 0x20,
     on: 0x0A,
     off: 0x0B,
-    label: "Beep on button press",
+    label: "Tone on button press",
     section: .buttons,
     defaultValue: false
   )
 
-  static let loadSense = OperatingFlag(name: "loadSense", summary: "Load sense.", query: 0x00, bit: 0x01, label: "Load sense", section: .load)
+  static let loadDetect = OperatingFlag(name: "loadDetect", summary: "Load detect.", query: 0x00, bit: 0x01, label: "Load detect", section: .load)
 
-  static let radioOff = OperatingFlag(
-    name: "radioOff",
-    summary: "Radio off.",
+  static let radioMute = OperatingFlag(
+    name: "radioMute",
+    summary: "Radio mute.",
     query: 0x05,
     bit: 0x40,
     on: 0x0C,
     off: 0x0D,
-    label: "Turn off radio",
+    label: "Mute radio",
     section: .communication,
-    isAdvanced: true
+    isAdvanced: true,
+    writeGuard: .keep
   )
 
   static let delta = OperatingReading(name: "databaseDelta", summary: "Delta.", query: 0x01, label: "ALL-Link database changes", section: .diagnostics)
@@ -52,7 +53,7 @@ enum ExampleSettings {
     id: "exampleDimmer",
     name: "Example Dimmer",
     summary: "A made-up dimmer.",
-    operatingFlags: [keyBeep, loadSense, radioOff],
+    operatingFlags: [pressTone, loadDetect, radioMute],
     readings: [delta],
     extendedSettings: ExtendedSettings(
       isPerButton: true,
@@ -100,10 +101,10 @@ struct DeviceSettingsTextTests {
     let texts: [String] = lines.map { "\($0.section) | \($0.title): \($0.valueText) (\($0.notes))" }
 
     #expect(texts == [
-      "Load | Load sense: on (read-only)",
+      "Load | Load detect: on (read-only)",
       "Load | Ramp rate: 0.1 s (default 0.5 s, writable)",
       "Load | On-level: 50% (writable)",
-      "Buttons | Beep on button press: on (default off, writable)",
+      "Buttons | Tone on button press: on (default off, writable)",
       "Diagnostics | ALL-Link database changes: 7 (read-only)"
     ])
     #expect(lines.first { $0.name == "rampRate" }?.raw == "0x1F")
@@ -114,7 +115,7 @@ struct DeviceSettingsTextTests {
   @Test func marksWhatTheDeviceDidntReport() throws {
 
     let lines: [SettingLine] = SettingsText.lines(for: ExampleSettings.reading(showsAdvanced: true))
-    let radio = try #require(lines.first { $0.name == "radioOff" })
+    let radio = try #require(lines.first { $0.name == "radioMute" })
 
     #expect(radio.value == nil)
     #expect(radio.valueText == "not reported")
@@ -126,7 +127,7 @@ struct DeviceSettingsTextTests {
   @Test func showsTheRadioFlagAsReadOnlyThoughTheCatalogGivesItsCommands() throws {
 
     let lines: [SettingLine] = SettingsText.lines(for: ExampleSettings.reading(showsAdvanced: true, operatingFlags: [0x05: 0x00]))
-    let radio = try #require(lines.first { $0.name == "radioOff" })
+    let radio = try #require(lines.first { $0.name == "radioMute" })
 
     #expect(radio.value == "off")
     #expect(!radio.isWritable)
@@ -145,7 +146,7 @@ struct DeviceSettingsTextTests {
     let titles: [String] = lines.filter { $0.section == "Load" }.map { "\($0.title): \($0.valueText)" }
 
     // The on-level's write is the whole device's, so it's read from button 1 only.
-    #expect(titles == ["Load sense: not reported", "Ramp rate (button 1): 0.5 s", "Ramp rate (button 2): 0.1 s", "On-level: 100%"])
+    #expect(titles == ["Load detect: not reported", "Ramp rate (button 1): 0.5 s", "Ramp rate (button 2): 0.1 s", "On-level: 100%"])
 
   }
 
@@ -173,11 +174,11 @@ struct DeviceSettingsTextTests {
 
   @Test func explainsTheSettingsThatAreNeverWritten() {
 
-    let radio: String = SettingsText.failure(.neverWritten(label: "Turn off radio"), device: "1A.2B.3C")
-    let lock: String = SettingsText.failure(.leavesProgrammingLocked(label: "Programming lock"), device: "1A.2B.3C")
+    let radio: String = SettingsText.failure(.neverWritten(label: "Mute radio"), device: "1A.2B.3C")
+    let lock: String = SettingsText.failure(.leavesProgrammingLocked(label: "Lockout"), device: "1A.2B.3C")
 
-    #expect(radio == "Turn off radio is never changed, since a wrong value can cut the device off from the modem.")
-    #expect(lock == "Programming lock is never turned on, so the device isn't left locked. Turning it off is allowed.")
+    #expect(radio == "Mute radio is never changed, since a wrong value can cut the device off from the modem.")
+    #expect(lock == "Lockout is never turned on, so the device isn't left locked. Turning it off is allowed.")
 
   }
 
@@ -309,9 +310,9 @@ struct ExploringArgumentTests {
 
   @Test func needsASettingsNameValueAndAButtonInRange() {
 
-    #expect(throws: ArgumentError.missingArgument("a VALUE for keyBeep", subcommand: "device ADDRESS set")) {
+    #expect(throws: ArgumentError.missingArgument("a VALUE for pressTone", subcommand: "device ADDRESS set")) {
 
-      try Invocation.parse(["device", "1A.2B.3C", "set", "keyBeep"])
+      try Invocation.parse(["device", "1A.2B.3C", "set", "pressTone"])
 
     }
 
@@ -534,7 +535,7 @@ struct ExploringArgumentTests {
 
     let refusals: [SendRefusal] = ProtectedCommand.allCases.map { (command: ProtectedCommand) -> SendRefusal in .protected(command) } + [
       .neverSentToDevice(product: "Example"),
-      .writesGuardedFlags(label: "Programming lock"),
+      .writesGuardedFlags(label: "Lockout"),
       .extendedSetWithoutCommandSet,
       .notSerialCommand,
       .incompleteMessage,

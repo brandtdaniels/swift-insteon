@@ -62,3 +62,11 @@ public typealias LinkingDirection = InsteonLinking.LinkingDirection
 
 /// A version of the Insteon device catalog, such as `0.6.26`.
 public typealias DeviceCatalogVersion = InsteonDeviceCatalog.DeviceCatalogVersion
+
+/// A way a catalog would let an app send or write more to a device than the copy the package
+/// ships with does, such as `0x01/0x7A unlocksProtectedCommand Set Operating Flags 0x0C`, which
+/// a front end reports when it keeps the bundled copy.
+public typealias GuardWeakening = InsteonDeviceCatalog.GuardWeakening
+
+/// A name the catalog gives a setting, command or flag, such as `rampRate`.
+public typealias SettingName = InsteonDeviceCatalog.SettingName

@@ -345,7 +345,9 @@ extension CommandSet: Decodable {
   ///   and two hexadecimal digits, a position is outside its message's user data, a field's bytes
   ///   or mask can't be read, a range ends before it starts, a standard command has both a
   ///   fixed cmd2 and a parameter, a field names an enumeration the command set doesn't
-  ///   have, or a value's or field's scale isn't a finite number above zero.
+  ///   have, a value's or field's scale isn't a finite number above zero, an extended
+  ///   command fixes a byte twice or fixes one its integrity check overwrites, or a standard
+  ///   command guards a bit of its cmd2.
   public init(from decoder: any Decoder) throws {
 
     let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -421,6 +423,8 @@ extension CommandSet: Decodable {
   }
 
   private mutating func decodeMessages(from container: KeyedDecodingContainer<CodingKeys>) throws {
+
+    let setID: CommandSetID = id
 
     let enumerations = Dictionary(
       try (container.decodeIfPresent([Enumeration].self, forKey: .enumerations) ?? []).map { enumeration in
@@ -512,19 +516,46 @@ extension CommandSet: Decodable {
 
     }
 
-    func fixedBytes(_ bytes: [FixedByte]?, in key: CodingKeys) throws -> [FixedUserDataByte] {
+    // Fixed bytes are kept in D order, each position once, and never where the message's
+    // integrity check goes, so two commands that send the same bytes compare equal.
+    func fixedBytes(_ bytes: [FixedByte]?, in key: CodingKeys, named name: String, integrity: MessageIntegrity = .unprotected) throws -> [FixedUserDataByte] {
 
-      try (bytes ?? []).map { byte in
+      let checked: [FixedUserDataByte] = try (bytes ?? []).map { byte in
 
         guard (1...UserData.count).contains(byte.position) else {
 
-          throw corrupted(key, "A fixed byte isn't in D1 through D14.")
+          throw corrupted(key, "A fixed byte of the \(setID) command set's \(name) command isn't in D1 through D14.")
 
         }
 
         return FixedUserDataByte(position: byte.position, value: byte.value.value)
 
       }
+
+      guard Set(checked.map(\.position)).count == checked.count else {
+
+        throw corrupted(key, "The \(setID) command set's \(name) command fixes a byte twice.")
+
+      }
+
+      let reserved: Set<Int>
+
+      switch integrity {
+      case .unprotected:
+        reserved = []
+      case .checksum:
+        reserved = [14]
+      case .crc:
+        reserved = [13, 14]
+      }
+
+      guard checked.allSatisfy({ (byte: FixedUserDataByte) -> Bool in !reserved.contains(byte.position) }) else {
+
+        throw corrupted(key, "The \(setID) command set's \(name) command fixes a byte its integrity check overwrites.")
+
+      }
+
+      return checked.sorted { (left: FixedUserDataByte, right: FixedUserDataByte) -> Bool in left.position < right.position }
 
     }
 
@@ -549,12 +580,21 @@ extension CommandSet: Decodable {
 
       }
 
+      let parameter: MessageField? = try command.parameter.map { try field($0, in: .standardCommands, extended: false) }
+
+      // A guard is enforced on a byte an extended message writes; a standard command's cmd2
+      // isn't one, so a guarded bit there would read as guarded and protect nothing.
+      if case let .flags(bits)? = parameter?.kind, bits.contains(where: { (bit: FieldBit) -> Bool in bit.writeGuard != nil }) {
+
+        throw corrupted(.standardCommands, "The \(setID) command set's \(command.name) command guards a bit of its cmd2, which nothing enforces; guard the operating flag instead.")
+
+      }
+
       return DeviceStandardCommand(
         name: SettingName(rawValue: command.name),
         summary: command.description,
         command1: command.command1.value,
-        command2: try command.parameter.map { DeviceStandardCommand.Command2.parameter(try field($0, in: .standardCommands, extended: false)) }
-          ?? .fixed(command.command2?.value ?? 0x00),
+        command2: parameter.map { DeviceStandardCommand.Command2.parameter($0) } ?? .fixed(command.command2?.value ?? 0x00),
         reply: try command.reply.map { try field($0, in: .standardCommands, extended: false) },
         followUp: try command.followUp.map { try field($0, in: .standardCommands, extended: false) },
         extendedWhen: command.extendedWhen.map(SettingName.init(rawValue:)),
@@ -584,7 +624,7 @@ extension CommandSet: Decodable {
 
         reply = DeviceExtendedReply(
           command: Command(command1: decoded.command1?.value ?? command.command1.value, command2: decoded.command2.value),
-          match: try fixedBytes(decoded.match, in: .extendedCommands),
+          match: try fixedBytes(decoded.match, in: .extendedCommands, named: command.name, integrity: replyIntegrity),
           integrity: replyIntegrity,
           values: try decoded.values.map { try field($0, in: .extendedCommands, extended: true) }
         )
@@ -596,7 +636,7 @@ extension CommandSet: Decodable {
         summary: command.description,
         command: Command(command1: command.command1.value, command2: command.command2.value),
         isPerButton: command.perButton ?? false,
-        fixedBytes: try fixedBytes(command.fixed, in: .extendedCommands),
+        fixedBytes: try fixedBytes(command.fixed, in: .extendedCommands, named: command.name, integrity: commandIntegrity),
         parameters: try (command.parameters ?? []).map { try field($0, in: .extendedCommands, extended: true) },
         integrity: commandIntegrity,
         reply: reply,

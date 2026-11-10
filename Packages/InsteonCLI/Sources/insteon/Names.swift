@@ -26,7 +26,7 @@ struct ProductNames: Sendable {
 
   }
 
-  /// The product a device's identity names, such as "Dimmer Switch 2477D (SwitchLinc Dimmer)".
+  /// The product a device's identity names, such as "Example Dimmer 9101 (DemoLinc Dimmer)".
   func name(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> String? {
 
     catalog?.productName(category: category, subcategory: subcategory, firmwareVersion: firmwareVersion)

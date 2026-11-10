@@ -98,9 +98,20 @@ enum CatalogStore {
 
     if CatalogCache.source(bundled: bundled, cached: cached) == .cached {
 
-      if let json = cachedJSON(), let catalog = try? ProductCatalog(json: json) {
+      if let json = cachedJSON() {
 
-        return Loaded(catalog: catalog, source: .cached)
+        switch CatalogCache.cachedCatalog(json, path: catalogPath() ?? CatalogCache.relativePath, reading: ProductCatalog.init(json:)) {
+        case let .use(catalog):
+          return Loaded(catalog: catalog, source: .cached)
+        case let .useBundled(warning):
+          Output.note(warning)
+          return bundledCatalog().map { (catalog: ProductCatalog) -> Loaded in Loaded(catalog: catalog, source: .bundled) }
+        case let .useNone(warning):
+          Output.note(warning)
+          return nil
+        case .unreadable:
+          break
+        }
 
       }
 
@@ -251,9 +262,11 @@ enum CatalogCommand {
     var cachedVersion: DeviceCatalogVersion? = nil
     var currentVersion: DeviceCatalogVersion = bundled
 
+    // A cached copy that fails the guard check isn't in use, so the published copy replaces it.
     if let cached = CatalogStore.cachedVersion(),
       CatalogCache.source(bundled: bundled, cached: cached) == .cached,
-      let json = CatalogStore.cachedJSON()
+      let json = CatalogStore.cachedJSON(),
+      (try? ProductCatalog(json: json)) != nil
     {
 
       current = json
@@ -340,6 +353,8 @@ enum CatalogCommand {
       )
     case .unreadableCatalog:
       throw CommandFailure(description: "The published Insteon device catalog couldn't be read, so the current copy, \(current), stays.")
+    case let .weakensGuards(weakenings):
+      throw CommandFailure(description: CatalogText.publishedWeakensGuards(weakenings, current: current))
     }
 
   }

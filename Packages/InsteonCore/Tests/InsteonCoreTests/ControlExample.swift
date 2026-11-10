@@ -147,16 +147,16 @@ enum ControlExample {
   static let dimmerCommands = CommandSet(
     id: "exampleDimmer",
     name: "Example dimmer",
-    summary: "A dimmer with a key beep and a ramp rate.",
+    summary: "A dimmer with a press tone and a ramp rate.",
     operatingFlags: [
       OperatingFlag(
-        name: "keyBeep",
+        name: "pressTone",
         summary: "Beeps on every button press.",
         query: .operatingFlags,
         bit: 0x02,
         on: 0x0A,
         off: 0x0B,
-        label: "Key beep",
+        label: "Press tone",
         section: .buttons,
         defaultValue: false
       )
@@ -305,22 +305,22 @@ enum ControlExample {
     groupTypes: [light]
   )
 
-  /// Three buttons, each with its own on-level, and a key beep that's set with an extended
+  /// Three buttons, each with its own on-level, and a press tone that's set with an extended
   /// message while the program lock is on.
   static let buttonsCommands = CommandSet(
     id: "exampleButtons",
     name: "Example buttons",
-    summary: "Per-button on-levels and a guarded key beep.",
+    summary: "Per-button on-levels and a guarded press tone.",
     operatingFlags: [
       OperatingFlag(
-        name: "keyBeep",
+        name: "pressTone",
         summary: "Beeps on every button press.",
         query: .operatingFlags,
         bit: 0x02,
         on: 0x0A,
         off: 0x0B,
         extendedWhen: "programLock",
-        label: "Key beep"
+        label: "Press tone"
       ),
       OperatingFlag(name: "programLock", summary: "Locks the buttons' programming.", query: .operatingFlags, bit: 0x01, label: "Program lock")
     ],
@@ -337,25 +337,25 @@ enum ControlExample {
     groupTypes: [light]
   )
 
-  /// The flags that are never written, or only turned off, each with the Set Operating Flags
-  /// commands a catalog could give them. The programming lock is bit `0x02`, which
-  /// ``SettingsModem`` sets with `0x0A` and clears with `0x0B`. An extended settings value,
-  /// `operatingFlags`, holds the same byte, at D7, which the extended Set with selector `0x05`
-  /// writes.
+  /// Flags the catalog guards, each with the Set Operating Flags commands a catalog could give
+  /// them: a lockout that's only turned off, and three flags that cut a device off from the
+  /// modem, which are never written. The lockout is bit `0x02`, which ``SettingsModem`` sets
+  /// with `0x0A` and clears with `0x0B`. An extended settings value, `operatingFlags`, holds
+  /// the same byte, at D7, which the extended Set with selector `0x05` writes.
   static let guardedCommands = CommandSet(
     id: "exampleGuarded",
     name: "Example guarded",
-    summary: "Flags that cut a device off from the modem, and a programming lock.",
+    summary: "Flags that cut a device off from the modem, and a lockout.",
     operatingFlags: [
-      OperatingFlag(name: "programmingLock", summary: "Locks the device's programming.", query: .operatingFlags, bit: 0x02, on: 0x0A, off: 0x0B, label: "Programming lock"),
-      OperatingFlag(name: "radioOff", summary: "Turns the radio off.", query: .operatingFlags, bit: 0x10, on: 0x0C, off: 0x0D, label: "Radio off"),
-      OperatingFlag(name: "powerLineOff", summary: "Turns the powerline off.", query: .operatingFlags, bit: 0x20, on: 0x0E, off: 0x0F, label: "Powerline off"),
-      OperatingFlag(name: "checksumRequired", summary: "Requires a checksum.", query: .operatingFlags, bit: 0x40, on: 0x10, off: 0x11, label: "Checksum required")
+      OperatingFlag(name: "lockout", summary: "Locks out linking from the device.", query: .operatingFlags, bit: 0x02, on: 0x0A, off: 0x0B, label: "Lockout", writeGuard: .neverSet),
+      OperatingFlag(name: "radioMute", summary: "Mutes the radio.", query: .operatingFlags, bit: 0x10, on: 0x0C, off: 0x0D, label: "Radio mute", writeGuard: .keep),
+      OperatingFlag(name: "powerlineMute", summary: "Mutes the powerline.", query: .operatingFlags, bit: 0x20, on: 0x0E, off: 0x0F, label: "Powerline mute", writeGuard: .keep),
+      OperatingFlag(name: "strictChecksum", summary: "Requires a checksum.", query: .operatingFlags, bit: 0x40, on: 0x10, off: 0x11, label: "Strict checksum", writeGuard: .keep)
     ],
     extendedSettings: ExtendedSettings(
       isPerButton: false,
       values: [
-        SettingValue(name: "operatingFlags", summary: "The operating flags, as Get Operating Flags reads them.", position: 7, label: "Operating flags")
+        SettingValue(name: "operatingFlags", summary: "The operating flags, as Get Operating Flags reads them.", position: 7, label: "Operating flags", flagsQuery: .operatingFlags)
       ],
       writes: [
         SettingWrite(name: "operatingFlags", summary: "Sets the operating flags.", selector: 0x05, isPerButton: false, bytes: [SettingWrite.Byte(position: 3, value: "operatingFlags")])
