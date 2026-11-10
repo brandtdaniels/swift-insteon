@@ -193,111 +193,41 @@ enum DeviceCommands {
 
   // MARK: - id
 
-  /// A device's identity as `--json` prints it.
-  struct Identity: Encodable {
-
-    let address: String
-
-    let engine: String
-
-    let acceptsModem: Bool
-
-    let category: String?
-
-    let categoryName: String?
-
-    let subcategory: String?
-
-    let firmwareVersion: String?
-
-    let productKey: String?
-
-    /// The product key the Insteon device catalog gives, or `"none"` for a product it says
-    /// reports none.
-    let catalogProductKey: String?
-
-    let product: String?
-
-  }
-
   private static func identify(_ device: InsteonAddress, network: DeviceNetwork, names: ProductNames, printsJSON: Bool) async throws {
 
     // The network records the identity the device reports.
-    let identification = try await network.identify(device)
-    var productData: DeviceProductData?
+    let report: IdentityReport = try await IdentityReport.read(
+      device,
+      identify: { () async throws -> IdentityReport.Answer in
 
-    if identification.acceptsModem {
+        let identification = try await network.identify(device)
+        let identity = identification.identity
 
-      productData = try await network.productData(of: device)
+        return IdentityReport.Answer(
+          engine: identification.engine,
+          acceptsModem: identification.acceptsModem,
+          category: identity?.category,
+          subcategory: identity?.subcategory,
+          firmwareVersion: identity?.firmwareVersion
+        )
 
-    }
-
-    let identity = identification.identity
-    let category = identity?.category ?? productData?.category
-    let subcategory = identity?.subcategory ?? productData?.subcategory
-    var product: String?
-
-    if let category, let subcategory {
-
-      product = names.name(category: category, subcategory: subcategory, firmwareVersion: identity?.firmwareVersion)
-
-    }
-
-    // What the catalog says the product reports explains a key that's missing.
-    let catalogInfo: DeviceInfo? = await network.registry.device(device)?.info
-    let catalogKey: ExpectedProductKey? = catalogInfo?.expectedProductKey
-
-    // Newer devices leave the product key out, or report zeros; that's expected, not a failure.
-    let productKey = productData?.productKey
+      },
+      productData: { () async throws -> DeviceProductData? in try await network.productData(of: device) },
+      catalogInfo: { () async -> DeviceInfo? in await network.registry.device(device)?.info },
+      productName: names.name(category:subcategory:firmwareVersion:)
+    )
 
     if printsJSON {
 
-      try Output.json(Identity(
-        address: "\(device)",
-        engine: Names.engine(identification.engine),
-        acceptsModem: identification.acceptsModem,
-        category: category.map { "\($0)" },
-        categoryName: category?.name,
-        subcategory: subcategory.map { "\($0)" },
-        firmwareVersion: identity?.firmwareVersion.map { "\($0)" },
-        productKey: productKey.map { "\($0)" },
-        catalogProductKey: IdentityText.catalogProductKey(catalogKey),
-        product: product
-      ))
+      try Output.json(IdentityText.JSON(report))
 
       return
 
     }
 
-    // Each value is its own statement, which keeps the type checker quick.
-    let categoryText: String = category.map(Names.category) ?? "not reported"
-    let subcategoryText: String = subcategory.map { "\($0)" } ?? "not reported"
-    let firmwareText: String = identity?.firmwareVersion.map { "\($0)" } ?? "not reported"
-    let productKeyText: String = IdentityText.productKey(
-      reported: productKey,
-      answered: productData != nil,
-      catalog: catalogKey,
-      isCatalogKeyObserved: catalogInfo?.isExpectedProductKeyObserved == true
-    )
-    var rows: [[String]] = [
-      ["Device:", "\(device)"],
-      ["Engine:", Names.engine(identification.engine)],
-      ["Category:", categoryText],
-      ["Subcategory:", subcategoryText],
-      ["Firmware:", firmwareText],
-      ["Product key:", productKeyText]
-    ]
+    Output.table(IdentityText.rows(report, namesProducts: names.catalog != nil))
 
-    // Without an identity, or without the catalog, nothing is said about the product.
-    if category != nil, names.catalog != nil {
-
-      rows.append(["Product:", product ?? "not in the Insteon device catalog"])
-
-    }
-
-    Output.table(rows)
-
-    if let note = IdentityText.notLinkedNote(device, acceptsModem: identification.acceptsModem) {
+    if let note = IdentityText.notLinkedNote(device, acceptsModem: report.acceptsModem) {
 
       Output.note(note)
 
