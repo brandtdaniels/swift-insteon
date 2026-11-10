@@ -64,6 +64,43 @@ public enum HubText {
 
   }
 
+  /// What `insteon discover --identify HOST[:PORT]` says when the Hub named wasn't found, on
+  /// the Hub's port when none is given.
+  ///
+  /// - Parameter target: The Hub named.
+  /// - Returns: The note.
+  public static func notFound(_ target: HubAddress) -> String {
+
+    "\(target.host):\(target.port ?? HubLocation.defaultPort) wasn't among the Hubs found, so it wasn't sent the password."
+
+  }
+
+  /// What `insteon discover --identify` says once asking stopped because a Hub rejected the
+  /// credentials, so they aren't sent to the rest, or `nil` when none did.
+  ///
+  /// - Parameter outcomes: What came of each Hub asked.
+  /// - Returns: The note, or `nil`.
+  public static func identificationStopped(_ outcomes: [HubIdentification]) -> String? {
+
+    outcomes.contains(where: \.isAuthenticationFailure)
+      ? "Stopped identifying Hubs, so the rejected credentials aren't sent to any more of them."
+      : nil
+
+  }
+
+  /// What `insteon discover` says under the Hubs it found: that a Hub found on the local
+  /// network is only a candidate, unless the Hubs were identified; `nil` otherwise.
+  ///
+  /// - Parameter options: The command's options.
+  /// - Returns: The note, or `nil`.
+  public static func candidateNote(_ options: DiscoverOptions) -> String? {
+
+    options.searchesLocalNetwork && !options.identifiesHubs
+      ? "A Hub found on the local network is a candidate: check its address before using its password there."
+      : nil
+
+  }
+
   /// What `insteon discover --identify` says about a Hub it asked, or didn't ask, for Get IM
   /// Info, without its credentials, or `nil` when there's nothing to say: the Hub was
   /// identified, which the table shows, or the person declined.

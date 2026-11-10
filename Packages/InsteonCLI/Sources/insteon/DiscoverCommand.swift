@@ -95,9 +95,9 @@ enum DiscoverCommand {
 
     Output.table([["ADDRESS", "INSTEON ID", "PRODUCT", "FOUND BY"]] + rows)
 
-    if options.searchesLocalNetwork, credentials == nil {
+    if let note = HubText.candidateNote(options) {
 
-      Output.note("A Hub found on the local network is a candidate: check its address before using its password there.")
+      Output.note(note)
 
     }
 
@@ -163,12 +163,11 @@ enum DiscoverCommand {
 
     if let target {
 
-      let port: Int = target.port ?? HubLocation.defaultPort
       let index: Int? = hubs.firstIndex { target.matches(host: $0.host, port: $0.port) }
 
       guard let index else {
 
-        Output.note("\(target.host):\(port) wasn't among the Hubs found, so it wasn't sent the password.")
+        Output.note(HubText.notFound(target))
 
         return
 
@@ -213,7 +212,9 @@ enum DiscoverCommand {
 
     for (hub, outcome) in results {
 
-      if case let .identified(info) = outcome, let index = hubs.firstIndex(where: { $0.host == hub.host && $0.port == hub.port }) {
+      let asked = HubAddress(host: hub.host, port: hub.port)
+
+      if case let .identified(info) = outcome, let index = hubs.firstIndex(where: { asked.matches(host: $0.host, port: $0.port) }) {
 
         hubs[index].record(info)
 
@@ -221,9 +222,9 @@ enum DiscoverCommand {
 
     }
 
-    if results.contains(where: { $0.outcome.isAuthenticationFailure }) {
+    if let note = HubText.identificationStopped(results.map(\.outcome)) {
 
-      Output.note("Stopped identifying Hubs, so the rejected credentials aren't sent to any more of them.")
+      Output.note(note)
 
     }
 
