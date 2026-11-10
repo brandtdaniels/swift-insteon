@@ -12,23 +12,7 @@ struct CatalogUpdateTests {
   let cachedJSON = Data("cached".utf8)
   let location = URL(string: "https://catalog.example/insteon/")!
 
-  /// The copies on disk, as a test sets them.
-  struct Copies: CatalogCopies {
-
-    var bundled: DeviceCatalogVersion?
-    var cached: DeviceCatalogVersion?
-    var json: Data?
-    var hasCacheDirectory: Bool = true
-
-    func bundledVersion() -> DeviceCatalogVersion? { bundled }
-
-    func cachedVersion() -> DeviceCatalogVersion? { cached }
-
-    var hasCachedCopy: Bool { json != nil || cached != nil }
-
-    func cachedJSON() -> Data? { json }
-
-  }
+  typealias Copies = FakeCatalogCopies
 
   /// What the download was asked for, and what it answers.
   final class Download {
@@ -102,7 +86,7 @@ struct CatalogUpdateTests {
 
     await #expect(throws: CommandFailure(description: CatalogText.noCacheDirectory)) {
 
-      try await update(Copies(bundled: bundled, hasCacheDirectory: false), download, notes: notes)
+      try await update(Copies(bundled: bundled, catalogPath: nil), download, notes: notes)
 
     }
 

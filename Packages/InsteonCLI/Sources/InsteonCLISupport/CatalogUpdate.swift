@@ -9,8 +9,12 @@ public protocol CatalogCopies {
   /// The bundled copy's version, or `nil` if the bundle or its manifest isn't there.
   func bundledVersion() -> DeviceCatalogVersion?
 
-  /// Whether there's a cache directory to keep a copy in.
-  var hasCacheDirectory: Bool { get }
+  /// The cached copy's file, or `nil` if there's no cache directory, as when neither
+  /// `XDG_CACHE_HOME` nor `HOME` is set.
+  var catalogPath: String? { get }
+
+  /// The file of the cached copy's version, or `nil` if there's no cache directory.
+  var versionPath: String? { get }
 
   /// Whether there's a cached copy, readable or not.
   var hasCachedCopy: Bool { get }
@@ -21,6 +25,13 @@ public protocol CatalogCopies {
 
   /// The cached copy's JSON, or `nil` if there's none or it can't be read.
   func cachedJSON() -> Data?
+
+}
+
+extension CatalogCopies {
+
+  /// Whether there's a cache directory to keep a copy in: both files have a path.
+  public var hasCacheDirectory: Bool { catalogPath != nil && versionPath != nil }
 
 }
 

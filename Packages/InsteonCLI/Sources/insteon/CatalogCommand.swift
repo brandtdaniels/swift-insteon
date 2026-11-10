@@ -12,15 +12,7 @@ import InsteonCore
 enum CatalogStore {
 
   /// A copy of the catalog, and which copy it is.
-  struct Loaded {
-
-    /// The catalog.
-    let catalog: ProductCatalog
-
-    /// Which copy it was read from.
-    let source: CatalogSource
-
-  }
+  typealias Loaded = CatalogCache.Choice<ProductCatalog>
 
   /// The cached catalog's file, or `nil` if neither `XDG_CACHE_HOME` nor `HOME` is set.
   static func catalogPath() -> String? {
@@ -79,56 +71,12 @@ enum CatalogStore {
 
   }
 
-  /// The copy of the catalog to use, as `CatalogCache.source(bundled:cached:)` chooses, or
-  /// `nil` if neither copy can be read. A copy that can't be read gets a one-line warning on
-  /// standard error.
+  /// The copy of the catalog to use, as `CatalogCache.choose(_:reading:bundled:warn:)`
+  /// chooses it, or `nil` if neither copy can be used. A copy that can't be read gets a
+  /// one-line warning on standard error.
   static func load() -> Loaded? {
 
-    let bundled: DeviceCatalogVersion? = bundledVersion()
-    let cached: DeviceCatalogVersion? = cachedVersion()
-
-    if cached == nil, hasCachedCopy(), let path = versionPath() {
-
-      Output.note(
-        "insteon: warning: the cached Insteon device catalog's version, \(path), couldn't be read, so the cached copy isn't used. "
-          + "'insteon catalog update' downloads it again."
-      )
-
-    }
-
-    if CatalogCache.source(bundled: bundled, cached: cached) == .cached {
-
-      if let json = cachedJSON() {
-
-        switch CatalogCache.cachedCatalog(json, path: catalogPath() ?? CatalogCache.relativePath, reading: ProductCatalog.init(json:)) {
-        case let .use(catalog):
-          return Loaded(catalog: catalog, source: .cached)
-        case let .useBundled(warning):
-          Output.note(warning)
-          return bundledCatalog().map { (catalog: ProductCatalog) -> Loaded in Loaded(catalog: catalog, source: .bundled) }
-        case let .useNone(warning):
-          Output.note(warning)
-          return nil
-        case .unreadable:
-          break
-        }
-
-      }
-
-      Output.note(
-        "insteon: warning: the cached Insteon device catalog at \(catalogPath() ?? CatalogCache.relativePath) couldn't be read, "
-          + "so it isn't used. 'insteon catalog update' downloads it again."
-      )
-
-    }
-
-    guard let catalog = bundledCatalog() else {
-
-      return nil
-
-    }
-
-    return Loaded(catalog: catalog, source: .bundled)
+    CatalogCache.choose(CatalogFiles(), reading: ProductCatalog.init(json:), bundled: bundledCatalog, warn: Output.note)
 
   }
 
@@ -205,7 +153,9 @@ struct CatalogFiles: CatalogCopies {
 
   func bundledVersion() -> DeviceCatalogVersion? { CatalogStore.bundledVersion() }
 
-  var hasCacheDirectory: Bool { CatalogStore.catalogPath() != nil && CatalogStore.versionPath() != nil }
+  var catalogPath: String? { CatalogStore.catalogPath() }
+
+  var versionPath: String? { CatalogStore.versionPath() }
 
   var hasCachedCopy: Bool { CatalogStore.hasCachedCopy() }
 
