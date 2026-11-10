@@ -68,4 +68,15 @@ struct IdentityTextTests {
 
   }
 
+  @Test func suggestsIdentifyingOnlyWhenADeviceInTheModemsDatabaseIsUnnamed() {
+
+    let hint = "Devices are named from the identities they reported to 'insteon link' and 'insteon device ADDRESS id'. "
+      + "'insteon links --identify' asks each device with ID Request."
+
+    #expect(IdentityText.unnamedHint(identifies: false, hasUnnamedDevice: true) == hint)
+    #expect(IdentityText.unnamedHint(identifies: false, hasUnnamedDevice: false) == nil)
+    #expect(IdentityText.unnamedHint(identifies: true, hasUnnamedDevice: true) == nil)
+
+  }
+
 }

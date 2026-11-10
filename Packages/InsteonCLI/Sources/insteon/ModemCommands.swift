@@ -169,12 +169,11 @@ enum ModemCommands {
       "\(Wording.count(rows.count, "record")). The modem controls a device in a controller record, and responds to it in a responder record."
     )
 
-    if !options.identifiesDevices, entries.contains(where: { (entry: ModemDatabaseEntry) -> Bool in entry.device == nil }) {
+    let hasUnnamedDevice: Bool = entries.contains { (entry: ModemDatabaseEntry) -> Bool in entry.device == nil }
 
-      Output.note(
-        "Devices are named from the identities they reported to 'insteon link' and 'insteon device ADDRESS id'. "
-          + "'insteon links --identify' asks each device with ID Request."
-      )
+    if let hint = IdentityText.unnamedHint(identifies: options.identifiesDevices, hasUnnamedDevice: hasUnnamedDevice) {
+
+      Output.note(hint)
 
     }
 

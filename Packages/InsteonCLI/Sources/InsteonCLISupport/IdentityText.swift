@@ -97,4 +97,25 @@ public enum IdentityText {
 
   }
 
+  /// What `insteon links` adds when a device in the modem's ALL-Link database is unnamed:
+  /// where names come from and how to ask for them, or `nil` when every device is named or
+  /// `--identify` asked them.
+  ///
+  /// - Parameters:
+  ///   - identifies: Whether `--identify` was given.
+  ///   - hasUnnamedDevice: Whether a record names a device whose identity isn't known.
+  /// - Returns: The note, or `nil`.
+  public static func unnamedHint(identifies: Bool, hasUnnamedDevice: Bool) -> String? {
+
+    guard !identifies, hasUnnamedDevice else {
+
+      return nil
+
+    }
+
+    return "Devices are named from the identities they reported to 'insteon link' and 'insteon device ADDRESS id'. "
+      + "'insteon links --identify' asks each device with ID Request."
+
+  }
+
 }
