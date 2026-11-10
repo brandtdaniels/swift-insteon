@@ -56,4 +56,23 @@ public enum ExitStatus {
   /// The person interrupted the command with Control-C: `130`.
   public static let interrupted: Int32 = 130
 
+  /// The status a command that threw `error` exits with: ``usage`` for a command line or
+  /// configuration that can't be used, ``interrupted`` after Control-C, and ``failure`` for
+  /// anything else.
+  ///
+  /// - Parameter error: The error the command threw.
+  /// - Returns: The exit status.
+  public static func status(for error: any Error) -> Int32 {
+
+    switch error {
+    case is ArgumentError, is ConfigurationError, is DotEnvError, is EnvironmentFileError:
+      return usage
+    case is CancellationError:
+      return interrupted
+    default:
+      return failure
+    }
+
+  }
+
 }

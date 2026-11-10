@@ -37,14 +37,7 @@ struct InsteonCommand {
 
       Output.note("insteon: \(Names.message(for: error))")
 
-      switch error {
-      case is ArgumentError, is ConfigurationError, is DotEnvError, is EnvironmentFileError:
-        return ExitStatus.usage
-      case is CancellationError:
-        return ExitStatus.interrupted
-      default:
-        return ExitStatus.failure
-      }
+      return ExitStatus.status(for: error)
 
     }
 
