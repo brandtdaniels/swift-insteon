@@ -453,6 +453,19 @@ public enum LinkingEventText {
 
   }
 
+  /// What `insteon unlink ADDRESS --all` says when a link couldn't be removed without the
+  /// device's SET button.
+  ///
+  /// - Parameters:
+  ///   - device: The device, as `LinkingInstructions.deviceLabel(_:info:)` writes it.
+  ///   - reason: Why, as a sentence that ends with a period.
+  /// - Returns: The message.
+  public static func notUnlinkedRemotely(device: String, reason: String) -> String {
+
+    "\(device) wasn't unlinked without its SET button: \(reason)"
+
+  }
+
   /// Why `insteon link` fails once the coordinator returns, or `nil` when it did what was
   /// asked: a leg of the catalog's linking from a Hub that didn't link, as
   /// ``incompleteLegs(_:message:)`` says; else what a relay linked with a state didn't do, as

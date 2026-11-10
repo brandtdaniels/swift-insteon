@@ -485,7 +485,7 @@ enum ModemCommands {
 
       let label: String = LinkingInstructions.deviceLabel(device, info: failure.info)
 
-      throw CommandFailure(description: "\(label) wasn't unlinked without its SET button: \(Names.message(for: failure.underlying))")
+      throw CommandFailure(description: LinkingEventText.notUnlinkedRemotely(device: label, reason: Names.message(for: failure.underlying)))
 
     }
 
@@ -509,17 +509,7 @@ enum ModemCommands {
       let known: RegisteredDevice? = await cached.network.registry.device(device)
       let label: String = LinkingInstructions.deviceLabel(device, info: known?.info)
 
-      if asks {
-
-        let question: String = RemovalText.question(device: label, forcesModemSide: options.forcesModemSide)
-
-        guard try await Terminal.confirm(question) else {
-
-          throw CommandFailure(description: RemovalText.declined(device: label))
-
-        }
-
-      }
+      try await RemovalText.confirmRemoval(device: label, forcesModemSide: options.forcesModemSide, asks: asks, confirm: Terminal.confirm)
 
       let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? DeviceLinkingCoordinator.defaultRemoteTimeout
       let observer = LinkingPrompter(names: names, printsJSON: printsJSON, cached: cached)
@@ -548,9 +538,9 @@ enum ModemCommands {
       }
 
       // A device whose links aren't confirmed gone stays in the cache, and the command fails.
-      if let reason = result.keptBecause {
+      if let failure = RemovalText.failure(result, device: label, message: Names.message(for:)) {
 
-        throw CommandFailure(description: RemovalText.kept(device, device: label, reason: reason, message: Names.message(for:)))
+        throw failure
 
       }
 

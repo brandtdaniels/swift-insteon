@@ -314,4 +314,95 @@ struct RemovalTextTests {
 
   }
 
+  // MARK: - Deciding
+
+  /// The questions asked, and the answer given.
+  final class Asker {
+
+    var questions: [String] = []
+
+    let answer: Bool
+
+    init(answer: Bool) {
+
+      self.answer = answer
+
+    }
+
+    func confirm(_ question: String) -> Bool {
+
+      questions.append(question)
+
+      return answer
+
+    }
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func removesOnlyOnceThePersonAgreesWhenTheCommandAsks() async throws {
+
+    let yes = Asker(answer: true)
+    let unasked = Asker(answer: false)
+
+    try await RemovalText.confirmRemoval(device: "1A.2B.3C", forcesModemSide: true, asks: true, confirm: yes.confirm)
+    try await RemovalText.confirmRemoval(device: "1A.2B.3C", forcesModemSide: false, asks: false, confirm: unasked.confirm)
+
+    #expect(yes.questions == [RemovalText.question(device: "1A.2B.3C", forcesModemSide: true)])
+    #expect(unasked.questions.isEmpty)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func failsWhenThePersonDeclines() async throws {
+
+    let no = Asker(answer: false)
+
+    await #expect(throws: CommandFailure(description: "1A.2B.3C wasn't removed.")) {
+
+      try await RemovalText.confirmRemoval(device: "1A.2B.3C", forcesModemSide: false, asks: true, confirm: no.confirm)
+
+    }
+
+  }
+
+  @Test func failsWhenTheDeviceWasKept() {
+
+    let left: [ModemLink] = [ModemLink(modemRole: .controller, group: 0)]
+
+    func result(keptBecause: DeviceKeptReason?) -> DeviceRemovalResult {
+
+      DeviceRemovalResult(
+        address: lamp,
+        removed: RemovedLinks(address: lamp, device: nil, links: []),
+        remainingLinks: left,
+        remoteUnlinkingFailure: nil,
+        deletedModemRecords: [],
+        forgotten: nil,
+        keptBecause: keptBecause,
+        leftoverRecords: nil,
+        factoryReset: nil
+      )
+
+    }
+
+    #expect(RemovalText.failure(result(keptBecause: nil), device: "1A.2B.3C", message: message) == nil)
+    #expect(
+      RemovalText.failure(result(keptBecause: .linksRemain(left)), device: "1A.2B.3C", message: message)
+        == CommandFailure(
+          description: "1A.2B.3C was kept, not removed. The modem still has 1 link with 1A.2B.3C: controller in group 0. "
+            + "Remove them with 'insteon unlink 1A.2B.3C' and the device's SET button, then run 'insteon remove 1A.2B.3C' again; "
+            + "if the device is gone for good, run 'insteon remove 1A.2B.3C --force-modem-side'."
+        )
+    )
+
+  }
+
+  @Test func saysADeviceWasntUnlinkedWithoutItsSETButton() {
+
+    #expect(
+      LinkingEventText.notUnlinkedRemotely(device: "1A.2B.3C", reason: "It didn't answer.")
+        == "1A.2B.3C wasn't unlinked without its SET button: It didn't answer."
+    )
+
+  }
+
 }

@@ -35,6 +35,48 @@ public enum RemovalText {
 
   }
 
+  /// Asks the person before a device is removed, when the command asks.
+  ///
+  /// - Parameters:
+  ///   - device: The device, as `LinkingInstructions.deviceLabel(_:info:)` writes it.
+  ///   - forcesModemSide: Whether `--force-modem-side` was given.
+  ///   - asks: Whether to ask, as `RemoveOptions.asksForConfirmation(readsFromTerminal:)` says.
+  ///   - confirm: Asks a person a question, and returns whether they agreed.
+  /// - Throws: `CommandFailure` when the person declines.
+  public static func confirmRemoval(device: String, forcesModemSide: Bool, asks: Bool, confirm: (String) async throws -> Bool) async throws {
+
+    guard asks else {
+
+      return
+
+    }
+
+    guard try await confirm(question(device: device, forcesModemSide: forcesModemSide)) else {
+
+      throw CommandFailure(description: declined(device: device))
+
+    }
+
+  }
+
+  /// The failure of a removal that kept the device, because its links with the modem aren't
+  /// confirmed gone, or `nil` if it was removed.
+  ///
+  /// - Parameters:
+  ///   - result: What the coordinator did.
+  ///   - device: The device, as `LinkingInstructions.deviceLabel(_:info:)` writes it.
+  ///   - message: The sentence that describes an error, ending with a period.
+  /// - Returns: The failure, or `nil`.
+  public static func failure(_ result: DeviceRemovalResult, device: String, message: (any Error) -> String) -> CommandFailure? {
+
+    result.keptBecause.map { (reason: DeviceKeptReason) -> CommandFailure in
+
+      CommandFailure(description: kept(result.address, device: device, reason: reason, message: message))
+
+    }
+
+  }
+
   /// What to say when a device's links couldn't be removed through it, so it wasn't removed.
   ///
   /// - Parameters:
