@@ -411,26 +411,10 @@ enum ModemCommands {
 
     }
 
-    if let incomplete = LinkingEventText.incompleteLegs(result, message: Names.message(for:)) {
-
-      throw CommandFailure(description: incomplete)
-
-    }
-
-    // One message for everything a relay linked with a state didn't do as asked, the link
-    // back included.
-    if let failure = LinkingEventText.relayStateFailure(result, message: Names.message(for:)) {
+    // One message for what didn't go as asked: a leg, a relay's state, or the link back.
+    if let failure = LinkingEventText.failure(result, message: Names.message(for:)) {
 
       throw CommandFailure(description: failure)
-
-    }
-
-    if let failure = result.linkBackFailure, let first = result.links.first {
-
-      throw CommandFailure(
-        description: "\(first.address) is linked with the modem as controller, but it didn't link back: \(Names.message(for: failure)) "
-          + "To link back with its SET button, run 'insteon link \(first.address) --responder'."
-      )
 
     }
 
