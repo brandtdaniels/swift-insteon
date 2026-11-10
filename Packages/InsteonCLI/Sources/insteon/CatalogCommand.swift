@@ -196,9 +196,22 @@ enum CatalogStore {
   }
 
   /// The error when there's no cache directory to keep the catalog in.
-  static let noCacheDirectory = CommandFailure(
-    description: "Neither XDG_CACHE_HOME nor HOME is set to an absolute path, so there's nowhere to keep the Insteon device catalog."
-  )
+  static let noCacheDirectory = CommandFailure(description: CatalogText.noCacheDirectory)
+
+}
+
+/// The copies `CatalogStore` reads, for the decisions InsteonCLISupport makes about them.
+struct CatalogFiles: CatalogCopies {
+
+  func bundledVersion() -> DeviceCatalogVersion? { CatalogStore.bundledVersion() }
+
+  var hasCacheDirectory: Bool { CatalogStore.catalogPath() != nil && CatalogStore.versionPath() != nil }
+
+  var hasCachedCopy: Bool { CatalogStore.hasCachedCopy() }
+
+  func cachedVersion() -> DeviceCatalogVersion? { CatalogStore.cachedVersion() }
+
+  func cachedJSON() -> Data? { CatalogStore.cachedJSON() }
 
 }
 
@@ -227,7 +240,7 @@ enum CatalogCommand {
 
   /// Downloads the published catalog when it's compatible with the bundled copy, differs
   /// from the copy in use, and is at least as new as that copy and the bundled copy, and
-  /// saves it.
+  /// saves it. `CatalogUpdate.check` decides; this asks the site and saves.
   ///
   /// Only the catalog's site is asked, over HTTPS, with a session that keeps no cookies or
   /// credentials, so nothing about the Hub is ever sent. A redirect is followed only to HTTPS
@@ -236,133 +249,27 @@ enum CatalogCommand {
   /// - Throws: `CommandFailure` if the catalog can't be downloaded, checked or saved.
   static func update() async throws {
 
-    let bundled: DeviceCatalogVersion
-
-    do {
-
-      bundled = try ProductCatalog.bundledVersion()
-
-    } catch {
-
-      throw CommandFailure(
-        description: "The Insteon device catalog (\(ProductCatalog.bundleName)) isn't next to the command, "
-          + "so there's no version to update from. Scripts/install-insteon.sh installs the command with it."
-      )
-
-    }
-
-    guard CatalogStore.catalogPath() != nil, CatalogStore.versionPath() != nil else {
-
-      throw CatalogStore.noCacheDirectory
-
-    }
-
-    // The cached copy is compared with the published one only when it's the copy in use.
-    var current: Data? = nil
-    var cachedVersion: DeviceCatalogVersion? = nil
-    var currentVersion: DeviceCatalogVersion = bundled
-
-    // A cached copy that fails the guard check isn't in use, so the published copy replaces it.
-    if let cached = CatalogStore.cachedVersion(),
-      CatalogCache.source(bundled: bundled, cached: cached) == .cached,
-      let json = CatalogStore.cachedJSON(),
-      (try? ProductCatalog(json: json)) != nil
-    {
-
-      current = json
-      cachedVersion = cached
-      currentVersion = cached
-
-    }
-
     let location: URL = ProductCatalog.updateLocation
+    let outcome: CatalogUpdateOutcome = try await CatalogUpdate.check(
+      CatalogFiles(),
+      isReadable: { (json: Data) -> Bool in (try? ProductCatalog(json: json)) != nil },
+      location: location,
+      willAsk: Output.note,
+      download: { (current: Data?, currentVersion: DeviceCatalogVersion?) async throws -> ProductCatalogUpdate in
 
-    guard location.scheme == "https" else {
+        try await ProductCatalog.update(replacing: current, currentVersion: currentVersion, from: location, requestTimeout: requestTimeout)
 
-      throw CommandFailure(description: "The Insteon device catalog's address, \(location.absoluteString), isn't HTTPS, so it isn't asked.")
+      },
+      message: Names.message(for:)
+    )
 
-    }
-
-    Output.note("Checking \(location.absoluteString) for a newer Insteon device catalog...")
-
-    let result: ProductCatalogUpdate
-
-    do {
-
-      // Only the catalog's site is asked, with a session that keeps no cookies or
-      // credentials, and redirects only to HTTPS on its own host. A published copy older
-      // than the one in use is refused.
-      result = try await ProductCatalog.update(replacing: current, currentVersion: cachedVersion, from: location, requestTimeout: requestTimeout)
-
-    } catch let error as CancellationError {
-
-      throw error
-
-    } catch let error as ProductCatalogUpdateError {
-
-      try report(error, bundled: bundled, current: currentVersion)
-
-      return
-
-    } catch {
-
-      throw CommandFailure(
-        description: "The Insteon device catalog couldn't be downloaded from \(location.absoluteString): \(oneLine(Names.message(for: error)))"
-      )
-
-    }
-
-    switch result {
-    case .unchanged:
-      Output.line(CatalogText.upToDate(currentVersion))
-    case let .updated(json, version):
+    switch outcome {
+    case let .keep(line):
+      Output.line(line)
+    case let .save(json, version):
       try CatalogStore.save(json: json, version: version)
       Output.line(CatalogText.updated(to: version))
     }
-
-  }
-
-  /// Says why the published catalog wasn't used: in a line, for a catalog in another format,
-  /// which isn't a failure, or by throwing.
-  ///
-  /// - Throws: `CommandFailure` for an error other than an incompatible version.
-  private static func report(_ error: ProductCatalogUpdateError, bundled: DeviceCatalogVersion, current: DeviceCatalogVersion) throws {
-
-    switch error {
-    case let .incompatibleVersion(published):
-      Output.line(CatalogText.incompatible(published: published, bundled: bundled, current: current))
-    case let .olderThanCurrent(published):
-      Output.line(CatalogText.publishedIsOlder(published: published, current: current))
-    case let .unexpectedStatus(status):
-      throw CommandFailure(
-        description: "The Insteon device catalog's site answered with HTTP status \(status), so the current copy, \(current), stays."
-      )
-    case .malformedManifest:
-      throw CommandFailure(description: "The Insteon device catalog's manifest couldn't be read, so the current copy, \(current), stays.")
-    case .checksumMismatch:
-      throw CommandFailure(
-        description: "The downloaded Insteon device catalog didn't match its manifest's SHA-256, so the current copy, \(current), stays. Try again later."
-      )
-    case .insecureLocation:
-      throw CommandFailure(description: "The Insteon device catalog's address isn't HTTPS, so it isn't asked, and the current copy, \(current), stays.")
-    case .insecureRedirect:
-      throw CommandFailure(description: "The Insteon device catalog's site redirected to an address that isn't HTTPS, so nothing was used and the current copy, \(current), stays.")
-    case .redirectRefused:
-      throw CommandFailure(
-        description: "The Insteon device catalog's site redirected to another host or port, so the redirect wasn't followed, nothing was used, and the current copy, \(current), stays."
-      )
-    case .unreadableCatalog:
-      throw CommandFailure(description: "The published Insteon device catalog couldn't be read, so the current copy, \(current), stays.")
-    case let .weakensGuards(weakenings):
-      throw CommandFailure(description: CatalogText.publishedWeakensGuards(weakenings, current: current))
-    }
-
-  }
-
-  /// A message on one line, for an error whose description may span several.
-  private static func oneLine(_ text: String) -> String {
-
-    text.split(whereSeparator: { (character: Character) -> Bool in character.isNewline }).joined(separator: " ")
 
   }
 

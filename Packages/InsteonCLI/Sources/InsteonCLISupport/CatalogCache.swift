@@ -219,6 +219,11 @@ public enum CatalogText {
 
   }
 
+  /// Why there's nowhere to keep a downloaded copy: neither `XDG_CACHE_HOME` nor `HOME` is an
+  /// absolute path.
+  public static let noCacheDirectory: String =
+    "Neither XDG_CACHE_HOME nor HOME is set to an absolute path, so there's nowhere to keep the Insteon device catalog."
+
   /// What `insteon catalog update` says after saving a newer copy, such as
   /// "Updated the Insteon device catalog to 0.6.26."
   ///
