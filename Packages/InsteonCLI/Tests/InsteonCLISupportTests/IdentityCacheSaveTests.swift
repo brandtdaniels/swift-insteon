@@ -92,7 +92,10 @@ struct IdentityCacheSaveTests {
 
     #expect(
       IdentityCache.save(identified, since: NetworkSnapshot(), to: file, path: path)
-        == .notSaved(warning: IdentityCache.warning(for: DeviceRegistryStoreError.malformedContents, path: path))
+        == .notSaved(
+          warning: "insteon: warning: the identity cache \(path) isn't in a format this command reads, so it's left as it is "
+            + "and the identities devices report won't be remembered. Delete it to start a new one."
+        )
     )
     #expect(file.written.isEmpty)
 
@@ -113,7 +116,7 @@ struct IdentityCacheSaveTests {
 
     #expect(
       IdentityCache.save(NetworkSnapshot(hub: hub), since: NetworkSnapshot(), to: file, path: path)
-        == .notSaved(warning: IdentityCache.warning(for: DeviceRegistryStoreError.writeFailed(code: 28), path: path))
+        == .notSaved(warning: "insteon: warning: the identity cache \(path) couldn't be written, so the identities devices report won't be remembered.")
     )
 
   }

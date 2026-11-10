@@ -60,4 +60,25 @@ struct LinkFailureTests {
 
   }
 
+  @Test func namesWhatARelayLinkedWithAStateDidntDoBeforeAFailedLinkBack() {
+
+    let made = LinkMade(address: device, group: 2, mode: .controller)
+    let otherState = RelayStateLinkingError.recordedOtherState(device, group: 2, data1: 0x00, requested: .on)
+    let relayState = RelayStateLink(
+      device: device,
+      state: .on,
+      group: 2,
+      recordedData1: 0x00,
+      recordFailure: otherState,
+      holding: RelayStateHolding(releasedBy: ["examplePulse"], restState: .off)
+    )
+    let result = DeviceLinkingResult(links: [made], device: nil, linkBackFailure: Failure(), relayState: relayState)
+    let failure: String? = LinkingEventText.failure(result, message: message)
+
+    #expect(failure == LinkingEventText.relayStateFailure(result, message: message))
+    #expect(failure?.hasPrefix("1A.2B.3C is linked. ") == true)
+    #expect(failure?.contains("is linked with the modem as controller, but it didn't link back") == false)
+
+  }
+
 }

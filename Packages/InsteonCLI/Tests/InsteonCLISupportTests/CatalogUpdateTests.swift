@@ -138,6 +138,7 @@ struct CatalogUpdateTests {
     #expect(download.asked.map(\.current) == [cachedJSON])
     #expect(download.asked.map(\.version) == [cached])
     #expect(outcome == .keep(CatalogText.upToDate(cached)))
+    #expect(outcome == .keep("The Insteon device catalog is up to date (0.6.21)."))
     #expect(notes.lines == ["Checking https://catalog.example/insteon/ for a newer Insteon device catalog..."])
 
   }
@@ -205,6 +206,10 @@ struct CatalogUpdateTests {
 
     #expect(incompatible == .keep(CatalogText.incompatible(published: nextMinor, bundled: bundled, current: bundled)))
     #expect(olderOutcome == .keep(CatalogText.publishedIsOlder(published: older, current: bundled)))
+    #expect(
+      olderOutcome
+        == .keep("The published Insteon device catalog, 0.6.1, is older than the current copy, 0.6.20, so it isn't downloaded and the current copy stays.")
+    )
 
   }
 

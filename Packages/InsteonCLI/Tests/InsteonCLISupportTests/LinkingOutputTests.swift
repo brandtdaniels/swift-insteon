@@ -1,12 +1,13 @@
 import Testing
 import InsteonCLISupport
-@testable import InsteonCore
+import InsteonCore
 import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonProtocol
 
 /// What `insteon link`, `unlink` and `remove` do with each event a coordinator reports: what
 /// they save, print or write as JSON.
+@Suite(.timeLimit(.minutes(1)))
 struct LinkingOutputTests {
 
   let lamp = InsteonAddress(0x1A, 0x2B, 0x3C)
@@ -15,23 +16,20 @@ struct LinkingOutputTests {
 
   let message: (any Error) -> String = { (_: any Error) -> String in "It failed." }
 
-  /// A made-up catalog with the lamp's product.
+  /// A made-up catalog with the lamp's product, on an identity no real product has.
   let catalog = DeviceCatalog(profiles: [
     DeviceProfile(
-      model: "9402",
+      model: "EX-LINKED-LAMP",
       name: "Example Linked Lamp",
-      identities: [DeviceIdentity(category: 0x01, subcategory: 0x2C)],
+      identities: [DeviceIdentity(category: 0x01, subcategory: 0x7B)],
       groups: [DeviceProfile.Group(number: 1, name: "Load", role: .responder)]
     )
   ])
 
-  var registered: RegisteredDevice {
+  /// The lamp as a registry with the catalog describes it, reporting a firmware version or not.
+  func lampDevice(firmwareVersion: FirmwareVersion? = 0x45) async -> RegisteredDevice {
 
-    RegisteredDevice(
-      address: lamp,
-      identity: ReportedIdentity(category: 0x01, subcategory: 0x2C, firmwareVersion: 0x45),
-      info: DeviceInfo(catalog.describe(category: 0x01, subcategory: 0x2C, firmwareVersion: 0x45))
-    )
+    await DeviceRegistry(catalog: catalog).record(ReportedIdentity(category: 0x01, subcategory: 0x7B, firmwareVersion: firmwareVersion), for: lamp)
 
   }
 
@@ -43,7 +41,9 @@ struct LinkingOutputTests {
 
   // MARK: - A link made
 
-  @Test func savesTheIdentityAndPrintsItWithTheFirstLink() {
+  @Test func savesTheIdentityAndPrintsItWithTheFirstLink() async {
+
+    let registered: RegisteredDevice = await lampDevice()
 
     let made = LinkMade(address: lamp, group: 1, mode: .controller)
     let info: DeviceInfo = registered.info
@@ -61,10 +61,10 @@ struct LinkingOutputTests {
 
   }
 
-  @Test func leavesOutTheProductWithoutACatalogAndSaysWhatsNotReported() {
+  @Test func leavesOutTheProductWithoutACatalogAndSaysWhatsNotReported() async {
 
     let made = LinkMade(address: lamp, group: 1, mode: .controller)
-    let unreported = RegisteredDevice(address: lamp, identity: ReportedIdentity(category: 0x01, subcategory: 0x2C, firmwareVersion: nil), info: DeviceInfo(catalog.describe(category: 0x01, subcategory: 0x2C, firmwareVersion: nil)))
+    let unreported: RegisteredDevice = await lampDevice(firmwareVersion: nil)
     let found = outputs(.linked(LinkedDevice(link: made, device: unreported, leg: .first)), namesProducts: false)
 
     guard case let .table(rows)? = found.last else {
@@ -80,7 +80,9 @@ struct LinkingOutputTests {
 
   }
 
-  @Test func printsTheLinkBackAloneAndSavesNothingThen() {
+  @Test func printsTheLinkBackAloneAndSavesNothingThen() async {
+
+    let registered: RegisteredDevice = await lampDevice()
 
     let back = LinkMade(address: lamp, group: 1, mode: .responder)
 
@@ -90,7 +92,9 @@ struct LinkingOutputTests {
 
   }
 
-  @Test func onlySavesTheIdentityWithJSON() {
+  @Test func onlySavesTheIdentityWithJSON() async {
+
+    let registered: RegisteredDevice = await lampDevice()
 
     let made = LinkMade(address: lamp, group: 1, mode: .controller)
 
@@ -110,7 +114,9 @@ struct LinkingOutputTests {
 
   }
 
-  @Test func printsEachLinkRemovedWithoutTheSETButtonOrThatThereWereNone() {
+  @Test func printsEachLinkRemovedWithoutTheSETButtonOrThatThereWereNone() async {
+
+    let registered: RegisteredDevice = await lampDevice()
 
     let label: String = LinkingInstructions.deviceLabel(lamp, info: registered.info)
     let removed = RemovedLinks(address: lamp, device: registered, links: [ModemLink(modemRole: .responder, group: 1), ModemLink(modemRole: .controller, group: 0)])
@@ -126,12 +132,42 @@ struct LinkingOutputTests {
 
   }
 
-  @Test func printsADeviceForgottenOnlyWithoutJSON() {
+  @Test func printsADeviceForgottenOnlyWithoutJSON() async {
+
+    let registered: RegisteredDevice = await lampDevice()
 
     let forgotten = ForgottenDevice(address: lamp, device: registered)
 
     #expect(outputs(.forgotten(forgotten)) == RemovalText.forgotten(forgotten).map(LinkingOutput.line))
     #expect(outputs(.forgotten(forgotten), printsJSON: true).isEmpty)
+
+  }
+
+  @Test func printsWhatRemovingADeviceLeftOnlyWithoutJSON() async {
+
+    let registered: RegisteredDevice = await lampDevice()
+    let other = InsteonAddress(0x4E, 0x5F, 0x01)
+    let record = LinkRecord(isController: false, isInUse: true, group: 1, address: lamp, data: [0x00, 0x00, 0x00], memoryAddress: 0x0FFF)
+    let scan = LeftoverRecordScan(removedDevice: lamp, holders: [LeftoverRecords(address: other, device: nil, records: [record])], unread: [])
+    let reset = FactoryResetSteps(
+      address: lamp,
+      info: registered.info,
+      procedure: Instructions(steps: [InstructionStep(text: "Hold the example button for 10 seconds.")], notes: []),
+      erases: [.links]
+    )
+    let events: [(LinkingEvent, [String])] = [
+      (.leftoverRecords(scan), RemovalText.leftoverRecords(scan, message: message)),
+      (.modemRecordsDeleted(lamp, [record]), RemovalText.modemRecordsDeleted(lamp, [record])),
+      (.factoryReset(reset), RemovalText.factoryReset(reset))
+    ]
+
+    for (event, lines) in events {
+
+      #expect(!lines.isEmpty)
+      #expect(outputs(event) == lines.map(LinkingOutput.line))
+      #expect(outputs(event, printsJSON: true).isEmpty)
+
+    }
 
   }
 
