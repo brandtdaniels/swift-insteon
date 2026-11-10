@@ -222,7 +222,14 @@ let package = Package(
     ),
     .testTarget(
       name: "InsteonCLISupportTests",
-      dependencies: ["InsteonCLISupport", "InsteonCore", "InsteonDeviceCatalog", "InsteonLinking", "InsteonProtocol"],
+      dependencies: [
+        "InsteonCLISupport",
+        "InsteonCore",
+        "InsteonDeviceCatalog",
+        "InsteonHubClient",
+        "InsteonLinking",
+        "InsteonProtocol"
+      ],
       path: "Packages/InsteonCLI/Tests/InsteonCLISupportTests",
       swiftSettings: memberImportVisibility
     ),
