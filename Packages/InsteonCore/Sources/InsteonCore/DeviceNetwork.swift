@@ -42,7 +42,7 @@ import InsteonProtocol
 public actor DeviceNetwork {
 
   /// The modem the devices are reached through. It's internal, so every message a front end
-  /// sends a device goes through the guards of ``Device`` and ``send(_:collectingFor:onAcknowledgment:)``.
+  /// sends a device goes through the guards of ``Device`` and ``send(_:collectingFor:consent:onAcknowledgment:)``.
   nonisolated let modem: any LinkingModem
 
   /// The identities devices reported, described with the Insteon device catalog.

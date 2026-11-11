@@ -318,9 +318,16 @@ reading each write back. <doc:DatabaseLinking> says what each writes and when to
 ### Sending bytes as they're given
 
 A front end that explores what the catalog doesn't describe yet sends a device a message as
-it's given with ``DeviceNetwork/send(_:collectingFor:onAcknowledgment:)``, and writes the
+it's given with ``DeviceNetwork/send(_:collectingFor:consent:onAcknowledgment:)``, and writes the
 modem a serial command with ``ModemSession/write(rawCommand:forcing:collectingFor:clock:)``.
-Both check the bytes first, and throw a ``SendRefusal`` before anything is sent. A protected
+Both check the bytes first, and throw a ``SendRefusal`` before anything is sent.
+``DeviceNetwork/send(_:collectingFor:consent:onAcknowledgment:)`` also takes the
+``SendConsent`` the caller grants: a message that asks for state is sent, and one that does
+more is sent only when the consent grants what the device's command set says it does, else
+it throws ``SendRefusal/needsConsent(_:)`` naming the effect to grant. A message no entry of
+the command set describes needs ``SendConsent/allowsUndescribed``. The operations of
+``Device`` grant the effect of the act they name, so turning a device on grants actuation and
+nothing more. A protected
 Set Operating Flags whose cmd2 the device's command set gives to a flag it guards is refused
 with ``SendRefusal/setsGuardedFlag(_:label:setting:)``, which carries the flag's label, and
 one the command set doesn't name with ``SendRefusal/protected(_:)``. A message is

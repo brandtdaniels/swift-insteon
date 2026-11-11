@@ -122,7 +122,7 @@ public enum ProtectedCommand: Hashable, Sendable, CaseIterable {
 /// Why InsteonCore refused to send a message or write a serial command as it was given.
 ///
 /// It's thrown before anything is sent, by the raw passthroughs:
-/// ``DeviceNetwork/send(_:collectingFor:onAcknowledgment:)`` and
+/// ``DeviceNetwork/send(_:collectingFor:consent:onAcknowledgment:)`` and
 /// ``ModemSession/write(rawCommand:forcing:collectingFor:clock:)``. Only
 /// ``SendRefusal/serialCommand(_:)`` can be forced; ``canBeForced`` says so.
 ///

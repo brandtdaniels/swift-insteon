@@ -165,7 +165,7 @@ public struct ModemSession: Sendable {
   /// one whose number the package doesn't know; nothing forces a message that carries a
   /// ``ProtectedCommand``: Poke, or Set Operating Flags with one of the cmd2s that can cut a
   /// device off from the modem or lock it, depending on the device.
-  /// A message to a device is better sent with ``DeviceNetwork/send(_:collectingFor:onAcknowledgment:)``,
+  /// A message to a device is better sent with ``DeviceNetwork/send(_:collectingFor:consent:onAcknowledgment:)``,
   /// which also checks it against the device's command set.
   ///
   /// Listening starts before the command is written, so nothing the modem sends is missed.
