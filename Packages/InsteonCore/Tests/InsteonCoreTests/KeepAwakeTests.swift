@@ -192,6 +192,9 @@ struct KeepAwakeTests {
 
   }
 
+  /// The same sensor, kept awake before linking.
+  static let earlyWiper = (address: InsteonAddress(0x5A, 0x6B, 0x05), identity: ReportedIdentity(category: 0x10, subcategory: 0x73, firmwareVersion: 0x41))
+
   static let wiperCatalog = DeviceCatalog(
     profiles: [
       sleepy(
@@ -201,6 +204,14 @@ struct KeepAwakeTests {
         commands: wiperCommands,
         groups: [1],
         keepAwake: DeviceLifecycle.HubLinking.KeepAwake(timing: .afterLinked, send: .command("holdAwake"))
+      ),
+      sleepy(
+        model: "9415",
+        name: "Example Early Wiping Sensor",
+        identity: earlyWiper.identity,
+        commands: wiperCommands,
+        groups: [1],
+        keepAwake: DeviceLifecycle.HubLinking.KeepAwake(timing: .beforeLinking, send: .command("holdAwake"))
       )
     ],
     commandSets: [wiperCommands]
@@ -564,17 +575,24 @@ struct KeepAwakeTests {
 
   // MARK: - Consent
 
-  @Test(.timeLimit(.minutes(1))) func stopsLinkingBeforeAnythingIsSentWhenTheKeepAwakeMessageIsDestructive() async throws {
+  @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+  func stopsLinkingBeforeAnythingIsSentWhenTheKeepAwakeMessageIsDestructive(keptAwakeBeforeLinking: Bool) async throws {
 
+    let sensor: (address: InsteonAddress, identity: ReportedIdentity) = keptAwakeBeforeLinking ? Self.earlyWiper : Self.wiper
     let modem = InMemoryModem()
-    let (sensor, identity): (InsteonAddress, ReportedIdentity) = Self.wiper
-    await modem.setEngine(.i2cs, of: sensor)
-    let network: DeviceNetwork = self.network(modem, catalog: Self.wiperCatalog, identities: [sensor: identity])
-    let recorder: LinkingRecorder = readying(sensor, on: modem)
+    let requests = RequestCount()
+    await modem.setEngine(.i2cs, of: sensor.address)
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      await requests.record(operation)
+
+    }
+    let network: DeviceNetwork = self.network(modem, catalog: Self.wiperCatalog, identities: [sensor.address: sensor.identity])
+    let recorder: LinkingRecorder = readying(sensor.address, on: modem)
 
     let error: DeviceControlError? = await #expect(throws: DeviceControlError.self) {
 
-      _ = try await network.linking.link(sensor, as: .controller, observer: recorder)
+      _ = try await network.linking.link(sensor.address, as: .controller, observer: recorder)
 
     }
 
@@ -589,6 +607,20 @@ struct KeepAwakeTests {
     #expect(effect == .destructive)
     #expect(await modem.linkingSteps.isEmpty)
     #expect(await modem.extendedRequests.isEmpty)
+    #expect(await requests.count == 0)
+
+  }
+
+}
+
+/// Counts the operations an in-memory modem is asked to carry out.
+actor RequestCount {
+
+  private(set) var count: Int = 0
+
+  func record(_ operation: InMemoryModem.Operation) {
+
+    count += 1
 
   }
 

@@ -71,7 +71,7 @@ struct CatalogControlTests {
             "parameter": { "name": "valve", "description": "The valve.", "range": { "from": 0, "through": 7 } }, "effect": "actuation", "idempotent": true },
           { "name": "readValveStatus", "description": "Reads the valve status byte.", "command1": "0x44", "command2": "0x02",
             "reply": { "name": "valveStatus", "description": "The valve status byte.", "kind": "flags",
-              "bits": [{ "mask": "0x07", "name": "activeValve", "description": "The active valve." }, { "mask": "0x80", "name": "anyValveOn", "description": "A valve is on." }] }, "effect": "actuation", "idempotent": true }
+              "bits": [{ "mask": "0x07", "name": "activeValve", "description": "The active valve." }, { "mask": "0x80", "name": "anyValveOn", "description": "A valve is on." }] }, "effect": "readOnly", "idempotent": true }
         ],
         "groupTypes": [
           { "name": "zone1", "label": "Zone 1", "kind": "relay",
