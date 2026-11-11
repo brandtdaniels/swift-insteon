@@ -22,11 +22,12 @@ spec.loader.exec_module(check)
 # A made-up catalog: a relay with an alias and two flags, and a modem the libraries talk through.
 CATALOG = {
     "devices": [
-        {"model": "9801", "name": "Garden Relay", "aliases": ["GardenLinc"], "capabilities": [{"kind": "onOff"}]},
-        {"model": "9899", "name": "Window Modem", "capabilities": [{"kind": "modem"}]},
+        {"model": "9801", "name": "Garden Relay", "aliases": ["GardenLinc"], "capabilities": [{"kind": "onOff"}], "commandSets": [{"commandSet": "gardenRelay"}]},
+        {"model": "9899", "name": "Window Modem", "capabilities": [{"kind": "modem"}], "commandSets": [{"commandSet": "windowModem"}]},
         {"model": "9898", "name": "Roof Hub", "capabilities": [{"kind": "modem"}, {"kind": "hub"}]},
     ],
     "commandSets": [
+        {"id": "windowModem", "serialCommands": [{"name": "readIdentity"}]},
         {
             "id": "gardenRelay",
             "operatingFlags": [
@@ -94,6 +95,17 @@ class CheckDeviceNeutralTests(unittest.TestCase):
             "IOLinc": True,
             "IO Linc": True,
         })
+
+    def test_leaves_the_command_sets_of_a_modem_the_libraries_talk_through(self):
+        words = check.forbidden_words(self.catalog)
+
+        self.assertNotIn("windowModem", words)
+
+        self.write("Packages/InsteonCore/Sources/InsteonCore/Modem.swift", "let id = \"windowModem\"\n")
+
+        status, output = self.run_check()
+
+        self.assertEqual(status, 0, output)
 
     def test_matches_identifiers_and_explicit_words_in_any_case(self):
         self.write(

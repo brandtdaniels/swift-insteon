@@ -11,7 +11,8 @@ words ruled out come from the bundled catalog as the check runs, so they follow 
 - each device's name, aliases and model, apart from a modem's or a Hub's, which the libraries
   talk through rather than control, matched with the case the catalog gives, since they're
   proper names and the same words in lowercase, such as "a dimmer switch", are plain English;
-- each command set's id, and each operating flag's name and label and extended setting's name
+- each command set's id, apart from one only a modem's or a Hub's profile names, and each
+  operating flag's name and label and extended setting's name
   in every command set, matched in any case, so `ioLinc`, `IOLinc` and `iolinc` are all found;
 - the words in `EXPLICIT`, product names the catalog doesn't spell that way, in any case.
 
@@ -102,17 +103,25 @@ def forbidden_words(catalog_path):
     for word in sorted(EXPLICIT):
         add(word, True)
 
+    transport_sets = set()
+    other_sets = set()
+
     for device in catalog.get("devices", []):
         kinds = {capability.get("kind") for capability in device.get("capabilities", [])}
+        named = {entry.get("commandSet") for entry in device.get("commandSets", [])}
 
         if kinds & TRANSPORT_CAPABILITIES:
+            transport_sets |= named
             continue
+
+        other_sets |= named
 
         for word in [device.get("name"), device.get("model"), *(device.get("aliases") or [])]:
             add(word, False)
 
     for command_set in catalog.get("commandSets", []):
-        add(command_set.get("id"), True)
+        if command_set.get("id") not in transport_sets - other_sets:
+            add(command_set.get("id"), True)
 
         for flag in command_set.get("operatingFlags", []):
             add(flag.get("name"), True)
