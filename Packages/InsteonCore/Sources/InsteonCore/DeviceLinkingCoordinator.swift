@@ -15,7 +15,9 @@ import InsteonProtocol
 /// modem's records are read again when the coordinator needs them, so the network's
 /// ``DeviceNetwork/snapshot()`` holds them. A link or unlink that throws forgets them too: the
 /// device's, and those of another device the modem reported instead, such as one whose SET
-/// button was pressed by mistake.
+/// button was pressed by mistake. When the modem's report of a link that throws, such as one
+/// in another group than asked, carries the device's identity, the registry holds that
+/// identity too, since the link was made.
 ///
 /// The catalog decides:
 ///
@@ -826,7 +828,8 @@ public struct DeviceLinkingCoordinator: Sendable {
   /// When `body` throws, the links it may have changed are recorded before the error is
   /// rethrown, so the network's copies of ALL-Link databases aren't stale: those of the device
   /// asked for, and those of the device of a link the modem reported in a `LinkMismatch` or
-  /// `LinkingError.unexpectedLink(_:)`, which did take part.
+  /// `LinkingError.unexpectedLink(_:)`, which did take part. The registry records the
+  /// identity that report carries, if any.
   ///
   /// - Parameters:
   ///   - device: The device asked for, or `nil` for whichever device's SET button is pressed.
@@ -850,6 +853,13 @@ public struct DeviceLinkingCoordinator: Sendable {
       if let reported = Self.reportedLink(in: error) {
 
         await network.recordLinkChange(of: reported.address, answered: true)
+
+        // The link the modem reported was made even so, and its report names the device.
+        if let identity = ReportedIdentity(reported) {
+
+          await network.registry.record(identity, for: reported.address)
+
+        }
 
       }
 

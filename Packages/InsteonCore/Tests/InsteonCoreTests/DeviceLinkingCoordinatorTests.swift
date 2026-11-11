@@ -1177,6 +1177,70 @@ struct DeviceLinkingCoordinatorTests {
 
   }
 
+  @Test(.timeLimit(.minutes(1))) func learnsTheIdentityTheModemReportedForALinkInAnotherGroupThanAsked() async throws {
+
+    let modem = InMemoryModem()
+    let lamp: InsteonAddress = LinkingExample.lamp
+    await modem.setReportedGroup(0x05, of: lamp)
+    await modem.setReportedIdentity(LinkingExample.lampIdentity, of: lamp)
+    let network: DeviceNetwork = self.network(modem)
+
+    await #expect(throws: LinkingError.self) {
+
+      _ = try await network.linking.linkBySETButton(as: .controller, observer: pressing(lamp, on: modem))
+
+    }
+
+    let registered: RegisteredDevice? = await network.registry.device(lamp)
+
+    #expect(registered?.identity == LinkingExample.lampIdentity)
+    #expect(registered?.info.displayName == "Example Lamp Dimmer 9201")
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func learnsTheIdentityTheModemReportedForTheOtherDeviceThatLinked() async throws {
+
+    let modem = InMemoryModem()
+    let module: InsteonAddress = LinkingExample.module
+    let lamp: InsteonAddress = LinkingExample.lamp
+    let network: DeviceNetwork = self.network(modem, identities: [module: LinkingExample.moduleIdentity])
+    // The module can't be linked remotely, and the lamp's SET button is pressed instead.
+    await modem.setEngine(.i1, of: module)
+    await modem.setReportedIdentity(LinkingExample.lampIdentity, of: lamp)
+    let recorder = LinkingRecorder(pressing: { (_: SETButtonPrompt) async -> Void in
+
+      await modem.pressSetButton(of: lamp)
+
+    })
+
+    await #expect(throws: LinkMismatch.self) {
+
+      _ = try await network.linking.link(module, as: .controller, observer: recorder)
+
+    }
+
+    #expect(await network.registry.device(lamp)?.identity == LinkingExample.lampIdentity)
+    #expect(await network.registry.device(module)?.identity == LinkingExample.moduleIdentity)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func learnsNoIdentityFromAReportWithoutOne() async throws {
+
+    let modem = InMemoryModem()
+    let lamp: InsteonAddress = LinkingExample.lamp
+    await modem.setReportedGroup(0x05, of: lamp)
+    let network: DeviceNetwork = self.network(modem)
+
+    await #expect(throws: LinkingError.self) {
+
+      _ = try await network.linking.linkBySETButton(as: .controller, observer: pressing(lamp, on: modem))
+
+    }
+
+    #expect(await network.registry.device(lamp) == nil)
+
+  }
+
   @Test(.timeLimit(.minutes(1))) func recordsTheOtherDeviceThatLinkedInsteadOfTheOneAskedFor() async throws {
 
     let modem = InMemoryModem()
