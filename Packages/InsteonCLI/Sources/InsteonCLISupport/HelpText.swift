@@ -180,6 +180,10 @@ public enum HelpText {
     Without ADDRESS, puts the modem into linking mode with Start ALL-Linking, then waits for
     someone to press and hold a device's SET button, and prints the linked device.
 
+    When the modem reports a link other than the one asked for, such as one in another group
+    or with another device, the command fails, and keeps the identity the modem reported for
+    the device, so 'insteon links' names its product.
+
     Either way, when the modem is the controller and the catalog says the device can
     control, the device is then linked back without a second SET press, with the modem as
     its responder, so the modem hears the device's buttons. It's linked back in the first

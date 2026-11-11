@@ -170,6 +170,10 @@ public actor InMemoryModem: LinkingModem {
   /// The group the modem reports for each device's links, when it isn't the modem's group.
   public var reportedGroups: [InsteonAddress: AllLinkGroupNumber] = [:]
 
+  /// The identity the modem reports for each device it becomes the controller of, as a modem
+  /// does in ALL-Linking Completed. A device without one is reported with no identity.
+  public var reportedIdentities: [InsteonAddress: ReportedIdentity] = [:]
+
   /// Whether the modem keeps its own records in step with the links it reports: a controller
   /// or responder record for a link it makes, and none for a link it removes. Defaults to `false`, so
   /// the modem's records change only as a test sets them.
@@ -431,6 +435,13 @@ public actor InMemoryModem: LinkingModem {
   public func setReportedGroup(_ group: AllLinkGroupNumber, of device: InsteonAddress) {
 
     reportedGroups[device] = group
+
+  }
+
+  /// Sets the identity the modem reports for a device it becomes the controller of.
+  public func setReportedIdentity(_ identity: ReportedIdentity, of device: InsteonAddress) {
+
+    reportedIdentities[device] = identity
 
   }
 
@@ -1124,13 +1135,15 @@ public actor InMemoryModem: LinkingModem {
     }
 
     let linkCode = linking.mode == .delete || waiting.isUnlinking ? 0xFF : linking.mode.rawValue
+    // A modem reports the device's identity only when it became the controller.
+    let identity: ReportedIdentity? = linkCode == AllLinkMode.controller.rawValue ? reportedIdentities[waiting.address] : nil
     let link = AllLinkingCompleted(
       linkCode: linkCode,
       group: reportedGroups[waiting.address] ?? linking.group,
       address: waiting.address,
-      category: nil,
-      subcategory: nil,
-      firmwareVersion: nil
+      category: identity?.category,
+      subcategory: identity?.subcategory,
+      firmwareVersion: identity?.firmwareVersion
     )
 
     linkingMode = nil
