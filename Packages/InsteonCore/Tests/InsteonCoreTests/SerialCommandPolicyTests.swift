@@ -218,6 +218,7 @@ struct SerialCommandPolicyTests {
               "fixed": [{ "position": 1, "value": "0x80" }], "parameters": [{ "name": "record", "description": "Record.", "bytes": [2, 3, 4] }] },
             { "name": "unmarked", "description": "Marks nothing.", "number": "0x6B", "parameters": [{ "name": "value", "description": "Value.", "byte": 1 }] },
             { "name": "alsoTune", "description": "Tunes too.", "effect": "configuration", "idempotent": true, "number": "0x6C" },
+            { "name": "neverSend", "description": "Is never sent.", "effect": "destructive", "idempotent": false, "guard": "never", "number": "0x6E" },
             { "name": "alsoLink", "description": "Links too.", "effect": "link", "idempotent": true, "number": "0x6C" }
           ],
           "sources": ["A"]
@@ -339,6 +340,14 @@ struct SerialCommandPolicyTests {
     }
 
     #expect(Self.decision(write, forcing: true) == .transmit)
+
+  }
+
+  @Test func neverWritesACommandTheCommandSetNeverSendsWhateverIsGranted() {
+
+    #expect(Self.decision([0x02, 0x6E]) == .refuse(.neverSentToModem))
+    #expect(Self.decision([0x02, 0x6E], forcing: true) == .refuse(.neverSentToModem))
+    #expect(SendRefusal.neverSentToModem.canBeForced == false)
 
   }
 

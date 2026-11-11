@@ -162,6 +162,9 @@ public enum SendRefusal: Error, Hashable, Sendable {
   /// list, so which bytes it writes can't be told. The associated value is the selector.
   case unlistedExtendedSet(selector: UInt8)
 
+  /// The Insteon device catalog marks the serial command as never sent to the modem.
+  case neverSentToModem
+
   /// The bytes don't start with Start of Text (`0x02`), as every serial command does.
   case notSerialCommand
 

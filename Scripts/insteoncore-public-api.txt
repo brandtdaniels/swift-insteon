@@ -286,6 +286,7 @@ case SendRefusal.extendedSetWithoutCommandSet
 case SendRefusal.incompleteMessage
 case SendRefusal.needsConsent(_:)
 case SendRefusal.neverSentToDevice(product:)
+case SendRefusal.neverSentToModem
 case SendRefusal.notSerialCommand
 case SendRefusal.protected(_:)
 case SendRefusal.serialCommand(_:)

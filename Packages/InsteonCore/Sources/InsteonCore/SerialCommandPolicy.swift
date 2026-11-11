@@ -40,7 +40,8 @@ public enum SerialCommandPolicy {
   /// Whether a serial command is written, needs the person's consent, or is never written.
   ///
   /// ``refusal(of:forcing:)`` refuses first: the byte floor, a command cut short, and without
-  /// `forcing` a command that can't be framed or that writes to a device. Otherwise the
+  /// `forcing` a command that can't be framed or that writes to a device. A command the
+  /// modem's command set marks as never sent is refused whatever is granted. Otherwise the
   /// command's effect decides. It is the strictest effect of the entries of the modem's command
   /// set whose number and fixed payload bytes the command matches, and the effect InsteonCore's
   /// own flows declare for the same bytes, whichever is stricter. A command neither describes
@@ -54,7 +55,14 @@ public enum SerialCommandPolicy {
   /// - Returns: The decision.
   public static func decision(of bytes: [UInt8], commands: CommandSet?, forcing: Bool) -> SendDecision {
 
-    let refusal: SendRefusal? = refusal(of: bytes, forcing: forcing)
+    var refusal: SendRefusal? = refusal(of: bytes, forcing: forcing)
+
+    if refusal == nil, bytes.count >= 2, CommandSetSafety.isSerialNeverSent(number: bytes[1], payload: Array(bytes.dropFirst(2)), in: commands) {
+
+      refusal = .neverSentToModem
+
+    }
+
     var effect: CommandEffect?
 
     if refusal == nil, bytes.count >= 2, case let .described(described, _) = CommandSetSafety.serialEffect(number: bytes[1], payload: Array(bytes.dropFirst(2)), in: commands) {

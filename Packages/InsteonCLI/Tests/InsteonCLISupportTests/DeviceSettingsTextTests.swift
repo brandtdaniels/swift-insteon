@@ -552,6 +552,7 @@ struct ExploringArgumentTests {
       .writesGuardedFlags(label: "Lockout"),
       .extendedSetWithoutCommandSet,
       .notSerialCommand,
+      .neverSentToModem,
       .incompleteMessage,
       .serialCommand("0x09 isn't a serial command the package knows, so the modem's answer can't be read."),
       .needsConsent(.configuration),

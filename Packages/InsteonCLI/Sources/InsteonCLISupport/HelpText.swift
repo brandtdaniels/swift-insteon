@@ -499,17 +499,22 @@ public enum HelpText {
     command it doesn't guard.
 
     What a command does decides whether it needs --force. The modem is asked who it is (Get IM
-    Info), and the Insteon device catalog's entry for it says what each command does: asks for
-    state, links, or acts (such as Get IM Info, Get First ALL-Link Record, Start ALL-Linking
-    with link code 00, 01 or 03, Cancel ALL-Linking, Send X10 and Beep) are sent. Changing a
-    setting the modem keeps is refused without --force, and so is removing or overwriting
-    what it keeps or stopping it answering, such as Reset the IM (0x67), Start ALL-Linking
-    with link code FF, Manage ALL-Link Record to add, change or delete a record, RF Sleep
-    (0x72) and Write Database (0x76). The Set ACK byte commands (0x68, 0x70 and 0x71), 0x79
-    and 0x7A are among the ones that change a setting, so they need --force. A command the
-    catalog's entry doesn't describe, or a modem the catalog has no entry for, needs --force
-    too, apart from the commands the insteon command itself sends: Get IM Info, linking,
-    reading the ALL-Link database, Manage ALL-Link Record, Send ALL-Link Command and Beep.
+    Info), and the Insteon device catalog's entry for it says what each command does. Commands
+    that ask for state, link or act are sent, such as Get IM Info, Get First ALL-Link Record,
+    Start ALL-Linking with link code 00, 01 or 03, Cancel ALL-Linking, Send X10 and Beep.
+    Commands that change a setting the modem keeps need --force, and so do those that remove
+    or overwrite what it keeps or stop it answering, such as Reset the IM (0x67), Start
+    ALL-Linking with link code FF, Manage ALL-Link Record codes 20, 40, 41 and 80 (add, change
+    or delete a record), RF Sleep (0x72) and Write Database (0x76). The Set ACK byte commands
+    (0x68, 0x70 and 0x71), 0x79 and 0x7A change a setting, so they need --force. A command the
+    catalog's entry doesn't describe, or any command for a modem the catalog has no entry for,
+    needs --force too, except the ones the insteon command itself sends that ask for state,
+    link or act: Get IM Info, Start ALL-Linking with link code 00, 01 or 03, Cancel
+    ALL-Linking, reading the ALL-Link database (Get First and Get Next ALL-Link Record,
+    Manage ALL-Link Record codes 00 and 01), Send ALL-Link Command and Beep. A command the
+    catalog marks as never sent is never written, with or without --force.
+
+    If the modem can't say who it is, nothing is written, with or without --force.
 
     Without --force, a command is also refused when the package doesn't know its number, since
     the modem's answer can't be read, and a message (0x62) that writes to a device is:

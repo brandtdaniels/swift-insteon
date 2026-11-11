@@ -36,6 +36,7 @@ struct ModemSendTests {
             { "name": "blink", "description": "Blinks.", "effect": "actuation", "idempotent": true, "number": "0x6D" },
             { "name": "tuneAck", "description": "Tunes.", "effect": "configuration", "idempotent": true, "number": "0x68",
               "parameters": [{ "name": "value", "description": "Value.", "byte": 1 }] },
+            { "name": "neverSend", "description": "Is never sent.", "effect": "destructive", "idempotent": false, "guard": "never", "number": "0x72" },
             { "name": "wipe", "description": "Wipes.", "effect": "destructive", "idempotent": true, "number": "0x67" }
           ],
           "sources": ["A"]
@@ -134,6 +135,22 @@ struct ModemSendTests {
 
   }
 
+  @Test(.timeLimit(.minutes(1))) func neverWritesACommandTheModemsCommandSetNeverSends() async throws {
+
+    let catalog: ProductCatalog = try Self.catalog()
+
+    for forcing in [false, true] {
+
+      await #expect(throws: SendRefusal.neverSentToModem) {
+
+        _ = try await Self.send([0x02, 0x72], catalog: catalog, forcing: forcing)
+
+      }
+
+    }
+
+  }
+
   // MARK: - Without one
 
   @Test(.timeLimit(.minutes(1))) func treatsAModemWithoutACommandSetAsDescribingNothingExceptWhatCoreBuilds() async throws {
@@ -165,6 +182,50 @@ struct ModemSendTests {
 
   }
 
+  @Test(.timeLimit(.minutes(1))) func treatsAModemTheCatalogDoesntKnowAsOneWithoutACommandSet() async throws {
+
+    let catalog: ProductCatalog = try Self.catalog()
+    let other = ScriptedConnection { written, _ in
+
+      written.count > 1 && written[1] == 0x60 ? [0x02, 0x60, 0x3A, 0x4B, 0x41, 0x03, 0x55, 0x45, 0x06] : written + [0x06]
+
+    }
+
+    try await Modem.withConnection(other) { (modem: Modem) async throws -> Void in
+
+      let session = ModemSession(modem: modem, hub: nil)
+
+      await #expect(throws: SendRefusal.needsConsent(nil)) {
+
+        _ = try await session.write(rawCommand: [0x02, 0x6D], catalog: catalog, collectingFor: .zero)
+
+      }
+
+      _ = try await session.write(rawCommand: [0x02, 0x69], catalog: catalog, collectingFor: .zero)
+
+    }
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func doesNotWriteAForcedCommandWhenTheModemCantSayWhoItIs() async throws {
+
+    let catalog: ProductCatalog = try Self.catalog()
+    let broken = FailingIdentityConnection()
+
+    try await Modem.withConnection(broken) { (modem: Modem) async throws -> Void in
+
+      await #expect(throws: FailingIdentityConnection.Failure.self) {
+
+        _ = try await ModemSession(modem: modem, hub: nil).write(rawCommand: [0x02, 0x67], forcing: true, catalog: catalog, collectingFor: .zero)
+
+      }
+
+    }
+
+    #expect(await broken.written.isEmpty)
+
+  }
+
   // MARK: - What is never consent's to decide
 
   @Test(.timeLimit(.minutes(1))) func neverWritesTheFloorOrAnUnframedCommandAndNeverAsksTheModemFirst() async throws {
@@ -191,6 +252,41 @@ struct ModemSendTests {
     }
 
     #expect(connection.written.isEmpty)
+
+  }
+
+}
+
+/// A modem connection that fails the write of Get IM Info and keeps every other write.
+actor FailingIdentityConnection: ModemConnection {
+
+  struct Failure: Error {}
+
+  private(set) var written: [[UInt8]] = []
+
+  private let stream: AsyncThrowingStream<[UInt8], any Error>
+
+  init() {
+
+    stream = AsyncThrowingStream<[UInt8], any Error>.makeStream().stream
+
+  }
+
+  func write(_ bytes: [UInt8]) async throws {
+
+    guard bytes.count > 1, bytes[1] != 0x60 else {
+
+      throw Failure()
+
+    }
+
+    written.append(bytes)
+
+  }
+
+  nonisolated func receive() -> AsyncThrowingStream<[UInt8], any Error> {
+
+    stream
 
   }
 

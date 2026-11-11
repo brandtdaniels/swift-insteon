@@ -47,6 +47,8 @@ public enum SendRefusalText {
       return "The device's catalog entry lists no extended Set with selector \(hex.count == 1 ? "0" : "")\(hex), so which bytes it writes can't be told; insteon doesn't send it as given."
     case .extendedSetWithoutCommandSet:
       return "Without the device's catalog entry, insteon can't tell which bits an extended Set writes, so it doesn't send one as given; run 'insteon device ADDRESS id' first, so the identity cache knows the device."
+    case .neverSentToModem:
+      return "The modem's catalog entry marks this command as one never sent to the modem; insteon never sends it."
     case .notSerialCommand:
       return "A serial command starts with 02."
     case .incompleteMessage:
