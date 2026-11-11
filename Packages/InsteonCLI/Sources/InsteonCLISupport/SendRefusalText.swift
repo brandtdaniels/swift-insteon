@@ -58,13 +58,13 @@ public enum SendRefusalText {
     let consequence: String
 
     switch command {
-    case .programmingLockOn:
+    case .setOperatingFlags0x00:
       consequence = "Locking linking from the device would stop its SET button from linking it"
-    case .radioOff:
+    case .setOperatingFlags0x0C:
       consequence = "Turning radio off would cut the device off the network"
-    case .powerlineOff:
+    case .setOperatingFlags0x0E:
       consequence = "Turning powerline off would cut the device off the network"
-    case .checksumOn:
+    case .setOperatingFlags0x19:
       consequence = "Requiring a checksum in every message would cut the device off from a modem that doesn't send one"
     case .poke:
       consequence = "Poke One Byte writes any byte of a device's memory, its ALL-Link database included"

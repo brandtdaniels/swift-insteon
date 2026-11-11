@@ -198,11 +198,11 @@ case ProductCatalogUpdateError.redirectRefused
 case ProductCatalogUpdateError.unexpectedStatus(_:)
 case ProductCatalogUpdateError.unreadableCatalog
 case ProductCatalogUpdateError.weakensGuards(_:)
-case ProtectedCommand.checksumOn
 case ProtectedCommand.poke
-case ProtectedCommand.powerlineOff
-case ProtectedCommand.programmingLockOn
-case ProtectedCommand.radioOff
+case ProtectedCommand.setOperatingFlags0x00
+case ProtectedCommand.setOperatingFlags0x0C
+case ProtectedCommand.setOperatingFlags0x0E
+case ProtectedCommand.setOperatingFlags0x19
 case RawModemReply.echo(bytes:kind:)
 case RawModemReply.message(_:)
 case RawModemReply.negativeAcknowledgment

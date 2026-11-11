@@ -141,10 +141,10 @@ struct GuardedBytesTests {
 
   @Test func namesEveryProtectedCommandByItsBytes() throws {
 
-    #expect(ProtectedCommand(command1: 0x20, command2: 0x0C) == .radioOff)
-    #expect(ProtectedCommand(command1: 0x20, command2: 0x0E) == .powerlineOff)
-    #expect(ProtectedCommand(command1: 0x20, command2: 0x19) == .checksumOn)
-    #expect(ProtectedCommand(command1: 0x20, command2: 0x00) == .programmingLockOn)
+    #expect(ProtectedCommand(command1: 0x20, command2: 0x0C) == .setOperatingFlags0x0C)
+    #expect(ProtectedCommand(command1: 0x20, command2: 0x0E) == .setOperatingFlags0x0E)
+    #expect(ProtectedCommand(command1: 0x20, command2: 0x19) == .setOperatingFlags0x19)
+    #expect(ProtectedCommand(command1: 0x20, command2: 0x00) == .setOperatingFlags0x00)
     #expect(ProtectedCommand(command1: 0x29, command2: 0x00) == .poke)
     #expect(ProtectedCommand(command1: 0x29, command2: 0xFF) == .poke)
 
@@ -818,8 +818,8 @@ struct GuardedBytesTests {
     // Beep, then a whole message: the modem reads both, so --force can't hide the second.
     let hidden: [UInt8] = [0x02, 0x77, 0x02, 0x62, 0x3A, 0x4B, 0x41, 0x0F, 0x20, 0x0C]
 
-    #expect(SerialCommandPolicy.neverWritten(hidden) == .protected(.radioOff))
-    #expect(SerialCommandPolicy.refusal(of: hidden, forcing: true) == .protected(.radioOff))
+    #expect(SerialCommandPolicy.neverWritten(hidden) == .protected(.setOperatingFlags0x0C))
+    #expect(SerialCommandPolicy.refusal(of: hidden, forcing: true) == .protected(.setOperatingFlags0x0C))
 
     // A message cut short, which the next command's bytes could finish.
     #expect(SerialCommandPolicy.neverWritten([0x02, 0x62, 0x3A, 0x4B, 0x41, 0x0F, 0x20]) == .incompleteMessage)

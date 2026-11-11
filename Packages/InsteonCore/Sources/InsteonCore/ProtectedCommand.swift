@@ -4,11 +4,12 @@ import InsteonProtocol
 /// something harmless for that device, or, for Poke, never.
 ///
 /// The four Set Operating Flags (cmd1 `0x20`) commands here cut most devices off from the
-/// modem or leave them locked. Each is refused for a device the catalog doesn't know or gives
-/// no command set, and for a command set that doesn't say what its cmd2 means. It's sent only
-/// where the device's command set names that cmd2 for a flag or command it doesn't guard, such
-/// as a keypad's button lock flag, turned on with cmd2 `0x19`; a cmd2 the command set names
-/// only for a flag or command it guards stays refused. Poke writes any byte of a device's
+/// modem or leave them locked. Each case is named by its cmd2, since a device's command set can
+/// give the byte another meaning. Each is refused for a device the catalog doesn't know or
+/// gives no command set, and for a command set that doesn't say what its cmd2 means. It's sent
+/// only where the device's command set names that cmd2 for a flag or command it doesn't guard,
+/// such as an unguarded flag it turns on with cmd2 `0x19`; a cmd2 the command set names only
+/// for a flag or command it guards stays refused. Poke writes any byte of a device's
 /// memory and is never sent. Every message InsteonCore sends, raw or not, is checked by its
 /// bytes, and nothing forces one through. A raw serial command has no device to look up, so
 /// ``SerialCommandPolicy`` refuses all of them in it. The catalog's guards add more commands
@@ -16,26 +17,26 @@ import InsteonProtocol
 ///
 /// ```swift
 /// if let protected = ProtectedCommand(command1: 0x20, command2: 0x0C) {
-///   print(protected)   // radioOff
+///   print(protected)   // setOperatingFlags0x0C
 /// }
 /// ```
 public enum ProtectedCommand: Hashable, Sendable, CaseIterable {
 
-  /// Set Operating Flags with cmd2 `0x00`, which locks linking and programming from the device
-  /// itself, so its SET button doesn't link it.
-  case programmingLockOn
+  /// Set Operating Flags with cmd2 `0x00`, which on most devices locks linking and programming
+  /// from the device itself, so its SET button doesn't link it.
+  case setOperatingFlags0x00
 
-  /// Set Operating Flags with cmd2 `0x0C`, which turns a dual-band device's radio off, so it
-  /// can't hear the modem by radio.
-  case radioOff
+  /// Set Operating Flags with cmd2 `0x0C`, which on most dual-band devices stops the radio, so
+  /// the device can't hear the modem by radio.
+  case setOperatingFlags0x0C
 
-  /// Set Operating Flags with cmd2 `0x0E`, which turns a dual-band device's powerline off, so
-  /// it can't hear the modem over the powerline.
-  case powerlineOff
+  /// Set Operating Flags with cmd2 `0x0E`, which on most dual-band devices stops the powerline,
+  /// so the device can't hear the modem over the powerline.
+  case setOperatingFlags0x0E
 
-  /// Set Operating Flags with cmd2 `0x19`, which makes a device require a checksum in every
-  /// message, so a modem that doesn't send one can't reach it.
-  case checksumOn
+  /// Set Operating Flags with cmd2 `0x19`, which on most devices makes the device require a
+  /// checksum in every message, so a modem that doesn't send one can't reach it.
+  case setOperatingFlags0x19
 
   /// Poke One Byte (cmd1 `0x29`), with any cmd2, which writes a byte of a device's memory, its
   /// ALL-Link database included, at the address that Set Address MSB (`0x28`) and Peek One
@@ -71,13 +72,13 @@ public enum ProtectedCommand: Hashable, Sendable, CaseIterable {
 
     switch command2 {
     case 0x00:
-      self = .programmingLockOn
+      self = .setOperatingFlags0x00
     case 0x0C:
-      self = .radioOff
+      self = .setOperatingFlags0x0C
     case 0x0E:
-      self = .powerlineOff
+      self = .setOperatingFlags0x0E
     case 0x19:
-      self = .checksumOn
+      self = .setOperatingFlags0x19
     default:
       return nil
     }
@@ -95,13 +96,13 @@ public enum ProtectedCommand: Hashable, Sendable, CaseIterable {
   var setOperatingFlagsCommand: Command? {
 
     switch self {
-    case .programmingLockOn:
+    case .setOperatingFlags0x00:
       Command(command1: Self.setOperatingFlags, command2: 0x00)
-    case .radioOff:
+    case .setOperatingFlags0x0C:
       Command(command1: Self.setOperatingFlags, command2: 0x0C)
-    case .powerlineOff:
+    case .setOperatingFlags0x0E:
       Command(command1: Self.setOperatingFlags, command2: 0x0E)
-    case .checksumOn:
+    case .setOperatingFlags0x19:
       Command(command1: Self.setOperatingFlags, command2: 0x19)
     case .poke:
       nil

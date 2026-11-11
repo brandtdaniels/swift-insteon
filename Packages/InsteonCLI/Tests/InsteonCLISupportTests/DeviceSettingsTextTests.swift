@@ -503,13 +503,13 @@ struct ExploringArgumentTests {
 
     for forcing in [[], ["--force"]] {
 
-      #expect(throws: ArgumentError.neverSent(.protected(.checksumOn), by: .modemSend)) {
+      #expect(throws: ArgumentError.neverSent(.protected(.setOperatingFlags0x19), by: .modemSend)) {
 
         try Invocation.parse(["modem", "send", "02621A2B3C0F2019"] + forcing)
 
       }
 
-      #expect(throws: ArgumentError.neverSent(.protected(.powerlineOff), by: .modemSend)) {
+      #expect(throws: ArgumentError.neverSent(.protected(.setOperatingFlags0x0E), by: .modemSend)) {
 
         try Invocation.parse(["modem", "send", "0261", "01", "200E"] + forcing)
 
@@ -559,8 +559,8 @@ struct ExploringArgumentTests {
 
     // device ADDRESS send sends a protected Set Operating Flags where the catalog gives it
     // another meaning; modem send, with no device to look up, never does.
-    #expect(SendRefusalText.sentence(.protected(.radioOff), from: .deviceSend).hasPrefix("Turning radio off would cut the device off the network; insteon sends it only"))
-    #expect(SendRefusalText.sentence(.protected(.radioOff), from: .modemSend) == "Turning radio off would cut the device off the network; insteon modem send never writes it.")
+    #expect(SendRefusalText.sentence(.protected(.setOperatingFlags0x0C), from: .deviceSend).hasPrefix("Turning radio off would cut the device off the network; insteon sends it only"))
+    #expect(SendRefusalText.sentence(.protected(.setOperatingFlags0x0C), from: .modemSend) == "Turning radio off would cut the device off the network; insteon modem send never writes it.")
     #expect(SendRefusalText.sentence(.protected(.poke), from: .deviceSend).hasSuffix("insteon never sends it."))
     #expect(SendRefusalText.sentence(.extendedSetWithoutCommandSet, from: .deviceSend).contains("can't tell which bits"))
     #expect(SendRefusalText.sentence(.serialCommand("Reset."), from: .modemSend).hasSuffix("Pass --force to send it anyway."))
