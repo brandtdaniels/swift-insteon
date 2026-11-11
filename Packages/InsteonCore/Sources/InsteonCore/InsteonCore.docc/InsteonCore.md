@@ -480,6 +480,12 @@ do {
 - ``ProductCatalogStore``
 - ``ProductCatalogStoreError``
 
+### Deciding what is sent
+
+- ``SendPolicy``
+- ``SendConsent``
+- ``SendDecision``
+
 ### Raw passthroughs
 
 - ``ProtectedCommand``

@@ -267,6 +267,9 @@ case SelfTestOutcome.failed
 case SelfTestOutcome.passed
 case SelfTestOutcome.skipped
 case SelfTestOutcome.warning
+case SendDecision.needsConsent(_:)
+case SendDecision.refuse(_:)
+case SendDecision.transmit
 case SendFailure.deviceRejected(_:_:)
 case SendFailure.deviceUnanswered(_:)
 case SendFailure.modemRejected
@@ -330,7 +333,9 @@ enum SelfTestCheckKind
 enum SelfTestChecklistItem
 enum SelfTestFix
 enum SelfTestOutcome
+enum SendDecision
 enum SendFailure
+enum SendPolicy
 enum SendRefusal
 enum SerialCommandPolicy
 enum TwoWayLinking
@@ -485,6 +490,7 @@ init SelfTestCheck(kind:outcome:detail:fixes:group:)
 init SelfTestGroup(number:name:)
 init SelfTestOptions(actuates:)
 init SelfTestReport(device:engine:identity:productName:productKey:expectedProductKey:status:checks:checklist:)
+init SendConsent(effects:allowsUndescribed:)
 init SendFailure?(_:)
 init UnlinkedLink(link:device:)
 init UnreadDatabase(address:device:reason:)
@@ -543,6 +549,7 @@ static func ProductCatalog.load(contentsOf:)
 static func ProductCatalog.update(replacing:currentVersion:from:requestTimeout:resourceTimeout:)
 static func ProductCatalogStore.version(json:)
 static func ProductCatalogStore.versionJSON(_:)
+static func SendPolicy.decision(effect:declaredEffect:refusal:consent:)
 static func SerialCommandPolicy.isSerialCommand(_:)
 static func SerialCommandPolicy.neverWritten(_:)
 static func SerialCommandPolicy.refusal(for:)
@@ -655,6 +662,7 @@ struct SelfTestCheck
 struct SelfTestGroup
 struct SelfTestOptions
 struct SelfTestReport
+struct SendConsent
 struct UnlinkedLink
 struct UnreadDatabase
 struct WakePrompt
@@ -1022,6 +1030,8 @@ var SelfTestReport.outcome
 var SelfTestReport.productKey
 var SelfTestReport.productName
 var SelfTestReport.status
+var SendConsent.allowsUndescribed
+var SendConsent.effects
 var SendRefusal.canBeForced
 var UnlinkedLink.device
 var UnlinkedLink.link
