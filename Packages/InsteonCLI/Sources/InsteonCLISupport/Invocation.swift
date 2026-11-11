@@ -25,6 +25,25 @@ public struct Invocation: Hashable, Sendable {
   /// The subcommand to run.
   public var subcommand: Subcommand
 
+  /// The device the subcommand is for, if it's for one: `insteon device ADDRESS`, and
+  /// `insteon link`, `unlink` and `remove` with an address.
+  public var device: InsteonAddress? {
+
+    switch subcommand {
+    case let .device(address, _):
+      address
+    case let .link(options):
+      options.device
+    case let .unlink(options):
+      options.device
+    case let .remove(options):
+      options.device
+    default:
+      nil
+    }
+
+  }
+
   /// Creates an invocation.
   ///
   /// - Parameters:
@@ -251,6 +270,28 @@ public struct DiscoverOptions: Hashable, Sendable {
 
   }
 
+  /// Checks that the Hub's password goes only where the person chose: to the one Hub
+  /// `--identify HOST[:PORT]` names, or to each Hub found after asking at a terminal.
+  ///
+  /// - Parameter readsFromTerminal: Whether standard input is a terminal, so the person can
+  ///   be asked.
+  /// - Throws: `CommandFailure` when the Hubs found would be identified with no Hub named
+  ///   and no terminal to ask.
+  public func checkIdentifying(readsFromTerminal: Bool) throws(CommandFailure) {
+
+    guard identifiesHubs, identifyTarget == nil, !readsFromTerminal else {
+
+      return
+
+    }
+
+    throw CommandFailure(
+      description: "'--identify' sends the Hub's password, and there's no terminal to ask before sending it to each Hub found. "
+        + "Name the one Hub to send it to with '--identify HOST[:PORT]'."
+    )
+
+  }
+
 }
 
 /// A Hub named on the command line by its host and, optionally, its port.
@@ -288,6 +329,28 @@ public enum LinkingRole: String, Hashable, Sendable, CaseIterable {
   /// The modem controls the device or responds to it, whichever the device's SET button asks
   /// for.
   case either
+
+  /// The modem's role when a device is linked or unlinked by its address: responder when
+  /// asked, and controller otherwise, since only a SET button can choose.
+  public var modemRole: ModemRole {
+
+    self == .responder ? .responder : .controller
+
+  }
+
+  /// The modem's role when a device is linked with its SET button.
+  public var manualRole: ManualLinkingRole {
+
+    switch self {
+    case .controller:
+      .controller
+    case .responder:
+      .responder
+    case .either:
+      .either
+    }
+
+  }
 
 }
 

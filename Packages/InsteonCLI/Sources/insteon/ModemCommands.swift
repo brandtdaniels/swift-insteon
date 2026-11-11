@@ -169,12 +169,11 @@ enum ModemCommands {
       "\(Wording.count(rows.count, "record")). The modem controls a device in a controller record, and responds to it in a responder record."
     )
 
-    if !options.identifiesDevices, entries.contains(where: { (entry: ModemDatabaseEntry) -> Bool in entry.device == nil }) {
+    let hasUnnamedDevice: Bool = entries.contains { (entry: ModemDatabaseEntry) -> Bool in entry.device == nil }
 
-      Output.note(
-        "Devices are named from the identities they reported to 'insteon link' and 'insteon device ADDRESS id'. "
-          + "'insteon links --identify' asks each device with ID Request."
-      )
+    if let hint = IdentityText.unnamedHint(identifies: options.identifiesDevices, hasUnnamedDevice: hasUnnamedDevice) {
+
+      Output.note(hint)
 
     }
 
@@ -199,11 +198,7 @@ enum ModemCommands {
 
       }
 
-      Output.note(
-        identification.acceptsModem
-          ? "\(device) didn't report its identity."
-          : "\(device) runs i2CS and has no link to the modem, so it won't say what it is."
-      )
+      Output.note(IdentityText.unreported(device, acceptsModem: identification.acceptsModem))
 
     } catch let error as CancellationError {
 
@@ -269,9 +264,11 @@ enum ModemCommands {
 
     DatabaseLinkText.plan(plan).forEach(say)
 
-    if plan.isEmpty || options.isDryRun {
+    let decision: DatabaseLinkText.Decision = try await DatabaseLinkText.decision(plan, isDryRun: options.isDryRun, asks: asks, confirm: Terminal.confirm)
 
-      if options.isDryRun, !plan.isEmpty {
+    switch decision {
+    case .nothingToWrite, .dryRun:
+      if decision == .dryRun {
 
         say(DatabaseLinkText.dryRun)
 
@@ -284,17 +281,10 @@ enum ModemCommands {
       }
 
       return
-
-    }
-
-    if asks {
-
-      guard try await Terminal.confirm(DatabaseLinkText.question(plan)) else {
-
-        throw CommandFailure(description: DatabaseLinkText.declined)
-
-      }
-
+    case .declined:
+      throw CommandFailure(description: DatabaseLinkText.declined)
+    case .write:
+      break
     }
 
     let result: DatabaseLinkResult
@@ -314,13 +304,7 @@ enum ModemCommands {
 
       }
 
-      if interrupted.cause is CancellationError {
-
-        throw CancellationError()
-
-      }
-
-      throw CommandFailure(description: "The writes to the ALL-Link databases stopped partway: \(Names.message(for: interrupted.cause))")
+      throw DatabaseLinkText.failure(interrupted, message: Names.message(for:))
 
     }
 
@@ -332,9 +316,9 @@ enum ModemCommands {
 
     }
 
-    guard result.isComplete else {
+    if let failure = DatabaseLinkText.failure(result) {
 
-      throw CommandFailure(description: "Not every write to the ALL-Link databases went as planned.")
+      throw failure
 
     }
 
@@ -402,7 +386,7 @@ enum ModemCommands {
 
       result = try await coordinator.link(
         device,
-        as: options.role == .responder ? .responder : .controller,
+        as: options.role.modemRole,
         group: options.group,
         twoWay: twoWay,
         setButtonTimeout: timeout,
@@ -412,7 +396,7 @@ enum ModemCommands {
 
     } else {
 
-      result = try await coordinator.linkBySETButton(as: manualRole(options.role), group: options.group, twoWay: twoWay, timeout: timeout, observer: observer)
+      result = try await coordinator.linkBySETButton(as: options.role.manualRole, group: options.group, twoWay: twoWay, timeout: timeout, observer: observer)
 
     }
 
@@ -422,41 +406,11 @@ enum ModemCommands {
 
     }
 
-    if let incomplete = LinkingEventText.incompleteLegs(result, message: Names.message(for:)) {
-
-      throw CommandFailure(description: incomplete)
-
-    }
-
-    // One message for everything a relay linked with a state didn't do as asked, the link
-    // back included.
-    if let failure = LinkingEventText.relayStateFailure(result, message: Names.message(for:)) {
+    // One message for what didn't go as asked: a leg, a relay's state, or the link back.
+    if let failure = LinkingEventText.failure(result, message: Names.message(for:)) {
 
       throw CommandFailure(description: failure)
 
-    }
-
-    if let failure = result.linkBackFailure, let first = result.links.first {
-
-      throw CommandFailure(
-        description: "\(first.address) is linked with the modem as controller, but it didn't link back: \(Names.message(for: failure)) "
-          + "To link back with its SET button, run 'insteon link \(first.address) --responder'."
-      )
-
-    }
-
-  }
-
-  /// The modem's role in a SET button link.
-  private static func manualRole(_ role: LinkingRole) -> ManualLinkingRole {
-
-    switch role {
-    case .controller:
-      return .controller
-    case .responder:
-      return .responder
-    case .either:
-      return .either
     }
 
   }
@@ -493,7 +447,7 @@ enum ModemCommands {
 
       let result: DeviceUnlinkingResult = try await coordinator.unlink(
         options.device,
-        as: options.role == .responder ? .responder : .controller,
+        as: options.role.modemRole,
         group: options.group,
         timeout: timeout,
         observer: observer
@@ -530,7 +484,7 @@ enum ModemCommands {
 
       let label: String = LinkingInstructions.deviceLabel(device, info: failure.info)
 
-      throw CommandFailure(description: "\(label) wasn't unlinked without its SET button: \(Names.message(for: failure.underlying))")
+      throw CommandFailure(description: LinkingEventText.notUnlinkedRemotely(device: label, reason: Names.message(for: failure.underlying)))
 
     }
 
@@ -554,17 +508,7 @@ enum ModemCommands {
       let known: RegisteredDevice? = await cached.network.registry.device(device)
       let label: String = LinkingInstructions.deviceLabel(device, info: known?.info)
 
-      if asks {
-
-        let question: String = RemovalText.question(device: label, forcesModemSide: options.forcesModemSide)
-
-        guard try await Terminal.confirm(question) else {
-
-          throw CommandFailure(description: RemovalText.declined(device: label))
-
-        }
-
-      }
+      try await RemovalText.confirmRemoval(device: label, forcesModemSide: options.forcesModemSide, asks: asks, confirm: Terminal.confirm)
 
       let timeout: Duration = options.timeoutSeconds.map { (seconds: Int) -> Duration in .seconds(seconds) } ?? DeviceLinkingCoordinator.defaultRemoteTimeout
       let observer = LinkingPrompter(names: names, printsJSON: printsJSON, cached: cached)
@@ -593,9 +537,9 @@ enum ModemCommands {
       }
 
       // A device whose links aren't confirmed gone stays in the cache, and the command fails.
-      if let reason = result.keptBecause {
+      if let failure = RemovalText.failure(result, device: label, message: Names.message(for:)) {
 
-        throw CommandFailure(description: RemovalText.kept(device, device: label, reason: reason, message: Names.message(for:)))
+        throw failure
 
       }
 
@@ -608,36 +552,6 @@ enum ModemCommands {
     try await modem.cancelLinking()
 
     Output.line("The modem has left linking mode.")
-
-  }
-
-  // MARK: - Helpers
-
-  /// Prints a new link, with the device's identity when it's known. Pass `nil` for `known` to
-  /// print the link alone.
-  static func report(_ link: LinkMade, known: DeviceInfo?, names: ProductNames) {
-
-    Output.line("Linked \(link.address) in group \(link.group), modem as \(Names.mode(link.mode)).")
-
-    guard let known else {
-
-      return
-
-    }
-
-    var rows = [
-      ["Category:", Names.category(known.category)],
-      ["Subcategory:", "\(known.subcategory)"],
-      ["Firmware:", known.firmwareVersion.map { "\($0)" } ?? "not reported"]
-    ]
-
-    if names.catalog != nil {
-
-      rows.append(["Product:", known.displayName ?? "not in the Insteon device catalog"])
-
-    }
-
-    Output.table(rows)
 
   }
 

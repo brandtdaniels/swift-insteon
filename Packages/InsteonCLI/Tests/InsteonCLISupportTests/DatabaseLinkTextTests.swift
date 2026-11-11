@@ -237,4 +237,101 @@ struct DatabaseLinkTextTests {
 
   }
 
+  // MARK: - Deciding
+
+  /// The questions a decision asked, and the answer it gets.
+  final class Asker {
+
+    var questions: [String] = []
+
+    let answer: Bool
+
+    init(answer: Bool) {
+
+      self.answer = answer
+
+    }
+
+    func confirm(_ question: String) -> Bool {
+
+      questions.append(question)
+
+      return answer
+
+    }
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func writesNothingForAnEmptyPlanEvenInADryRun() async throws {
+
+    let asker = Asker(answer: true)
+    let empty: DatabaseLinkPlan = plan(steps: [])
+
+    #expect(try await DatabaseLinkText.decision(empty, isDryRun: false, asks: true, confirm: asker.confirm) == .nothingToWrite)
+    #expect(try await DatabaseLinkText.decision(empty, isDryRun: true, asks: true, confirm: asker.confirm) == .nothingToWrite)
+    #expect(asker.questions.isEmpty)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func onlyShowsThePlanInADryRun() async throws {
+
+    let asker = Asker(answer: true)
+
+    #expect(try await DatabaseLinkText.decision(plan(steps: linkSteps), isDryRun: true, asks: true, confirm: asker.confirm) == .dryRun)
+    #expect(asker.questions.isEmpty)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func asksBeforeWritingWhenItShould() async throws {
+
+    let yes = Asker(answer: true)
+    let no = Asker(answer: false)
+    let unasked = Asker(answer: false)
+    let linking: DatabaseLinkPlan = plan(steps: linkSteps)
+
+    #expect(try await DatabaseLinkText.decision(linking, isDryRun: false, asks: true, confirm: yes.confirm) == .write)
+    #expect(try await DatabaseLinkText.decision(linking, isDryRun: false, asks: true, confirm: no.confirm) == .declined)
+    #expect(try await DatabaseLinkText.decision(linking, isDryRun: false, asks: false, confirm: unasked.confirm) == .write)
+    #expect(yes.questions == [DatabaseLinkText.question(linking)])
+    #expect(unasked.questions.isEmpty)
+
+  }
+
+  @Test func failsWhenNotEveryWriteWentAsPlanned() {
+
+    let steps: [DatabaseLinkStep] = linkSteps
+    let complete = DatabaseLinkResult(
+      plan: plan(steps: steps),
+      steps: steps.map { (step: DatabaseLinkStep) -> DatabaseLinkResult.StepResult in DatabaseLinkResult.StepResult(step: step, outcome: .written) },
+      mismatches: [],
+      deviceCheck: .checked
+    )
+    let incomplete = DatabaseLinkResult(
+      plan: plan(steps: steps),
+      steps: steps.map { (step: DatabaseLinkStep) -> DatabaseLinkResult.StepResult in DatabaseLinkResult.StepResult(step: step, outcome: .notReached) },
+      mismatches: [],
+      deviceCheck: .checked
+    )
+
+    #expect(DatabaseLinkText.failure(complete) == nil)
+    #expect(DatabaseLinkText.failure(incomplete) == CommandFailure(description: "Not every write to the ALL-Link databases went as planned."))
+
+  }
+
+  @Test func stopsOnCancellationAndFailsOtherwiseWhenTheWritesStopPartway() {
+
+    struct Unanswered: Error {}
+
+    let result = DatabaseLinkResult(plan: plan(steps: linkSteps), steps: [], mismatches: [], deviceCheck: .checked)
+    let canceled: any Error = DatabaseLinkText.failure(DatabaseLinkInterrupted(result: result, cause: CancellationError()), message: { _ in "" })
+    let failed: any Error = DatabaseLinkText.failure(DatabaseLinkInterrupted(result: result, cause: Unanswered()), message: { _ in "The device didn't answer." })
+
+    #expect(canceled is CancellationError)
+    #expect(
+      failed as? CommandFailure
+        == CommandFailure(description: "The writes to the ALL-Link databases stopped partway: The device didn't answer.")
+    )
+
+  }
+
 }

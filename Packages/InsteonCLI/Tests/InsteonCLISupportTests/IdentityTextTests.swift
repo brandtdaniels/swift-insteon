@@ -52,4 +52,31 @@ struct IdentityTextTests {
 
   }
 
+  // MARK: - No identity
+
+  @Test func saysWhyADeviceAskedWithIDRequestNamedNothing() {
+
+    let device = InsteonAddress(0x1A, 0x2B, 0x3C)
+
+    #expect(IdentityText.unreported(device, acceptsModem: true) == "1A.2B.3C didn't report its identity.")
+    #expect(IdentityText.unreported(device, acceptsModem: false) == "1A.2B.3C runs i2CS and has no link to the modem, so it won't say what it is.")
+    #expect(
+      IdentityText.notLinkedNote(device, acceptsModem: false)
+        == "The device runs i2CS and isn't linked to the modem, so it won't say more. Link it first with 'insteon link 1A.2B.3C'."
+    )
+    #expect(IdentityText.notLinkedNote(device, acceptsModem: true) == nil)
+
+  }
+
+  @Test func suggestsIdentifyingOnlyWhenADeviceInTheModemsDatabaseIsUnnamed() {
+
+    let hint = "Devices are named from the identities they reported to 'insteon link' and 'insteon device ADDRESS id'. "
+      + "'insteon links --identify' asks each device with ID Request."
+
+    #expect(IdentityText.unnamedHint(identifies: false, hasUnnamedDevice: true) == hint)
+    #expect(IdentityText.unnamedHint(identifies: false, hasUnnamedDevice: false) == nil)
+    #expect(IdentityText.unnamedHint(identifies: true, hasUnnamedDevice: true) == nil)
+
+  }
+
 }

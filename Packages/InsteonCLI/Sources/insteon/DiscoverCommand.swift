@@ -5,8 +5,8 @@ import InsteonCore
 ///
 /// The reusable parts, running local and Insteon Connect discovery, stopping at the first Hub,
 /// merging duplicates, and the password policy for confirming a Hub, live in InsteonCore's
-/// `HubSearch`. This command is the argument parsing, the progress and prompts, and the output
-/// around them.
+/// `HubSearch`, and the order of the searches and when they fail in InsteonCLISupport's
+/// `HubDiscovery`. This command is the progress and prompts, and the output around them.
 enum DiscoverCommand {
 
   /// A Hub as `--json` prints it. The identity is left out when it isn't known.
@@ -45,84 +45,18 @@ enum DiscoverCommand {
 
     // Without a person to ask before each Hub is sent the password, it's sent only to the one
     // Hub named.
-    if options.identifiesHubs, options.identifyTarget == nil, !Terminal.readsFromTerminal {
-
-      throw CommandFailure(
-        description: "'--identify' sends the Hub's password, and there's no terminal to ask before sending it to each Hub found. "
-          + "Name the one Hub to send it to with '--identify HOST[:PORT]'."
-      )
-
-    }
+    try options.checkIdentifying(readsFromTerminal: Terminal.readsFromTerminal)
 
     let names = ProductNames()
     let search = HubSearch()
-    var hubs: [HubCandidate] = []
-    var failures: [any Error] = []
-
-    if options.asksInsteonConnect {
-
-      Output.note("Asking Insteon Connect...")
-
-      do {
-
-        for hub in try await search.insteonConnectHubs() {
-
-          HubSearch.merge(hub, into: &hubs)
-
-        }
-
-      } catch {
-
-        Output.note("Insteon Connect: \(Names.message(for: error))")
-        failures.append(error)
-
-      }
-
-    }
-
-    if options.searchesLocalNetwork {
-
-      do {
-
-        let found = try await searchLocalNetwork(search, stoppingAtFirst: !options.searchesAllAddresses)
-
-        for hub in found {
-
-          HubSearch.merge(hub, into: &hubs)
-
-        }
-
-        // Insteon Connect sees the network's public IP address, so it's only suggested.
-        if found.isEmpty, !options.asksInsteonConnect {
-
-          Output.note(
-            "No Hub answered on the local network. 'insteon discover --insteon-connect' asks Insteon Connect "
-              + "for the Hubs that reported from this network, which shares the network's public IP address with Insteon."
-          )
-
-        }
-
-      } catch let error as CancellationError {
-
-        throw error
-
-      } catch {
-
-        Output.note("Local network: \(Names.message(for: error))")
-        failures.append(error)
-
-      }
-
-    }
-
-    // Fail only when every way of looking failed, rather than reporting no Hubs.
-    let ways = (options.asksInsteonConnect ? 1 : 0) + (options.searchesLocalNetwork ? 1 : 0)
-
-    if let failure = failures.last, failures.count == ways {
-
-      throw failure
-
-    }
+    var hubs: [HubCandidate] = try await HubDiscovery.search(
+      options,
+      insteonConnect: { () async throws -> [HubCandidate] in try await search.insteonConnectHubs() },
+      localNetwork: { (stoppingAtFirst: Bool) async throws -> [HubCandidate] in try await searchLocalNetwork(search, stoppingAtFirst: stoppingAtFirst) },
+      merge: { (hub: HubCandidate, hubs: inout [HubCandidate]) -> Void in HubSearch.merge(hub, into: &hubs) },
+      note: Output.note,
+      message: Names.message(for:)
+    )
 
     if let credentials {
 
@@ -161,9 +95,9 @@ enum DiscoverCommand {
 
     Output.table([["ADDRESS", "INSTEON ID", "PRODUCT", "FOUND BY"]] + rows)
 
-    if options.searchesLocalNetwork, credentials == nil {
+    if let note = HubText.candidateNote(options) {
 
-      Output.note("A Hub found on the local network is a candidate: check its address before using its password there.")
+      Output.note(note)
 
     }
 
@@ -229,12 +163,11 @@ enum DiscoverCommand {
 
     if let target {
 
-      let port: Int = target.port ?? HubLocation.defaultPort
-      let index: Int? = hubs.firstIndex { $0.host == target.host && $0.port == port }
+      let index: Int? = hubs.firstIndex { target.matches(host: $0.host, port: $0.port) }
 
       guard let index else {
 
-        Output.note("\(target.host):\(port) wasn't among the Hubs found, so it wasn't sent the password.")
+        Output.note(HubText.notFound(target))
 
         return
 
@@ -279,7 +212,9 @@ enum DiscoverCommand {
 
     for (hub, outcome) in results {
 
-      if case let .identified(info) = outcome, let index = hubs.firstIndex(where: { $0.host == hub.host && $0.port == hub.port }) {
+      let asked = HubAddress(host: hub.host, port: hub.port)
+
+      if case let .identified(info) = outcome, let index = hubs.firstIndex(where: { asked.matches(host: $0.host, port: $0.port) }) {
 
         hubs[index].record(info)
 
@@ -287,9 +222,9 @@ enum DiscoverCommand {
 
     }
 
-    if results.contains(where: { $0.outcome.isAuthenticationFailure }) {
+    if let note = HubText.identificationStopped(results.map(\.outcome)) {
 
-      Output.note("Stopped identifying Hubs, so the rejected credentials aren't sent to any more of them.")
+      Output.note(note)
 
     }
 
@@ -298,22 +233,10 @@ enum DiscoverCommand {
   /// Prints what came of asking a candidate for Get IM Info, without its credentials.
   private static func report(_ outcome: HubIdentification, for hub: HubCandidate) {
 
-    let address = "\(hub.host):\(hub.port)"
+    if let note = HubText.identification(outcome, host: hub.host, port: hub.port, message: Names.message(for:)) {
 
-    switch outcome {
-    case .identified, .declined:
-      break
-    case .skippedNonPrivateAddress:
-      Output.note("\(hub.host) isn't a private address, so it wasn't sent the password.")
-    case .skippedNonHubPort:
-      Output.note(
-        "\(address) isn't on the Hub's port, \(HubLocation.defaultPort), so it wasn't sent the password. "
-          + "'insteon discover --identify \(address)' sends it."
-      )
-    case .didNotAnswer:
-      Output.note("\(address) didn't answer Get IM Info in time.")
-    case let .rejected(error), let .failed(error):
-      Output.note("\(address): \(Names.message(for: error))")
+      Output.note(note)
+
     }
 
   }

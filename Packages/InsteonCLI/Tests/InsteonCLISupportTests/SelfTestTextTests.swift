@@ -233,4 +233,17 @@ struct SelfTestTextTests {
 
   }
 
+  // MARK: - The exit status
+
+  @Test func failsTheCommandOnlyWhenACheckFailed() {
+
+    let warned = SelfTestReport(device: lamp, checks: [SelfTestCheck(kind: .catalog, outcome: .warning, detail: "")])
+    let failed = SelfTestReport(device: lamp, checks: [SelfTestCheck(kind: .answers, outcome: .failed, detail: "")])
+
+    #expect(SelfTestText.failure(SelfTestReport(device: lamp, checks: [])) == nil)
+    #expect(SelfTestText.failure(warned) == nil)
+    #expect(SelfTestText.failure(failed) == CommandFailure(description: "The self-test of \(lamp) found a problem."))
+
+  }
+
 }

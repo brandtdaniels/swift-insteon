@@ -127,4 +127,46 @@ public enum SceneText {
 
   }
 
+  /// What `insteon beep` says when the modem rejected Beep or didn't answer, which means it
+  /// doesn't support it.
+  ///
+  /// - Parameters:
+  ///   - failure: How the send failed, as `SendFailure` reads the error, or `nil`.
+  ///   - isDouble: Whether a double beep was asked for.
+  /// - Returns: The sentence, or `nil` for a failure that describes itself.
+  public static func beepFailure(_ failure: SendFailure?, isDouble: Bool) -> String? {
+
+    let name: String = isDouble ? "a double beep" : "Beep"
+
+    switch failure {
+    case .modemRejected?:
+      return "The modem doesn't support \(name): it rejected it."
+    case .modemUnanswered?:
+      return "The modem doesn't support \(name): it didn't answer."
+    default:
+      return nil
+    }
+
+  }
+
+  /// What `insteon scene` says when the modem rejected the group's command, which it does
+  /// for a group it has no records for.
+  ///
+  /// - Parameters:
+  ///   - failure: How the send failed, as `SendFailure` reads the error, or `nil`.
+  ///   - group: The group.
+  ///   - isOn: Whether Light On was sent, rather than Light Off.
+  /// - Returns: The sentence, or `nil` for a failure that describes itself.
+  public static func failure(_ failure: SendFailure?, group: AllLinkGroupNumber, isOn: Bool) -> String? {
+
+    guard failure == .modemRejected else {
+
+      return nil
+
+    }
+
+    return "The modem rejected \(isOn ? "Light On" : "Light Off") for group \(group); it does that for a group it has no records for."
+
+  }
+
 }

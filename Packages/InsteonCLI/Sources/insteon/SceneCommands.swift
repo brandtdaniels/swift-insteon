@@ -27,9 +27,15 @@ enum SceneCommands {
 
       report = try await scene.send(turningOn: isOn, responderCount: responders.count, through: modem)
 
-    } catch where SendFailure(error) == .modemRejected {
+    } catch {
 
-      throw CommandFailure(description: "The modem rejected \(commandName) for group \(group); it does that for a group it has no records for.")
+      if let failure = SceneText.failure(SendFailure(error), group: group, isOn: isOn) {
+
+        throw CommandFailure(description: failure)
+
+      }
+
+      throw error
 
     }
 
@@ -54,22 +60,19 @@ enum SceneCommands {
 
   static func beep(isDouble: Bool, modem: ModemSession) async throws {
 
-    let name: String = isDouble ? "a double beep" : "Beep"
-
     do {
 
       try await modem.beep(isDouble: isDouble)
 
     } catch {
 
-      switch SendFailure(error) {
-      case .modemRejected?:
-        throw CommandFailure(description: "The modem doesn't support \(name): it rejected it.")
-      case .modemUnanswered?:
-        throw CommandFailure(description: "The modem doesn't support \(name): it didn't answer.")
-      default:
-        throw error
+      if let failure = SceneText.beepFailure(SendFailure(error), isDouble: isDouble) {
+
+        throw CommandFailure(description: failure)
+
       }
+
+      throw error
 
     }
 

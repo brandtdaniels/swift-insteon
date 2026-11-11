@@ -150,6 +150,87 @@ public enum DatabaseLinkText {
   /// What's printed after a dry run's plan.
   public static let dryRun: String = "Dry run: nothing was written."
 
+  /// What to do with a plan once it's shown.
+  public enum Decision: Hashable, Sendable {
+
+    /// Stop: the plan has nothing to write.
+    case nothingToWrite
+
+    /// Only show the plan, as `--dry-run` asks.
+    case dryRun
+
+    /// Stop: the person didn't agree to the writes.
+    case declined
+
+    /// Write as the plan says.
+    case write
+
+  }
+
+  /// Decides what to do with a plan once it's shown: a plan with nothing to write stops
+  /// there, dry run or not, a dry run stops there, the person is asked first when `asks` is
+  /// `true`, and anything else is written.
+  ///
+  /// - Parameters:
+  ///   - plan: The plan.
+  ///   - isDryRun: Whether `--dry-run` was given.
+  ///   - asks: Whether to ask before writing, as ``DatabaseWriteOptions/asksForConfirmation(readsFromTerminal:subcommand:)`` says.
+  ///   - confirm: Asks a person a question, and returns whether they agreed.
+  /// - Returns: What to do.
+  public static func decision(_ plan: DatabaseLinkPlan, isDryRun: Bool, asks: Bool, confirm: (String) async throws -> Bool) async throws -> Decision {
+
+    if plan.isEmpty {
+
+      return .nothingToWrite
+
+    }
+
+    if isDryRun {
+
+      return .dryRun
+
+    }
+
+    if asks {
+
+      return try await confirm(question(plan)) ? .write : .declined
+
+    }
+
+    return .write
+
+  }
+
+  /// The failure of writes that were all made but didn't all go as planned, or `nil` if they
+  /// did.
+  ///
+  /// - Parameter result: The result.
+  /// - Returns: The failure, or `nil`.
+  public static func failure(_ result: DatabaseLinkResult) -> CommandFailure? {
+
+    result.isComplete ? nil : CommandFailure(description: "Not every write to the ALL-Link databases went as planned.")
+
+  }
+
+  /// The error a command stops with when the writes stopped partway: `CancellationError`
+  /// after Control-C, and a `CommandFailure` that says why otherwise.
+  ///
+  /// - Parameters:
+  ///   - interrupted: What stopped the writes, and what was written.
+  ///   - message: Describes the cause.
+  /// - Returns: The error.
+  public static func failure(_ interrupted: DatabaseLinkInterrupted, message: (any Error) -> String) -> any Error {
+
+    if interrupted.cause is CancellationError {
+
+      return CancellationError()
+
+    }
+
+    return CommandFailure(description: "The writes to the ALL-Link databases stopped partway: \(message(interrupted.cause))")
+
+  }
+
   // MARK: - The result
 
   /// What became of the writes, a line each for those that didn't go as planned, and for each

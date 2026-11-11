@@ -453,6 +453,54 @@ public enum LinkingEventText {
 
   }
 
+  /// What `insteon unlink ADDRESS --all` says when a link couldn't be removed without the
+  /// device's SET button.
+  ///
+  /// - Parameters:
+  ///   - device: The device, as `LinkingInstructions.deviceLabel(_:info:)` writes it.
+  ///   - reason: Why, as a sentence that ends with a period.
+  /// - Returns: The message.
+  public static func notUnlinkedRemotely(device: String, reason: String) -> String {
+
+    "\(device) wasn't unlinked without its SET button: \(reason)"
+
+  }
+
+  /// Why `insteon link` fails once the coordinator returns, or `nil` when it did what was
+  /// asked: a leg of the catalog's linking from a Hub that didn't link, as
+  /// ``incompleteLegs(_:message:)`` says; else what a relay linked with a state didn't do, as
+  /// ``relayStateFailure(_:message:)`` says, the link back included; else a link back that
+  /// failed, with how to make it with the SET button.
+  ///
+  /// - Parameters:
+  ///   - result: What the coordinator linked.
+  ///   - message: The sentence that describes an error, ending with a period.
+  /// - Returns: The message, or `nil`.
+  public static func failure(_ result: DeviceLinkingResult, message: (any Error) -> String) -> String? {
+
+    if let incomplete = incompleteLegs(result, message: message) {
+
+      return incomplete
+
+    }
+
+    if let relayState = relayStateFailure(result, message: message) {
+
+      return relayState
+
+    }
+
+    guard let failure = result.linkBackFailure, let first = result.links.first else {
+
+      return nil
+
+    }
+
+    return "\(first.address) is linked with the modem as controller, but it didn't link back: \(message(failure)) "
+      + "To link back with its SET button, run 'insteon link \(first.address) --responder'."
+
+  }
+
   /// Why `insteon link` fails after linking some of a device's legs of the catalog's linking
   /// from a Hub, or `nil` when every leg linked or there were none.
   ///

@@ -163,6 +163,17 @@ public enum SelfTestText {
 
   }
 
+  /// The failure `insteon device ADDRESS selftest` exits with when a check failed, so a
+  /// script can tell, or `nil` when none did; a warning doesn't fail it.
+  ///
+  /// - Parameter report: The report.
+  /// - Returns: The failure, or `nil`.
+  public static func failure(_ report: SelfTestReport) -> CommandFailure? {
+
+    report.outcome == .failed ? CommandFailure(description: "The self-test of \(report.device) found a problem.") : nil
+
+  }
+
   /// The line that sums up the test.
   ///
   /// - Parameter report: The report.

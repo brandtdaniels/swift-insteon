@@ -94,10 +94,10 @@ public enum CatalogCache {
 
   /// What to do with the cached copy of the catalog, once it's read and checked against the
   /// bundled copy.
-  public enum CachedCatalog {
+  public enum CachedCatalog<Catalog> {
 
     /// Use the cached copy.
-    case use(ProductCatalog)
+    case use(Catalog)
 
     /// Use the bundled copy, after the warning, as the cached copy weakens its guards.
     case useBundled(warning: String)
@@ -118,7 +118,7 @@ public enum CatalogCache {
   ///   - path: The cached copy's file, for a warning.
   ///   - reading: Reads and checks a catalog, as `ProductCatalog.init(json:)` does.
   /// - Returns: What to do.
-  public static func cachedCatalog(_ json: Data, path: String, reading: (Data) throws -> ProductCatalog) -> CachedCatalog {
+  public static func cachedCatalog<Catalog>(_ json: Data, path: String, reading: (Data) throws -> Catalog) -> CachedCatalog<Catalog> {
 
     do {
 
@@ -141,6 +141,103 @@ public enum CatalogCache {
       return .unreadable
 
     }
+
+  }
+
+  /// A copy of the catalog the command uses, and which copy it is.
+  public struct Choice<Catalog> {
+
+    /// The catalog.
+    public let catalog: Catalog
+
+    /// Which copy it was read from.
+    public let source: CatalogSource
+
+    /// Creates a choice.
+    ///
+    /// - Parameters:
+    ///   - catalog: The catalog.
+    ///   - source: Which copy it was read from.
+    public init(catalog: Catalog, source: CatalogSource) {
+
+      self.catalog = catalog
+      self.source = source
+
+    }
+
+  }
+
+  /// Loads the copy of the catalog the command uses, as ``source(bundled:cached:)`` and
+  /// ``cachedCatalog(_:path:reading:)`` choose it, saying with a one-line warning when a
+  /// cached copy is there but isn't used.
+  ///
+  /// A cached copy whose version can't be read, or that can't be read as a catalog, isn't
+  /// used, and the bundled copy is. One that weakens the bundled copy's guards isn't used
+  /// either. One that can't be checked, since the bundled copy is missing or can't be read,
+  /// means no copy is used.
+  ///
+  /// - Parameters:
+  ///   - copies: The copies on disk.
+  ///   - reading: Reads and checks the cached copy's JSON, as `ProductCatalog.init(json:)`
+  ///     does.
+  ///   - bundled: Loads the bundled copy, or returns `nil`, after its own warning, if it can't.
+  ///   - warn: Prints a warning.
+  /// - Returns: The copy to use, or `nil` if none can be used.
+  public static func choose<Catalog>(
+    _ copies: some CatalogCopies,
+    reading: (Data) throws -> Catalog,
+    bundled: () -> Catalog?,
+    warn: (String) -> Void
+  ) -> Choice<Catalog>? {
+
+    let bundledVersion: DeviceCatalogVersion? = copies.bundledVersion()
+    let cachedVersion: DeviceCatalogVersion? = copies.cachedVersion()
+    let path: String = copies.catalogPath ?? relativePath
+
+    if cachedVersion == nil, copies.hasCachedCopy, let versionPath = copies.versionPath {
+
+      warn(
+        "insteon: warning: the cached Insteon device catalog's version, \(versionPath), couldn't be read, so the cached copy isn't used. "
+          + "'insteon catalog update' downloads it again."
+      )
+
+    }
+
+    func useBundled() -> Choice<Catalog>? {
+
+      bundled().map { (catalog: Catalog) -> Choice<Catalog> in Choice(catalog: catalog, source: .bundled) }
+
+    }
+
+    guard source(bundled: bundledVersion, cached: cachedVersion) == .cached else {
+
+      return useBundled()
+
+    }
+
+    if let json = copies.cachedJSON() {
+
+      switch cachedCatalog(json, path: path, reading: reading) {
+      case let .use(catalog):
+        return Choice(catalog: catalog, source: .cached)
+      case let .useBundled(warning):
+        warn(warning)
+        return useBundled()
+      case let .useNone(warning):
+        warn(warning)
+        return nil
+      case .unreadable:
+        break
+      }
+
+    }
+
+    warn(
+      "insteon: warning: the cached Insteon device catalog at \(path) couldn't be read, "
+        + "so it isn't used. 'insteon catalog update' downloads it again."
+    )
+
+    return useBundled()
 
   }
 
@@ -218,6 +315,11 @@ public enum CatalogText {
     ]
 
   }
+
+  /// Why there's nowhere to keep a downloaded copy: neither `XDG_CACHE_HOME` nor `HOME` is an
+  /// absolute path.
+  public static let noCacheDirectory: String =
+    "Neither XDG_CACHE_HOME nor HOME is set to an absolute path, so there's nowhere to keep the Insteon device catalog."
 
   /// What `insteon catalog update` says after saving a newer copy, such as
   /// "Updated the Insteon device catalog to 0.6.26."
@@ -338,3 +440,6 @@ public enum CatalogText {
   }
 
 }
+
+/// Two choices are equal when they chose the same catalog from the same copy.
+extension CatalogCache.Choice: Equatable where Catalog: Equatable {}
