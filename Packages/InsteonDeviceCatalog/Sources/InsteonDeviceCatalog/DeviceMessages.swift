@@ -54,6 +54,14 @@ public struct DeviceStandardCommand: Hashable, Sendable {
   /// ``CommandGuard/never`` marks one an app never sends.
   public var sendGuard: CommandGuard?
 
+  /// What the command does to the device, or `nil` if the catalog doesn't say, which reads as
+  /// ``CommandEffect/destructive``.
+  public var effect: CommandEffect?
+
+  /// Whether sending the command twice leaves the device as sending it once does, or `nil` if
+  /// the catalog doesn't say, which reads as `false`. The catalog's JSON calls it `idempotent`.
+  public var isIdempotent: Bool?
+
   /// Creates a standard command.
   ///
   /// - Parameters:
@@ -66,6 +74,9 @@ public struct DeviceStandardCommand: Hashable, Sendable {
   ///   - extendedWhen: The operating flag that has the command sent as an extended message.
   ///   - verification: How sure the catalog is of the command. Defaults to ``Verification/documented``.
   ///   - sendGuard: Whether an app may send the command. Defaults to `nil`.
+  ///   - effect: What the command does to the device. Defaults to `nil`.
+  ///   - isIdempotent: Whether sending the command twice leaves the device as sending it once
+  ///     does. Defaults to `nil`.
   public init(
     name: SettingName,
     summary: String,
@@ -75,7 +86,9 @@ public struct DeviceStandardCommand: Hashable, Sendable {
     followUp: MessageField? = nil,
     extendedWhen: SettingName? = nil,
     verification: Verification = .documented,
-    sendGuard: CommandGuard? = nil
+    sendGuard: CommandGuard? = nil,
+    effect: CommandEffect? = nil,
+    isIdempotent: Bool? = nil
   ) {
 
     self.name = name
@@ -87,6 +100,8 @@ public struct DeviceStandardCommand: Hashable, Sendable {
     self.followUp = followUp
     self.extendedWhen = extendedWhen
     self.sendGuard = sendGuard
+    self.effect = effect
+    self.isIdempotent = isIdempotent
 
   }
 
@@ -296,6 +311,14 @@ public struct DeviceExtendedCommand: Hashable, Sendable {
   /// ``CommandGuard/never`` marks one an app never sends.
   public var sendGuard: CommandGuard?
 
+  /// What the command does to the device, or `nil` if the catalog doesn't say, which reads as
+  /// ``CommandEffect/destructive``.
+  public var effect: CommandEffect?
+
+  /// Whether sending the command twice leaves the device as sending it once does, or `nil` if
+  /// the catalog doesn't say, which reads as `false`. The catalog's JSON calls it `idempotent`.
+  public var isIdempotent: Bool?
+
   /// Creates an extended command.
   ///
   /// - Parameters:
@@ -309,6 +332,9 @@ public struct DeviceExtendedCommand: Hashable, Sendable {
   ///   - reply: The extended reply that answers the command.
   ///   - verification: How sure the catalog is of the command. Defaults to ``Verification/documented``.
   ///   - sendGuard: Whether an app may send the command. Defaults to `nil`.
+  ///   - effect: What the command does to the device. Defaults to `nil`.
+  ///   - isIdempotent: Whether sending the command twice leaves the device as sending it once
+  ///     does. Defaults to `nil`.
   public init(
     name: SettingName,
     summary: String,
@@ -319,7 +345,9 @@ public struct DeviceExtendedCommand: Hashable, Sendable {
     integrity: MessageIntegrity = .unprotected,
     reply: DeviceExtendedReply? = nil,
     verification: Verification = .documented,
-    sendGuard: CommandGuard? = nil
+    sendGuard: CommandGuard? = nil,
+    effect: CommandEffect? = nil,
+    isIdempotent: Bool? = nil
   ) {
 
     self.name = name
@@ -332,6 +360,8 @@ public struct DeviceExtendedCommand: Hashable, Sendable {
     self.integrity = integrity
     self.reply = reply
     self.sendGuard = sendGuard
+    self.effect = effect
+    self.isIdempotent = isIdempotent
 
   }
 

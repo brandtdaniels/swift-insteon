@@ -111,6 +111,13 @@ never sends. A value whose byte is an operating flags byte names its query in
 bits. A command set's ``CommandSet/linkingChanges`` are the flags linking may change on its
 own, which a linking flow may set back.
 
+Each flag command, standard command and extended command, and a keep-awake message given as
+bytes, says what it does to the device it's sent to, as a ``CommandEffect``, and whether
+sending it twice leaves the device as sending it once does, in its `isIdempotent`. An entry
+without them reads both as `nil`, which an app treats as ``CommandEffect/destructive`` and not
+idempotent, and an effect this package doesn't know ranks as destructive in
+``CommandEffect/strictness``.
+
 Values from a later version of the catalog are read rather than refused: a kind, guard, role,
 mode or answer this package doesn't know keeps its name, and a message in a form it doesn't
 read is left out.
@@ -198,6 +205,7 @@ dimming for dimmable lighting control, as ``GroupType/Kind/fallback(for:)`` give
 - ``DeviceStandardCommand``
 - ``DeviceExtendedCommand``
 - ``DeviceExtendedReply``
+- ``CommandEffect``
 - ``DeviceDirectMessage``
 - ``FixedUserDataByte``
 - ``MessageIntegrity``
