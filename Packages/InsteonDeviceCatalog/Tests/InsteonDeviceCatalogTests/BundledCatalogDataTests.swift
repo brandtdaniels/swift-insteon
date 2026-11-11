@@ -470,4 +470,41 @@ struct BundledCatalogDataTests {
 
   }
 
+  // MARK: - Modems
+
+  @Test func describesTheSerialCommandsOfEveryModemTheCatalogNamesACommandSetFor() throws {
+
+    let catalog: DeviceCatalog = try Self.catalog()
+
+    for (category, subcategory, id) in [(0x03, 0x33, "hubModem"), (0x03, 0x15, "modem")] as [(UInt8, UInt8, CommandSetID)] {
+
+      let commands: CommandSet = try #require(catalog.commandSet(category: DeviceCategory(rawValue: category), subcategory: DeviceSubcategory(rawValue: subcategory), firmwareVersion: nil))
+
+      #expect(commands.id == id)
+      #expect(!commands.serialCommands.isEmpty)
+      #expect(commands.serialCommands.allSatisfy { (command: DeviceSerialCommand) -> Bool in command.effect != nil && command.isIdempotent != nil }, "\(id)")
+
+    }
+
+  }
+
+  @Test func marksWhatEachKindOfSerialFrameDoesInTheBundledModemCommandSets() throws {
+
+    let commands: CommandSet = try Self.commands("hubModem")
+
+    func effect(_ number: UInt8, _ payload: [UInt8] = []) -> CommandSetSafety.MessageEffect {
+
+      CommandSetSafety.serialEffect(number: number, payload: payload, in: commands)
+
+    }
+
+    #expect(effect(0x60) == .described(.readOnly, isIdempotent: true))
+    #expect(effect(0x64, [0x01, 0x01]) == .described(.link, isIdempotent: false))
+    #expect(effect(0x64, [0xFF, 0x01]) == .described(.destructive, isIdempotent: true))
+    #expect(effect(0x6F, [0x00, 0xE2, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]) == .described(.readOnly, isIdempotent: true))
+    #expect(effect(0x6F, [0x80, 0xE2, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]) == .described(.destructive, isIdempotent: true))
+    #expect(effect(0x68, [0x00]) == .described(.configuration, isIdempotent: true))
+
+  }
+
 }
