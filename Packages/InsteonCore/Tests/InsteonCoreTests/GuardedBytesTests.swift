@@ -901,6 +901,8 @@ struct GuardedBytesTests {
     #expect(SerialCommandPolicy.refusal(of: [0x02, 0x09], forcing: true) == nil)
     #expect(SerialCommandPolicy.refusal(of: [0x02, 0x09], forcing: false)?.canBeForced == true)
     #expect(SendRefusal.protected(.poke).canBeForced == false)
+    #expect(SendRefusal.needsConsent(.destructive).canBeForced == true)
+    #expect(SendRefusal.needsConsent(nil).canBeForced == true)
 
   }
 

@@ -9,7 +9,7 @@ import InsteonProtocol
 import InsteonTestSupport
 
 /// The serial commands InsteonCore's flows send a modem, with the flows run on an in-memory
-/// modem: each flow still completes, and every command it sends is one the flows declare, so
+/// modem: each flow completes, and every command it sends is one the flows declare, so
 /// a raw send's policy is no stricter than a flow's own consent for it.
 struct FlowSerialCommandTests {
 
@@ -58,7 +58,7 @@ struct FlowSerialCommandTests {
     let network: DeviceNetwork = await self.network(modem)
     let result: DeviceRemovalResult = try await network.linking.remove(RemovalExample.lamp, forceModemSide: true, observer: LinkingRecorder())
 
-    // Removing with --force-modem-side still deletes the modem's two records for the lamp.
+    // Removing with --force-modem-side deletes the modem's two records for the lamp.
     #expect(result.deletedModemRecords.count == 2)
     #expect(await modem.modemRecords == [RemovalExample.keypadRecord])
 

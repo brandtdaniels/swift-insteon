@@ -4,7 +4,7 @@ import InsteonDeviceCatalog
 import InsteonProtocol
 
 /// The effect each serial command a core flow builds declares, so a modem with no command set
-/// still sends them, and the flows that build them.
+/// sends them, and the flows that build them.
 struct SerialFlowEffectsTests {
 
   static let group: AllLinkGroupNumber = AllLinkGroupNumber(rawValue: 0x01)

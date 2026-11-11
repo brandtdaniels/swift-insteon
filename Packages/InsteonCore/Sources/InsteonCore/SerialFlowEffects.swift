@@ -3,7 +3,7 @@ import InsteonProtocol
 
 /// What the serial commands InsteonCore's own flows build do to the modem, declared where the
 /// flows build them, so a modem whose command set doesn't describe them, or that has none, is
-/// still sent them.
+/// sent them.
 ///
 /// A declaration is read with the modem's command set, and the stricter of the two decides, so
 /// it never weakens the catalog. Each frame is declared by its number and, where one number does
