@@ -197,6 +197,48 @@ struct RemoteLinkingTests {
 
   }
 
+  // The modem as responder reports the group the device controls, and Enter Linking Mode named
+  // the group the device was asked to control, so a report in another group isn't that link.
+  @Test func refusesALinkTheModemStartedFirstWhenTheDeviceControlsAnotherGroup() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setEngine(.i2cs, of: lamp)
+    await modem.setReportedGroup(0x01, of: lamp)
+
+    await #expect(throws: LinkingError.unexpectedLink(reported(lamp, linkCode: 0x00, group: 0x01))) {
+
+      try await linker(modem).linkModemFirst(lamp, modemRole: .responder, modemGroup: 0x02, deviceGroup: 0x02)
+
+    }
+
+    #expect(await modem.linkingSteps.suffix(2) == [.cancel, .device(lamp, Command(command1: 0x08), isExtended: false)])
+
+  }
+
+  @Test func acceptsALinkTheModemStartedFirstInTheDevicesGroupWhateverTheModemsGroup() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setReportedGroup(0x02, of: lamp)
+
+    let link = try await linker(modem).linkModemFirst(lamp, modemRole: .responder, modemGroup: 0x09, deviceGroup: 0x02)
+
+    #expect(link == reported(lamp, linkCode: 0x00, group: 0x02))
+
+  }
+
+  @Test func refusesALinkTheModemStartedFirstAsControllerInAnotherGroup() async throws {
+
+    let modem = InMemoryModem()
+    await modem.setReportedGroup(0x05, of: lamp)
+
+    await #expect(throws: LinkingError.unexpectedLink(reported(lamp, linkCode: 0x01, group: 0x05))) {
+
+      try await linker(modem).linkModemFirst(lamp, modemRole: .controller, modemGroup: 0x00, deviceGroup: 0x01)
+
+    }
+
+  }
+
   @Test func linksWhicheverDeviceHasItsSetButtonPressed() async throws {
 
     let modem = InMemoryModem()
