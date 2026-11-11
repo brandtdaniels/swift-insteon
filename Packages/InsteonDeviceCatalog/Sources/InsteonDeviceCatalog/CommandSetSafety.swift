@@ -691,6 +691,237 @@ package enum CommandSetSafety {
 
   }
 
+  /// What a message does to the device it's sent to, as the device's command set describes it
+  /// by the message's bytes.
+  package enum MessageEffect: Hashable, Sendable {
+
+    /// One or more entries describe the message: the strictest of their effects, and whether
+    /// every one of them is idempotent.
+    case described(CommandEffect, isIdempotent: Bool)
+
+    /// No entry describes the message.
+    case undescribed
+
+  }
+
+  /// What a message does to a device that uses a command set, found by its bytes rather than
+  /// the name it's sent under, so it can't change its effect by being sent as another command.
+  ///
+  /// A standard message matches a standard command by cmd1 and its fixed cmd2, or any cmd2 its
+  /// parameter allows: one an enumeration names, or any for another kind. A Set Operating Flags
+  /// message (cmd1 `0x20`), standard or extended, matches a flag command and an operating
+  /// flag's on or off by cmd2, the flag's on and off as ``CommandEffect/configuration`` and
+  /// idempotent. An extended message matches:
+  ///
+  /// - an extended command by cmd1, cmd2 and every user data byte: a fixed byte holds its
+  ///   value, a byte a parameter fills, D1 of a per-button command and the integrity bytes hold
+  ///   any value, and every other byte is `0x00`;
+  /// - an extended settings write, as ``CommandEffect/configuration`` and idempotent, by cmd1
+  ///   `0x2E`, cmd2 `0x00` and the write's selector in D2;
+  /// - a standard command, in the form ``DeviceStandardCommand/extendedWhen`` sends: its cmd1
+  ///   and cmd2 again in D1 and D2 and `0x00` in D3 through D12, with D13 and D14 left to an
+  ///   integrity check.
+  ///
+  /// It fails closed: an entry without an effect, or with one this package doesn't know, is
+  /// ``CommandEffect/destructive``, and one without `idempotent` isn't idempotent. A message
+  /// several entries describe takes the strictest of their effects, and two different effects
+  /// of the same ``CommandEffect/Strictness``, such as link and actuation, read as destructive,
+  /// since neither stands for the other. It's idempotent only if every entry is.
+  ///
+  /// - Parameters:
+  ///   - command: The message's cmd1 and cmd2.
+  ///   - userData: An extended message's user data, or `nil` for a standard message.
+  ///   - commands: The device's command set, or `nil` if the catalog gives it none.
+  /// - Returns: The effect, or ``MessageEffect/undescribed`` if no entry describes the message,
+  ///   as for every message to a device without a command set.
+  package static func effect(of command: Command, userData: UserData?, in commands: CommandSet?) -> MessageEffect {
+
+    guard let commands else {
+
+      return .undescribed
+
+    }
+
+    var matched: [(effect: CommandEffect?, isIdempotent: Bool?)] = []
+
+    if command.command1 == setOperatingFlagsCommand1 {
+
+      for flag in commands.operatingFlags where flag.on == command.command2 || flag.off == command.command2 {
+
+        matched.append((effect: .configuration, isIdempotent: true))
+
+      }
+
+      for flagCommand in commands.flagCommands where flagCommand.command.command == command {
+
+        matched.append((effect: flagCommand.effect, isIdempotent: flagCommand.isIdempotent))
+
+      }
+
+    }
+
+    for standard in commands.standardCommands where sends(standard, as: command, userData: userData) {
+
+      matched.append((effect: standard.effect, isIdempotent: standard.isIdempotent))
+
+    }
+
+    if let userData {
+
+      for extended in commands.extendedCommands where sends(extended, as: command, userData: userData) {
+
+        matched.append((effect: extended.effect, isIdempotent: extended.isIdempotent))
+
+      }
+
+      if command == Command(command1: 0x2E, command2: 0x00) {
+
+        for write in commands.extendedSettings?.writes ?? [] where write.selector == userData[2] {
+
+          matched.append((effect: .configuration, isIdempotent: true))
+
+        }
+
+      }
+
+    }
+
+    guard let first = matched.first else {
+
+      return .undescribed
+
+    }
+
+    let effect: CommandEffect = matched.dropFirst().reduce(reading(first.effect)) { (strictest: CommandEffect, entry: (effect: CommandEffect?, isIdempotent: Bool?)) -> CommandEffect in
+
+      stricter(strictest, reading(entry.effect))
+
+    }
+
+    let isIdempotent: Bool = matched.allSatisfy { (entry: (effect: CommandEffect?, isIdempotent: Bool?)) -> Bool in entry.isIdempotent == true }
+
+    return .described(effect, isIdempotent: isIdempotent)
+
+  }
+
+  /// An entry's effect as ``effect(of:userData:in:)`` reads it: one that's missing, or that
+  /// this package doesn't know, is destructive.
+  private static func reading(_ effect: CommandEffect?) -> CommandEffect {
+
+    guard let effect, effect.strictness != .destructive else {
+
+      return .destructive
+
+    }
+
+    return effect
+
+  }
+
+  /// The stricter of two effects this package knows, or destructive for two different ones of
+  /// the same strictness.
+  private static func stricter(_ left: CommandEffect, _ right: CommandEffect) -> CommandEffect {
+
+    if left.strictness != right.strictness {
+
+      return left.strictness > right.strictness ? left : right
+
+    }
+
+    return left == right ? left : .destructive
+
+  }
+
+  /// Whether a message is a standard command: as a standard message, by cmd1 and its fixed cmd2
+  /// or one its parameter allows, or as an extended message in the form its `extendedWhen`
+  /// sends.
+  private static func sends(_ standard: DeviceStandardCommand, as command: Command, userData: UserData?) -> Bool {
+
+    guard standard.command1 == command.command1 else {
+
+      return false
+
+    }
+
+    switch standard.command2 {
+    case let .fixed(command2):
+      guard command2 == command.command2 else {
+
+        return false
+
+      }
+    case let .parameter(field):
+      if case let .enumeration(enumeration) = field.kind, enumeration.name(for: command.command2) == nil {
+
+        return false
+
+      }
+    }
+
+    guard let userData else {
+
+      return true
+
+    }
+
+    // The extended form: cmd1 and cmd2 again in D1 and D2, and 0x00 up to the integrity bytes,
+    // which the widest integrity check, a CRC, puts in D13 and D14.
+    return userData[1] == command.command1 && userData[2] == command.command2 && (3...12).allSatisfy { (position: Int) -> Bool in userData[position] == 0x00 }
+
+  }
+
+  /// Whether an extended message is an extended command: its cmd1 and cmd2, each fixed byte's
+  /// value, any value in a byte a parameter fills, in D1 of a per-button command and in the
+  /// integrity bytes, and `0x00` in every other byte.
+  private static func sends(_ extended: DeviceExtendedCommand, as command: Command, userData: UserData) -> Bool {
+
+    guard extended.command == command else {
+
+      return false
+
+    }
+
+    // Each D position's expected value, by position, or nil for any value; index 0 is unused.
+    var expected: [UInt8?] = Array(repeating: 0x00, count: UserData.count + 1)
+
+    for parameter in extended.parameters {
+
+      for position in parameter.positions {
+
+        expected[position] = nil
+
+      }
+
+    }
+
+    if extended.isPerButton {
+
+      expected[1] = nil
+
+    }
+
+    switch extended.integrity {
+    case .unprotected:
+      break
+    case .checksum:
+      expected[14] = nil
+    case .crc:
+      expected[13] = nil
+      expected[14] = nil
+    }
+
+    // A fixed byte holds its value even where a parameter or a per-button D1 would fill it, as
+    // the catalog's build reads it.
+    for byte in extended.fixedBytes {
+
+      expected[byte.position] = byte.value
+
+    }
+
+    return (1...UserData.count).allSatisfy { (position: Int) -> Bool in expected[position].map { (value: UInt8) -> Bool in userData[position] == value } ?? true }
+
+  }
+
   /// The parameter of an extended command a value is written into: the value's own, or else
   /// the command's only one, as `ValueChange.message(to:button:setting:to:current:)` chooses it.
   package static func parameter(of command: DeviceExtendedCommand, for value: SettingValue) -> MessageField? {

@@ -90,6 +90,10 @@ extension CommandSet: Decodable {
 
     let `guard`: String?
 
+    let effect: String?
+
+    let idempotent: Bool?
+
   }
 
   private struct Settings: Decodable {
@@ -262,6 +266,10 @@ extension CommandSet: Decodable {
 
     let `guard`: String?
 
+    let effect: String?
+
+    let idempotent: Bool?
+
   }
 
   private struct ExtendedReply: Decodable {
@@ -302,6 +310,10 @@ extension CommandSet: Decodable {
 
     let `guard`: String?
 
+    let effect: String?
+
+    let idempotent: Bool?
+
   }
 
   private struct DirectMessage: Decodable {
@@ -337,8 +349,9 @@ extension CommandSet: Decodable {
   /// A value of a kind from a later version of the catalog reads as
   /// ``SettingValue/Kind/number``, and a field's as a ``FieldKind/number(isSigned:scale:unit:)``.
   /// A unit or settings section from a later version reads as none, and an extended command
-  /// whose integrity scheme is from a later version is left out. A flag or command guard from a
-  /// later version keeps its name.
+  /// whose integrity scheme is from a later version is left out. A flag or command guard, or a
+  /// command's effect, from a later version keeps its name. A command without an effect or
+  /// `idempotent` reads them as `nil`.
   ///
   /// - Parameter decoder: The decoder to read from.
   /// - Throws: `DecodingError` if the JSON isn't a command set, a byte isn't written as `0x`
@@ -398,7 +411,9 @@ extension CommandSet: Decodable {
           command2: command.command2.value,
           extendedWhen: command.extendedWhen.map(SettingName.init(rawValue:)),
           verification: command.verification ?? .documented,
-          sendGuard: command.guard.map(CommandGuard.init(rawValue:))
+          sendGuard: command.guard.map(CommandGuard.init(rawValue:)),
+          effect: command.effect.map(CommandEffect.init(rawValue:)),
+          isIdempotent: command.idempotent
         )
 
       },
@@ -599,7 +614,9 @@ extension CommandSet: Decodable {
         followUp: try command.followUp.map { try field($0, in: .standardCommands, extended: false) },
         extendedWhen: command.extendedWhen.map(SettingName.init(rawValue:)),
         verification: command.verification ?? .documented,
-        sendGuard: command.guard.map(CommandGuard.init(rawValue:))
+        sendGuard: command.guard.map(CommandGuard.init(rawValue:)),
+        effect: command.effect.map(CommandEffect.init(rawValue:)),
+        isIdempotent: command.idempotent
       )
 
     }
@@ -641,7 +658,9 @@ extension CommandSet: Decodable {
         integrity: commandIntegrity,
         reply: reply,
         verification: command.verification ?? .documented,
-        sendGuard: command.guard.map(CommandGuard.init(rawValue:))
+        sendGuard: command.guard.map(CommandGuard.init(rawValue:)),
+        effect: command.effect.map(CommandEffect.init(rawValue:)),
+        isIdempotent: command.idempotent
       )
 
     }

@@ -193,6 +193,15 @@ extension DeviceLifecycle {
       /// How an extended message's user data is protected.
       public var integrity: MessageIntegrity
 
+      /// What the message does to the device, or `nil` if the catalog doesn't say, which reads
+      /// as ``CommandEffect/destructive``.
+      public var effect: CommandEffect?
+
+      /// Whether sending the message twice leaves the device as sending it once does, or `nil`
+      /// if the catalog doesn't say, which reads as `false`. The catalog's JSON calls it
+      /// `idempotent`.
+      public var isIdempotent: Bool?
+
       /// Creates a message from its bytes.
       ///
       /// - Parameters:
@@ -201,12 +210,24 @@ extension DeviceLifecycle {
       ///   - fixedBytes: An extended message's fixed user data bytes. Defaults to none.
       ///   - integrity: How an extended message's user data is protected. Defaults to
       ///     ``MessageIntegrity/unprotected``.
-      public init(command: Command, isExtended: Bool = false, fixedBytes: [FixedUserDataByte] = [], integrity: MessageIntegrity = .unprotected) {
+      ///   - effect: What the message does to the device. Defaults to `nil`.
+      ///   - isIdempotent: Whether sending the message twice leaves the device as sending it
+      ///     once does. Defaults to `nil`.
+      public init(
+        command: Command,
+        isExtended: Bool = false,
+        fixedBytes: [FixedUserDataByte] = [],
+        integrity: MessageIntegrity = .unprotected,
+        effect: CommandEffect? = nil,
+        isIdempotent: Bool? = nil
+      ) {
 
         self.command = command
         self.isExtended = isExtended
         self.fixedBytes = fixedBytes
         self.integrity = integrity
+        self.effect = effect
+        self.isIdempotent = isIdempotent
 
       }
 
@@ -398,6 +419,8 @@ extension DeviceLifecycle.HubLinking: Decodable {
       case extended
       case data
       case integrity
+      case effect
+      case idempotent
 
     }
 
@@ -447,7 +470,9 @@ extension DeviceLifecycle.HubLinking: Decodable {
         command: Command(command1: command1.value, command2: command2.value),
         isExtended: try container.decodeIfPresent(Bool.self, forKey: .extended) ?? false,
         fixedBytes: fixed.map { FixedUserDataByte(position: $0.position, value: $0.value.value) },
-        integrity: integrity
+        integrity: integrity,
+        effect: try container.decodeIfPresent(String.self, forKey: .effect).map(CommandEffect.init(rawValue:)),
+        isIdempotent: try container.decodeIfPresent(Bool.self, forKey: .idempotent)
       ))
 
     }
@@ -497,8 +522,8 @@ extension DeviceLifecycle.HubLinking: Decodable {
 
   /// Decodes a way to link a product to a Hub from a profile's `lifecycle.fromHub`.
   ///
-  /// A leg without its own verification takes the whole's. A role, answer or timing from a
-  /// later version of the catalog keeps its name. A keep-awake message in a form this package
+  /// A leg without its own verification takes the whole's. A role, answer, timing or effect from
+  /// a later version of the catalog keeps its name. A keep-awake message in a form this package
   /// doesn't read, or without its timing, reads as `nil`, as does a release message in such a
   /// form.
   ///
