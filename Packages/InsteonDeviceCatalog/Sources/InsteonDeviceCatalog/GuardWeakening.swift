@@ -47,6 +47,15 @@ public struct GuardWeakening: Hashable, Sendable, CustomStringConvertible {
     /// A command the baseline guards, whose bytes the catalog sends with no guard.
     case commandGuard
 
+    /// A command whose effect the baseline ranks stricter, or names differently among
+    /// configuration, link and actuation, which the catalog gives a weaker or different one,
+    /// or a command the baseline describes as other than read-only, which the catalog doesn't
+    /// describe by its bytes. An effect that's missing or unknown reads as destructive.
+    case effect
+
+    /// A command the baseline doesn't mark idempotent, which the catalog does.
+    case idempotent
+
   }
 
   /// The category of the device it's for.
@@ -109,7 +118,18 @@ extension DeviceCatalog {
   ///   message against (`CommandSetSafety.guardViolation(by:userData:in:current:)`);
   /// - each value guards, as a write of it finds its bits, every bit the baseline's value of
   ///   the same name or the same position guards, with the same flags query;
-  /// - it sends no bytes of a command the baseline guards from an unguarded command.
+  /// - it sends no bytes of a command the baseline guards from an unguarded command;
+  /// - for every command with the bytes of one of the baseline's, found as the send path finds
+  ///   it by cmd1, its fixed cmd2 and its fixed bytes, whatever its name, the strictest of its
+  ///   effects ranks at least as strict and is the same effect unless it is destructive or
+  ///   read-only, and it is idempotent only where the baseline's is. A missing or unknown effect
+  ///   reads as destructive and a missing mark as not idempotent, as the send path reads them.
+  ///   A command the baseline describes as other than read-only, which this catalog leaves
+  ///   without an entry of those bytes, is weaker too: a message no entry describes needs less
+  ///   consent than a destructive one.
+  ///   A command the baseline describes as other than read-only, which this catalog leaves
+  ///   without an entry of those bytes, is weaker too: a message no entry describes needs less
+  ///   consent than a destructive one.
   ///
   /// A device either catalog gives no command set, or doesn't know, is compared as one with
   /// none, which only the byte floor guards. The send path refuses an extended Set as given to
@@ -356,6 +376,38 @@ struct SafetySummary: Hashable {
 
   var unguardedCommands: Set<CommandKey> = []
 
+  /// What a command does and whether it's idempotent, as the send path reads them, by the
+  /// command's bytes: the strictest effect of the commands with the same bytes, and idempotent
+  /// only if every one of them is.
+  struct Effect: Hashable {
+
+    let effect: CommandEffect
+
+    let isIdempotent: Bool
+
+    /// The effect of several commands with the same bytes.
+    func combined(with other: Effect) -> Effect {
+
+      let combined: CommandEffect
+
+      if effect.strictness != other.effect.strictness {
+
+        combined = effect.strictness > other.effect.strictness ? effect : other.effect
+
+      } else {
+
+        combined = effect == other.effect ? effect : .destructive
+
+      }
+
+      return Effect(effect: combined, isIdempotent: isIdempotent && other.isIdempotent)
+
+    }
+
+  }
+
+  var effects: [CommandKey: Effect] = [:]
+
   init(_ commands: CommandSet?) {
 
     neverSent = CommandSetSafety.neverSentCommands(in: commands)
@@ -442,9 +494,21 @@ struct SafetySummary: Hashable {
 
     }
 
+    func addEffect(_ key: CommandKey, effect: CommandEffect?, isIdempotent: Bool?) {
+
+      let read: CommandEffect = effect.flatMap { (effect: CommandEffect) -> CommandEffect? in effect.strictness == .destructive ? nil : effect } ?? .destructive
+      let entry = Effect(effect: read, isIdempotent: isIdempotent == true)
+
+      effects[key] = effects[key].map { (known: Effect) -> Effect in known.combined(with: entry) } ?? entry
+
+    }
+
     for command in commands.flagCommands {
 
-      add(.standard(command.command.command.command1, command.command.command.command2), isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
+      let key: CommandKey = .standard(command.command.command.command1, command.command.command.command2)
+
+      add(key, isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
+      addEffect(key, effect: command.effect, isIdempotent: command.isIdempotent)
 
     }
 
@@ -459,12 +523,14 @@ struct SafetySummary: Hashable {
       }
 
       add(.standard(command.command1, command2), isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
+      addEffect(.standard(command.command1, command2), effect: command.effect, isIdempotent: command.isIdempotent)
 
     }
 
     for command in commands.extendedCommands {
 
       add(.extended(command.command, CommandSetSafety.keyBytes(of: command)), isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
+      addEffect(.extended(command.command, CommandSetSafety.keyBytes(of: command)), effect: command.effect, isIdempotent: command.isIdempotent)
 
     }
 
@@ -606,14 +672,56 @@ struct SafetySummary: Hashable {
 
     }
 
-    for key in unguardedCommands.intersection(baseline.guardedCommands) {
+    func describe(_ key: CommandKey) -> String {
 
       switch key {
       case let .standard(command1, command2):
-        findings.append(Finding(kind: .commandGuard, detail: "cmd1 \(hex(command1))" + (command2.map { " cmd2 \(hex($0))" } ?? "")))
+        return "cmd1 \(hex(command1))" + (command2.map { " cmd2 \(hex($0))" } ?? "")
       case let .extended(command, fixed):
         let bytes: String = fixed.map { (byte: FixedUserDataByte) -> String in " D\(byte.position) \(hex(byte.value))" }.joined()
-        findings.append(Finding(kind: .commandGuard, detail: "extended cmd1 \(hex(command.command1)) cmd2 \(hex(command.command2))\(bytes)"))
+
+        return "extended cmd1 \(hex(command.command1)) cmd2 \(hex(command.command2))\(bytes)"
+      }
+
+    }
+
+    for key in unguardedCommands.intersection(baseline.guardedCommands) {
+
+      findings.append(Finding(kind: .commandGuard, detail: describe(key)))
+
+    }
+
+    // A command's effect is compared by its bytes: the new effect has to rank at least as
+    // strict, and among the effects of one rank, configuration, link and actuation, be the
+    // same. A command the baseline describes as other than read-only, which the catalog no
+    // longer describes by those bytes, is undescribed, which an app may send with less consent
+    // than a destructive one.
+    for (key, old) in baseline.effects {
+
+      guard let new = effects[key] else {
+
+        if old.effect.strictness != .readOnly {
+
+          findings.append(Finding(kind: .effect, detail: "\(describe(key)) \(old.effect) to undescribed"))
+
+        }
+
+        continue
+
+      }
+
+      let isWeaker: Bool = new.effect.strictness < old.effect.strictness || (new.effect.strictness == .change && old.effect.strictness == .change && new.effect != old.effect)
+
+      if isWeaker {
+
+        findings.append(Finding(kind: .effect, detail: "\(describe(key)) \(old.effect) to \(new.effect)"))
+
+      }
+
+      if new.isIdempotent && !old.isIdempotent {
+
+        findings.append(Finding(kind: .idempotent, detail: describe(key)))
+
       }
 
     }
