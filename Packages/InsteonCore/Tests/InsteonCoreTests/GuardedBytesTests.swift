@@ -164,6 +164,29 @@ struct GuardedBytesTests {
 
   }
 
+  @Test func protectsExactlyFourSetOperatingFlagsCommandsEachByItsOwnCase() {
+
+    let protected: [UInt8: ProtectedCommand] = (UInt8.min...UInt8.max).reduce(into: [:]) { (found: inout [UInt8: ProtectedCommand], command2: UInt8) in
+
+      found[command2] = ProtectedCommand(command1: 0x20, command2: command2)
+
+    }
+
+    #expect(protected.keys.sorted() == [0x00, 0x0C, 0x0E, 0x19])
+    #expect(Set(protected.values).count == 4)
+    #expect(!protected.values.contains(.poke))
+    #expect(ProtectedCommand.allCases.count == 5)
+
+    for (command2, command) in protected {
+
+      #expect(command.setOperatingFlagsCommand == Command(command1: 0x20, command2: command2), "\(command2)")
+
+    }
+
+    #expect(ProtectedCommand.poke.setOperatingFlagsCommand == nil)
+
+  }
+
   @Test(arguments: [nil, "exampleFlagless"] as [CommandSetID?])
   func holdsTheFloorWithoutACommandSetOrItsFlags(_ id: CommandSetID?) throws {
 
