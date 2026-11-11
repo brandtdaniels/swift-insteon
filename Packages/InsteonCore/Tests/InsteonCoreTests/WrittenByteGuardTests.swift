@@ -43,7 +43,7 @@ struct WrittenByteGuardTests {
     // The load's on action names an extended command whose fixed bytes are the configuration
     // write's selector, so it writes D7 with no report of the kept bits.
     let json: String = Self.json(replacing: [
-      (#""extendedCommands": ["#, #""extendedCommands": [ { "name": "brighten", "description": "Brightens.", "command1": "0x2E", "command2": "0x00", "fixed": [{ "position": 2, "value": "0x05" }, { "position": 3, "value": "0x00" }] },"#),
+      (#""extendedCommands": ["#, #""extendedCommands": [ { "name": "brighten", "description": "Brightens.", "command1": "0x2E", "command2": "0x00", "fixed": [{ "position": 2, "value": "0x05" }, { "position": 3, "value": "0x00" }], "effect": "configuration", "idempotent": true },"#),
       (#"{ "name": "on", "label": "On", "command": "lightOn" }"#, #"{ "name": "on", "label": "On", "command": "brighten" }"#)
     ])
     let modem = SettingsModem(device: CatalogGuardTests.address, flags: 0x00, values: [7: 0x04])
@@ -108,7 +108,7 @@ struct WrittenByteGuardTests {
 
     await #expect(throws: SendRefusal.unlistedExtendedSet(selector: 0x09)) {
 
-      _ = try await network.send(unlisted, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+      _ = try await network.send(unlisted, collectingFor: .zero, consent: .everything) { (_: ReceivedFrame) -> Void in }
 
     }
 

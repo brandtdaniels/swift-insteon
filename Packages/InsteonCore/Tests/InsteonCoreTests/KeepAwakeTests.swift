@@ -41,7 +41,8 @@ struct KeepAwakeTests {
         command: Command(command1: 0x2E, command2: 0x00),
         fixedBytes: [FixedUserDataByte(position: 1, value: 0x01), FixedUserDataByte(position: 2, value: 0x04)],
         parameters: [MessageField(name: "duration", summary: "How long it remains awake.", location: .userData([3]), kind: .number(unit: .seconds), range: 0...255)],
-        integrity: .checksum
+        integrity: .checksum,
+        effect: .configuration, isIdempotent: true
       )
     ]
   )
@@ -134,8 +135,8 @@ struct KeepAwakeTests {
         ]),
         keepAwake: DeviceLifecycle.HubLinking.KeepAwake(
           timing: .beforeLinking,
-          send: .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x06), isExtended: true, integrity: .checksum)),
-          release: .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x07), isExtended: true, integrity: .checksum)),
+          send: .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x06), isExtended: true, integrity: .checksum, effect: .configuration, isIdempotent: true)),
+          release: .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x07), isExtended: true, integrity: .checksum, effect: .configuration, isIdempotent: true)),
           duration: .seconds(240)
         )
       )
@@ -367,7 +368,7 @@ struct KeepAwakeTests {
         OperatingFlag(name: "radioMute", summary: "Mutes the radio.", query: .operatingFlags, bit: 0x40, on: 0x0C, off: 0x0D, writeGuard: .keep)
       ],
       standardCommands: [
-        DeviceStandardCommand(name: "muteRadio", summary: "Mutes the radio.", command1: 0x20, command2: .fixed(0x0C), sendGuard: .never)
+        DeviceStandardCommand(name: "muteRadio", summary: "Mutes the radio.", command1: 0x20, command2: .fixed(0x0C), sendGuard: .never, effect: .destructive, isIdempotent: false)
       ]
     )
 
@@ -396,7 +397,7 @@ struct KeepAwakeTests {
     .timeLimit(.minutes(1)),
     arguments: [
       DeviceLifecycle.HubLinking.HubMessage.flag(DeviceProfile.Group.Condition(flag: "lockout", isSet: true)),
-      DeviceLifecycle.HubLinking.HubMessage.bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x0C))),
+      DeviceLifecycle.HubLinking.HubMessage.bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x0C), effect: .configuration, isIdempotent: true)),
       DeviceLifecycle.HubLinking.HubMessage.command("muteRadio")
     ]
   )
@@ -496,7 +497,8 @@ struct KeepAwakeTests {
       summary: "Keeps it awake.",
       command: Command(command1: 0x2E, command2: 0x00),
       fixedBytes: [FixedUserDataByte(position: 1, value: 0x01)],
-      parameters: [mode, duration]
+      parameters: [mode, duration],
+      effect: .configuration, isIdempotent: true
     )
 
     // The parameter in seconds takes the duration, even after another number.
@@ -510,7 +512,7 @@ struct KeepAwakeTests {
     #expect([userData[1], userData[3], userData[4]] == [0x01, 0xFF, 0x00])
 
     // With no unit, a command's only number takes it.
-    let only = DeviceExtendedCommand(name: "holdAwake", summary: "Keeps it awake.", command: Command(command1: 0x2E, command2: 0x00), parameters: [mode])
+    let only = DeviceExtendedCommand(name: "holdAwake", summary: "Keeps it awake.", command: Command(command1: 0x2E, command2: 0x00), parameters: [mode], effect: .configuration, isIdempotent: true)
 
     #expect(Device.durationParameter(of: only) == mode)
 

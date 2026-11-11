@@ -645,7 +645,7 @@ extension DeviceLinkingCoordinator {
   /// Sends Get Operating Flags for a flag's request through the device's guarded send path.
   private static func read(_ flag: OperatingFlag, of target: Device) async throws -> ReceivedMessage {
 
-    try await target.request(StandardMessage(to: target.address, command: flag.readCommand), timeout: target.network.requestTimeout, for: .control(.linkingFlags))
+    try await target.request(StandardMessage(to: target.address, command: flag.readCommand), timeout: target.network.requestTimeout, declaring: .readOnly, for: .control(.linkingFlags))
 
   }
 

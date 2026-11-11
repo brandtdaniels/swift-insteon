@@ -1,3 +1,4 @@
+import InsteonDeviceCatalog
 import InsteonProtocol
 
 /// A command InsteonCore sends to a device only where the Insteon device catalog says it means
@@ -170,6 +171,11 @@ public enum SendRefusal: Error, Hashable, Sendable {
   /// ``SerialCommandPolicy/refusal(for:)`` refuses the serial command unless it's forced. The
   /// associated value is its reason, as a sentence.
   case serialCommand(String)
+
+  /// The consent the send was given doesn't grant what the message does, so nothing is sent
+  /// until it does. The associated value is the effect to grant, or `nil` for a message no
+  /// entry of the device's command set describes. ``SendPolicy`` decides it.
+  case needsConsent(CommandEffect?)
 
   /// Whether forcing the command would write it: only for ``serialCommand(_:)``.
   public var canBeForced: Bool {

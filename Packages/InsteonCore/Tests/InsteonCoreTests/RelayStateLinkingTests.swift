@@ -74,7 +74,8 @@ enum RelayExample {
     summary: "Reads whether the relay is on.",
     command1: 0x19,
     command2: .fixed(0x00),
-    reply: MessageField(name: "relayState", summary: "0x00 when off.", location: .command2)
+    reply: MessageField(name: "relayState", summary: "0x00 when off.", location: .command2),
+    effect: .readOnly, isIdempotent: true
   )
 
   static let relay = GroupType(

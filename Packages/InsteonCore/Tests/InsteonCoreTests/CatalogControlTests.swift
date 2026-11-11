@@ -66,12 +66,12 @@ struct CatalogControlTests {
         "description": "Eight zones in one valve status byte: bits 0 to 2 the active valve, bit 7 whether a valve is on.",
         "standardCommands": [
           { "name": "valveOn", "description": "Turns on the valve in cmd2.", "command1": "0x40",
-            "parameter": { "name": "valve", "description": "The valve.", "range": { "from": 0, "through": 7 } } },
+            "parameter": { "name": "valve", "description": "The valve.", "range": { "from": 0, "through": 7 } }, "effect": "actuation", "idempotent": true },
           { "name": "valveOff", "description": "Turns off the valve in cmd2.", "command1": "0x41",
-            "parameter": { "name": "valve", "description": "The valve.", "range": { "from": 0, "through": 7 } } },
+            "parameter": { "name": "valve", "description": "The valve.", "range": { "from": 0, "through": 7 } }, "effect": "actuation", "idempotent": true },
           { "name": "readValveStatus", "description": "Reads the valve status byte.", "command1": "0x44", "command2": "0x02",
             "reply": { "name": "valveStatus", "description": "The valve status byte.", "kind": "flags",
-              "bits": [{ "mask": "0x07", "name": "activeValve", "description": "The active valve." }, { "mask": "0x80", "name": "anyValveOn", "description": "A valve is on." }] } }
+              "bits": [{ "mask": "0x07", "name": "activeValve", "description": "The active valve." }, { "mask": "0x80", "name": "anyValveOn", "description": "A valve is on." }] }, "effect": "actuation", "idempotent": true }
         ],
         "groupTypes": [
           { "name": "zone1", "label": "Zone 1", "kind": "relay",
@@ -108,10 +108,10 @@ struct CatalogControlTests {
           { "name": "outputMode", "description": "The load is two relays.", "query": "0x05", "bit": "0x80", "on": "0x1F", "off": "0x1E", "label": "Output mode" }
         ],
         "standardCommands": [
-          { "name": "lightOn", "description": "Turns the load on.", "command1": "0x11", "parameter": { "name": "onLevel", "description": "The level, or the relays." } },
-          { "name": "lightOff", "description": "Turns the load off.", "command1": "0x13", "parameter": { "name": "relays", "description": "The relays." } },
+          { "name": "lightOn", "description": "Turns the load on.", "command1": "0x11", "parameter": { "name": "onLevel", "description": "The level, or the relays." }, "effect": "actuation", "idempotent": true },
+          { "name": "lightOff", "description": "Turns the load off.", "command1": "0x13", "parameter": { "name": "relays", "description": "The relays." }, "effect": "actuation", "idempotent": true },
           { "name": "readStatus", "description": "Reads the level.", "command1": "0x19", "command2": "0x00",
-            "reply": { "name": "onLevel", "description": "The level.", "scale": 0.392157, "unit": "percent" } }
+            "reply": { "name": "onLevel", "description": "The level.", "scale": 0.392157, "unit": "percent" }, "effect": "readOnly", "idempotent": true }
         ],
         "groupTypes": [{
           "name": "light",

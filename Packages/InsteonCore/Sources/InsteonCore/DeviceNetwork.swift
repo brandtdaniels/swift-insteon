@@ -491,18 +491,22 @@ public actor DeviceNetwork {
   /// - Parameters:
   ///   - message: The message.
   ///   - duration: How long to collect what the device sends after its acknowledgment.
+  ///   - consent: What the caller grants the message to do. Defaults to nothing, which sends
+  ///     only a message that asks for state.
   ///   - onAcknowledgment: Called with the device's acknowledgment.
   /// - Returns: The other messages from the device, in order.
-  /// - Throws: ``SendRefusal`` before anything is sent; the modem's error, which
+  /// - Throws: ``SendRefusal`` before anything is sent, such as ``SendRefusal/needsConsent(_:)``
+  ///   for a message that does more than the consent grants; the modem's error, which
   ///   ``SendFailure`` reads as the device rejecting the message or not answering; or
   ///   `CancellationError`.
   public nonisolated func send(
     _ message: DirectMessage,
     collectingFor duration: Duration,
+    consent: SendConsent = SendConsent(),
     onAcknowledgment: (ReceivedFrame) -> Void
   ) async throws -> [ReceivedFrame] {
 
-    try await device(message.device).sendAsGiven(message, collectingFor: duration, onAcknowledgment: onAcknowledgment)
+    try await device(message.device).sendAsGiven(message, collectingFor: duration, consent: consent, onAcknowledgment: onAcknowledgment)
 
   }
 

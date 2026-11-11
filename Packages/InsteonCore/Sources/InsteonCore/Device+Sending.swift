@@ -19,8 +19,23 @@ extension Device {
     case setting(label: String, current: [Int: UInt8]? = nil)
 
     /// A message sent as it's given, through a raw passthrough, refused with the
-    /// ``SendRefusal`` itself.
-    case asGiven
+    /// ``SendRefusal`` itself. The associated value is what the caller grants.
+    case asGiven(SendConsent)
+
+    /// What the purpose grants a message to do: an operation grants what its act does, a
+    /// setting's write grants configuration, and a passthrough grants what its caller gives.
+    var consent: SendConsent {
+
+      switch self {
+      case let .control(operation):
+        return operation.consent
+      case .setting:
+        return SendConsent(effects: [.configuration])
+      case let .asGiven(consent):
+        return consent
+      }
+
+    }
 
     /// The bytes the device reported, which a kept bit a message writes must match; `nil` for
     /// any message not built from a report, so any kept bit it writes refuses it.
@@ -42,11 +57,13 @@ extension Device {
   /// guard allows it.
   private enum LinkingSend {
 
-    /// A standard message.
-    case standard(StandardMessage)
+    /// A standard message, and the effect the catalog's linking gives it when it gives the
+    /// message by its bytes.
+    case standard(StandardMessage, declared: CommandEffect?)
 
-    /// An extended message.
-    case extended(ExtendedMessage)
+    /// An extended message, and the effect the catalog's linking gives it when it gives the
+    /// message by its bytes.
+    case extended(ExtendedMessage, declared: CommandEffect?)
 
     /// Set Operating Flags with a cmd2, in the form the device takes.
     case setOperatingFlags(UInt8, extendedWhen: SettingName?, description: DeviceDescription, commands: CommandSet)
@@ -84,10 +101,10 @@ extension Device {
     let purpose: SendPurpose = .control(operation)
 
     switch try await resolveLinkingMessage(message, duration: duration, writableFlags: writableFlags, for: operation) {
-    case let .standard(standard):
-      _ = try await request(standard, timeout: network.requestTimeout, for: purpose)
-    case let .extended(extended):
-      _ = try await request(extended, timeout: Modem.defaultExtendedRequestTimeout, for: purpose)
+    case let .standard(standard, declared):
+      _ = try await request(standard, timeout: network.requestTimeout, declaring: declared, for: purpose)
+    case let .extended(extended, declared):
+      _ = try await request(extended, timeout: Modem.defaultExtendedRequestTimeout, declaring: declared, for: purpose)
     case let .setOperatingFlags(command2, extendedWhen, description, commands):
       try await sendSetOperatingFlags(command2, extendedWhen: extendedWhen, description: description, commands: commands, purpose: purpose)
     }
@@ -166,11 +183,14 @@ extension Device {
 
         }
 
-        resolved = .extended(ExtendedMessage(to: address, command: raw.command, userData: userData, integrity: raw.integrity.scheme))
+        // The profile is the only description of a message given by its bytes, so what it
+        // says the message does is what the policy reads, and a profile that says nothing
+        // reads as destructive.
+        resolved = .extended(ExtendedMessage(to: address, command: raw.command, userData: userData, integrity: raw.integrity.scheme), declared: raw.effect ?? .destructive)
 
       } else {
 
-        resolved = .standard(StandardMessage(to: address, command: raw.command))
+        resolved = .standard(StandardMessage(to: address, command: raw.command), declared: raw.effect ?? .destructive)
 
       }
 
@@ -201,7 +221,7 @@ extension Device {
       case let .setOperatingFlags(command2):
         resolved = .setOperatingFlags(command2, extendedWhen: flag.extendedWhen, description: description, commands: commands)
       case let .standardCommand(command):
-        resolved = .standard(StandardMessage(to: address, command: try command.command()))
+        resolved = .standard(StandardMessage(to: address, command: try command.command()), declared: nil)
       }
 
     case let .command(name):
@@ -238,7 +258,7 @@ extension Device {
           command = try standard.command(Self.durationValue(duration, for: field))
         }
 
-        resolved = .standard(StandardMessage(to: address, command: command))
+        resolved = .standard(StandardMessage(to: address, command: command), declared: nil)
 
       } else if let extended = commands.extendedCommand(named: name) {
 
@@ -258,7 +278,7 @@ extension Device {
 
         }
 
-        resolved = .extended(try extended.message(to: address, values: values))
+        resolved = .extended(try extended.message(to: address, values: values), declared: nil)
 
       } else {
 
@@ -269,12 +289,12 @@ extension Device {
 
     // The bytes the message carries pass the same check as every message the device is sent.
     switch resolved {
-    case let .standard(standard):
-      try await refuseIfNeverSent(standard.command, for: purpose)
-    case let .extended(extended):
-      try await refuseIfNeverSent(extended.command, userData: extended.userData, for: purpose)
+    case let .standard(standard, declared):
+      try await authorize(standard.command, declaring: declared, for: purpose)
+    case let .extended(extended, declared):
+      try await authorize(extended.command, userData: extended.userData, declaring: declared, for: purpose)
     case let .setOperatingFlags(command2, _, _, _):
-      try await refuseIfNeverSent(Command(command1: DeviceSettingSafety.setOperatingFlagsCommand1, command2: command2), for: purpose)
+      try await authorize(Command(command1: DeviceSettingSafety.setOperatingFlagsCommand1, command2: command2), for: purpose)
     }
 
     return resolved
@@ -287,10 +307,11 @@ extension Device {
   /// - Parameters:
   ///   - message: The message, whose ``DirectMessage/device`` is the device.
   ///   - duration: How long to collect what the device sends after its acknowledgment.
+  ///   - consent: What the caller grants the message to do.
   ///   - onAcknowledgment: Called with the device's acknowledgment.
   /// - Returns: The other messages from the device, in order.
   /// - Throws: ``SendRefusal`` before anything is sent, and the modem's errors.
-  func sendAsGiven(_ message: DirectMessage, collectingFor duration: Duration, onAcknowledgment: (ReceivedFrame) -> Void) async throws -> [ReceivedFrame] {
+  func sendAsGiven(_ message: DirectMessage, collectingFor duration: Duration, consent: SendConsent, onAcknowledgment: (ReceivedFrame) -> Void) async throws -> [ReceivedFrame] {
 
     let device: InsteonAddress = address
     let replies: AsyncStream<ModemReply> = await modem.replies()
@@ -298,11 +319,11 @@ extension Device {
 
     if let extended = message.extended {
 
-      acknowledgment = try await request(extended, timeout: Modem.defaultExtendedRequestTimeout, for: .asGiven)
+      acknowledgment = try await request(extended, timeout: Modem.defaultExtendedRequestTimeout, for: .asGiven(consent))
 
     } else {
 
-      acknowledgment = try await request(StandardMessage(to: device, command: message.command), timeout: network.requestTimeout, for: .asGiven)
+      acknowledgment = try await request(StandardMessage(to: device, command: message.command), timeout: network.requestTimeout, for: .asGiven(consent))
 
     }
 
@@ -411,22 +432,37 @@ extension Device {
 
   }
 
-  /// Refuses a message whose bytes are never sent to the device, as
-  /// `DeviceSettingSafety.isNeverSent(_:in:)` says from its command set: Poke, a
-  /// ``ProtectedCommand`` the command set doesn't name for a flag it doesn't guard, and the
-  /// bytes the catalog's guards add; an extended message that writes a guarded bit as its
-  /// guard forbids, on whatever route it writes the byte, as
+  /// Decides whether a message is sent, by the bytes it carries: refuses one whose bytes are
+  /// never sent to the device, as `DeviceSettingSafety.isNeverSent(_:in:)` says from its
+  /// command set (Poke, a ``ProtectedCommand`` the command set doesn't name for a flag it
+  /// doesn't guard, and the bytes the catalog's guards add); one that writes a guarded bit as
+  /// its guard forbids, on whatever route it writes the byte, as
   /// `DeviceSettingSafety.guardViolation(by:userData:in:current:)` decides it, for every
   /// purpose; and an extended Set to a device with no command set, or with a selector its
   /// command set doesn't list. Every message the device is sent is checked here, with the
   /// bytes it actually carries, so a command filled in with a value, listed under another
   /// name, or named by a control action, can't send them.
-  private func refuseIfNeverSent(_ command: Command, userData: UserData? = nil, for purpose: SendPurpose) async throws {
+  ///
+  /// What remains is decided by ``SendPolicy`` from what the message does and what the
+  /// purpose grants. What it does is the stricter of the effect the device's command set gives
+  /// its bytes, as `DeviceSettingSafety.effect(of:userData:in:)` finds it, and the effect the
+  /// flow that builds it declares, so a message can't change its effect by being sent under
+  /// another name.
+  ///
+  /// - Parameters:
+  ///   - command: The message's cmd1 and cmd2.
+  ///   - userData: An extended message's user data.
+  ///   - declared: The effect the flow that builds the message says it has, or `nil` for a
+  ///     message the command set describes.
+  ///   - purpose: What the message is sent for, which says what it may do and how a refusal is
+  ///     reported.
+  /// - Throws: The purpose's refusal, before anything is sent.
+  func authorize(_ command: Command, userData: UserData? = nil, declaring declared: CommandEffect? = nil, for purpose: SendPurpose) async throws {
 
     let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription
     let commands: CommandSet? = description?.commandSet
     let product: String = description.map { (described: DeviceDescription) -> String in DeviceControlModel.product(of: described) } ?? "this device"
-    let refusal: SendRefusal
+    let refusal: SendRefusal?
 
     let isNeverSent: Bool = DeviceSettingSafety.isNeverSent(command, in: commands)
 
@@ -464,17 +500,43 @@ extension Device {
 
     } else {
 
-      return
+      refusal = nil
 
     }
 
-    switch purpose {
-    case let .control(operation):
-      throw DeviceControlError.unsupported(operation, product: product)
-    case let .setting(label, _):
-      throw DeviceSettingError.neverWritten(label: label)
-    case .asGiven:
-      throw refusal
+    let effect: CommandEffect?
+
+    if case let .described(described, _) = DeviceSettingSafety.effect(of: command, userData: userData, in: commands) {
+
+      effect = described
+
+    } else {
+
+      effect = nil
+
+    }
+
+    switch SendPolicy.decision(effect: effect, declaredEffect: declared, refusal: refusal, consent: purpose.consent) {
+    case .transmit:
+      return
+    case let .needsConsent(needed):
+      switch purpose {
+      case let .control(operation):
+        throw DeviceControlError.needsConsent(operation, effect: needed, product: product)
+      case let .setting(label, _):
+        throw DeviceSettingError.needsConsent(label: label, effect: needed)
+      case .asGiven:
+        throw SendRefusal.needsConsent(needed)
+      }
+    case let .refuse(refused):
+      switch purpose {
+      case let .control(operation):
+        throw DeviceControlError.unsupported(operation, product: product)
+      case let .setting(label, _):
+        throw DeviceSettingError.neverWritten(label: label)
+      case .asGiven:
+        throw refused
+      }
     }
 
   }
@@ -516,21 +578,21 @@ extension Device {
 
   }
 
-  /// Sends a standard message once ``refuseIfNeverSent(_:userData:for:)`` allows it. Every
+  /// Sends a standard message once ``authorize(_:userData:declaring:for:)`` allows it. Every
   /// standard message the device is sent goes through here.
-  func request(_ message: StandardMessage, timeout: Duration, for purpose: SendPurpose) async throws -> ReceivedMessage {
+  func request(_ message: StandardMessage, timeout: Duration, declaring declared: CommandEffect? = nil, for purpose: SendPurpose) async throws -> ReceivedMessage {
 
-    try await refuseIfNeverSent(message.command, for: purpose)
+    try await authorize(message.command, declaring: declared, for: purpose)
 
     return try await modem.request(message, timeout: timeout)
 
   }
 
-  /// Sends an extended message once ``refuseIfNeverSent(_:userData:for:)`` allows it, by its
+  /// Sends an extended message once ``authorize(_:userData:declaring:for:)`` allows it, by its
   /// cmd1, cmd2 and user data. Every extended message the device is sent goes through here.
-  func request(_ message: ExtendedMessage, timeout: Duration, for purpose: SendPurpose) async throws -> ReceivedMessage {
+  func request(_ message: ExtendedMessage, timeout: Duration, declaring declared: CommandEffect? = nil, for purpose: SendPurpose) async throws -> ReceivedMessage {
 
-    try await refuseIfNeverSent(message.command, userData: message.userData, for: purpose)
+    try await authorize(message.command, userData: message.userData, declaring: declared, for: purpose)
 
     return try await modem.request(message, timeout: timeout)
 
@@ -542,9 +604,9 @@ extension Device {
 
     switch message {
     case let .standard(standard):
-      _ = try await request(standard, timeout: network.requestTimeout, for: .control(operation))
+      _ = try await request(standard, timeout: network.requestTimeout, declaring: operation.declaredEffect, for: .control(operation))
     case let .extended(extended):
-      _ = try await request(extended, timeout: Modem.defaultExtendedRequestTimeout, for: .control(operation))
+      _ = try await request(extended, timeout: Modem.defaultExtendedRequestTimeout, declaring: operation.declaredEffect, for: .control(operation))
     }
 
   }
@@ -554,9 +616,9 @@ extension Device {
 
     switch message {
     case let .standard(standard):
-      try await refuseIfNeverSent(standard.command, for: .control(operation))
+      try await authorize(standard.command, declaring: operation.declaredEffect, for: .control(operation))
     case let .extended(extended):
-      try await refuseIfNeverSent(extended.command, userData: extended.userData, for: .control(operation))
+      try await authorize(extended.command, userData: extended.userData, declaring: operation.declaredEffect, for: .control(operation))
     }
 
   }
@@ -619,6 +681,7 @@ extension Device {
     let acknowledgment: ReceivedMessage = try await request(
       StandardMessage(to: address, command: StandardDirectCommand.statusRequest()),
       timeout: network.requestTimeout,
+      declaring: .readOnly,
       for: .control(.status)
     )
     let value: UInt8 = acknowledgment.command.command2
@@ -731,7 +794,7 @@ extension Device {
 
     do {
 
-      return try await request(message, timeout: network.requestTimeout, for: .control(.settings))
+      return try await request(message, timeout: network.requestTimeout, declaring: .readOnly, for: .control(.settings))
 
     } catch let error as ModemError {
 
@@ -755,7 +818,7 @@ extension Device {
     let message = ExtendedMessage(to: device, command: ExtendedDirectCommand.getSet(), userData: settings.getUserData(button: button))
     let isPerButton: Bool = settings.isPerButton
 
-    try await refuseIfNeverSent(message.command, userData: message.userData, for: .control(.settings))
+    try await authorize(message.command, userData: message.userData, declaring: .readOnly, for: .control(.settings))
 
     do {
 
@@ -863,6 +926,40 @@ extension Device {
       .filter { (number: UInt8) -> Bool in number > 1 && number < 0xFF }
 
     return [0x01] + Array(Set(others)).sorted()
+
+  }
+
+}
+
+extension DeviceOperation {
+
+  /// What the operation grants the messages it sends to do. An operation that names an act
+  /// grants that act's effect, and one that only reads grants nothing, since reading needs no
+  /// consent.
+  var consent: SendConsent {
+
+    switch self {
+    case .turnOn, .turnOff, .turnOnFast, .turnOffFast, .instantChange, .beep:
+      SendConsent(effects: [.actuation])
+    case .keepAwake, .linkingFlags:
+      SendConsent(effects: [.configuration])
+    case .status, .settings:
+      SendConsent()
+    }
+
+  }
+
+  /// The effect of the message the operation's act sends, which InsteonCore declares for the
+  /// act's message whatever the device's command set says of it, or `nil` for an operation
+  /// that sends no single act.
+  var declaredEffect: CommandEffect? {
+
+    switch self {
+    case .turnOn, .turnOff, .turnOnFast, .turnOffFast, .instantChange, .beep:
+      .actuation
+    case .status, .settings, .keepAwake, .linkingFlags:
+      nil
+    }
 
   }
 

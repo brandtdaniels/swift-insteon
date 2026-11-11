@@ -220,7 +220,7 @@ extension Device {
 
       }
 
-      let reply: ReceivedMessage = try await request(StandardMessage(to: address, command: flag.readCommand), timeout: network.requestTimeout, for: .control(operation))
+      let reply: ReceivedMessage = try await request(StandardMessage(to: address, command: flag.readCommand), timeout: network.requestTimeout, declaring: .readOnly, for: .control(operation))
 
       guard flag.isSet(in: reply) == condition.isSet else {
 
@@ -276,7 +276,7 @@ extension Device {
 
     }
 
-    _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, for: .control(.turnOnFast))
+    _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, declaring: .actuation, for: .control(.turnOnFast))
 
     await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? command.command2 : nil)
 
@@ -315,7 +315,7 @@ extension Device {
 
     }
 
-    _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, for: .control(.turnOffFast))
+    _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, declaring: .actuation, for: .control(.turnOffFast))
 
     await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? 0x00 : nil)
 
@@ -383,7 +383,7 @@ extension Device {
 
     }
 
-    _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, for: .control(.instantChange))
+    _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, declaring: .actuation, for: .control(.instantChange))
 
     await network.recordAnswer(of: address, level: model.reportsDeviceLevel(target) ? command.command2 : nil)
 
@@ -451,6 +451,7 @@ extension Device {
     let acknowledgment: ReceivedMessage = try await request(
       StandardMessage(to: address, command: try command.command()),
       timeout: network.requestTimeout,
+      declaring: .readOnly,
       for: .control(.status)
     )
     let value: UInt8 = acknowledgment.command.command2
@@ -474,7 +475,7 @@ extension Device {
   ///   answer.
   public func ping() async throws {
 
-    _ = try await request(StandardMessage(to: address, command: StandardDirectCommand.ping), timeout: network.requestTimeout, for: .control(.status))
+    _ = try await request(StandardMessage(to: address, command: StandardDirectCommand.ping), timeout: network.requestTimeout, declaring: .readOnly, for: .control(.status))
 
     await network.recordAnswer(of: address, level: nil)
 
@@ -531,7 +532,7 @@ extension Device {
 
     }
 
-    _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, for: .control(.beep))
+    _ = try await request(StandardMessage(to: address, command: command), timeout: network.requestTimeout, declaring: .actuation, for: .control(.beep))
 
     await network.recordAnswer(of: address, level: nil)
 

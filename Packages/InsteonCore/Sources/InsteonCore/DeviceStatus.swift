@@ -1,3 +1,5 @@
+import InsteonDeviceCatalog
+
 /// What a device reported about one of its groups, read as the group's type in the Insteon
 /// device catalog says.
 ///
@@ -294,5 +296,10 @@ public enum DeviceControlError: Error, Hashable, Sendable {
   /// so an output can't be switched on its own. The associated values are the group and the
   /// product.
   case outputsInactive(group: Int, product: String)
+
+  /// The operation doesn't grant what the message it sends does, so nothing was sent. The
+  /// associated values are the operation, the effect to grant, or `nil` for a message no entry
+  /// describes, and the product.
+  case needsConsent(DeviceOperation, effect: CommandEffect?, product: String)
 
 }

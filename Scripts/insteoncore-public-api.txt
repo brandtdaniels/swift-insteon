@@ -41,6 +41,7 @@ case DeviceCapabilities.Source.catalog
 case DeviceCapabilities.Source.categoryFallback
 case DeviceCapabilities.Source.uncontrolled
 case DeviceControlError.missingCommand(_:product:)
+case DeviceControlError.needsConsent(_:effect:product:)
 case DeviceControlError.noSuchGroup(_:product:)
 case DeviceControlError.noSuchOutput(_:group:product:)
 case DeviceControlError.notIdentified(_:)
@@ -85,6 +86,7 @@ case DeviceSettingError.engineRejected
 case DeviceSettingError.isReading(label:)
 case DeviceSettingError.leavesProgrammingLocked(label:)
 case DeviceSettingError.missingValue(label:other:)
+case DeviceSettingError.needsConsent(label:effect:)
 case DeviceSettingError.neverWritten(label:)
 case DeviceSettingError.noCommandForState(label:isOn:)
 case DeviceSettingError.noSettings(product:)
@@ -282,6 +284,7 @@ case SendFailure.modemRejected
 case SendFailure.modemUnanswered
 case SendRefusal.extendedSetWithoutCommandSet
 case SendRefusal.incompleteMessage
+case SendRefusal.needsConsent(_:)
 case SendRefusal.neverSentToDevice(product:)
 case SendRefusal.notSerialCommand
 case SendRefusal.protected(_:)
@@ -383,7 +386,7 @@ func DeviceNetwork.identify(_:)
 func DeviceNetwork.modemDatabase()
 func DeviceNetwork.modemInfo()
 func DeviceNetwork.productData(of:)
-func DeviceNetwork.send(_:collectingFor:onAcknowledgment:)
+func DeviceNetwork.send(_:collectingFor:consent:onAcknowledgment:)
 func DeviceNetwork.snapshot()
 func DeviceNetwork.state(of:)
 func DeviceRegistry.device(_:)
@@ -678,6 +681,7 @@ struct UnreadDatabase
 struct WakePrompt
 typealias AllLinkGroupNumber
 typealias AllLinkMode
+typealias CommandEffect
 typealias DeviceCatalogVersion
 typealias DeviceCategory
 typealias DeviceSubcategory

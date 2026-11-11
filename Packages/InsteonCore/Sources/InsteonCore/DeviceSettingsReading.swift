@@ -525,6 +525,11 @@ public enum DeviceSettingError: Error, Sendable {
   /// such a flag is refused with the flag's label when it would set the flag's bit.
   case leavesProgrammingLocked(label: String)
 
+  /// Writing the setting sends a message whose effect the write doesn't grant, so nothing was
+  /// sent. The associated values are the setting's label and the effect to grant, or `nil` for
+  /// a message no entry describes.
+  case needsConsent(label: String, effect: CommandEffect?)
+
   /// The device rejected Get Insteon Engine Version, as an i2CS device does when it isn't
   /// linked to the modem, so the form of Set Operating Flags it takes isn't known.
   case engineRejected

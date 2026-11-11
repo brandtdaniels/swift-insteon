@@ -285,6 +285,8 @@ public enum SettingsText {
       return "Writing \(label) also writes \(other), which the device didn't report, so nothing was changed."
     case let .unwritableValue(problem, label, value):
       return "The Insteon device catalog's command for \(label) can't take \(value): \(fieldProblem(problem)), so nothing was changed."
+    case let .needsConsent(label, effect):
+      return "Writing \(label) sends a message that \(ConsentText.clause(effect)), which 'insteon device \(device) set' doesn't grant, so nothing was changed."
     case .engineRejected:
       return "\(device) rejected Get Insteon Engine Version, as an i2CS device does when it isn't linked to the modem, "
         + "so its settings can't be written. Link it first with 'insteon link \(device)'."
