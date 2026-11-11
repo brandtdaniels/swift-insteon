@@ -17,7 +17,9 @@ public enum SendRefusalText {
 
   }
 
-  /// A refusal as one sentence, with the reason the message isn't sent.
+  /// A refusal as one sentence, with the reason the message isn't sent. What a protected Set
+  /// Operating Flags does comes from the device's catalog entry, so the sentence names the
+  /// guarded flag the entry gives its cmd2 to, or else says only what the protocol does.
   ///
   /// - Parameters:
   ///   - refusal: The refusal.
@@ -28,6 +30,14 @@ public enum SendRefusalText {
     switch refusal {
     case let .protected(command):
       return sentence(command, from: passthrough)
+    case let .setsGuardedFlag(command, label, setting):
+      guard passthrough == .deviceSend, let command2 = command.command2 else {
+
+        return sentence(command, from: passthrough)
+
+      }
+
+      return "Set Operating Flags \(Hex.byte(command2)) turns this device's '\(label)' flag \(setting ? "on" : "off"), a flag its catalog entry guards; insteon never sends it as given."
     case let .neverSentToDevice(product):
       return "The Insteon device catalog marks this message as one never sent to \(product); insteon never sends it."
     case let .writesGuardedFlags(label):

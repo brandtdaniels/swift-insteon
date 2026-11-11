@@ -534,6 +534,7 @@ struct ExploringArgumentTests {
   @Test func wordsEveryRefusalInOneLine() {
 
     let refusals: [SendRefusal] = ProtectedCommand.allCases.map { (command: ProtectedCommand) -> SendRefusal in .protected(command) } + [
+      .setsGuardedFlag(.setOperatingFlags0x0C, label: "Example lock", setting: true),
       .neverSentToDevice(product: "Example"),
       .writesGuardedFlags(label: "Lockout"),
       .extendedSetWithoutCommandSet,

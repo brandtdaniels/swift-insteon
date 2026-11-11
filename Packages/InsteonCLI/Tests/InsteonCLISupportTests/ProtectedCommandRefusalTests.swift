@@ -3,7 +3,8 @@ import InsteonCLISupport
 import InsteonCore
 
 /// What the raw passthroughs say, and the status they exit with, when they refuse a protected
-/// Set Operating Flags (cmd1 `0x20`), found by its cmd2 alone, in protocol terms.
+/// Set Operating Flags (cmd1 `0x20`), found by its cmd2 alone. The words come from the protocol,
+/// or from the device's catalog entry where it names the cmd2 for a guarded flag.
 struct ProtectedCommandRefusalTests {
 
   /// Each protected Set Operating Flags cmd2, as `modem send` takes it and as a sentence names it.
@@ -35,6 +36,25 @@ struct ProtectedCommandRefusalTests {
 
   }
 
+  @Test func deviceSendNamesTheGuardedFlagTheCatalogEntryGivesTheCmd2() throws {
+
+    for refusal in Self.refusals {
+
+      let command: ProtectedCommand = try #require(ProtectedCommand(command1: 0x20, command2: refusal.command2))
+
+      for (setting, state) in [(true, "on"), (false, "off")] {
+
+        let sentence: String = SendRefusalText.sentence(.setsGuardedFlag(command, label: "Example lock", setting: setting), from: .deviceSend)
+
+        #expect(sentence == "Set Operating Flags \(refusal.hex) turns this device's 'Example lock' flag \(state), a flag its catalog entry guards; insteon never sends it as given.")
+        #expect(ExitStatus.status(for: CommandFailure(description: sentence)) == ExitStatus.failure)
+
+      }
+
+    }
+
+  }
+
   @Test func modemSendRefusesEachProtectedSetOperatingFlagsInProtocolTermsAsAUsageError() {
 
     for refusal in Self.refusals {
@@ -56,6 +76,14 @@ struct ProtectedCommandRefusalTests {
       }
 
     }
+
+  }
+
+  @Test func modemSendNeverNamesAFlagItHasNoDeviceFor() {
+
+    let sentence: String = SendRefusalText.sentence(.setsGuardedFlag(.setOperatingFlags0x0C, label: "Example lock", setting: true), from: .modemSend)
+
+    #expect(sentence == "\(Self.protocolFact("0x0C")); insteon modem send has no device's catalog entry to check, so it never writes it.")
 
   }
 

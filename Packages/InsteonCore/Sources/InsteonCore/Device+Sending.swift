@@ -430,7 +430,11 @@ extension Device {
 
     let isNeverSent: Bool = DeviceSettingSafety.isNeverSent(command, in: commands)
 
-    if isNeverSent, let protected = ProtectedCommand(command) {
+    if isNeverSent, let protected = ProtectedCommand(command), let commands, let flag = Self.guardedFlag(turnedBy: protected, in: commands) {
+
+      refusal = .setsGuardedFlag(protected, label: flag.label, setting: flag.setting)
+
+    } else if isNeverSent, let protected = ProtectedCommand(command) {
 
       refusal = .protected(protected)
 
@@ -472,6 +476,43 @@ extension Device {
     case .asGiven:
       throw refusal
     }
+
+  }
+
+  /// The label of the first operating flag a command set guards that a protected Set Operating
+  /// Flags turns on or off, and which way it turns it, or `nil` if no labeled guarded flag
+  /// names the cmd2.
+  static func guardedFlag(turnedBy command: ProtectedCommand, in commands: CommandSet) -> (label: String, setting: Bool)? {
+
+    guard let command2 = command.command2 else {
+
+      return nil
+
+    }
+
+    for flag in commands.operatingFlags where DeviceSettingSafety.rule(for: flag) != nil {
+
+      guard let label = flag.label else {
+
+        continue
+
+      }
+
+      if flag.on == command2 {
+
+        return (label, true)
+
+      }
+
+      if flag.off == command2 {
+
+        return (label, false)
+
+      }
+
+    }
+
+    return nil
 
   }
 

@@ -442,7 +442,8 @@ public enum HelpText {
                           cmd2 0C, 0E, 19 or 00, which can cut a device off from the modem
                           or lock it, depending on the device, is sent only to a device the
                           identity cache knows whose catalog entry names that cmd2 for a
-                          flag or command it doesn't guard. Poke (29) is
+                          flag or command it doesn't guard; the refusal names the guarded
+                          flag the entry gives the cmd2 to, if it has a label. Poke (29) is
                           never sent. Nor is a message the device's catalog entry never
                           sends, an extended message that writes a byte holding a guarded
                           flag, which only 'set' writes, or an extended Set (2E with D2

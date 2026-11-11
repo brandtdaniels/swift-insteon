@@ -138,6 +138,11 @@ public enum SendRefusal: Error, Hashable, Sendable {
   /// Operating Flags with a cmd2 its command set doesn't name for a flag it doesn't guard.
   case protected(ProtectedCommand)
 
+  /// The message is a protected Set Operating Flags whose cmd2 the device's command set gives
+  /// to an operating flag it guards, so it isn't sent. The associated values are the command,
+  /// the flag's label, and whether the cmd2 turns the flag on.
+  case setsGuardedFlag(ProtectedCommand, label: String, setting: Bool)
+
   /// The Insteon device catalog marks the message's bytes as never sent to the device. The
   /// associated value is the product, as a sentence names it.
   case neverSentToDevice(product: String)
