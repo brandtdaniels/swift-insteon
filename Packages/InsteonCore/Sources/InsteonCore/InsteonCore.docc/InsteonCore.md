@@ -485,6 +485,9 @@ do {
 - ``SendPolicy``
 - ``SendConsent``
 - ``SendDecision``
+- ``ResendPolicy``
+- ``ResendDecision``
+- ``DeliveryFailure``
 
 ### Raw passthroughs
 

@@ -33,6 +33,10 @@ case DatabaseLinkStepOutcome.unanswered
 case DatabaseLinkStepOutcome.unverifiable
 case DatabaseLinkStepOutcome.written
 case DatabaseLinkStepOutcome.writtenOnRetry
+case DeliveryFailure.deviceBusy
+case DeliveryFailure.deviceRejected
+case DeliveryFailure.modemRejected
+case DeliveryFailure.noDeviceAcknowledgment
 case DeviceCapabilities.Source.catalog
 case DeviceCapabilities.Source.categoryFallback
 case DeviceCapabilities.Source.uncontrolled
@@ -243,6 +247,8 @@ case RelayStateLinkingError.remoteLinkingFailed(_:reason:)
 case RelayStateLinkingError.restStateUnknown(_:action:)
 case RelayStateLinkingError.stateHoldingFlagUnknown(_:flag:)
 case RelayStateLinkingError.stateHoldingNotDescribed(_:product:)
+case ResendDecision.doNotResend
+case ResendDecision.resend
 case ResetErasure.links
 case ResetErasure.settings
 case SelfTestCheckKind.answers
@@ -294,6 +300,7 @@ enum DatabaseLinkRefusal
 enum DatabaseLinkResult.DeviceCheck
 enum DatabaseLinkStep.Kind
 enum DatabaseLinkStepOutcome
+enum DeliveryFailure
 enum DeviceCapabilities.Source
 enum DeviceControlError
 enum DeviceKeptReason
@@ -328,6 +335,8 @@ enum RawModemReply
 enum RelayState
 enum RelayStateEvent
 enum RelayStateLinkingError
+enum ResendDecision
+enum ResendPolicy
 enum ResetErasure
 enum SelfTestCheckKind
 enum SelfTestChecklistItem
@@ -549,6 +558,7 @@ static func ProductCatalog.load(contentsOf:)
 static func ProductCatalog.update(replacing:currentVersion:from:requestTimeout:resourceTimeout:)
 static func ProductCatalogStore.version(json:)
 static func ProductCatalogStore.versionJSON(_:)
+static func ResendPolicy.decision(after:isIdempotent:)
 static func SendPolicy.decision(effect:declaredEffect:refusal:consent:)
 static func SerialCommandPolicy.isSerialCommand(_:)
 static func SerialCommandPolicy.neverWritten(_:)
