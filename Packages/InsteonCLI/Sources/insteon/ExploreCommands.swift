@@ -73,7 +73,7 @@ enum ExploreCommands {
 
   // MARK: - modem send
 
-  static func send(_ request: RawSerialRequest, modem: ModemSession) async throws {
+  static func send(_ request: RawSerialRequest, modem: ModemSession, catalog: ProductCatalog?) async throws {
 
     Output.note("Writing \(Hex.pairs(request.bytes)) to the modem")
 
@@ -81,7 +81,7 @@ enum ExploreCommands {
 
     do {
 
-      received = try await modem.write(rawCommand: request.bytes, forcing: request.isForced, collectingFor: .seconds(request.waitSeconds))
+      received = try await modem.write(rawCommand: request.bytes, forcing: request.isForced, catalog: catalog, collectingFor: .seconds(request.waitSeconds))
 
     } catch let refusal as SendRefusal {
 

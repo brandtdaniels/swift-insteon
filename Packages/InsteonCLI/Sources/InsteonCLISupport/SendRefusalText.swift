@@ -5,8 +5,8 @@ import InsteonCore
 public enum SendRefusalText {
 
   /// The raw passthrough that refused a message, which says what the refusal means: `device
-  /// ADDRESS send` checks a message against the device's catalog entry, and `modem send` has
-  /// no device to look up.
+  /// ADDRESS send` checks a message against the device's catalog entry, and `modem send` checks
+  /// a command against the modem's, and has no device's to check a message it carries against.
   public enum Passthrough: Hashable, Sendable {
 
     /// `insteon device ADDRESS send`.
@@ -54,7 +54,12 @@ public enum SendRefusalText {
     case let .serialCommand(reason):
       return "\(reason) Pass --force to send it anyway."
     case let .needsConsent(effect):
-      return ConsentText.deviceSend(effect)
+      switch passthrough {
+      case .deviceSend:
+        return ConsentText.deviceSend(effect)
+      case .modemSend:
+        return ConsentText.modemSend(effect)
+      }
     }
 
   }

@@ -319,7 +319,7 @@ reading each write back. <doc:DatabaseLinking> says what each writes and when to
 
 A front end that explores what the catalog doesn't describe yet sends a device a message as
 it's given with ``DeviceNetwork/send(_:collectingFor:consent:onAcknowledgment:)``, and writes the
-modem a serial command with ``ModemSession/write(rawCommand:forcing:collectingFor:clock:)``.
+modem a serial command with ``ModemSession/write(rawCommand:forcing:catalog:collectingFor:clock:)``.
 Both check the bytes first, and throw a ``SendRefusal`` before anything is sent.
 ``DeviceNetwork/send(_:collectingFor:consent:onAcknowledgment:)`` also takes the
 ``SendConsent`` the caller grants: a message that asks for state is sent, and one that does
@@ -334,7 +334,11 @@ one the command set doesn't name with ``SendRefusal/protected(_:)``. A message i
 checked like every message a ``Device`` sends, and a serial command by
 ``SerialCommandPolicy``, which finds the ``ProtectedCommand``s in any message to a device or
 a group it holds. Nothing forces a ``ProtectedCommand`` through; `forcing` writes only a
-serial command the policy refuses unless it's forced:
+serial command the policy refuses unless it's forced, or one that needs more consent than
+reading, linking or acting. With a `catalog`, the modem is asked who it is and its command
+set says what the command does: one that changes a setting, is destructive, or that neither
+the command set nor a flow of InsteonCore's describes, throws ``SendRefusal/needsConsent(_:)``
+unless it's forced:
 
 ```swift
 do {

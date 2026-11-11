@@ -115,9 +115,9 @@ struct InsteonCommand {
 
       }
     case let .modemSend(request):
-      try await withModem(invocation) { modem, _ in
+      try await withModem(invocation) { modem, names in
 
-        try await ExploreCommands.send(request, modem: modem)
+        try await ExploreCommands.send(request, modem: modem, catalog: names.catalog)
 
       }
     case let .watch(options):
