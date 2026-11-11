@@ -124,6 +124,49 @@ extension Device {
 
   }
 
+  /// Whether the command that switches the main group on or off leaves the device as sending it
+  /// twice does, as the Insteon device catalog marks it.
+  ///
+  /// - Parameter isOn: Whether to ask about turning it on, rather than off.
+  /// - Returns: The catalog's mark, or `nil` if no entry describes the command or it can't be
+  ///   found, which reads as not idempotent.
+  func isSwitchIdempotent(on isOn: Bool) async -> Bool? {
+
+    let operation: DeviceOperation = isOn ? .turnOn : .turnOff
+    let name: SettingName = isOn ? DeviceControlModel.onAction : DeviceControlModel.offAction
+
+    guard
+      let model = try? await controlModel(),
+      let target = try? controlGroup(nil, in: model, for: operation),
+      let action = target.type.action(named: name),
+      let message = try? model.message(for: action, of: target, value: isOn ? 0xFF : 0x00, to: address)
+    else {
+
+      return nil
+
+    }
+
+    let description: DeviceDescription? = await network.registry.device(address)?.deviceDescription
+
+    let userData: UserData?
+
+    switch message {
+    case .standard:
+      userData = nil
+    case let .extended(extended):
+      userData = extended.userData
+    }
+
+    guard case let .described(_, isIdempotent) = DeviceSettingSafety.effect(of: message.command, userData: userData, in: description?.commandSet) else {
+
+      return nil
+
+    }
+
+    return isIdempotent
+
+  }
+
   /// Turns some of a group's outputs on, such as one of a ballast dimmer's two relays, with its
   /// type's `on` action, and leaves the others as they are.
   ///

@@ -43,6 +43,11 @@ enum RelayExample {
 
   static let noClearModuleIdentity = ReportedIdentity(category: 0x7A, subcategory: 0x66, firmwareVersion: 0x41)
 
+  /// A module whose Off the catalog marks as not idempotent.
+  static let stubbornModule = InsteonAddress(0x4A, 0x5B, 0x09)
+
+  static let stubbornModuleIdentity = ReportedIdentity(category: 0x7A, subcategory: 0x68, firmwareVersion: 0x41)
+
   static let moduleIdentity = ReportedIdentity(category: 0x7A, subcategory: 0x60, firmwareVersion: 0x41)
 
   static let fixedModuleIdentity = ReportedIdentity(category: 0x7A, subcategory: 0x61, firmwareVersion: 0x41)
@@ -100,14 +105,20 @@ enum RelayExample {
   /// pulseBoth on too, every On and Off only pulses it.
   static let holding = GroupType.StateHolding(releasedBy: ["pulse"], restState: "off", pulsesOnEveryCommandWhen: [["pulse", "pulseBoth"]])
 
-  static func moduleCommands(id: CommandSetID, linkingChanges: [LinkingChange], flags: [OperatingFlag] = operatingFlags, relayType: GroupType = relay) -> CommandSet {
+  static func moduleCommands(
+    id: CommandSetID,
+    linkingChanges: [LinkingChange],
+    flags: [OperatingFlag] = operatingFlags,
+    relayType: GroupType = relay,
+    off: DeviceStandardCommand = ControlExample.lightOff
+  ) -> CommandSet {
 
     CommandSet(
       id: id,
       name: "Example pulse relay",
       summary: "A relay that can pulse.",
       operatingFlags: flags,
-      standardCommands: [ControlExample.lightOn, ControlExample.lightOff, readStatus],
+      standardCommands: [ControlExample.lightOn, off, readStatus],
       groupTypes: [relayType],
       linkingChanges: linkingChanges
     )
@@ -144,6 +155,18 @@ enum RelayExample {
     linkingChanges: [LinkingChange(flag: "pulse")],
     flags: [OperatingFlag(name: "pulse", summary: "The relay closes, then returns to off by itself.", query: .operatingFlags, bit: pulse.bit, on: pulse.on, label: "Pulse"), operatingFlags[1]]
   )
+
+  /// Off, marked as one that isn't safe to send twice.
+  static let stubbornOff = DeviceStandardCommand(
+    name: "lightOff",
+    summary: "Turns the load off.",
+    command1: 0x13,
+    command2: .fixed(0x00),
+    effect: .actuation,
+    isIdempotent: false
+  )
+
+  static let stubbornCommands: CommandSet = moduleCommands(id: "exampleStubbornIO", linkingChanges: [LinkingChange(flag: "pulse")], off: stubbornOff)
 
   static let dimmerCommands = CommandSet(
     id: "exampleRelayDimmer",
@@ -185,9 +208,10 @@ enum RelayExample {
       profile("9605", noOffModuleIdentity, commands: noOffCommands, type: "relay"),
       profile("9606", noOnModuleIdentity, commands: noOnCommands, type: "relay"),
       profile("9607", noClearModuleIdentity, commands: noClearCommands, type: "relay"),
-      profile("9608", leggedModuleIdentity, commands: commands, type: "relay", lifecycle: hubLegs)
+      profile("9608", leggedModuleIdentity, commands: commands, type: "relay", lifecycle: hubLegs),
+      profile("9609", stubbornModuleIdentity, commands: stubbornCommands, type: "relay")
     ],
-    commandSets: [commands, fixedCommands, dimmerCommands, oneWayCommands, noOffCommands, noOnCommands, noClearCommands]
+    commandSets: [commands, fixedCommands, dimmerCommands, oneWayCommands, noOffCommands, noOnCommands, noClearCommands, stubbornCommands]
   )
 
   static let identities: [InsteonAddress: ReportedIdentity] = [
@@ -197,7 +221,8 @@ enum RelayExample {
     oneWayModule: oneWayModuleIdentity,
     noOffModule: noOffModuleIdentity,
     noOnModule: noOnModuleIdentity,
-    noClearModule: noClearModuleIdentity
+    noClearModule: noClearModuleIdentity,
+    stubbornModule: stubbornModuleIdentity
   ]
 
 }
@@ -1586,6 +1611,82 @@ struct RelayStateLinkingTests {
 
     #expect(device == module)
     #expect(state == .off)
+
+  }
+
+  /// Fails every Off sent to the device once linking has begun, with the error, and counts them.
+  func failingTheReturn(of device: InsteonAddress, with error: ModemError, on modem: InMemoryModem) async -> RestoreWatch {
+
+    let linked = RestoreWatch()
+
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      switch operation {
+      case let .extendedRequest(message) where message.command.command1 == 0x09:
+        await linked.begin()
+      case let .standardRequest(message) where message.command.command1 == 0x13:
+        if await linked.hasBegun {
+
+          await linked.count()
+
+          throw error
+
+        }
+      default:
+        break
+      }
+
+    }
+
+    return linked
+
+  }
+
+  @Test func sendsTheReturnOnceWhenTheCatalogDoesntMarkItIdempotentAndTheDeviceDoesntAcknowledge() async throws {
+
+    let stubborn: InsteonAddress = RelayExample.stubbornModule
+    let modem: InMemoryModem = await modem(stubborn, flags: RelayExample.pulse.bit)
+    let linked: RestoreWatch = await failingTheReturn(of: stubborn, with: .deviceTimedOut(stubborn), on: modem)
+
+    let result: DeviceLinkingResult = try await linkRelay(modem, .on, device: stubborn)
+
+    #expect(await linked.attempts == 1)
+
+    guard case let .relayNotReturned(device, state, _)? = result.relayState?.restoreFailures.first else {
+
+      Issue.record("Expected the relay not to be returned, got \(String(describing: result.relayState?.restoreFailures))")
+
+      return
+
+    }
+
+    #expect(device == stubborn)
+    #expect(state == .off)
+
+  }
+
+  @Test func sendsTheReturnOnceWhenTheDeviceRejectsIt() async throws {
+
+    let module: InsteonAddress = self.module
+    let modem: InMemoryModem = await modem(flags: RelayExample.pulse.bit)
+    let linked: RestoreWatch = await failingTheReturn(of: module, with: .deviceRejected(module, .noLoad), on: modem)
+
+    let result: DeviceLinkingResult = try await linkRelay(modem, .on)
+
+    #expect(await linked.attempts == 1)
+    #expect(result.relayState?.restoreFailures.isEmpty == false)
+
+  }
+
+  @Test func sendsTheReturnAgainWhenTheDeviceIsBusySearchingItsDatabase() async throws {
+
+    let module: InsteonAddress = self.module
+    let modem: InMemoryModem = await modem(flags: RelayExample.pulse.bit)
+    let linked: RestoreWatch = await failingTheReturn(of: module, with: .deviceRejected(module, .databaseSearchPending), on: modem)
+
+    _ = try await linkRelay(modem, .on)
+
+    #expect(await linked.attempts == 2)
 
   }
 
