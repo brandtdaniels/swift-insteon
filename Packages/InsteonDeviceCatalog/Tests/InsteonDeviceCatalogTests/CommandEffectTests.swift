@@ -4,7 +4,8 @@ import InsteonDeviceCatalog
 import InsteonProtocol
 
 /// What a command does to its addressee and whether it may be sent again, as a command set's
-/// entries carry them, read from a made-up command set.
+/// entries carry them, and the effect of a message found by its bytes, read from a made-up
+/// command set.
 struct CommandEffectTests {
 
   static let commandSet = #"""
@@ -98,6 +99,26 @@ struct CommandEffectTests {
 
   }
 
+  static func effect(_ command1: UInt8, _ command2: UInt8, userData: [Int: UInt8]? = nil, in commands: CommandSet?) -> CommandSetSafety.MessageEffect {
+
+    let data: UserData? = userData.map { (bytes: [Int: UInt8]) -> UserData in
+
+      var data = UserData()
+
+      for (position, value) in bytes {
+
+        data[position] = value
+
+      }
+
+      return data
+
+    }
+
+    return CommandSetSafety.effect(of: Command(command1: command1, command2: command2), userData: data, in: commands)
+
+  }
+
   // MARK: - Decoding
 
   @Test func readsTheEffectAndIdempotentOfEachKindOfCommand() throws {
@@ -170,6 +191,143 @@ struct CommandEffectTests {
     #expect(send.isIdempotent == true)
     #expect(release.effect == nil)
     #expect(release.isIdempotent == nil)
+
+  }
+
+  // MARK: - Standard messages
+
+  @Test func findsAStandardCommandByItsFixedCmd2() throws {
+
+    let commands = try Self.commands()
+
+    #expect(Self.effect(0x15, 0x00, in: commands) == .described(.actuation, isIdempotent: false))
+    #expect(Self.effect(0x19, 0x00, in: commands) == .described(.readOnly, isIdempotent: true))
+    // Another cmd2 is another message, which nothing describes.
+    #expect(Self.effect(0x19, 0x01, in: commands) == .undescribed)
+
+  }
+
+  @Test func findsAStandardCommandByAnyCmd2ItsParameterAllows() throws {
+
+    let commands = try Self.commands()
+
+    #expect(Self.effect(0x11, 0x00, in: commands) == .described(.actuation, isIdempotent: true))
+    #expect(Self.effect(0x11, 0xFF, in: commands) == .described(.actuation, isIdempotent: true))
+    // An enumeration allows only the values it names.
+    #expect(Self.effect(0x30, 0x02, in: commands) == .described(.configuration, isIdempotent: true))
+    #expect(Self.effect(0x30, 0x03, in: commands) == .undescribed)
+
+  }
+
+  @Test func findsAFlagCommandAndAnOperatingFlagsOnAndOffBySetOperatingFlags() throws {
+
+    let commands = try Self.commands()
+
+    // The flag's off, which only the flag names: configuration, and idempotent.
+    #expect(Self.effect(0x20, 0x41, in: commands) == .described(.configuration, isIdempotent: true))
+    // The same cmd2 sent as an extended message, with any user data, as for i2CS.
+    #expect(Self.effect(0x20, 0x41, userData: [14: 0x9F], in: commands) == .described(.configuration, isIdempotent: true))
+    // A cmd2 nothing names.
+    #expect(Self.effect(0x20, 0x48, in: commands) == .undescribed)
+
+  }
+
+  // MARK: - Failing closed
+
+  @Test func readsAnEntryWithoutAnEffectOrIdempotentAsDestructiveAndNotIdempotent() throws {
+
+    let commands = try Self.commands()
+
+    #expect(Self.effect(0x32, 0x02, in: commands) == .described(.destructive, isIdempotent: false))
+    #expect(Self.effect(0x20, 0x44, in: commands) == .described(.destructive, isIdempotent: false))
+
+  }
+
+  @Test func readsAnEffectItDoesntKnowAsDestructive() throws {
+
+    #expect(Self.effect(0x31, 0x01, in: try Self.commands()) == .described(.destructive, isIdempotent: true))
+
+  }
+
+  @Test func takesTheStrictestEffectOfTheEntriesAMessageMatches() throws {
+
+    // The flag command is configuration and the standard command with its bytes destructive.
+    #expect(Self.effect(0x20, 0x42, in: try Self.commands()) == .described(.destructive, isIdempotent: true))
+
+  }
+
+  @Test func readsTwoDifferentEffectsOfTheSameRankAsDestructive() throws {
+
+    // Neither link nor actuation covers the other, so no consent for one stands for both.
+    #expect(Self.effect(0x33, 0x03, in: try Self.commands()) == .described(.destructive, isIdempotent: true))
+
+  }
+
+  @Test func isIdempotentOnlyIfEveryEntryItMatchesIs() throws {
+
+    // The flag's on is idempotent and the flag command with its cmd2 isn't.
+    #expect(Self.effect(0x20, 0x40, in: try Self.commands()) == .described(.configuration, isIdempotent: false))
+
+  }
+
+  @Test func describesNothingForADeviceWithoutACommandSet() {
+
+    #expect(Self.effect(0x19, 0x00, in: nil) == .undescribed)
+    #expect(Self.effect(0x20, 0x41, userData: [:], in: nil) == .undescribed)
+
+  }
+
+  // MARK: - Extended messages
+
+  @Test func findsAnExtendedCommandOnlyWhenEveryByteItDoesntFillIsZero() throws {
+
+    let commands = try Self.commands()
+
+    #expect(Self.effect(0x2E, 0x02, userData: [:], in: commands) == .described(.readOnly, isIdempotent: true))
+    // The read fixes no byte, but a nonzero byte isn't the read.
+    #expect(Self.effect(0x2E, 0x02, userData: [5: 0x01], in: commands) == .undescribed)
+    // The write's bytes: its fixed D2, its parameter in D3 and its checksum in D14. The read
+    // expects 0x00 in each, so only the write matches.
+    #expect(Self.effect(0x2E, 0x02, userData: [2: 0x02, 3: 0x7F, 14: 0x4D], in: commands) == .described(.configuration, isIdempotent: true))
+    // A nonzero byte the write doesn't fill matches neither.
+    #expect(Self.effect(0x2E, 0x02, userData: [2: 0x02, 3: 0x7F, 9: 0x01], in: commands) == .undescribed)
+    // A fixed byte with another value matches neither.
+    #expect(Self.effect(0x2E, 0x02, userData: [2: 0x03], in: commands) == .undescribed)
+
+  }
+
+  @Test func letsAPerButtonD1AndTheIntegrityBytesHoldAnyValue() throws {
+
+    let commands = try Self.commands()
+
+    #expect(Self.effect(0x2F, 0x00, userData: [1: 0x03, 2: 0x05, 4: 0x10, 13: 0xAB, 14: 0xCD], in: commands) == .described(.configuration, isIdempotent: true))
+    #expect(Self.effect(0x2F, 0x00, userData: [1: 0x03, 2: 0x05, 4: 0x10, 12: 0x01], in: commands) == .undescribed)
+
+  }
+
+  @Test func findsAnExtendedSettingsWriteByItsSelector() throws {
+
+    let commands = try Self.commands()
+
+    #expect(Self.effect(0x2E, 0x00, userData: [1: 0x01, 2: 0x06, 3: 0x20, 14: 0x8B], in: commands) == .described(.configuration, isIdempotent: true))
+    // A selector the command set doesn't list, and the extended Get, which no entry describes.
+    #expect(Self.effect(0x2E, 0x00, userData: [1: 0x01, 2: 0x07, 3: 0x20], in: commands) == .undescribed)
+    #expect(Self.effect(0x2E, 0x00, userData: [1: 0x01], in: commands) == .undescribed)
+
+  }
+
+  @Test func findsAStandardCommandSentInItsExtendedWhenForm() throws {
+
+    let commands = try Self.commands()
+
+    // cmd1 and cmd2 again in D1 and D2, the rest 0x00 apart from the integrity bytes.
+    #expect(Self.effect(0x11, 0x80, userData: [1: 0x11, 2: 0x80], in: commands) == .described(.actuation, isIdempotent: true))
+    #expect(Self.effect(0x11, 0x80, userData: [1: 0x11, 2: 0x80, 13: 0x12, 14: 0x34], in: commands) == .described(.actuation, isIdempotent: true))
+    // D2 that isn't cmd2, or another nonzero byte, isn't the form.
+    #expect(Self.effect(0x11, 0x80, userData: [1: 0x11, 2: 0x81], in: commands) == .undescribed)
+    #expect(Self.effect(0x11, 0x80, userData: [1: 0x11, 2: 0x80, 5: 0x01], in: commands) == .undescribed)
+    // A standard command sent as an extended message in no other form is undescribed.
+    #expect(Self.effect(0x15, 0x00, userData: [:], in: commands) == .undescribed)
 
   }
 
