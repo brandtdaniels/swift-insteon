@@ -152,4 +152,56 @@ struct SerialCommandWeakeningTests {
 
   }
 
+  // MARK: - Commands the baseline leaves undescribed
+
+  static func described(_ number: UInt8, _ effect: CommandEffect?) -> DeviceSerialCommand {
+
+    DeviceSerialCommand(name: SettingName(rawValue: "added\(number)"), summary: "Added.", number: number, effect: effect, isIdempotent: true)
+
+  }
+
+  @Test func refusesACatalogThatDescribesAnUndescribedSerialCommandAsOtherThanDestructive() {
+
+    for effect in [CommandEffect.readOnly, .link, .actuation, .configuration] {
+
+      for number: UInt8 in [0x76, 0x7D, 0x82] {
+
+        let weakenings: [GuardWeakening] = Self.weakenings(Self.modem(extra: [Self.described(number, effect)]))
+
+        #expect(weakenings.map(\.kind) == [.effect], "\(number) \(effect)")
+        #expect(weakenings.map(\.detail) == ["serial 0x\(String(number, radix: 16, uppercase: true)) undescribed to \(effect)"])
+
+      }
+
+    }
+
+  }
+
+  @Test func refusesASerialCommandDescribedForAModemWithoutABaselineCommandSet() {
+
+    let bare: DeviceCatalog = DeviceCatalog(profiles: [Self.profile([])], commandSets: [])
+    let given: DeviceCatalog = DeviceCatalog(profiles: [Self.profile(["exampleModem"])], commandSets: [Self.modem(extra: [Self.described(0x67, .readOnly)])])
+
+    #expect(given.guardWeakenings(comparedTo: bare).map(\.kind).contains(.effect))
+
+  }
+
+  @Test func acceptsANewlyDescribedSerialCommandThatIsDestructiveMissingOrUnknown() {
+
+    #expect(Self.weakenings(Self.modem(extra: [Self.described(0x76, .destructive)])).isEmpty)
+    #expect(Self.weakenings(Self.modem(extra: [Self.described(0x76, nil)])).isEmpty)
+    #expect(Self.weakenings(Self.modem(extra: [Self.described(0x76, CommandEffect(rawValue: "sideEffect"))])).isEmpty)
+
+  }
+
+  @Test func refusesAnEntryForAFixedByteTheBaselineLeavesUndescribed() {
+
+    // Start ALL-Linking with another link code is the same number, but a frame the baseline's
+    // entry with a fixed link code does not match, so it is undescribed there.
+    let other: DeviceSerialCommand = DeviceSerialCommand(name: "openPairing", summary: "Opens.", number: 0x64, fixedBytes: [FixedPayloadByte(position: 1, value: 0x01)], effect: .link, isIdempotent: false)
+
+    #expect(Self.weakenings(Self.modem(extra: [other])).map(\.kind) == [.effect])
+
+  }
+
 }

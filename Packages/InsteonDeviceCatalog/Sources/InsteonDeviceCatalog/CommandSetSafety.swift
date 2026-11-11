@@ -855,6 +855,28 @@ package enum CommandSetSafety {
 
   }
 
+  /// Whether the modem's command set marks a serial frame as never sent: an entry the frame
+  /// matches by number and fixed payload bytes has ``CommandGuard/never``.
+  ///
+  /// - Parameters:
+  ///   - number: The frame's command number.
+  ///   - payload: The bytes after the number.
+  ///   - commands: The modem's command set, or `nil`.
+  /// - Returns: `true` if an app never sends the frame.
+  package static func isSerialNeverSent(number: UInt8, payload: [UInt8], in commands: CommandSet?) -> Bool {
+
+    (commands?.serialCommands ?? []).contains { (command: DeviceSerialCommand) -> Bool in
+
+      isNeverSent(command.sendGuard) && command.number == number && command.fixedBytes.allSatisfy { (byte: FixedPayloadByte) -> Bool in
+
+        byte.position <= payload.count && payload[byte.position - 1] == byte.value
+
+      }
+
+    }
+
+  }
+
   private static func matchedEffect(of command: Command, userData: UserData?, in commands: CommandSet?, isLoose: Bool) -> MessageEffect {
 
     guard let commands else {

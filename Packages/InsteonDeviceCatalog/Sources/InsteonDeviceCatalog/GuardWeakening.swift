@@ -409,6 +409,18 @@ struct SafetySummary: Hashable {
 
   var effects: [CommandKey: Effect] = [:]
 
+  /// Every serial command's number and fixed payload bytes, to tell which frames an entry
+  /// describes.
+  struct SerialKey: Hashable {
+
+    let number: UInt8
+
+    let fixed: [FixedPayloadByte]
+
+  }
+
+  var serialKeys: [SerialKey] = []
+
   init(_ commands: CommandSet?) {
 
     neverSent = CommandSetSafety.neverSentCommands(in: commands)
@@ -510,7 +522,6 @@ struct SafetySummary: Hashable {
 
       add(key, isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
       addEffect(key, effect: command.effect, isIdempotent: command.isIdempotent)
-
     }
 
     for command in commands.standardCommands {
@@ -538,6 +549,8 @@ struct SafetySummary: Hashable {
     for command in commands.serialCommands {
 
       let key: CommandKey = .serial(command.number, command.fixedBytes)
+
+      serialKeys.append(SerialKey(number: command.number, fixed: command.fixedBytes))
 
       add(key, isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
       addEffect(key, effect: command.effect, isIdempotent: command.isIdempotent)
@@ -735,6 +748,38 @@ struct SafetySummary: Hashable {
       if new.isIdempotent && !old.isIdempotent {
 
         findings.append(Finding(kind: .idempotent, detail: describe(key)))
+
+      }
+
+    }
+
+    // A serial frame the baseline leaves undescribed needs --force to send. A catalog that
+    // describes it as anything but destructive would let it through, so it is weaker.
+    for (key, new) in effects {
+
+      guard case let .serial(number, fixed) = key, new.effect.strictness != .destructive else {
+
+        continue
+
+      }
+
+      let isDescribed: Bool = baseline.serialKeys.contains { (entry: SerialKey) -> Bool in
+
+        entry.number == number && entry.fixed.allSatisfy { (byte: FixedPayloadByte) -> Bool in
+
+          fixed.first { $0.position == byte.position }.map { $0.value == byte.value } ?? true
+
+        } && fixed.allSatisfy { (byte: FixedPayloadByte) -> Bool in
+
+          entry.fixed.first { $0.position == byte.position }.map { $0.value == byte.value } ?? true
+
+        }
+
+      }
+
+      if !isDescribed {
+
+        findings.append(Finding(kind: .effect, detail: "\(describe(key)) undescribed to \(new.effect)"))
 
       }
 
