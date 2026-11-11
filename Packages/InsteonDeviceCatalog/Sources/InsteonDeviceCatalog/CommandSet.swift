@@ -68,6 +68,9 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
   /// Extended direct commands beyond extended Get and Set with cmd2 `0x00`.
   public var extendedCommands: [DeviceExtendedCommand]
 
+  /// The serial commands a modem accepts, or none for a product that isn't a modem.
+  public var serialCommands: [DeviceSerialCommand]
+
   /// Standard direct messages the products send on their own.
   public var directMessages: [DeviceDirectMessage]
 
@@ -106,6 +109,7 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
   ///   - extendedSettings: The values read and written with extended Get and Set.
   ///   - standardCommands: Standard direct commands beyond the operating flags.
   ///   - extendedCommands: Extended direct commands beyond extended Get and Set.
+  ///   - serialCommands: The serial commands a modem accepts. Defaults to none.
   ///   - directMessages: Standard direct messages the products send on their own.
   ///   - celsiusIndicator: The flag, value or bit that's true when the device displays Celsius.
   ///   - groupTypes: What the products' ALL-Link groups are.
@@ -124,6 +128,7 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
     extendedSettings: ExtendedSettings? = nil,
     standardCommands: [DeviceStandardCommand] = [],
     extendedCommands: [DeviceExtendedCommand] = [],
+    serialCommands: [DeviceSerialCommand] = [],
     directMessages: [DeviceDirectMessage] = [],
     celsiusIndicator: SettingName? = nil,
     groupTypes: [GroupType] = [],
@@ -142,6 +147,7 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
     self.extendedSettings = extendedSettings
     self.standardCommands = standardCommands
     self.extendedCommands = extendedCommands
+    self.serialCommands = serialCommands
     self.directMessages = directMessages
     self.celsiusIndicator = celsiusIndicator
     self.groupTypes = groupTypes
@@ -179,6 +185,16 @@ public struct CommandSet: Hashable, Sendable, Identifiable {
   public func extendedCommand(named name: SettingName) -> DeviceExtendedCommand? {
 
     extendedCommands.first { $0.name == name }
+
+  }
+
+  /// The serial command with a name.
+  ///
+  /// - Parameter name: The command's name, such as `"getImInfo"`.
+  /// - Returns: The command, or `nil` if the command set has none by that name.
+  public func serialCommand(named name: SettingName) -> DeviceSerialCommand? {
+
+    serialCommands.first { $0.name == name }
 
   }
 
