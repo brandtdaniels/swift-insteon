@@ -646,6 +646,57 @@ struct GuardWeakeningTests {
 
   }
 
+  @Test func refusesACatalogThatDropsACommandTheBaselineMarksDestructive() {
+
+    var dropped: CommandSet = Self.marked()
+
+    dropped.standardCommands = []
+
+    let weakenings: [GuardWeakening] = Self.weakenings(marking: dropped)
+
+    #expect(Self.kinds(weakenings) == [.effect])
+    #expect(weakenings.map(\.detail) == ["cmd1 0x32 cmd2 0x00 destructive to undescribed"])
+
+  }
+
+  @Test func refusesACatalogThatDropsAConfigurationOrActuationCommand() {
+
+    for effect in [CommandEffect.configuration, .link, .actuation] {
+
+      let baseline: DeviceCatalog = Self.catalog([Self.profile(["exampleGuarded"])], [Self.marked(standard: (effect, true))])
+      var dropped: CommandSet = Self.marked(standard: (effect, true))
+
+      dropped.standardCommands = []
+
+      let weakenings: [GuardWeakening] = Self.catalog([Self.profile(["exampleGuarded"])], [dropped]).guardWeakenings(comparedTo: baseline)
+
+      #expect(weakenings.map(\.detail) == ["cmd1 0x32 cmd2 0x00 \(effect) to undescribed"])
+
+    }
+
+  }
+
+  @Test func acceptsACatalogThatDropsAReadOnlyCommand() {
+
+    let baseline: DeviceCatalog = Self.catalog([Self.profile(["exampleGuarded"])], [Self.marked(standard: (.readOnly, true))])
+    var dropped: CommandSet = Self.marked(standard: (.readOnly, true))
+
+    dropped.standardCommands = []
+
+    #expect(Self.catalog([Self.profile(["exampleGuarded"])], [dropped]).guardWeakenings(comparedTo: baseline).isEmpty)
+
+  }
+
+  @Test func acceptsACommandRenamedAndMovedToAnotherCommandSet() {
+
+    // The command set is renamed and the command is listed after another one: the bytes match.
+    let other = DeviceStandardCommand(name: "readLevel", summary: "Reads.", command1: 0x19, command2: .fixed(0x00), effect: .readOnly, isIdempotent: true)
+    let moved: CommandSet = Self.marked(id: "exampleGuardedV2", standardName: "wipeRenamed", extraStandardCommands: [other])
+
+    #expect(Self.weakenings(marking: moved).isEmpty)
+
+  }
+
   // MARK: - Updating
 
   @Test(.timeLimit(.minutes(1))) func refusesADownloadThatWeakensTheBaselinesGuards() async throws {

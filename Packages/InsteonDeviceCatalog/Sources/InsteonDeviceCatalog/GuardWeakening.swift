@@ -48,8 +48,9 @@ public struct GuardWeakening: Hashable, Sendable, CustomStringConvertible {
     case commandGuard
 
     /// A command whose effect the baseline ranks stricter, or names differently among
-    /// configuration, link and actuation, which the catalog gives a weaker or different one.
-    /// An effect that's missing or unknown reads as destructive.
+    /// configuration, link and actuation, which the catalog gives a weaker or different one,
+    /// or a command the baseline describes as other than read-only, which the catalog doesn't
+    /// describe by its bytes. An effect that's missing or unknown reads as destructive.
     case effect
 
     /// A command the baseline doesn't mark idempotent, which the catalog does.
@@ -123,6 +124,12 @@ extension DeviceCatalog {
   ///   effects ranks at least as strict and is the same effect unless it is destructive or
   ///   read-only, and it is idempotent only where the baseline's is. A missing or unknown effect
   ///   reads as destructive and a missing mark as not idempotent, as the send path reads them.
+  ///   A command the baseline describes as other than read-only, which this catalog leaves
+  ///   without an entry of those bytes, is weaker too: a message no entry describes needs less
+  ///   consent than a destructive one.
+  ///   A command the baseline describes as other than read-only, which this catalog leaves
+  ///   without an entry of those bytes, is weaker too: a message no entry describes needs less
+  ///   consent than a destructive one.
   ///
   /// A device either catalog gives no command set, or doesn't know, is compared as one with
   /// none, which only the byte floor guards. The send path refuses an extended Set as given to
@@ -686,10 +693,18 @@ struct SafetySummary: Hashable {
 
     // A command's effect is compared by its bytes: the new effect has to rank at least as
     // strict, and among the effects of one rank, configuration, link and actuation, be the
-    // same. A command the catalog doesn't describe is left to the rest of the send path.
+    // same. A command the baseline describes as other than read-only, which the catalog no
+    // longer describes by those bytes, is undescribed, which an app may send with less consent
+    // than a destructive one.
     for (key, old) in baseline.effects {
 
       guard let new = effects[key] else {
+
+        if old.effect.strictness != .readOnly {
+
+          findings.append(Finding(kind: .effect, detail: "\(describe(key)) \(old.effect) to undescribed"))
+
+        }
 
         continue
 
