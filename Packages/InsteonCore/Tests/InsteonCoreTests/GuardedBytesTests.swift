@@ -605,6 +605,12 @@ struct GuardedBytesTests {
 
   }
 
+  @Test func givesEachProtectedSetOperatingFlagsItsCmd2() {
+
+    #expect(ProtectedCommand.allCases.map(\.command2) == [0x00, 0x0C, 0x0E, 0x19, nil])
+
+  }
+
   @Test(.timeLimit(.minutes(1))) func keepsASensorAwakeAndLetsItSleepAgainWithAProtectedCmd2ItNames() async throws {
 
     let modem = SettingsModem(device: Self.sensor.address, flags: 0x00, values: [:])

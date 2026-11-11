@@ -450,8 +450,7 @@ extension Device {
 
     } else if commands == nil, let userData, DeviceSettingSafety.isExtendedSet(command, userData: userData) {
 
-      // Without a command set, which bits an extended Set writes, such as a lock on linking in
-      // a sensor's configuration byte, can't be told.
+      // Without a command set, which bits an extended Set writes can't be told.
       refusal = .extendedSetWithoutCommandSet
 
     } else if let userData, let commands, DeviceSettingSafety.isUnlistedExtendedSet(command, userData: userData, in: commands) {

@@ -36,7 +36,7 @@ public enum SendRefusalText {
       let hex: String = String(selector, radix: 16, uppercase: true)
       return "The device's catalog entry lists no extended Set with selector \(hex.count == 1 ? "0" : "")\(hex), so which bytes it writes can't be told; insteon doesn't send it as given."
     case .extendedSetWithoutCommandSet:
-      return "Without the device's catalog entry, insteon can't tell which bits an extended Set writes, such as one that locks linking, so it doesn't send one as given; run 'insteon device ADDRESS id' first, so the identity cache knows the device."
+      return "Without the device's catalog entry, insteon can't tell which bits an extended Set writes, so it doesn't send one as given; run 'insteon device ADDRESS id' first, so the identity cache knows the device."
     case .notSerialCommand:
       return "A serial command starts with 02."
     case .incompleteMessage:
@@ -47,7 +47,8 @@ public enum SendRefusalText {
 
   }
 
-  /// Why a protected command isn't sent, as one sentence.
+  /// Why a protected command isn't sent, as one sentence that says only what the protocol does,
+  /// since what a Set Operating Flags cmd2 does depends on the device.
   ///
   /// - Parameters:
   ///   - command: The command.
@@ -55,28 +56,26 @@ public enum SendRefusalText {
   /// - Returns: The sentence.
   public static func sentence(_ command: ProtectedCommand, from passthrough: Passthrough) -> String {
 
-    let consequence: String
+    guard let command2 = command.command2 else {
 
-    switch command {
-    case .setOperatingFlags0x00:
-      consequence = "Locking linking from the device would stop its SET button from linking it"
-    case .setOperatingFlags0x0C:
-      consequence = "Turning radio off would cut the device off the network"
-    case .setOperatingFlags0x0E:
-      consequence = "Turning powerline off would cut the device off the network"
-    case .setOperatingFlags0x19:
-      consequence = "Requiring a checksum in every message would cut the device off from a modem that doesn't send one"
-    case .poke:
-      consequence = "Poke One Byte writes any byte of a device's memory, its ALL-Link database included"
+      let consequence: String = "Poke One Byte writes any byte of a device's memory, its ALL-Link database included"
+
+      switch passthrough {
+      case .modemSend:
+        return "\(consequence); insteon modem send never writes it."
+      case .deviceSend:
+        return "\(consequence); insteon never sends it."
+      }
+
     }
 
-    switch (passthrough, command) {
-    case (.modemSend, _):
-      return "\(consequence); insteon modem send never writes it."
-    case (.deviceSend, .poke):
-      return "\(consequence); insteon never sends it."
-    case (.deviceSend, _):
-      return "\(consequence); insteon sends it only to a device whose catalog entry gives the byte another meaning."
+    let consequence: String = "Set Operating Flags \(Hex.byte(command2)) can cut a device off from the modem or lock it, depending on the device"
+
+    switch passthrough {
+    case .modemSend:
+      return "\(consequence); insteon modem send has no device's catalog entry to check, so it never writes it."
+    case .deviceSend:
+      return "\(consequence); insteon sends it only to a device whose catalog entry names the cmd2 for a flag or command it doesn't guard."
     }
 
   }

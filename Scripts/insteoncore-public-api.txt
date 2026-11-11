@@ -943,6 +943,7 @@ var ProductCatalogStore.directory
 var ProductCatalogStore.hasCachedCopy
 var ProductCatalogStore.versionPath
 var ProductCatalogStoreError.description
+var ProtectedCommand.command2
 var RegisteredDevice.address
 var RegisteredDevice.identity
 var RegisteredDevice.info

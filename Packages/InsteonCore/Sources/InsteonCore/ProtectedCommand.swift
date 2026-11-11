@@ -3,14 +3,14 @@ import InsteonProtocol
 /// A command InsteonCore sends to a device only where the Insteon device catalog says it means
 /// something harmless for that device, or, for Poke, never.
 ///
-/// The four Set Operating Flags (cmd1 `0x20`) commands here cut most devices off from the
-/// modem or leave them locked. Each case is named by its cmd2, since a device's command set can
-/// give the byte another meaning. Each is refused for a device the catalog doesn't know or
-/// gives no command set, and for a command set that doesn't say what its cmd2 means. It's sent
-/// only where the device's command set names that cmd2 for a flag or command it doesn't guard,
-/// such as an unguarded flag it turns on with cmd2 `0x19`; a cmd2 the command set names only
-/// for a flag or command it guards stays refused. Poke writes any byte of a device's
-/// memory and is never sent. Every message InsteonCore sends, raw or not, is checked by its
+/// The four Set Operating Flags (cmd1 `0x20`) commands here can cut a device off from the
+/// modem or leave it locked, depending on the device; what each cmd2 does comes from the
+/// device's command set, and differs between devices. Each case is named by its cmd2. Each is
+/// refused for a device the catalog doesn't know or gives no command set, and for a command set
+/// that doesn't say what its cmd2 means. It's sent only where the device's command set names
+/// that cmd2 for a flag or command it doesn't guard; a cmd2 the command set names only for a
+/// flag or command it guards stays refused. Poke writes any byte of a device's memory and is
+/// never sent. Every message InsteonCore sends, raw or not, is checked by its
 /// bytes, and nothing forces one through. A raw serial command has no device to look up, so
 /// ``SerialCommandPolicy`` refuses all of them in it. The catalog's guards add more commands
 /// that are never sent to a device.
@@ -22,20 +22,16 @@ import InsteonProtocol
 /// ```
 public enum ProtectedCommand: Hashable, Sendable, CaseIterable {
 
-  /// Set Operating Flags with cmd2 `0x00`, which on most devices locks linking and programming
-  /// from the device itself, so its SET button doesn't link it.
+  /// Set Operating Flags with cmd2 `0x00`.
   case setOperatingFlags0x00
 
-  /// Set Operating Flags with cmd2 `0x0C`, which on most dual-band devices stops the radio, so
-  /// the device can't hear the modem by radio.
+  /// Set Operating Flags with cmd2 `0x0C`.
   case setOperatingFlags0x0C
 
-  /// Set Operating Flags with cmd2 `0x0E`, which on most dual-band devices stops the powerline,
-  /// so the device can't hear the modem over the powerline.
+  /// Set Operating Flags with cmd2 `0x0E`.
   case setOperatingFlags0x0E
 
-  /// Set Operating Flags with cmd2 `0x19`, which on most devices makes the device require a
-  /// checksum in every message, so a modem that doesn't send one can't reach it.
+  /// Set Operating Flags with cmd2 `0x19`.
   case setOperatingFlags0x19
 
   /// Poke One Byte (cmd1 `0x29`), with any cmd2, which writes a byte of a device's memory, its
@@ -92,21 +88,28 @@ public enum ProtectedCommand: Hashable, Sendable, CaseIterable {
 
   }
 
-  /// The Set Operating Flags command, or `nil` for ``poke``, which is a cmd1 with any cmd2.
-  var setOperatingFlagsCommand: Command? {
+  /// The Set Operating Flags cmd2, or `nil` for ``poke``, which is a cmd1 with any cmd2.
+  public var command2: UInt8? {
 
     switch self {
     case .setOperatingFlags0x00:
-      Command(command1: Self.setOperatingFlags, command2: 0x00)
+      0x00
     case .setOperatingFlags0x0C:
-      Command(command1: Self.setOperatingFlags, command2: 0x0C)
+      0x0C
     case .setOperatingFlags0x0E:
-      Command(command1: Self.setOperatingFlags, command2: 0x0E)
+      0x0E
     case .setOperatingFlags0x19:
-      Command(command1: Self.setOperatingFlags, command2: 0x19)
+      0x19
     case .poke:
       nil
     }
+
+  }
+
+  /// The Set Operating Flags command, or `nil` for ``poke``, which is a cmd1 with any cmd2.
+  var setOperatingFlagsCommand: Command? {
+
+    command2.map { (command2: UInt8) -> Command in Command(command1: Self.setOperatingFlags, command2: command2) }
 
   }
 
@@ -145,8 +148,7 @@ public enum SendRefusal: Error, Hashable, Sendable {
   case writesGuardedFlags(label: String)
 
   /// The message is an extended Set (cmd1 `0x2E` with D2 other than `0x00`) to a device the
-  /// catalog doesn't know or gives no command set, so which bits it writes, such as one that
-  /// locks linking, can't be told.
+  /// catalog doesn't know or gives no command set, so which bits it writes can't be told.
   case extendedSetWithoutCommandSet
 
   /// The message is an extended Set whose selector, in D2, the device's command set doesn't

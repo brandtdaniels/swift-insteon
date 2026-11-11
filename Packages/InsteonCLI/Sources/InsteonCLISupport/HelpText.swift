@@ -439,11 +439,10 @@ public enum HelpText {
                           --extended, the message is extended, with the data bytes given and
                           0x00 after; unless all 14 are given or --no-checksum is, D14 holds
                           the checksum i2CS devices require. Set Operating Flags (20) with
-                          cmd2 0C, 0E, 19 or 00, which turn most devices' radio or
-                          powerline off, require a checksum or lock linking from the
-                          device, is sent only to a device the identity cache knows whose
-                          catalog entry names that cmd2 for a flag or command it doesn't
-                          guard, such as a keypad's button lock (19). Poke (29) is
+                          cmd2 0C, 0E, 19 or 00, which can cut a device off from the modem
+                          or lock it, depending on the device, is sent only to a device the
+                          identity cache knows whose catalog entry names that cmd2 for a
+                          flag or command it doesn't guard. Poke (29) is
                           never sent. Nor is a message the device's catalog entry never
                           sends, an extended message that writes a byte holding a guarded
                           flag, which only 'set' writes, or an extended Set (2E with D2
@@ -485,11 +484,11 @@ public enum HelpText {
     HEX is the command's bytes, starting with 02, such as 0277 or 02 77 01.
 
     A message to a device (0x62) or a group (0x61) is never written, with or without
-    --force, when it's Set Operating Flags (0x20) that turns the radio (0C) or the powerline
-    (0E) off, requires a checksum (19) or locks linking from the device (00), or Poke
-    (0x29), which writes a device's memory. Nor is one cut short. 'insteon device ADDRESS
-    send' sends those Set Operating Flags to a device whose catalog entry gives the byte
-    another meaning.
+    --force, when it's Set Operating Flags (0x20) with cmd2 0C, 0E, 19 or 00, which can cut
+    a device off from the modem or lock it, depending on the device, or Poke (0x29), which
+    writes a device's memory. Nor is one cut short. 'insteon device ADDRESS send' sends
+    those Set Operating Flags to a device whose catalog entry names the cmd2 for a flag or
+    command it doesn't guard.
 
     Without --force, a command is refused when the package doesn't know its number, since the
     modem's answer can't be read, or when it changes or erases what the modem keeps or stops

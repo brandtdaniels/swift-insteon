@@ -559,10 +559,10 @@ struct ExploringArgumentTests {
 
     // device ADDRESS send sends a protected Set Operating Flags where the catalog gives it
     // another meaning; modem send, with no device to look up, never does.
-    #expect(SendRefusalText.sentence(.protected(.setOperatingFlags0x0C), from: .deviceSend).hasPrefix("Turning radio off would cut the device off the network; insteon sends it only"))
-    #expect(SendRefusalText.sentence(.protected(.setOperatingFlags0x0C), from: .modemSend) == "Turning radio off would cut the device off the network; insteon modem send never writes it.")
+    #expect(SendRefusalText.sentence(.protected(.setOperatingFlags0x0C), from: .deviceSend).hasSuffix("insteon sends it only to a device whose catalog entry names the cmd2 for a flag or command it doesn't guard."))
+    #expect(SendRefusalText.sentence(.protected(.setOperatingFlags0x0C), from: .modemSend).hasSuffix("insteon modem send has no device's catalog entry to check, so it never writes it."))
     #expect(SendRefusalText.sentence(.protected(.poke), from: .deviceSend).hasSuffix("insteon never sends it."))
-    #expect(SendRefusalText.sentence(.extendedSetWithoutCommandSet, from: .deviceSend).contains("can't tell which bits"))
+    #expect(SendRefusalText.sentence(.extendedSetWithoutCommandSet, from: .deviceSend) == "Without the device's catalog entry, insteon can't tell which bits an extended Set writes, so it doesn't send one as given; run 'insteon device ADDRESS id' first, so the identity cache knows the device.")
     #expect(SendRefusalText.sentence(.serialCommand("Reset."), from: .modemSend).hasSuffix("Pass --force to send it anyway."))
 
   }
