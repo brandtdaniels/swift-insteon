@@ -182,7 +182,9 @@ public enum HelpText {
 
     When the modem reports a link other than the one asked for, such as one in another group
     or with another device, the command fails, and keeps the identity the modem reported for
-    the device, so 'insteon links' names its product.
+    the device, so 'insteon links' names its product. When the modem controls the link it
+    reported, the message gives the group the link is in and the 'insteon unlink' command
+    that removes it.
 
     Either way, when the modem is the controller and the catalog says the device can
     control, the device is then linked back without a second SET press, with the modem as

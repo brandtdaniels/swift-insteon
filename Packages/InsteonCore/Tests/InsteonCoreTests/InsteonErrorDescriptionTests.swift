@@ -43,6 +43,29 @@ struct InsteonErrorDescriptionTests {
 
   }
 
+  // MARK: - Linking
+
+  @Test func namesTheUnlinkForAControllerLinkTheModemMadeInAnotherGroup() {
+
+    let link = AllLinkingCompleted(linkCode: 0x01, group: 0x05, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+
+    #expect(
+      InsteonErrorDescription.message(for: LinkingError.unexpectedLink(link))
+        == "The modem reported a different link: 1A.2B.3C, group 5, controller. The link is in the modem's ALL-Link database in group 5; to remove it, run 'insteon unlink 1A.2B.3C --group 5' and press the device's SET button."
+    )
+
+  }
+
+  @Test func namesNoUnlinkForAReportedLinkTheModemDoesntControl() {
+
+    let responder = AllLinkingCompleted(linkCode: 0x00, group: 0x01, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+    let removed = AllLinkingCompleted(linkCode: 0xFF, group: 0x03, address: lamp, category: nil, subcategory: nil, firmwareVersion: nil)
+
+    #expect(InsteonErrorDescription.message(for: LinkingError.unexpectedLink(responder)) == "The modem reported a different link: 1A.2B.3C, group 1, responder.")
+    #expect(InsteonErrorDescription.message(for: LinkingError.unexpectedLink(removed)) == "The modem reported a different link: 1A.2B.3C, group 3, \(AllLinkMode.delete.name).")
+
+  }
+
   // MARK: - The Hub
 
   @Test func saysWhenTheHubRejectsItsCredentials() {

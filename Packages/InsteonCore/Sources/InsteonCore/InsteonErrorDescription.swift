@@ -211,7 +211,7 @@ public enum InsteonErrorDescription {
     case .linkingTimedOut:
       "No device's SET button was pressed in time. The modem has left linking mode."
     case let .unexpectedLink(link):
-      "The modem reported a different link: \(link.address), group \(link.group), \(link.mode?.name ?? "unknown")."
+      unexpectedLink(link)
     case let .remoteLinkingUnsupported(device):
       "Device \(device) runs i1, so it can be linked only with its SET button."
     case let .databaseFull(device):
@@ -219,6 +219,23 @@ public enum InsteonErrorDescription {
     case let .recordNotWritten(device, address):
       "A record written to the ALL-Link database of \(device) at \(hexAddress(address)) didn't read back as written."
     }
+
+  }
+
+  /// What the modem reported, and, for a link it controls, how to remove it: the modem keeps
+  /// the link in its ALL-Link database in the group it reported.
+  private static func unexpectedLink(_ link: AllLinkingCompleted) -> String {
+
+    let reported: String = "The modem reported a different link: \(link.address), group \(link.group), \(link.mode?.name ?? "unknown")."
+
+    guard link.mode == .controller else {
+
+      return reported
+
+    }
+
+    return reported
+      + " The link is in the modem's ALL-Link database in group \(link.group); to remove it, run 'insteon unlink \(link.address) --group \(link.group)' and press the device's SET button."
 
   }
 
