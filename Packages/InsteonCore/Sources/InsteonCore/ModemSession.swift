@@ -1,4 +1,5 @@
 import Foundation
+import InsteonDeviceCatalog
 import InsteonHubClient
 import InsteonLinking
 @_spi(Raw) import InsteonModem
@@ -165,6 +166,15 @@ public struct ModemSession: Sendable {
   /// one whose number the package doesn't know; nothing forces a message that carries a
   /// ``ProtectedCommand``: Poke, or Set Operating Flags with one of the cmd2s that can cut a
   /// device off from the modem or lock it, depending on the device.
+  ///
+  /// What the command does decides next. With a `catalog`, the modem is asked who it is (Get IM
+  /// Info) and its command set is found the way a device's is, by the category, subcategory and
+  /// firmware version it reports; without one, or when the catalog gives the modem no command
+  /// set, every command is undescribed. ``SerialCommandPolicy/decision(of:commands:forcing:)``
+  /// reads the command against it. A command that is read-only, links or acts is written; one
+  /// that changes a setting, is destructive or is undescribed, other than those InsteonCore's
+  /// own flows build, is written only when `forcing`, and otherwise throws
+  /// ``SendRefusal/needsConsent(_:)``.
   /// A message to a device is better sent with ``DeviceNetwork/send(_:collectingFor:consent:onAcknowledgment:)``,
   /// which also checks it against the device's command set.
   ///
@@ -177,24 +187,47 @@ public struct ModemSession: Sendable {
   ///
   /// - Parameters:
   ///   - bytes: The command's bytes, starting with `0x02`.
-  ///   - forcing: Whether to write a command the policy refuses unless it's forced. Defaults
-  ///     to `false`.
+  ///   - forcing: Whether to write a command the policy refuses unless it's forced, and one
+  ///     that needs more consent than reading, linking or acting. Defaults to `false`.
+  ///   - catalog: The catalog to find the modem's command set in, or `nil` to describe no
+  ///     command. Defaults to `nil`.
   ///   - duration: How long to collect what the modem sends.
   ///   - clock: The clock that times the wait. Defaults to a `ContinuousClock`.
   /// - Returns: What the modem sent, in order.
-  /// - Throws: ``SendRefusal`` before anything is written, the modem's error if the command
-  ///   isn't accepted, or `CancellationError`.
+  /// - Throws: ``SendRefusal`` before the command is written, the modem's error if it can't
+  ///   say who it is or doesn't accept the command, or `CancellationError`.
   public func write(
     rawCommand bytes: [UInt8],
     forcing: Bool = false,
+    catalog: ProductCatalog? = nil,
     collectingFor duration: Duration,
     clock: any Clock<Duration> = ContinuousClock()
   ) async throws -> [RawModemReply] {
 
+    // The framing and the byte floor refuse before the modem is asked anything.
     if let refusal = SerialCommandPolicy.refusal(of: bytes, forcing: forcing) {
 
       throw refusal
 
+    }
+
+    var commands: CommandSet?
+
+    if let catalog {
+
+      let identity: ModemInfo = try await info()
+
+      commands = catalog.catalog.commandSet(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion)
+
+    }
+
+    switch SerialCommandPolicy.decision(of: bytes, commands: commands, forcing: forcing) {
+    case .transmit:
+      break
+    case let .needsConsent(effect):
+      throw SendRefusal.needsConsent(effect)
+    case let .refuse(refusal):
+      throw refusal
     }
 
     let replies: AsyncStream<ModemReply> = await modem.replies()

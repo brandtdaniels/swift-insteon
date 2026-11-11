@@ -1,5 +1,8 @@
+import Foundation
 import Testing
-import InsteonCore
+@testable import InsteonCore
+import InsteonDeviceCatalog
+import InsteonProtocol
 
 /// Which serial commands a raw passthrough writes without being forced.
 struct SerialCommandPolicyTests {
@@ -12,15 +15,26 @@ struct SerialCommandPolicyTests {
 
   }
 
-  @Test func refusesSerialCommandsThatChangeWhatTheModemKeeps() {
+  @Test func refusesAnUnknownCommandNumberAndATruncatedCommand() {
 
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x77]) == nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x60]) == nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x67]) != nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x6F, 0x80]) != nil)
-    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x76]) != nil)
     #expect(SerialCommandPolicy.refusal(for: [0x02, 0x99]) != nil)
     #expect(SerialCommandPolicy.refusal(for: [0x02]) != nil)
+
+  }
+
+  @Test func leavesWhatACommandDoesToTheModemsCommandSet() {
+
+    // The reasons a command changes or erases what the modem keeps come from the modem's
+    // command set, so the framing check passes each of them.
+    for number: UInt8 in [0x66, 0x67, 0x6B, 0x72, 0x76, 0x7D, 0x82] {
+
+      let bytes: [UInt8] = [0x02, number] + [UInt8](repeating: 0x00, count: (SerialCommandNumber(rawValue: number)?.commandLength ?? 2) - 2)
+
+      #expect(SerialCommandPolicy.refusal(for: bytes) == nil, "\(number)")
+
+    }
+
+    #expect(SerialCommandPolicy.refusal(for: [0x02, 0x6F, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]) == nil)
 
   }
 
@@ -95,14 +109,9 @@ struct SerialCommandPolicyTests {
 
   // MARK: - Contents
 
-  @Test func refusesStartAllLinkingOnlyWithTheDeleteLinkCode() {
+  @Test func leavesTheLinkCodeOfStartAllLinkingToTheModemsCommandSet() {
 
-    #expect(
-      SerialCommandPolicy.refusal(for: [0x02, 0x64, 0xFF, 0x01])
-        == "Start ALL-Linking (0x64) with link code 0xFF deletes the link with the next device whose SET button is pressed. Use 'insteon unlink' instead."
-    )
-
-    for linkCode: UInt8 in [0x00, 0x01, 0x03] {
+    for linkCode: UInt8 in [0x00, 0x01, 0x03, 0xFF] {
 
       #expect(SerialCommandPolicy.refusal(for: [0x02, 0x64, linkCode, 0x01]) == nil, "link code \(linkCode)")
 
@@ -167,15 +176,176 @@ struct SerialCommandPolicyTests {
 
   }
 
-  @Test func writesARefusedCommandOnlyWhenForced() {
+  @Test func writesAnUnframedCommandOnlyWhenForced() {
 
-    let deleteLinking: [UInt8] = [0x02, 0x64, 0xFF, 0x01]
-    let reason: String? = SerialCommandPolicy.refusal(for: deleteLinking)
+    let unknown: [UInt8] = [0x02, 0x09]
+    let reason: String? = SerialCommandPolicy.refusal(for: unknown)
 
     #expect(reason != nil)
-    #expect(SerialCommandPolicy.refusal(of: deleteLinking, forcing: false) == reason.map(SendRefusal.serialCommand))
-    #expect(SerialCommandPolicy.refusal(of: deleteLinking, forcing: true) == nil)
+    #expect(SerialCommandPolicy.refusal(of: unknown, forcing: false) == reason.map(SendRefusal.serialCommand))
+    #expect(SerialCommandPolicy.refusal(of: unknown, forcing: true) == nil)
     #expect(SerialCommandPolicy.refusal(of: Self.message(flags: 0x0F, 0x11, 0xFF), forcing: false) == nil)
+    #expect(SerialCommandPolicy.refusal(of: [0x02, 0x67], forcing: false) == nil)
+
+  }
+
+  // MARK: - Decisions from the modem's command set
+
+  /// A made-up modem whose serial commands carry an effect each, told apart by their fixed
+  /// bytes where one number does several things.
+  static let modemCommands: CommandSet = {
+
+    let json = #"""
+      {
+        "devices": [],
+        "commandSets": [{
+          "id": "exampleModem",
+          "name": "Example modem",
+          "description": "Serial commands that each do something different.",
+          "serialCommands": [
+            { "name": "readIdentity", "description": "Reads.", "effect": "readOnly", "idempotent": true, "number": "0x60" },
+            { "name": "openPairing", "description": "Opens.", "effect": "link", "idempotent": false, "number": "0x64",
+              "fixed": [{ "position": 1, "value": "0x01" }], "parameters": [{ "name": "group", "description": "Group.", "byte": 2 }] },
+            { "name": "erasePairing", "description": "Erases.", "effect": "destructive", "idempotent": true, "number": "0x64",
+              "fixed": [{ "position": 1, "value": "0xFF" }], "parameters": [{ "name": "group", "description": "Group.", "byte": 2 }] },
+            { "name": "blink", "description": "Blinks.", "effect": "actuation", "idempotent": true, "number": "0x6D" },
+            { "name": "tuneAck", "description": "Tunes.", "effect": "configuration", "idempotent": true, "number": "0x68",
+              "parameters": [{ "name": "value", "description": "Value.", "byte": 1 }] },
+            { "name": "wipe", "description": "Wipes.", "effect": "destructive", "idempotent": true, "number": "0x67" },
+            { "name": "findRecord", "description": "Finds.", "effect": "readOnly", "idempotent": true, "number": "0x6F",
+              "fixed": [{ "position": 1, "value": "0x00" }], "parameters": [{ "name": "record", "description": "Record.", "bytes": [2, 3, 4] }] },
+            { "name": "mislabeledDelete", "description": "Deletes.", "effect": "readOnly", "idempotent": true, "number": "0x6F",
+              "fixed": [{ "position": 1, "value": "0x80" }], "parameters": [{ "name": "record", "description": "Record.", "bytes": [2, 3, 4] }] },
+            { "name": "unmarked", "description": "Marks nothing.", "number": "0x6B", "parameters": [{ "name": "value", "description": "Value.", "byte": 1 }] },
+            { "name": "alsoTune", "description": "Tunes too.", "effect": "configuration", "idempotent": true, "number": "0x6C" },
+            { "name": "alsoLink", "description": "Links too.", "effect": "link", "idempotent": true, "number": "0x6C" }
+          ],
+          "sources": ["A"]
+        }]
+      }
+      """#
+
+    return try! DeviceCatalog(json: Data(json.utf8)).commandSet(id: "exampleModem")!
+
+  }()
+
+  static func decision(_ bytes: [UInt8], commands: CommandSet? = modemCommands, forcing: Bool = false) -> SendDecision {
+
+    SerialCommandPolicy.decision(of: bytes, commands: commands, forcing: forcing)
+
+  }
+
+  @Test func sendsWhatTheCommandSetCallsReadOnlyLinkOrActuation() {
+
+    #expect(Self.decision([0x02, 0x60]) == .transmit)
+    #expect(Self.decision([0x02, 0x64, 0x01, 0x01]) == .transmit)
+    #expect(Self.decision([0x02, 0x6D]) == .transmit)
+    #expect(Self.decision([0x02, 0x6F, 0x00, 0xE2, 0x01, 0x1A, 0x2B, 0x3C, 0x00, 0x00, 0x00]) == .transmit)
+
+  }
+
+  @Test func asksForConsentToConfigureOrDestroyUnlessForced() {
+
+    #expect(Self.decision([0x02, 0x68, 0x01]) == .needsConsent(.configuration))
+    #expect(Self.decision([0x02, 0x67]) == .needsConsent(.destructive))
+    #expect(Self.decision([0x02, 0x64, 0xFF, 0x01]) == .needsConsent(.destructive))
+
+    #expect(Self.decision([0x02, 0x68, 0x01], forcing: true) == .transmit)
+    #expect(Self.decision([0x02, 0x67], forcing: true) == .transmit)
+    #expect(Self.decision([0x02, 0x64, 0xFF, 0x01], forcing: true) == .transmit)
+
+  }
+
+  @Test func readsAnEffectTheCommandSetLeavesOutOrDoesntKnowAsDestructive() {
+
+    #expect(Self.decision([0x02, 0x6B, 0x00]) == .needsConsent(.destructive))
+    #expect(Self.decision([0x02, 0x6B, 0x00], forcing: true) == .transmit)
+
+  }
+
+  @Test func takesTheStrictestOfTheEntriesAFrameMatches() {
+
+    // Configuration and link rank alike, so neither stands for the other.
+    #expect(Self.decision([0x02, 0x6C]) == .needsConsent(.destructive))
+
+  }
+
+  @Test func needsConsentForACommandNoEntryDescribes() {
+
+    // Radio is a command number the package knows and the command set doesn't describe.
+    #expect(Self.decision([0x02, 0x7D, 0x00]) == .needsConsent(nil))
+    #expect(Self.decision([0x02, 0x7D, 0x00], forcing: true) == .transmit)
+
+    // So is a number the package doesn't know, which also can't be framed.
+    #expect(Self.decision([0x02, 0x09]) == .refuse(.serialCommand("0x09 isn't a serial command the package knows, so the modem's answer can't be read.")))
+    #expect(Self.decision([0x02, 0x09], forcing: true) == .transmit)
+
+  }
+
+  @Test func needsConsentForEveryCommandWhenTheModemHasNoCommandSetExceptWhatCoreBuilds() {
+
+    // Described by nothing, so a command needs --force unless a core flow builds it.
+    #expect(Self.decision([0x02, 0x67], commands: nil) == .needsConsent(nil))
+    #expect(Self.decision([0x02, 0x68, 0x01], commands: nil) == .needsConsent(nil))
+    #expect(Self.decision([0x02, 0x6D], commands: nil) == .needsConsent(nil))
+    #expect(Self.decision([0x02, 0x67], commands: nil, forcing: true) == .transmit)
+
+    #expect(Self.decision([0x02, 0x60], commands: nil) == .transmit)
+    #expect(Self.decision([0x02, 0x65], commands: nil) == .transmit)
+    #expect(Self.decision([0x02, 0x69], commands: nil) == .transmit)
+    #expect(Self.decision([0x02, 0x6A], commands: nil) == .transmit)
+    #expect(Self.decision([0x02, 0x77], commands: nil) == .transmit)
+    #expect(Self.decision([0x02, 0x64, 0x01, 0x01], commands: nil) == .transmit)
+    #expect(Self.decision([0x02, 0x64, 0xFF, 0x01], commands: nil) == .needsConsent(.destructive))
+
+  }
+
+  @Test func letsTheStricterOfTheFlowsDeclarationAndTheCommandSetDecide() {
+
+    // The command set marks Manage ALL-Link Record's delete code read-only; the removal flow
+    // declares it destructive.
+    let delete: [UInt8] = [0x02, 0x6F, 0x80, 0xE2, 0x01, 0x1A, 0x2B, 0x3C, 0x00, 0x00, 0x00]
+
+    #expect(Self.decision(delete) == .needsConsent(.destructive))
+    #expect(Self.decision(delete, forcing: true) == .transmit)
+
+  }
+
+  @Test func sendsAMessageCarriedToADeviceWithoutForcingWhateverTheModemIs() {
+
+    let lightOn: [UInt8] = Self.message(flags: 0x0F, 0x11, 0xFF)
+
+    #expect(Self.decision(lightOn) == .transmit)
+    #expect(Self.decision(lightOn, commands: nil) == .transmit)
+    #expect(Self.decision([0x02, 0x61, 0x01, 0x11, 0xFF], commands: nil) == .transmit)
+
+  }
+
+  @Test func keepsTheFloorAndTheDeviceWritesOutOfReachOfConsent() {
+
+    #expect(Self.decision(Self.message(flags: 0x0F, 0x29, 0x05), forcing: true) == .refuse(.protected(.poke)))
+    #expect(Self.decision([0x02, 0x61, 0x01, 0x20, 0x0C], forcing: true) == .refuse(.protected(.setOperatingFlags0x0C)))
+    #expect(Self.decision(Self.message(flags: 0x0F, 0x20, 0x0C), commands: nil, forcing: true) == .refuse(.protected(.setOperatingFlags0x0C)))
+
+    // A write to a device is routed to `device send` unless forced.
+    let write: [UInt8] = Self.message(flags: 0x0F, 0x20, 0x04)
+
+    guard case .refuse(.serialCommand)? = Optional(Self.decision(write)) else {
+
+      Issue.record("Expected a serialCommand refusal.")
+
+      return
+
+    }
+
+    #expect(Self.decision(write, forcing: true) == .transmit)
+
+  }
+
+  @Test func grantsReadOnlyLinkAndActuationUnforcedAndEverythingForced() {
+
+    #expect(SerialCommandPolicy.consent(forcing: false) == SendConsent(effects: [.link, .actuation]))
+    #expect(SerialCommandPolicy.consent(forcing: true) == SendConsent(effects: [.configuration, .link, .actuation, .destructive], allowsUndescribed: true))
 
   }
 

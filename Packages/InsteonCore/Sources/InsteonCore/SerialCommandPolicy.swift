@@ -1,15 +1,71 @@
+import InsteonDeviceCatalog
 import InsteonProtocol
 
 /// Which serial commands a raw passthrough, such as `insteon modem send`, writes to the modem,
-/// with or without being forced. ``ModemSession/write(rawCommand:forcing:collectingFor:clock:)``
+/// with or without being forced. ``ModemSession/write(rawCommand:forcing:catalog:collectingFor:clock:)``
 /// enforces it.
+///
+/// Three things decide, in this order. The byte floor and the command's framing refuse bytes
+/// whatever the modem is: ``refusal(of:forcing:)`` says why. Then what the command does to the
+/// modem decides, as ``decision(of:commands:forcing:)`` reads it from the modem's command set
+/// and from what InsteonCore's own flows declare, through ``SendPolicy``.
 ///
 /// ```swift
 /// if let refusal = SerialCommandPolicy.refusal(of: bytes, forcing: false) {
 ///   print(refusal.canBeForced ? "Refused unless forced." : "Never written.")
 /// }
+///
+/// switch SerialCommandPolicy.decision(of: bytes, commands: modemCommands, forcing: false) {
+/// case .transmit: print("Written.")
+/// case let .needsConsent(effect): print("Needs --force:", effect?.rawValue ?? "undescribed")
+/// case let .refuse(refusal): print("Never written:", refusal)
+/// }
 /// ```
 public enum SerialCommandPolicy {
+
+  /// What `insteon modem send` grants a command: what a flow does without asking, link and
+  /// actuation, and with `forcing` also configuration, destructive and a command no entry
+  /// describes.
+  ///
+  /// - Parameter forcing: Whether the person passed `--force`.
+  /// - Returns: The consent.
+  public static func consent(forcing: Bool) -> SendConsent {
+
+    forcing
+      ? SendConsent(effects: [.configuration, .link, .actuation, .destructive], allowsUndescribed: true)
+      : SendConsent(effects: [.link, .actuation])
+
+  }
+
+  /// Whether a serial command is written, needs the person's consent, or is never written.
+  ///
+  /// ``refusal(of:forcing:)`` refuses first: the byte floor, a command cut short, and without
+  /// `forcing` a command that can't be framed or that writes to a device. Otherwise the
+  /// command's effect decides. It is the strictest effect of the entries of the modem's command
+  /// set whose number and fixed payload bytes the command matches, and the effect InsteonCore's
+  /// own flows declare for the same bytes, whichever is stricter. A command neither describes
+  /// is undescribed. ``consent(forcing:)`` is what is granted.
+  ///
+  /// - Parameters:
+  ///   - bytes: The command's bytes, starting with `0x02`.
+  ///   - commands: The modem's command set, or `nil` if the catalog gives the modem none or
+  ///     doesn't know it.
+  ///   - forcing: Whether the person passed `--force`.
+  /// - Returns: The decision.
+  public static func decision(of bytes: [UInt8], commands: CommandSet?, forcing: Bool) -> SendDecision {
+
+    let refusal: SendRefusal? = refusal(of: bytes, forcing: forcing)
+    var effect: CommandEffect?
+
+    if refusal == nil, bytes.count >= 2, case let .described(described, _) = CommandSetSafety.serialEffect(number: bytes[1], payload: Array(bytes.dropFirst(2)), in: commands) {
+
+      effect = described
+
+    }
+
+    return SendPolicy.decision(effect: effect, declaredEffect: SerialFlowEffects.declaredEffect(of: bytes), refusal: refusal, consent: consent(forcing: forcing))
+
+  }
 
   /// Whether bytes start the way every serial command does, with Start of Text (`0x02`).
   ///
@@ -103,17 +159,14 @@ public enum SerialCommandPolicy {
   /// A command that doesn't start with `0x02` is always refused, so this isn't asked about it:
   /// ask ``isSerialCommand(_:)`` first, or ask ``refusal(of:forcing:)``, which also refuses
   /// what ``neverWritten(_:)`` does. One whose number the package doesn't know is refused,
-  /// since the modem's answer can't be read. So are those that change or erase what the modem
-  /// keeps, or stop it answering: Set Host Device Category, Reset the IM, Set IM Configuration,
-  /// Manage ALL-Link Record, RF Sleep, Write Database, Set Radio and Manage Device Record.
+  /// since the modem's answer can't be read. What a command does to the modem is not judged
+  /// here: ``decision(of:commands:forcing:)`` reads it from the modem's command set.
   ///
   /// A command must also have the length its number calls for, counting `0x02`: Send Insteon
   /// Standard or Extended Message (`0x62`) has 8 bytes, or 22 when bit 4 of its flags says
   /// it's extended, and Beep (`0x77`) has 2 or 3.
   ///
-  /// Some commands that are otherwise allowed are refused for what they do: Start
-  /// ALL-Linking (`0x64`) with the link code `0xFF`, which deletes links, and a message to a
-  /// device that writes its ALL-Link database (Read/Write ALL-Link Database, `0x2F`), its
+  /// A message to a device that writes its ALL-Link database (Read/Write ALL-Link Database, `0x2F`), its
   /// operating flags (Set Operating Flags, `0x20`) or its settings (Extended Set/Get, `0x2E`
   /// with D2 other than `0x00`). A ``Device`` sends those, checked against its command set.
   ///
@@ -135,12 +188,6 @@ public enum SerialCommandPolicy {
 
     }
 
-    if let reason: String = harm(of: number) {
-
-      return reason
-
-    }
-
     if let reason: String = lengthRefusal(for: bytes, number: known) {
 
       return reason
@@ -148,32 +195,6 @@ public enum SerialCommandPolicy {
     }
 
     return contentRefusal(for: bytes, number: known)
-
-  }
-
-  /// Why a command number changes or erases what the modem keeps, or stops it answering.
-  private static func harm(of number: UInt8) -> String? {
-
-    switch number {
-    case 0x66:
-      return "Set Host Device Category (0x66) changes the identity the modem reports."
-    case 0x67:
-      return "Reset the IM (0x67) erases the modem's ALL-Link database and configuration."
-    case 0x6B:
-      return "Set IM Configuration (0x6B) can turn off the modem's linking and the messages it passes on."
-    case 0x6F:
-      return "Manage ALL-Link Record (0x6F) can change or delete the modem's ALL-Link records."
-    case 0x72:
-      return "RF Sleep (0x72) puts the modem to sleep, so it stops answering."
-    case 0x76:
-      return "Write Database (0x76) overwrites the modem's ALL-Link database."
-    case 0x7D:
-      return "Set Radio (0x7D) can turn off the modem's radio until it's turned back on."
-    case 0x82:
-      return "Manage Device Record (0x82) can change or delete a record in a device's ALL-Link database."
-    default:
-      return nil
-    }
 
   }
 
@@ -221,15 +242,6 @@ public enum SerialCommandPolicy {
   private static func contentRefusal(for bytes: [UInt8], number: SerialCommandNumber) -> String? {
 
     switch number {
-    case .startAllLinking:
-      // Start ALL-Linking is 02 64 CODE GROUP.
-      guard bytes[2] == 0xFF else {
-
-        return nil
-
-      }
-
-      return "Start ALL-Linking (0x64) with link code 0xFF deletes the link with the next device whose SET button is pressed. Use 'insteon unlink' instead."
     case .sendMessage:
       // A message is 02 62 ADDRESS(3) FLAGS CMD1 CMD2, then D1 to D14 when it's extended.
       let command1: UInt8 = bytes[6]
