@@ -133,6 +133,44 @@ extension Device {
 
   }
 
+  /// Refuses to link a device whose keep-awake messages do more than keeping it awake is granted
+  /// to, so linking stops before anything is sent. Nothing is sent.
+  ///
+  /// Only a message that needs consent stops it. A message refused for another reason is
+  /// reported when it would be sent, and linking goes on without it.
+  ///
+  /// - Parameters:
+  ///   - keepAwake: How the catalog keeps the device awake.
+  ///   - writableFlags: The operating flags a linking flow may write.
+  /// - Throws: ``DeviceControlError/needsConsent(_:effect:product:)`` for the message that
+  ///   keeps the device awake or the one that lets it sleep.
+  func refuseKeepAwakeNeedingConsent(_ keepAwake: DeviceLifecycle.HubLinking.KeepAwake, writableFlags: Set<SettingName>) async throws {
+
+    for message in [keepAwake.send, keepAwake.release].compactMap({ (message: DeviceLifecycle.HubLinking.HubMessage?) -> DeviceLifecycle.HubLinking.HubMessage? in message }) {
+
+      do {
+
+        try await refuseUnlessSendable(message, writableFlags: writableFlags, for: .keepAwake)
+
+      } catch let error as DeviceControlError {
+
+        if case .needsConsent = error {
+
+          throw error
+
+        }
+
+      } catch is FieldError {
+
+        // The message is reported when it would be sent.
+        continue
+
+      }
+
+    }
+
+  }
+
   /// What a message the catalog's linking from a Hub names sends, once every guard allows it,
   /// without sending anything: the flags a linking flow may write, the command set's guards
   /// and the byte floor, by the bytes the message carries.

@@ -176,6 +176,36 @@ struct KeepAwakeTests {
 
   }
 
+  /// A made-up contact sensor whose catalog marks the extended Set that keeps it awake as
+  /// destructive, which a catalog build rejects.
+  static let wiper = (address: InsteonAddress(0x5A, 0x6B, 0x04), identity: ReportedIdentity(category: 0x10, subcategory: 0x72, firmwareVersion: 0x41))
+
+  static var wiperCommands: CommandSet {
+
+    var commands: CommandSet = contactCommands
+
+    commands.id = "exampleWiper"
+    commands.extendedCommands[0].effect = .destructive
+    commands.extendedCommands[0].isIdempotent = false
+
+    return commands
+
+  }
+
+  static let wiperCatalog = DeviceCatalog(
+    profiles: [
+      sleepy(
+        model: "9414",
+        name: "Example Wiping Sensor",
+        identity: wiper.identity,
+        commands: wiperCommands,
+        groups: [1],
+        keepAwake: DeviceLifecycle.HubLinking.KeepAwake(timing: .afterLinked, send: .command("holdAwake"))
+      )
+    ],
+    commandSets: [wiperCommands]
+  )
+
   // MARK: - Sending and releasing
 
   @Test(.timeLimit(.minutes(1))) func keepsAContactSensorAwakeAfterItsFirstLink() async throws {
@@ -529,6 +559,36 @@ struct KeepAwakeTests {
     #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: contact).isEmpty)
     #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: dimmer).isEmpty)
     #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: nil).isEmpty)
+
+  }
+
+  // MARK: - Consent
+
+  @Test(.timeLimit(.minutes(1))) func stopsLinkingBeforeAnythingIsSentWhenTheKeepAwakeMessageIsDestructive() async throws {
+
+    let modem = InMemoryModem()
+    let (sensor, identity): (InsteonAddress, ReportedIdentity) = Self.wiper
+    await modem.setEngine(.i2cs, of: sensor)
+    let network: DeviceNetwork = self.network(modem, catalog: Self.wiperCatalog, identities: [sensor: identity])
+    let recorder: LinkingRecorder = readying(sensor, on: modem)
+
+    let error: DeviceControlError? = await #expect(throws: DeviceControlError.self) {
+
+      _ = try await network.linking.link(sensor, as: .controller, observer: recorder)
+
+    }
+
+    guard case let .needsConsent(.keepAwake, effect, _)? = error else {
+
+      Issue.record("Expected needsConsent, got \(String(describing: error)).")
+
+      return
+
+    }
+
+    #expect(effect == .destructive)
+    #expect(await modem.linkingSteps.isEmpty)
+    #expect(await modem.extendedRequests.isEmpty)
 
   }
 
