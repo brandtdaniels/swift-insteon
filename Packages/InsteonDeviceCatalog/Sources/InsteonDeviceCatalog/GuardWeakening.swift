@@ -126,10 +126,9 @@ extension DeviceCatalog {
   ///   reads as destructive and a missing mark as not idempotent, as the send path reads them.
   ///   A command the baseline describes as other than read-only, which this catalog leaves
   ///   without an entry of those bytes, is weaker too: a message no entry describes needs less
-  ///   consent than a destructive one.
-  ///   A command the baseline describes as other than read-only, which this catalog leaves
-  ///   without an entry of those bytes, is weaker too: a message no entry describes needs less
-  ///   consent than a destructive one.
+  ///   consent than a destructive one;
+  /// - a modem's serial commands are compared the same way, by command number and fixed payload
+  ///   bytes, and a serial command the baseline never sends stays never sent.
   ///
   /// A device either catalog gives no command set, or doesn't know, is compared as one with
   /// none, which only the byte floor guards. The send path refuses an extended Set as given to
@@ -338,6 +337,8 @@ struct SafetySummary: Hashable {
 
     case extended(Command, [FixedUserDataByte])
 
+    case serial(UInt8, [FixedPayloadByte])
+
   }
 
   /// The bytes never sent, the byte floor's included.
@@ -534,6 +535,15 @@ struct SafetySummary: Hashable {
 
     }
 
+    for command in commands.serialCommands {
+
+      let key: CommandKey = .serial(command.number, command.fixedBytes)
+
+      add(key, isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
+      addEffect(key, effect: command.effect, isIdempotent: command.isIdempotent)
+
+    }
+
   }
 
   /// Each way this summary is weaker than a baseline's.
@@ -681,6 +691,10 @@ struct SafetySummary: Hashable {
         let bytes: String = fixed.map { (byte: FixedUserDataByte) -> String in " D\(byte.position) \(hex(byte.value))" }.joined()
 
         return "extended cmd1 \(hex(command.command1)) cmd2 \(hex(command.command2))\(bytes)"
+      case let .serial(number, fixed):
+        let bytes: String = fixed.map { (byte: FixedPayloadByte) -> String in " payload \(byte.position) \(hex(byte.value))" }.joined()
+
+        return "serial \(hex(number))\(bytes)"
       }
 
     }
