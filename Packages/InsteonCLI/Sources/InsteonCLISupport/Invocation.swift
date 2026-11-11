@@ -173,6 +173,19 @@ public struct DirectMessageRequest: Hashable, Sendable {
   /// How many seconds to print the device's messages after its acknowledgment.
   public var waitSeconds: Int
 
+  /// Whether `--force` was given, which grants a message the catalog describes as destructive.
+  public var isForced: Bool
+
+  /// What the command grants the message: every effect but destructive, and a message no
+  /// catalog entry describes, since a person typed the exact bytes and the command exists to
+  /// explore what the catalog lacks. `--force` adds destructive. The byte floor and the
+  /// catalog's guards refuse what they refuse whatever is granted.
+  public var consent: SendConsent {
+
+    SendConsent(effects: isForced ? [.configuration, .link, .actuation, .destructive] : [.configuration, .link, .actuation], allowsUndescribed: true)
+
+  }
+
   /// Creates a request.
   ///
   /// - Parameters:
@@ -182,13 +195,15 @@ public struct DirectMessageRequest: Hashable, Sendable {
   ///     to `nil`.
   ///   - hasChecksum: Whether to put a checksum in D14. Defaults to `true`.
   ///   - waitSeconds: How many seconds to print the device's messages. Defaults to 3.
-  public init(command1: UInt8, command2: UInt8, userData: [UInt8]? = nil, hasChecksum: Bool = true, waitSeconds: Int = 3) {
+  ///   - isForced: Whether `--force` was given. Defaults to `false`.
+  public init(command1: UInt8, command2: UInt8, userData: [UInt8]? = nil, hasChecksum: Bool = true, waitSeconds: Int = 3, isForced: Bool = false) {
 
     self.command1 = command1
     self.command2 = command2
     self.userData = userData
     self.hasChecksum = hasChecksum
     self.waitSeconds = waitSeconds
+    self.isForced = isForced
 
   }
 

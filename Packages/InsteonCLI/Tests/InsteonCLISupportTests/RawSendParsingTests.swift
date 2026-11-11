@@ -1,6 +1,7 @@
 import Testing
 import InsteonCLISupport
 import InsteonCore
+import InsteonDeviceCatalog
 import InsteonProtocol
 
 /// The parsing of the raw passthroughs, `insteon modem send` and `insteon device ADDRESS send`:
@@ -100,6 +101,39 @@ struct RawSendParsingTests {
 
   }
 
+  @Test func takesForceForADeviceMessage() throws {
+
+    #expect(try Invocation.parse(["device", "1A.2B.3C", "send", "55", "00", "--force"]).subcommand
+      == .device(lamp, .send(DirectMessageRequest(command1: 0x55, command2: 0x00, isForced: true))))
+    #expect(try Invocation.parse(["device", "1A.2B.3C", "send", "55", "00"]).subcommand
+      == .device(lamp, .send(DirectMessageRequest(command1: 0x55, command2: 0x00))))
+
+    #expect(throws: ArgumentError.unexpectedValue(option: "--force")) {
+
+      try Invocation.parse(["device", "1A.2B.3C", "send", "55", "00", "--force=yes"])
+
+    }
+
+  }
+
+  @Test func grantsADeviceMessageEveryEffectButDestructiveUnlessForced() {
+
+    let granted: Set<CommandEffect> = [.configuration, .link, .actuation]
+
+    #expect(DirectMessageRequest(command1: 0x55, command2: 0x00).consent == SendConsent(effects: granted, allowsUndescribed: true))
+    #expect(DirectMessageRequest(command1: 0x55, command2: 0x00, isForced: true).consent == SendConsent(effects: granted.union([.destructive]), allowsUndescribed: true))
+
+  }
+
+  @Test func saysInTheHelpThatForceGrantsADestructiveDeviceMessage() throws {
+
+    let help: String = try #require(HelpText.text(for: "device"))
+
+    #expect(help.contains("send CMD1 CMD2 [--extended [D1 ... D14]] [--no-checksum] [--force] [--wait SECONDS]"))
+    #expect(help.contains("refused without --force, and so is one the catalog marks with an"))
+
+  }
+
   @Test func refusesADeviceMessageWithMoreThanTwoCommandBytes() {
 
     #expect(throws: ArgumentError.unexpectedArgument("01", subcommand: "device")) {
@@ -128,9 +162,9 @@ struct RawSendParsingTests {
 
   @Test func refusesADeviceOptionItDoesntKnow() {
 
-    #expect(throws: ArgumentError.unknownOption("--force", subcommand: "device")) {
+    #expect(throws: ArgumentError.unknownOption("--bogus", subcommand: "device")) {
 
-      try Invocation.parse(["device", "1A.2B.3C", "send", "20", "0C", "--force"])
+      try Invocation.parse(["device", "1A.2B.3C", "send", "20", "0C", "--bogus"])
 
     }
 
