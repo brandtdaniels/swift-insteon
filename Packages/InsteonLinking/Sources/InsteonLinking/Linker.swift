@@ -176,9 +176,12 @@ public struct Linker: Sendable {
   /// link code for its role, `0x01` as controller or `0x00` as responder, and the device is
   /// sent Enter Linking Mode with `deviceGroup` in cmd2: standard to an i2 device, and
   /// extended with a checksum to an i2CS device. The linker then waits for the modem to report
-  /// the link with ALL-Linking Completed (`0x53`). Unlike
-  /// ``Linker/linkRemotely(_:modemRole:modemGroup:deviceGroup:timeout:)``, the device never
-  /// goes first, even when the modem is the responder.
+  /// the link with ALL-Linking Completed (`0x53`), in `modemGroup` when the modem is the
+  /// controller and in `deviceGroup` when it's the responder, since a responder's report names
+  /// the controller's group.
+  ///
+  /// Unlike ``Linker/linkRemotely(_:modemRole:modemGroup:deviceGroup:timeout:)``, the device
+  /// never goes first, even when the modem is the responder.
   ///
   /// - Parameters:
   ///   - device: The device to link.
@@ -192,8 +195,9 @@ public struct Linker: Sendable {
   /// - Returns: The link the modem reports.
   /// - Throws: ``LinkingError/remoteLinkingUnsupported(_:)`` for an i1 device,
   ///   ``LinkingError/linkingTimedOut`` if the modem doesn't report the link in time,
-  ///   ``LinkingError/unexpectedLink(_:)`` if it reports a different link, or the modem's
-  ///   errors. When the link fails, the modem and the device are taken out of linking mode.
+  ///   ``LinkingError/unexpectedLink(_:)`` if it reports a different link, such as one in
+  ///   another group than the device's when the modem responds, or the modem's errors. When
+  ///   the link fails, the modem and the device are taken out of linking mode.
   @discardableResult
   public func linkModemFirst(
     _ device: InsteonAddress,
@@ -211,6 +215,7 @@ public struct Linker: Sendable {
       modemGroup: modemGroup,
       deviceFirst: false,
       expecting: modemRole.linkingMode,
+      controllerGroup: deviceGroup,
       within: linkingTimeout,
       deviceAcknowledged: deviceAcknowledged
     )

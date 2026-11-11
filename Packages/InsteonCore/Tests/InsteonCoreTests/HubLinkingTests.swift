@@ -503,6 +503,39 @@ struct HubLinkingTests {
 
   }
 
+  @Test(.timeLimit(.minutes(1))) func stopsAtALaterLegTheModemReportsInAnotherGroupThanTheDevicesOwn() async throws {
+
+    let modem = InMemoryModem()
+    let keypad: InsteonAddress = HubLinkingExample.keypad
+    let network: DeviceNetwork = self.network(modem, identities: [keypad: HubLinkingExample.keypadIdentity])
+    // From the second leg on, the keypad links as the controller of group 1 whatever group
+    // Enter Linking Mode names.
+    let recorder = LinkingRecorder(reacting: { (event: LinkingEvent) async -> Void in
+
+      if case let .hubLinkingLegStarted(leg) = event, leg.index == 1 {
+
+        await modem.setReportedGroup(0x01, of: keypad)
+
+      }
+
+    })
+    let reported = AllLinkingCompleted(linkCode: 0x00, group: 0x01, address: keypad, category: nil, subcategory: nil, firmwareVersion: nil)
+
+    await #expect(throws: LinkingError.unexpectedLink(reported)) {
+
+      _ = try await network.linking.link(keypad, as: .controller, observer: recorder)
+
+    }
+
+    let lines: [String] = await recorder.lines
+
+    // The second leg isn't reported as linked, and the third isn't run.
+    #expect(!lines.contains { (line: String) -> Bool in line.hasPrefix("linked") && line.hasSuffix("leg 2") })
+    #expect(lines.last == "stopped after 1 of 3 legs")
+    #expect(await !modem.linkingSteps.contains(.modem(.responder, 0x03)))
+
+  }
+
   @Test(.timeLimit(.minutes(1))) func reportsNoLegFailureForAFirstLegThatThrows() async throws {
 
     let modem = InMemoryModem()

@@ -29,6 +29,8 @@ struct LinkingSession: Sendable {
   ///   - modemGroup: The modem's group.
   ///   - deviceFirst: Whether the device enters its mode before the modem.
   ///   - expectedMode: The mode the modem reports for the link: its role, or `AllLinkMode.delete`.
+  ///   - controllerGroup: When the modem responds, the group the device is asked to control,
+  ///     which the modem's report must name, or `nil` to accept whichever group it reports.
   ///   - linkingTimeout: How long to wait for the modem's report.
   ///   - extendsForI2cs: Whether an i2CS device is sent the command extended, with a
   ///     checksum, rather than standard.
@@ -41,6 +43,7 @@ struct LinkingSession: Sendable {
     modemGroup: AllLinkGroupNumber,
     deviceFirst: Bool,
     expecting expectedMode: AllLinkMode,
+    controllerGroup: AllLinkGroupNumber? = nil,
     within linkingTimeout: Duration,
     extendsForI2cs: Bool = true,
     deviceAcknowledged: @escaping @Sendable () async -> Void = {}
@@ -59,10 +62,13 @@ struct LinkingSession: Sendable {
     let timeout = timeout
     let commandEngine: InsteonEngine = extendsForI2cs ? engine : .i2
 
+    // The Insteon Developer's Guide says Start ALL-Linking assigns the group the modem reports.
+    // That's the modem's own group only when it doesn't respond in the link; a responder's report
+    // names the controller's group, checked only when the caller knows it.
     return try await awaitLink(
       with: device,
       modemMode: modemMode,
-      group: modemGroup,
+      reportedGroup: modemMode == .responder ? controllerGroup : modemGroup,
       expecting: expectedMode,
       within: linkingTimeout,
       cleanUp: {
@@ -102,7 +108,15 @@ struct LinkingSession: Sendable {
     within linkingTimeout: Duration
   ) async throws -> AllLinkingCompleted {
 
-    try await awaitLink(with: nil, modemMode: modemMode, group: group, expecting: expectedMode, within: linkingTimeout, cleanUp: {}) {
+    // A person chooses the controller's group with its SET button, so a responder's isn't checked.
+    try await awaitLink(
+      with: nil,
+      modemMode: modemMode,
+      reportedGroup: modemMode == .responder ? nil : group,
+      expecting: expectedMode,
+      within: linkingTimeout,
+      cleanUp: {}
+    ) {
 
       try await modem.send(.startAllLinking(mode: modemMode, group: group))
 
@@ -247,7 +261,7 @@ struct LinkingSession: Sendable {
   // MARK: - Waiting
 
   /// Runs `start`, which puts the modem and the device into their modes, then waits for the
-  /// modem to report the link.
+  /// modem to report the link, in `reportedGroup` when it isn't `nil`.
   ///
   /// When the wait fails, the modem is taken out of linking mode and `cleanUp` runs before the
   /// error is thrown, so the next session can't start while the modem is still in this one.
@@ -256,7 +270,7 @@ struct LinkingSession: Sendable {
   private func awaitLink(
     with device: InsteonAddress?,
     modemMode: AllLinkMode,
-    group: AllLinkGroupNumber,
+    reportedGroup: AllLinkGroupNumber?,
     expecting expectedMode: AllLinkMode,
     within linkingTimeout: Duration,
     cleanUp: @escaping @Sendable () async -> Void,
@@ -264,11 +278,6 @@ struct LinkingSession: Sendable {
   ) async throws -> AllLinkingCompleted {
 
     do {
-
-      // The Insteon Developer's Guide says Start ALL-Linking assigns the group the modem reports.
-      // That's the modem's own group only when it controls the link, so a responder's isn't
-      // checked.
-      let reportedGroup: AllLinkGroupNumber? = modemMode == .responder ? nil : group
 
       // Listening starts before the modem enters linking mode, so the report can't be missed.
       let reported: AllLinkingCompleted? = try await modem.firstReply(

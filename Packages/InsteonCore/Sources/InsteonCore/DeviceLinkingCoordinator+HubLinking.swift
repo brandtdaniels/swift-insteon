@@ -22,7 +22,9 @@ extension DeviceLinkingCoordinator {
   ///    device joins: with Enter Linking Mode for the leg's device group, standard or extended
   ///    by its engine, unless the catalog says Enter Linking Mode doesn't work for it, when
   ///    the observer is told to have its SET button pressed, with the catalog's steps.
-  /// 4. The coordinator waits for ALL-Linking Completed (`0x53`), records the link, and the
+  /// 4. The coordinator waits for ALL-Linking Completed (`0x53`) in the leg's group: the
+  ///    modem's group when it's the controller, and the device's when it's the responder, since
+  ///    a responder's report names the controller's group. It records the link, and the
   ///    observer gets ``LinkingEvent/linked(_:)`` and
   ///    ``LinkingEvent/hubLinkingLegCompleted(_:link:)`` before the next leg starts.
   ///
