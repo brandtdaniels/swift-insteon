@@ -14,7 +14,7 @@ import InsteonNetworking
 /// ```swift
 /// let catalog = try ProductCatalog.load(contentsOf: ProductCatalog.bundledCatalogURL())
 ///
-/// print(catalog.productName(category: 0x01, subcategory: 0x20, firmwareVersion: nil) ?? "unknown")
+/// print(catalog.productName(category: 0x01, subcategory: 0x7A, firmwareVersion: nil) ?? "unknown")
 /// ```
 public struct ProductCatalog: Sendable {
 

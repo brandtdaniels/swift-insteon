@@ -138,15 +138,15 @@ struct SerialCommandPolicyTests {
   @Test func neverWritesAProtectedCommandEvenWhenForced() {
 
     let cases: [([UInt8], ProtectedCommand)] = [
-      (Self.message(flags: 0x0F, 0x20, 0x00), .programmingLockOn),
-      (Self.message(flags: 0x0F, 0x20, 0x0C), .radioOff),
-      (Self.message(flags: 0x0F, 0x20, 0x0E), .powerlineOff),
-      (Self.message(flags: 0x0F, 0x20, 0x19), .checksumOn),
+      (Self.message(flags: 0x0F, 0x20, 0x00), .setOperatingFlags0x00),
+      (Self.message(flags: 0x0F, 0x20, 0x0C), .setOperatingFlags0x0C),
+      (Self.message(flags: 0x0F, 0x20, 0x0E), .setOperatingFlags0x0E),
+      (Self.message(flags: 0x0F, 0x20, 0x19), .setOperatingFlags0x19),
       (Self.message(flags: 0x0F, 0x29, 0x05), .poke),
       // Send ALL-Link Command carries its cmd1 and cmd2 after the group.
-      ([0x02, 0x61, 0x01, 0x20, 0x0C], .radioOff),
+      ([0x02, 0x61, 0x01, 0x20, 0x0C], .setOperatingFlags0x0C),
       // A protected message after another command in the same bytes.
-      ([0x02, 0x60] + Self.message(flags: 0x0F, 0x20, 0x0E), .powerlineOff),
+      ([0x02, 0x60] + Self.message(flags: 0x0F, 0x20, 0x0E), .setOperatingFlags0x0E),
     ]
 
     for (bytes, protected) in cases {
