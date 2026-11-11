@@ -55,8 +55,14 @@ struct SendAuthorizationTests {
             { "name": "wipe", "description": "Erases what the device keeps.", "command1": "0x55", "command2": "0x00", "effect": "destructive", "idempotent": false },
             { "name": "erase", "description": "Never sent.", "command1": "0x20", "command2": "0x0A", "guard": "never", "effect": "destructive", "idempotent": false },
             { "name": "unmarked", "description": "Says nothing of its effect.", "command1": "0x58", "command2": "0x00" },
-            { "name": "oddity", "description": "An effect this package doesn't know.", "command1": "0x59", "command2": "0x00", "effect": "sideEffect", "idempotent": true }
+            { "name": "oddity", "description": "An effect this package doesn't know.", "command1": "0x59", "command2": "0x00", "effect": "sideEffect", "idempotent": true },
+            { "name": "chimeOn", "description": "Never sent.", "command1": "0x45", "command2": "0x01", "guard": "never", "effect": "destructive", "idempotent": false }
             \#(pingEntry)
+          ],
+          "extendedCommands": [
+            { "name": "resetAll", "description": "Restores factory settings.", "command1": "0x36", "command2": "0x00", "fixed": [{ "position": 1, "value": "0x01" }], "effect": "destructive", "idempotent": false },
+            { "name": "writeMode", "description": "Overwrites a stored mode.", "command1": "0x2E", "command2": "0x00", "fixed": [{ "position": 2, "value": "0x07" }], "effect": "destructive", "idempotent": false },
+            { "name": "readMode", "description": "Reads the stored mode.", "command1": "0x2E", "command2": "0x00", "fixed": [{ "position": 2, "value": "0x00" }], "effect": "readOnly", "idempotent": true }
           ],
           "groupTypes": [{
             "name": "load",
@@ -290,6 +296,100 @@ struct SendAuthorizationTests {
   }
 
   // MARK: - A message sent as given
+
+  func extended(_ command1: UInt8, _ command2: UInt8, _ data: [UInt8], hasChecksum: Bool = true) -> DirectMessage {
+
+    DirectMessage(to: Self.described, command1: command1, command2: command2, data: data, hasChecksum: hasChecksum)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func asksForConsentToSendAnExtendedDestructiveWriteThatCarriesTheDefaultChecksum() async throws {
+
+    let (network, sent) = try await network()
+
+    // The entry has no integrity check, and the default checksum sits in D14.
+    let error: SendRefusal? = await #expect(throws: SendRefusal.self) {
+
+      _ = try await network.send(extended(0x2E, 0x00, [0x00, 0x07, 0x05]), collectingFor: .seconds(0), consent: SendConsent(effects: [.configuration, .link, .actuation], allowsUndescribed: true)) { (_: ReceivedFrame) -> Void in }
+
+    }
+
+    #expect(error == .needsConsent(.destructive))
+    #expect(await sent.extended.isEmpty)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func asksForConsentToSendAFactoryResetWithPaddingAfterItsFixedBytes() async throws {
+
+    let (network, sent) = try await network()
+
+    let error: SendRefusal? = await #expect(throws: SendRefusal.self) {
+
+      _ = try await network.send(extended(0x36, 0x00, [0x01, 0x00, 0x00, 0x00, 0x09]), collectingFor: .seconds(0), consent: SendConsent(effects: [.configuration, .link, .actuation], allowsUndescribed: true)) { (_: ReceivedFrame) -> Void in }
+
+    }
+
+    #expect(error == .needsConsent(.destructive))
+    #expect(await sent.extended.isEmpty)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func asksForConsentToSendAStandardDestructiveCommandAsAnExtendedMessage() async throws {
+
+    let (network, sent) = try await network()
+
+    let error: SendRefusal? = await #expect(throws: SendRefusal.self) {
+
+      _ = try await network.send(extended(0x55, 0x00, [0x55, 0x00]), collectingFor: .seconds(0), consent: SendConsent(effects: [.configuration, .link, .actuation], allowsUndescribed: true)) { (_: ReceivedFrame) -> Void in }
+
+    }
+
+    #expect(error == .needsConsent(.destructive))
+    #expect(await sent.extended.isEmpty)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func sendsAnExtendedDestructiveWriteWhenTheConsentGrantsIt() async throws {
+
+    let (network, sent) = try await network()
+
+    _ = try await network.send(extended(0x2E, 0x00, [0x00, 0x07, 0x05]), collectingFor: .seconds(0), consent: SendConsent(effects: [.destructive])) { (_: ReceivedFrame) -> Void in }
+
+    #expect(await sent.extended == [Command(command1: 0x2E, command2: 0x00)])
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func keepsAReadWithExtraBytesReadOnlyWhenItMatchesOnlyAReadOnlyEntry() async throws {
+
+    let (network, sent) = try await network()
+
+    _ = try await network.send(extended(0x2E, 0x00, [0x01, 0x00, 0x00]), collectingFor: .seconds(0)) { (_: ReceivedFrame) -> Void in }
+
+    #expect(await sent.extended == [Command(command1: 0x2E, command2: 0x00)])
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func refusesAnEntryTheCatalogNeverSendsWhateverItsCmd1() async throws {
+
+    let (network, sent) = try await network()
+
+    let error: SendRefusal? = await #expect(throws: SendRefusal.self) {
+
+      _ = try await network.send(message(0x45, 0x01), collectingFor: .seconds(0), consent: .everything) { (_: ReceivedFrame) -> Void in }
+
+    }
+
+    guard case .neverSentToDevice? = error else {
+
+      Issue.record("Expected a refusal, got \(String(describing: error)).")
+
+      return
+
+    }
+
+    #expect(await sent.standard.isEmpty)
+
+  }
 
   @Test(.timeLimit(.minutes(1))) func sendsAReadOnlyMessageAsGivenWithNoConsent() async throws {
 

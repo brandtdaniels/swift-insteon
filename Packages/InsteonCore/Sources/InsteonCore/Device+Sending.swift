@@ -502,7 +502,7 @@ extension Device {
     let product: String = description.map { (described: DeviceDescription) -> String in DeviceControlModel.product(of: described) } ?? "this device"
     let refusal: SendRefusal?
 
-    let isNeverSent: Bool = DeviceSettingSafety.isNeverSent(command, in: commands)
+    let isNeverSent: Bool = DeviceSettingSafety.isNeverSent(command, in: commands) || DeviceSettingSafety.matchesNeverSentEntry(command, userData: userData, in: commands)
 
     if isNeverSent, let protected = ProtectedCommand(command), let commands, let flag = Self.guardedFlag(turnedBy: protected, in: commands) {
 
@@ -544,7 +544,7 @@ extension Device {
 
     let effect: CommandEffect?
 
-    if case let .described(described, _) = DeviceSettingSafety.effect(of: command, userData: userData, in: commands) {
+    if case let .described(described, _) = DeviceSettingSafety.authorizationEffect(of: command, userData: userData, in: commands) {
 
       effect = described
 

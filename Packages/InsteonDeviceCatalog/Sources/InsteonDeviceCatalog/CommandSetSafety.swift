@@ -285,6 +285,49 @@ package enum CommandSetSafety {
 
   }
 
+  /// Whether a message matches a command the command set marks ``CommandGuard/never``, whatever
+  /// its cmd1: a standard command by its cmd1 and cmd2, or by its cmd1 when a parameter fills
+  /// cmd2, and an extended command by its cmd1, cmd2 and fixed bytes, the reading the guards'
+  /// routes use. A standard message matches an extended command by its cmd1 and cmd2.
+  ///
+  /// - Parameters:
+  ///   - command: The message's cmd1 and cmd2.
+  ///   - userData: An extended message's user data, or `nil` for a standard message.
+  ///   - commands: The device's command set, or `nil` if the catalog gives it none.
+  package static func matchesNeverSentEntry(_ command: Command, userData: UserData?, in commands: CommandSet?) -> Bool {
+
+    guard let commands else {
+
+      return false
+
+    }
+
+    for standard in commands.standardCommands where isNeverSent(standard.sendGuard) && sends(standard, as: command, userData: nil) {
+
+      return true
+
+    }
+
+    for extended in commands.extendedCommands where isNeverSent(extended.sendGuard) && extended.command == command {
+
+      let fixed: Bool = userData.map { (data: UserData) -> Bool in
+
+        extended.fixedBytes.allSatisfy { (byte: FixedUserDataByte) -> Bool in data[byte.position] == byte.value }
+
+      } ?? true
+
+      if fixed {
+
+        return true
+
+      }
+
+    }
+
+    return false
+
+  }
+
   /// Whether an item is never written: a flag that's kept, or a value whose only write is a
   /// command the command set never sends.
   package static func isNeverWritten(_ item: SettingItem, in commands: CommandSet) -> Bool {
@@ -736,6 +779,34 @@ package enum CommandSetSafety {
   ///   as for every message to a device without a command set.
   package static func effect(of command: Command, userData: UserData?, in commands: CommandSet?) -> MessageEffect {
 
+    matchedEffect(of: command, userData: userData, in: commands, isLoose: false)
+
+  }
+
+  /// What a message does to a device, read the way a send is authorized: the strictest effect of
+  /// every entry ``effect(of:userData:in:)`` matches and every entry that matches loosely.
+  ///
+  /// A loose match is by cmd1, cmd2 and an extended command's fixed bytes alone, the reading the
+  /// guards' routes use, so a byte the entry doesn't fix, such as a checksum an entry without
+  /// one doesn't carry or padding after the fixed bytes, can't make a message read as
+  /// undescribed. A standard message matches an extended command by its cmd1 and cmd2, and an
+  /// extended message a standard command the same way. Every strict match is a loose match, so
+  /// this reads a message as strictly as ``effect(of:userData:in:)`` does or more. A message
+  /// is undescribed only when neither matches any entry.
+  ///
+  /// - Parameters:
+  ///   - command: The message's cmd1 and cmd2.
+  ///   - userData: An extended message's user data, or `nil` for a standard message.
+  ///   - commands: The device's command set, or `nil` if the catalog gives it none.
+  /// - Returns: The effect, or ``MessageEffect/undescribed``.
+  package static func authorizationEffect(of command: Command, userData: UserData?, in commands: CommandSet?) -> MessageEffect {
+
+    matchedEffect(of: command, userData: userData, in: commands, isLoose: true)
+
+  }
+
+  private static func matchedEffect(of command: Command, userData: UserData?, in commands: CommandSet?, isLoose: Bool) -> MessageEffect {
+
     guard let commands else {
 
       return .undescribed
@@ -760,15 +831,25 @@ package enum CommandSetSafety {
 
     }
 
-    for standard in commands.standardCommands where sends(standard, as: command, userData: userData) {
+    for standard in commands.standardCommands where sends(standard, as: command, userData: isLoose ? nil : userData) {
 
       matched.append((effect: standard.effect, isIdempotent: standard.isIdempotent))
 
     }
 
+    if isLoose {
+
+      for extended in commands.extendedCommands where extended.command == command && (userData.map { (data: UserData) -> Bool in extended.fixedBytes.allSatisfy { (byte: FixedUserDataByte) -> Bool in data[byte.position] == byte.value } } ?? true) {
+
+        matched.append((effect: extended.effect, isIdempotent: extended.isIdempotent))
+
+      }
+
+    }
+
     if let userData {
 
-      for extended in commands.extendedCommands where sends(extended, as: command, userData: userData) {
+      for extended in commands.extendedCommands where !isLoose && sends(extended, as: command, userData: userData) {
 
         matched.append((effect: extended.effect, isIdempotent: extended.isIdempotent))
 
