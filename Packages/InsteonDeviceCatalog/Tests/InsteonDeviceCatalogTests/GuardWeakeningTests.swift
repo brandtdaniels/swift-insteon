@@ -494,6 +494,158 @@ struct GuardWeakeningTests {
 
   }
 
+  // MARK: - Effects
+
+  /// The guarded command set with a standard command, a flag command and an extended command
+  /// that carry the given effect and idempotent marks.
+  static func marked(
+    id: CommandSetID = "exampleGuarded",
+    standard: (CommandEffect?, Bool?) = (.destructive, true),
+    flag: (CommandEffect?, Bool?) = (.destructive, true),
+    extended: (CommandEffect?, Bool?) = (.destructive, true),
+    standardName: SettingName = "wipeRecords",
+    extraStandardCommands: [DeviceStandardCommand] = []
+  ) -> CommandSet {
+
+    var commands: CommandSet = guarded(id: id)
+
+    commands.standardCommands = [
+      DeviceStandardCommand(name: standardName, summary: "Wipes.", command1: 0x32, command2: .fixed(0x00), effect: standard.0, isIdempotent: standard.1)
+    ] + extraStandardCommands
+    commands.flagCommands.append(OperatingFlagCommand(name: "tuneGlow", summary: "Tunes the glow.", command2: 0x40, effect: flag.0, isIdempotent: flag.1))
+    commands.extendedCommands.append(
+      DeviceExtendedCommand(name: "wipeBlock", summary: "Wipes a block.", command: Command(command1: 0x2E, command2: 0x02), effect: extended.0, isIdempotent: extended.1)
+    )
+
+    return commands
+
+  }
+
+  static let markedBaseline: DeviceCatalog = catalog([profile(["exampleGuarded"])], [marked()])
+
+  static func weakenings(marking commands: CommandSet) -> [GuardWeakening] {
+
+    catalog([profile([commands.id])], [commands]).guardWeakenings(comparedTo: markedBaseline)
+
+  }
+
+  @Test func refusesAnEffectMadeWeaker() {
+
+    for weaker in [CommandEffect.configuration, .link, .actuation, .readOnly] {
+
+      let weakenings: [GuardWeakening] = Self.weakenings(marking: Self.marked(standard: (weaker, true)))
+
+      #expect(Self.kinds(weakenings) == [.effect])
+      #expect(weakenings.map(\.detail) == ["cmd1 0x32 cmd2 0x00 destructive to \(weaker)"])
+
+    }
+
+  }
+
+  @Test func refusesAFlagCommandAndAnExtendedCommandMadeWeaker() {
+
+    let flag: [GuardWeakening] = Self.weakenings(marking: Self.marked(flag: (.configuration, true)))
+    let extended: [GuardWeakening] = Self.weakenings(marking: Self.marked(extended: (.readOnly, true)))
+
+    #expect(flag.map(\.detail) == ["cmd1 0x20 cmd2 0x40 destructive to configuration"])
+    #expect(extended.map(\.detail) == ["extended cmd1 0x2E cmd2 0x02 destructive to readOnly"])
+
+  }
+
+  @Test func refusesAnEffectChangedAmongConfigurationLinkAndActuation() {
+
+    let baseline: CommandSet = Self.marked(standard: (.configuration, true), flag: (.configuration, true), extended: (.configuration, true))
+
+    for changed in [CommandEffect.link, .actuation] {
+
+      let given: CommandSet = Self.marked(standard: (changed, true), flag: (.configuration, true), extended: (.configuration, true))
+      let weakenings: [GuardWeakening] = Self.catalog([Self.profile(["exampleGuarded"])], [given]).guardWeakenings(comparedTo: Self.catalog([Self.profile(["exampleGuarded"])], [baseline]))
+
+      #expect(weakenings.map(\.detail) == ["cmd1 0x32 cmd2 0x00 configuration to \(changed)"])
+
+    }
+
+  }
+
+  @Test func refusesAnEffectTheBaselineLeavesUnmarkedBeingMarked() {
+
+    // An unmarked entry reads as destructive.
+    let baseline: DeviceCatalog = Self.catalog([Self.profile(["exampleGuarded"])], [Self.marked(standard: (nil, nil))])
+    let weakenings: [GuardWeakening] = Self.catalog([Self.profile(["exampleGuarded"])], [Self.marked(standard: (.readOnly, true))]).guardWeakenings(comparedTo: baseline)
+
+    #expect(weakenings.filter { $0.kind == .effect }.map(\.detail) == ["cmd1 0x32 cmd2 0x00 destructive to readOnly"])
+
+  }
+
+  @Test func refusesAWeakerEffectWhateverTheCommandIsNamed() {
+
+    #expect(Self.kinds(Self.weakenings(marking: Self.marked(standard: (.configuration, true), standardName: "renamed"))) == [.effect])
+
+  }
+
+  @Test func readsAMessageAsItsStrictestEntryWithItsBytes() {
+
+    // A renamed command and a weaker twin with the same bytes: the message is still as strict
+    // as the baseline's.
+    let twin = DeviceStandardCommand(name: "wipeTwin", summary: "Wipes.", command1: 0x32, command2: .fixed(0x00), effect: .configuration, isIdempotent: true)
+
+    #expect(Self.weakenings(marking: Self.marked(standardName: "renamed", extraStandardCommands: [twin])).isEmpty)
+
+  }
+
+  @Test func refusesAnIdempotentMarkTurnedOn() {
+
+    for notIdempotent in [Bool?.some(false), nil] {
+
+      let baseline: DeviceCatalog = Self.catalog([Self.profile(["exampleGuarded"])], [Self.marked(standard: (.actuation, notIdempotent))])
+      let weakenings: [GuardWeakening] = Self.catalog([Self.profile(["exampleGuarded"])], [Self.marked(standard: (.actuation, true))]).guardWeakenings(comparedTo: baseline)
+
+      #expect(Self.kinds(weakenings) == [.idempotent])
+      #expect(weakenings.map(\.detail) == ["cmd1 0x32 cmd2 0x00"])
+
+    }
+
+  }
+
+  @Test func acceptsAnEffectMadeStricterOrUnchanged() {
+
+    #expect(Self.weakenings(marking: Self.marked()).isEmpty)
+
+    let baseline: DeviceCatalog = Self.catalog([Self.profile(["exampleGuarded"])], [Self.marked(standard: (.readOnly, true), flag: (.configuration, true), extended: (.actuation, true))])
+
+    for given in [
+      Self.marked(standard: (.configuration, true), flag: (.destructive, true), extended: (.destructive, true)),
+      Self.marked(standard: (nil, nil), flag: (CommandEffect(rawValue: "sideEffect"), true), extended: (nil, true))
+    ] {
+
+      #expect(Self.catalog([Self.profile(["exampleGuarded"])], [given]).guardWeakenings(comparedTo: baseline).isEmpty)
+
+    }
+
+  }
+
+  @Test func acceptsAnIdempotentMarkTurnedOff() {
+
+    #expect(Self.weakenings(marking: Self.marked(standard: (.destructive, false))).isEmpty)
+    #expect(Self.weakenings(marking: Self.marked(standard: (.destructive, nil))).isEmpty)
+
+  }
+
+  @Test func keepsTheBaselineWhenADownloadMakesADestructiveCommandConfiguration() throws {
+
+    let download: CommandSet = Self.marked(standard: (.configuration, true))
+    let catalog: DeviceCatalog = Self.catalog([Self.profile(["exampleGuarded"])], [download])
+    let weakenings: [GuardWeakening] = catalog.guardWeakenings(comparedTo: Self.markedBaseline)
+
+    #expect(!weakenings.isEmpty)
+    #expect(throws: DeviceCatalogError.weakensGuards(weakenings)) {
+
+      try catalog.checkGuards(against: Self.markedBaseline)
+
+    }
+
+  }
+
   // MARK: - Updating
 
   @Test(.timeLimit(.minutes(1))) func refusesADownloadThatWeakensTheBaselinesGuards() async throws {
