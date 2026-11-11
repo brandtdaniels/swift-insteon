@@ -277,6 +277,7 @@ case SendRefusal.neverSentToDevice(product:)
 case SendRefusal.notSerialCommand
 case SendRefusal.protected(_:)
 case SendRefusal.serialCommand(_:)
+case SendRefusal.setsGuardedFlag(_:label:setting:)
 case SendRefusal.unlistedExtendedSet(selector:)
 case SendRefusal.writesGuardedFlags(label:)
 case TwoWayLinking.always
@@ -943,6 +944,7 @@ var ProductCatalogStore.directory
 var ProductCatalogStore.hasCachedCopy
 var ProductCatalogStore.versionPath
 var ProductCatalogStoreError.description
+var ProtectedCommand.command2
 var RegisteredDevice.address
 var RegisteredDevice.identity
 var RegisteredDevice.info

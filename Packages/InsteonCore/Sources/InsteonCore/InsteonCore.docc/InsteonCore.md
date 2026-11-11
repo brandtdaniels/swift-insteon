@@ -320,7 +320,10 @@ reading each write back. <doc:DatabaseLinking> says what each writes and when to
 A front end that explores what the catalog doesn't describe yet sends a device a message as
 it's given with ``DeviceNetwork/send(_:collectingFor:onAcknowledgment:)``, and writes the
 modem a serial command with ``ModemSession/write(rawCommand:forcing:collectingFor:clock:)``.
-Both check the bytes first, and throw a ``SendRefusal`` before anything is sent. A message is
+Both check the bytes first, and throw a ``SendRefusal`` before anything is sent. A protected
+Set Operating Flags whose cmd2 the device's command set gives to a flag it guards is refused
+with ``SendRefusal/setsGuardedFlag(_:label:setting:)``, which carries the flag's label, and
+one the command set doesn't name with ``SendRefusal/protected(_:)``. A message is
 checked like every message a ``Device`` sends, and a serial command by
 ``SerialCommandPolicy``, which finds the ``ProtectedCommand``s in any message to a device or
 a group it holds. Nothing forces a ``ProtectedCommand`` through; `forcing` writes only a

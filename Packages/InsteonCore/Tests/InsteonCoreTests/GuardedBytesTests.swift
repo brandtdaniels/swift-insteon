@@ -588,7 +588,7 @@ struct GuardedBytesTests {
 
     _ = try await network.send(buttonLock, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
 
-    await #expect(throws: SendRefusal.protected(try Self.protected(Command(command1: 0x20, command2: 0x0C)))) {
+    await #expect(throws: SendRefusal.setsGuardedFlag(.setOperatingFlags0x0C, label: "Radio mute", setting: true)) {
 
       _ = try await network.send(radioMute, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
 
@@ -602,6 +602,69 @@ struct GuardedBytesTests {
 
     #expect(writable["buttonLock"] == true)
     #expect(writable["radioMute"] == false)
+
+  }
+
+  /// A made-up panel whose kept chime flag is turned off with Set Operating Flags `0x0E`, whose
+  /// kept quiet flag, which has no label, is turned on with `0x19`, and whose lockout's on,
+  /// `0x00`, is a flag command the catalog never sends.
+  static let chimeCommands = CommandSet(
+    id: "exampleChimePanel",
+    name: "Example chime panel",
+    summary: "Kept flags turned on and off with protected cmd2s.",
+    operatingFlags: [
+      OperatingFlag(name: "chime", summary: "Sounds the chime.", query: .operatingFlags, bit: 0x02, on: 0x0F, off: 0x0E, label: "Chime", writeGuard: .keep),
+      OperatingFlag(name: "quiet", summary: "Quiets the panel.", query: .operatingFlags, bit: 0x04, on: 0x19, off: 0x1A, writeGuard: .keep)
+    ],
+    flagCommands: [
+      OperatingFlagCommand(name: "lockoutOn", summary: "Locks out linking.", command2: 0x00, sendGuard: .never)
+    ]
+  )
+
+  @Test(.timeLimit(.minutes(1))) func namesTheGuardedFlagARefusedProtectedCmd2TurnsOnOrOff() async throws {
+
+    let panel = (address: InsteonAddress(0x3A, 0x4B, 0x44), identity: ReportedIdentity(category: 0x01, subcategory: 0x6C, firmwareVersion: 0x45))
+    let catalog = DeviceCatalog(
+      profiles: [ControlExample.profile(model: "9513", name: "Example Chime Panel", identity: panel.identity, commands: Self.chimeCommands, groups: [])],
+      commandSets: [Self.chimeCommands]
+    )
+    let modem = SettingsModem(device: panel.address, flags: 0x00, values: [:])
+    let network = DeviceNetwork(
+      modem: modem,
+      catalog: catalog,
+      snapshot: NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: [panel.address: panel.identity])),
+      clock: clock,
+      now: { () -> Date in Date(timeIntervalSince1970: 1_800_000_000) }
+    )
+    // A labeled guarded flag names its cmd2; an unlabeled one, a flag command and a cmd2
+    // nothing names leave the refusal to the bytes alone.
+    let expected: [(command2: UInt8, refusal: SendRefusal)] = [
+      (0x0E, .setsGuardedFlag(.setOperatingFlags0x0E, label: "Chime", setting: false)),
+      (0x19, .protected(.setOperatingFlags0x19)),
+      (0x00, .protected(.setOperatingFlags0x00)),
+      (0x0C, .protected(.setOperatingFlags0x0C))
+    ]
+
+    for (command2, refusal) in expected {
+
+      let message = DirectMessage(to: panel.address, command1: 0x20, command2: command2, data: nil, hasChecksum: false)
+
+      await #expect(throws: refusal, "cmd2 \(command2)") {
+
+        _ = try await network.send(message, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+
+      }
+
+    }
+
+    #expect(await modem.standardCommands.isEmpty)
+    #expect(await modem.extendedMessages.isEmpty)
+
+  }
+
+  @Test func givesEachProtectedSetOperatingFlagsItsCmd2() {
+
+    #expect(ProtectedCommand.allCases.map(\.command2) == [0x00, 0x0C, 0x0E, 0x19, nil])
 
   }
 

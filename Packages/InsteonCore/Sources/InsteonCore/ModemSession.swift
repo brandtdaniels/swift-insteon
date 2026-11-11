@@ -163,7 +163,8 @@ public struct ModemSession: Sendable {
   /// ``SerialCommandPolicy/refusal(of:forcing:)`` checks the bytes before anything is
   /// written. `forcing` writes a command the policy refuses only unless it's forced, such as
   /// one whose number the package doesn't know; nothing forces a message that carries a
-  /// ``ProtectedCommand``, such as Set Operating Flags turning a device's radio off or Poke.
+  /// ``ProtectedCommand``: Poke, or Set Operating Flags with one of the cmd2s that can cut a
+  /// device off from the modem or lock it, depending on the device.
   /// A message to a device is better sent with ``DeviceNetwork/send(_:collectingFor:onAcknowledgment:)``,
   /// which also checks it against the device's command set.
   ///
