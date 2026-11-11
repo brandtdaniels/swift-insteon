@@ -402,8 +402,8 @@ struct BundledCatalogDataTests {
     let keepAwake: DeviceLifecycle.HubLinking.KeepAwake = try #require(description.hubLinking?.keepAwake)
 
     #expect(keepAwake.timing == .beforeLinking)
-    #expect(keepAwake.send == .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Self.setOperatingFlags(0x06), isExtended: true, integrity: .checksum)))
-    #expect(keepAwake.release == .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Self.setOperatingFlags(0x07), isExtended: true, integrity: .checksum)))
+    #expect(keepAwake.send == .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Self.setOperatingFlags(0x06), isExtended: true, integrity: .checksum, effect: .configuration, isIdempotent: true)))
+    #expect(keepAwake.release == .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Self.setOperatingFlags(0x07), isExtended: true, integrity: .checksum, effect: .configuration, isIdempotent: true)))
     #expect(description.hubLinkingLegs.count == 4)
 
   }
