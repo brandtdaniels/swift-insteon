@@ -3,7 +3,7 @@ import InsteonDeviceCatalog
 /// What an operation lets InsteonCore send for it: the effects it grants, and whether it grants
 /// a message no catalog entry describes.
 ///
-/// A message that only asks for state, ``CommandEffect/readOnly``, needs no consent, so
+/// A message that only asks for state, `CommandEffect.readOnly`, needs no consent, so
 /// ``effects`` doesn't have to list it. An operation that names the act, such as turning a
 /// device on, grants just the effect of that act:
 ///
@@ -13,7 +13,7 @@ import InsteonDeviceCatalog
 public struct SendConsent: Hashable, Sendable {
 
   /// The effects the operation grants. An effect this package doesn't know grants nothing,
-  /// since a message with one is ``CommandEffect/destructive``.
+  /// since a message with one is `CommandEffect.destructive`.
   public var effects: Set<CommandEffect>
 
   /// Whether the operation grants a message no entry of the device's command set describes,
@@ -58,9 +58,9 @@ public enum SendDecision: Hashable, Sendable {
 /// 1. A refusal the byte floor or a guard already made refuses the message, whatever the
 ///    consent.
 /// 2. An effect that's missing or that this package doesn't know is
-///    ``CommandEffect/destructive``.
+///    `CommandEffect.destructive`.
 /// 3. A message no entry describes needs ``SendConsent/allowsUndescribed``.
-/// 4. A ``CommandEffect/readOnly`` message is sent.
+/// 4. A `CommandEffect.readOnly` message is sent.
 /// 5. An effect in ``SendConsent/effects`` is sent.
 /// 6. Any other effect needs consent.
 ///
@@ -77,7 +77,7 @@ public enum SendPolicy {
   ///     describes it.
   ///   - declaredEffect: What the flow that builds the message says it does, or `nil` if it
   ///     declares none. The stricter of the two decides; two different effects of equal rank
-  ///     read as ``CommandEffect/destructive``.
+  ///     read as `CommandEffect.destructive`.
   ///   - refusal: Why a guard or the byte floor refuses the message, or `nil` if neither does.
   ///   - consent: What the operation grants.
   /// - Returns: The decision.
