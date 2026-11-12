@@ -53,6 +53,8 @@ public enum SendRefusalText {
       return "The bytes hold a message to a device or a group that's cut short, which the next command's bytes could finish; insteon modem send never writes it."
     case let .serialCommand(reason):
       return "\(reason) Pass --force to send it anyway."
+    case let .needsConsent(effect):
+      return ConsentText.deviceSend(effect)
     }
 
   }

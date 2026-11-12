@@ -813,6 +813,7 @@ extension Invocation {
     var bytes: [UInt8] = []
     var userData: [UInt8]?
     var hasChecksum = true
+    var forces = false
     var waitSeconds = 3
     var index = 0
 
@@ -865,6 +866,9 @@ extension Invocation {
       case "--no-checksum":
         try expectNoValue(name, inlineValue)
         hasChecksum = false
+      case "--force":
+        try expectNoValue(name, inlineValue)
+        forces = true
       case "--wait":
         waitSeconds = try seconds(value(of: name, inline: inlineValue, in: arguments, at: &index), option: name)
       default:
@@ -890,7 +894,7 @@ extension Invocation {
     // All 14 bytes given are sent as they are.
     let checksums: Bool = hasChecksum && (userData?.count ?? 0) < 14
 
-    return DirectMessageRequest(command1: bytes[0], command2: bytes[1], userData: userData, hasChecksum: checksums, waitSeconds: waitSeconds)
+    return DirectMessageRequest(command1: bytes[0], command2: bytes[1], userData: userData, hasChecksum: checksums, waitSeconds: waitSeconds, isForced: forces)
 
   }
 

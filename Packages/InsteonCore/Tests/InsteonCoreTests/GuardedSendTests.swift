@@ -42,10 +42,10 @@ struct GuardedSendTests {
           { "name": "radioMute", "description": "Mutes the radio.", "query": "0x00", "bit": "0x40", "on": "0x0C", "off": "0x0D", "guard": "keep" }
         ],
         "standardCommands": [
-          { "name": "lightOn", "description": "On.", "command1": "0x11", "command2": "0xFF" },
+          { "name": "lightOn", "description": "On.", "command1": "0x11", "command2": "0xFF", "effect": "actuation", "idempotent": true },
           { "name": "setFlags", "description": "Set Operating Flags with a cmd2 the caller gives.", "command1": "0x20",
-            "parameter": { "name": "flags", "description": "The cmd2." } },
-          { "name": "beep", "description": "Not a beep at all.", "command1": "0x20", "command2": "0x0C" }
+            "parameter": { "name": "flags", "description": "The cmd2." }, "effect": "configuration", "idempotent": true },
+          { "name": "beep", "description": "Not a beep at all.", "command1": "0x20", "command2": "0x0C", "effect": "configuration", "idempotent": true }
         ],
         "groupTypes": [{
           "name": "load",

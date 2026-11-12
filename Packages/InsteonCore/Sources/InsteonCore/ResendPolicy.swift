@@ -1,3 +1,6 @@
+import InsteonModem
+import InsteonProtocol
+
 /// Why a message that was sent didn't get the answer it needs.
 public enum DeliveryFailure: Hashable, Sendable {
 
@@ -13,6 +16,33 @@ public enum DeliveryFailure: Hashable, Sendable {
 
   /// The device rejected the message with a NAK for another reason.
   case deviceRejected
+
+}
+
+extension DeliveryFailure {
+
+  /// How a modem error says a message failed, or `nil` for an error that isn't a delivery
+  /// failure, such as a refusal or a cancellation, which nothing resends after.
+  init?(_ error: any Error) {
+
+    guard let error = error as? ModemError else {
+
+      return nil
+
+    }
+
+    switch error {
+    case .rejected:
+      self = .modemRejected
+    case let .deviceRejected(_, reason):
+      self = reason == .databaseSearchPending ? .deviceBusy : .deviceRejected
+    case .deviceTimedOut, .timedOut:
+      self = .noDeviceAcknowledgment
+    case .connectionClosed:
+      return nil
+    }
+
+  }
 
 }
 

@@ -645,7 +645,7 @@ extension DeviceLinkingCoordinator {
   /// Sends Get Operating Flags for a flag's request through the device's guarded send path.
   private static func read(_ flag: OperatingFlag, of target: Device) async throws -> ReceivedMessage {
 
-    try await target.request(StandardMessage(to: target.address, command: flag.readCommand), timeout: target.network.requestTimeout, for: .control(.linkingFlags))
+    try await target.request(StandardMessage(to: target.address, command: flag.readCommand), timeout: target.network.requestTimeout, declaring: .readOnly, for: .control(.linkingFlags))
 
   }
 
@@ -950,7 +950,9 @@ extension DeviceLinkingCoordinator {
 
   }
 
-  /// Switches a relay back to a state, once more if that fails, and tells the observer.
+  /// Switches a relay back to a state, and tells the observer. The command is sent again after a
+  /// failure only when ``ResendPolicy`` allows it: a message the modem rejected or a busy
+  /// device rejected, or one the catalog marks idempotent that the device didn't acknowledge.
   ///
   /// - Returns: Why it wasn't switched back, or `nil` when it was.
   private static func switchBack(_ target: Device, to state: RelayState, observer: any LinkingObserver) async -> RelayStateLinkingError? {
@@ -958,8 +960,11 @@ extension DeviceLinkingCoordinator {
     await observer.linking(.relayState(.returningRelay(target.address, state)))
 
     var lastFailure: (any Error)?
+    var attempts: Int = 0
 
-    for _ in 1...2 {
+    while attempts < 2 {
+
+      attempts += 1
 
       do {
 
@@ -970,6 +975,20 @@ extension DeviceLinkingCoordinator {
       } catch {
 
         lastFailure = error
+
+        guard let failure = DeliveryFailure(error) else {
+
+          break
+
+        }
+
+        let isIdempotent: Bool? = await target.isSwitchIdempotent(on: state == .on)
+
+        guard ResendPolicy.decision(after: failure, isIdempotent: isIdempotent) == .resend else {
+
+          break
+
+        }
 
       }
 

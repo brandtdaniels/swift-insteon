@@ -253,7 +253,7 @@ extension Device {
     // Request.
     do {
 
-      _ = try await modem.request(StandardMessage(to: address, command: StandardDirectCommand.getEngineVersion), timeout: network.requestTimeout)
+      _ = try await self.request(StandardMessage(to: address, command: StandardDirectCommand.getEngineVersion), timeout: network.requestTimeout, declaring: .readOnly, for: .control(.status))
       engineProblem = nil
 
     } catch {

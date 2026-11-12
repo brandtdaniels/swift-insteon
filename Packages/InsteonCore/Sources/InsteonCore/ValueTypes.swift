@@ -70,3 +70,7 @@ public typealias GuardWeakening = InsteonDeviceCatalog.GuardWeakening
 
 /// A name the catalog gives a setting, command or flag, such as `rampRate`.
 public typealias SettingName = InsteonDeviceCatalog.SettingName
+
+/// What a message does to the device it's sent to, such as `CommandEffect.actuation`, which a
+/// ``SendConsent`` grants and a refusal names.
+public typealias CommandEffect = InsteonDeviceCatalog.CommandEffect

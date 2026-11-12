@@ -57,7 +57,9 @@ extension DeviceLinkingCoordinator {
   ///   - setButtonTimeout: How long the modem waits for a device linked with its SET button.
   ///   - observer: What a person is told and asked.
   /// - Returns: Each leg's link, the device, and what became of each leg.
-  /// - Throws: The first leg's errors, `LinkMismatch` or `LinkingError.unexpectedLink(_:)`
+  /// - Throws: ``DeviceControlError/needsConsent(_:effect:product:)`` before anything is sent
+  ///   when a message that keeps the device awake does more than keeping it awake is granted;
+  ///   the first leg's errors, `LinkMismatch` or `LinkingError.unexpectedLink(_:)`
   ///   when the modem reports another link, the observer's errors, and `CancellationError` if
   ///   the task is canceled.
   func linkByLegs(
@@ -71,6 +73,14 @@ extension DeviceLinkingCoordinator {
     let keepAwake: DeviceLifecycle.HubLinking.KeepAwake? = description?.hubLinking?.keepAwake
     let writableFlags: Set<SettingName> = Self.keepAwakeFlags(of: description)
     var isKeptAwake: Bool = false
+
+    // A keep-awake message that needs more consent than keeping a device awake is granted stops
+    // linking before anything is sent.
+    if let keepAwake {
+
+      try await network.device(device).refuseKeepAwakeNeedingConsent(keepAwake, writableFlags: writableFlags)
+
+    }
 
     do {
 

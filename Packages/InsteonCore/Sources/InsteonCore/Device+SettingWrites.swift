@@ -174,7 +174,7 @@ extension Device {
 
     do {
 
-      acknowledgment = try await request(StandardMessage(to: address, command: StandardDirectCommand.getEngineVersion), timeout: network.requestTimeout, for: .control(.settings))
+      acknowledgment = try await request(StandardMessage(to: address, command: StandardDirectCommand.getEngineVersion), timeout: network.requestTimeout, declaring: .readOnly, for: .control(.settings))
 
     } catch let error as ModemError {
 

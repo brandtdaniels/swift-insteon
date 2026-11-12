@@ -73,17 +73,19 @@ enum ControlExample {
     name: "lightOn",
     summary: "Turns the load on to the level in cmd2.",
     command1: 0x11,
-    command2: .parameter(MessageField(name: "onLevel", summary: "The level.", location: .command2, range: 0...255))
+    command2: .parameter(MessageField(name: "onLevel", summary: "The level.", location: .command2, range: 0...255)),
+    effect: .actuation, isIdempotent: true
   )
 
-  static let lightOff = DeviceStandardCommand(name: "lightOff", summary: "Turns the load off.", command1: 0x13, command2: .fixed(0x00))
+  static let lightOff = DeviceStandardCommand(name: "lightOff", summary: "Turns the load off.", command1: 0x13, command2: .fixed(0x00), effect: .actuation, isIdempotent: true)
 
   static let readLevel = DeviceStandardCommand(
     name: "readStatus",
     summary: "Reads the load's level.",
     command1: 0x19,
     command2: .fixed(0x00),
-    reply: MessageField(name: "onLevel", summary: "The level.", location: .command2, kind: .number(scale: 0.392157, unit: .percent))
+    reply: MessageField(name: "onLevel", summary: "The level.", location: .command2, kind: .number(scale: 0.392157, unit: .percent)),
+    effect: .readOnly, isIdempotent: true
   )
 
   static let readOnOff = DeviceStandardCommand(
@@ -91,25 +93,28 @@ enum ControlExample {
     summary: "Reads whether the load is on.",
     command1: 0x19,
     command2: .fixed(0x00),
-    reply: MessageField(name: "onLevel", summary: "0x00 when off.", location: .command2)
+    reply: MessageField(name: "onLevel", summary: "0x00 when off.", location: .command2),
+    effect: .readOnly, isIdempotent: true
   )
 
-  static let beep = DeviceStandardCommand(name: "beep", summary: "Beeps.", command1: 0x30, command2: .fixed(0x00))
+  static let beep = DeviceStandardCommand(name: "beep", summary: "Beeps.", command1: 0x30, command2: .fixed(0x00), effect: .actuation, isIdempotent: true)
 
   static let lightOnFast = DeviceStandardCommand(
     name: "lightOnFast",
     summary: "Turns the load on to the level in cmd2 at once.",
     command1: 0x12,
-    command2: .parameter(MessageField(name: "onLevel", summary: "The level.", location: .command2, range: 0...255))
+    command2: .parameter(MessageField(name: "onLevel", summary: "The level.", location: .command2, range: 0...255)),
+    effect: .actuation, isIdempotent: true
   )
 
-  static let lightOffFast = DeviceStandardCommand(name: "lightOffFast", summary: "Turns the load off at once.", command1: 0x14, command2: .fixed(0x00))
+  static let lightOffFast = DeviceStandardCommand(name: "lightOffFast", summary: "Turns the load off at once.", command1: 0x14, command2: .fixed(0x00), effect: .actuation, isIdempotent: true)
 
   static let instantChange = DeviceStandardCommand(
     name: "instantChange",
     summary: "Changes the load to the level in cmd2 at once.",
     command1: 0x21,
-    command2: .parameter(MessageField(name: "onLevel", summary: "The level.", location: .command2, range: 0...255))
+    command2: .parameter(MessageField(name: "onLevel", summary: "The level.", location: .command2, range: 0...255)),
+    effect: .actuation, isIdempotent: true
   )
 
   // MARK: - Group types
@@ -198,20 +203,22 @@ enum ControlExample {
       lightOn,
       lightOff,
       readLevel,
-      DeviceStandardCommand(name: "readFanSpeed", summary: "Reads the fan speed.", command1: 0x19, command2: .fixed(0x03))
+      DeviceStandardCommand(name: "readFanSpeed", summary: "Reads the fan speed.", command1: 0x19, command2: .fixed(0x03), effect: .readOnly, isIdempotent: true)
     ],
     extendedCommands: [
       DeviceExtendedCommand(
         name: "fanOff",
         summary: "Turns the fan off.",
         command: Command(command1: 0x13, command2: 0x00),
-        fixedBytes: [FixedUserDataByte(position: 1, value: 0x02)]
+        fixedBytes: [FixedUserDataByte(position: 1, value: 0x02)],
+        effect: .actuation, isIdempotent: true
       ),
       DeviceExtendedCommand(
         name: "fanHigh",
         summary: "Turns the fan to high.",
         command: Command(command1: 0x11, command2: 0xFF),
-        fixedBytes: [FixedUserDataByte(position: 1, value: 0x02)]
+        fixedBytes: [FixedUserDataByte(position: 1, value: 0x02)],
+        effect: .actuation, isIdempotent: true
       )
     ],
     groupTypes: [
@@ -254,7 +261,8 @@ enum ControlExample {
           summary: "The outlets that are on.",
           location: .command2,
           kind: .flags([FieldBit(mask: 0x01, name: "topOn"), FieldBit(mask: 0x02, name: "bottomOn")])
-        )
+        ),
+        effect: .readOnly, isIdempotent: true
       )
     ],
     extendedCommands: [
@@ -263,14 +271,16 @@ enum ControlExample {
         summary: "Turns the bottom outlet on.",
         command: Command(command1: 0x11, command2: 0xFF),
         fixedBytes: [FixedUserDataByte(position: 1, value: 0x02)],
-        integrity: .checksum
+        integrity: .checksum,
+        effect: .actuation, isIdempotent: true
       ),
       DeviceExtendedCommand(
         name: "bottomOff",
         summary: "Turns the bottom outlet off.",
         command: Command(command1: 0x13, command2: 0x00),
         fixedBytes: [FixedUserDataByte(position: 1, value: 0x02)],
-        integrity: .checksum
+        integrity: .checksum,
+        effect: .actuation, isIdempotent: true
       )
     ],
     groupTypes: [

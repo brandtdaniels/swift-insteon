@@ -33,7 +33,7 @@ enum ExploreCommands {
     do {
 
       // Listening starts before the message, so nothing the device sends is missed.
-      messages = try await network.send(message, collectingFor: .seconds(request.waitSeconds)) { (acknowledgment: ReceivedFrame) -> Void in
+      messages = try await network.send(message, collectingFor: .seconds(request.waitSeconds), consent: request.consent) { (acknowledgment: ReceivedFrame) -> Void in
 
         Output.line("ACK: \(text(of: acknowledgment))")
 

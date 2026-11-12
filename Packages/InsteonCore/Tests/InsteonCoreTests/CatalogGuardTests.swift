@@ -43,13 +43,13 @@ struct CatalogGuardTests {
           { "name": "panelLock", "description": "Locks the panel.", "query": "0x00", "bit": "0x80", "on": "0x10", "off": "0x11", "label": "Panel lock" }
         ],
         "flagCommands": [
-          { "name": "lockOn", "description": "Locks the device.", "command2": "0x0C", "guard": "never" }
+          { "name": "lockOn", "description": "Locks the device.", "command2": "0x0C", "guard": "never", "effect": "destructive", "idempotent": false }
         ],
         "standardCommands": [
-          { "name": "lightOn", "description": "On.", "command1": "0x11", "command2": "0xFF" },
-          { "name": "lightOff", "description": "Off.", "command1": "0x13", "command2": "0x00" },
-          { "name": "chimeOn", "description": "Chimes.", "command1": "0x45", "command2": "0x01", "guard": "never" },
-          { "name": "chimeOff", "description": "Stops chiming.", "command1": "0x45", "command2": "0x00" }
+          { "name": "lightOn", "description": "On.", "command1": "0x11", "command2": "0xFF", "effect": "actuation", "idempotent": true },
+          { "name": "lightOff", "description": "Off.", "command1": "0x13", "command2": "0x00", "effect": "actuation", "idempotent": true },
+          { "name": "chimeOn", "description": "Chimes.", "command1": "0x45", "command2": "0x01", "guard": "never", "effect": "destructive", "idempotent": false },
+          { "name": "chimeOff", "description": "Stops chiming.", "command1": "0x45", "command2": "0x00", "effect": "actuation", "idempotent": true }
         ],
         "extendedCommands": [
           { "name": "writeFlags", "description": "Writes the flags byte.", "command1": "0x2E", "command2": "0x00",
@@ -59,9 +59,9 @@ struct CatalogGuardTests {
                 { "mask": "0x01", "name": "lockBit", "guard": "neverSet" },
                 { "mask": "0x02", "name": "keepBit", "guard": "keep" },
                 { "mask": "0x04", "name": "freeBit" }
-              ] }] },
+              ] }], "effect": "configuration", "idempotent": true },
           { "name": "sleepNever", "description": "Locks while asleep.", "command1": "0x20", "command2": "0x00", "integrity": "checksum",
-            "parameters": [{ "name": "sleep", "description": "The sleep.", "byte": 3 }], "guard": "never" }
+            "parameters": [{ "name": "sleep", "description": "The sleep.", "byte": 3 }], "guard": "never", "effect": "destructive", "idempotent": false }
         ],
         "extendedSettings": {
           "perButton": false,

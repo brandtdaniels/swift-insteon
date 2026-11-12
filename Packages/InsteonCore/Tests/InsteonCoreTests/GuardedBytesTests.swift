@@ -72,11 +72,11 @@ struct GuardedBytesTests {
         "name": "Example flagless switch",
         "description": "A command set with no operating flags.",
         "standardCommands": [
-          { "name": "lightOn", "description": "On.", "command1": "0x11", "command2": "0xFF" },
+          { "name": "lightOn", "description": "On.", "command1": "0x11", "command2": "0xFF", "effect": "actuation", "idempotent": true },
           { "name": "setFlags", "description": "Set Operating Flags with a cmd2 the caller gives.", "command1": "0x20",
-            "parameter": { "name": "flags", "description": "The cmd2." } },
+            "parameter": { "name": "flags", "description": "The cmd2." }, "effect": "configuration", "idempotent": true },
           { "name": "poke", "description": "Poke One Byte.", "command1": "0x29",
-            "parameter": { "name": "byte", "description": "The byte." } }
+            "parameter": { "name": "byte", "description": "The byte." }, "effect": "actuation", "idempotent": true }
         ],
         "groupTypes": [{
           "name": "load",
@@ -232,7 +232,7 @@ struct GuardedBytesTests {
 
       await #expect(throws: SendRefusal.protected(expected), "\(knowledge) \(command)") {
 
-        _ = try await network.send(message, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+        _ = try await network.send(message, collectingFor: .zero, consent: .everything) { (_: ReceivedFrame) -> Void in }
 
       }
 
@@ -255,7 +255,7 @@ struct GuardedBytesTests {
 
       let message = DirectMessage(to: Self.address, command1: command.command1, command2: command.command2, data: nil, hasChecksum: false)
 
-      _ = try await network.send(message, collectingFor: .zero) { (frame: ReceivedFrame) -> Void in
+      _ = try await network.send(message, collectingFor: .zero, consent: .everything) { (frame: ReceivedFrame) -> Void in
 
         acknowledged.append(Command(command1: frame.frame[9], command2: frame.frame[10]))
 
@@ -308,7 +308,7 @@ struct GuardedBytesTests {
 
     for command in Self.protectedCommands {
 
-      let raw = DeviceLifecycle.HubLinking.RawMessage(command: command, isExtended: isExtended, integrity: isExtended ? .checksum : .unprotected)
+      let raw = DeviceLifecycle.HubLinking.RawMessage(command: command, isExtended: isExtended, integrity: isExtended ? .checksum : .unprotected, effect: .configuration, isIdempotent: true)
       let error: DeviceControlError? = await #expect(throws: DeviceControlError.self, "\(knowledge) \(command)") {
 
         try await device.sendLinkingMessage(.bytes(raw), duration: nil, writableFlags: [])
@@ -336,13 +336,16 @@ struct GuardedBytesTests {
     let modem: SettingsModem = Self.modem()
     let device: Device = try network(modem, knowing: knowledge).device(Self.address)
 
-    for command in Self.allowedCommands {
+    // Light On changes what the device does at once, which keeping a device awake doesn't grant.
+    let keepAwakeCommands: [Command] = Self.allowedCommands.filter { (command: Command) -> Bool in command.command1 != 0x11 }
 
-      try await device.sendLinkingMessage(.bytes(DeviceLifecycle.HubLinking.RawMessage(command: command)), duration: nil, writableFlags: [])
+    for command in keepAwakeCommands {
+
+      try await device.sendLinkingMessage(.bytes(DeviceLifecycle.HubLinking.RawMessage(command: command, effect: .configuration, isIdempotent: true)), duration: nil, writableFlags: [])
 
     }
 
-    #expect(await modem.standardCommands == Self.allowedCommands)
+    #expect(await modem.standardCommands == keepAwakeCommands)
 
   }
 
@@ -356,7 +359,8 @@ struct GuardedBytesTests {
       command: Command(command1: 0x2E, command2: 0x00),
       isExtended: true,
       fixedBytes: [FixedUserDataByte(position: 1, value: 0x01), FixedUserDataByte(position: 2, value: 0x05), FixedUserDataByte(position: 3, value: 0xFF)],
-      integrity: .checksum
+      integrity: .checksum,
+      effect: .configuration, isIdempotent: true
     )
 
     let error: DeviceControlError? = await #expect(throws: DeviceControlError.self) {
@@ -381,7 +385,7 @@ struct GuardedBytesTests {
     .timeLimit(.minutes(1)),
     arguments: [
       // Checksum on's bytes, which a command set with no flags doesn't name.
-      DeviceLifecycle.HubLinking.HubMessage.bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x19))),
+      DeviceLifecycle.HubLinking.HubMessage.bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x19), effect: .configuration, isIdempotent: true)),
       // A command the command set doesn't describe.
       DeviceLifecycle.HubLinking.HubMessage.command("noSuchCommand"),
       // An extended Set given by its bytes, which never writes settings.
@@ -389,7 +393,8 @@ struct GuardedBytesTests {
         command: Command(command1: 0x2E, command2: 0x00),
         isExtended: true,
         fixedBytes: [FixedUserDataByte(position: 1, value: 0x01), FixedUserDataByte(position: 2, value: 0x05)],
-        integrity: .checksum
+        integrity: .checksum,
+        effect: .configuration, isIdempotent: true
       ))
     ]
   )
@@ -402,7 +407,7 @@ struct GuardedBytesTests {
     // Keeping it awake is allowed, but the release would be refused, each for its own reason.
     let keepAwake = DeviceLifecycle.HubLinking.KeepAwake(
       timing: .afterLinked,
-      send: .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x18))),
+      send: .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x18), effect: .configuration, isIdempotent: true)),
       release: release
     )
     let catalog = DeviceCatalog(
@@ -488,9 +493,9 @@ struct GuardedBytesTests {
     name: "Example panel",
     summary: "Set Operating Flags as extended commands.",
     extendedCommands: [
-      DeviceExtendedCommand(name: "indicatorOn", summary: "Lights the indicator.", command: Command(command1: 0x20, command2: 0x0C), integrity: .checksum),
-      DeviceExtendedCommand(name: "lockoutOn", summary: "Locks out linking.", command: Command(command1: 0x20, command2: 0x00), integrity: .checksum, sendGuard: .never),
-      DeviceExtendedCommand(name: "lockoutOff", summary: "Allows linking.", command: Command(command1: 0x20, command2: 0x01), integrity: .checksum)
+      DeviceExtendedCommand(name: "indicatorOn", summary: "Lights the indicator.", command: Command(command1: 0x20, command2: 0x0C), integrity: .checksum, effect: .configuration, isIdempotent: true),
+      DeviceExtendedCommand(name: "lockoutOn", summary: "Locks out linking.", command: Command(command1: 0x20, command2: 0x00), integrity: .checksum, sendGuard: .never, effect: .destructive, isIdempotent: false),
+      DeviceExtendedCommand(name: "lockoutOff", summary: "Allows linking.", command: Command(command1: 0x20, command2: 0x01), integrity: .checksum, effect: .configuration, isIdempotent: true)
     ]
   )
 
@@ -501,8 +506,8 @@ struct GuardedBytesTests {
     name: "Example hidden sensor",
     summary: "Keep-awake flag commands.",
     flagCommands: [
-      OperatingFlagCommand(name: "holdAwakeOn", summary: "Keeps the sensor awake.", command2: 0x18),
-      OperatingFlagCommand(name: "holdAwakeOff", summary: "Lets the sensor sleep again.", command2: 0x19)
+      OperatingFlagCommand(name: "holdAwakeOn", summary: "Keeps the sensor awake.", command2: 0x18, effect: .configuration, isIdempotent: true),
+      OperatingFlagCommand(name: "holdAwakeOff", summary: "Lets the sensor sleep again.", command2: 0x19, effect: .configuration, isIdempotent: true)
     ]
   )
 
@@ -586,11 +591,11 @@ struct GuardedBytesTests {
     let buttonLock = DirectMessage(to: Self.keypad.address, command1: 0x20, command2: 0x19, data: nil, hasChecksum: false)
     let radioMute = DirectMessage(to: Self.keypad.address, command1: 0x20, command2: 0x0C, data: nil, hasChecksum: false)
 
-    _ = try await network.send(buttonLock, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+    _ = try await network.send(buttonLock, collectingFor: .zero, consent: .everything) { (_: ReceivedFrame) -> Void in }
 
     await #expect(throws: SendRefusal.setsGuardedFlag(.setOperatingFlags0x0C, label: "Radio mute", setting: true)) {
 
-      _ = try await network.send(radioMute, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+      _ = try await network.send(radioMute, collectingFor: .zero, consent: .everything) { (_: ReceivedFrame) -> Void in }
 
     }
 
@@ -617,7 +622,7 @@ struct GuardedBytesTests {
       OperatingFlag(name: "quiet", summary: "Quiets the panel.", query: .operatingFlags, bit: 0x04, on: 0x19, off: 0x1A, writeGuard: .keep)
     ],
     flagCommands: [
-      OperatingFlagCommand(name: "lockoutOn", summary: "Locks out linking.", command2: 0x00, sendGuard: .never)
+      OperatingFlagCommand(name: "lockoutOn", summary: "Locks out linking.", command2: 0x00, sendGuard: .never, effect: .destructive, isIdempotent: false)
     ]
   )
 
@@ -651,7 +656,7 @@ struct GuardedBytesTests {
 
       await #expect(throws: refusal, "cmd2 \(command2)") {
 
-        _ = try await network.send(message, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+        _ = try await network.send(message, collectingFor: .zero, consent: .everything) { (_: ReceivedFrame) -> Void in }
 
       }
 
@@ -702,7 +707,7 @@ struct GuardedBytesTests {
 
     await #expect(throws: SendRefusal.extendedSetWithoutCommandSet) {
 
-      _ = try await network.send(set, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+      _ = try await network.send(set, collectingFor: .zero, consent: .everything) { (_: ReceivedFrame) -> Void in }
 
     }
 
@@ -711,7 +716,7 @@ struct GuardedBytesTests {
     // An extended Get writes nothing, so it's sent.
     let get = DirectMessage(to: Self.address, command1: 0x2E, command2: 0x00, data: [0x01, 0x00], hasChecksum: true)
 
-    _ = try await network.send(get, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+    _ = try await network.send(get, collectingFor: .zero, consent: .everything) { (_: ReceivedFrame) -> Void in }
 
     #expect(await modem.extendedMessages.count == 1)
 
@@ -745,7 +750,7 @@ struct GuardedBytesTests {
     // Without the device's report, any guarded bit on the byte refuses it, the first named.
     await #expect(throws: SendRefusal.writesGuardedFlags(label: "Beeper lock")) {
 
-      _ = try await network.send(configuration, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+      _ = try await network.send(configuration, collectingFor: .zero, consent: .everything) { (_: ReceivedFrame) -> Void in }
 
     }
 
@@ -753,7 +758,7 @@ struct GuardedBytesTests {
 
     await #expect(throws: SendRefusal.writesGuardedFlags(label: "lockBit")) {
 
-      _ = try await network.send(flagsByte, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+      _ = try await network.send(flagsByte, collectingFor: .zero, consent: .everything) { (_: ReceivedFrame) -> Void in }
 
     }
 
@@ -762,7 +767,7 @@ struct GuardedBytesTests {
     // An extended Get writes nothing.
     let get = DirectMessage(to: device, command1: 0x2E, command2: 0x00, data: [0x01, 0x00], hasChecksum: true)
 
-    _ = try await network.send(get, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+    _ = try await network.send(get, collectingFor: .zero, consent: .everything) { (_: ReceivedFrame) -> Void in }
 
     #expect(await modem.extendedMessages.count == 1)
 
@@ -779,7 +784,7 @@ struct GuardedBytesTests {
 
     let error: SendRefusal? = await #expect(throws: SendRefusal.self) {
 
-      _ = try await network.send(extendedOnlyOff, collectingFor: .zero) { (_: ReceivedFrame) -> Void in }
+      _ = try await network.send(extendedOnlyOff, collectingFor: .zero, consent: .everything) { (_: ReceivedFrame) -> Void in }
 
     }
 

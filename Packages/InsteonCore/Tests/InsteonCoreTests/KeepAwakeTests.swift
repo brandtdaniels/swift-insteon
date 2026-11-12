@@ -41,7 +41,8 @@ struct KeepAwakeTests {
         command: Command(command1: 0x2E, command2: 0x00),
         fixedBytes: [FixedUserDataByte(position: 1, value: 0x01), FixedUserDataByte(position: 2, value: 0x04)],
         parameters: [MessageField(name: "duration", summary: "How long it remains awake.", location: .userData([3]), kind: .number(unit: .seconds), range: 0...255)],
-        integrity: .checksum
+        integrity: .checksum,
+        effect: .configuration, isIdempotent: true
       )
     ]
   )
@@ -134,8 +135,8 @@ struct KeepAwakeTests {
         ]),
         keepAwake: DeviceLifecycle.HubLinking.KeepAwake(
           timing: .beforeLinking,
-          send: .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x06), isExtended: true, integrity: .checksum)),
-          release: .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x07), isExtended: true, integrity: .checksum)),
+          send: .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x06), isExtended: true, integrity: .checksum, effect: .configuration, isIdempotent: true)),
+          release: .bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x07), isExtended: true, integrity: .checksum, effect: .configuration, isIdempotent: true)),
           duration: .seconds(240)
         )
       )
@@ -174,6 +175,47 @@ struct KeepAwakeTests {
     await modem.extendedRequests.filter { (request: InMemoryModem.ExtendedRequest) -> Bool in request.device == device }.map(\.command)
 
   }
+
+  /// A made-up contact sensor whose catalog marks the extended Set that keeps it awake as
+  /// destructive, which a catalog build rejects.
+  static let wiper = (address: InsteonAddress(0x5A, 0x6B, 0x04), identity: ReportedIdentity(category: 0x10, subcategory: 0x72, firmwareVersion: 0x41))
+
+  static var wiperCommands: CommandSet {
+
+    var commands: CommandSet = contactCommands
+
+    commands.id = "exampleWiper"
+    commands.extendedCommands[0].effect = .destructive
+    commands.extendedCommands[0].isIdempotent = false
+
+    return commands
+
+  }
+
+  /// The same sensor, kept awake before linking.
+  static let earlyWiper = (address: InsteonAddress(0x5A, 0x6B, 0x05), identity: ReportedIdentity(category: 0x10, subcategory: 0x73, firmwareVersion: 0x41))
+
+  static let wiperCatalog = DeviceCatalog(
+    profiles: [
+      sleepy(
+        model: "9414",
+        name: "Example Wiping Sensor",
+        identity: wiper.identity,
+        commands: wiperCommands,
+        groups: [1],
+        keepAwake: DeviceLifecycle.HubLinking.KeepAwake(timing: .afterLinked, send: .command("holdAwake"))
+      ),
+      sleepy(
+        model: "9415",
+        name: "Example Early Wiping Sensor",
+        identity: earlyWiper.identity,
+        commands: wiperCommands,
+        groups: [1],
+        keepAwake: DeviceLifecycle.HubLinking.KeepAwake(timing: .beforeLinking, send: .command("holdAwake"))
+      )
+    ],
+    commandSets: [wiperCommands]
+  )
 
   // MARK: - Sending and releasing
 
@@ -367,7 +409,7 @@ struct KeepAwakeTests {
         OperatingFlag(name: "radioMute", summary: "Mutes the radio.", query: .operatingFlags, bit: 0x40, on: 0x0C, off: 0x0D, writeGuard: .keep)
       ],
       standardCommands: [
-        DeviceStandardCommand(name: "muteRadio", summary: "Mutes the radio.", command1: 0x20, command2: .fixed(0x0C), sendGuard: .never)
+        DeviceStandardCommand(name: "muteRadio", summary: "Mutes the radio.", command1: 0x20, command2: .fixed(0x0C), sendGuard: .never, effect: .destructive, isIdempotent: false)
       ]
     )
 
@@ -396,7 +438,7 @@ struct KeepAwakeTests {
     .timeLimit(.minutes(1)),
     arguments: [
       DeviceLifecycle.HubLinking.HubMessage.flag(DeviceProfile.Group.Condition(flag: "lockout", isSet: true)),
-      DeviceLifecycle.HubLinking.HubMessage.bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x0C))),
+      DeviceLifecycle.HubLinking.HubMessage.bytes(DeviceLifecycle.HubLinking.RawMessage(command: Command(command1: 0x20, command2: 0x0C), effect: .configuration, isIdempotent: true)),
       DeviceLifecycle.HubLinking.HubMessage.command("muteRadio")
     ]
   )
@@ -496,7 +538,8 @@ struct KeepAwakeTests {
       summary: "Keeps it awake.",
       command: Command(command1: 0x2E, command2: 0x00),
       fixedBytes: [FixedUserDataByte(position: 1, value: 0x01)],
-      parameters: [mode, duration]
+      parameters: [mode, duration],
+      effect: .configuration, isIdempotent: true
     )
 
     // The parameter in seconds takes the duration, even after another number.
@@ -510,7 +553,7 @@ struct KeepAwakeTests {
     #expect([userData[1], userData[3], userData[4]] == [0x01, 0xFF, 0x00])
 
     // With no unit, a command's only number takes it.
-    let only = DeviceExtendedCommand(name: "holdAwake", summary: "Keeps it awake.", command: Command(command1: 0x2E, command2: 0x00), parameters: [mode])
+    let only = DeviceExtendedCommand(name: "holdAwake", summary: "Keeps it awake.", command: Command(command1: 0x2E, command2: 0x00), parameters: [mode], effect: .configuration, isIdempotent: true)
 
     #expect(Device.durationParameter(of: only) == mode)
 
@@ -527,6 +570,57 @@ struct KeepAwakeTests {
     #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: contact).isEmpty)
     #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: dimmer).isEmpty)
     #expect(DeviceLinkingCoordinator.keepAwakeFlags(of: nil).isEmpty)
+
+  }
+
+  // MARK: - Consent
+
+  @Test(.timeLimit(.minutes(1)), arguments: [false, true])
+  func stopsLinkingBeforeAnythingIsSentWhenTheKeepAwakeMessageIsDestructive(keptAwakeBeforeLinking: Bool) async throws {
+
+    let sensor: (address: InsteonAddress, identity: ReportedIdentity) = keptAwakeBeforeLinking ? Self.earlyWiper : Self.wiper
+    let modem = InMemoryModem()
+    let requests = RequestCount()
+    await modem.setEngine(.i2cs, of: sensor.address)
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      await requests.record(operation)
+
+    }
+    let network: DeviceNetwork = self.network(modem, catalog: Self.wiperCatalog, identities: [sensor.address: sensor.identity])
+    let recorder: LinkingRecorder = readying(sensor.address, on: modem)
+
+    let error: DeviceControlError? = await #expect(throws: DeviceControlError.self) {
+
+      _ = try await network.linking.link(sensor.address, as: .controller, observer: recorder)
+
+    }
+
+    guard case let .needsConsent(.keepAwake, effect, _)? = error else {
+
+      Issue.record("Expected needsConsent, got \(String(describing: error)).")
+
+      return
+
+    }
+
+    #expect(effect == .destructive)
+    #expect(await modem.linkingSteps.isEmpty)
+    #expect(await modem.extendedRequests.isEmpty)
+    #expect(await requests.count == 0)
+
+  }
+
+}
+
+/// Counts the operations an in-memory modem is asked to carry out.
+actor RequestCount {
+
+  private(set) var count: Int = 0
+
+  func record(_ operation: InMemoryModem.Operation) {
+
+    count += 1
 
   }
 

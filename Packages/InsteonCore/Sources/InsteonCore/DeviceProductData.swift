@@ -1,3 +1,4 @@
+import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonModem
 import InsteonProtocol
@@ -68,6 +69,7 @@ extension DeviceNetwork {
 
     let modem: any LinkingModem = self.modem
     let timeout: Duration = requestTimeout
+    let target: Device = self.device(device)
 
     do {
 
@@ -78,7 +80,7 @@ extension DeviceNetwork {
 
           do {
 
-            _ = try await modem.request(StandardMessage(to: device, command: StandardDirectCommand.productDataRequest), timeout: timeout)
+            _ = try await target.request(StandardMessage(to: device, command: StandardDirectCommand.productDataRequest), timeout: timeout, declaring: .readOnly, for: .control(.status))
 
           } catch let error as ModemError {
 
