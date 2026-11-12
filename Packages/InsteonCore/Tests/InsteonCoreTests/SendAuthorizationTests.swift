@@ -369,6 +369,24 @@ struct SendAuthorizationTests {
 
   }
 
+  @Test(.timeLimit(.minutes(1))) func announcesASendOnlyOnceItIsAllowed() async throws {
+
+    let (network, _) = try await network()
+    var announced = 0
+
+    _ = try await network.send(message(0x19), collectingFor: .seconds(0), onSending: { announced += 1 }) { (_: ReceivedFrame) -> Void in }
+    #expect(announced == 1)
+
+    await #expect(throws: SendRefusal.needsConsent(.destructive)) {
+
+      _ = try await network.send(self.message(0x55), collectingFor: .seconds(0), onSending: { announced += 100 }) { (_: ReceivedFrame) -> Void in }
+
+    }
+
+    #expect(announced == 1)
+
+  }
+
   @Test(.timeLimit(.minutes(1))) func refusesAnEntryTheCatalogNeverSendsWhateverItsCmd1() async throws {
 
     let (network, sent) = try await network()

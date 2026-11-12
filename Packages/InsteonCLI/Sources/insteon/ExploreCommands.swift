@@ -3,126 +3,36 @@ import InsteonCore
 
 /// `insteon device ADDRESS send` and `insteon modem send`: messages and serial commands sent
 /// as given, for exploring what the Insteon device catalog doesn't describe yet, through
-/// InsteonCore's `DeviceNetwork` and `ModemSession`, which refuse what's never sent.
+/// InsteonCore's `DeviceNetwork` and `ModemSession`, which refuse what's never sent. What they
+/// print, and in what order, is `RawSendFlow`.
 enum ExploreCommands {
-
-  // MARK: - device ADDRESS send
 
   static func send(_ request: DirectMessageRequest, to device: InsteonAddress, network: DeviceNetwork) async throws {
 
-    let message = DirectMessage(
-      to: device,
-      command1: request.command1,
-      command2: request.command2,
-      data: request.userData,
-      hasChecksum: request.hasChecksum
-    )
-
-    if let data = message.userData {
-
-      Output.note("Sending \(device) extended cmd1 \(Hex.byte(message.command1)) cmd2 \(Hex.byte(message.command2)), data \(Hex.pairs(data))")
-
-    } else {
-
-      Output.note("Sending \(device) cmd1 \(Hex.byte(message.command1)) cmd2 \(Hex.byte(message.command2))")
-
-    }
-
-    let messages: [ReceivedFrame]
-
-    do {
-
-      // Listening starts before the message, so nothing the device sends is missed.
-      messages = try await network.send(message, collectingFor: .seconds(request.waitSeconds), consent: request.consent) { (acknowledgment: ReceivedFrame) -> Void in
-
-        Output.line("ACK: \(text(of: acknowledgment))")
-
-      }
-
-    } catch let refusal as SendRefusal {
-
-      throw CommandFailure(description: SendRefusalText.sentence(refusal, from: .deviceSend))
-
-    } catch {
-
-      guard case let .deviceRejected(_, reason)? = SendFailure(error) else {
-
-        throw error
-
-      }
-
-      Output.line("NAK: \(reason.summary) (cmd2 \(Hex.byte(reason.rawValue)))")
-
-      throw CommandFailure(description: "\(device) rejected the message.")
-
-    }
-
-    for frame in messages {
-
-      Output.line(text(of: frame))
-
-    }
-
-    if messages.isEmpty {
-
-      Output.line("No other messages from \(device) in \(request.waitSeconds) s.")
-
-    }
+    try await RawSendFlow.deviceSend(request, to: device, through: network, output: TerminalOutput())
 
   }
-
-  // MARK: - modem send
 
   static func send(_ request: RawSerialRequest, modem: ModemSession) async throws {
 
-    Output.note("Writing \(Hex.pairs(request.bytes)) to the modem")
-
-    let received: [RawModemReply]
-
-    do {
-
-      received = try await modem.write(rawCommand: request.bytes, forcing: request.isForced, collectingFor: .seconds(request.waitSeconds))
-
-    } catch let refusal as SendRefusal {
-
-      throw CommandFailure(description: SendRefusalText.sentence(refusal, from: .modemSend))
-
-    }
-
-    for reply in received {
-
-      Output.line(text(of: reply))
-
-    }
-
-    if received.isEmpty {
-
-      Output.line("The modem sent nothing in \(request.waitSeconds) s.")
-
-    }
+    try await RawSendFlow.modemSend(request, through: modem, output: TerminalOutput())
 
   }
 
-  /// A message from a device: its frame in hexadecimal, and what it says.
-  private static func text(of frame: ReceivedFrame) -> String {
+}
 
-    "\(RawFrame.text(of: frame.frame))  \(WatchText.message(frame.summary))"
+/// The terminal: progress to standard error, results to standard output.
+struct TerminalOutput: CommandOutput {
+
+  func note(_ text: String) {
+
+    Output.note(text)
 
   }
 
-  /// A reply in hexadecimal where its bytes are known, and as the package reads it.
-  private static func text(of reply: RawModemReply) -> String {
+  func line(_ text: String) {
 
-    switch reply {
-    case let .echo(bytes, kind):
-      return "\(Hex.pairs(bytes))  \(kind)"
-    case let .message(frame):
-      return text(of: frame)
-    case .negativeAcknowledgment:
-      return "15  NAK"
-    case let .other(kind, description):
-      return "\(kind): \(description)"
-    }
+    Output.line(text)
 
   }
 

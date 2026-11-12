@@ -42,7 +42,7 @@ import InsteonProtocol
 public actor DeviceNetwork {
 
   /// The modem the devices are reached through. It's internal, so every message a front end
-  /// sends a device goes through the guards of ``Device`` and ``send(_:collectingFor:consent:onAcknowledgment:)``.
+  /// sends a device goes through the guards of ``Device`` and ``send(_:collectingFor:consent:onSending:onAcknowledgment:)``.
   nonisolated let modem: any LinkingModem
 
   /// The identities devices reported, described with the Insteon device catalog.
@@ -493,6 +493,8 @@ public actor DeviceNetwork {
   ///   - duration: How long to collect what the device sends after its acknowledgment.
   ///   - consent: What the caller grants the message to do. Defaults to nothing, which sends
   ///     only a message that asks for state.
+  ///   - onSending: Called once the message is allowed, just before it is sent, and never for a
+  ///     refused message.
   ///   - onAcknowledgment: Called with the device's acknowledgment.
   /// - Returns: The other messages from the device, in order.
   /// - Throws: ``SendRefusal`` before anything is sent, such as ``SendRefusal/needsConsent(_:)``
@@ -503,10 +505,11 @@ public actor DeviceNetwork {
     _ message: DirectMessage,
     collectingFor duration: Duration,
     consent: SendConsent = SendConsent(),
+    onSending: () -> Void = {},
     onAcknowledgment: (ReceivedFrame) -> Void
   ) async throws -> [ReceivedFrame] {
 
-    try await device(message.device).sendAsGiven(message, collectingFor: duration, consent: consent, onAcknowledgment: onAcknowledgment)
+    try await device(message.device).sendAsGiven(message, collectingFor: duration, consent: consent, onSending: onSending, onAcknowledgment: onAcknowledgment)
 
   }
 
