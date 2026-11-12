@@ -13,6 +13,7 @@ extension CommandSet: Decodable {
     case extendedSettings
     case standardCommands
     case extendedCommands
+    case serialCommands
     case directMessages
     case enumerations
     case displayScale
@@ -305,6 +306,30 @@ extension CommandSet: Decodable {
     let integrity: String?
 
     let reply: ExtendedReply?
+
+    let verification: Verification?
+
+    let `guard`: String?
+
+    let effect: String?
+
+    let idempotent: Bool?
+
+  }
+
+  private struct SerialCommand: Decodable {
+
+    let name: String
+
+    let description: String
+
+    let number: ProfileByte
+
+    let fixed: [FixedByte]?
+
+    let parameters: [Field]?
+
+    let reply: [Field]?
 
     let verification: Verification?
 
@@ -657,6 +682,35 @@ extension CommandSet: Decodable {
         parameters: try (command.parameters ?? []).map { try field($0, in: .extendedCommands, extended: true) },
         integrity: commandIntegrity,
         reply: reply,
+        verification: command.verification ?? .documented,
+        sendGuard: command.guard.map(CommandGuard.init(rawValue:)),
+        effect: command.effect.map(CommandEffect.init(rawValue:)),
+        isIdempotent: command.idempotent
+      )
+
+    }
+
+    serialCommands = try (container.decodeIfPresent([SerialCommand].self, forKey: .serialCommands) ?? []).map { command -> DeviceSerialCommand in
+
+      let positions: [Int] = command.fixed?.map(\.position) ?? []
+
+      guard positions.allSatisfy({ (1...UserData.count).contains($0) }), Set(positions).count == positions.count else {
+
+        throw corrupted(.serialCommands, "The \(setID) command set's \(command.name) command fixes a byte outside payload positions 1 through 14 or fixes a byte twice.")
+
+      }
+
+      return DeviceSerialCommand(
+        name: SettingName(rawValue: command.name),
+        summary: command.description,
+        number: command.number.value,
+        fixedBytes: (command.fixed ?? []).sorted { (left: FixedByte, right: FixedByte) -> Bool in left.position < right.position }.map { (byte: FixedByte) -> FixedPayloadByte in
+
+          FixedPayloadByte(position: byte.position, value: byte.value.value)
+
+        },
+        parameters: try (command.parameters ?? []).map { try field($0, in: .serialCommands, extended: true) },
+        reply: try (command.reply ?? []).map { try field($0, in: .serialCommands, extended: true) },
         verification: command.verification ?? .documented,
         sendGuard: command.guard.map(CommandGuard.init(rawValue:)),
         effect: command.effect.map(CommandEffect.init(rawValue:)),

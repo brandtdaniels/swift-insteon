@@ -28,7 +28,7 @@ try await ModemSession.withHub(host: host, port: HubLocation.defaultPort, user: 
 }
 ```
 
-``ModemSession/withHub(host:port:user:password:_:)`` sends the Hub's user name and password,
+``ModemSession/withHub(host:port:user:password:catalog:_:)`` sends the Hub's user name and password,
 which the Hub's plain HTTP carries readably, only to an IPv4 address in `10.0.0.0/8`,
 `172.16.0.0/12` or `192.168.0.0/16`. A host name, an IPv6, loopback or link-local address, and
 a public address are refused with ``HubAddressRefused`` before anything is sent, and
@@ -334,7 +334,11 @@ one the command set doesn't name with ``SendRefusal/protected(_:)``. A message i
 checked like every message a ``Device`` sends, and a serial command by
 ``SerialCommandPolicy``, which finds the ``ProtectedCommand``s in any message to a device or
 a group it holds. Nothing forces a ``ProtectedCommand`` through; `forcing` writes only a
-serial command the policy refuses unless it's forced:
+serial command the policy refuses unless it's forced, or one that needs more consent than
+reading, linking or acting. When the session was opened with a catalog, the modem is asked who it is once and its command
+set says what the command does: one that changes a setting, is destructive, or that neither
+the command set nor a flow of InsteonCore's describes, throws ``SendRefusal/needsConsent(_:)``
+unless it's forced:
 
 ```swift
 do {

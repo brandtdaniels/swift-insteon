@@ -7317,6 +7317,952 @@
       ]
     },
     {
+      "description": "The serial commands of the Insteon Hub 2242's modem, as the Insteon Hub Developer's Guide gives them: the commands of the Insteon powerline modems and those it marks as added after initial release.",
+      "id": "hubModem",
+      "name": "Insteon Hub modem",
+      "notes": [
+        "A serial command is 0x02, its number and its payload; the modem echoes it and ends the echo with an ACK (0x06) or a NAK (0x15). Send Insteon Standard or Extended Message (0x62) and Send ALL-Link Command (0x61) carry a device message, so the device's own command set describes them and they are not entries.",
+        "Start ALL-Linking and Manage ALL-Link Record are one command number each in the Insteon Hub Developer's Guide and one entry per control byte here, so each control byte has its own effect. A frame with a control byte no entry lists matches no entry.",
+        "Effects classify what the Insteon Hub Developer's Guide documents each command does. Get First, Get Next and Get ALL-Link Record for Sender are readOnly: the position they move is state that matters only to the scan.",
+        "modifyOrAddAllLinkRecord, modifyOrAddControllerRecord and modifyOrAddResponderRecord are destructive, not link: the Insteon Hub Developer's Guide has each overwrite a record that matches, so none only adds a record.",
+        "deleteAllLink removes the ALL-Link to a device, and resetModem clears the entire ALL-Link database, so both are destructive. rfSleep is destructive because the modem does not answer commands until it is woken with a byte of serial data.",
+        "sendX10 is not idempotent: an X10 Dim or Bright command repeats its step.",
+        "startAllLinkingAsResponder, startAllLinkingAsController and startAllLinkingAsEither are not idempotent: sending one again restarts ALL-Linking mode.",
+        "The Insteon Hub Developer's Guide gives the commands from 0x75 on in its summary table only, and charts Cancel Cleanup (0x74) alone. It lists 0x7B (Set RF Frequency Offset) and 0x7C (Set Acknowledge for TempLinc command), whose payloads it does not describe enough to take, so they have no entries.",
+        "writeDatabaseBytes overwrites an ALL-Link record in the modem's database at an address, so it is destructive. beep sounds at once, so it is actuation."
+      ],
+      "serialCommands": [
+        {
+          "description": "Asks the modem for its Insteon ID, device category, device subcategory and firmware version. The modem returns the values hard-coded at the factory, whatever Set Host Device Category set.",
+          "effect": "readOnly",
+          "idempotent": true,
+          "name": "getImInfo",
+          "number": "0x60",
+          "reply": [
+            {
+              "bytes": [
+                1,
+                2,
+                3
+              ],
+              "description": "The modem's Insteon ID, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 4,
+              "description": "The modem's device category.",
+              "name": "category"
+            },
+            {
+              "byte": 5,
+              "description": "The modem's device subcategory.",
+              "name": "subcategory"
+            },
+            {
+              "byte": 6,
+              "description": "The modem's firmware version.",
+              "name": "firmware"
+            }
+          ]
+        },
+        {
+          "description": "Sends a raw X10 address or X10 command.",
+          "effect": "actuation",
+          "idempotent": false,
+          "name": "sendX10",
+          "number": "0x63",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "The X10 house code in the four most significant bits and the key code in the four least significant.",
+              "name": "rawX10"
+            },
+            {
+              "byte": 2,
+              "description": "0x00 when the key code is an X10 unit code, 0x80 when it is an X10 command.",
+              "name": "x10Flag"
+            }
+          ]
+        },
+        {
+          "description": "Puts the modem into ALL-Linking mode without the SET button, to link as a responder. The modem's LED blinks until the ALL-Link completes or is canceled, and an ALL-Linking Completed message reports the link.",
+          "effect": "link",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x00"
+            }
+          ],
+          "idempotent": false,
+          "name": "startAllLinkingAsResponder",
+          "number": "0x64",
+          "parameters": [
+            {
+              "byte": 2,
+              "description": "The ALL-Link group to link.",
+              "name": "group"
+            }
+          ]
+        },
+        {
+          "description": "Puts the modem into ALL-Linking mode without the SET button, to link as a controller. The modem's LED blinks until the ALL-Link completes or is canceled, and an ALL-Linking Completed message reports the link.",
+          "effect": "link",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x01"
+            }
+          ],
+          "idempotent": false,
+          "name": "startAllLinkingAsController",
+          "number": "0x64",
+          "parameters": [
+            {
+              "byte": 2,
+              "description": "The ALL-Link group to link.",
+              "name": "group"
+            }
+          ]
+        },
+        {
+          "description": "Puts the modem into ALL-Linking mode without the SET button, to link as a controller when the modem starts ALL-Linking and as a responder when another device does. The modem's LED blinks until the ALL-Link completes or is canceled, and an ALL-Linking Completed message reports the link.",
+          "effect": "link",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x03"
+            }
+          ],
+          "idempotent": false,
+          "name": "startAllLinkingAsEither",
+          "number": "0x64",
+          "parameters": [
+            {
+              "byte": 2,
+              "description": "The ALL-Link group to link.",
+              "name": "group"
+            }
+          ]
+        },
+        {
+          "description": "Deletes the ALL-Link to a device for a group, through ALL-Linking mode.",
+          "effect": "destructive",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0xFF"
+            }
+          ],
+          "idempotent": true,
+          "name": "deleteAllLink",
+          "number": "0x64",
+          "parameters": [
+            {
+              "byte": 2,
+              "description": "The ALL-Link group to delete.",
+              "name": "group"
+            }
+          ]
+        },
+        {
+          "description": "Cancels ALL-Linking mode, whether it was started with the SET button or with Start ALL-Linking.",
+          "effect": "link",
+          "idempotent": true,
+          "name": "cancelAllLinking",
+          "number": "0x65"
+        },
+        {
+          "description": "Sets the device category and subcategory of the host, which the modem sends other devices while ALL-Linking. The modem keeps them across a power loss; Get IM Info still returns the factory values.",
+          "effect": "configuration",
+          "idempotent": true,
+          "name": "setHostDeviceCategory",
+          "number": "0x66",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "The host's device category.",
+              "name": "category"
+            },
+            {
+              "byte": 2,
+              "description": "The host's device subcategory.",
+              "name": "subcategory"
+            },
+            {
+              "byte": 3,
+              "description": "The host's firmware version, or a filler byte.",
+              "name": "firmware"
+            }
+          ]
+        },
+        {
+          "description": "Puts the modem in its factory reset state, which clears its entire ALL-Link database. The ACK follows the erase, about 20 seconds for a modem with external EEPROM and about 2 seconds for one without.",
+          "effect": "destructive",
+          "idempotent": true,
+          "name": "resetModem",
+          "number": "0x67"
+        },
+        {
+          "description": "Sets the byte the modem puts in cmd2 of the ACK it sends automatically after an Insteon direct message. The host has about 15 milliseconds after the message to send it.",
+          "effect": "configuration",
+          "idempotent": true,
+          "name": "setAckMessageByte",
+          "number": "0x68",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "The byte for cmd2 of the ACK.",
+              "name": "command2"
+            }
+          ]
+        },
+        {
+          "description": "Starts a scan of the modem's ALL-Link database. An ACK means an ALL-Link Record Response follows; a NAK means the database is empty.",
+          "effect": "readOnly",
+          "idempotent": true,
+          "name": "getFirstAllLinkRecord",
+          "number": "0x69"
+        },
+        {
+          "description": "Returns the next record in the modem's ALL-Link database. An ACK means an ALL-Link Record Response follows; a NAK means there are no more records.",
+          "effect": "readOnly",
+          "idempotent": true,
+          "name": "getNextAllLinkRecord",
+          "number": "0x6A"
+        },
+        {
+          "description": "Sets all of the modem's configuration flags at once. Reading them with Get IM Configuration first lets a caller change one bit.",
+          "effect": "configuration",
+          "idempotent": true,
+          "name": "setImConfiguration",
+          "number": "0x6B",
+          "parameters": [
+            {
+              "bits": [
+                {
+                  "description": "Disables automatic ALL-Linking when the SET button is pressed and held.",
+                  "mask": "0x80",
+                  "name": "autoLinkingDisabled"
+                },
+                {
+                  "description": "Reports every received message whose From Address is in the modem's ALL-Link database, not only those directed to the modem.",
+                  "mask": "0x40",
+                  "name": "monitorMode"
+                },
+                {
+                  "description": "Disables the modem's automatic LED operation, so the host controls the LED with LED On and LED Off.",
+                  "mask": "0x20",
+                  "name": "ledControlledByHost"
+                },
+                {
+                  "description": "Allows the host to wait more than 240 milliseconds between bytes it sends the modem.",
+                  "mask": "0x10",
+                  "name": "deadmanDisabled"
+                }
+              ],
+              "byte": 1,
+              "description": "The configuration flags; bits 3 to 0 are reserved and stay 0.",
+              "kind": "flags",
+              "name": "flags"
+            }
+          ]
+        },
+        {
+          "description": "Returns the ALL-Link database record for the sender of the last Insteon message the modem received. A NAK means the sender is not in the database.",
+          "effect": "readOnly",
+          "idempotent": true,
+          "name": "getAllLinkRecordForSender",
+          "number": "0x6C"
+        },
+        {
+          "description": "Turns the modem's LED on, when the configuration flags let the host control it; otherwise the modem NAKs.",
+          "effect": "actuation",
+          "idempotent": true,
+          "name": "ledOn",
+          "number": "0x6D"
+        },
+        {
+          "description": "Turns the modem's LED off, when the configuration flags let the host control it; otherwise the modem NAKs.",
+          "effect": "actuation",
+          "idempotent": true,
+          "name": "ledOff",
+          "number": "0x6E"
+        },
+        {
+          "description": "Searches the modem's ALL-Link database from the top for the first record that matches the group and ID, ignoring the record flags, and returns it in an ALL-Link Record Response. A NAK means no record matches.",
+          "effect": "readOnly",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x00"
+            }
+          ],
+          "idempotent": true,
+          "name": "findFirstAllLinkRecord",
+          "number": "0x6F",
+          "parameters": [
+            {
+              "bits": [
+                {
+                  "description": "The record is in use.",
+                  "mask": "0x80",
+                  "name": "inUse"
+                },
+                {
+                  "description": "The modem is the controller of the device in the record; clear, it is a responder.",
+                  "mask": "0x40",
+                  "name": "controller"
+                },
+                {
+                  "description": "The record has been used before; clear, it is the high-water mark.",
+                  "mask": "0x02",
+                  "name": "usedBefore"
+                }
+              ],
+              "byte": 2,
+              "description": "The ALL-Link record flags.",
+              "kind": "flags",
+              "name": "recordFlags"
+            },
+            {
+              "byte": 3,
+              "description": "The ALL-Link group of the record.",
+              "name": "group"
+            },
+            {
+              "bytes": [
+                4,
+                5,
+                6
+              ],
+              "description": "The Insteon ID of the device the record links to, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 7,
+              "description": "Link Data 1.",
+              "name": "data1"
+            },
+            {
+              "byte": 8,
+              "description": "Link Data 2.",
+              "name": "data2"
+            },
+            {
+              "byte": 9,
+              "description": "Link Data 3.",
+              "name": "data3"
+            }
+          ]
+        },
+        {
+          "description": "Searches for the next record after the one Find First ALL-Link Record found, with the same group and ID, and returns it in an ALL-Link Record Response. A NAK means no other record matches.",
+          "effect": "readOnly",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x01"
+            }
+          ],
+          "idempotent": true,
+          "name": "findNextAllLinkRecord",
+          "number": "0x6F",
+          "parameters": [
+            {
+              "bits": [
+                {
+                  "description": "The record is in use.",
+                  "mask": "0x80",
+                  "name": "inUse"
+                },
+                {
+                  "description": "The modem is the controller of the device in the record; clear, it is a responder.",
+                  "mask": "0x40",
+                  "name": "controller"
+                },
+                {
+                  "description": "The record has been used before; clear, it is the high-water mark.",
+                  "mask": "0x02",
+                  "name": "usedBefore"
+                }
+              ],
+              "byte": 2,
+              "description": "The ALL-Link record flags.",
+              "kind": "flags",
+              "name": "recordFlags"
+            },
+            {
+              "byte": 3,
+              "description": "The ALL-Link group of the record.",
+              "name": "group"
+            },
+            {
+              "bytes": [
+                4,
+                5,
+                6
+              ],
+              "description": "The Insteon ID of the device the record links to, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 7,
+              "description": "Link Data 1.",
+              "name": "data1"
+            },
+            {
+              "byte": 8,
+              "description": "Link Data 2.",
+              "name": "data2"
+            },
+            {
+              "byte": 9,
+              "description": "Link Data 3.",
+              "name": "data3"
+            }
+          ]
+        },
+        {
+          "description": "Overwrites the first record that matches the group and ID with the record given, or adds a new record if none matches, as either a controller or a responder record. The modem does not check the data, and a wrong flags byte can make its database look empty.",
+          "effect": "destructive",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x20"
+            }
+          ],
+          "idempotent": true,
+          "name": "modifyOrAddAllLinkRecord",
+          "number": "0x6F",
+          "parameters": [
+            {
+              "bits": [
+                {
+                  "description": "The record is in use.",
+                  "mask": "0x80",
+                  "name": "inUse"
+                },
+                {
+                  "description": "The modem is the controller of the device in the record; clear, it is a responder.",
+                  "mask": "0x40",
+                  "name": "controller"
+                },
+                {
+                  "description": "The record has been used before; clear, it is the high-water mark.",
+                  "mask": "0x02",
+                  "name": "usedBefore"
+                }
+              ],
+              "byte": 2,
+              "description": "The ALL-Link record flags.",
+              "kind": "flags",
+              "name": "recordFlags"
+            },
+            {
+              "byte": 3,
+              "description": "The ALL-Link group of the record.",
+              "name": "group"
+            },
+            {
+              "bytes": [
+                4,
+                5,
+                6
+              ],
+              "description": "The Insteon ID of the device the record links to, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 7,
+              "description": "Link Data 1.",
+              "name": "data1"
+            },
+            {
+              "byte": 8,
+              "description": "Link Data 2.",
+              "name": "data2"
+            },
+            {
+              "byte": 9,
+              "description": "Link Data 3.",
+              "name": "data3"
+            }
+          ]
+        },
+        {
+          "description": "Overwrites the first controller record that matches the group and ID with the record given, or adds a new controller record if none matches.",
+          "effect": "destructive",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x40"
+            }
+          ],
+          "idempotent": true,
+          "name": "modifyOrAddControllerRecord",
+          "number": "0x6F",
+          "parameters": [
+            {
+              "bits": [
+                {
+                  "description": "The record is in use.",
+                  "mask": "0x80",
+                  "name": "inUse"
+                },
+                {
+                  "description": "The modem is the controller of the device in the record; clear, it is a responder.",
+                  "mask": "0x40",
+                  "name": "controller"
+                },
+                {
+                  "description": "The record has been used before; clear, it is the high-water mark.",
+                  "mask": "0x02",
+                  "name": "usedBefore"
+                }
+              ],
+              "byte": 2,
+              "description": "The ALL-Link record flags.",
+              "kind": "flags",
+              "name": "recordFlags"
+            },
+            {
+              "byte": 3,
+              "description": "The ALL-Link group of the record.",
+              "name": "group"
+            },
+            {
+              "bytes": [
+                4,
+                5,
+                6
+              ],
+              "description": "The Insteon ID of the device the record links to, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 7,
+              "description": "Link Data 1.",
+              "name": "data1"
+            },
+            {
+              "byte": 8,
+              "description": "Link Data 2.",
+              "name": "data2"
+            },
+            {
+              "byte": 9,
+              "description": "Link Data 3.",
+              "name": "data3"
+            }
+          ]
+        },
+        {
+          "description": "Overwrites the first responder record that matches the group and ID with the record given, or adds a new responder record if none matches.",
+          "effect": "destructive",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x41"
+            }
+          ],
+          "idempotent": true,
+          "name": "modifyOrAddResponderRecord",
+          "number": "0x6F",
+          "parameters": [
+            {
+              "bits": [
+                {
+                  "description": "The record is in use.",
+                  "mask": "0x80",
+                  "name": "inUse"
+                },
+                {
+                  "description": "The modem is the controller of the device in the record; clear, it is a responder.",
+                  "mask": "0x40",
+                  "name": "controller"
+                },
+                {
+                  "description": "The record has been used before; clear, it is the high-water mark.",
+                  "mask": "0x02",
+                  "name": "usedBefore"
+                }
+              ],
+              "byte": 2,
+              "description": "The ALL-Link record flags.",
+              "kind": "flags",
+              "name": "recordFlags"
+            },
+            {
+              "byte": 3,
+              "description": "The ALL-Link group of the record.",
+              "name": "group"
+            },
+            {
+              "bytes": [
+                4,
+                5,
+                6
+              ],
+              "description": "The Insteon ID of the device the record links to, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 7,
+              "description": "Link Data 1.",
+              "name": "data1"
+            },
+            {
+              "byte": 8,
+              "description": "Link Data 2.",
+              "name": "data2"
+            },
+            {
+              "byte": 9,
+              "description": "Link Data 3.",
+              "name": "data3"
+            }
+          ]
+        },
+        {
+          "description": "Deletes the first record that matches the group and ID. A NAK means no record matches.",
+          "effect": "destructive",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x80"
+            }
+          ],
+          "idempotent": true,
+          "name": "deleteAllLinkRecord",
+          "number": "0x6F",
+          "parameters": [
+            {
+              "bits": [
+                {
+                  "description": "The record is in use.",
+                  "mask": "0x80",
+                  "name": "inUse"
+                },
+                {
+                  "description": "The modem is the controller of the device in the record; clear, it is a responder.",
+                  "mask": "0x40",
+                  "name": "controller"
+                },
+                {
+                  "description": "The record has been used before; clear, it is the high-water mark.",
+                  "mask": "0x02",
+                  "name": "usedBefore"
+                }
+              ],
+              "byte": 2,
+              "description": "The ALL-Link record flags.",
+              "kind": "flags",
+              "name": "recordFlags"
+            },
+            {
+              "byte": 3,
+              "description": "The ALL-Link group of the record.",
+              "name": "group"
+            },
+            {
+              "bytes": [
+                4,
+                5,
+                6
+              ],
+              "description": "The Insteon ID of the device the record links to, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 7,
+              "description": "Link Data 1.",
+              "name": "data1"
+            },
+            {
+              "byte": 8,
+              "description": "Link Data 2.",
+              "name": "data2"
+            },
+            {
+              "byte": 9,
+              "description": "Link Data 3.",
+              "name": "data3"
+            }
+          ]
+        },
+        {
+          "description": "Makes the ACK the modem sends automatically after an Insteon direct message a NAK, with a byte in cmd2.",
+          "effect": "configuration",
+          "idempotent": true,
+          "name": "setNakMessageByte",
+          "number": "0x70",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "The byte for cmd2 of the NAK.",
+              "name": "command2"
+            }
+          ]
+        },
+        {
+          "description": "Sets the bytes the modem puts in cmd1 and cmd2 of the ACK it sends automatically after an Insteon direct message. The host has about 15 milliseconds after the message to send it.",
+          "effect": "configuration",
+          "idempotent": true,
+          "name": "setAckMessageTwoBytes",
+          "number": "0x71",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "The byte for cmd1 of the ACK.",
+              "name": "command1"
+            },
+            {
+              "byte": 2,
+              "description": "The byte for cmd2 of the ACK.",
+              "name": "command2"
+            }
+          ]
+        },
+        {
+          "description": "Directs an RF modem into its power-saving sleep mode, in which it does not answer until the host sends it one byte of serial data. The modem then reinitializes without altering its memory.",
+          "effect": "destructive",
+          "idempotent": true,
+          "name": "rfSleep",
+          "number": "0x72"
+        },
+        {
+          "description": "Returns the modem's configuration flags.",
+          "effect": "readOnly",
+          "idempotent": true,
+          "name": "getImConfiguration",
+          "number": "0x73",
+          "reply": [
+            {
+              "bits": [
+                {
+                  "description": "Disables automatic ALL-Linking when the SET button is pressed and held.",
+                  "mask": "0x80",
+                  "name": "autoLinkingDisabled"
+                },
+                {
+                  "description": "Reports every received message whose From Address is in the modem's ALL-Link database, not only those directed to the modem.",
+                  "mask": "0x40",
+                  "name": "monitorMode"
+                },
+                {
+                  "description": "Disables the modem's automatic LED operation, so the host controls the LED with LED On and LED Off.",
+                  "mask": "0x20",
+                  "name": "ledControlledByHost"
+                },
+                {
+                  "description": "Allows the host to wait more than 240 milliseconds between bytes it sends the modem.",
+                  "mask": "0x10",
+                  "name": "deadmanDisabled"
+                }
+              ],
+              "byte": 1,
+              "description": "The configuration flags.",
+              "kind": "flags",
+              "name": "flags"
+            },
+            {
+              "byte": 2,
+              "description": "Reserved; 0x00.",
+              "name": "spare1"
+            },
+            {
+              "byte": 3,
+              "description": "Reserved; 0x00.",
+              "name": "spare2"
+            }
+          ]
+        },
+        {
+          "description": "Cancels the cleanup that Send ALL-Link Command started.",
+          "effect": "actuation",
+          "idempotent": true,
+          "name": "cancelCleanup",
+          "number": "0x74"
+        },
+        {
+          "description": "Reads 8 bytes from the modem's database at an address. After the ACK the modem sends a 12-byte database record found response.",
+          "effect": "readOnly",
+          "idempotent": true,
+          "name": "readDatabaseBytes",
+          "number": "0x75",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "The database address, high byte.",
+              "name": "addressHigh"
+            },
+            {
+              "byte": 2,
+              "description": "The database address, low byte; its low nibble is 0xF or 0x8.",
+              "name": "addressLow"
+            }
+          ],
+          "verification": {
+            "note": "The Insteon Hub Developer's Guide lists the command in its serial command summary table, among the commands it marks as added after initial release, without a chart of its own.",
+            "status": "documented"
+          }
+        },
+        {
+          "description": "Writes an ALL-Link record's 8 bytes into the modem's database at an address, over whatever is there.",
+          "effect": "destructive",
+          "idempotent": true,
+          "name": "writeDatabaseBytes",
+          "number": "0x76",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "The database address, high byte.",
+              "name": "addressHigh"
+            },
+            {
+              "byte": 2,
+              "description": "The database address, low byte; its low nibble is 0xF or 0x8.",
+              "name": "addressLow"
+            },
+            {
+              "bits": [
+                {
+                  "description": "The record is in use.",
+                  "mask": "0x80",
+                  "name": "inUse"
+                },
+                {
+                  "description": "The modem is the controller of the device in the record; clear, it is a responder.",
+                  "mask": "0x40",
+                  "name": "controller"
+                },
+                {
+                  "description": "The record has been used before; clear, it is the high-water mark.",
+                  "mask": "0x02",
+                  "name": "usedBefore"
+                }
+              ],
+              "byte": 3,
+              "description": "The ALL-Link record flags.",
+              "kind": "flags",
+              "name": "recordFlags"
+            },
+            {
+              "byte": 4,
+              "description": "The ALL-Link group of the record.",
+              "name": "group"
+            },
+            {
+              "bytes": [
+                5,
+                6,
+                7
+              ],
+              "description": "The Insteon ID of the device the record links to, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 8,
+              "description": "Link Data 1.",
+              "name": "data1"
+            },
+            {
+              "byte": 9,
+              "description": "Link Data 2.",
+              "name": "data2"
+            },
+            {
+              "byte": 10,
+              "description": "Link Data 3.",
+              "name": "data3"
+            }
+          ],
+          "verification": {
+            "note": "The Insteon Hub Developer's Guide lists the command in its serial command summary table, among the commands it marks as added after initial release, without a chart of its own.",
+            "status": "documented"
+          }
+        },
+        {
+          "description": "Makes the modem beep.",
+          "effect": "actuation",
+          "idempotent": true,
+          "name": "beep",
+          "number": "0x77",
+          "verification": {
+            "note": "The Insteon Hub Developer's Guide lists the command in its serial command summary table, among the commands it marks as added after initial release, without a chart of its own.",
+            "status": "documented"
+          }
+        },
+        {
+          "description": "Sets the status the modem reports in cmd2 of its answer to a direct Status Request (cmd1 0x19).",
+          "effect": "configuration",
+          "idempotent": true,
+          "name": "setStatus",
+          "number": "0x78",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "The status to report.",
+              "name": "status"
+            }
+          ],
+          "verification": {
+            "note": "The Insteon Hub Developer's Guide lists the command in its serial command summary table, among the commands it marks as added after initial release, without a chart of its own.",
+            "status": "documented"
+          }
+        },
+        {
+          "description": "Sets Link Data 1 to 3 for the next link, which Start ALL-Linking uses when its link code has bit 2 set. For an RF modem only.",
+          "effect": "configuration",
+          "idempotent": true,
+          "name": "setLinkDataForNextLink",
+          "number": "0x79",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "Link Data 1.",
+              "name": "data1"
+            },
+            {
+              "byte": 2,
+              "description": "Link Data 2.",
+              "name": "data2"
+            },
+            {
+              "byte": 3,
+              "description": "Link Data 3.",
+              "name": "data3"
+            }
+          ],
+          "verification": {
+            "note": "The Insteon Hub Developer's Guide lists the command in its serial command summary table, among the commands it marks as added after initial release, without a chart of its own.",
+            "status": "documented"
+          }
+        },
+        {
+          "description": "Sets the number of application retries for new links. For an RF modem only.",
+          "effect": "configuration",
+          "idempotent": true,
+          "name": "setApplicationRetries",
+          "number": "0x7A",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "The number of application retries for new links.",
+              "name": "retries"
+            }
+          ],
+          "verification": {
+            "note": "The Insteon Hub Developer's Guide lists the command in its serial command summary table, among the commands it marks as added after initial release, without a chart of its own.",
+            "status": "documented"
+          }
+        }
+      ],
+      "sources": [
+        "Insteon Hub Developer's Guide"
+      ]
+    },
+    {
       "description": "The i3 Dial: a dimmer turned with a dial and pushed to turn on and off.",
       "enumerations": [
         {
@@ -18189,6 +19135,770 @@
       ]
     },
     {
+      "description": "The serial commands of the Insteon powerline modems 2412S, 2412U, 2413S and 2413U and their variants, as the Insteon Modem Developer's Guide gives them: identity, ALL-Linking, the ALL-Link database, the modem's configuration and its LED.",
+      "id": "modem",
+      "name": "Insteon modem",
+      "notes": [
+        "A serial command is 0x02, its number and its payload; the modem echoes it and ends the echo with an ACK (0x06) or a NAK (0x15). Send Insteon Standard or Extended Message (0x62) and Send ALL-Link Command (0x61) carry a device message, so the device's own command set describes them and they are not entries.",
+        "Start ALL-Linking and Manage ALL-Link Record are one command number each in the Insteon Modem Developer's Guide and one entry per control byte here, so each control byte has its own effect. A frame with a control byte no entry lists matches no entry.",
+        "Effects classify what the Insteon Modem Developer's Guide documents each command does. Get First, Get Next and Get ALL-Link Record for Sender are readOnly: the position they move is state that matters only to the scan.",
+        "modifyOrAddAllLinkRecord, modifyOrAddControllerRecord and modifyOrAddResponderRecord are destructive, not link: the Insteon Modem Developer's Guide has each overwrite a record that matches, so none only adds a record.",
+        "deleteAllLink removes the ALL-Link to a device, and resetModem clears the entire ALL-Link database, so both are destructive. rfSleep is destructive because the modem does not answer commands until it is woken with a byte of serial data.",
+        "sendX10 is not idempotent: an X10 Dim or Bright command repeats its step.",
+        "startAllLinkingAsResponder, startAllLinkingAsController and startAllLinkingAsEither are not idempotent: sending one again restarts ALL-Linking mode."
+      ],
+      "serialCommands": [
+        {
+          "description": "Asks the modem for its Insteon ID, device category, device subcategory and firmware version. The modem returns the values hard-coded at the factory, whatever Set Host Device Category set.",
+          "effect": "readOnly",
+          "idempotent": true,
+          "name": "getImInfo",
+          "number": "0x60",
+          "reply": [
+            {
+              "bytes": [
+                1,
+                2,
+                3
+              ],
+              "description": "The modem's Insteon ID, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 4,
+              "description": "The modem's device category.",
+              "name": "category"
+            },
+            {
+              "byte": 5,
+              "description": "The modem's device subcategory.",
+              "name": "subcategory"
+            },
+            {
+              "byte": 6,
+              "description": "The modem's firmware version.",
+              "name": "firmware"
+            }
+          ]
+        },
+        {
+          "description": "Sends a raw X10 address or X10 command.",
+          "effect": "actuation",
+          "idempotent": false,
+          "name": "sendX10",
+          "number": "0x63",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "The X10 house code in the four most significant bits and the key code in the four least significant.",
+              "name": "rawX10"
+            },
+            {
+              "byte": 2,
+              "description": "0x00 when the key code is an X10 unit code, 0x80 when it is an X10 command.",
+              "name": "x10Flag"
+            }
+          ]
+        },
+        {
+          "description": "Puts the modem into ALL-Linking mode without the SET button, to link as a responder. The modem's LED blinks until the ALL-Link completes or is canceled, and an ALL-Linking Completed message reports the link.",
+          "effect": "link",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x00"
+            }
+          ],
+          "idempotent": false,
+          "name": "startAllLinkingAsResponder",
+          "number": "0x64",
+          "parameters": [
+            {
+              "byte": 2,
+              "description": "The ALL-Link group to link.",
+              "name": "group"
+            }
+          ]
+        },
+        {
+          "description": "Puts the modem into ALL-Linking mode without the SET button, to link as a controller. The modem's LED blinks until the ALL-Link completes or is canceled, and an ALL-Linking Completed message reports the link.",
+          "effect": "link",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x01"
+            }
+          ],
+          "idempotent": false,
+          "name": "startAllLinkingAsController",
+          "number": "0x64",
+          "parameters": [
+            {
+              "byte": 2,
+              "description": "The ALL-Link group to link.",
+              "name": "group"
+            }
+          ]
+        },
+        {
+          "description": "Puts the modem into ALL-Linking mode without the SET button, to link as a controller when the modem starts ALL-Linking and as a responder when another device does. The modem's LED blinks until the ALL-Link completes or is canceled, and an ALL-Linking Completed message reports the link.",
+          "effect": "link",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x03"
+            }
+          ],
+          "idempotent": false,
+          "name": "startAllLinkingAsEither",
+          "number": "0x64",
+          "parameters": [
+            {
+              "byte": 2,
+              "description": "The ALL-Link group to link.",
+              "name": "group"
+            }
+          ]
+        },
+        {
+          "description": "Deletes the ALL-Link to a device for a group, through ALL-Linking mode.",
+          "effect": "destructive",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0xFF"
+            }
+          ],
+          "idempotent": true,
+          "name": "deleteAllLink",
+          "number": "0x64",
+          "parameters": [
+            {
+              "byte": 2,
+              "description": "The ALL-Link group to delete.",
+              "name": "group"
+            }
+          ]
+        },
+        {
+          "description": "Cancels ALL-Linking mode, whether it was started with the SET button or with Start ALL-Linking.",
+          "effect": "link",
+          "idempotent": true,
+          "name": "cancelAllLinking",
+          "number": "0x65"
+        },
+        {
+          "description": "Sets the device category and subcategory of the host, which the modem sends other devices while ALL-Linking. The modem keeps them across a power loss; Get IM Info still returns the factory values.",
+          "effect": "configuration",
+          "idempotent": true,
+          "name": "setHostDeviceCategory",
+          "number": "0x66",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "The host's device category.",
+              "name": "category"
+            },
+            {
+              "byte": 2,
+              "description": "The host's device subcategory.",
+              "name": "subcategory"
+            },
+            {
+              "byte": 3,
+              "description": "The host's firmware version, or a filler byte.",
+              "name": "firmware"
+            }
+          ]
+        },
+        {
+          "description": "Puts the modem in its factory reset state, which clears its entire ALL-Link database. The ACK follows the erase, about 20 seconds for a modem with external EEPROM and about 2 seconds for one without.",
+          "effect": "destructive",
+          "idempotent": true,
+          "name": "resetModem",
+          "number": "0x67"
+        },
+        {
+          "description": "Sets the byte the modem puts in cmd2 of the ACK it sends automatically after an Insteon direct message. The host has about 15 milliseconds after the message to send it.",
+          "effect": "configuration",
+          "idempotent": true,
+          "name": "setAckMessageByte",
+          "number": "0x68",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "The byte for cmd2 of the ACK.",
+              "name": "command2"
+            }
+          ]
+        },
+        {
+          "description": "Starts a scan of the modem's ALL-Link database. An ACK means an ALL-Link Record Response follows; a NAK means the database is empty.",
+          "effect": "readOnly",
+          "idempotent": true,
+          "name": "getFirstAllLinkRecord",
+          "number": "0x69"
+        },
+        {
+          "description": "Returns the next record in the modem's ALL-Link database. An ACK means an ALL-Link Record Response follows; a NAK means there are no more records.",
+          "effect": "readOnly",
+          "idempotent": true,
+          "name": "getNextAllLinkRecord",
+          "number": "0x6A"
+        },
+        {
+          "description": "Sets all of the modem's configuration flags at once. Reading them with Get IM Configuration first lets a caller change one bit.",
+          "effect": "configuration",
+          "idempotent": true,
+          "name": "setImConfiguration",
+          "number": "0x6B",
+          "parameters": [
+            {
+              "bits": [
+                {
+                  "description": "Disables automatic ALL-Linking when the SET button is pressed and held.",
+                  "mask": "0x80",
+                  "name": "autoLinkingDisabled"
+                },
+                {
+                  "description": "Reports every received message whose From Address is in the modem's ALL-Link database, not only those directed to the modem.",
+                  "mask": "0x40",
+                  "name": "monitorMode"
+                },
+                {
+                  "description": "Disables the modem's automatic LED operation, so the host controls the LED with LED On and LED Off.",
+                  "mask": "0x20",
+                  "name": "ledControlledByHost"
+                },
+                {
+                  "description": "Allows the host to wait more than 240 milliseconds between bytes it sends the modem.",
+                  "mask": "0x10",
+                  "name": "deadmanDisabled"
+                }
+              ],
+              "byte": 1,
+              "description": "The configuration flags; bits 3 to 0 are reserved and stay 0.",
+              "kind": "flags",
+              "name": "flags"
+            }
+          ]
+        },
+        {
+          "description": "Returns the ALL-Link database record for the sender of the last Insteon message the modem received. A NAK means the sender is not in the database.",
+          "effect": "readOnly",
+          "idempotent": true,
+          "name": "getAllLinkRecordForSender",
+          "number": "0x6C"
+        },
+        {
+          "description": "Turns the modem's LED on, when the configuration flags let the host control it; otherwise the modem NAKs.",
+          "effect": "actuation",
+          "idempotent": true,
+          "name": "ledOn",
+          "number": "0x6D"
+        },
+        {
+          "description": "Turns the modem's LED off, when the configuration flags let the host control it; otherwise the modem NAKs.",
+          "effect": "actuation",
+          "idempotent": true,
+          "name": "ledOff",
+          "number": "0x6E"
+        },
+        {
+          "description": "Searches the modem's ALL-Link database from the top for the first record that matches the group and ID, ignoring the record flags, and returns it in an ALL-Link Record Response. A NAK means no record matches.",
+          "effect": "readOnly",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x00"
+            }
+          ],
+          "idempotent": true,
+          "name": "findFirstAllLinkRecord",
+          "number": "0x6F",
+          "parameters": [
+            {
+              "bits": [
+                {
+                  "description": "The record is in use.",
+                  "mask": "0x80",
+                  "name": "inUse"
+                },
+                {
+                  "description": "The modem is the controller of the device in the record; clear, it is a responder.",
+                  "mask": "0x40",
+                  "name": "controller"
+                },
+                {
+                  "description": "The record has been used before; clear, it is the high-water mark.",
+                  "mask": "0x02",
+                  "name": "usedBefore"
+                }
+              ],
+              "byte": 2,
+              "description": "The ALL-Link record flags.",
+              "kind": "flags",
+              "name": "recordFlags"
+            },
+            {
+              "byte": 3,
+              "description": "The ALL-Link group of the record.",
+              "name": "group"
+            },
+            {
+              "bytes": [
+                4,
+                5,
+                6
+              ],
+              "description": "The Insteon ID of the device the record links to, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 7,
+              "description": "Link Data 1.",
+              "name": "data1"
+            },
+            {
+              "byte": 8,
+              "description": "Link Data 2.",
+              "name": "data2"
+            },
+            {
+              "byte": 9,
+              "description": "Link Data 3.",
+              "name": "data3"
+            }
+          ]
+        },
+        {
+          "description": "Searches for the next record after the one Find First ALL-Link Record found, with the same group and ID, and returns it in an ALL-Link Record Response. A NAK means no other record matches.",
+          "effect": "readOnly",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x01"
+            }
+          ],
+          "idempotent": true,
+          "name": "findNextAllLinkRecord",
+          "number": "0x6F",
+          "parameters": [
+            {
+              "bits": [
+                {
+                  "description": "The record is in use.",
+                  "mask": "0x80",
+                  "name": "inUse"
+                },
+                {
+                  "description": "The modem is the controller of the device in the record; clear, it is a responder.",
+                  "mask": "0x40",
+                  "name": "controller"
+                },
+                {
+                  "description": "The record has been used before; clear, it is the high-water mark.",
+                  "mask": "0x02",
+                  "name": "usedBefore"
+                }
+              ],
+              "byte": 2,
+              "description": "The ALL-Link record flags.",
+              "kind": "flags",
+              "name": "recordFlags"
+            },
+            {
+              "byte": 3,
+              "description": "The ALL-Link group of the record.",
+              "name": "group"
+            },
+            {
+              "bytes": [
+                4,
+                5,
+                6
+              ],
+              "description": "The Insteon ID of the device the record links to, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 7,
+              "description": "Link Data 1.",
+              "name": "data1"
+            },
+            {
+              "byte": 8,
+              "description": "Link Data 2.",
+              "name": "data2"
+            },
+            {
+              "byte": 9,
+              "description": "Link Data 3.",
+              "name": "data3"
+            }
+          ]
+        },
+        {
+          "description": "Overwrites the first record that matches the group and ID with the record given, or adds a new record if none matches, as either a controller or a responder record. The modem does not check the data, and a wrong flags byte can make its database look empty.",
+          "effect": "destructive",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x20"
+            }
+          ],
+          "idempotent": true,
+          "name": "modifyOrAddAllLinkRecord",
+          "number": "0x6F",
+          "parameters": [
+            {
+              "bits": [
+                {
+                  "description": "The record is in use.",
+                  "mask": "0x80",
+                  "name": "inUse"
+                },
+                {
+                  "description": "The modem is the controller of the device in the record; clear, it is a responder.",
+                  "mask": "0x40",
+                  "name": "controller"
+                },
+                {
+                  "description": "The record has been used before; clear, it is the high-water mark.",
+                  "mask": "0x02",
+                  "name": "usedBefore"
+                }
+              ],
+              "byte": 2,
+              "description": "The ALL-Link record flags.",
+              "kind": "flags",
+              "name": "recordFlags"
+            },
+            {
+              "byte": 3,
+              "description": "The ALL-Link group of the record.",
+              "name": "group"
+            },
+            {
+              "bytes": [
+                4,
+                5,
+                6
+              ],
+              "description": "The Insteon ID of the device the record links to, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 7,
+              "description": "Link Data 1.",
+              "name": "data1"
+            },
+            {
+              "byte": 8,
+              "description": "Link Data 2.",
+              "name": "data2"
+            },
+            {
+              "byte": 9,
+              "description": "Link Data 3.",
+              "name": "data3"
+            }
+          ]
+        },
+        {
+          "description": "Overwrites the first controller record that matches the group and ID with the record given, or adds a new controller record if none matches.",
+          "effect": "destructive",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x40"
+            }
+          ],
+          "idempotent": true,
+          "name": "modifyOrAddControllerRecord",
+          "number": "0x6F",
+          "parameters": [
+            {
+              "bits": [
+                {
+                  "description": "The record is in use.",
+                  "mask": "0x80",
+                  "name": "inUse"
+                },
+                {
+                  "description": "The modem is the controller of the device in the record; clear, it is a responder.",
+                  "mask": "0x40",
+                  "name": "controller"
+                },
+                {
+                  "description": "The record has been used before; clear, it is the high-water mark.",
+                  "mask": "0x02",
+                  "name": "usedBefore"
+                }
+              ],
+              "byte": 2,
+              "description": "The ALL-Link record flags.",
+              "kind": "flags",
+              "name": "recordFlags"
+            },
+            {
+              "byte": 3,
+              "description": "The ALL-Link group of the record.",
+              "name": "group"
+            },
+            {
+              "bytes": [
+                4,
+                5,
+                6
+              ],
+              "description": "The Insteon ID of the device the record links to, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 7,
+              "description": "Link Data 1.",
+              "name": "data1"
+            },
+            {
+              "byte": 8,
+              "description": "Link Data 2.",
+              "name": "data2"
+            },
+            {
+              "byte": 9,
+              "description": "Link Data 3.",
+              "name": "data3"
+            }
+          ]
+        },
+        {
+          "description": "Overwrites the first responder record that matches the group and ID with the record given, or adds a new responder record if none matches.",
+          "effect": "destructive",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x41"
+            }
+          ],
+          "idempotent": true,
+          "name": "modifyOrAddResponderRecord",
+          "number": "0x6F",
+          "parameters": [
+            {
+              "bits": [
+                {
+                  "description": "The record is in use.",
+                  "mask": "0x80",
+                  "name": "inUse"
+                },
+                {
+                  "description": "The modem is the controller of the device in the record; clear, it is a responder.",
+                  "mask": "0x40",
+                  "name": "controller"
+                },
+                {
+                  "description": "The record has been used before; clear, it is the high-water mark.",
+                  "mask": "0x02",
+                  "name": "usedBefore"
+                }
+              ],
+              "byte": 2,
+              "description": "The ALL-Link record flags.",
+              "kind": "flags",
+              "name": "recordFlags"
+            },
+            {
+              "byte": 3,
+              "description": "The ALL-Link group of the record.",
+              "name": "group"
+            },
+            {
+              "bytes": [
+                4,
+                5,
+                6
+              ],
+              "description": "The Insteon ID of the device the record links to, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 7,
+              "description": "Link Data 1.",
+              "name": "data1"
+            },
+            {
+              "byte": 8,
+              "description": "Link Data 2.",
+              "name": "data2"
+            },
+            {
+              "byte": 9,
+              "description": "Link Data 3.",
+              "name": "data3"
+            }
+          ]
+        },
+        {
+          "description": "Deletes the first record that matches the group and ID. A NAK means no record matches.",
+          "effect": "destructive",
+          "fixed": [
+            {
+              "position": 1,
+              "value": "0x80"
+            }
+          ],
+          "idempotent": true,
+          "name": "deleteAllLinkRecord",
+          "number": "0x6F",
+          "parameters": [
+            {
+              "bits": [
+                {
+                  "description": "The record is in use.",
+                  "mask": "0x80",
+                  "name": "inUse"
+                },
+                {
+                  "description": "The modem is the controller of the device in the record; clear, it is a responder.",
+                  "mask": "0x40",
+                  "name": "controller"
+                },
+                {
+                  "description": "The record has been used before; clear, it is the high-water mark.",
+                  "mask": "0x02",
+                  "name": "usedBefore"
+                }
+              ],
+              "byte": 2,
+              "description": "The ALL-Link record flags.",
+              "kind": "flags",
+              "name": "recordFlags"
+            },
+            {
+              "byte": 3,
+              "description": "The ALL-Link group of the record.",
+              "name": "group"
+            },
+            {
+              "bytes": [
+                4,
+                5,
+                6
+              ],
+              "description": "The Insteon ID of the device the record links to, high byte first.",
+              "name": "id"
+            },
+            {
+              "byte": 7,
+              "description": "Link Data 1.",
+              "name": "data1"
+            },
+            {
+              "byte": 8,
+              "description": "Link Data 2.",
+              "name": "data2"
+            },
+            {
+              "byte": 9,
+              "description": "Link Data 3.",
+              "name": "data3"
+            }
+          ]
+        },
+        {
+          "description": "Makes the ACK the modem sends automatically after an Insteon direct message a NAK, with a byte in cmd2.",
+          "effect": "configuration",
+          "idempotent": true,
+          "name": "setNakMessageByte",
+          "number": "0x70",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "The byte for cmd2 of the NAK.",
+              "name": "command2"
+            }
+          ]
+        },
+        {
+          "description": "Sets the bytes the modem puts in cmd1 and cmd2 of the ACK it sends automatically after an Insteon direct message. The host has about 15 milliseconds after the message to send it.",
+          "effect": "configuration",
+          "idempotent": true,
+          "name": "setAckMessageTwoBytes",
+          "number": "0x71",
+          "parameters": [
+            {
+              "byte": 1,
+              "description": "The byte for cmd1 of the ACK.",
+              "name": "command1"
+            },
+            {
+              "byte": 2,
+              "description": "The byte for cmd2 of the ACK.",
+              "name": "command2"
+            }
+          ]
+        },
+        {
+          "description": "Directs an RF modem into its power-saving sleep mode, in which it does not answer until the host sends it one byte of serial data. The modem then reinitializes without altering its memory.",
+          "effect": "destructive",
+          "idempotent": true,
+          "name": "rfSleep",
+          "number": "0x72"
+        },
+        {
+          "description": "Returns the modem's configuration flags.",
+          "effect": "readOnly",
+          "idempotent": true,
+          "name": "getImConfiguration",
+          "number": "0x73",
+          "reply": [
+            {
+              "bits": [
+                {
+                  "description": "Disables automatic ALL-Linking when the SET button is pressed and held.",
+                  "mask": "0x80",
+                  "name": "autoLinkingDisabled"
+                },
+                {
+                  "description": "Reports every received message whose From Address is in the modem's ALL-Link database, not only those directed to the modem.",
+                  "mask": "0x40",
+                  "name": "monitorMode"
+                },
+                {
+                  "description": "Disables the modem's automatic LED operation, so the host controls the LED with LED On and LED Off.",
+                  "mask": "0x20",
+                  "name": "ledControlledByHost"
+                },
+                {
+                  "description": "Allows the host to wait more than 240 milliseconds between bytes it sends the modem.",
+                  "mask": "0x10",
+                  "name": "deadmanDisabled"
+                }
+              ],
+              "byte": 1,
+              "description": "The configuration flags.",
+              "kind": "flags",
+              "name": "flags"
+            },
+            {
+              "byte": 2,
+              "description": "Reserved; 0x00.",
+              "name": "spare1"
+            },
+            {
+              "byte": 3,
+              "description": "Reserved; 0x00.",
+              "name": "spare2"
+            }
+          ]
+        }
+      ],
+      "sources": [
+        "Insteon Modem Developer's Guide"
+      ]
+    },
+    {
       "description": "The Open/Close Sensor and the Leak Sensor, whose Developer Notes give the same configuration byte and extended settings.",
       "extendedCommands": [
         {
@@ -25425,6 +27135,43 @@
           "port": 25105
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x03",
+          "commandSet": "hubModem",
+          "subcategory": "0x2B"
+        },
+        {
+          "category": "0x03",
+          "commandSet": "hubModem",
+          "subcategory": "0x2E"
+        },
+        {
+          "category": "0x03",
+          "commandSet": "hubModem",
+          "subcategory": "0x2F"
+        },
+        {
+          "category": "0x03",
+          "commandSet": "hubModem",
+          "subcategory": "0x30"
+        },
+        {
+          "category": "0x03",
+          "commandSet": "hubModem",
+          "subcategory": "0x31"
+        },
+        {
+          "category": "0x03",
+          "commandSet": "hubModem",
+          "subcategory": "0x32"
+        },
+        {
+          "category": "0x03",
+          "commandSet": "hubModem",
+          "subcategory": "0x37"
+        }
+      ],
       "engines": [
         {
           "category": "0x03",
@@ -25828,6 +27575,44 @@
         {
           "kind": "hub",
           "port": 25105
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x03",
+          "commandSet": "hubModem",
+          "subcategory": "0x33",
+          "verification": {
+            "note": "The Insteon Hub Developer's Guide describes the Hub 2242's modem, and no document describes the Hub 2245's. A Hub 2245 answered Get IM Info with its modem's firmware, 0xA5.",
+            "status": "inferred"
+          }
+        },
+        {
+          "category": "0x03",
+          "commandSet": "hubModem",
+          "subcategory": "0x34",
+          "verification": {
+            "note": "The Insteon Hub Developer's Guide describes the Hub 2242's modem, and no document describes the Hub 2245's. A Hub 2245 answered Get IM Info with its modem's firmware, 0xA5.",
+            "status": "inferred"
+          }
+        },
+        {
+          "category": "0x03",
+          "commandSet": "hubModem",
+          "subcategory": "0x35",
+          "verification": {
+            "note": "The Insteon Hub Developer's Guide describes the Hub 2242's modem, and no document describes the Hub 2245's. A Hub 2245 answered Get IM Info with its modem's firmware, 0xA5.",
+            "status": "inferred"
+          }
+        },
+        {
+          "category": "0x03",
+          "commandSet": "hubModem",
+          "subcategory": "0x36",
+          "verification": {
+            "note": "The Insteon Hub Developer's Guide describes the Hub 2242's modem, and no document describes the Hub 2245's. A Hub 2245 answered Get IM Info with its modem's firmware, 0xA5.",
+            "status": "inferred"
+          }
         }
       ],
       "description": "The central controller for an Insteon system. It drives its built-in modem over the local network, and runs scenes, schedules and alerts.",
@@ -27817,6 +29602,18 @@
           "kind": "modem"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x03",
+          "commandSet": "modem",
+          "subcategory": "0x05"
+        },
+        {
+          "category": "0x03",
+          "commandSet": "modem",
+          "subcategory": "0x1E"
+        }
+      ],
       "identities": [
         {
           "category": "0x03",
@@ -27959,6 +29756,13 @@
       "capabilities": [
         {
           "kind": "modem"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x03",
+          "commandSet": "modem",
+          "subcategory": "0x14"
         }
       ],
       "identities": [
@@ -28109,6 +29913,13 @@
           "kind": "modem"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x03",
+          "commandSet": "modem",
+          "subcategory": "0x0B"
+        }
+      ],
       "identities": [
         {
           "category": "0x03",
@@ -28243,6 +30054,13 @@
       "capabilities": [
         {
           "kind": "modem"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x03",
+          "commandSet": "modem",
+          "subcategory": "0x13"
         }
       ],
       "identities": [
@@ -28391,6 +30209,13 @@
       "capabilities": [
         {
           "kind": "modem"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x03",
+          "commandSet": "modem",
+          "subcategory": "0x11"
         }
       ],
       "engines": [
@@ -28559,6 +30384,13 @@
       "capabilities": [
         {
           "kind": "modem"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x03",
+          "commandSet": "modem",
+          "subcategory": "0x19"
         }
       ],
       "engines": [
@@ -28748,6 +30580,13 @@
           "kind": "modem"
         }
       ],
+      "commandSets": [
+        {
+          "category": "0x03",
+          "commandSet": "modem",
+          "subcategory": "0x15"
+        }
+      ],
       "description": "A USB powerline modem that connects a computer to an Insteon network, so home automation software can send and receive Insteon messages.",
       "engines": [
         {
@@ -28912,6 +30751,13 @@
       "capabilities": [
         {
           "kind": "modem"
+        }
+      ],
+      "commandSets": [
+        {
+          "category": "0x03",
+          "commandSet": "modem",
+          "subcategory": "0x1A"
         }
       ],
       "engines": [

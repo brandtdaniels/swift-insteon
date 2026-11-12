@@ -898,9 +898,11 @@ struct GuardedBytesTests {
     #expect(SerialCommandPolicy.neverWritten([0x03, 0x60]) == .notSerialCommand)
     #expect(SerialCommandPolicy.neverWritten([0x02, 0x77]) == nil)
     #expect(SerialCommandPolicy.neverWritten([0x02, 0x62, 0x3A, 0x4B, 0x41, 0x0F, 0x11, 0xFF]) == nil)
-    #expect(SerialCommandPolicy.refusal(of: [0x02, 0x67], forcing: true) == nil)
-    #expect(SerialCommandPolicy.refusal(of: [0x02, 0x67], forcing: false)?.canBeForced == true)
+    #expect(SerialCommandPolicy.refusal(of: [0x02, 0x09], forcing: true) == nil)
+    #expect(SerialCommandPolicy.refusal(of: [0x02, 0x09], forcing: false)?.canBeForced == true)
     #expect(SendRefusal.protected(.poke).canBeForced == false)
+    #expect(SendRefusal.needsConsent(.destructive).canBeForced == true)
+    #expect(SendRefusal.needsConsent(nil).canBeForced == true)
 
   }
 

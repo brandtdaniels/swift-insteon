@@ -124,7 +124,8 @@ public enum ProtectedCommand: Hashable, Sendable, CaseIterable {
 /// It's thrown before anything is sent, by the raw passthroughs:
 /// ``DeviceNetwork/send(_:collectingFor:consent:onAcknowledgment:)`` and
 /// ``ModemSession/write(rawCommand:forcing:collectingFor:clock:)``. Only
-/// ``SendRefusal/serialCommand(_:)`` can be forced; ``canBeForced`` says so.
+/// ``SendRefusal/serialCommand(_:)`` and ``SendRefusal/needsConsent(_:)`` can be forced;
+/// ``canBeForced`` says so.
 ///
 /// ```swift
 /// do {
@@ -161,6 +162,9 @@ public enum SendRefusal: Error, Hashable, Sendable {
   /// list, so which bytes it writes can't be told. The associated value is the selector.
   case unlistedExtendedSet(selector: UInt8)
 
+  /// The Insteon device catalog marks the serial command as never sent to the modem.
+  case neverSentToModem
+
   /// The bytes don't start with Start of Text (`0x02`), as every serial command does.
   case notSerialCommand
 
@@ -177,16 +181,17 @@ public enum SendRefusal: Error, Hashable, Sendable {
   /// entry of the device's command set describes. ``SendPolicy`` decides it.
   case needsConsent(CommandEffect?)
 
-  /// Whether forcing the command would write it: only for ``serialCommand(_:)``.
+  /// Whether forcing the command would write it: for ``serialCommand(_:)`` and
+  /// ``needsConsent(_:)``, which a person grants by forcing. Every other refusal stands
+  /// whatever is granted.
   public var canBeForced: Bool {
 
-    if case .serialCommand = self {
-
+    switch self {
+    case .serialCommand, .needsConsent:
       return true
-
+    default:
+      return false
     }
-
-    return false
 
   }
 

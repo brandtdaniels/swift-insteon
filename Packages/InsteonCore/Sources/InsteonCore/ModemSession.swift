@@ -1,4 +1,5 @@
 import Foundation
+import InsteonDeviceCatalog
 import InsteonHubClient
 import InsteonLinking
 @_spi(Raw) import InsteonModem
@@ -33,10 +34,18 @@ public struct ModemSession: Sendable {
   /// serial or USB port.
   public let hub: HubLocation?
 
-  init(modem: Modem, hub: HubLocation?) {
+  /// The catalog that describes the modem's serial commands, which passed the check a
+  /// ``ProductCatalog`` makes, or `nil` to describe none.
+  private let catalog: ProductCatalog?
+
+  /// The modem's command set, found once from its identity.
+  private let commandSet: ModemCommandSetCache = ModemCommandSetCache()
+
+  init(modem: Modem, hub: HubLocation?, catalog: ProductCatalog? = nil) {
 
     self.modem = modem
     self.hub = hub
+    self.catalog = catalog
 
   }
 
@@ -54,6 +63,9 @@ public struct ModemSession: Sendable {
   ///   - port: The Hub's port, such as ``HubLocation/defaultPort``.
   ///   - user: The Hub's user name.
   ///   - password: The Hub's password.
+  ///   - catalog: The catalog that describes the modem's serial commands for
+  ///     ``write(rawCommand:forcing:collectingFor:clock:)``, or `nil` to describe none. Defaults
+  ///     to `nil`.
   ///   - body: The work to do with the modem.
   /// - Throws: ``HubAddressRefused`` for a host that isn't a private IPv4 address, the error
   ///   `body` throws, or the connection's, such as the Hub's `HubStoppedAnswering`, which
@@ -63,6 +75,7 @@ public struct ModemSession: Sendable {
     port: Int,
     user: String,
     password: String,
+    catalog: ProductCatalog? = nil,
     _ body: @Sendable (ModemSession) async throws -> Void
   ) async throws {
 
@@ -79,7 +92,7 @@ public struct ModemSession: Sendable {
 
     try await Modem.withConnection(HubConnection(hub: hub)) { (modem: Modem) async throws -> Void in
 
-      try await body(ModemSession(modem: modem, hub: location))
+      try await body(ModemSession(modem: modem, hub: location, catalog: catalog))
 
     }
 
@@ -90,17 +103,20 @@ public struct ModemSession: Sendable {
   ///
   /// - Parameters:
   ///   - path: The port's device path, such as `/dev/ttyUSB0`.
+  ///   - catalog: The catalog that describes the modem's serial commands for
+  ///     ``write(rawCommand:forcing:collectingFor:clock:)``, or `nil` to describe none. Defaults
+  ///     to `nil`.
   ///   - body: The work to do with the modem.
   /// - Throws: The port's error if it can't be opened or configured, or the error `body`
   ///   throws.
-  public static func withSerialPort(path: String, _ body: @Sendable (ModemSession) async throws -> Void) async throws {
+  public static func withSerialPort(path: String, catalog: ProductCatalog? = nil, _ body: @Sendable (ModemSession) async throws -> Void) async throws {
 
     let port = try SerialPort(path: path)
     defer { port.close() }
 
     try await Modem.withConnection(port) { (modem: Modem) async throws -> Void in
 
-      try await body(ModemSession(modem: modem, hub: nil))
+      try await body(ModemSession(modem: modem, hub: nil, catalog: catalog))
 
     }
 
@@ -165,6 +181,17 @@ public struct ModemSession: Sendable {
   /// one whose number the package doesn't know; nothing forces a message that carries a
   /// ``ProtectedCommand``: Poke, or Set Operating Flags with one of the cmd2s that can cut a
   /// device off from the modem or lock it, depending on the device.
+  ///
+  /// What the command does decides next. When the session holds a catalog, the modem is asked
+  /// who it is (Get IM Info) the first time, and its command set is found the way a device's
+  /// is, by the category, subcategory and firmware version it reports; later writes reuse it.
+  /// A failed read isn't kept, so the next write asks again, and the write that asked fails
+  /// without writing the command. Without a catalog, or when the catalog gives the modem no
+  /// command set, every command is undescribed. ``SerialCommandPolicy/decision(of:commands:forcing:)``
+  /// reads the command against it. A command that is read-only, links or acts is written; one
+  /// that changes a setting, is destructive or is undescribed, other than those InsteonCore's
+  /// own flows build, is written only when `forcing`, and otherwise throws
+  /// ``SendRefusal/needsConsent(_:)``.
   /// A message to a device is better sent with ``DeviceNetwork/send(_:collectingFor:consent:onAcknowledgment:)``,
   /// which also checks it against the device's command set.
   ///
@@ -177,13 +204,13 @@ public struct ModemSession: Sendable {
   ///
   /// - Parameters:
   ///   - bytes: The command's bytes, starting with `0x02`.
-  ///   - forcing: Whether to write a command the policy refuses unless it's forced. Defaults
-  ///     to `false`.
+  ///   - forcing: Whether to write a command the policy refuses unless it's forced, and one
+  ///     that needs more consent than reading, linking or acting. Defaults to `false`.
   ///   - duration: How long to collect what the modem sends.
   ///   - clock: The clock that times the wait. Defaults to a `ContinuousClock`.
   /// - Returns: What the modem sent, in order.
-  /// - Throws: ``SendRefusal`` before anything is written, the modem's error if the command
-  ///   isn't accepted, or `CancellationError`.
+  /// - Throws: ``SendRefusal`` before the command is written, the modem's error if it can't
+  ///   say who it is or doesn't accept the command, or `CancellationError`.
   public func write(
     rawCommand bytes: [UInt8],
     forcing: Bool = false,
@@ -191,10 +218,28 @@ public struct ModemSession: Sendable {
     clock: any Clock<Duration> = ContinuousClock()
   ) async throws -> [RawModemReply] {
 
+    // The framing and the byte floor refuse before the modem is asked anything.
     if let refusal = SerialCommandPolicy.refusal(of: bytes, forcing: forcing) {
 
       throw refusal
 
+    }
+
+    var commands: CommandSet?
+
+    if let catalog {
+
+      commands = try await commandSet.commands(in: catalog.catalog, identifiedBy: { () async throws -> ModemInfo in try await info() })
+
+    }
+
+    switch SerialCommandPolicy.decision(of: bytes, commands: commands, forcing: forcing) {
+    case .transmit:
+      break
+    case let .needsConsent(effect):
+      throw SendRefusal.needsConsent(effect)
+    case let .refuse(refusal):
+      throw refusal
     }
 
     let replies: AsyncStream<ModemReply> = await modem.replies()
@@ -379,6 +424,36 @@ public enum RawModemReply: Hashable, Sendable {
     default:
       self = .other(kind: DeviceMonitor.replyKind(reply), description: "\(reply)")
     }
+
+  }
+
+}
+
+/// The modem's command set, found from its identity the first time it's asked for and kept for
+/// the session. A failed read of the identity isn't kept.
+actor ModemCommandSetCache {
+
+  private var found: CommandSet??
+
+  /// The command set the catalog gives the modem, or `nil` if it gives none.
+  ///
+  /// - Parameters:
+  ///   - catalog: The catalog to look in.
+  ///   - identify: Reads the modem's identity, run only until one read succeeds.
+  func commands(in catalog: DeviceCatalog, identifiedBy identify: () async throws -> ModemInfo) async throws -> CommandSet? {
+
+    if let found {
+
+      return found
+
+    }
+
+    let identity: ModemInfo = try await identify()
+    let commands: CommandSet? = catalog.commandSet(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion)
+
+    found = .some(commands)
+
+    return commands
 
   }
 

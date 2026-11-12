@@ -498,20 +498,36 @@ public enum HelpText {
     those Set Operating Flags to a device whose catalog entry names the cmd2 for a flag or
     command it doesn't guard.
 
-    Without --force, a command is refused when the package doesn't know its number, since the
-    modem's answer can't be read, or when it changes or erases what the modem keeps or stops
-    it answering, such as Reset the IM (0x67), Manage ALL-Link Record (0x6F) and Write
-    Database (0x76). So is Start ALL-Linking (0x64) with link code FF, which deletes links,
-    and a message (0x62) that writes to a device: Read/Write ALL-Link Database (0x2F), any
-    other Set Operating Flags (0x20), or Extended Set/Get (0x2E) with D2 other than 00. Use
-    'insteon device ADDRESS set' or 'insteon device ADDRESS send', which check a message
-    against the device's catalog entry, for those. A command must also have the length its
-    number calls for, counting 02: 8 bytes for a standard message and 22 for an extended one,
-    and 2 or 3 for Beep (0x77).
+    What a command does decides whether it needs --force. The modem is asked who it is (Get IM
+    Info), and the Insteon device catalog's entry for it says what each command does. Commands
+    that ask for state, link or act are sent, such as Get IM Info, Get First ALL-Link Record,
+    Start ALL-Linking with link code 00, 01 or 03, Cancel ALL-Linking, Send X10 and Beep.
+    Commands that change a setting the modem keeps need --force, and so do those that remove
+    or overwrite what it keeps or stop it answering, such as Reset the IM (0x67), Start
+    ALL-Linking with link code FF, Manage ALL-Link Record codes 20, 40, 41 and 80 (add, change
+    or delete a record), RF Sleep (0x72) and Write Database (0x76). The Set ACK byte commands
+    (0x68, 0x70 and 0x71), 0x79 and 0x7A change a setting, so they need --force. A command the
+    catalog's entry doesn't describe, or any command for a modem the catalog has no entry for,
+    needs --force too, except the ones the insteon command itself sends that ask for state,
+    link or act: Get IM Info, Start ALL-Linking with link code 00, 01 or 03, Cancel
+    ALL-Linking, reading the ALL-Link database (Get First and Get Next ALL-Link Record,
+    Manage ALL-Link Record codes 00 and 01), Send ALL-Link Command and Beep. A command the
+    catalog marks as never sent is never written, with or without --force.
+
+    If the modem can't say who it is, nothing is written, with or without --force.
+
+    Without --force, a command is also refused when the package doesn't know its number, since
+    the modem's answer can't be read, and a message (0x62) that writes to a device is:
+    Read/Write ALL-Link Database (0x2F), any other Set Operating Flags (0x20), or Extended
+    Set/Get (0x2E) with D2 other than 00. Use 'insteon device ADDRESS set' or 'insteon device
+    ADDRESS send', which check a message against the device's catalog entry, for those. A
+    command must also have the length its number calls for, counting 02: 8 bytes for a
+    standard message and 22 for an extended one, and 2 or 3 for Beep (0x77).
 
     What you find is worth adding to the Insteon device catalog, marked as observed.
 
-      --force             Send a command refused without it even so.
+      --force             Send a command that changes or erases what the modem keeps, or
+                          that nothing describes, or is refused for its framing, even so.
       --wait SECONDS      How long to print the modem's replies. Defaults to 3.
     """
 

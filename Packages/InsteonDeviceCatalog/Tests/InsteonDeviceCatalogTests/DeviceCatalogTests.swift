@@ -281,7 +281,7 @@ struct DeviceCatalogTests {
     let version = try DeviceCatalog.bundledVersion()
 
     #expect(version.major == 0)
-    #expect(version.minor == 9)
+    #expect(version.minor == 10)
 
   }
 

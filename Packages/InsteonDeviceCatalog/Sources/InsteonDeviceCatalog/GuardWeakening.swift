@@ -126,10 +126,9 @@ extension DeviceCatalog {
   ///   reads as destructive and a missing mark as not idempotent, as the send path reads them.
   ///   A command the baseline describes as other than read-only, which this catalog leaves
   ///   without an entry of those bytes, is weaker too: a message no entry describes needs less
-  ///   consent than a destructive one.
-  ///   A command the baseline describes as other than read-only, which this catalog leaves
-  ///   without an entry of those bytes, is weaker too: a message no entry describes needs less
-  ///   consent than a destructive one.
+  ///   consent than a destructive one;
+  /// - a modem's serial commands are compared the same way, by command number and fixed payload
+  ///   bytes, and a serial command the baseline never sends stays never sent.
   ///
   /// A device either catalog gives no command set, or doesn't know, is compared as one with
   /// none, which only the byte floor guards. The send path refuses an extended Set as given to
@@ -338,6 +337,8 @@ struct SafetySummary: Hashable {
 
     case extended(Command, [FixedUserDataByte])
 
+    case serial(UInt8, [FixedPayloadByte])
+
   }
 
   /// The bytes never sent, the byte floor's included.
@@ -407,6 +408,18 @@ struct SafetySummary: Hashable {
   }
 
   var effects: [CommandKey: Effect] = [:]
+
+  /// Every serial command's number and fixed payload bytes, to tell which frames an entry
+  /// describes.
+  struct SerialKey: Hashable {
+
+    let number: UInt8
+
+    let fixed: [FixedPayloadByte]
+
+  }
+
+  var serialKeys: [SerialKey] = []
 
   init(_ commands: CommandSet?) {
 
@@ -509,7 +522,6 @@ struct SafetySummary: Hashable {
 
       add(key, isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
       addEffect(key, effect: command.effect, isIdempotent: command.isIdempotent)
-
     }
 
     for command in commands.standardCommands {
@@ -531,6 +543,17 @@ struct SafetySummary: Hashable {
 
       add(.extended(command.command, CommandSetSafety.keyBytes(of: command)), isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
       addEffect(.extended(command.command, CommandSetSafety.keyBytes(of: command)), effect: command.effect, isIdempotent: command.isIdempotent)
+
+    }
+
+    for command in commands.serialCommands {
+
+      let key: CommandKey = .serial(command.number, command.fixedBytes)
+
+      serialKeys.append(SerialKey(number: command.number, fixed: command.fixedBytes))
+
+      add(key, isGuarded: CommandSetSafety.isNeverSent(command.sendGuard))
+      addEffect(key, effect: command.effect, isIdempotent: command.isIdempotent)
 
     }
 
@@ -681,6 +704,10 @@ struct SafetySummary: Hashable {
         let bytes: String = fixed.map { (byte: FixedUserDataByte) -> String in " D\(byte.position) \(hex(byte.value))" }.joined()
 
         return "extended cmd1 \(hex(command.command1)) cmd2 \(hex(command.command2))\(bytes)"
+      case let .serial(number, fixed):
+        let bytes: String = fixed.map { (byte: FixedPayloadByte) -> String in " payload \(byte.position) \(hex(byte.value))" }.joined()
+
+        return "serial \(hex(number))\(bytes)"
       }
 
     }
@@ -721,6 +748,38 @@ struct SafetySummary: Hashable {
       if new.isIdempotent && !old.isIdempotent {
 
         findings.append(Finding(kind: .idempotent, detail: describe(key)))
+
+      }
+
+    }
+
+    // A serial frame the baseline leaves undescribed needs --force to send. A catalog that
+    // describes it as anything but destructive would let it through, so it is weaker.
+    for (key, new) in effects {
+
+      guard case let .serial(number, fixed) = key, new.effect.strictness != .destructive else {
+
+        continue
+
+      }
+
+      let isDescribed: Bool = baseline.serialKeys.contains { (entry: SerialKey) -> Bool in
+
+        entry.number == number && entry.fixed.allSatisfy { (byte: FixedPayloadByte) -> Bool in
+
+          fixed.first { $0.position == byte.position }.map { $0.value == byte.value } ?? true
+
+        } && fixed.allSatisfy { (byte: FixedPayloadByte) -> Bool in
+
+          entry.fixed.first { $0.position == byte.position }.map { $0.value == byte.value } ?? true
+
+        }
+
+      }
+
+      if !isDescribed {
+
+        findings.append(Finding(kind: .effect, detail: "\(describe(key)) undescribed to \(new.effect)"))
 
       }
 

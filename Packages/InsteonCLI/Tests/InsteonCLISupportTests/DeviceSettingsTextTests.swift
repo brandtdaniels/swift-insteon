@@ -420,11 +420,26 @@ struct ExploringArgumentTests {
 
   }
 
-  @Test func refusesAModemCommandThatCouldDoHarmWithoutForce() throws {
+  @Test func leavesWhatAModemCommandDoesToTheModemsCommandSet() throws {
 
-    #expect(throws: ArgumentError.refusedSerialCommand("Reset the IM (0x67) erases the modem's ALL-Link database and configuration.")) {
+    // What these do to the modem is read from its catalog entry once the modem is open, so the
+    // parser lets each through, forced or not.
+    for text in ["0267", "0264FF00", "026800", "0272", "0276" + String(repeating: "00", count: 10), "0277"] {
 
-      try Invocation.parse(["modem", "send", "0267"])
+      let bytes: [UInt8] = try #require(HexInput.bytes(text))
+
+      #expect(try Invocation.parse(["modem", "send", text]).subcommand == .modemSend(RawSerialRequest(bytes: bytes)), "\(text)")
+      #expect(try Invocation.parse(["modem", "send", text, "--force"]).subcommand == .modemSend(RawSerialRequest(bytes: bytes, isForced: true)), "\(text)")
+
+    }
+
+  }
+
+  @Test func refusesAModemCommandItCantFrameWithoutForce() throws {
+
+    #expect(throws: ArgumentError.refusedSerialCommand("0x09 isn't a serial command the package knows, so the modem's answer can't be read.")) {
+
+      try Invocation.parse(["modem", "send", "0209"])
 
     }
 
@@ -440,23 +455,21 @@ struct ExploringArgumentTests {
 
     }
 
-    // Start ALL-Linking in delete mode, and messages that write to a device.
-    let deleteLinking: [UInt8] = [0x02, 0x64, 0xFF, 0x00]
+    // Messages that write to a device.
     let databaseWrite: [UInt8] = [0x02, 0x62, 0x1A, 0x2B, 0x3C, 0x1F, 0x2F, 0x00] + [UInt8](repeating: 0x00, count: 14)
     let databaseRead: [UInt8] = [0x02, 0x62, 0x1A, 0x2B, 0x3C, 0x0F, 0x2F, 0x00]
     let operatingFlags: [UInt8] = [0x02, 0x62, 0x1A, 0x2B, 0x3C, 0x0F, 0x20, 0x04]
     var extendedSet: [UInt8] = [0x02, 0x62, 0x1A, 0x2B, 0x3C, 0x1F, 0x2E, 0x00] + [UInt8](repeating: 0x00, count: 14)
     extendedSet[9] = 0x06
 
-    #expect(SerialCommandPolicy.refusal(for: deleteLinking) != nil)
     #expect(SerialCommandPolicy.refusal(for: databaseWrite) != nil)
     #expect(SerialCommandPolicy.refusal(for: databaseRead) != nil)
     #expect(SerialCommandPolicy.refusal(for: operatingFlags) != nil)
     #expect(SerialCommandPolicy.refusal(for: extendedSet) != nil)
 
-    #expect(throws: ArgumentError.refusedSerialCommand(SerialCommandPolicy.refusal(for: deleteLinking) ?? "")) {
+    #expect(throws: ArgumentError.refusedSerialCommand(SerialCommandPolicy.refusal(for: databaseRead) ?? "")) {
 
-      try Invocation.parse(["modem", "send", "0264FF00"])
+      try Invocation.parse(["modem", "send", "02621A2B3C0F2F00"])
 
     }
 
@@ -495,7 +508,7 @@ struct ExploringArgumentTests {
 
     }
 
-    #expect(try Invocation.parse(["modem", "send", "0264FF00", "--force"]).subcommand == .modemSend(RawSerialRequest(bytes: deleteLinking, isForced: true)))
+    #expect(try Invocation.parse(["modem", "send", "02621A2B3C0F2F00", "--force"]).subcommand == .modemSend(RawSerialRequest(bytes: databaseRead, isForced: true)))
 
   }
 
@@ -539,8 +552,12 @@ struct ExploringArgumentTests {
       .writesGuardedFlags(label: "Lockout"),
       .extendedSetWithoutCommandSet,
       .notSerialCommand,
+      .neverSentToModem,
       .incompleteMessage,
-      .serialCommand("Reset the IM (0x67) erases the modem's ALL-Link database and configuration.")
+      .serialCommand("0x09 isn't a serial command the package knows, so the modem's answer can't be read."),
+      .needsConsent(.configuration),
+      .needsConsent(.destructive),
+      .needsConsent(nil)
     ]
 
     for refusal in refusals {
@@ -565,6 +582,9 @@ struct ExploringArgumentTests {
     #expect(SendRefusalText.sentence(.protected(.poke), from: .deviceSend).hasSuffix("insteon never sends it."))
     #expect(SendRefusalText.sentence(.extendedSetWithoutCommandSet, from: .deviceSend) == "Without the device's catalog entry, insteon can't tell which bits an extended Set writes, so it doesn't send one as given; run 'insteon device ADDRESS id' first, so the identity cache knows the device.")
     #expect(SendRefusalText.sentence(.serialCommand("Reset."), from: .modemSend).hasSuffix("Pass --force to send it anyway."))
+    #expect(SendRefusalText.sentence(.needsConsent(.configuration), from: .modemSend) == "The modem's catalog entry describes this command as one that changes a setting the modem keeps; pass --force to send it.")
+    #expect(SendRefusalText.sentence(.needsConsent(.destructive), from: .modemSend) == "The modem's catalog entry describes this command as one that removes or overwrites ALL-Link records, memory or counters, restores factory settings, or leaves the modem unable to communicate with its host; pass --force to send it.")
+    #expect(SendRefusalText.sentence(.needsConsent(nil), from: .modemSend) == "No entry of the modem's catalog describes this command, or the catalog has no entry for the modem; pass --force to send it.")
 
   }
 
@@ -572,7 +592,7 @@ struct ExploringArgumentTests {
 
     let errors: [ArgumentError] = [
       .missingArgument("a VALUE", subcommand: "device ADDRESS set"),
-      .refusedSerialCommand("Reset the IM (0x67) erases the modem's ALL-Link database and configuration.")
+      .refusedSerialCommand("0x09 isn't a serial command the package knows, so the modem's answer can't be read.")
     ]
 
     for error in errors {

@@ -27,9 +27,10 @@ enum CommandSession {
   ///
   /// - Parameters:
   ///   - invocation: The command line, which names the modem with `--hub` or `--serial`.
+  ///   - catalog: The catalog the session describes the modem's serial commands with.
   ///   - body: The work to do with the modem. The session's `hub` is the Hub's host and port,
   ///     or `nil` for a serial modem; the Hub's credentials aren't part of it.
-  static func run(_ invocation: Invocation, _ body: @escaping @Sendable (ModemSession) async throws -> Void) async throws {
+  static func run(_ invocation: Invocation, catalog: ProductCatalog? = nil, _ body: @escaping @Sendable (ModemSession) async throws -> Void) async throws {
 
     let environment = try loadEnvironment(explicitPath: invocation.envFilePath)
     let target = try ModemTarget.resolve(hub: invocation.hub, serialPath: invocation.serialPath, environment: environment)
@@ -46,7 +47,7 @@ enum CommandSession {
 
       do {
 
-        try await ModemSession.withHub(host: host, port: hubPort, user: credentials.user, password: credentials.password) { (session: ModemSession) async throws -> Void in
+        try await ModemSession.withHub(host: host, port: hubPort, user: credentials.user, password: credentials.password, catalog: catalog) { (session: ModemSession) async throws -> Void in
 
           try await Interrupt.cancellingOnInterrupt {
 
@@ -69,7 +70,7 @@ enum CommandSession {
       }
     case let .serial(path):
       #if os(macOS) || os(Linux)
-      try await ModemSession.withSerialPort(path: path) { (session: ModemSession) async throws -> Void in
+      try await ModemSession.withSerialPort(path: path, catalog: catalog) { (session: ModemSession) async throws -> Void in
 
         try await Interrupt.cancellingOnInterrupt {
 

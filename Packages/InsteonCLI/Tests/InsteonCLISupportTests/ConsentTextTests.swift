@@ -35,6 +35,21 @@ struct ConsentTextTests {
 
   }
 
+  @Test func modemSendNamesForceForWhatTheModemsCatalogEntryDoesntGrant() {
+
+    for effect in [CommandEffect.configuration, .destructive, CommandEffect(rawValue: "sideEffect")] {
+
+      #expect(SendRefusalText.sentence(.needsConsent(effect), from: .modemSend).hasSuffix("; pass --force to send it."))
+
+    }
+
+    #expect(SendRefusalText.sentence(.needsConsent(CommandEffect(rawValue: "sideEffect")), from: .modemSend) == SendRefusalText.sentence(.needsConsent(.destructive), from: .modemSend))
+    #expect(ConsentText.clause(.configuration, of: "modem") == "changes a setting the modem keeps")
+    #expect(ConsentText.clause(.link, of: "modem") == "puts the modem in or out of ALL-Linking mode, or adds an ALL-Link record")
+    #expect(ConsentText.clause(.actuation, of: "modem") == "changes what the modem does at once")
+
+  }
+
   @Test func saysWhatAControlCommandDoesntGrant() {
 
     let sentence: String = DeviceText.failure(.needsConsent(.turnOn, effect: .configuration, product: "Example Relay 9101"), device: Self.device)

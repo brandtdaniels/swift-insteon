@@ -805,6 +805,78 @@ package enum CommandSetSafety {
 
   }
 
+  /// What a serial frame does to a modem that uses a command set, found by the frame's command
+  /// number and payload bytes, read the way a send is authorized.
+  ///
+  /// A serial command matches a frame by its number and every fixed payload byte; a byte a
+  /// parameter fills holds any value. A frame cut short of a fixed byte matches nothing. A frame
+  /// several entries match takes the strictest of their effects, two different effects of the
+  /// same ``CommandEffect/Strictness`` reading as destructive, and is idempotent only if every
+  /// entry is. An entry without an effect, or with one this package doesn't know, is
+  /// ``CommandEffect/destructive``, and one without `idempotent` isn't idempotent.
+  ///
+  /// - Parameters:
+  ///   - number: The frame's command number, the byte after `0x02`.
+  ///   - payload: The bytes after the number.
+  ///   - commands: The modem's command set, or `nil` if the catalog gives it none.
+  /// - Returns: The effect, or ``MessageEffect/undescribed`` if no entry describes the frame, as
+  ///   for every frame to a modem without a command set.
+  package static func serialEffect(number: UInt8, payload: [UInt8], in commands: CommandSet?) -> MessageEffect {
+
+    guard let commands else {
+
+      return .undescribed
+
+    }
+
+    let matched: [DeviceSerialCommand] = commands.serialCommands.filter { (command: DeviceSerialCommand) -> Bool in
+
+      command.number == number && command.fixedBytes.allSatisfy { (byte: FixedPayloadByte) -> Bool in
+
+        byte.position <= payload.count && payload[byte.position - 1] == byte.value
+
+      }
+
+    }
+
+    guard let first = matched.first else {
+
+      return .undescribed
+
+    }
+
+    let effect: CommandEffect = matched.dropFirst().reduce(reading(first.effect)) { (strictest: CommandEffect, command: DeviceSerialCommand) -> CommandEffect in
+
+      stricter(strictest, reading(command.effect))
+
+    }
+
+    return .described(effect, isIdempotent: matched.allSatisfy { (command: DeviceSerialCommand) -> Bool in command.isIdempotent == true })
+
+  }
+
+  /// Whether the modem's command set marks a serial frame as never sent: an entry the frame
+  /// matches by number and fixed payload bytes has ``CommandGuard/never``.
+  ///
+  /// - Parameters:
+  ///   - number: The frame's command number.
+  ///   - payload: The bytes after the number.
+  ///   - commands: The modem's command set, or `nil`.
+  /// - Returns: `true` if an app never sends the frame.
+  package static func isSerialNeverSent(number: UInt8, payload: [UInt8], in commands: CommandSet?) -> Bool {
+
+    (commands?.serialCommands ?? []).contains { (command: DeviceSerialCommand) -> Bool in
+
+      isNeverSent(command.sendGuard) && command.number == number && command.fixedBytes.allSatisfy { (byte: FixedPayloadByte) -> Bool in
+
+        byte.position <= payload.count && payload[byte.position - 1] == byte.value
+
+      }
+
+    }
+
+  }
+
   private static func matchedEffect(of command: Command, userData: UserData?, in commands: CommandSet?, isLoose: Bool) -> MessageEffect {
 
     guard let commands else {
