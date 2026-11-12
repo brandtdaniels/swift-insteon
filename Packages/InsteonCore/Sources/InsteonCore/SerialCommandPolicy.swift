@@ -2,7 +2,7 @@ import InsteonDeviceCatalog
 import InsteonProtocol
 
 /// Which serial commands a raw passthrough, such as `insteon modem send`, writes to the modem,
-/// with or without being forced. ``ModemSession/write(rawCommand:forcing:catalog:collectingFor:clock:)``
+/// with or without being forced. ``ModemSession/write(rawCommand:forcing:collectingFor:clock:)``
 /// enforces it.
 ///
 /// Three things decide, in this order. The byte floor and the command's framing refuse bytes

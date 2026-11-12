@@ -72,7 +72,7 @@ struct ModemSendTests {
 
     try await Modem.withConnection(connection) { (modem: Modem) async throws -> Void in
 
-      _ = try await ModemSession(modem: modem, hub: nil).write(rawCommand: bytes, forcing: forcing, catalog: catalog, collectingFor: .zero)
+      _ = try await ModemSession(modem: modem, hub: nil, catalog: catalog).write(rawCommand: bytes, forcing: forcing, collectingFor: .zero)
 
     }
 
@@ -151,6 +151,79 @@ struct ModemSendTests {
 
   }
 
+  // MARK: - The modem's identity
+
+  @Test(.timeLimit(.minutes(1))) func asksTheModemWhoItIsOncePerSession() async throws {
+
+    let catalog: ProductCatalog = try Self.catalog()
+    let connection: ScriptedConnection = Self.connection()
+
+    try await Modem.withConnection(connection) { (modem: Modem) async throws -> Void in
+
+      let session = ModemSession(modem: modem, hub: nil, catalog: catalog)
+
+      _ = try await session.write(rawCommand: [0x02, 0x6D], collectingFor: .zero)
+      _ = try await session.write(rawCommand: [0x02, 0x69], collectingFor: .zero)
+
+      await #expect(throws: SendRefusal.needsConsent(.configuration)) {
+
+        _ = try await session.write(rawCommand: [0x02, 0x68, 0x01], collectingFor: .zero)
+
+      }
+
+    }
+
+    #expect(connection.written.filter { $0 == Self.getInfo }.count == 1)
+    #expect(connection.written == [Self.getInfo, [0x02, 0x6D], [0x02, 0x69]])
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func doesNotKeepAFailedIdentityReadAndAsksAgain() async throws {
+
+    let catalog: ProductCatalog = try Self.catalog()
+    let connection = FailingIdentityConnection(failures: 1)
+
+    try await Modem.withConnection(connection) { (modem: Modem) async throws -> Void in
+
+      let session = ModemSession(modem: modem, hub: nil, catalog: catalog)
+
+      await #expect(throws: FailingIdentityConnection.Failure.self) {
+
+        _ = try await session.write(rawCommand: [0x02, 0x67], forcing: true, collectingFor: .zero)
+
+      }
+
+      _ = try await session.write(rawCommand: [0x02, 0x6D], collectingFor: .zero)
+
+    }
+
+    #expect(await connection.identityAsks == 2)
+    #expect(await connection.written == [[0x02, 0x6D]])
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func readsEveryCommandAgainstTheCatalogTheSessionHolds() async throws {
+
+    // The session is built with one catalog; a call has no way to give another.
+    let connection: ScriptedConnection = Self.connection()
+
+    try await Modem.withConnection(connection) { (modem: Modem) async throws -> Void in
+
+      let described = ModemSession(modem: modem, hub: nil, catalog: try Self.catalog())
+      let undescribing = ModemSession(modem: modem, hub: nil, catalog: try Self.catalog(withCommandSet: false))
+
+      _ = try await described.write(rawCommand: [0x02, 0x6D], collectingFor: .zero)
+
+      await #expect(throws: SendRefusal.needsConsent(nil)) {
+
+        _ = try await undescribing.write(rawCommand: [0x02, 0x6D], collectingFor: .zero)
+
+      }
+
+    }
+
+  }
+
   // MARK: - Without one
 
   @Test(.timeLimit(.minutes(1))) func treatsAModemWithoutACommandSetAsDescribingNothingExceptWhatCoreBuilds() async throws {
@@ -193,15 +266,15 @@ struct ModemSendTests {
 
     try await Modem.withConnection(other) { (modem: Modem) async throws -> Void in
 
-      let session = ModemSession(modem: modem, hub: nil)
+      let session = ModemSession(modem: modem, hub: nil, catalog: catalog)
 
       await #expect(throws: SendRefusal.needsConsent(nil)) {
 
-        _ = try await session.write(rawCommand: [0x02, 0x6D], catalog: catalog, collectingFor: .zero)
+        _ = try await session.write(rawCommand: [0x02, 0x6D], collectingFor: .zero)
 
       }
 
-      _ = try await session.write(rawCommand: [0x02, 0x69], catalog: catalog, collectingFor: .zero)
+      _ = try await session.write(rawCommand: [0x02, 0x69], collectingFor: .zero)
 
     }
 
@@ -216,7 +289,7 @@ struct ModemSendTests {
 
       await #expect(throws: FailingIdentityConnection.Failure.self) {
 
-        _ = try await ModemSession(modem: modem, hub: nil).write(rawCommand: [0x02, 0x67], forcing: true, catalog: catalog, collectingFor: .zero)
+        _ = try await ModemSession(modem: modem, hub: nil, catalog: catalog).write(rawCommand: [0x02, 0x67], forcing: true, collectingFor: .zero)
 
       }
 
@@ -245,7 +318,7 @@ struct ModemSendTests {
 
       await #expect(throws: SendRefusal.self) {
 
-        _ = try await ModemSession(modem: modem, hub: nil).write(rawCommand: [0x02, 0x09], catalog: catalog, collectingFor: .zero)
+        _ = try await ModemSession(modem: modem, hub: nil, catalog: catalog).write(rawCommand: [0x02, 0x09], collectingFor: .zero)
 
       }
 
@@ -264,23 +337,46 @@ actor FailingIdentityConnection: ModemConnection {
 
   private(set) var written: [[UInt8]] = []
 
+  /// How many Get IM Info writes were asked.
+  private(set) var identityAsks: Int = 0
+
+  private var failures: Int
+
+  private let continuation: AsyncThrowingStream<[UInt8], any Error>.Continuation
+
   private let stream: AsyncThrowingStream<[UInt8], any Error>
 
-  init() {
+  /// - Parameter failures: How many Get IM Info writes fail before one is answered. Defaults
+  ///   to every one.
+  init(failures: Int = .max) {
 
-    stream = AsyncThrowingStream<[UInt8], any Error>.makeStream().stream
+    self.failures = failures
+    (stream, continuation) = AsyncThrowingStream<[UInt8], any Error>.makeStream()
 
   }
 
   func write(_ bytes: [UInt8]) async throws {
 
-    guard bytes.count > 1, bytes[1] != 0x60 else {
+    if bytes.count > 1, bytes[1] == 0x60 {
 
-      throw Failure()
+      identityAsks += 1
+
+      if failures > 0 {
+
+        failures -= 1
+
+        throw Failure()
+
+      }
+
+      continuation.yield([0x02, 0x60] + ModemSendTests.identity + [0x06])
+
+      return
 
     }
 
     written.append(bytes)
+    continuation.yield(bytes + [0x06])
 
   }
 

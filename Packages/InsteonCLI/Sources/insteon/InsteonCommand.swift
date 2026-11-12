@@ -115,9 +115,9 @@ struct InsteonCommand {
 
       }
     case let .modemSend(request):
-      try await withModem(invocation) { modem, names in
+      try await withModem(invocation) { modem, _ in
 
-        try await ExploreCommands.send(request, modem: modem, catalog: names.catalog)
+        try await ExploreCommands.send(request, modem: modem)
 
       }
     case let .watch(options):
@@ -150,7 +150,7 @@ struct InsteonCommand {
 
     let names = ProductNames()
 
-    try await CommandSession.run(invocation) { (session: ModemSession) async throws -> Void in
+    try await CommandSession.run(invocation, catalog: names.catalog) { (session: ModemSession) async throws -> Void in
 
       try await body(session, names)
 
@@ -167,7 +167,7 @@ struct InsteonCommand {
 
     let names = ProductNames()
 
-    try await CommandSession.run(invocation) { (session: ModemSession) async throws -> Void in
+    try await CommandSession.run(invocation, catalog: names.catalog) { (session: ModemSession) async throws -> Void in
 
       try await body(session, names, session.hub)
 

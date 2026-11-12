@@ -1,6 +1,6 @@
 import InsteonHubDiscovery
 
-/// A Hub's address that isn't a private IPv4 address, so ``ModemSession/withHub(host:port:user:password:_:)``
+/// A Hub's address that isn't a private IPv4 address, so ``ModemSession/withHub(host:port:user:password:catalog:_:)``
 /// sends it neither the Hub's user name and password nor any request.
 ///
 /// The Hub's interface is plain HTTP, so its credentials are readable wherever they go. They go
@@ -55,7 +55,7 @@ extension HubLocation {
   /// Whether the Hub's user name and password may be sent to this location's host: only when
   /// it's an IPv4 address in `10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16`.
   ///
-  /// ``ModemSession/withHub(host:port:user:password:_:)`` refuses any other host with
+  /// ``ModemSession/withHub(host:port:user:password:catalog:_:)`` refuses any other host with
   /// ``HubAddressRefused`` before sending anything, so a front end can check a host as it's
   /// entered.
   public var acceptsCredentials: Bool {

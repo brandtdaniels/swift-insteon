@@ -123,7 +123,7 @@ public enum ProtectedCommand: Hashable, Sendable, CaseIterable {
 ///
 /// It's thrown before anything is sent, by the raw passthroughs:
 /// ``DeviceNetwork/send(_:collectingFor:consent:onAcknowledgment:)`` and
-/// ``ModemSession/write(rawCommand:forcing:catalog:collectingFor:clock:)``. Only
+/// ``ModemSession/write(rawCommand:forcing:collectingFor:clock:)``. Only
 /// ``SendRefusal/serialCommand(_:)`` and ``SendRefusal/needsConsent(_:)`` can be forced;
 /// ``canBeForced`` says so.
 ///
