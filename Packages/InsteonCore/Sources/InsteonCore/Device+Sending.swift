@@ -346,10 +346,11 @@ extension Device {
   ///   - message: The message, whose ``DirectMessage/device`` is the device.
   ///   - duration: How long to collect what the device sends after its acknowledgment.
   ///   - consent: What the caller grants the message to do.
+  ///   - onSending: Called once the message is allowed, just before it is sent.
   ///   - onAcknowledgment: Called with the device's acknowledgment.
   /// - Returns: The other messages from the device, in order.
   /// - Throws: ``SendRefusal`` before anything is sent, and the modem's errors.
-  func sendAsGiven(_ message: DirectMessage, collectingFor duration: Duration, consent: SendConsent, onAcknowledgment: (ReceivedFrame) -> Void) async throws -> [ReceivedFrame] {
+  func sendAsGiven(_ message: DirectMessage, collectingFor duration: Duration, consent: SendConsent, onSending: () -> Void, onAcknowledgment: (ReceivedFrame) -> Void) async throws -> [ReceivedFrame] {
 
     let device: InsteonAddress = address
     let replies: AsyncStream<ModemReply> = await modem.replies()
@@ -357,11 +358,17 @@ extension Device {
 
     if let extended = message.extended {
 
-      acknowledgment = try await request(extended, timeout: Modem.defaultExtendedRequestTimeout, for: .asGiven(consent))
+      try await authorize(extended.command, userData: extended.userData, for: .asGiven(consent))
+      onSending()
+      acknowledgment = try await modem.request(extended, timeout: Modem.defaultExtendedRequestTimeout)
 
     } else {
 
-      acknowledgment = try await request(StandardMessage(to: device, command: message.command), timeout: network.requestTimeout, for: .asGiven(consent))
+      let standard = StandardMessage(to: device, command: message.command)
+
+      try await authorize(standard.command, for: .asGiven(consent))
+      onSending()
+      acknowledgment = try await modem.request(standard, timeout: network.requestTimeout)
 
     }
 

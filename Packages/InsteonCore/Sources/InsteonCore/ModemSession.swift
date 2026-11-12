@@ -64,7 +64,7 @@ public struct ModemSession: Sendable {
   ///   - user: The Hub's user name.
   ///   - password: The Hub's password.
   ///   - catalog: The catalog that describes the modem's serial commands for
-  ///     ``write(rawCommand:forcing:collectingFor:clock:)``, or `nil` to describe none. Defaults
+  ///     ``write(rawCommand:forcing:collectingFor:clock:onWriting:)``, or `nil` to describe none. Defaults
   ///     to `nil`.
   ///   - body: The work to do with the modem.
   /// - Throws: ``HubAddressRefused`` for a host that isn't a private IPv4 address, the error
@@ -104,7 +104,7 @@ public struct ModemSession: Sendable {
   /// - Parameters:
   ///   - path: The port's device path, such as `/dev/ttyUSB0`.
   ///   - catalog: The catalog that describes the modem's serial commands for
-  ///     ``write(rawCommand:forcing:collectingFor:clock:)``, or `nil` to describe none. Defaults
+  ///     ``write(rawCommand:forcing:collectingFor:clock:onWriting:)``, or `nil` to describe none. Defaults
   ///     to `nil`.
   ///   - body: The work to do with the modem.
   /// - Throws: The port's error if it can't be opened or configured, or the error `body`
@@ -192,7 +192,7 @@ public struct ModemSession: Sendable {
   /// that changes a setting, is destructive or is undescribed, other than those InsteonCore's
   /// own flows build, is written only when `forcing`, and otherwise throws
   /// ``SendRefusal/needsConsent(_:)``.
-  /// A message to a device is better sent with ``DeviceNetwork/send(_:collectingFor:consent:onAcknowledgment:)``,
+  /// A message to a device is better sent with ``DeviceNetwork/send(_:collectingFor:consent:onSending:onAcknowledgment:)``,
   /// which also checks it against the device's command set.
   ///
   /// Listening starts before the command is written, so nothing the modem sends is missed.
@@ -208,6 +208,8 @@ public struct ModemSession: Sendable {
   ///     that needs more consent than reading, linking or acting. Defaults to `false`.
   ///   - duration: How long to collect what the modem sends.
   ///   - clock: The clock that times the wait. Defaults to a `ContinuousClock`.
+  ///   - onWriting: Called once the command is allowed, just before its bytes are written, and
+  ///     never for a refused command.
   /// - Returns: What the modem sent, in order.
   /// - Throws: ``SendRefusal`` before the command is written, the modem's error if it can't
   ///   say who it is or doesn't accept the command, or `CancellationError`.
@@ -215,7 +217,8 @@ public struct ModemSession: Sendable {
     rawCommand bytes: [UInt8],
     forcing: Bool = false,
     collectingFor duration: Duration,
-    clock: any Clock<Duration> = ContinuousClock()
+    clock: any Clock<Duration> = ContinuousClock(),
+    onWriting: () -> Void = {}
   ) async throws -> [RawModemReply] {
 
     // The framing and the byte floor refuse before the modem is asked anything.
@@ -243,6 +246,8 @@ public struct ModemSession: Sendable {
     }
 
     let replies: AsyncStream<ModemReply> = await modem.replies()
+
+    onWriting()
 
     try await modem.write(rawCommand: bytes)
 

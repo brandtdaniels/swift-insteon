@@ -318,10 +318,10 @@ reading each write back. <doc:DatabaseLinking> says what each writes and when to
 ### Sending bytes as they're given
 
 A front end that explores what the catalog doesn't describe yet sends a device a message as
-it's given with ``DeviceNetwork/send(_:collectingFor:consent:onAcknowledgment:)``, and writes the
-modem a serial command with ``ModemSession/write(rawCommand:forcing:collectingFor:clock:)``.
+it's given with ``DeviceNetwork/send(_:collectingFor:consent:onSending:onAcknowledgment:)``, and writes the
+modem a serial command with ``ModemSession/write(rawCommand:forcing:collectingFor:clock:onWriting:)``.
 Both check the bytes first, and throw a ``SendRefusal`` before anything is sent.
-``DeviceNetwork/send(_:collectingFor:consent:onAcknowledgment:)`` also takes the
+``DeviceNetwork/send(_:collectingFor:consent:onSending:onAcknowledgment:)`` also takes the
 ``SendConsent`` the caller grants: a message that asks for state is sent, and one that does
 more is sent only when the consent grants what the device's command set says it does, else
 it throws ``SendRefusal/needsConsent(_:)`` naming the effect to grant. A message no entry of

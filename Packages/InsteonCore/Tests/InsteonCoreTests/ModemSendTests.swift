@@ -135,6 +135,60 @@ struct ModemSendTests {
 
   }
 
+  /// How many times `onWriting` ran when bytes were handed to a session, and the refusal if any.
+  static func writingCalls(_ bytes: [UInt8], catalog: ProductCatalog?, forcing: Bool = false) async -> (calls: Int, refusal: SendRefusal?) {
+
+    let counter = Counter()
+    var refusal: SendRefusal?
+
+    do {
+
+      try await Modem.withConnection(connection()) { (modem: Modem) async throws -> Void in
+
+        _ = try await ModemSession(modem: modem, hub: nil, catalog: catalog).write(rawCommand: bytes, forcing: forcing, collectingFor: .zero, onWriting: { counter.count += 1 })
+
+      }
+
+    } catch let caught as SendRefusal {
+
+      refusal = caught
+
+    } catch {
+
+      Issue.record("\(error)")
+
+    }
+
+    return (counter.count, refusal)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func announcesAWriteOnlyOnceItIsAllowed() async throws {
+
+    let catalog: ProductCatalog = try Self.catalog()
+    let tune: [UInt8] = [0x02, 0x68, 0x01]
+
+    #expect(await Self.writingCalls([0x02, 0x6D], catalog: catalog).calls == 1)
+    #expect(await Self.writingCalls(tune, catalog: catalog, forcing: true).calls == 1)
+
+    let consent = await Self.writingCalls(tune, catalog: catalog)
+    #expect(consent.calls == 0)
+    #expect(consent.refusal == .needsConsent(.configuration))
+
+    let undescribed = await Self.writingCalls([0x02, 0x6E], catalog: catalog)
+    #expect(undescribed.calls == 0)
+    #expect(undescribed.refusal == .needsConsent(nil))
+
+    let floor = await Self.writingCalls([0x02, 0x09], catalog: catalog)
+    #expect(floor.calls == 0)
+    #expect(floor.refusal != nil)
+
+    let never = await Self.writingCalls([0x02, 0x72], catalog: catalog, forcing: true)
+    #expect(never.calls == 0)
+    #expect(never.refusal == .neverSentToModem)
+
+  }
+
   @Test(.timeLimit(.minutes(1))) func neverWritesACommandTheModemsCommandSetNeverSends() async throws {
 
     let catalog: ProductCatalog = try Self.catalog()
@@ -385,5 +439,12 @@ actor FailingIdentityConnection: ModemConnection {
     stream
 
   }
+
+}
+
+/// Counts calls to a synchronous callback.
+private final class Counter: @unchecked Sendable {
+
+  var count = 0
 
 }
