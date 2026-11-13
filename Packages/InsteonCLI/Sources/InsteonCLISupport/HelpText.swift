@@ -20,6 +20,7 @@ public enum HelpText {
     case "link": link
     case "unlink": unlink
     case "remove": remove
+    case "observe": observe
     case "device": device
     case "scene", "group": scene
     case "beep": beep
@@ -46,6 +47,8 @@ public enum HelpText {
                           --all, by its address
       remove ADDRESS      Remove a device from the network: unlink it from the modem,
                           forget it and show its factory reset steps
+      observe ADDRESS     Record what a device did, as a JSON file to share, using
+                          only reads
       device ADDRESS ...  Control a device, read and change its settings, or read its
                           ALL-Link database
       scene GROUP on|off  Turn the devices in one of the modem's groups on or off
@@ -362,6 +365,37 @@ public enum HelpText {
       --timeout SECONDS   How long to wait for each link to be removed. Defaults to 30.
 
     'unlink ADDRESS --all' removes the links and keeps the device in the identity cache.
+    """
+
+  /// The help for `insteon observe`.
+  public static let observe = """
+    Usage: insteon [--hub HOST[:PORT] | --serial PATH] observe ADDRESS [--note TEXT]
+                   [--output PATH] [--json]
+
+    Records what a device did, as a small JSON file you can attach to an issue or a pull
+    request, so others can help check the Insteon device catalog. The device must be linked
+    to the modem.
+
+    It asks the device Get Insteon Engine Version, ID Request, Product Data Request, the
+    catalog's status request and the requests for its operating flags, and records for each
+    whether the device answered, was silent or refused. A device that is asleep, such as a
+    battery sensor, is silent; the file says it may need to be awake and states nothing
+    about the device. Press its button first to wake it.
+
+    The file has the format insteon-observation/1, described by
+    Packages/InsteonCLI/Schemas/insteon-observation-1.schema.json.
+
+    It only reads. It never writes to a device, its ALL-Link database or its settings. The
+    file never holds an address of a device, the modem or a Hub, a host, or account data.
+
+      --note TEXT         Text to record with the observation, such as what the device is
+                          and how it is set up. It is refused if it looks like an address.
+      --output PATH       Write the JSON to PATH instead of standard output. An existing file
+                          is never overwritten.
+      --json              Accepted for consistency; the output is always JSON.
+
+    The JSON goes to standard output, or to the file; a summary of the checks goes to
+    standard error.
     """
 
   /// The help for `insteon device`.
