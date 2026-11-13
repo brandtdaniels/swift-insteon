@@ -3,7 +3,7 @@ import InsteonCore
 extension Invocation {
 
   /// The subcommands, in the order the help lists them.
-  public static let subcommandNames = ["discover", "info", "links", "link", "unlink", "remove", "device", "scene", "beep", "modem", "watch", "catalog"]
+  public static let subcommandNames = ["discover", "info", "links", "link", "unlink", "remove", "observe", "device", "scene", "beep", "modem", "watch", "catalog"]
 
   /// Other names for subcommands: `group` for `scene`.
   public static let subcommandAliases = ["group": "scene"]
@@ -154,6 +154,8 @@ extension Invocation {
       return try .unlink(parseUnlink(rest))
     case "remove":
       return try .remove(parseRemove(rest))
+    case "observe":
+      return try .observe(parseObserve(rest))
     case "device":
       return try parseDevice(rest)
     case "scene":
@@ -592,6 +594,49 @@ extension Invocation {
       assumesYes: assumesYes,
       timeoutSeconds: timeoutSeconds
     )
+
+  }
+
+  private static func parseObserve(_ arguments: [String]) throws(ArgumentError) -> ObserveOptions {
+
+    var device: InsteonAddress?
+    var deviceArgument: String?
+    var note: String?
+    var outputPath: String?
+    var index = 0
+
+    while index < arguments.count {
+
+      let argument = arguments[index]
+      let (name, inlineValue) = split(argument)
+      index += 1
+
+      if !argument.hasPrefix("-") {
+
+        device = try address(argument, after: deviceArgument, subcommand: "observe")
+        deviceArgument = argument
+        continue
+
+      }
+
+      switch name {
+      case "--note":
+        note = try value(of: name, inline: inlineValue, in: arguments, at: &index)
+      case "--output":
+        outputPath = try value(of: name, inline: inlineValue, in: arguments, at: &index)
+      default:
+        throw unexpected(argument, subcommand: "observe")
+      }
+
+    }
+
+    guard let device else {
+
+      throw ArgumentError.missingArgument("a device's ADDRESS, such as 1A.2B.3C", subcommand: "observe")
+
+    }
+
+    return ObserveOptions(device: device, note: note, outputPath: outputPath)
 
   }
 

@@ -38,6 +38,8 @@ public struct Invocation: Hashable, Sendable {
       options.device
     case let .remove(options):
       options.device
+    case let .observe(options):
+      options.device
     default:
       nil
     }
@@ -99,6 +101,9 @@ public enum Subcommand: Hashable, Sendable {
   /// Removes a device from the network: every link between it and the modem, then what the
   /// identity cache keeps about it, and shows the catalog's factory reset steps.
   case remove(RemoveOptions)
+
+  /// Asks a device read-only questions and records its answers as a JSON file to share.
+  case observe(ObserveOptions)
 
   /// Sends a device a command, or reads its ALL-Link database.
   case device(InsteonAddress, DeviceAction)
@@ -580,6 +585,34 @@ public struct UnlinkOptions: Hashable, Sendable {
     self.timeoutSeconds = timeoutSeconds
     self.removesAllLinks = removesAllLinks
     self.database = database
+
+  }
+
+}
+
+/// What `insteon observe` records, and where it puts the file.
+public struct ObserveOptions: Hashable, Sendable {
+
+  /// The device to observe.
+  public var device: InsteonAddress
+
+  /// The text given with `--note`, or `nil`.
+  public var note: String?
+
+  /// The path given with `--output`, or `nil` for standard output.
+  public var outputPath: String?
+
+  /// Creates observe options.
+  ///
+  /// - Parameters:
+  ///   - device: The device to observe.
+  ///   - note: The text to record with the observation. Defaults to `nil`.
+  ///   - outputPath: The file to write. Defaults to `nil`, for standard output.
+  public init(device: InsteonAddress, note: String? = nil, outputPath: String? = nil) {
+
+    self.device = device
+    self.note = note
+    self.outputPath = outputPath
 
   }
 

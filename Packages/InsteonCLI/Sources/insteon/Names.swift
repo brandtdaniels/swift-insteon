@@ -14,17 +14,23 @@ struct ProductNames: Sendable {
   /// copy that can't be read gets a one-line warning on standard error.
   init() {
 
-    catalog = Self.loadCatalog()
+    let loaded = CatalogStore.load()
+
+    catalog = loaded?.catalog
+
+    switch loaded?.source {
+    case .bundled?:
+      catalogVersion = CatalogStore.bundledVersion().map { "\($0)" } ?? "unknown"
+    case .cached?:
+      catalogVersion = CatalogStore.cachedVersion().map { "\($0)" } ?? "unknown"
+    case nil:
+      catalogVersion = "unknown"
+    }
 
   }
 
-  /// The catalog `CatalogStore.load()` chooses, or `nil` after a one-line warning if neither
-  /// copy can be read, as when only the executable was copied.
-  private static func loadCatalog() -> ProductCatalog? {
-
-    CatalogStore.load()?.catalog
-
-  }
+  /// The version of the catalog in use, or `"unknown"` if none could be loaded.
+  let catalogVersion: String
 
   /// The product a device's identity names, such as "Example Dimmer 9101 (DemoLinc Dimmer)".
   func name(category: DeviceCategory, subcategory: DeviceSubcategory, firmwareVersion: FirmwareVersion?) -> String? {

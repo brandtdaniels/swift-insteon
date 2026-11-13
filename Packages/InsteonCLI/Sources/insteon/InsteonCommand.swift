@@ -96,6 +96,12 @@ struct InsteonCommand {
         try await ModemCommands.remove(modem, options: options, asks: asks, names: names, printsJSON: printsJSON)
 
       }
+    case let .observe(options):
+      try await withModemAndHub(invocation) { modem, names, hub in
+
+        try await ObserveCommand.run(options, modem: modem, hub: hub, names: names)
+
+      }
     case let .device(device, action):
       try await withModemAndHub(invocation) { modem, names, hub in
 

@@ -795,3 +795,48 @@ struct ArgumentParserTests {
   }
 
 }
+
+// MARK: - observe
+
+extension ArgumentParserTests {
+
+  @Test func readsObserveWithItsOptions() throws {
+
+    let plain = try Invocation.parse(["observe", "1A.2B.3C"])
+    let full = try Invocation.parse(["observe", "1A.2B.3C", "--note", "Fresh battery", "--output=out.json", "--json"])
+
+    #expect(plain.subcommand == .observe(ObserveOptions(device: lamp)))
+    #expect(plain.device == lamp)
+    #expect(full.subcommand == .observe(ObserveOptions(device: lamp, note: "Fresh battery", outputPath: "out.json")))
+    #expect(full.printsJSON)
+
+  }
+
+  @Test func needsAnAddressForObserve() {
+
+    #expect(throws: ArgumentError.missingArgument("a device's ADDRESS, such as 1A.2B.3C", subcommand: "observe")) {
+
+      try Invocation.parse(["observe"])
+
+    }
+    #expect(throws: ArgumentError.missingValue(option: "--output")) {
+
+      try Invocation.parse(["observe", "1A.2B.3C", "--output"])
+
+    }
+    #expect(throws: ArgumentError.unknownOption("--write", subcommand: "observe")) {
+
+      try Invocation.parse(["observe", "1A.2B.3C", "--write"])
+
+    }
+
+  }
+
+  @Test func helpsWithObserve() throws {
+
+    #expect(try Invocation.parse(["observe", "--help"]).subcommand == .help(topic: "observe"))
+    #expect(HelpText.text(for: "observe")?.contains("never") == true)
+
+  }
+
+}
