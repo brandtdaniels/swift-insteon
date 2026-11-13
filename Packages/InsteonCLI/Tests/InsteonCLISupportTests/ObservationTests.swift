@@ -104,11 +104,15 @@ struct ObservationTests {
 
   }
 
-  @Test func saysNotReportedForAProductKeyThatIsMissing() throws {
+  @Test func leavesOutTheProductKeyWhenTheDeviceGaveNoAnswer() throws {
 
-    let object = try json(build(findings(productKey: nil)))
+    #expect(try json(build(findings(productKey: nil)))["productKey"] == nil)
 
-    #expect(object["productKey"] as? String == "not reported")
+  }
+
+  @Test func writesNoneForAProductKeyTheDeviceAnsweredWithoutGiving() throws {
+
+    #expect(try json(build(findings(productKey: "none")))["productKey"] as? String == "none")
 
   }
 
@@ -222,6 +226,7 @@ struct ObservationTests {
 
     #expect(Set(written.keys) == Set(properties.keys))
     #expect(required.isSubset(of: Set(written.keys)))
+    #expect(!required.contains("productKey"))
     #expect(Set(example.keys) == Set(properties.keys))
     #expect(example["format"] as? String == Observation.format)
 

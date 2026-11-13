@@ -184,11 +184,11 @@ public enum ObservationRun {
     case let .answered(data):
       category = category ?? data.category
       subcategory = subcategory ?? data.subcategory
-      productKey = data.productKey.map { (key: ProductKey) -> String in "\(key)" }
+      productKey = data.productKey.map { (key: ProductKey) -> String in "\(key)" } ?? Observation.noKey
       checks.append(ObservationCheckResult(
         name: Name.productData,
         outcome: .answered,
-        detail: productKey == nil ? "The device answered and reported no product key." : "The device reported a product key."
+        detail: productKey == Observation.noKey ? "The device answered and reported no product key." : "The device reported a product key."
       ))
     case .silent:
       checks.append(ObservationCheckResult(name: Name.productData, outcome: .silent, detail: "No answer."))

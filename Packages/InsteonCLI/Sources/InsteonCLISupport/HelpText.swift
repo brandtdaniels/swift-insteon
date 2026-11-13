@@ -382,6 +382,10 @@ public enum HelpText {
     battery sensor, is silent; the file says it may need to be awake and states nothing
     about the device. Press its button first to wake it.
 
+    The file's productKey is the key the device reported; "none" only when it answered
+    Product Data Request and reported no key; and left out when the request got no answer,
+    was refused or wasn't made.
+
     The file has the format insteon-observation/1, described by
     Packages/InsteonCLI/Schemas/insteon-observation-1.schema.json.
 

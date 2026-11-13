@@ -116,14 +116,14 @@ struct ObservationRunTests {
 
   }
 
-  @Test func recordsAProductKeyTheDeviceDidntReportAsNotReported() async throws {
+  @Test func recordsAProductKeyTheDeviceAnsweredWithoutAsNone() async throws {
 
     let device = ScriptedDevice()
     device.productData = .answered(DeviceProductData(category: 0x7E, subcategory: 0x7F, productKey: nil))
 
     let findings = try await ObservationRun.observe(device)
 
-    #expect(findings.productKey == nil)
+    #expect(findings.productKey == "none")
     #expect(findings.checks[2].outcome == .answered)
 
   }
@@ -206,6 +206,15 @@ struct ObservationRunTests {
     #expect(outcomes(findings) == [.answered, .answered, .silent, .silent, .refused])
     #expect(findings.productKey == nil)
     #expect(findings.operatingFlags == nil)
+
+  }
+
+  @Test func leavesTheProductKeyOutWhenProductDataWasRefused() async throws {
+
+    let device = ScriptedDevice()
+    device.productData = .refused
+
+    #expect(try await ObservationRun.observe(device).productKey == nil)
 
   }
 

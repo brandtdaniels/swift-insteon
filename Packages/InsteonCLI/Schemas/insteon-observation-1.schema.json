@@ -5,7 +5,7 @@
   "description": "What a device did when `insteon observe` asked it read-only questions. The file holds no device, modem or Hub address, no host and no account data. A check with the outcome silent means the device sent nothing back, which a device that is asleep also does; it states nothing about the device.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["format", "tool", "catalog", "device", "checks", "productKey", "observedOn"],
+  "required": ["format", "tool", "catalog", "device", "checks", "observedOn"],
   "properties": {
     "format": {
       "const": "insteon-observation/1"
@@ -16,7 +16,7 @@
       "required": ["name", "version"],
       "properties": {
         "name": { "type": "string" },
-        "version": { "type": "string" }
+        "version": { "type": "string", "description": "A plain string, not necessarily a semantic version." }
       }
     },
     "catalog": {
@@ -55,8 +55,8 @@
     },
     "productKey": {
       "type": "string",
-      "description": "The product key the device reported, as 0x followed by six hexadecimal digits, or not reported.",
-      "pattern": "^(0x[0-9A-F]{6}|not reported)$"
+      "description": "The product key the device reported, as 0x followed by six hexadecimal digits; none only when the device answered Product Data Request and reported no key. Absent when the request got no answer, was refused or was not made, which says nothing about the device.",
+      "pattern": "^(0x[0-9A-F]{6}|none)$"
     },
     "operatingFlags": {
       "type": "object",

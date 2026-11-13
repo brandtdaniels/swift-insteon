@@ -62,7 +62,9 @@ public struct ObservationFindings: Hashable, Sendable {
   /// The product the Insteon device catalog names for the device, or `nil` if it names none.
   public var model: String?
 
-  /// The product key the device reported, such as `"0x00001A"`, or `nil` if it reported none.
+  /// The product key the device reported, such as `"0x00001A"`; `"none"` if it answered Product
+  /// Data Request and reported no key; `nil` if the request got no answer, was refused or
+  /// wasn't made. The file leaves the key out for `nil`.
   public var productKey: String?
 
   /// The bytes the device gave for its operating flags, or `nil` if it gave none.
@@ -165,8 +167,9 @@ public struct Observation: Encodable, Hashable, Sendable {
   /// What a silent check says besides its detail.
   static let awakeSentence: String = "It may need to be awake."
 
-  /// The key the file gives a product key that the device didn't report.
-  static let notReported: String = "not reported"
+  /// The product key the file holds for a device that answered Product Data Request and
+  /// reported no key.
+  static let noKey: String = "none"
 
   /// The program that made the observation.
   public let tool: ObservationTool
@@ -309,7 +312,7 @@ public struct Observation: Encodable, Hashable, Sendable {
 
     }
 
-    try container.encode(findings.productKey ?? Self.notReported, forKey: .productKey)
+    try container.encodeIfPresent(findings.productKey, forKey: .productKey)
 
     if let bytes = findings.operatingFlags, !bytes.isEmpty {
 
