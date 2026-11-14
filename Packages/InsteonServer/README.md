@@ -103,6 +103,9 @@ JSON commands need `Content-Type: application/json` and `X-Insteon-Request: 1`. 
 for `on`, from 0 through 100, and only when the catalog says the device dims. Unknown fields,
 invalid addresses and malformed values are refused. Request bodies are limited to 8 KiB.
 Errors use a non-success status and a plain-text explanation without hardware diagnostics.
+Browser command failures redirect to the device page with an inline message on the affected
+device's card. Refreshing that page doesn't repeat the command. While the service is busy,
+the website retains its last displayed device list so the message and controls remain visible.
 
 A successful control returns `outcome: "acknowledged"`, not a claim that status was read
 back. A status request returns `outcome: "read"` with a structured `status` object containing

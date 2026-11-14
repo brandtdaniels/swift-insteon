@@ -152,6 +152,37 @@ struct HTTPTests {
     }
   }
 
+  @Test(arguments: [false, true], ["status", "on"])
+  func browserCommandFailuresReturnToTheDeviceCardWithoutRepeatingTheCommand(_ busy: Bool, _ action: String) async throws {
+    let service = FakeService(fails: !busy, refusal: busy ? .busy : nil)
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
+    try await app.test(.router) { client in
+      let page = try await client.execute(uri: "/", method: .get, headers: headers())
+      let text = String(buffer: page.body)
+      let start = try #require(text.range(of: "name=\"formKey\" value=\""))
+      let key = try #require(text[start.upperBound...].split(separator: "\"").first)
+      if busy { await service.setQueriesBusy(true) }
+      let response = try await client.execute(uri: "/devices/1A.2B.3C", method: .post, headers: headers("application/x-www-form-urlencoded"), body: ByteBuffer(string: "action=" + action + "&formKey=" + key))
+      #expect(response.status == .seeOther)
+      let location = try #require(response.headers[.location])
+      #expect(location.hasPrefix("/?"))
+      #expect(location.hasSuffix("#device-1A.2B.3C"))
+      let path = String(location.split(separator: "#")[0])
+      for _ in 0..<2 {
+        let updated = try await client.execute(uri: path, method: .get, headers: headers())
+        let html = String(buffer: updated.body)
+        #expect(updated.status == .ok)
+        #expect(updated.headers[.contentType] == "text/html; charset=utf-8")
+        #expect(html.contains("role=\"alert\""))
+        #expect(html.contains(busy ? "The service is busy" : action == "status" ? "Could not read status" : "hardware outcome may be unknown"))
+        #expect(html.contains("id=\"device-1A.2B.3C\""))
+        #expect(html.contains("Read status</button>"))
+        #expect(!html.contains("private diagnostic"))
+      }
+    }
+    #expect(await service.commands.count == 1)
+  }
+
   @Test(arguments: ["{", #"{"action":"remove"}"#, #"{"action":"on","levelPercent":"50"}"#, #"{"action":"on","levle":50}"#])
   func malformedCommandsNeverReachTheService(_ json: String) async throws {
     let service = FakeService()
@@ -290,6 +321,7 @@ private struct FailingEventWriter: ResponseBodyWriter {
 }
 
 private actor FakeService: InsteonServiceAPI {
+  private var queriesBusy = false
   var reads = 0
   var commands: [ServiceCommand] = []
   var subscriptions = 0
@@ -305,8 +337,10 @@ private actor FakeService: InsteonServiceAPI {
   }
   func devices() async throws -> [ServiceDevice] {
     reads += 1
+    if queriesBusy { throw ServiceControlError.busy }
     return [ServiceDevice(address: address, productName: "<script>Example</script>", canTurnOnAndOff: true, canDim: true, value: 128, lastAnsweredAt: nil)]
   }
+  func setQueriesBusy(_ busy: Bool) { queriesBusy = busy }
   func execute(_ command: ServiceCommand) async throws -> CommandReceipt {
     commands.append(command)
     if let refusal { throw refusal }
