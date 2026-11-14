@@ -3,7 +3,8 @@ import Hummingbird
 import HummingbirdCore
 import InsteonCLISupport
 import InsteonCore
-import InsteonGateway
+import InsteonHTTP
+import InsteonService
 
 /// Starts the optional Swift server using the CLI's environment and modem selection rules.
 public enum ServerRunner {
@@ -35,7 +36,9 @@ public enum ServerRunner {
     let target = try ModemTarget.resolve(hub: options.hub, serialPath: options.serialPath, environment: environment)
     guard let password = environment["INSTEON_GATEWAY_PASSWORD"] else { throw ServerRunError.missingPassword }
     // Validate server authentication before opening any hardware connection.
-    _ = try Gateway(controller: UnavailableController(), password: password)
+    let authentication: HTTPAuthentication
+    do { authentication = try HTTPAuthentication(password: password) }
+    catch { throw ServerRunError.invalidPassword }
     let catalog = try ProductCatalog.load(contentsOf: ProductCatalog.bundledCatalogURL())
     let store = JSONFileDeviceRegistryStore(fileURL: URL(fileURLWithPath: options.statePath))
     let snapshot = try store.loadNetwork()
@@ -45,12 +48,12 @@ public enum ServerRunner {
       let credentials = try HubCredentials(environment: environment)
       note("Opening the Hub at \(location.host):\(location.port)")
       try await ModemSession.withHub(host: location.host, port: location.port, user: credentials.user, password: credentials.password, catalog: catalog) { session in
-        try await serve(session: session, catalog: catalog, snapshot: snapshot, store: store, options: options, password: password)
+        try await serve(session: session, catalog: catalog, snapshot: snapshot, store: store, options: options, authentication: authentication)
       }
     case let .serial(path):
       #if os(macOS) || os(Linux)
       try await ModemSession.withSerialPort(path: path, catalog: catalog) { session in
-        try await serve(session: session, catalog: catalog, snapshot: snapshot, store: store, options: options, password: password)
+        try await serve(session: session, catalog: catalog, snapshot: snapshot, store: store, options: options, authentication: authentication)
       }
       #else
       throw ConfigurationError.serialUnavailable
@@ -58,38 +61,23 @@ public enum ServerRunner {
     }
   }
 
-  private static func serve(session: ModemSession, catalog: ProductCatalog, snapshot: NetworkSnapshot, store: JSONFileDeviceRegistryStore, options: ServerOptions, password: String) async throws {
+  private static func serve(session: ModemSession, catalog: ProductCatalog, snapshot: NetworkSnapshot, store: JSONFileDeviceRegistryStore, options: ServerOptions, authentication: HTTPAuthentication) async throws {
     let network = session.network(catalog: catalog, snapshot: snapshot, hub: session.hub)
-    _ = try await network.modemInfo()
-    _ = try await network.modemDatabase()
-    let controller = NetworkGatewayController(network: network, store: store)
-    try await controller.save()
-    let gateway = try Gateway(controller: controller, password: password)
+    let service = InsteonService(network: network, persistence: NetworkSnapshotPersistence(store: store))
+    let router = makeInsteonRouter(service: service, authentication: authentication)
     let app = Application(
-      responder: GatewayHTTPResponder(gateway: gateway, controller: controller),
+      responder: router.buildResponder(),
       configuration: .init(address: .hostname(options.listen, port: options.port), availableConnectionsDelegate: MaximumAvailableConnections(32))
     )
     note("Serving Insteon at http://\(options.listen):\(options.port). Remote access requires an encrypted VPN.")
     do {
-      try await withThrowingTaskGroup(of: Void.self) { group in
-        group.addTask { try await app.runService() }
-        group.addTask {
-          // Consume events throughout the service's life, so identities are learned even
-          // without a remote subscriber. Passive events don't invent device status readings.
-          for await _ in await controller.events() {
-            try Task.checkCancellation()
-          }
-          try Task.checkCancellation()
-          throw ServerRunError.disconnected
-        }
-        defer { group.cancelAll() }
-        _ = try await group.next()
+      let persistence = try await service.run { try await app.runService() }
+      if persistence == .failed {
+        note("The final network snapshot could not be saved.")
       }
-    } catch {
-      try? await controller.save()
-      throw error
+    } catch ServiceLifecycleError.connectionEnded {
+      throw ServerRunError.disconnected
     }
-    try await controller.save()
   }
 
   private static func note(_ message: String) {
@@ -98,9 +86,11 @@ public enum ServerRunner {
 }
 
 /// Startup or connection failure with a credential-free description.
-public enum ServerRunError: Error, CustomStringConvertible {
+public enum ServerRunError: Error, CustomStringConvertible, Equatable {
   /// No gateway password was configured.
   case missingPassword
+  /// The HTTP authentication policy refused the configured password.
+  case invalidPassword
   /// The modem's event stream ended while the service was running.
   case disconnected
 
@@ -108,13 +98,8 @@ public enum ServerRunError: Error, CustomStringConvertible {
   public var description: String {
     switch self {
     case .missingPassword: "Set INSTEON_GATEWAY_PASSWORD in the protected environment file."
+    case .invalidPassword: "INSTEON_GATEWAY_PASSWORD must contain 32 through 1024 bytes with no control characters."
     case .disconnected: "The modem connection ended. Restart the service after checking the Hub or modem."
     }
   }
-}
-
-/// Validates gateway configuration before any device can be reached.
-private struct UnavailableController: GatewayControlling {
-  func devices() async throws -> [GatewayDevice] { throw ServerRunError.disconnected }
-  func perform(_ command: GatewayCommand) async throws -> GatewayCommandResult { throw ServerRunError.disconnected }
 }

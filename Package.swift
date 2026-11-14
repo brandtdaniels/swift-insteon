@@ -27,7 +27,7 @@ let package = Package(
     .library(name: "InsteonDeviceCatalog", targets: ["InsteonDeviceCatalog"]),
     .library(name: "InsteonNotifications", targets: ["InsteonNotifications"]),
     .library(name: "InsteonCore", targets: ["InsteonCore"]),
-    .library(name: "InsteonGateway", targets: ["InsteonGateway"]),
+    .library(name: "InsteonService", targets: ["InsteonService"]),
     .library(name: "InsteonCLISupport", targets: ["InsteonCLISupport"]),
     .executable(name: "insteon", targets: ["insteon"])
   ],
@@ -206,18 +206,17 @@ let package = Package(
       swiftSettings: memberImportVisibility
     ),
 
-    // The remote request boundary, independent of a server framework.
+    // The application service, independent of authentication, transport and presentation.
     .target(
-      name: "InsteonGateway",
-      dependencies: ["InsteonCore", "InsteonProtocol", .product(name: "Crypto", package: "swift-crypto")],
-      path: "Packages/InsteonGateway/Sources/InsteonGateway"
+      name: "InsteonService",
+      dependencies: ["InsteonCore"],
+      path: "Packages/InsteonService/Sources/InsteonService"
     ),
     .testTarget(
-      name: "InsteonGatewayTests",
-      dependencies: ["InsteonGateway", "InsteonCore", "InsteonProtocol", "InsteonLinkingTestSupport"],
-      path: "Packages/InsteonGateway/Tests/InsteonGatewayTests"
+      name: "InsteonServiceTests",
+      dependencies: ["InsteonService", "InsteonCore", "InsteonProtocol", "InsteonLinkingTestSupport"],
+      path: "Packages/InsteonService/Tests/InsteonServiceTests"
     ),
-
     // The `insteon` command. Its command-line parsing is in InsteonCLISupport, so it can be tested.
     // Both depend only on InsteonCore, the library every front end uses; CI builds with
     // --explicit-target-dependency-import-check error, so an import of a lower-level module fails.

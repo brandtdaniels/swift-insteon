@@ -10,29 +10,40 @@ let package = Package(
   dependencies: [
     .package(name: "swift-insteon", path: "../.."),
     .package(url: "https://github.com/hummingbird-project/hummingbird.git", .upToNextMinor(from: "2.28.1")),
-    .package(url: "https://github.com/apple/swift-http-types.git", from: "1.0.0")
+    .package(url: "https://github.com/apple/swift-http-types.git", from: "1.0.0"),
+    .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMinor(from: "5.0.3"))
   ],
   targets: [
     .target(
-      name: "InsteonServerSupport",
+      name: "InsteonHTTP",
       dependencies: [
-        .product(name: "InsteonGateway", package: "swift-insteon"),
+        .product(name: "InsteonService", package: "swift-insteon"),
         .product(name: "InsteonCore", package: "swift-insteon"),
-        .product(name: "InsteonCLISupport", package: "swift-insteon"),
+        .product(name: "InsteonProtocol", package: "swift-insteon"),
+        .product(name: "Crypto", package: "swift-crypto"),
         .product(name: "Hummingbird", package: "hummingbird"),
-        .product(name: "HummingbirdCore", package: "hummingbird"),
         .product(name: "HTTPTypes", package: "swift-http-types")
       ]
     ),
-    .executableTarget(name: "insteon-server", dependencies: ["InsteonServerSupport", .product(name: "InsteonGateway", package: "swift-insteon")]),
+    .testTarget(
+      name: "InsteonHTTPTests",
+      dependencies: ["InsteonHTTP", .product(name: "InsteonService", package: "swift-insteon"), .product(name: "InsteonCore", package: "swift-insteon"), .product(name: "HummingbirdTesting", package: "hummingbird"), .product(name: "Hummingbird", package: "hummingbird"), .product(name: "HTTPTypes", package: "swift-http-types")]
+    ),
+    .target(
+      name: "InsteonServerSupport",
+      dependencies: [
+        "InsteonHTTP",
+        .product(name: "InsteonService", package: "swift-insteon"),
+        .product(name: "InsteonCore", package: "swift-insteon"),
+        .product(name: "InsteonCLISupport", package: "swift-insteon"),
+        .product(name: "Hummingbird", package: "hummingbird"),
+        .product(name: "HummingbirdCore", package: "hummingbird")
+      ]
+    ),
+    .executableTarget(name: "insteon-server", dependencies: ["InsteonServerSupport"]),
     .testTarget(
       name: "InsteonServerTests",
-      dependencies: [
-        "InsteonServerSupport",
-        .product(name: "InsteonGateway", package: "swift-insteon"),
-        .product(name: "Hummingbird", package: "hummingbird"),
-        .product(name: "HummingbirdTesting", package: "hummingbird")
-      ]
+      dependencies: ["InsteonServerSupport"]
     )
   ]
 )

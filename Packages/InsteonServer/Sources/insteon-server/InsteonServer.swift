@@ -1,6 +1,5 @@
 import Foundation
 import InsteonServerSupport
-import InsteonGateway
 #if canImport(Darwin)
 import Darwin
 #else
@@ -21,8 +20,6 @@ struct InsteonServer {
       fail(error.description)
     } catch let error as ServerRunError {
       fail(error.description)
-    } catch GatewayConfigurationError.weakPassword {
-      fail("INSTEON_GATEWAY_PASSWORD must contain 32 through 1024 bytes with no control characters.")
     } catch is CancellationError {
       return
     } catch {

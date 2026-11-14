@@ -105,9 +105,13 @@ invalid addresses and malformed values are refused. Request bodies are limited t
 Errors use a non-success status and a plain-text explanation without hardware diagnostics.
 
 A successful control returns `outcome: "acknowledged"`, not a claim that status was read
-back. A status request returns `outcome: "read"` and an interpreted `status` string. Network
-timeouts and storage failures may happen after a device acts: read status before deciding
-whether to repeat a command. The server doesn't queue or automatically retry controls.
+back. A status request returns `outcome: "read"` with a structured `status` object containing
+`group`, `kind`, `value`, `isOn` and, where applicable, `percent` or `label`. Clients need not
+parse display text. Every receipt reports `persistence` independently: `notConfigured`,
+`notAttempted`, `saved` or `failed`. A failed snapshot save preserves a successful HTTP response
+and the known device acknowledgment or reading. Browser controls show a save warning.
+A network timeout can leave the hardware outcome unknown: read status before deciding whether
+to repeat a command. The server doesn't queue or automatically retry controls.
 Concurrent controller operations receive 409.
 
 The event stream reports identities, SET button presses, group commands, heartbeats and status
@@ -118,7 +122,7 @@ after a dropped connection. Requests have no idempotency-key or deduplication su
 
 ## Persistence and lifecycle
 
-The gateway writes its own network snapshot at
+The service writes its own network snapshot at
 `$XDG_STATE_HOME/insteon/gateway.json`, or `~/.local/state/insteon/gateway.json`. Use
 `--state /absolute/path/gateway.json` for another file. It is separate from the CLI's cache
 and contains no credentials. Use a dedicated state file for each configured modem or Hub.
@@ -141,3 +145,20 @@ before relying on it unattended.
 swift build --package-path Packages/InsteonServer --build-tests --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
 swift test --package-path Packages/InsteonServer --skip-build
 ```
+
+## Architecture
+
+- `InsteonService` (root library): typed device queries, commands, events, lifecycle and one
+  admission gate shared by all callers. It depends on InsteonCore and knows no HTTP or HTML.
+- `SnapshotPersisting`: replaceable persistence policy. The file-store adapter reports storage
+  outcomes independently of hardware outcomes.
+- `InsteonHTTP` (optional target): HTTP authentication and middleware, versioned JSON DTOs,
+  API routing, browser form handling and a separate HTML renderer. Both commands and event
+  streams use the same injected service. Authentication can be replaced independently.
+- `InsteonServerSupport`: composition and configuration. Opens the hardware session, restores
+  state, creates the service and adapters, and hosts HTTP during the service runtime.
+- `insteon-server`: executable entry point and safe error reporting.
+
+Transport models are separate from domain models. The query, command and event protocols let
+adapters depend on the roles they use. A different host can use the service without the HTTP
+package. Existing environment keys and state paths retain their names for compatibility.
