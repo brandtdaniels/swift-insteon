@@ -11,6 +11,15 @@ actor DeviceWebsite<Service: DeviceQuerying & DeviceCommanding> {
 
   init(service: Service) { self.service = service }
 
+  /// Live refreshes read the service cache only. Busy responses must remain errors so a
+  /// client retries its safe GET instead of accepting a stale card as a successful update.
+  func device(address: String?) async throws -> Response {
+    guard let address = address.flatMap(InsteonAddress.init) else { throw HTTPInputError.invalid }
+    cachedDevices = try await service.devices()
+    guard let device = cachedDevices.first(where: { $0.address == address }) else { throw ServiceControlError.unknownDevice }
+    return Response(status: .ok, headers: [.contentType: "text/html; charset=utf-8"], body: .init(byteBuffer: ByteBuffer(string: HTMLRenderer.card(device, formKey: forms.key))))
+  }
+
   func index(_ request: Request) async throws -> Response {
     let notice = request.uri.queryParameters["notice"] == "persistence-failed" ? "The device operation completed, but its snapshot could not be saved. Do not repeat the control just to retry storage." : nil
     var failure = request.uri.queryParameters["error"].flatMap { BrowserCommandFailure(rawValue: String($0)) }

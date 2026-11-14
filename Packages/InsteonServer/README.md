@@ -92,7 +92,17 @@ The helper uses the existing authenticated forms and form protection. Requests m
 `X-Insteon-Fragment: device` receive a Swift-rendered article instead of a redirect. Ordinary
 forms remain available without scripting and redirect to an anchor on the affected card.
 The helper is served from the authenticated `/controls.js` endpoint, with no external assets,
-inline scripts or script evaluation. Changes originating elsewhere still require Refresh page.
+inline scripts or script evaluation. With live updates connected, successful controls from
+other clients refresh the affected card automatically. The live status line shows connection
+state. Reconnecting or returning to a backgrounded page refreshes cached information to cover
+missed events. Unsaved level inputs, focus and viewport position are preserved; a background
+read cannot overwrite an in-flight or newer local command response.
+
+Live synchronization uses authenticated `GET /devices/{address}` card fragments and the cached
+device list. Busy or failed cache reads are retried with backoff; stalled reads time out, and
+page suspension cancels obsolete reads. Hardware commands are never retried automatically.
+No extra hardware command is sent to refresh a card. Physical activity notifications don't
+imply a confirmed new reading; use Read status when a fresh hardware reading is needed.
 
 ## HTTPS for remote access
 
@@ -131,6 +141,7 @@ aren't implemented.
 | GET | `/api/v1/devices` | `{ "version": 1, "devices": [...] }`; doesn't poll hardware |
 | POST | `/api/v1/devices/1A.2B.3C/commands` | Identify, read status, On or Off for a known device's main group |
 | GET | `/api/v1/events` | Server-sent JSON events for changes heard after subscription; no history |
+| GET | `/devices/1A.2B.3C` | Authenticated card fragment from cached state; no hardware polling |
 
 JSON commands need `Content-Type: application/json` and `X-Insteon-Request: 1`. Example body:
 
@@ -166,7 +177,8 @@ structured `status`, and independent `persistence`. An acknowledged On/Off isn't
 readback. Failed or refused commands don't produce a completion, and no extra hardware read
 is sent to generate events. These completions cover commands sent through this service.
 Subscribe before issuing commands to receive them. Passive events don't imply that cached values have been refreshed. The browser
-page uses manual refresh; native clients can subscribe and request status as needed. Idle event
+subscribes to completion and identity events and refreshes affected cards from cached state;
+native clients can subscribe and request status as needed. Idle event
 streams have no heartbeat or replay mechanism, so clients must reconnect and refresh state
 after a dropped connection. Event responses end during graceful server shutdown. The HTTP
 adapter buffers at most 64 pending events per response; a client that falls behind is
@@ -225,5 +237,5 @@ and a chosen test device's controls. Restore the device's original state after t
 
 The phone connects to the home service, and the service connects locally to the Hub. No Hub
 subnet route, router port forwarding or public tunnel is required. The VPN encrypts the remote
-path. The browser page uses explicit refresh and POST controls; native clients can subscribe
-to the event API to observe command completions from other clients.
+path. The browser page subscribes to the event API and updates cards when other clients complete
+commands. Native clients can consume the same events.

@@ -20,6 +20,9 @@ public func makeInsteonRouter<Service: InsteonServiceAPI>(service: Service, auth
     try await api.command(request, address: context.parameters.get("address"))
   }
   router.get("/api/v1/events") { _, _ in await api.events() }
+  router.get("/devices/{address}") { _, context in
+    try await website.device(address: context.parameters.get("address"))
+  }
   router.post("/devices/{address}") { request, context in
     try await website.command(request, address: context.parameters.get("address"))
   }
