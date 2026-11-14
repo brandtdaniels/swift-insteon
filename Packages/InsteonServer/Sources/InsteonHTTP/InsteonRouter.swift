@@ -11,6 +11,9 @@ public func makeInsteonRouter<Service: InsteonServiceAPI>(service: Service, auth
   router.add(middleware: RequestBodyLimitMiddleware<BasicRequestContext>())
   let api = DeviceAPI(service: service)
   let website = DeviceWebsite(service: service)
+  router.get("/controls.js") { _, _ in
+    Response(status: .ok, headers: [.contentType: "text/javascript; charset=utf-8"], body: .init(byteBuffer: ByteBuffer(string: BrowserControls.source)))
+  }
   router.get("/") { request, _ in try await website.index(request) }
   router.get("/api/v1/devices") { _, _ in try await api.devices() }
   router.post("/api/v1/devices/{address}/commands") { request, context in

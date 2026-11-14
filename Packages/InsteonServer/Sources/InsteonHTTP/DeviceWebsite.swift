@@ -1,4 +1,5 @@
 import Hummingbird
+import HTTPTypes
 import InsteonCore
 import InsteonService
 
@@ -26,30 +27,55 @@ actor DeviceWebsite<Service: DeviceQuerying & DeviceCommanding> {
   }
 
   func command(_ request: Request, address: String?) async throws -> Response {
+    let fragment = request.headers[HTTPField.Name("X-Insteon-Fragment")!] == "device"
     let command: ServiceCommand
     do {
       let input = try await forms.command(request)
       command = try input.serviceCommand(address: address)
     } catch HTTPInputError.invalidFormKey {
-      return rejection(.expiredForm, address: address)
+      return await rejection(.expiredForm, address: address, fragment: fragment)
     } catch is CancellationError {
       throw CancellationError()
     } catch {
-      return rejection(.invalidForm, address: address)
+      return await rejection(.invalidForm, address: address, fragment: fragment)
     }
     do {
       let receipt = try await service.execute(command)
-      return Response(status: .seeOther, headers: [.location: receipt.persistence == .failed ? "/?notice=persistence-failed" : "/"])
+      if fragment {
+        let notice = receipt.persistence == .failed ? "The device operation completed, but its snapshot could not be saved. Do not repeat the control just to retry storage." : nil
+        return await cardResponse(address: command.address, notice: notice)
+      }
+      let address = command.address.description
+      let location = receipt.persistence == .failed ? "/?notice=persistence-failed&device=" + address : "/"
+      return Response(status: .seeOther, headers: [.location: location + "#device-" + address])
     } catch {
       let failure = BrowserCommandFailure(error, action: command.action)
-      return rejection(failure, address: command.address.description)
+      return await rejection(failure, address: command.address.description, fragment: fragment)
     }
   }
 
-  private func rejection(_ failure: BrowserCommandFailure, address: String?) -> Response {
+  private func rejection(_ failure: BrowserCommandFailure, address: String?, fragment: Bool) async -> Response {
+    if fragment, let address = address.flatMap(InsteonAddress.init) {
+      return await cardResponse(address: address, failure: failure)
+    }
     let address = address.flatMap { InsteonAddress($0)?.description }
     let target = address.map { "&device=" + $0 + "#device-" + $0 } ?? ""
     return Response(status: .seeOther, headers: [.location: "/?error=" + failure.rawValue + target])
+  }
+
+  private func cardResponse(address: InsteonAddress, failure: BrowserCommandFailure? = nil, notice: String? = nil) async -> Response {
+    var notice = notice
+    do {
+      cachedDevices = try await service.devices()
+    } catch {
+      let stale = "Showing previously displayed device information; refresh is temporarily unavailable."
+      notice = notice.map { $0 + " " + stale } ?? stale
+    }
+    guard let device = cachedDevices.first(where: { $0.address == address }) else {
+      return Response(status: .notFound, headers: [.contentType: "text/plain; charset=utf-8"], body: .init(byteBuffer: ByteBuffer(string: "The device is unavailable. Refresh the page.")))
+    }
+    let html = HTMLRenderer.card(device, formKey: forms.key, error: failure?.message, notice: notice)
+    return Response(status: failure?.status ?? .ok, headers: [.contentType: "text/html; charset=utf-8"], body: .init(byteBuffer: ByteBuffer(string: html)))
   }
 }
 
@@ -83,6 +109,17 @@ private enum BrowserCommandFailure: String {
     case .controlFailed: "The control failed and its hardware outcome may be unknown. Read status before deciding whether to repeat it."
     case .expiredForm: "This form expired. No command was sent. Use the controls on this refreshed page to try again."
     case .invalidForm: "The form could not be read. No command was sent. Check the values and use the controls on this refreshed page to try again."
+    }
+  }
+
+  var status: HTTPResponse.Status {
+    switch self {
+    case .busy: .conflict
+    case .unknownDevice: .notFound
+    case .invalidLevel, .invalidForm: .badRequest
+    case .unsupportedControl: .unprocessableContent
+    case .expiredForm: .forbidden
+    case .statusFailed, .identifyFailed, .controlFailed: .badGateway
     }
   }
 }

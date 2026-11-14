@@ -152,12 +152,90 @@ struct HTTPTests {
       #expect(await service.commands.isEmpty)
       try await client.execute(uri: "/devices/1A.2B.3C", method: .post, headers: headers("application/x-www-form-urlencoded"), body: ByteBuffer(string: "action=off&formKey=" + key)) { response in
         #expect(response.status == .seeOther)
-        #expect(response.headers[.location] == "/?notice=persistence-failed")
+        #expect(response.headers[.location] == "/?notice=persistence-failed&device=1A.2B.3C#device-1A.2B.3C")
       }
       try await client.execute(uri: "/?notice=persistence-failed", method: .get, headers: headers()) { response in
         #expect(String(buffer: response.body).contains("snapshot could not be saved"))
       }
     }
+  }
+
+  @Test(arguments: ["on", "off", "status", "identify"], [false, true])
+  func fragmentCommandsReturnOnlyTheAffectedCard(_ action: String, _ fails: Bool) async throws {
+    let service = FakeService(fails: fails)
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
+    try await app.test(.router) { client in
+      let page = try await client.execute(uri: "/", method: .get, headers: headers())
+      let text = String(buffer: page.body)
+      #expect(text.contains("src=\"/controls.js\""))
+      let start = try #require(text.range(of: "name=\"formKey\" value=\""))
+      let key = try #require(text[start.upperBound...].split(separator: "\"").first)
+      var fields = headers("application/x-www-form-urlencoded")
+      fields[HTTPField.Name("X-Insteon-Fragment")!] = "device"
+      let response = try await client.execute(uri: "/devices/1A.2B.3C", method: .post, headers: fields, body: ByteBuffer(string: "action=" + action + "&formKey=" + key))
+      let html = String(buffer: response.body)
+      #expect(response.status == (fails ? .badGateway : .ok))
+      #expect(response.headers[.location] == nil)
+      #expect(response.headers[.contentType] == "text/html; charset=utf-8")
+      #expect(html.hasPrefix("<article "))
+      #expect(html.contains("id=\"device-1A.2B.3C\""))
+      #expect(!html.contains("<!doctype"))
+      #expect(!html.contains("private diagnostic"))
+      #expect(html.contains("role=\"alert\"") == fails)
+    }
+    #expect(await service.commands.count == 1)
+  }
+
+  @Test(arguments: ["busy", "expired", "storage"])
+  func fragmentsKeepRecoverableFailuresAndStorageWarningsOnTheCard(_ mode: String) async throws {
+    let service = FakeService(persistence: mode == "storage" ? .failed : .saved, refusal: mode == "busy" ? .busy : nil)
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
+    try await app.test(.router) { client in
+      let page = try await client.execute(uri: "/", method: .get, headers: headers())
+      let text = String(buffer: page.body)
+      let start = try #require(text.range(of: "name=\"formKey\" value=\""))
+      let key = try #require(text[start.upperBound...].split(separator: "\"").first)
+      if mode == "busy" { await service.setQueriesBusy(true) }
+      var fields = headers("application/x-www-form-urlencoded")
+      fields[HTTPField.Name("X-Insteon-Fragment")!] = "device"
+      let suppliedKey = mode == "expired" ? "expired" : String(key)
+      let response = try await client.execute(uri: "/devices/1A.2B.3C", method: .post, headers: fields, body: ByteBuffer(string: "action=on&formKey=" + suppliedKey))
+      let html = String(buffer: response.body)
+      #expect(html.hasPrefix("<article "))
+      #expect(html.contains("Read status</button>"))
+      #expect(html.contains("value=\"" + key + "\""))
+      switch mode {
+      case "busy":
+        #expect(response.status == .conflict)
+        #expect(html.contains("The service is busy"))
+        #expect(html.contains("previously displayed"))
+      case "expired":
+        #expect(response.status == .forbidden)
+        #expect(html.contains("No command was sent"))
+      default:
+        #expect(response.status == .ok)
+        #expect(html.contains("snapshot could not be saved"))
+      }
+    }
+    #expect(await service.commands.count == (mode == "expired" ? 0 : 1))
+  }
+
+  @Test func browserHelperIsAuthenticatedAndAllowedByTheSecurityPolicy() async throws {
+    let service = FakeService()
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
+    try await app.test(.router) { client in
+      let denied = try await client.execute(uri: "/controls.js", method: .get)
+      #expect(denied.status == .unauthorized)
+      let script = try await client.execute(uri: "/controls.js", method: .get, headers: headers())
+      #expect(script.status == .ok)
+      #expect(script.headers[.contentType] == "text/javascript; charset=utf-8")
+      let page = try await client.execute(uri: "/", method: .get, headers: headers())
+      let policy = try #require(page.headers[HTTPField.Name("Content-Security-Policy")!])
+      #expect(policy.contains("script-src 'self'"))
+      #expect(policy.contains("connect-src 'self'"))
+      #expect(!policy.contains("script-src 'unsafe-inline'"))
+    }
+    #expect(await service.commands.isEmpty)
   }
 
   @Test(arguments: ["action=off", "action=off&formKey=expired", "action=on&levelPercent=invalid&formKey=VALID", "action=off&action=on&formKey=VALID"])

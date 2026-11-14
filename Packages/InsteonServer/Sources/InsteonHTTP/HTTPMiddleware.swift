@@ -18,7 +18,7 @@ struct SecurityHeadersMiddleware<Context: RequestContext>: RouterMiddleware {
     response.headers[.cacheControl] = "no-store"
     response.headers[HTTPField.Name("X-Content-Type-Options")!] = "nosniff"
     response.headers[HTTPField.Name("Referrer-Policy")!] = "no-referrer"
-    response.headers[HTTPField.Name("Content-Security-Policy")!] = "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+    response.headers[HTTPField.Name("Content-Security-Policy")!] = "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
     return response
   }
 }

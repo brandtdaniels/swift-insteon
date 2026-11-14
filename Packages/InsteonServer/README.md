@@ -1,8 +1,9 @@
 # InsteonServer
 
 An optional Swift HTTP service for one Hub or serial modem on macOS 14 or later, or Linux.
-The service, HTML pages and request handling are implemented in Swift. There are no client
-scripts, required Insteon subscriptions or public cloud relays.
+The service, HTML pages and request handling are implemented in Swift. A small, locally served
+browser helper submits controls in the background and replaces the affected device card.
+There are no required Insteon subscriptions or public cloud relays.
 
 A remote client connects through a user-supplied VPN to the home computer running the service.
 Only the service connects to the Hub or serial modem. The Hub doesn't need to be routed to
@@ -79,6 +80,44 @@ On macOS, use the modem's actual `/dev/cu.*` path. Run one controlling service p
 don't run the CLI's `watch` or other controller processes against the same modem while the
 service is active.
 
+## Browser controls
+
+With browser scripting enabled, Identify, Read status, On and Off update only their device
+card. Other cards, their edited values and the page's scroll position remain intact. Buttons
+on the active card are disabled while a request is pending to prevent repeated submissions.
+Errors and persistence warnings appear on that card. A lost response never triggers an
+automatic retry, because the device may already have acted.
+
+The helper uses the existing authenticated forms and form protection. Requests marked
+`X-Insteon-Fragment: device` receive a Swift-rendered article instead of a redirect. Ordinary
+forms remain available without scripting and redirect to an anchor on the affected card.
+The helper is served from the authenticated `/controls.js` endpoint, with no external assets,
+inline scripts or script evaluation. Changes originating elsewhere still require Refresh page.
+
+## HTTPS for remote access
+
+For regular remote use, bind the Swift service to loopback and put your private VPN's HTTPS
+proxy in front of it. On the Mac, run the service without `--listen`:
+
+```sh
+swift run --package-path Packages/InsteonServer insteon-server
+```
+
+In another terminal, configure the HTTPS proxy for that local port:
+
+```sh
+sudo tailscale serve --bg http://127.0.0.1:8080
+```
+
+Follow the HTTPS setup prompt if needed. Use the printed `https://…ts.net` address in the
+browser and as the website in your password manager. Authenticate with the same service user
+and password. The HTTPS address is restricted to the private VPN; the Swift service and Hub
+are contacted locally. Keep the home computer awake and the service running. See the
+[HTTPS proxy reference](https://tailscale.com/kb/1312/serve) for installation-specific details.
+
+A direct HTTP connection over the encrypted VPN protects traffic on that VPN path. HTTPS
+also supplies a secure browser origin and an address suitable for password-manager launching.
+
 ## API
 
 Authenticate every endpoint with the same HTTP Basic credential as the website. There is no
@@ -102,8 +141,8 @@ JSON commands need `Content-Type: application/json` and `X-Insteon-Request: 1`. 
 `action` is `identify`, `status`, `on` or `off`. `levelPercent` is optional, accepted only
 for `on`, from 0 through 100, and only when the catalog says the device dims. Unknown fields,
 invalid addresses and malformed values are refused. Request bodies are limited to 8 KiB.
-Errors use a non-success status and a plain-text explanation without hardware diagnostics.
-Browser command failures redirect to the device page with an inline message on the affected
+JSON API errors use a non-success status and a plain-text explanation without hardware diagnostics.
+Ordinary browser form failures redirect to the device page with an inline message on the affected
 device's card. Refreshing that page doesn't repeat the command. While the service is busy,
 the website retains its last displayed device list so the message and controls remain visible.
 Expired or malformed browser forms return to that page with an explanation and send no
