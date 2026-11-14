@@ -118,7 +118,10 @@ The event stream reports identities, SET button presses, group commands, heartbe
 change notifications. Events don't imply that cached values have been refreshed. The browser
 page uses manual refresh; native clients can subscribe and request status as needed. Idle event
 streams have no heartbeat or replay mechanism, so clients must reconnect and refresh state
-after a dropped connection. Requests have no idempotency-key or deduplication support.
+after a dropped connection. Event responses end during graceful server shutdown. The HTTP
+adapter buffers at most 64 pending events per response; a client that falls behind is
+disconnected and must reconnect and refresh state. Requests have no idempotency-key or
+deduplication support.
 
 ## Persistence and lifecycle
 

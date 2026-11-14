@@ -4,6 +4,7 @@ import HummingbirdTesting
 import HTTPTypes
 import InsteonCore
 import InsteonService
+import ServiceLifecycleTestKit
 import Testing
 @testable import InsteonHTTP
 
@@ -62,6 +63,46 @@ struct HTTPTests {
     }
     #expect(await service.commands == [ServiceCommand(address: address, action: .on, levelPercent: 50)])
     #expect(await service.subscriptions == 1)
+  }
+
+  @Test(arguments: [true, false])
+  func gracefulShutdownFinishesAnOpenEventResponse(_ shutdownBeforeRequest: Bool) async throws {
+    let (source, continuation) = AsyncStream<ServiceEvent>.makeStream()
+    defer { continuation.finish() }
+    try await testGracefulShutdown { trigger in
+      let events = AsyncStream<ServiceEvent>(unfolding: {
+        if !shutdownBeforeRequest { trigger.triggerGracefulShutdown() }
+        return await source.first { _ in true }
+      })
+      let service = FakeService(eventStream: events)
+      let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
+      // A source that never ends must not keep the HTTP host alive after shutdown.
+      if shutdownBeforeRequest { trigger.triggerGracefulShutdown() }
+      try await app.test(.router) { client in
+        try await client.execute(uri: "/api/v1/events", method: .get, headers: headers()) { response in
+          #expect(response.status == .ok)
+          #expect(String(buffer: response.body).contains(": connected"))
+        }
+      }
+      #expect(await service.subscriptions == 1)
+    }
+  }
+
+  @Test func aFailedEventWriterCancelsItsSourceSubscription() async throws {
+    let (events, continuation) = AsyncStream<ServiceEvent>.makeStream()
+    let (terminations, ended) = AsyncStream<AsyncStream<ServiceEvent>.Continuation.Termination>.makeStream()
+    continuation.onTermination = { reason in ended.yield(reason); ended.finish() }
+    continuation.yield(.statusChanged(address))
+    let service = FakeService(eventStream: events)
+    let response = await DeviceAPI(service: service).events()
+    await #expect(throws: (any Error).self) {
+      try await response.body.write(FailingEventWriter())
+    }
+    let termination = await terminations.first { _ in true }
+    guard case .cancelled? = termination else {
+      Issue.record("A disconnected event writer must cancel its source")
+      return
+    }
   }
 
   @Test func statusRemainsStructuredAndPersistenceFailureDoesNotBecomeHTTPFailure() async throws {
@@ -157,6 +198,28 @@ struct HTTPTests {
     #expect(throws: HTTPAuthenticationError.self) { try HTTPAuthentication(password: "short") }
   }
 
+  @Test(arguments: ["Basic ", "basic ", "BASIC ", "bAsIc   "])
+  func basicAuthenticationAcceptsTheHTTPAuthSchemeGrammar(_ prefix: String) async throws {
+    let service = FakeService()
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
+    let credential = Data(("insteon:" + password).utf8).base64EncodedString()
+    try await app.test(.router) { client in
+      try await client.execute(uri: "/api/v1/devices", method: .get, headers: [.authorization: prefix + credential]) { response in
+        #expect(response.status == .ok)
+      }
+    }
+    #expect(await service.reads == 1)
+  }
+
+  @Test func basicAuthenticationStillRejectsWrongCredentialsAndMalformedHeaders() throws {
+    let authentication = try HTTPAuthentication(password: password)
+    let credential = Data(("insteon:" + password).utf8).base64EncodedString()
+    for header in ["Bearer " + credential, "Basic", "Basic wrong", "Basic " + credential + " extra", "Basic\t" + credential] {
+      #expect(!authentication.authorizes(header))
+    }
+    #expect(!authentication.authorizes(nil))
+  }
+
   @Test func authenticationPolicyCanBeReplacedWithoutChangingTheServiceOrRoutes() async throws {
     let service = FakeService()
     let app = Application(responder: makeInsteonRouter(service: service, authentication: AlternateAuthentication()).buildResponder())
@@ -218,6 +281,14 @@ private struct AlternateAuthentication: HTTPAuthenticating {
   func authorizes(_ header: String?) -> Bool { header == "Test accepted" }
 }
 
+private struct FailingEventWriter: ResponseBodyWriter {
+  struct Disconnected: Error {}
+  mutating func write(_ buffer: ByteBuffer) async throws {
+    if String(buffer: buffer).hasPrefix("data:") { throw Disconnected() }
+  }
+  consuming func finish(_ trailingHeaders: HTTPFields?) async throws {}
+}
+
 private actor FakeService: InsteonServiceAPI {
   var reads = 0
   var commands: [ServiceCommand] = []
@@ -226,9 +297,11 @@ private actor FakeService: InsteonServiceAPI {
   let fails: Bool
   let refusal: ServiceControlError?
   let reading: DeviceStatus.Reading
+  let eventStream: AsyncStream<ServiceEvent>?
   let address = InsteonAddress(0x1A, 0x2B, 0x3C)
-  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, reading: DeviceStatus.Reading = .percent(50)) {
+  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil) {
     self.persistence = persistence; self.fails = fails; self.refusal = refusal; self.reading = reading
+    self.eventStream = eventStream
   }
   func devices() async throws -> [ServiceDevice] {
     reads += 1
@@ -245,6 +318,7 @@ private actor FakeService: InsteonServiceAPI {
   }
   func events() async -> AsyncStream<ServiceEvent> {
     subscriptions += 1
+    if let eventStream { return eventStream }
     let address = self.address
     return AsyncStream { continuation in
       continuation.yield(.statusChanged(address))

@@ -16,14 +16,18 @@ public struct HTTPAuthentication: HTTPAuthenticating {
   /// Validates a password without constructing a device service. Use 32 through 1024 random bytes.
   public init(password: String) throws {
     guard (32...1024).contains(password.utf8.count), !password.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { throw HTTPAuthenticationError.weakPassword }
-    let header = "Basic " + Data(("insteon:" + password).utf8).base64EncodedString()
-    expected = SecureDigest.of(header)
+    let credential = Data(("insteon:" + password).utf8).base64EncodedString()
+    expected = SecureDigest.of(credential)
   }
 
   /// Accepts the fixed user name insteon and configured password, without retaining its plaintext.
   public func authorizes(_ header: String?) -> Bool {
     guard let header, header.utf8.count <= 4096 else { return false }
-    return SecureDigest.matches(SecureDigest.of(header), expected)
+    // RFC 9110, "HTTP Semantics", section 11.1: auth-scheme is case-insensitive,
+    // followed by one or more spaces. Only the credential is compared as secret data.
+    let parts = header.split(separator: " ", omittingEmptySubsequences: true)
+    guard parts.count == 2, parts[0].lowercased() == "basic" else { return false }
+    return SecureDigest.matches(SecureDigest.of(String(parts[1])), expected)
   }
 
   /// The browser's authentication challenge.

@@ -1,6 +1,7 @@
 import Foundation
 import Hummingbird
 import InsteonService
+import ServiceLifecycle
 
 /// JSON and event-stream presentation of a service's three roles.
 struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
@@ -21,13 +22,37 @@ struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
     let body = ResponseBody { writer in
       do {
         try await writer.write(ByteBuffer(string: ": connected\n\n"))
-        let encoder = JSONEncoder()
-        for try await event in events {
-          try Task.checkCancellation()
-          let data = try encoder.encode(EventDTO(event))
-          try await writer.write(ByteBuffer(string: "data: " + String(decoding: data, as: UTF8.self) + "\n\n"))
+        try await withThrowingTaskGroup(of: Void.self) { group in
+          let (buffered, continuation) = AsyncThrowingStream<ServiceEvent, any Error>.makeStream(bufferingPolicy: .bufferingOldest(64))
+          group.addTask {
+            do {
+              // Long-lived sources must stop during graceful HTTP shutdown, even when
+              // no device event arrives. Keep the non-Sendable HTTP writer in its task.
+              try await cancelWhenGracefulShutdown {
+                for try await event in events {
+                  try Task.checkCancellation()
+                  switch continuation.yield(event) {
+                  case .enqueued: break
+                  case .dropped: throw EventStreamFailure()
+                  case .terminated: return
+                  @unknown default: throw EventStreamFailure()
+                  }
+                }
+              }
+              continuation.finish()
+            } catch {
+              continuation.finish(throwing: error)
+            }
+          }
+          defer { group.cancelAll() }
+          let encoder = JSONEncoder()
+          for try await event in buffered {
+            try Task.checkCancellation()
+            let data = try encoder.encode(EventDTO(event))
+            try await writer.write(ByteBuffer(string: "data: " + String(decoding: data, as: UTF8.self) + "\n\n"))
+          }
+          try await writer.finish(nil)
         }
-        try await writer.finish(nil)
       } catch is CancellationError {
         throw CancellationError()
       } catch {
