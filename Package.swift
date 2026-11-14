@@ -2,11 +2,8 @@
 
 import PackageDescription
 
-// Every target but the `insteon` command's two reads a member of a type, such as a method or an
-// enum case, only from a module the file imports itself (SE-0444). The command's targets depend
-// only on InsteonCore, which names lower-level types through typealiases, so they keep the
-// default: their files read those types' members without importing the modules that declare
-// them.
+// The device libraries read members only from modules their files import (SE-0444).
+// Front ends use InsteonCore's typealiases and keep the default member import visibility.
 let memberImportVisibility: [SwiftSetting] = [.enableUpcomingFeature("MemberImportVisibility")]
 
 let package = Package(
@@ -30,6 +27,8 @@ let package = Package(
     .library(name: "InsteonDeviceCatalog", targets: ["InsteonDeviceCatalog"]),
     .library(name: "InsteonNotifications", targets: ["InsteonNotifications"]),
     .library(name: "InsteonCore", targets: ["InsteonCore"]),
+    .library(name: "InsteonService", targets: ["InsteonService"]),
+    .library(name: "InsteonCLISupport", targets: ["InsteonCLISupport"]),
     .executable(name: "insteon", targets: ["insteon"])
   ],
   dependencies: [
@@ -207,6 +206,17 @@ let package = Package(
       swiftSettings: memberImportVisibility
     ),
 
+    // The application service, independent of authentication, transport and presentation.
+    .target(
+      name: "InsteonService",
+      dependencies: ["InsteonCore"],
+      path: "Packages/InsteonService/Sources/InsteonService"
+    ),
+    .testTarget(
+      name: "InsteonServiceTests",
+      dependencies: ["InsteonService", "InsteonCore", "InsteonProtocol", "InsteonLinkingTestSupport"],
+      path: "Packages/InsteonService/Tests/InsteonServiceTests"
+    ),
     // The `insteon` command. Its command-line parsing is in InsteonCLISupport, so it can be tested.
     // Both depend only on InsteonCore, the library every front end uses; CI builds with
     // --explicit-target-dependency-import-check error, so an import of a lower-level module fails.

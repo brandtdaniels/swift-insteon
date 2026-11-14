@@ -151,6 +151,10 @@ jobs:
       # The tests built in the step before, with the same flags.
       - name: Test
         run: swift test --skip-build
+      - name: Build optional server
+        run: swift build --package-path Packages/InsteonServer --build-tests --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
+      - name: Test optional server
+        run: swift test --package-path Packages/InsteonServer --skip-build
       - name: Build documentation
         run: Scripts/build-docs.sh
 
@@ -183,5 +187,9 @@ jobs:
         run: swift build --build-tests --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
       - name: Test
         run: swift test --skip-build
+      - name: Build optional server
+        run: swift build --package-path Packages/InsteonServer --build-tests --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
+      - name: Test optional server
+        run: swift test --package-path Packages/InsteonServer --skip-build
       - name: Build documentation
         run: Scripts/build-docs.sh
