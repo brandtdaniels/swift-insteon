@@ -88,7 +88,15 @@ struct HTTPTests {
     }
   }
 
-  @Test func aFailedEventWriterCancelsItsSourceSubscription() async throws {
+  @Test func anUnwrittenEventResponseDoesNotCreateASubscription() async {
+    let service = FakeService()
+    let response = await DeviceAPI(service: service).events()
+    #expect(response.status == .ok)
+    #expect(await service.subscriptions == 0)
+  }
+
+  @Test(arguments: [false, true])
+  func aFailedEventWriterCancelsItsSourceSubscription(_ failOnGreeting: Bool) async throws {
     let (events, continuation) = AsyncStream<ServiceEvent>.makeStream()
     let (terminations, ended) = AsyncStream<AsyncStream<ServiceEvent>.Continuation.Termination>.makeStream()
     continuation.onTermination = { reason in ended.yield(reason); ended.finish() }
@@ -96,7 +104,7 @@ struct HTTPTests {
     let service = FakeService(eventStream: events)
     let response = await DeviceAPI(service: service).events()
     await #expect(throws: (any Error).self) {
-      try await response.body.write(FailingEventWriter())
+      try await response.body.write(FailingEventWriter(failOnGreeting: failOnGreeting))
     }
     let termination = await terminations.first { _ in true }
     guard case .cancelled? = termination else {
@@ -139,7 +147,7 @@ struct HTTPTests {
       let start = try #require(text.range(of: "name=\"formKey\" value=\""))
       let key = try #require(text[start.upperBound...].split(separator: "\"").first)
       try await client.execute(uri: "/devices/1A.2B.3C", method: .post, headers: headers("application/x-www-form-urlencoded"), body: ByteBuffer(string: "action=off")) { response in
-        #expect(response.status == .forbidden)
+        #expect(response.status == .seeOther)
       }
       #expect(await service.commands.isEmpty)
       try await client.execute(uri: "/devices/1A.2B.3C", method: .post, headers: headers("application/x-www-form-urlencoded"), body: ByteBuffer(string: "action=off&formKey=" + key)) { response in
@@ -150,6 +158,27 @@ struct HTTPTests {
         #expect(String(buffer: response.body).contains("snapshot could not be saved"))
       }
     }
+  }
+
+  @Test(arguments: ["action=off", "action=off&formKey=expired", "action=on&levelPercent=invalid&formKey=VALID", "action=off&action=on&formKey=VALID"])
+  func invalidBrowserFormsReturnToThePageWithoutSendingCommands(_ form: String) async throws {
+    let service = FakeService()
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
+    try await app.test(.router) { client in
+      let page = try await client.execute(uri: "/", method: .get, headers: headers())
+      let text = String(buffer: page.body)
+      let start = try #require(text.range(of: "name=\"formKey\" value=\""))
+      let key = try #require(text[start.upperBound...].split(separator: "\"").first)
+      let response = try await client.execute(uri: "/devices/1A.2B.3C", method: .post, headers: headers("application/x-www-form-urlencoded"), body: ByteBuffer(string: form.replacingOccurrences(of: "VALID", with: String(key))))
+      #expect(response.status == .seeOther)
+      let location = try #require(response.headers[.location])
+      let path = String(location.split(separator: "#")[0])
+      let recovered = try await client.execute(uri: path, method: .get, headers: headers())
+      #expect(recovered.status == .ok)
+      #expect(String(buffer: recovered.body).contains("role=\"alert\""))
+      #expect(String(buffer: recovered.body).contains("Read status</button>"))
+    }
+    #expect(await service.commands.isEmpty)
   }
 
   @Test(arguments: [false, true], ["status", "on"])
@@ -313,9 +342,10 @@ private struct AlternateAuthentication: HTTPAuthenticating {
 }
 
 private struct FailingEventWriter: ResponseBodyWriter {
+  var failOnGreeting = false
   struct Disconnected: Error {}
   mutating func write(_ buffer: ByteBuffer) async throws {
-    if String(buffer: buffer).hasPrefix("data:") { throw Disconnected() }
+    if failOnGreeting || String(buffer: buffer).hasPrefix("data:") { throw Disconnected() }
   }
   consuming func finish(_ trailingHeaders: HTTPFields?) async throws {}
 }

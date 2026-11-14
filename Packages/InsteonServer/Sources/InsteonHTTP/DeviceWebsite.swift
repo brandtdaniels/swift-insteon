@@ -26,22 +26,36 @@ actor DeviceWebsite<Service: DeviceQuerying & DeviceCommanding> {
   }
 
   func command(_ request: Request, address: String?) async throws -> Response {
-    let input = try await forms.command(request)
-    let command = try input.serviceCommand(address: address)
+    let command: ServiceCommand
+    do {
+      let input = try await forms.command(request)
+      command = try input.serviceCommand(address: address)
+    } catch HTTPInputError.invalidFormKey {
+      return rejection(.expiredForm, address: address)
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch {
+      return rejection(.invalidForm, address: address)
+    }
     do {
       let receipt = try await service.execute(command)
       return Response(status: .seeOther, headers: [.location: receipt.persistence == .failed ? "/?notice=persistence-failed" : "/"])
     } catch {
       let failure = BrowserCommandFailure(error, action: command.action)
-      let address = command.address.description
-      return Response(status: .seeOther, headers: [.location: "/?error=" + failure.rawValue + "&device=" + address + "#device-" + address])
+      return rejection(failure, address: command.address.description)
     }
+  }
+
+  private func rejection(_ failure: BrowserCommandFailure, address: String?) -> Response {
+    let address = address.flatMap { InsteonAddress($0)?.description }
+    let target = address.map { "&device=" + $0 + "#device-" + $0 } ?? ""
+    return Response(status: .seeOther, headers: [.location: "/?error=" + failure.rawValue + target])
   }
 }
 
 /// Only fixed presentation codes cross the redirect; provider diagnostics stay private.
 private enum BrowserCommandFailure: String {
-  case busy, unknownDevice, invalidLevel, unsupportedControl, statusFailed, identifyFailed, controlFailed
+  case busy, unknownDevice, invalidLevel, unsupportedControl, statusFailed, identifyFailed, controlFailed, expiredForm, invalidForm
 
   init(_ error: any Error, action: ServiceCommand.Action) {
     switch error {
@@ -67,6 +81,8 @@ private enum BrowserCommandFailure: String {
     case .statusFailed: "Could not read status. The device may be unreachable or may not support this request. Try Identify or check its connection."
     case .identifyFailed: "Could not identify this device. Check its connection before trying again."
     case .controlFailed: "The control failed and its hardware outcome may be unknown. Read status before deciding whether to repeat it."
+    case .expiredForm: "This form expired. No command was sent. Use the controls on this refreshed page to try again."
+    case .invalidForm: "The form could not be read. No command was sent. Check the values and use the controls on this refreshed page to try again."
     }
   }
 }

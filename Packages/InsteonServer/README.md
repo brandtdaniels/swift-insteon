@@ -106,6 +106,8 @@ Errors use a non-success status and a plain-text explanation without hardware di
 Browser command failures redirect to the device page with an inline message on the affected
 device's card. Refreshing that page doesn't repeat the command. While the service is busy,
 the website retains its last displayed device list so the message and controls remain visible.
+Expired or malformed browser forms return to that page with an explanation and send no
+device command. The refreshed controls use the active form key.
 
 A successful control returns `outcome: "acknowledged"`, not a claim that status was read
 back. A status request returns `outcome: "read"` with a structured `status` object containing

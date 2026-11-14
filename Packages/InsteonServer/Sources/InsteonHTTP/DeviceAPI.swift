@@ -18,10 +18,11 @@ struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
   }
 
   func events() async -> Response {
-    let events = await service.events()
     let body = ResponseBody { writer in
       do {
-        try await writer.write(ByteBuffer(string: ": connected\n\n"))
+        // A response can be discarded without its body being written.
+        // Subscribe only while a structured producer can own and cancel the reader.
+        let events = await service.events()
         try await withThrowingTaskGroup(of: Void.self) { group in
           let (buffered, continuation) = AsyncThrowingStream<ServiceEvent, any Error>.makeStream(bufferingPolicy: .bufferingOldest(64))
           group.addTask {
@@ -45,6 +46,7 @@ struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
             }
           }
           defer { group.cancelAll() }
+          try await writer.write(ByteBuffer(string: ": connected\n\n"))
           let encoder = JSONEncoder()
           for try await event in buffered {
             try Task.checkCancellation()
