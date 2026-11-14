@@ -26,7 +26,7 @@ struct HTTPTests {
     let service = FakeService()
     let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
     try await app.test(setup) { client in
-      for path in ["/", "/api/v1/devices", "/api/v1/events", "/unknown"] {
+      for path in ["/", "/api/v1/devices", "/api/v1/events", "/devices/1A.2B.3C", "/unknown"] {
         try await client.execute(uri: path, method: .get) { response in
           #expect(response.status == .unauthorized)
           #expect(response.headers[.wwwAuthenticate] != nil)
@@ -45,6 +45,30 @@ struct HTTPTests {
         #expect(object["version"] as? Int == 1)
       }
     }
+  }
+
+  @Test func liveCardReadsUseCachedStateWithoutExecutingCommands() async throws {
+    let service = FakeService()
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
+    try await app.test(.router) { client in
+      let response = try await client.execute(uri: "/devices/1A.2B.3C", method: .get, headers: headers())
+      #expect(response.status == .ok)
+      #expect(response.headers[.contentType] == "text/html; charset=utf-8")
+      #expect(response.headers[.cacheControl] == "no-store")
+      let html = String(buffer: response.body)
+      #expect(html.hasPrefix("<article "))
+      #expect(html.contains("Cached: 50%"))
+      #expect(!html.contains("<!doctype"))
+      await service.setQueriesBusy(true)
+      let busy = try await client.execute(uri: "/devices/1A.2B.3C", method: .get, headers: headers())
+      #expect(busy.status == .conflict)
+      await service.setQueriesBusy(false)
+      let missing = try await client.execute(uri: "/devices/1A.2B.04", method: .get, headers: headers())
+      #expect(missing.status == .notFound)
+      let invalid = try await client.execute(uri: "/devices/invalid", method: .get, headers: headers())
+      #expect(invalid.status == .badRequest)
+    }
+    #expect(await service.commands.isEmpty)
   }
 
   @Test func theSameServiceSuppliesCommandsAndEventsWithoutAConcreteBackend() async throws {
