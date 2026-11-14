@@ -21,6 +21,8 @@ Swift packages for working with [Insteon](https://www.insteon.com) home automati
 
 The package also has a command, [`insteon`](Packages/InsteonCLI), for driving a Hub or modem, and its devices, from a terminal: finding Hubs, reading ALL-Link databases, linking devices by their addresses or SET buttons, sending commands and watching events.
 
+For a persistent home service, [InsteonGateway](Packages/InsteonGateway) provides an authenticated request boundary and server-generated HTML controls. The optional [Swift server](Packages/InsteonServer) runs on a home computer and exposes that gateway at a chosen local or VPN interface. Remote clients connect to the service; the service talks to the Hub or serial modem. It uses no Insteon cloud subscription and supplies no VPN. Its server framework is confined to the optional package.
+
 InsteonHubPro, InsteonScheduling and InsteonNotifications stand on their own: neither InsteonCore nor the `insteon` command uses them. They're kept for apps that want them. InsteonHubPro follows the Hub Pro's local interface without having been run against a Hub Pro, so treat it as untested.
 
 The [Supported Modems](Packages/InsteonModem/Sources/InsteonModem/InsteonModem.docc/SupportedModems.md) article lists every modem, Hub and controller, and how well each is supported.

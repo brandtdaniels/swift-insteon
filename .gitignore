@@ -1,6 +1,8 @@
 .DS_Store
 /.build
 /.swiftpm
+/Packages/InsteonServer/.build
+/Packages/InsteonServer/.swiftpm
 /*.xcodeproj
 xcuserdata/
 .env

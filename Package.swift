@@ -2,11 +2,8 @@
 
 import PackageDescription
 
-// Every target but the `insteon` command's two reads a member of a type, such as a method or an
-// enum case, only from a module the file imports itself (SE-0444). The command's targets depend
-// only on InsteonCore, which names lower-level types through typealiases, so they keep the
-// default: their files read those types' members without importing the modules that declare
-// them.
+// The device libraries read members only from modules their files import (SE-0444).
+// Front ends use InsteonCore's typealiases and keep the default member import visibility.
 let memberImportVisibility: [SwiftSetting] = [.enableUpcomingFeature("MemberImportVisibility")]
 
 let package = Package(
@@ -30,6 +27,8 @@ let package = Package(
     .library(name: "InsteonDeviceCatalog", targets: ["InsteonDeviceCatalog"]),
     .library(name: "InsteonNotifications", targets: ["InsteonNotifications"]),
     .library(name: "InsteonCore", targets: ["InsteonCore"]),
+    .library(name: "InsteonGateway", targets: ["InsteonGateway"]),
+    .library(name: "InsteonCLISupport", targets: ["InsteonCLISupport"]),
     .executable(name: "insteon", targets: ["insteon"])
   ],
   dependencies: [
@@ -205,6 +204,18 @@ let package = Package(
       ],
       path: "Packages/InsteonCore/Tests/InsteonCoreTests",
       swiftSettings: memberImportVisibility
+    ),
+
+    // The remote request boundary, independent of a server framework.
+    .target(
+      name: "InsteonGateway",
+      dependencies: ["InsteonCore", "InsteonProtocol", .product(name: "Crypto", package: "swift-crypto")],
+      path: "Packages/InsteonGateway/Sources/InsteonGateway"
+    ),
+    .testTarget(
+      name: "InsteonGatewayTests",
+      dependencies: ["InsteonGateway", "InsteonCore", "InsteonProtocol", "InsteonLinkingTestSupport"],
+      path: "Packages/InsteonGateway/Tests/InsteonGatewayTests"
     ),
 
     // The `insteon` command. Its command-line parsing is in InsteonCLISupport, so it can be tested.
