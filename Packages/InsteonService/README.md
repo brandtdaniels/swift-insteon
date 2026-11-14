@@ -35,3 +35,26 @@ Consumers request status when they need a confirmed reading.
 
 Tests use an in-memory modem and replaceable storage. Physical Hub/modem verification remains
 necessary before unattended deployment.
+
+## Events
+
+Each `events()` subscription combines named device notifications with `commandCompleted`
+events for successful Identify, Read status, On and Off operations performed through this
+service. Subscribe before issuing a command. Every completion includes the typed command and
+its `CommandReceipt`, including independent persistence health. An On/Off acknowledgment has
+no status reading; a Read status completion carries the actual structured reading. No extra
+hardware read is sent to produce these events. Failed or refused commands produce no completion.
+
+Completions are published after the cache and persistence result are established. A subscriber
+can immediately query the updated cache once the operation releases admission. The sequence
+has no replay, buffers at most 64 command completions per subscriber, and throws
+`ServiceEventError.slowConsumer` if that subscriber falls behind. Reconnect and refresh after
+a gap. The sequence also ends when the modem's event stream ends. Each subscription has one
+reader, and cancellation releases both underlying readers. Abandoned subscriptions aren't
+retained by the service.
+Swift clients consume this throwing sequence with `for try await` and handle a gap by
+subscribing again and refreshing state.
+
+These completions cover commands sent through this service. Commands issued by another
+controller aren't inferred from arbitrary protocol replies. Passive notifications retain their
+meaning and don't imply a fresh status reading.

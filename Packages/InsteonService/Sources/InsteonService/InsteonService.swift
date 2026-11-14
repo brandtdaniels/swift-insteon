@@ -10,6 +10,7 @@ public actor InsteonService: InsteonServiceAPI {
   private let persistence: (any SnapshotPersisting)?
   private var busy = false
   private var running = false
+  private var commandSubscriptions: [WeakCommandSubscription] = []
 
   /// The latest snapshot outcome, independent of any device acknowledgment or reading.
   public private(set) var persistenceOutcome: PersistenceOutcome
@@ -62,7 +63,14 @@ public actor InsteonService: InsteonServiceAPI {
       outcome = .acknowledged; status = nil
     }
     let saved = await persist()
-    return CommandReceipt(address: command.address, outcome: outcome, status: status, persistence: saved)
+    let receipt = CommandReceipt(address: command.address, outcome: outcome, status: status, persistence: saved)
+    // No suspension between publishing and releasing admission in defer. A subscriber
+    // can query the updated cache as soon as its actor call is served.
+    commandSubscriptions.removeAll { entry in
+      guard let subscription = entry.value else { return true }
+      return !subscription.publish(.commandCompleted(command, receipt))
+    }
+    return receipt
   }
 
   /// Saves a snapshot through the same admission gate as operations. Storage failure is data.
@@ -74,8 +82,12 @@ public actor InsteonService: InsteonServiceAPI {
   }
 
   /// Subscribes to typed events. Each subscription is iterated by one caller task.
-  public func events() async -> AsyncCompactMapSequence<AsyncStream<DeviceMonitorEvent>, ServiceEvent> {
-    await network.monitor.changes().compactMap { ServiceEvent($0) }
+  public func events() async -> ServiceEvents {
+    commandSubscriptions.removeAll { $0.value == nil }
+    let subscription = CommandEventSubscription()
+    commandSubscriptions.append(WeakCommandSubscription(value: subscription))
+    let monitor = await network.monitor.changes()
+    return ServiceEvents(monitor: monitor, subscription: subscription)
   }
 
   /// Prepares the modem, monitors it while a host body runs, then checkpoints on shutdown.
