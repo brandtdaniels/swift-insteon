@@ -119,8 +119,14 @@ A network timeout can leave the hardware outcome unknown: read status before dec
 to repeat a command. The server doesn't queue or automatically retry controls.
 Concurrent controller operations receive 409.
 
-The event stream reports identities, SET button presses, group commands, heartbeats and status
-change notifications. Events don't imply that cached values have been refreshed. The browser
+The event stream reports identities, SET button presses, group commands, heartbeats, status
+change notifications and explicit service command completions. A `commandCompleted` event has
+`address` and a `completion` object containing `action`, optional `levelPercent`, and `result`.
+The result has the same receipt shape as the command API, including `outcome`, optional
+structured `status`, and independent `persistence`. An acknowledged On/Off isn't a status
+readback. Failed or refused commands don't produce a completion, and no extra hardware read
+is sent to generate events. These completions cover commands sent through this service.
+Subscribe before issuing commands to receive them. Passive events don't imply that cached values have been refreshed. The browser
 page uses manual refresh; native clients can subscribe and request status as needed. Idle event
 streams have no heartbeat or replay mechanism, so clients must reconnect and refresh state
 after a dropped connection. Event responses end during graceful server shutdown. The HTTP
@@ -170,3 +176,15 @@ swift test --package-path Packages/InsteonServer --skip-build
 Transport models are separate from domain models. The query, command and event protocols let
 adapters depend on the roles they use. A different host can use the service without the HTTP
 package. Existing environment keys and state paths retain their names for compatibility.
+
+## Remote test from a phone
+
+Keep the home computer awake and the service running on its private VPN IPv4 address. Connect
+the phone to the same VPN, turn off the phone's Wi-Fi, and open the service's printed HTTP URL
+in the phone's browser. Authenticate with the separate server credential, then use Read status
+and a chosen test device's controls. Restore the device's original state after testing.
+
+The phone connects to the home service, and the service connects locally to the Hub. No Hub
+subnet route, router port forwarding or public tunnel is required. The VPN encrypts the remote
+path. The browser page uses explicit refresh and POST controls; native clients can subscribe
+to the event API to observe command completions from other clients.

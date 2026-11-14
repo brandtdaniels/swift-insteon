@@ -9,6 +9,97 @@ import Testing
 struct ServiceTests {
   let address = InsteonAddress(0x1A, 0x2B, 0x3C)
 
+  @Test func softwareControlsNotifyEverySubscriberWithoutInventingAStatusReading() async throws {
+    let service = InsteonService(network: network(InMemoryModem()))
+    let first = await service.events()
+    let second = await service.events()
+    let command = ServiceCommand(address: address, action: .on, levelPercent: 50)
+    let receipt = try await service.execute(command)
+    var firstReader = first.makeAsyncIterator()
+    var secondReader = second.makeAsyncIterator()
+    #expect(try await firstReader.next() == .commandCompleted(command, receipt))
+    #expect(try await secondReader.next() == .commandCompleted(command, receipt))
+    #expect(receipt.outcome == .acknowledged)
+    #expect(receipt.status == nil)
+    #expect(try await service.devices().first?.value == 128)
+  }
+
+  @Test func failedPersistenceDoesNotSuppressConfirmedStatusEvents() async throws {
+    let service = InsteonService(network: network(InMemoryModem()), persistence: NetworkSnapshotPersistence(store: MemoryStore(fails: true)))
+    let events = await service.events()
+    let command = ServiceCommand(address: address, action: .status)
+    let receipt = try await service.execute(command)
+    var reader = events.makeAsyncIterator()
+    #expect(try await reader.next() == .commandCompleted(command, receipt))
+    #expect(receipt.outcome == .read)
+    #expect(receipt.status != nil)
+    #expect(receipt.persistence == .failed)
+  }
+
+  @Test func failedCommandsAreNotPublishedAsCompletions() async throws {
+    let service = InsteonService(network: network(InMemoryModem()))
+    let events = await service.events()
+    await #expect(throws: ServiceControlError.invalidLevel) {
+      try await service.execute(ServiceCommand(address: address, action: .on, levelPercent: 101))
+    }
+    let successful = ServiceCommand(address: address, action: .off)
+    let receipt = try await service.execute(successful)
+    var reader = events.makeAsyncIterator()
+    #expect(try await reader.next() == .commandCompleted(successful, receipt))
+  }
+
+  @Test func slowSubscribersEndWithAnExplicitGapInsteadOfSilentlyMissingCompletions() async throws {
+    let service = InsteonService(network: network(InMemoryModem()))
+    let events = await service.events()
+    for _ in 0..<65 {
+      _ = try await service.execute(ServiceCommand(address: address, action: .off))
+    }
+    await #expect(throws: ServiceEventError.slowConsumer) {
+      for try await _ in events {}
+    }
+  }
+
+  @Test func subscriptionsHaveNoCommandHistory() async throws {
+    let service = InsteonService(network: network(InMemoryModem()))
+    _ = try await service.execute(ServiceCommand(address: address, action: .on))
+    let events = await service.events()
+    let command = ServiceCommand(address: address, action: .off)
+    let receipt = try await service.execute(command)
+    var reader = events.makeAsyncIterator()
+    #expect(try await reader.next() == .commandCompleted(command, receipt))
+  }
+
+  @Test func modemStreamEndingAlsoEndsTheIdleCommandSubscription() async throws {
+    let monitor = AsyncStream<DeviceMonitorEvent> { $0.finish() }
+    let events = ServiceEvents(monitor: monitor, subscription: CommandEventSubscription())
+    var reader = events.makeAsyncIterator()
+    #expect(try await reader.next() == nil)
+  }
+
+  @Test func cancelingOneSubscriberDoesNotStopOtherSubscribersOrCommands() async throws {
+    let service = InsteonService(network: network(InMemoryModem()))
+    let canceled = await service.events()
+    let active = await service.events()
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      group.addTask {
+        withUnsafeCurrentTask { $0?.cancel() }
+        var reader = canceled.makeAsyncIterator()
+        do {
+          #expect(try await reader.next() == nil)
+        } catch is CancellationError {
+          // Cancellation can end the sequence or throw, depending on the active input.
+        } catch {
+          Issue.record(error)
+        }
+      }
+      try await group.waitForAll()
+    }
+    let command = ServiceCommand(address: address, action: .on)
+    let receipt = try await service.execute(command)
+    var reader = active.makeAsyncIterator()
+    #expect(try await reader.next() == .commandCompleted(command, receipt))
+  }
+
   @Test func cachedQueriesDoNotSendHardwareRequests() async throws {
     let modem = InMemoryModem()
     let service = InsteonService(network: network(modem))
@@ -89,7 +180,7 @@ struct ServiceTests {
     await modem.setIdentity(SetButtonPressed(sender: other, role: .responder, category: 1, subcategory: 125, firmwareVersion: 69))
     await modem.broadcastIdentity(of: other)
     var iterator = events.makeAsyncIterator()
-    #expect(await iterator.next() == .setButtonPressed(other))
+    #expect(try await iterator.next() == .setButtonPressed(other))
     #expect(await network.registry.device(other) != nil)
     #expect(await network.state(of: other)?.lastSeen == nil)
   }

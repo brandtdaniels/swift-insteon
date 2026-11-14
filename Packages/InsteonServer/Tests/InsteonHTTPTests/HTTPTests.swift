@@ -65,6 +65,36 @@ struct HTTPTests {
     #expect(await service.subscriptions == 1)
   }
 
+  @Test(arguments: [ServiceCommand.Action.on, .status])
+  func softwareCompletionEventsPreserveReceiptsAndStructuredReadings(_ action: ServiceCommand.Action) async throws {
+    let command = ServiceCommand(address: address, action: action)
+    let reading = action == .status ? DeviceStatus(group: 1, value: 128, allLinkDatabaseDelta: 0, reading: .percent(50), isOn: true) : nil
+    let receipt = CommandReceipt(address: address, outcome: action == .status ? .read : .acknowledged, status: reading, persistence: .failed)
+    let events = AsyncStream<ServiceEvent> { continuation in
+      continuation.yield(.commandCompleted(command, receipt))
+      continuation.finish()
+    }
+    let service = FakeService(eventStream: events)
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
+    try await app.test(.router) { client in
+      let response = try await client.execute(uri: "/api/v1/events", method: .get, headers: headers())
+      let line = try #require(String(buffer: response.body).split(separator: "\n").first { $0.hasPrefix("data: ") })
+      let event = try #require(try JSONSerialization.jsonObject(with: Data(line.dropFirst(6).utf8)) as? [String: Any])
+      #expect(event["kind"] as? String == "commandCompleted")
+      #expect(event["address"] as? String == address.description)
+      let completion = try #require(event["completion"] as? [String: Any])
+      #expect(completion["action"] as? String == (action == .status ? "status" : "on"))
+      let result = try #require(completion["result"] as? [String: Any])
+      #expect(result["persistence"] as? String == "failed")
+      #expect(result["outcome"] as? String == (action == .status ? "read" : "acknowledged"))
+      if action == .status {
+        #expect((result["status"] as? [String: Any])?["percent"] as? Int == 50)
+      } else {
+        #expect(result["status"] == nil)
+      }
+    }
+  }
+
   @Test(arguments: [true, false])
   func gracefulShutdownFinishesAnOpenEventResponse(_ shutdownBeforeRequest: Bool) async throws {
     let (source, continuation) = AsyncStream<ServiceEvent>.makeStream()

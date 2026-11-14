@@ -140,6 +140,9 @@ public enum ServiceLifecycleError: Error {
 
 /// Named device events, without wire-format versions, raw protocol messages or history.
 public enum ServiceEvent: Equatable, Sendable {
+  /// An explicit service command completed. The receipt distinguishes acknowledgment from
+  /// a confirmed status reading and reports persistence independently. No automatic readback.
+  case commandCompleted(ServiceCommand, CommandReceipt)
   /// A device reported its identity.
   case identified(InsteonAddress, productName: String?)
   /// A device's SET button was pressed.

@@ -27,6 +27,8 @@ across all adapters. Query, command and event protocols describe the roles adapt
 - ``ServiceCommand``
 - ``CommandReceipt``
 - ``ServiceEvent``
+- ``ServiceEvents``
+- ``ServiceEventError``
 - ``ServiceControlError``
 - ``ServiceLifecycleError``
 

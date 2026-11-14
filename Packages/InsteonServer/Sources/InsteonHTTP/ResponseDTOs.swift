@@ -67,8 +67,16 @@ struct EventDTO: Encodable {
   let group: Int?
   let name: String?
   let productName: String?
+  let completion: CommandCompletionDTO?
   init(_ event: ServiceEvent) {
+    if case let .commandCompleted(command, receipt) = event {
+      completion = CommandCompletionDTO(command: command, receipt: receipt)
+    } else {
+      completion = nil
+    }
     switch event {
+    case let .commandCompleted(command, _):
+      kind = "commandCompleted"; address = command.address.description; group = nil; name = nil; productName = nil
     case let .identified(address, productName):
       kind = "identified"; self.address = address.description; group = nil; name = nil; self.productName = productName
     case let .setButtonPressed(address):
@@ -80,5 +88,22 @@ struct EventDTO: Encodable {
     case let .statusChanged(address):
       kind = "statusChanged"; self.address = address.description; group = nil; name = nil; productName = nil
     }
+  }
+}
+
+struct CommandCompletionDTO: Encodable {
+  let action: String
+  let levelPercent: Int?
+  let result: ReceiptDTO
+
+  init(command: ServiceCommand, receipt: CommandReceipt) {
+    switch command.action {
+    case .identify: action = "identify"
+    case .status: action = "status"
+    case .on: action = "on"
+    case .off: action = "off"
+    }
+    levelPercent = command.levelPercent
+    result = ReceiptDTO(receipt)
   }
 }
