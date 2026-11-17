@@ -45,7 +45,16 @@ let package = Package(
     .executableTarget(name: "insteon-server", dependencies: ["InsteonServerSupport"]),
     .testTarget(
       name: "InsteonServerTests",
-      dependencies: ["InsteonServerSupport"]
+      dependencies: [
+        "InsteonServerSupport",
+        "InsteonHTTP",
+        .product(name: "InsteonService", package: "swift-insteon"),
+        .product(name: "InsteonCore", package: "swift-insteon"),
+        .product(name: "InsteonHubClient", package: "swift-insteon"),
+        .product(name: "InsteonLinking", package: "swift-insteon"),
+        .product(name: "InsteonModem", package: "swift-insteon"),
+        .product(name: "InsteonProtocol", package: "swift-insteon")
+      ]
     )
   ]
 )

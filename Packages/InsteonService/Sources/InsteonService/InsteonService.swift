@@ -34,17 +34,8 @@ public actor InsteonService: InsteonServiceAPI {
 
   /// Creates a service for a network whose connection the host keeps open, and an optional
   /// persistence policy. The run ends if that connection does.
-  public init(network: DeviceNetwork, persistence: (any SnapshotPersisting)? = nil) {
-    self.network = network
-    self.opener = FixedNetworkOpener(network: network)
-    self.reconnect = .never
-    self.clock = ContinuousClock()
-    self.now = { Date() }
-    self.jitter = { 0 }
-    self.persistence = persistence
-    self.persistenceOutcome = persistence == nil ? .notConfigured : .notAttempted
-    self.connection = .connected
-    self.hasConnected = true
+  public init(network: DeviceNetwork, persistence: (any SnapshotPersisting)? = nil, clock: any Clock<Duration> = ContinuousClock()) {
+    self.init(network: network, opener: FixedNetworkOpener(network: network), persistence: persistence, snapshotSavedAt: nil, reconnect: .never, clock: clock, now: { Date() }, jitter: { 0 }, isConnected: true)
   }
 
   /// Creates a service that opens and reopens its own modem connection.
@@ -69,6 +60,20 @@ public actor InsteonService: InsteonServiceAPI {
     now: @escaping @Sendable () -> Date = { Date() },
     jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) }
   ) {
+    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false)
+  }
+
+  private init(
+    network: DeviceNetwork,
+    opener: any NetworkOpening,
+    persistence: (any SnapshotPersisting)?,
+    snapshotSavedAt: Date?,
+    reconnect: ReconnectPolicy,
+    clock: any Clock<Duration>,
+    now: @escaping @Sendable () -> Date,
+    jitter: @escaping @Sendable () -> Double,
+    isConnected: Bool
+  ) {
     self.network = network
     self.opener = opener
     self.reconnect = reconnect
@@ -77,8 +82,8 @@ public actor InsteonService: InsteonServiceAPI {
     self.jitter = jitter
     self.persistence = persistence
     self.persistenceOutcome = persistence == nil ? .notConfigured : .notAttempted
-    self.connection = .unavailable(.connecting)
-    self.hasConnected = false
+    self.connection = isConnected ? .connected : .unavailable(.connecting)
+    self.hasConnected = isConnected
     self.informationUpdated = snapshotSavedAt
   }
 

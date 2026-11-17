@@ -4,7 +4,7 @@ import InsteonService
 /// address or credential.
 extension ModemUnavailability {
   /// The stable name clients branch on.
-  var wireName: String {
+  public var wireName: String {
     switch self {
     case .connecting: "connecting"
     case .hubUnreachable: "hubUnreachable"
@@ -16,7 +16,7 @@ extension ModemUnavailability {
   }
 
   /// Why a command was refused, what the person can do, and that nothing was sent.
-  var refusal: String {
+  public var refusal: String {
     switch self {
     case .connecting: "The service is still connecting to the Hub or modem, so nothing was sent. Try again in a minute."
     case .hubUnreachable: "The Hub is unreachable, so nothing was sent. The service keeps retrying. Check the Hub's power and network, then try again."
@@ -28,7 +28,7 @@ extension ModemUnavailability {
   }
 
   /// What pages and event streams say while device information may be out of date.
-  var notice: String {
+  public var notice: String {
     switch self {
     case .connecting: "The service is connecting to the Hub or modem. Showing saved device information."
     case .hubUnreachable: "The Hub is unreachable. Showing saved device information while the service keeps retrying."
@@ -42,7 +42,7 @@ extension ModemUnavailability {
 
 extension ModemConnectionState {
   /// The cause when the modem is away, or `nil` when it is connected.
-  var cause: ModemUnavailability? {
+  public var cause: ModemUnavailability? {
     if case let .unavailable(cause) = self { cause } else { nil }
   }
 }

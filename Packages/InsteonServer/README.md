@@ -53,7 +53,7 @@ swift run --package-path Packages/InsteonServer insteon-server
 ```
 
 Open `http://127.0.0.1:8080/` on that computer. Log in as `insteon` using the separate gateway
-password. The Hub's ALL-Link database is read at startup. Use Identify on an unknown device
+password. The listener opens at once and serves the saved device list while the Hub's ALL-Link database is read. Use Identify on an unknown device
 to learn its capabilities, then Read status, On or Off. A percentage field is shown only when
 the main group dims. Device names and controls come from the catalog through InsteonCore.
 
@@ -131,14 +131,16 @@ also supplies a secure browser origin and an address suitable for password-manag
 ## API
 
 Authenticate every endpoint with the same HTTP Basic credential as the website. There is no
-public health, discovery or device endpoint. Authenticated clients may list and control all
+public health, discovery or device endpoint: even the health report is authenticated, because
+when the Hub is away is itself information about the household. Authenticated clients may list and control all
 devices known by this service. Pairing, individual client tokens and per-device permissions
 aren't implemented.
 
 | Method | Path | Behavior |
 | --- | --- | --- |
 | GET | `/` | Swift-generated HTML, with cached values and explicit POST controls |
-| GET | `/api/v1/devices` | `{ "version": 1, "devices": [...] }`; doesn't poll hardware |
+| GET | `/api/v1/devices` | `{ "version": 1, "devices": [...], "stale": false, "cause": null }`; doesn't poll hardware. `stale` is `true`, with the `cause`, while the Hub or modem is away |
+| GET | `/api/v1/health` | Readiness, modem state, ages; sends nothing to hardware (see Staying up) |
 | POST | `/api/v1/devices/1A.2B.3C/commands` | Identify, read status, On or Off for a known device's main group |
 | GET | `/api/v1/events` | Server-sent JSON events for changes heard after subscription; no history |
 | GET | `/devices/1A.2B.3C` | Authenticated card fragment from cached state; no hardware polling |
@@ -185,6 +187,60 @@ adapter buffers at most 64 pending events per response; a client that falls behi
 disconnected and must reconnect and refresh state. Requests have no idempotency-key or
 deduplication support.
 
+## Staying up while the Hub is away
+
+The HTTP listener never depends on the Hub. If the Hub is unplugged, restarting, unreachable
+or rejecting the credentials, or a serial modem is unplugged, the server keeps running and
+keeps retrying (1 second doubling to 60 seconds, with jitter; 15 minutes after rejected
+credentials). Nothing exits the process.
+
+| State | Commands | Device list and page | Events |
+| --- | --- | --- | --- |
+| Starting (first connection pending) | 503, cause `connecting` or the failure's cause | Saved list, `stale: true` | `modemUnavailable` once a cause is known |
+| Hub or modem away | 503, code `modemUnavailable`, `sent: false`, cause and a guided message | Saved list, `stale: true`, banner naming the cause | `modemUnavailable` with `cause` and `message` |
+| Back | Work again, no restart | Fresh after the ALL-Link database is read | `reconnected`: clients refresh every card |
+
+A refused command is never queued or repeated, and a reconnection never replays one. The 503
+body is `{"version":1,"code":"modemUnavailable","sent":false,"cause":"hubUnreachable","message":"..."}`.
+Causes are `connecting`, `hubUnreachable`, `credentialsRejected`, `hubErrorStatus`,
+`modemUnreachable` and `connectionLost`. A command that was already sent when the connection
+dropped fails with 502 and an unknown outcome; read status before repeating it.
+
+`GET /api/v1/health` needs the same authentication and sends nothing to hardware:
+
+```json
+{"version":1,"status":"starting","modem":{"connected":false,"cause":"hubUnreachable"},"lastExchangeAgeSeconds":null,"snapshotAgeSeconds":3600,"persistence":"saved"}
+```
+
+`status` is `starting` until the first connection, then `ready` or `degraded`. The ages are in
+seconds. `lastExchangeAgeSeconds` is the time since the modem last answered the service or sent
+it something, `null` before the first connection. `snapshotAgeSeconds` is the time since the
+cached device information was last confirmed against the modem's ALL-Link database; before the
+first connection it is the age of the saved state file. It reports no device, address or Hub
+detail. The endpoint answers 200 whatever the status, so a monitor reads the body.
+
+Wrong Hub credentials are reported as `credentialsRejected`. The service retries every 15
+minutes, in case the Hub's password was restored; changing the credentials in the environment
+file needs a restart. The log (standard error) says each change, without credentials.
+
+## Run under a supervisor
+
+The server stays up for connection problems, so a restart means a crash or a configuration
+error. Let the operating system restart it. `Deployment/insteon-server.plist` (macOS launchd) and
+`Deployment/insteon-server.service` (Linux systemd user unit) restart it on failure. They hold
+no secrets: the server reads the Hub's and gateway passwords from the protected environment file
+(`~/.config/insteon/env`, mode 600), never from the unit file or its command line. Build a release
+binary and install it where the unit expects:
+
+```sh
+swift build -c release --package-path Packages/InsteonServer
+install -m 755 Packages/InsteonServer/.build/release/insteon-server ~/.local/bin/insteon-server
+```
+
+For launchd, copy the plist to `~/Library/LaunchAgents/`, replace `YOU`, then
+`launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/insteon-server.plist`. For systemd, follow
+the steps at the top of the unit file.
+
 ## Persistence and lifecycle
 
 The service writes its own network snapshot at
@@ -194,14 +250,13 @@ and contains no credentials. Use a dedicated state file for each configured mode
 The file is saved after successful operations and during startup and graceful shutdown;
 passive events aren't stored as history.
 
-Control-C or SIGTERM stops the HTTP service and closes the hardware session. If the modem's
-event stream ends, the server stops. Automatic reconnection and installation as an operating
-system service aren't implemented; restart it after correcting the connection. Unexpected
-errors are redacted in logs. A corrupt or unsupported state file is refused rather than
+Control-C or SIGTERM stops the HTTP service and closes the hardware session. A lost Hub or modem
+connection doesn't stop the server; it reconnects as described above. Unexpected errors are
+redacted in logs. A corrupt or unsupported state file is refused rather than
 overwritten.
 
 The server is a prototype for local and private VPN testing. Tests cover a real local HTTP
-listener and an in-memory modem. macOS and physical hardware validation are still required
+listener and a modem that goes away and returns. Physical hardware validation is still required
 before relying on it unattended.
 
 ## Validation
