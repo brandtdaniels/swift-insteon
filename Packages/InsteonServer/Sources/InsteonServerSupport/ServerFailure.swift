@@ -1,0 +1,155 @@
+import Foundation
+import InsteonCLISupport
+import InsteonCore
+import InsteonHubClient
+import InsteonModem
+import Logging
+
+/// Why the server stopped, in words for the person who runs it.
+///
+/// A failure names its cause and the setting, file or device to check. Its message never carries a
+/// password, an Authorization value or text a client sent. A cause the server can't name is
+/// reported by its type alone.
+public struct ServerFailure: Error, Equatable, Sendable {
+  /// A stable name for the cause, for logs and scripts. The raw value never changes meaning.
+  public enum Code: String, Sendable {
+    case argumentsInvalid = "arguments_invalid"
+    case listenAddressInvalid = "listen_address_invalid"
+    case portInvalid = "port_invalid"
+    case portInUse = "port_in_use"
+    case gatewayPasswordMissing = "gateway_password_missing"
+    case gatewayPasswordInvalid = "gateway_password_invalid"
+    case environmentFileMissing = "environment_file_missing"
+    case environmentFileUnreadable = "environment_file_unreadable"
+    case environmentFileUnsafe = "environment_file_unsafe"
+    case environmentFileMalformed = "environment_file_malformed"
+    case modemNotChosen = "modem_not_chosen"
+    case hubCredentialsMissing = "hub_credentials_missing"
+    case hubAddressRefused = "hub_address_refused"
+    case hubCredentialsRejected = "hub_credentials_rejected"
+    case hubUnreachable = "hub_unreachable"
+    case serialPathMissing = "serial_path_missing"
+    case serialPortUnavailable = "serial_port_unavailable"
+    case stateFileUnusable = "state_file_unusable"
+    case modemConnectionEnded = "modem_connection_ended"
+    case unexpected = "unexpected_error"
+  }
+
+  /// The exit status for a setting, file or option the person has to change.
+  public static let configurationStatus: Int32 = 78
+  /// The exit status for a Hub, modem or port that isn't available.
+  public static let unavailableStatus: Int32 = 69
+
+  /// What went wrong.
+  public let code: Code
+  /// A guided, one-line explanation for standard error and the log.
+  public let message: String
+  /// The process's exit status: 78 to change a setting, 69 for hardware or a port that isn't
+  /// available, and 1 for anything unrecognized.
+  public let exitStatus: Int32
+
+  /// Describes an error from starting or running the server.
+  public init(_ error: any Error) {
+    switch error {
+    case let failure as ServerFailure: self = failure
+    case let error as ServerOptionError: self = Self.describe(error)
+    case let error as ServerRunError: self = Self.describe(error)
+    case let error as EnvironmentFileError: self = Self.describe(error)
+    case let error as DotEnvError: self.init(.environmentFileMalformed, error.description, Self.configurationStatus)
+    case let error as ConfigurationError: self = Self.describe(error)
+    case let error as HubAddressRefused: self.init(.hubAddressRefused, error.description + " Change --hub or INSTEON_HUB_HOST.", Self.configurationStatus)
+    case let error as HubError:
+      if case let .unexpectedStatus(status) = error, status == 401 || status == 403 {
+        self.init(.hubCredentialsRejected, "The Hub rejected its user name and password (HTTP \(status)). Check INSTEON_HUB_USERNAME and INSTEON_HUB_PASSWORD in the environment file.", Self.configurationStatus)
+      } else {
+        self = Self.unexpected(error)
+      }
+    case let error as SerialPortError: self = Self.describe(error)
+    default: self = Self.unexpected(error)
+    }
+  }
+
+  /// Writes the failure as one critical record, with its code and exit status as metadata.
+  public func record(in logger: Logger) {
+    logger.critical("\(message)", metadata: ["code": "\(code.rawValue)", "exit_status": "\(exitStatus)"])
+  }
+
+  /// A credential-free description of why a running connection stopped.
+  static func cause(of error: any Error) -> String {
+    if HubStoppedAnswering.isUnanswered(error) { return InsteonErrorDescription.hubStoppedAnsweringInline }
+    return InsteonErrorDescription.message(for: error) ?? "unclassified \(type(of: error))"
+  }
+
+  private init(_ code: Code, _ message: String, _ exitStatus: Int32) {
+    self.code = code
+    self.message = message
+    self.exitStatus = exitStatus
+  }
+
+  private static func unexpected(_ error: any Error) -> ServerFailure {
+    ServerFailure(.unexpected, "The server stopped on an unexpected error (\(type(of: error))). Check the Hub or modem, the listener and the state file.", 1)
+  }
+
+  private static func describe(_ error: ServerOptionError) -> ServerFailure {
+    switch error {
+    case .invalidArguments: ServerFailure(.argumentsInvalid, "Invalid options. Run insteon-server --help for the ones it takes.", configurationStatus)
+    case .invalidListener: ServerFailure(.listenAddressInvalid, "--listen must be a literal IPv4 address on this computer's loopback or a private network, such as 127.0.0.1 or a VPN address. Wildcard and public addresses are refused.", configurationStatus)
+    case .invalidPort: ServerFailure(.portInvalid, "--port must be a number from 1 through 65535.", configurationStatus)
+    case .invalidStatePath: ServerFailure(.stateFileUnusable, "--state must be an absolute path.", configurationStatus)
+    }
+  }
+
+  private static func describe(_ error: ServerRunError) -> ServerFailure {
+    switch error {
+    case .missingPassword:
+      ServerFailure(.gatewayPasswordMissing, "INSTEON_GATEWAY_PASSWORD isn't set. Add it to the environment file; it needs 32 through 1024 bytes with no control characters.", configurationStatus)
+    case .invalidPassword:
+      ServerFailure(.gatewayPasswordInvalid, "INSTEON_GATEWAY_PASSWORD must contain 32 through 1024 bytes with no control characters. Change it in the environment file.", configurationStatus)
+    case let .hubUnreachable(host, port):
+      ServerFailure(.hubUnreachable, "The Hub at \(host):\(port) didn't answer. Check that it's powered on and on the same network, and that --hub or INSTEON_HUB_HOST is its address.", unavailableStatus)
+    case let .portInUse(host, port):
+      ServerFailure(.portInUse, "\(host):\(port) is already in use. Stop the other program or choose another port with --port.", unavailableStatus)
+    case let .stateFileUnusable(path, reason):
+      switch reason {
+      case .unreadableFile:
+        ServerFailure(.stateFileUnusable, "The state file \(path) couldn't be read, so it was left as it is. Check that this account may read it.", configurationStatus)
+      default:
+        ServerFailure(.stateFileUnusable, "The state file \(path) isn't in a format this server reads, so it was left as it is. Move it aside and the server starts a fresh one.", configurationStatus)
+      }
+    case let .disconnected(cause):
+      if let cause {
+        ServerFailure(.modemConnectionEnded, "The modem connection ended: \(cause)\(cause.hasSuffix(".") ? "" : ".") Restart the server after checking the Hub or modem.", unavailableStatus)
+      } else {
+        ServerFailure(.modemConnectionEnded, "The modem connection ended. Restart the server after checking the Hub or modem.", unavailableStatus)
+      }
+    }
+  }
+
+  private static func describe(_ error: EnvironmentFileError) -> ServerFailure {
+    switch error {
+    case .notFound:
+      ServerFailure(.environmentFileMissing, error.description + " Create it, or leave out --env-file to use the default.", configurationStatus)
+    case .unreadable:
+      ServerFailure(.environmentFileUnreadable, error.description, configurationStatus)
+    case .refused:
+      ServerFailure(.environmentFileUnsafe, error.description, configurationStatus)
+    }
+  }
+
+  private static func describe(_ error: ConfigurationError) -> ServerFailure {
+    switch error {
+    case .missingCredentials: ServerFailure(.hubCredentialsMissing, error.description, configurationStatus)
+    case .noModem, .conflictingModems: ServerFailure(.modemNotChosen, error.description, configurationStatus)
+    case .invalidHost, .invalidPort: ServerFailure(.hubAddressRefused, error.description, configurationStatus)
+    case .serialUnavailable: ServerFailure(.serialPortUnavailable, error.description, configurationStatus)
+    }
+  }
+
+  private static func describe(_ error: SerialPortError) -> ServerFailure {
+    if case let .cannotOpen(path, code) = error, code == ENOENT {
+      return ServerFailure(.serialPathMissing, "No serial device at \(path). Plug in the modem and check the path given to --serial.", configurationStatus)
+    }
+    let message = InsteonErrorDescription.message(for: error) ?? "The serial port couldn't be used."
+    return ServerFailure(.serialPortUnavailable, message + " Check that this account may use the device and that no other program has it open.", unavailableStatus)
+  }
+}
