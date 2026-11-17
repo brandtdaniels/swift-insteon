@@ -27,6 +27,9 @@ actor FakeHub: HTTPClient {
 
   private var failingWrites = 0
 
+  /// The statuses the next requests are answered with, in order, before the script answers.
+  private var scriptedStatuses: [Int] = []
+
   /// Whether every request times out, as for a Hub that isn't at the address.
   private let isUnreachable: Bool
 
@@ -69,6 +72,16 @@ actor FakeHub: HTTPClient {
 
   }
 
+  /// Answers the next requests with an HTTP status and no effect on the buffer, as when the Hub
+  /// is busy or failing.
+  ///
+  /// - Parameter statuses: The status for each of the next requests, in order.
+  func answerNextRequests(with statuses: [Int]) {
+
+    scriptedStatuses = statuses
+
+  }
+
   /// Puts bytes in the buffer as if the modem had received them, such as a device's message.
   func deliver(_ bytes: [UInt8]) {
 
@@ -90,6 +103,12 @@ actor FakeHub: HTTPClient {
     if isUnreachable {
 
       throw URLError(.timedOut)
+
+    }
+
+    if !scriptedStatuses.isEmpty {
+
+      return HTTPResponse(statusCode: scriptedStatuses.removeFirst())
 
     }
 
