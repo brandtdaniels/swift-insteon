@@ -67,7 +67,8 @@ public enum ServerRunner {
     let router = makeInsteonRouter(service: service, authentication: authentication)
     let app = Application(
       responder: router.buildResponder(),
-      configuration: .init(address: .hostname(options.listen, port: options.port), availableConnectionsDelegate: MaximumAvailableConnections(32))
+      server: ConnectionLimits.server,
+      configuration: .init(address: .hostname(options.listen, port: options.port), availableConnectionsDelegate: MaximumAvailableConnections(ConnectionLimits.maximumConnections))
     )
     note("Serving Insteon at http://\(options.listen):\(options.port). Remote access requires an encrypted VPN.")
     do {

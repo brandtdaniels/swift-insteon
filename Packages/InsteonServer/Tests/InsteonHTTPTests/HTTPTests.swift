@@ -504,8 +504,12 @@ actor FakeService: InsteonServiceAPI {
   let refusal: ServiceControlError?
   let reading: DeviceStatus.Reading
   let eventStream: AsyncStream<ServiceEvent>?
+  /// Each subscription gets its own stream that never ends; the actor keeps its continuation open.
+  let endlessEvents: Bool
+  private var openSources: [AsyncStream<ServiceEvent>.Continuation] = []
   let address = InsteonAddress(0x1A, 0x2B, 0x3C)
-  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil) {
+  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false) {
+    self.endlessEvents = endlessEvents
     self.persistence = persistence; self.fails = fails; self.refusal = refusal; self.reading = reading
     self.eventStream = eventStream
   }
@@ -526,6 +530,11 @@ actor FakeService: InsteonServiceAPI {
   }
   func events() async -> AsyncStream<ServiceEvent> {
     subscriptions += 1
+    if endlessEvents {
+      let (stream, continuation) = AsyncStream<ServiceEvent>.makeStream()
+      openSources.append(continuation)
+      return stream
+    }
     if let eventStream { return eventStream }
     let address = self.address
     return AsyncStream { continuation in
