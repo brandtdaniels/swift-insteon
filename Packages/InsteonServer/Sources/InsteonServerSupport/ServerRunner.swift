@@ -4,7 +4,11 @@ import HummingbirdCore
 import InsteonCLISupport
 import InsteonCore
 import InsteonHTTP
+import InsteonHubClient
+import InsteonModem
 import InsteonService
+import Logging
+import NIOCore
 
 /// Starts the optional Swift server using the CLI's environment and modem selection rules.
 public enum ServerRunner {
@@ -28,11 +32,88 @@ public enum ServerRunner {
   uses no Insteon cloud service. Do not forward this server's or the Hub's port.
   """
 
-  /// Loads protected settings, serves the saved devices at once, and keeps reconnecting to the modem until interrupted.
-  /// Supplied arguments, settings and lower-level errors are never written to a remote client.
-  public static func run(arguments: [String], environment: [String: String]) async throws {
+  /// The modem a server opens, with what it needs to reach it.
+  public enum ModemEndpoint: Sendable {
+    /// A Hub at a location the credentials may be sent to.
+    case hub(HubLocation, HubCredentials)
+    /// A serial or USB modem's device path.
+    case serial(path: String)
+  }
+
+  /// Opens the modem, runs `body` with the network it carries, and closes the modem when `body`
+  /// returns or throws. The default opens the Hub or serial port; a test supplies a scripted connection.
+  public typealias ModemOpener = @Sendable (
+    _ endpoint: ModemEndpoint,
+    _ catalog: ProductCatalog,
+    _ snapshot: NetworkSnapshot,
+    _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void
+  ) async throws -> Void
+
+  /// Opens the Hub or serial port the endpoint names.
+  public static let openModem: ModemOpener = { endpoint, catalog, snapshot, body in
+    switch endpoint {
+    case let .hub(location, credentials):
+      try await ModemSession.withHub(host: location.host, port: location.port, user: credentials.user, password: credentials.password, catalog: catalog) { session in
+        try await body(session.network(catalog: catalog, snapshot: snapshot, hub: session.hub))
+      }
+    case let .serial(path):
+      #if os(macOS) || os(Linux)
+      try await ModemSession.withSerialPort(path: path, catalog: catalog) { session in
+        try await body(session.network(catalog: catalog, snapshot: snapshot, hub: session.hub))
+      }
+      #else
+      throw ConfigurationError.serialUnavailable
+      #endif
+    }
+  }
+
+  /// Loads protected settings, serves the saved devices at once, and keeps reconnecting to the
+  /// modem until interrupted. Supplied arguments, settings and lower-level errors are never
+  /// written to a remote client.
+  ///
+  /// A setting, option, file or port that can't work ends the run with a failure to report. A
+  /// Hub or modem that doesn't answer never does: the server stays up, serves what it saved, and
+  /// logs why at each change.
+  ///
+  /// - Parameters:
+  ///   - arguments: The command-line options after the program name.
+  ///   - environment: The process environment, which an environment file adds to.
+  ///   - logger: Receives progress notes, warnings and one record per HTTP request.
+  ///   - openModem: Opens the modem. Defaults to ``openModem``.
+  /// - Throws: A ``ServerFailure`` source error: describe it with ``ServerFailure/init(_:)``.
+  public static func run(arguments: [String], environment: [String: String], logger: Logger = Logger(label: "insteon-server"), openModem: @escaping ModemOpener = ServerRunner.openModem) async throws {
+    try await run(arguments: arguments, environment: environment, logger: logger, openModem: openModem, timing: Timing())
+  }
+
+  /// How long the server waits between attempts to reach its modem, and between reminders.
+  struct Timing: Sendable {
+    let reconnect: ReconnectPolicy
+    let clock: any Clock<Duration>
+    let jitter: @Sendable () -> Double
+    let reminderClock: any Clock<Duration>
+    let reminderInterval: Duration
+    let onListening: @Sendable (Int) -> Void
+
+    init(
+      reconnect: ReconnectPolicy = .standard,
+      clock: any Clock<Duration> = ContinuousClock(),
+      jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) },
+      reminderClock: any Clock<Duration> = ContinuousClock(),
+      reminderInterval: Duration = .seconds(900),
+      onListening: @escaping @Sendable (Int) -> Void = { _ in }
+    ) {
+      self.reconnect = reconnect
+      self.clock = clock
+      self.jitter = jitter
+      self.reminderClock = reminderClock
+      self.reminderInterval = reminderInterval
+      self.onListening = onListening
+    }
+  }
+
+  static func run(arguments: [String], environment: [String: String], logger: Logger, openModem: @escaping ModemOpener, timing: Timing) async throws {
     let options = try ServerOptions(arguments: arguments, environment: environment)
-    let environment = try EnvironmentFile.load(explicitPath: options.envFilePath, environment: environment, warn: note)
+    let environment = try EnvironmentFile.load(explicitPath: options.envFilePath, environment: environment, warn: { logger.warning("\($0)") })
     let target = try ModemTarget.resolve(hub: options.hub, serialPath: options.serialPath, environment: environment)
     guard let password = environment["INSTEON_GATEWAY_PASSWORD"] else { throw ServerRunError.missingPassword }
     // Validate server authentication before opening any hardware connection.
@@ -41,107 +122,170 @@ public enum ServerRunner {
     catch { throw ServerRunError.invalidPassword }
     let catalog = try ProductCatalog.load(contentsOf: ProductCatalog.bundledCatalogURL())
     let store = JSONFileDeviceRegistryStore(fileURL: URL(fileURLWithPath: options.statePath))
-    let snapshot = try store.loadNetwork()
+    let snapshot: NetworkSnapshot
+    do { snapshot = try store.loadNetwork() }
+    catch let error as DeviceRegistryStoreError { throw ServerRunError.stateFileUnusable(path: options.statePath, reason: error) }
     let savedAt = (try? FileManager.default.attributesOfItem(atPath: options.statePath))?[.modificationDate] as? Date
-    let opener: any NetworkOpening
-    let location: HubLocation?
+    let endpoint: ModemEndpoint
+    let hub: HubLocation?
     switch target {
     case let .hub(host, port):
-      let hub = try ModemTarget.hubLocation(host: host, port: port)
-      location = hub
-      let credentials = try HubCredentials(environment: environment)
-      note("Opening the Hub at \(hub.host):\(hub.port)")
-      let (user, password) = (credentials.user, credentials.password)
-      opener = ModemSessionOpener(catalog: catalog) { body in
-        try await ModemSession.withHub(host: hub.host, port: hub.port, user: user, password: password, catalog: catalog, body)
-      }
+      let location = try ModemTarget.hubLocation(host: host, port: port)
+      endpoint = .hub(location, try HubCredentials(environment: environment))
+      hub = location
+      logger.info("Starting: opening the Hub at \(location.host):\(location.port)")
     case let .serial(path):
-      #if os(macOS) || os(Linux)
-      location = nil
-      opener = ModemSessionOpener(catalog: catalog) { body in
-        try await ModemSession.withSerialPort(path: path, catalog: catalog, body)
-      }
-      #else
-      throw ConfigurationError.serialUnavailable
-      #endif
+      endpoint = .serial(path: path)
+      hub = nil
+      logger.info("Starting: opening the serial port")
     }
     try await serve(
-      network: DeviceNetwork.offline(catalog: catalog, snapshot: snapshot, hub: location),
-      opener: opener,
+      network: DeviceNetwork.offline(catalog: catalog, snapshot: snapshot, hub: hub),
+      opener: EndpointOpener(endpoint: endpoint, catalog: catalog, openModem: openModem),
+      hub: hub,
       snapshotSavedAt: savedAt,
       persistence: NetworkSnapshotPersistence(store: store),
-      listen: options.listen,
-      port: options.port,
-      authentication: authentication
+      options: options,
+      authentication: authentication,
+      logger: logger,
+      timing: timing
     )
   }
 
-  /// Serves HTTP while the service keeps its modem connected. The listener opens first and
-  /// serves the saved device list, so a Hub that is away never keeps the server down.
+  /// Serves HTTP while the service keeps its modem connected. The listener opens first and serves
+  /// the saved device list, so a Hub that is away never keeps the server down.
   static func serve(
     network: DeviceNetwork,
     opener: any NetworkOpening,
+    hub: HubLocation?,
     snapshotSavedAt: Date?,
     persistence: any SnapshotPersisting,
-    listen: String,
-    port: Int,
+    options: ServerOptions,
     authentication: any HTTPAuthenticating,
-    reconnect: ReconnectPolicy = .standard,
-    clock: any Clock<Duration> = ContinuousClock(),
-    jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) },
-    onListening: @escaping @Sendable (Int) -> Void = { _ in },
-    onEvent: @escaping @Sendable (ServiceEvent) -> Void = ServerRunner.logConnectionChange
+    logger: Logger,
+    timing: Timing
   ) async throws {
-    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, jitter: jitter)
-    let router = makeInsteonRouter(service: service, authentication: authentication)
+    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, jitter: timing.jitter)
+    let router = makeInsteonRouter(service: service, authentication: authentication, logger: logger)
     let app = Application(
       responder: router.buildResponder(),
-      configuration: .init(address: .hostname(listen, port: port), availableConnectionsDelegate: MaximumAvailableConnections(32)),
-      onServerRunning: { channel in onListening(channel.localAddress?.port ?? port) }
+      configuration: .init(address: .hostname(options.listen, port: options.port), availableConnectionsDelegate: MaximumAvailableConnections(32)),
+      onServerRunning: { channel in
+        // The listener accepts connections, whether or not the modem has answered.
+        logger.info("Serving Insteon at http://\(options.listen):\(options.port). Remote access requires an encrypted VPN.")
+        timing.onListening(channel.localAddress?.port ?? options.port)
+      },
+      logger: logger
     )
-    note("Serving Insteon at http://\(listen):\(port). Remote access requires an encrypted VPN.")
     let events = await service.events()
-    let finalSave = try await service.run {
-      try await withThrowingTaskGroup(of: Bool.self) { group in
-        group.addTask {
-          do { for try await event in events { onEvent(event) } } catch {}
-          return false
+    let outage = OutageLog(hub: hub, logger: logger)
+    do {
+      let persisted = try await service.run {
+        try await withThrowingTaskGroup(of: Bool.self) { group in
+          group.addTask {
+            do { for try await event in events { await outage.handle(event) } } catch {}
+            return false
+          }
+          group.addTask {
+            // A failure that persists is repeated at an interval, not at every retry.
+            do { while true { try await timing.reminderClock.sleep(for: timing.reminderInterval); await outage.remind() } } catch {}
+            return false
+          }
+          group.addTask { try await app.runService(); return true }
+          defer { group.cancelAll() }
+          while let hostEnded = try await group.next(), !hostEnded {}
         }
-        group.addTask { try await app.runService(); return true }
-        defer { group.cancelAll() }
-        while let hostEnded = try await group.next(), !hostEnded {}
       }
+      if persisted == .failed {
+        logger.warning("The final network snapshot could not be saved.")
+      }
+    } catch let error as IOError where error.errnoCode == EADDRINUSE {
+      throw ServerRunError.portInUse(host: options.listen, port: options.port)
     }
-    if finalSave == .failed {
-      note("The final network snapshot could not be saved.")
-    }
-  }
-
-  @Sendable static func logConnectionChange(_ event: ServiceEvent) {
-    switch event {
-    case let .modemUnavailable(cause): note(cause.notice)
-    case .modemReconnected: note("The Hub or modem is connected.")
-    default: break
-    }
-  }
-
-  private static func note(_ message: String) {
-    FileHandle.standardError.write(Data((message + "\n").utf8))
   }
 }
 
-/// Startup or connection failure with a credential-free description.
+/// Opens the configured Hub or serial port for each connection attempt.
+private struct EndpointOpener: NetworkOpening {
+  let endpoint: ServerRunner.ModemEndpoint
+  let catalog: ProductCatalog
+  let openModem: ServerRunner.ModemOpener
+  private let history = ConnectionHistory()
+
+  init(endpoint: ServerRunner.ModemEndpoint, catalog: ProductCatalog, openModem: @escaping ServerRunner.ModemOpener) {
+    self.endpoint = endpoint
+    self.catalog = catalog
+    self.openModem = openModem
+  }
+
+  func withNetwork(snapshot: NetworkSnapshot, _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void) async throws {
+    let history = history
+    do {
+      try await openModem(endpoint, catalog, snapshot) { network in
+        await history.markConnected()
+        try await body(network)
+      }
+    } catch let error as SerialPortError {
+      // A path that doesn't exist before the modem has ever connected is a setting to fix. Later,
+      // an unplugged modem is just away, and the same error means "retry".
+      if await !history.hasConnected, case let .cannotOpen(_, code) = error, code == ENOENT { throw ConnectionRefusal(error) }
+      throw error
+    }
+  }
+}
+
+private actor ConnectionHistory {
+  private(set) var hasConnected = false
+  func markConnected() { hasConnected = true }
+}
+
+/// Logs each change in whether the modem is reachable, and repeats an outage that lasts.
+private actor OutageLog {
+  private let hub: HubLocation?
+  private let logger: Logger
+  private var cause: ModemUnavailability?
+
+  init(hub: HubLocation?, logger: Logger) {
+    self.hub = hub
+    self.logger = logger
+  }
+
+  func handle(_ event: ServiceEvent) {
+    switch event {
+    case let .modemUnavailable(reason):
+      cause = reason
+      record(reason, reminder: false)
+    case .modemReconnected:
+      cause = nil
+      logger.info("The Hub or modem is connected.", metadata: ["code": "modem_connected"])
+    default:
+      break
+    }
+  }
+
+  func remind() {
+    if let cause { record(cause, reminder: true) }
+  }
+
+  private func record(_ reason: ModemUnavailability, reminder: Bool) {
+    guard let failure = ServerFailure.degraded(reason, hub: hub) else { return }
+    failure.record(in: logger, level: reason == .credentialsRejected ? .error : .warning, reminder: reminder)
+  }
+}
+
+/// Startup failure with a credential-free description.
 public enum ServerRunError: Error, CustomStringConvertible, Equatable {
   /// No gateway password was configured.
   case missingPassword
   /// The HTTP authentication policy refused the configured password.
   case invalidPassword
+  /// The Hub did not answer. The server reports this while it keeps retrying.
+  case hubUnreachable(host: String, port: Int)
+  /// Another program already listens on the server's address and port.
+  case portInUse(host: String, port: Int)
+  /// The state file exists but can't be used.
+  case stateFileUnusable(path: String, reason: DeviceRegistryStoreError)
 
   /// A safe explanation for the person running the server.
-  public var description: String {
-    switch self {
-    case .missingPassword: "Set INSTEON_GATEWAY_PASSWORD in the protected environment file."
-    case .invalidPassword: "INSTEON_GATEWAY_PASSWORD must contain 32 through 1024 bytes with no control characters."
-    }
-  }
+  public var description: String { ServerFailure(self).message }
 }

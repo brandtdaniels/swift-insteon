@@ -37,6 +37,8 @@ enum ConnectionFailure: Equatable {
 
   init(_ error: any Error) {
     switch error {
+    case is ConnectionRefusal:
+      self = .fatal
     case is HubAddressRefused, HubError.invalidEndpoint:
       self = .fatal
     case let HubError.unexpectedStatus(status) where status == 401 || status == 403:

@@ -213,7 +213,7 @@ public actor InsteonService: InsteonServiceAPI {
       guard reconnect.reconnects else { throw failure }
       let cause: ModemUnavailability
       switch ConnectionFailure(failure) {
-      case .fatal: throw failure
+      case .fatal: throw (failure as? ConnectionRefusal)?.underlying ?? failure
       case let .retry(reason): cause = reason
       }
       noteUnavailable(cause)

@@ -187,6 +187,19 @@ adapter buffers at most 64 pending events per response; a client that falls behi
 disconnected and must reconnect and refresh state. Requests have no idempotency-key or
 deduplication support.
 
+## Persistence and lifecycle
+
+The service writes its own network snapshot at
+`$XDG_STATE_HOME/insteon/gateway.json`, or `~/.local/state/insteon/gateway.json`. Use
+`--state /absolute/path/gateway.json` for another file. It is separate from the CLI's cache
+and contains no credentials. Use a dedicated state file for each configured modem or Hub.
+The file is saved after successful operations and during startup and graceful shutdown;
+passive events aren't stored as history.
+
+Control-C or SIGTERM stops the HTTP service and closes the hardware session. A lost Hub or modem
+connection doesn't stop the server; it reconnects as described under Staying up. A corrupt or
+unsupported state file is refused rather than overwritten.
+
 ## Staying up while the Hub is away
 
 The HTTP listener never depends on the Hub. If the Hub is unplugged, restarting, unreachable
@@ -241,22 +254,41 @@ For launchd, copy the plist to `~/Library/LaunchAgents/`, replace `YOU`, then
 `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/insteon-server.plist`. For systemd, follow
 the steps at the top of the unit file.
 
-## Persistence and lifecycle
+## Failures and logs
 
-The service writes its own network snapshot at
-`$XDG_STATE_HOME/insteon/gateway.json`, or `~/.local/state/insteon/gateway.json`. Use
-`--state /absolute/path/gateway.json` for another file. It is separate from the CLI's cache
-and contains no credentials. Use a dedicated state file for each configured modem or Hub.
-The file is saved after successful operations and during startup and graceful shutdown;
-passive events aren't stored as history.
+The server writes its log to standard error through swift-log, one line per record. A failure
+that stops the server is one critical record: its message names the cause and the setting,
+file or device to check, and its metadata carries a stable `code` and the `exit_status`. The
+message never contains the Hub's or the gateway's password.
 
-Control-C or SIGTERM stops the HTTP service and closes the hardware session. A lost Hub or modem
-connection doesn't stop the server; it reconnects as described above. Unexpected errors are
-redacted in logs. A corrupt or unsupported state file is refused rather than
-overwritten.
+| Exit status | Meaning |
+| --- | --- |
+| 78 | A setting, option or file to change: options, the environment file, credentials the Hub rejects, a missing serial path, the state file. |
+| 69 | A port that isn't available, or a serial modem path that can't be opened for another reason. |
+| 1 | An error the server doesn't recognize. The message names its type only. |
+
+A Hub or modem that doesn't answer never stops the server, so it never has an exit status. The
+log says each change instead, with the same codes and wording: one record at warning level when
+the Hub or modem goes away or its cause changes (`hub_unreachable`, `hub_answered_with_error`,
+`modem_unreachable`, `modem_connection_ended`), one at error level for rejected credentials
+(`hub_credentials_rejected`), and one at info level with `code=modem_connected` when it
+returns. A retry that fails the same way logs nothing; an outage that lasts is repeated every 15
+minutes with `reminder=true`. A setting, option, file or port that can't work, a refused Hub
+address and a serial path that doesn't exist at start still end the server with their message
+and exit status.
+
+Each HTTP request writes one record with its `method`, `route`, `status`, `duration_ms`,
+`request_id` and a stable `code`, plus a `cause` when a command fails in the Hub or modem.
+The `route` is the matched template, such as `/api/v1/devices/{address}/commands`, or
+`unmatched`; the path, query, headers, body and Authorization value are never logged, so a
+mistyped password and a client's own text can't reach the log. A `duration_ms` covers the time
+until the response starts, so an event stream records its connection, not its length. A request
+without credentials logs `authentication_required` at info level, a wrong password logs
+`authentication_failed` at warning level, and a refused command logs a warning. The log doesn't
+summarize or rate-limit failed authentication.
 
 The server is a prototype for local and private VPN testing. Tests cover a real local HTTP
-listener and a modem that goes away and returns. Physical hardware validation is still required
+listener and an in-memory modem. macOS and physical hardware validation are still required
 before relying on it unattended.
 
 ## Validation
