@@ -292,6 +292,18 @@ struct HTTPTests {
     #expect(await service.commands.isEmpty)
   }
 
+  @Test func browserHelperReconnectsThroughTheTestedLinkInsteadOfKeepingAClosedStream() async throws {
+    let service = FakeService()
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
+    try await app.test(.router) { client in
+      let response = try await client.execute(uri: "/controls.js", method: .get, headers: headers())
+      let script = String(buffer: response.body)
+      #expect(script.contains(LiveLink.source))
+      #expect(script.components(separatedBy: "new EventSource(").count == 2)
+      #expect(!script.contains("if (events ||"))
+    }
+  }
+
   @Test(arguments: ["action=off", "action=off&formKey=expired", "action=on&levelPercent=invalid&formKey=VALID", "action=off&action=on&formKey=VALID"])
   func invalidBrowserFormsReturnToThePageWithoutSendingCommands(_ form: String) async throws {
     let service = FakeService()
@@ -482,7 +494,7 @@ private struct FailingEventWriter: ResponseBodyWriter {
   consuming func finish(_ trailingHeaders: HTTPFields?) async throws {}
 }
 
-private actor FakeService: InsteonServiceAPI {
+actor FakeService: InsteonServiceAPI {
   private var queriesBusy = false
   var reads = 0
   var commands: [ServiceCommand] = []
