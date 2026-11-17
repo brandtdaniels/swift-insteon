@@ -42,7 +42,7 @@ public actor InsteonService: InsteonServiceAPI {
   ///
   /// - Parameters:
   ///   - network: What the service serves until the first connection succeeds, such as
-  ///     ``DeviceNetwork/offline(catalog:snapshot:hub:)`` over the saved snapshot.
+  ///     `DeviceNetwork/offline(catalog:snapshot:hub:)` over the saved snapshot.
   ///   - opener: Opens each connection.
   ///   - persistence: Where snapshots are saved, if anywhere.
   ///   - snapshotSavedAt: When the saved snapshot was written, if known.

@@ -2,7 +2,7 @@ import InsteonLinking
 import InsteonModem
 import InsteonProtocol
 
-/// A modem that is never there: every operation fails with ``ModemError/connectionClosed``
+/// A modem that is never there: every operation fails with `ModemError.connectionClosed`
 /// before anything is sent, and it reports nothing.
 struct UnreachableModem: LinkingModem {
 

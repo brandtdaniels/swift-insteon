@@ -173,7 +173,7 @@ public actor DeviceNetwork {
   ///
   /// A front end reads devices, identities and saved ALL-Link database copies from it while no
   /// modem is reachable, then builds a network with ``ModemSession/network(catalog:snapshot:hub:)``
-  /// once one is. Every operation that needs the modem throws ``ModemError/connectionClosed``
+  /// once one is. Every operation that needs the modem throws `ModemError.connectionClosed`
   /// without sending anything.
   ///
   /// - Parameters:
