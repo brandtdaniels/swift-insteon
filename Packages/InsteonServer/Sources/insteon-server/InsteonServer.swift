@@ -1,5 +1,6 @@
 import Foundation
 import InsteonServerSupport
+import Logging
 #if canImport(Darwin)
 import Darwin
 #else
@@ -14,22 +15,17 @@ struct InsteonServer {
       print(ServerRunner.help)
       return
     }
+    LoggingSystem.bootstrap { StreamLogHandler.standardError(label: $0) }
+    let logger = Logger(label: "insteon-server")
     do {
-      try await ServerRunner.run(arguments: arguments, environment: ProcessInfo.processInfo.environment)
-    } catch let error as ServerOptionError {
-      fail(error.description)
-    } catch let error as ServerRunError {
-      fail(error.description)
+      try await ServerRunner.run(arguments: arguments, environment: ProcessInfo.processInfo.environment, logger: logger)
     } catch is CancellationError {
       return
     } catch {
-      // Arbitrary errors can contain request details. Keep diagnostics out of shared logs.
-      fail("The server could not start or its connection failed. Check the protected settings, listener, catalog, state file and Hub or modem.")
+      // The description names the cause and the setting to check, never a credential or client text.
+      let failure = ServerFailure(error)
+      failure.record(in: logger)
+      exit(failure.exitStatus)
     }
-  }
-
-  private static func fail(_ message: String) -> Never {
-    FileHandle.standardError.write(Data(("insteon-server: " + message + "\n").utf8))
-    exit(1)
   }
 }

@@ -196,9 +196,31 @@ passive events aren't stored as history.
 
 Control-C or SIGTERM stops the HTTP service and closes the hardware session. If the modem's
 event stream ends, the server stops. Automatic reconnection and installation as an operating
-system service aren't implemented; restart it after correcting the connection. Unexpected
-errors are redacted in logs. A corrupt or unsupported state file is refused rather than
-overwritten.
+system service aren't implemented; restart it after correcting the connection. A corrupt or
+unsupported state file is refused rather than overwritten.
+
+## Failures and logs
+
+The server writes its log to standard error through swift-log, one line per record. A failure
+that stops the server is one critical record: its message names the cause and the setting,
+file or device to check, and its metadata carries a stable `code` and the `exit_status`. The
+message never contains the Hub's or the gateway's password.
+
+| Exit status | Meaning |
+| --- | --- |
+| 78 | A setting, option or file to change: options, the environment file, credentials the Hub rejects, a missing serial path, the state file. |
+| 69 | Hardware or a port that isn't available: the Hub doesn't answer, the port is in use, the modem connection ended. |
+| 1 | An error the server doesn't recognize. The message names its type only. |
+
+Each HTTP request writes one record with its `method`, `route`, `status`, `duration_ms`,
+`request_id` and a stable `code`, plus a `cause` when a command fails in the Hub or modem.
+The `route` is the matched template, such as `/api/v1/devices/{address}/commands`, or
+`unmatched`; the path, query, headers, body and Authorization value are never logged, so a
+mistyped password and a client's own text can't reach the log. A `duration_ms` covers the time
+until the response starts, so an event stream records its connection, not its length. A request
+without credentials logs `authentication_required` at info level, a wrong password logs
+`authentication_failed` at warning level, and a refused command logs a warning. The log doesn't
+summarize or rate-limit failed authentication.
 
 The server is a prototype for local and private VPN testing. Tests cover a real local HTTP
 listener and an in-memory modem. macOS and physical hardware validation are still required

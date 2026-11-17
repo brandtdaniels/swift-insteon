@@ -65,12 +65,5 @@ public enum ServerOptionError: Error, CustomStringConvertible {
   case invalidStatePath
 
   /// A safe explanation suitable for standard error.
-  public var description: String {
-    switch self {
-    case .invalidArguments: "Invalid options. Run insteon-server --help."
-    case .invalidListener: "Bind to a specific loopback or private VPN IPv4 address; wildcard and public listeners are refused."
-    case .invalidPort: "The server port must be from 1 through 65535."
-    case .invalidStatePath: "The state file needs an absolute path."
-    }
-  }
+  public var description: String { ServerFailure(self).message }
 }
