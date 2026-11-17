@@ -427,7 +427,7 @@ struct HTTPTests {
     #expect(await service.reads == 1)
   }
 
-  @Test(arguments: [ServiceControlError.busy, .unknownDevice, .invalidLevel, .unsupportedControl])
+  @Test(arguments: [ServiceControlError.busy, .unknownDevice, .invalidLevel, .unsupportedControl, .modemUnavailable(.hubUnreachable)])
   func serviceRefusalsHaveAnHTTPMapping(_ failure: ServiceControlError) async throws {
     let service = FakeService(refusal: failure)
     let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
@@ -438,6 +438,7 @@ struct HTTPTests {
         case .unknownDevice: #expect(response.status == .notFound)
         case .invalidLevel: #expect(response.status == .badRequest)
         case .unsupportedControl: #expect(response.status == .unprocessableContent)
+        case .modemUnavailable: #expect(response.status == .serviceUnavailable)
         }
       }
     }
@@ -482,7 +483,7 @@ private struct FailingEventWriter: ResponseBodyWriter {
   consuming func finish(_ trailingHeaders: HTTPFields?) async throws {}
 }
 
-private actor FakeService: InsteonServiceAPI {
+actor FakeService: InsteonServiceAPI {
   private var queriesBusy = false
   var reads = 0
   var commands: [ServiceCommand] = []
@@ -492,6 +493,7 @@ private actor FakeService: InsteonServiceAPI {
   let refusal: ServiceControlError?
   let reading: DeviceStatus.Reading
   let eventStream: AsyncStream<ServiceEvent>?
+  var reported = ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000))
   let address = InsteonAddress(0x1A, 0x2B, 0x3C)
   init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil) {
     self.persistence = persistence; self.fails = fails; self.refusal = refusal; self.reading = reading
@@ -503,6 +505,8 @@ private actor FakeService: InsteonServiceAPI {
     return [ServiceDevice(address: address, productName: "<script>Example</script>", canTurnOnAndOff: true, canDim: true, value: 128, lastAnsweredAt: nil)]
   }
   func setQueriesBusy(_ busy: Bool) { queriesBusy = busy }
+  func setHealth(_ health: ServiceHealth) { reported = health }
+  func health() async -> ServiceHealth { reported }
   func execute(_ command: ServiceCommand) async throws -> CommandReceipt {
     commands.append(command)
     if let refusal { throw refusal }

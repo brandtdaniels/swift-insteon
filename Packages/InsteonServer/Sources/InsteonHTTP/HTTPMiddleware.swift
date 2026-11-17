@@ -1,3 +1,4 @@
+import Foundation
 import Hummingbird
 import HTTPTypes
 import InsteonService
@@ -35,6 +36,7 @@ struct ErrorMappingMiddleware<Context: RequestContext>: RouterMiddleware {
   func handle(_ request: Request, context: Context, next: (Request, Context) async throws -> Response) async throws -> Response {
     do { return try await next(request, context) }
     catch ServiceControlError.busy { return text(.conflict, "The service is busy. Try again explicitly; nothing was queued.") }
+    catch let ServiceControlError.modemUnavailable(cause) { return modemUnavailable(cause) }
     catch ServiceControlError.unknownDevice { return text(.notFound, "Unknown device.") }
     catch ServiceControlError.invalidLevel { return text(.badRequest, "The device or action does not accept that percentage.") }
     catch ServiceControlError.unsupportedControl { return text(.unprocessableContent, "The device does not support that control.") }
@@ -48,6 +50,11 @@ struct ErrorMappingMiddleware<Context: RequestContext>: RouterMiddleware {
     }
     catch is CancellationError { return text(.serviceUnavailable, "Request canceled. Its hardware outcome may be unknown; read status before retrying.") }
     catch { return text(.badGateway, "Operation failed. Its hardware outcome may be unknown; read status before retrying.") }
+  }
+
+  private func modemUnavailable(_ cause: ModemUnavailability) -> Response {
+    let body = (try? JSONEncoder().encode(ModemUnavailableDTO(cause))) ?? Data()
+    return Response(status: .serviceUnavailable, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(bytes: body)))
   }
 
   private func text(_ status: HTTPResponse.Status, _ message: String) -> Response {

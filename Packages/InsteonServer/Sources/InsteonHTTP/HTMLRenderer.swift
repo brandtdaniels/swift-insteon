@@ -4,7 +4,7 @@ import InsteonProtocol
 
 /// Swift-rendered pages and device fragments, enhanced by a local browser helper.
 enum HTMLRenderer {
-  static func page(devices: [ServiceDevice], formKey: String, notice: String? = nil, error: String? = nil, failedAddress: String? = nil) -> String {
+  static func page(devices: [ServiceDevice], formKey: String, notice: String? = nil, error: String? = nil, failedAddress: String? = nil, hubNotice: String? = nil) -> String {
     let cards = devices.map { card($0, formKey: formKey, error: $0.address.description == failedAddress ? error : nil, notice: $0.address.description == failedAddress ? notice : nil) }.joined(separator: "\n")
     let empty = devices.isEmpty ? "<p data-empty-devices>No devices are available.</p>" : ""
     let hasTarget = devices.contains { $0.address.description == failedAddress }
@@ -25,7 +25,7 @@ enum HTMLRenderer {
     form{display:inline-flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.3rem .3rem .3rem 0}button,input{font:inherit;min-height:2.8rem;border-radius:.4rem}
     button{padding:.4rem 1rem;cursor:pointer}input[type=number]{width:5rem;padding:0 .5rem}a{color:LinkText}footer{margin-top:2rem}
     </style></head><body><header><h1>Insteon home</h1><p>Your home Insteon service</p>
-    <p>Cached values can be stale. Use Read status to ask a device. An acknowledged control is not a verified status reading.</p><a href="/">Refresh page</a><p id="live-updates" role="status"></p></header>
+    <p>Cached values can be stale. Use Read status to ask a device. An acknowledged control is not a verified status reading.</p><a href="/">Refresh page</a><p id="live-updates" role="status"></p><p id="hub-status" role="status">\(hubNotice.map(escape) ?? "")</p></header>
     \(banner)\(alert)\(empty)<main class="devices">\(cards)</main><footer><small>Local or encrypted private access. This service does not use the Hub's cloud connection.</small></footer></body></html>
     """
   }
