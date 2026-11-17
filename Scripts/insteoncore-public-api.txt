@@ -541,6 +541,7 @@ protocol DeviceRegistryStore
 protocol LinkingObserver
 protocol NetworkSnapshotStore
 static func DeviceMonitor.replyKind(_:)
+static func DeviceNetwork.offline(catalog:snapshot:hub:)
 static func DeviceSettingChange.OtherSettings.compared(_:unread:)
 static func DeviceSettingChange.OtherSettings.notReread(_:)
 static func HubLinkingLeg.canSucceedOnRetry(after:)
