@@ -1,13 +1,18 @@
 import Hummingbird
 import InsteonService
+import Logging
 
 /// Builds the HTTP adapter around one service instance and an independent authentication policy.
 /// Security, request limits, errors, API coding and browser presentation stay in this package.
-public func makeInsteonRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating) -> Router<BasicRequestContext> {
+///
+/// Each request logs one record to `logger`: method, route template, status, duration and a stable
+/// outcome code, with no path, query, header or body.
+public func makeInsteonRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, logger: Logger = Logger(label: "insteon-server")) -> Router<BasicRequestContext> {
   let router = Router<BasicRequestContext>()
   router.add(middleware: SecurityHeadersMiddleware<BasicRequestContext>())
-  router.add(middleware: AuthenticationMiddleware<BasicRequestContext>(authentication: authentication))
   router.add(middleware: ErrorMappingMiddleware<BasicRequestContext>())
+  router.add(middleware: RequestLogMiddleware<BasicRequestContext>(logger: logger))
+  router.add(middleware: AuthenticationMiddleware<BasicRequestContext>(authentication: authentication))
   router.add(middleware: RequestBodyLimitMiddleware<BasicRequestContext>())
   let api = DeviceAPI(service: service)
   let website = DeviceWebsite(service: service)
