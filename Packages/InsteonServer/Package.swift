@@ -11,9 +11,10 @@ let package = Package(
     .package(name: "swift-insteon", path: "../.."),
     .package(url: "https://github.com/hummingbird-project/hummingbird.git", .upToNextMinor(from: "2.28.1")),
     .package(url: "https://github.com/apple/swift-http-types.git", from: "1.0.0"),
-    .package(url: "https://github.com/apple/swift-nio.git", from: "2.105.0"),
     .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMinor(from: "5.0.3")),
-    .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.11.0")
+    .package(url: "https://github.com/swift-server/swift-service-lifecycle.git", from: "2.11.0"),
+    .package(url: "https://github.com/apple/swift-log.git", from: "1.5.0"),
+    .package(url: "https://github.com/apple/swift-nio.git", from: "2.60.0")
   ],
   targets: [
     .target(
@@ -23,6 +24,7 @@ let package = Package(
         .product(name: "InsteonCore", package: "swift-insteon"),
         .product(name: "InsteonProtocol", package: "swift-insteon"),
         .product(name: "Crypto", package: "swift-crypto"),
+        .product(name: "Logging", package: "swift-log"),
         .product(name: "Hummingbird", package: "hummingbird"),
         .product(name: "HummingbirdCore", package: "hummingbird"),
         .product(name: "NIOCore", package: "swift-nio"),
@@ -32,7 +34,7 @@ let package = Package(
     ),
     .testTarget(
       name: "InsteonHTTPTests",
-      dependencies: ["InsteonHTTP", .product(name: "InsteonService", package: "swift-insteon"), .product(name: "InsteonCore", package: "swift-insteon"), .product(name: "HummingbirdTesting", package: "hummingbird"), .product(name: "Hummingbird", package: "hummingbird"), .product(name: "HTTPTypes", package: "swift-http-types"), .product(name: "ServiceLifecycleTestKit", package: "swift-service-lifecycle"), .product(name: "NIOCore", package: "swift-nio"), .product(name: "NIOEmbedded", package: "swift-nio")]
+      dependencies: ["InsteonHTTP", .product(name: "InsteonModem", package: "swift-insteon"), .product(name: "InsteonService", package: "swift-insteon"), .product(name: "InsteonCore", package: "swift-insteon"), .product(name: "HummingbirdTesting", package: "hummingbird"), .product(name: "Hummingbird", package: "hummingbird"), .product(name: "HTTPTypes", package: "swift-http-types"), .product(name: "ServiceLifecycleTestKit", package: "swift-service-lifecycle"), .product(name: "Logging", package: "swift-log"), .product(name: "NIOCore", package: "swift-nio"), .product(name: "NIOEmbedded", package: "swift-nio")]
     ),
     .target(
       name: "InsteonServerSupport",
@@ -41,14 +43,27 @@ let package = Package(
         .product(name: "InsteonService", package: "swift-insteon"),
         .product(name: "InsteonCore", package: "swift-insteon"),
         .product(name: "InsteonCLISupport", package: "swift-insteon"),
+        .product(name: "InsteonModem", package: "swift-insteon"),
+        .product(name: "InsteonHubClient", package: "swift-insteon"),
+        .product(name: "Logging", package: "swift-log"),
+        .product(name: "NIOCore", package: "swift-nio"),
         .product(name: "Hummingbird", package: "hummingbird"),
         .product(name: "HummingbirdCore", package: "hummingbird")
       ]
     ),
-    .executableTarget(name: "insteon-server", dependencies: ["InsteonServerSupport"]),
+    .executableTarget(name: "insteon-server", dependencies: ["InsteonServerSupport", .product(name: "Logging", package: "swift-log")]),
     .testTarget(
       name: "InsteonServerTests",
-      dependencies: ["InsteonServerSupport"]
+      dependencies: [
+        "InsteonServerSupport",
+        .product(name: "InsteonCore", package: "swift-insteon"),
+        .product(name: "InsteonModem", package: "swift-insteon"),
+        .product(name: "InsteonHubClient", package: "swift-insteon"),
+        .product(name: "InsteonNetworking", package: "swift-insteon"),
+        .product(name: "InsteonService", package: "swift-insteon"),
+        .product(name: "InsteonCLISupport", package: "swift-insteon"),
+        .product(name: "Logging", package: "swift-log")
+      ]
     )
   ]
 )
