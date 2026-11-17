@@ -131,7 +131,7 @@ jobs:
       - name: Test the checks
         run: python3 -m unittest discover -s Scripts/tests -v
       - name: Test the browser's event-stream link
-        run: node --test Packages/InsteonServer/BrowserTests/
+        run: node --test Packages/InsteonServer/BrowserTests/live-link.test.mjs
 
   macos:
     name: macOS
@@ -158,7 +158,7 @@ jobs:
       - name: Test optional server
         run: swift test --package-path Packages/InsteonServer --skip-build
       - name: Test the browser's event-stream link
-        run: node --test Packages/InsteonServer/BrowserTests/
+        run: node --test Packages/InsteonServer/BrowserTests/live-link.test.mjs
       - name: Build documentation
         run: Scripts/build-docs.sh
 
