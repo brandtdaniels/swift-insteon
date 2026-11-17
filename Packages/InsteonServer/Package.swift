@@ -57,6 +57,7 @@ let package = Package(
         .product(name: "InsteonCore", package: "swift-insteon"),
         .product(name: "InsteonModem", package: "swift-insteon"),
         .product(name: "InsteonHubClient", package: "swift-insteon"),
+        .product(name: "InsteonNetworking", package: "swift-insteon"),
         .product(name: "InsteonService", package: "swift-insteon"),
         .product(name: "InsteonCLISupport", package: "swift-insteon"),
         .product(name: "Logging", package: "swift-log")

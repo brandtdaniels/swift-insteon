@@ -28,6 +28,8 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case hubAddressRefused = "hub_address_refused"
     case hubCredentialsRejected = "hub_credentials_rejected"
     case hubUnreachable = "hub_unreachable"
+    case hubAnsweredWithError = "hub_answered_with_error"
+    case hardwareError = "hardware_error"
     case serialPathMissing = "serial_path_missing"
     case serialPortUnavailable = "serial_port_unavailable"
     case stateFileUnusable = "state_file_unusable"
@@ -62,16 +64,29 @@ public struct ServerFailure: Error, Equatable, Sendable {
       if case let .unexpectedStatus(status) = error, status == 401 || status == 403 {
         self.init(.hubCredentialsRejected, "The Hub rejected its user name and password (HTTP \(status)). Check INSTEON_HUB_USERNAME and INSTEON_HUB_PASSWORD in the environment file.", Self.configurationStatus)
       } else {
-        self = Self.unexpected(error)
+        let message = InsteonErrorDescription.message(for: error) ?? "The Hub answered with an error."
+        self.init(.hubAnsweredWithError, message + " Check the Hub, then start the server again.", Self.unavailableStatus)
       }
     case let error as SerialPortError: self = Self.describe(error)
-    default: self = Self.unexpected(error)
+    default:
+      // Reuse InsteonCore's wording for an error from the modem, Hub or network libraries.
+      if let message = InsteonErrorDescription.message(for: error) {
+        self.init(.hardwareError, message, Self.unavailableStatus)
+      } else {
+        self = Self.unexpected(error)
+      }
     }
   }
 
   /// Writes the failure as one critical record, with its code and exit status as metadata.
   public func record(in logger: Logger) {
     logger.critical("\(message)", metadata: ["code": "\(code.rawValue)", "exit_status": "\(exitStatus)"])
+  }
+
+  /// Whether the Hub rejected its credentials with HTTP 401 or 403.
+  static func isRejectedHubCredentials(_ error: any Error) -> Bool {
+    if case let .unexpectedStatus(status)? = error as? HubError { return status == 401 || status == 403 }
+    return false
   }
 
   /// A credential-free description of why a running connection stopped.

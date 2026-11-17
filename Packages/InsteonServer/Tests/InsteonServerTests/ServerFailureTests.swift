@@ -251,7 +251,14 @@ struct ServerFailureTests {
   }
 }
 
-private enum FreePort {
+enum FreePort {
+  /// A loopback port nothing listens on.
+  static func unused() throws -> Int {
+    let socket = try bind()
+    defer { close(socket.fileDescriptor) }
+    return socket.port
+  }
+
   /// A loopback TCP socket bound to an ephemeral port, optionally listening.
   static func bind(listening: Bool = false) throws -> (fileDescriptor: Int32, port: Int) {
     #if canImport(Darwin)
@@ -301,7 +308,7 @@ enum ScriptedModem {
     ScriptingConnection(identity: identity, ending: ending)
   }
 
-  static func open(_ connection: ScriptingConnection, catalog: ProductCatalog, snapshot: NetworkSnapshot, body: @escaping @Sendable (DeviceNetwork) async throws -> Void) async throws {
+  static func open(_ connection: ScriptingConnection, catalog: ProductCatalog?, snapshot: NetworkSnapshot, body: @escaping @Sendable (DeviceNetwork) async throws -> Void) async throws {
     try await Modem.withConnection(connection) { modem in
       try await body(DeviceNetwork(modem: modem, catalog: nil, snapshot: snapshot, hub: HubLocation(host: "192.168.1.20", port: HubLocation.defaultPort)))
     }
@@ -349,9 +356,16 @@ final class ServerLogCapture: @unchecked Sendable {
   }
   private let lock = NSLock()
   private var stored: [Record] = []
+  /// Each message as it is logged, for a test that waits on a signal.
+  let messages: AsyncStream<String>
+  private let continuation: AsyncStream<String>.Continuation
+  init() { (messages, continuation) = AsyncStream.makeStream() }
   var records: [Record] { lock.withLock { stored } }
   var logger: Logger { Logger(label: "test") { _ in Handler(capture: self) } }
-  fileprivate func append(_ record: Record) { lock.withLock { stored.append(record) } }
+  fileprivate func append(_ record: Record) {
+    lock.withLock { stored.append(record) }
+    continuation.yield(record.message)
+  }
 
   private struct Handler: LogHandler {
     let capture: ServerLogCapture

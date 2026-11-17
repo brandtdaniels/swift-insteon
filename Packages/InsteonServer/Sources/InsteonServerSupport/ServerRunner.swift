@@ -5,6 +5,7 @@ import InsteonCLISupport
 import InsteonCore
 import InsteonHTTP
 import InsteonHubClient
+import InsteonModem
 import InsteonService
 import Logging
 import NIOCore
@@ -94,46 +95,72 @@ public enum ServerRunner {
     case let .hub(host, port):
       let location = try ModemTarget.hubLocation(host: host, port: port)
       endpoint = .hub(location, try HubCredentials(environment: environment))
-      logger.info("Opening the Hub at \(location.host):\(location.port)")
+      logger.info("Starting: opening the Hub at \(location.host):\(location.port)")
     case let .serial(path):
       endpoint = .serial(path: path)
+      logger.info("Starting: opening the serial port")
     }
-    let ended = ConnectionEnded()
+    let state = RunState()
     do {
       try await openModem(endpoint, catalog, snapshot) { network in
-        try await serve(network: network, snapshot: snapshot, store: store, options: options, authentication: authentication, logger: logger, ended: ended)
+        do {
+          try await serve(network: network, snapshot: snapshot, store: store, options: options, authentication: authentication, logger: logger, state: state)
+        } catch {
+          await state.recordBodyFailure(error)
+          throw error
+        }
       }
     } catch let error as ServerRunError {
       throw error
     } catch is CancellationError {
       throw CancellationError()
     } catch {
-      // The reader's own error replaces the one the body threw, so a connection that
-      // ended while serving surfaces here as that error.
-      if await ended.isSet || error is HubStoppedAnswering { throw ServerRunError.disconnected(cause: ServerFailure.cause(of: error)) }
-      if case let .hub(location, _) = endpoint, HubStoppedAnswering.isUnanswered(error) {
-        throw ServerRunError.hubUnreachable(host: location.host, port: location.port)
-      }
-      throw error
+      throw await classify(error, state: state, endpoint: endpoint)
     }
   }
 
-  private static func serve(network: DeviceNetwork, snapshot: NetworkSnapshot, store: JSONFileDeviceRegistryStore, options: ServerOptions, authentication: HTTPAuthentication, logger: Logger, ended: ConnectionEnded) async throws {
+  /// Chooses what to report when the modem's scope ends with `thrown`. The reader's own error
+  /// replaces the one the body threw, so the body's error is kept separately and weighed first.
+  private static func classify(_ thrown: any Error, state: RunState, endpoint: ModemEndpoint) async -> any Error {
+    let body = await state.bodyFailure
+    if await state.ended || thrown is HubStoppedAnswering {
+      return ServerRunError.disconnected(cause: ServerFailure.cause(of: thrown))
+    }
+    if let body = body as? ServerRunError { return body }
+    // The body only saw the modem close when the reader failed first; the reader's error says why.
+    let primary = (body as? ModemError == .connectionClosed ? nil : body) ?? thrown
+    // A Hub that rejects the credentials can drop the connection too, so a rejection in either error wins.
+    if ServerFailure.isRejectedHubCredentials(primary) { return primary }
+    if ServerFailure.isRejectedHubCredentials(thrown) { return thrown }
+    if case let .hub(location, _) = endpoint, !(await state.serving) {
+      let unanswered = HubStoppedAnswering.isUnanswered(primary) || HubStoppedAnswering.isUnanswered(thrown)
+      if unanswered || (primary as? ModemError).map({ if case .timedOut = $0 { true } else { false } }) == true {
+        return ServerRunError.hubUnreachable(host: location.host, port: location.port)
+      }
+    }
+    return primary
+  }
+
+  private static func serve(network: DeviceNetwork, snapshot: NetworkSnapshot, store: JSONFileDeviceRegistryStore, options: ServerOptions, authentication: HTTPAuthentication, logger: Logger, state: RunState) async throws {
     let service = InsteonService(network: network, persistence: NetworkSnapshotPersistence(store: store))
     let router = makeInsteonRouter(service: service, authentication: authentication, logger: logger)
     let app = Application(
       responder: router.buildResponder(),
       configuration: .init(address: .hostname(options.listen, port: options.port), availableConnectionsDelegate: MaximumAvailableConnections(32)),
+      onServerRunning: { _ in
+        // The modem answered and the listener accepts connections.
+        await state.markServing()
+        logger.info("Serving Insteon at http://\(options.listen):\(options.port). Remote access requires an encrypted VPN.")
+      },
       logger: logger
     )
-    logger.info("Serving Insteon at http://\(options.listen):\(options.port). Remote access requires an encrypted VPN.")
     do {
       let persistence = try await service.run { try await app.runService() }
       if persistence == .failed {
         logger.warning("The final network snapshot could not be saved.")
       }
     } catch ServiceLifecycleError.connectionEnded {
-      await ended.set()
+      await state.markEnded()
       throw ServerRunError.disconnected(cause: nil)
     } catch let error as IOError where error.errnoCode == EADDRINUSE {
       throw ServerRunError.portInUse(host: options.listen, port: options.port)
@@ -141,10 +168,16 @@ public enum ServerRunner {
   }
 }
 
-/// Remembers that the service saw the modem's connection end, which the reader's own error can hide.
-private actor ConnectionEnded {
-  private(set) var isSet = false
-  func set() { isSet = true }
+/// What the run has seen, which the reader's own error can hide from the error the modem's scope throws.
+private actor RunState {
+  private(set) var ended = false
+  private(set) var serving = false
+  private(set) var bodyFailure: (any Error)?
+  func markEnded() { ended = true }
+  func markServing() { serving = true }
+  func recordBodyFailure(_ error: any Error) {
+    if bodyFailure == nil, !(error is CancellationError) { bodyFailure = error }
+  }
 }
 
 /// Startup or connection failure with a credential-free description.
