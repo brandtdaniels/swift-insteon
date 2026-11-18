@@ -267,7 +267,9 @@ private actor OutageLog {
 
   func handle(_ event: ServiceEvent) {
     switch event {
-    case let .modemUnavailable(reason):
+    case let .modemUnavailable(cause):
+      // Through a Hub, a modem that doesn't answer is a Hub that doesn't answer: name the Hub.
+      let reason = hub != nil && cause == .modemUnreachable ? ModemUnavailability.hubUnreachable : cause
       if let logged, logged.continuesOutage(of: reason) { return }
       logged = reason
       record(reason, reminder: false)

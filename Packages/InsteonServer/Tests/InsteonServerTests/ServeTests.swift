@@ -153,6 +153,18 @@ struct ServeTests {
     await server.stop()
   }
 
+  @Test func aHubThatAnswersNothingToTheFirstModemRequestIsLoggedAsTheHubOnce() async throws {
+    let link = HubLink()
+    let server = try await start(try scratch(), openModem: opener(ScriptedHubOpener([.fail(ModemError.timedOut(.getModemInfo)), .connect(link)])))
+    let record = try #require(await server.record { $0.level == .warning })
+    #expect(record.metadata["code"] == "hub_unreachable")
+    #expect(record.message.contains("192.168.1.20:25105"))
+    server.retries.release()
+    _ = await server.code("modem_connected")
+    #expect(server.capture.records.filter { $0.level == .warning }.count == 1)
+    await server.stop()
+  }
+
   // MARK: Health liveness
 
   @Test func healthTellsAQuietLinkFromADeadOneWithoutAskingTheHub() async throws {
