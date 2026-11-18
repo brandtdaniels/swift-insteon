@@ -68,19 +68,26 @@ extension ServingTests {
 
   /// Starts the server, waits until its listener is up, and returns it.
   func start(_ directory: URL, extra: [String] = ["--hub", "192.168.1.20"], now: @escaping @Sendable () -> Date = { Date() }, openModem: @escaping ServerRunner.ModemOpener) async throws -> RunningServer {
-    let capture = ServerLogCapture()
-    let port = try FreePort.unused()
-    let retries = ReleasableClock()
-    let reminders = ReleasableClock()
-    let (listening, opened) = AsyncStream<Int>.makeStream()
-    let timing = ServerRunner.Timing(clock: retries, jitter: { 0 }, reminderClock: reminders, now: now, onListening: { opened.yield($0) })
-    let arguments = ["--state", directory.appendingPathComponent("state.json").path, "--port", String(port)] + extra
-    let environment = ["HOME": directory.path, "INSTEON_GATEWAY_PASSWORD": gatewayPassword, "INSTEON_HUB_USERNAME": "hub-user", "INSTEON_HUB_PASSWORD": "hub-secret-pass"]
-    let logger = capture.logger
-    let task = Task { try await ServerRunner.run(arguments: arguments, environment: environment, logger: logger, openModem: openModem, timing: timing) }
-    var ports = listening.makeAsyncIterator()
-    guard let bound = await ports.next() else { throw CancellationError() }
-    return RunningServer(task: task, port: bound, capture: capture, retries: retries, reminders: reminders)
+    // Another suite can take the port between choosing it and binding it: the run ends before it
+    // listens, and a different port is chosen.
+    for _ in 0..<5 {
+      let capture = ServerLogCapture()
+      let port = try FreePort.unused()
+      let retries = ReleasableClock()
+      let reminders = ReleasableClock()
+      let (listening, opened) = AsyncStream<Int>.makeStream()
+      let timing = ServerRunner.Timing(clock: retries, jitter: { 0 }, reminderClock: reminders, now: now, onListening: { opened.yield($0) })
+      let arguments = ["--state", directory.appendingPathComponent("state.json").path, "--port", String(port)] + extra
+      let environment = ["HOME": directory.path, "INSTEON_GATEWAY_PASSWORD": gatewayPassword, "INSTEON_HUB_USERNAME": "hub-user", "INSTEON_HUB_PASSWORD": "hub-secret-pass"]
+      let logger = capture.logger
+      let task = Task { try await ServerRunner.run(arguments: arguments, environment: environment, logger: logger, openModem: openModem, timing: timing) }
+      let ended = Task { _ = await task.result; opened.finish() }
+      var ports = listening.makeAsyncIterator()
+      let bound = await ports.next()
+      ended.cancel()
+      if let bound { return RunningServer(task: task, port: bound, capture: capture, retries: retries, reminders: reminders) }
+    }
+    throw CancellationError()
   }
 
   func opener(_ scripted: ScriptedHubOpener) -> ServerRunner.ModemOpener {

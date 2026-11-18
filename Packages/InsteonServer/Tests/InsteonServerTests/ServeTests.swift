@@ -193,7 +193,8 @@ struct ServeTests: ServingTests {
 
     // Mid-run failure: HTTP stays up, the command is refused, and nothing is replayed.
     first.drop(with: away)
-    _ = await server.record { $0.metadata["code"] == "hub_unreachable" }
+    // The first outage was logged at start; wait for this one.
+    _ = await server.record { _ in server.capture.records.filter { $0.metadata["code"] == "hub_unreachable" }.count == 2 }
     let degraded = try await server.request("/api/v1/health", password: gatewayPassword)
     #expect(degraded.json["status"] as? String == "degraded")
     #expect((try await server.request("/api/v1/devices/1A.2B.3C/commands", method: "POST", body: #"{"action":"off"}"#, password: gatewayPassword)).status == 503)
