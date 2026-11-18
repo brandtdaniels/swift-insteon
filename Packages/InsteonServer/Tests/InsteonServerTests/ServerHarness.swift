@@ -33,6 +33,12 @@ struct RunningServer {
   func stop() async { task.cancel(); _ = await task.result }
 
   func request(_ path: String, method: String = "GET", body: String? = nil, password: String) async throws -> (status: Int, json: [String: Any]) {
+    let result = try await exchange(path, method: method, body: body, headers: [:], password: password)
+    return (result.status, result.json)
+  }
+
+  /// A request with extra headers, answering the response headers as well.
+  func exchange(_ path: String, method: String = "GET", body: String? = nil, headers: [String: String], password: String) async throws -> (status: Int, json: [String: Any], headers: [String: String]) {
     var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)\(path)")!)
     request.httpMethod = method
     request.setValue("Basic " + Data(("insteon:" + password).utf8).base64EncodedString(), forHTTPHeaderField: "Authorization")
@@ -41,8 +47,12 @@ struct RunningServer {
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
       request.setValue("1", forHTTPHeaderField: "X-Insteon-Request")
     }
+    for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
     let (data, response) = try await URLSession.shared.data(for: request)
-    return ((response as! HTTPURLResponse).statusCode, (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:])
+    let http = response as! HTTPURLResponse
+    var received: [String: String] = [:]
+    for (name, value) in http.allHeaderFields { received[String(describing: name).lowercased()] = String(describing: value) }
+    return (http.statusCode, (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:], received)
   }
 }
 

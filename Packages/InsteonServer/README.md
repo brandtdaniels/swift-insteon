@@ -237,6 +237,7 @@ same status for the same failure.
 | `invalidAddress` | 400 | false | The address in the path isn't an Insteon address. |
 | `invalidCommand` | 400 | false | The body isn't valid JSON for a command: unknown field, unknown action, wrong type. |
 | `invalidLevel` | 400 | false | The percentage is outside 0 through 100, or the device or action doesn't take one. |
+| `invalidIdempotencyKey` | 400 | false | The `Idempotency-Key` header is malformed. |
 | `unknownDevice` | 404 | false | The service doesn't know the device. |
 | `routeNotFound` | 404 | false | No such route. |
 | `apiMarkerMissing` | 403 | false | `X-Insteon-Request: 1` is missing. |
@@ -244,6 +245,7 @@ same status for the same failure.
 | `unsupportedMediaType` | 415 | false | The content type isn't `application/json`. |
 | `requestRejected` | as the transport chose | false | Another malformed request. |
 | `busy` | 409 | false | Another command is running. Nothing was queued. |
+| `idempotencyKeyReused` | 422 | false | The `Idempotency-Key` was used for a different command. |
 | `notIdentified` | 409 | false | The device never reported what it is and doesn't answer, so no control was sent. |
 | `notLinked` | 409 | false | The device rejected the modem because it isn't linked to it. |
 | `unsupportedControl` | 422 | false | The device has no such control. |
@@ -256,6 +258,33 @@ same status for the same failure.
 
 A client retries on its own judgment: `sent: false` is safe to repeat once the cause is gone;
 `sent: true` is not, until status has been read. The server never repeats a command itself.
+
+## Repeating a command safely
+
+A client that doesn't get a response can't tell whether a control reached the device. Send
+`Idempotency-Key: <token>` with a command POST, and repeat the same request with the same key to
+find out: the server returns the recorded answer and sends nothing.
+
+- The key is a token the client picks, 1 through 128 characters from `A-Z a-z 0-9 . _ ~ : -`, such
+  as a UUID. Any other form is `400 invalidIdempotencyKey`. The header is optional; without it every
+  request is sent.
+- The same key with the same command (device, action and level; JSON key order and spacing don't
+  matter) returns the recorded status and body with `Idempotent-Replay: true`. A recorded failure
+  carries the repeated request's own `requestId`.
+- The same key with a different command or device is `422 idempotencyKeyReused`, and nothing is sent.
+- A repeat that arrives while the first is still running waits for its answer and gets it with
+  `Idempotent-Replay: true`. It doesn't send a second command.
+- What is recorded: a success, and a failure whose `sent` is `true` (`outcomeUnknown`, a canceled
+  control). Those are the answers a client can't recreate by asking again. A failure with
+  `sent: false` (`busy`, `modemUnavailable`, `notIdentified`, any refusal) is never recorded: nothing
+  changed, so repeating it costs nothing, and it may succeed once its cause is gone. After a `409 busy`
+  the client repeats the same key.
+- Memory is bounded: 256 answers, each kept 10 minutes from when it was recorded. The oldest leaves
+  first when the store is full. The record lives in memory only, so a restart forgets it; a client
+  that repeats a key after a restart sends the command again, after reading status.
+- Keys belong to the authenticated principal. The gateway has one password, so one principal; a
+  per-client scope changes the scope, not the rule.
+- The server never repeats a command on its own, and browser form posts don't use keys.
 
 ## Staying up while the Hub is away
 
