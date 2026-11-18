@@ -175,6 +175,32 @@ struct ServeTests {
     await server.stop()
   }
 
+  @Test func oneOutageThatChangesBetweenUnreachableCausesIsLoggedOnceWithTheFirstCause() async throws {
+    let link = HubLink()
+    let scripted = ScriptedHubOpener([.fail(HubStoppedAnswering(underlyingError: URLError(.timedOut))), .fail(ModemError.timedOut(.getModemInfo)), .connect(link)])
+    let server = try await start(try scratch(), openModem: opener(scripted))
+    _ = await server.code("hub_unreachable")
+    server.retries.release()
+    server.retries.release()
+    _ = await server.code("modem_connected")
+    let warnings = server.capture.records.filter { $0.level == .warning }.compactMap { $0.metadata["code"] }
+    #expect(warnings == ["hub_unreachable"])
+    await server.stop()
+  }
+
+  @Test func aMaterialChangeOfCauseDuringAnOutageIsLoggedAgain() async throws {
+    let link = HubLink()
+    let scripted = ScriptedHubOpener([.fail(HubStoppedAnswering(underlyingError: URLError(.timedOut))), .fail(HubError.unexpectedStatus(401)), .connect(link)])
+    let server = try await start(try scratch(), openModem: opener(scripted))
+    _ = await server.code("hub_unreachable")
+    server.retries.release()
+    server.retries.release()
+    _ = await server.code("modem_connected")
+    let problems = server.capture.records.filter { $0.level != .info }.compactMap { $0.metadata["code"] }
+    #expect(problems == ["hub_unreachable", "hub_credentials_rejected"])
+    await server.stop()
+  }
+
   @Test func anOutageThatLastsIsRepeatedAsAReminderNotAtEveryRetry() async throws {
     let server = try await start(try scratch(), openModem: opener(ScriptedHubOpener([.fail(HubStoppedAnswering(underlyingError: URLError(.timedOut)))])))
     _ = await server.code("hub_unreachable")

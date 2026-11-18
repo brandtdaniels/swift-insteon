@@ -241,10 +241,15 @@ private actor ConnectionHistory {
 }
 
 /// Logs each change in whether the modem is reachable, and repeats an outage that lasts.
+///
+/// One outage is one record. While the modem stays away, a change between causes that all mean
+/// "nothing answered" (the Hub, the modem or the connection) isn't a new record: the first cause
+/// stands, and the reminder repeats it. A change to a cause that asks for a different action,
+/// such as rejected credentials, is logged.
 private actor OutageLog {
   private let hub: HubLocation?
   private let logger: Logger
-  private var cause: ModemUnavailability?
+  private var logged: ModemUnavailability?
 
   init(hub: HubLocation?, logger: Logger) {
     self.hub = hub
@@ -254,10 +259,11 @@ private actor OutageLog {
   func handle(_ event: ServiceEvent) {
     switch event {
     case let .modemUnavailable(reason):
-      cause = reason
+      if let logged, logged.continuesOutage(of: reason) { return }
+      logged = reason
       record(reason, reminder: false)
     case .modemReconnected:
-      cause = nil
+      logged = nil
       logger.info("The Hub or modem is connected.", metadata: ["code": "modem_connected"])
     default:
       break
@@ -265,12 +271,26 @@ private actor OutageLog {
   }
 
   func remind() {
-    if let cause { record(cause, reminder: true) }
+    if let logged { record(logged, reminder: true) }
   }
 
   private func record(_ reason: ModemUnavailability, reminder: Bool) {
     guard let failure = ServerFailure.degraded(reason, hub: hub) else { return }
     failure.record(in: logger, level: reason == .credentialsRejected ? .error : .warning, reminder: reminder)
+  }
+}
+
+private extension ModemUnavailability {
+  /// Whether `other` is the same outage seen from a different side: nothing answered, and the
+  /// person has the same thing to check.
+  func continuesOutage(of other: ModemUnavailability) -> Bool {
+    func nothingAnswered(_ cause: ModemUnavailability) -> Bool {
+      switch cause {
+      case .hubUnreachable, .modemUnreachable, .connectionLost: true
+      case .connecting, .credentialsRejected, .hubErrorStatus: false
+      }
+    }
+    return self == other || (nothingAnswered(self) && nothingAnswered(other))
   }
 }
 
