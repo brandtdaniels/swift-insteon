@@ -1,0 +1,49 @@
+name: Repo checks equivalence
+
+# Transitional: compares each Swift check in Tools/RepoChecks with the Python script it
+# replaces, on a copy of the repository and on seeded mutants of it. Deleted with the Python.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-checks-equivalence-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  macos:
+    name: Equivalence (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Select Xcode
+        run: sudo xcode-select --switch "$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -n 1)"
+      - name: Build the tool and its tests
+        run: swift build --package-path Tools/RepoChecks --build-tests -Xswiftc -warnings-as-errors
+      - name: Test the tool
+        run: swift test --package-path Tools/RepoChecks --skip-build
+      - name: Compare the Swift checks with the Python scripts
+        run: Tools/RepoChecks/.build/debug/repo-check-dev equivalence --check workflows --rounds 10 --mutants 100
+
+  linux:
+    name: Equivalence (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # The image by digest, so a retagged image can't change what runs.
+    container: swift:6.3.3@sha256:1038d54c80063f5cdfabc4560990c30af64b5de8ebf28161deb22ca4ad5db866
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Install Python
+        run: command -v python3 > /dev/null || { apt-get update && apt-get install -y python3; }
+      - name: Build the tool and its tests
+        run: swift build --package-path Tools/RepoChecks --build-tests -Xswiftc -warnings-as-errors
+      - name: Test the tool
+        run: swift test --package-path Tools/RepoChecks --skip-build
+      - name: Compare the Swift checks with the Python scripts
+        run: Tools/RepoChecks/.build/debug/repo-check-dev equivalence --check workflows --rounds 10 --mutants 100
