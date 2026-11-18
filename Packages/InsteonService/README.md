@@ -9,7 +9,8 @@ dependencies. The [optional server](../InsteonServer) supplies those adapters.
 `InsteonService` owns queries, explicit device operations, monitoring, lifecycle and snapshot
 policy. Its single admission gate covers all callers; a concurrent operation is refused with
 `ServiceControlError.busy` rather than queued. Device lists use cached identities and values,
-without polling hardware. Unknown identities expose no switching controls until identified.
+without polling hardware, and never take the gate: a list answers while an operation is in
+flight, and a list never makes an operation refuse. Unknown identities expose no switching controls until identified.
 
 `DeviceQuerying`, `DeviceCommanding` and `DeviceEventSource` describe separate client roles;
 `InsteonServiceAPI` composes them for adapters that need all three. Commands and events carry

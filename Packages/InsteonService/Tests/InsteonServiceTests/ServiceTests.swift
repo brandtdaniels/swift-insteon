@@ -156,12 +156,56 @@ struct ServiceTests {
     try await withThrowingTaskGroup(of: CommandReceipt.self) { group in
       group.addTask { try await service.execute(command) }
       await gate.waitUntilPaused()
-      await #expect(throws: ServiceControlError.busy) { try await service.devices() }
+      await #expect(throws: ServiceControlError.busy) { try await service.execute(command) }
       await #expect(throws: ServiceControlError.busy) { try await service.checkpoint() }
       await gate.release()
       let receipt = try await group.next()
       #expect(receipt?.outcome == .acknowledged)
     }
+  }
+
+  @Test func aCachedReadAnswersImmediatelyWhileACommandIsInFlight() async throws {
+    let modem = InMemoryModem()
+    let gate = OperationGate()
+    await modem.setBeforeOperation { _ in await gate.pause() }
+    let service = InsteonService(network: network(modem))
+    try await withThrowingTaskGroup(of: CommandReceipt.self) { group in
+      group.addTask { try await service.execute(ServiceCommand(address: address, action: .on)) }
+      await gate.waitUntilPaused()
+      let devices = await Result { try await service.devices() }
+      #expect((try? devices.get().map(\.address)) == [address])
+      #expect(await service.health().readiness == .ready)
+      await gate.release()
+      let receipt = try await group.next()
+      #expect(receipt?.outcome == .acknowledged)
+    }
+  }
+
+  @Test func readsRunningAtTheSameTimeNeverRefuseACommand() async throws {
+    let service = InsteonService(network: network(InMemoryModem()))
+    try await withThrowingTaskGroup(of: Int.self) { group in
+      for _ in 0..<20 { group.addTask { try await service.devices().count } }
+      group.addTask { try await service.execute(ServiceCommand(address: address, action: .off)).outcome == .acknowledged ? 1 : 0 }
+      var total = 0
+      for try await value in group { total += value }
+      #expect(total == 20 + 1)
+    }
+  }
+
+  @Test func twoConcurrentCommandsRunOnceAndTheOtherIsRefused() async throws {
+    let modem = InMemoryModem()
+    let gate = OperationGate()
+    await modem.setBeforeOperation { _ in await gate.pause() }
+    let service = InsteonService(network: network(modem))
+    try await withThrowingTaskGroup(of: CommandReceipt.self) { group in
+      group.addTask { try await service.execute(ServiceCommand(address: address, action: .on)) }
+      await gate.waitUntilPaused()
+      await #expect(throws: ServiceControlError.busy) { try await service.execute(ServiceCommand(address: address, action: .off)) }
+      await gate.release()
+      let receipt = try await group.next()
+      #expect(receipt?.outcome == .acknowledged)
+    }
+    #expect(await modem.levels[address] == 255)
   }
 
   @Test func eventsLearnIdentityWithoutInventingStatus() async throws {

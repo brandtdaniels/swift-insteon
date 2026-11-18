@@ -4,7 +4,8 @@ import InsteonCore
 /// One persistent Insteon network's operations, monitoring and snapshot policy.
 ///
 /// The service has no authentication, HTTP, HTML or wire-format responsibilities. Its one
-/// admission gate applies to all callers, regardless of transport.
+/// admission gate applies to every operation that talks to hardware or saves the snapshot, for
+/// all callers, regardless of transport. Reads of the cache never take it.
 ///
 /// A service made with an opener owns the modem connection. While it runs it opens the modem,
 /// reads its ALL-Link database, and monitors it. When the Hub or modem goes away, it keeps
@@ -89,10 +90,10 @@ public actor InsteonService: InsteonServiceAPI {
 
   /// Lists cached devices, without asking hardware, whether or not the modem is connected.
   /// Unidentified devices have no switching controls until identified.
+  ///
+  /// A read never takes the admission gate: it answers from the cache while an operation is in
+  /// flight, and it never makes an operation refuse.
   public func devices() async throws -> [ServiceDevice] {
-    guard !busy else { throw ServiceControlError.busy }
-    busy = true
-    defer { busy = false }
     let network = network
     let snapshot = await network.snapshot()
     var result: [ServiceDevice] = []
