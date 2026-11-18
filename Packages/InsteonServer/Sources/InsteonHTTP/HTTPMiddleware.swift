@@ -1,3 +1,4 @@
+import Foundation
 import Hummingbird
 import HTTPTypes
 import InsteonCore
@@ -49,6 +50,11 @@ struct ErrorMappingMiddleware<Context: RequestContext>: RouterMiddleware {
     }
     catch {
       let failure = HTTPFailure(error)
+      if let unavailable = failure.modemUnavailability {
+        // A machine-readable refusal: nothing was sent, and the cause says why.
+        let body = (try? JSONEncoder().encode(ModemUnavailableDTO(unavailable))) ?? Data()
+        return Response(status: failure.status, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(bytes: body)))
+      }
       return Response(status: failure.status, headers: [.contentType: "text/plain; charset=utf-8"], body: .init(byteBuffer: ByteBuffer(string: failure.message)))
     }
   }
@@ -61,9 +67,13 @@ struct HTTPFailure {
   let message: String
   let code: String
   let cause: String?
+  /// Set when the modem is away, so the response can say why in a body clients can branch on.
+  let modemUnavailability: ModemUnavailability?
 
   init(_ error: any Error) {
     switch error {
+    case let ServiceControlError.modemUnavailable(unavailable):
+      self.init(.serviceUnavailable, unavailable.refusal, "modem_unavailable", modemUnavailability: unavailable)
     case ServiceControlError.busy: self.init(.conflict, "The service is busy. Try again explicitly; nothing was queued.", "busy")
     case ServiceControlError.unknownDevice: self.init(.notFound, "Unknown device.", "unknown_device")
     case ServiceControlError.invalidLevel: self.init(.badRequest, "The device or action does not accept that percentage.", "invalid_level")
@@ -86,7 +96,8 @@ struct HTTPFailure {
     }
   }
 
-  private init(_ status: HTTPResponse.Status, _ message: String, _ code: String, cause: String? = nil) {
+  private init(_ status: HTTPResponse.Status, _ message: String, _ code: String, cause: String? = nil, modemUnavailability: ModemUnavailability? = nil) {
+    self.modemUnavailability = modemUnavailability
     self.status = status
     self.message = message
     self.code = code

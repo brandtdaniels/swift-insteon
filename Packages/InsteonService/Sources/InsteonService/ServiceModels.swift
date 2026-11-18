@@ -114,12 +114,18 @@ public protocol DeviceEventSource: Sendable {
   func events() async -> Events
 }
 
-/// The cohesive API consumed by an adapter that needs queries, commands and events.
-/// A single instance supplies all three roles, preventing mismatched device networks.
-public protocol InsteonServiceAPI: DeviceQuerying, DeviceCommanding, DeviceEventSource {}
+/// The health role of an Insteon service.
+public protocol HealthReporting: Sendable {
+  /// Reports the service's state without asking hardware anything or taking the admission gate.
+  func health() async -> ServiceHealth
+}
+
+/// The cohesive API consumed by an adapter that needs queries, commands, events and health.
+/// A single instance supplies all four roles, preventing mismatched device networks.
+public protocol InsteonServiceAPI: DeviceQuerying, DeviceCommanding, DeviceEventSource, HealthReporting {}
 
 /// A refused operation, independent of HTTP status codes or display wording.
-public enum ServiceControlError: Error {
+public enum ServiceControlError: Error, Equatable {
   /// The device isn't known to this network.
   case unknownDevice
   /// A percentage is invalid or unsupported by the action or device.
@@ -128,13 +134,17 @@ public enum ServiceControlError: Error {
   case unsupportedControl
   /// Another operation owns this service's admission gate. Nothing was queued.
   case busy
+  /// The modem isn't connected, so nothing was sent. The service keeps reconnecting, and a
+  /// later command can succeed.
+  case modemUnavailable(ModemUnavailability)
 }
 
 /// A service runtime failure, independent of its host.
 public enum ServiceLifecycleError: Error {
   /// A runtime body is already active on this service.
   case alreadyRunning
-  /// The modem's event stream ended while the runtime was active.
+  /// The modem's event stream ended while the runtime was active and the service doesn't
+  /// reconnect.
   case connectionEnded
 }
 
@@ -153,6 +163,12 @@ public enum ServiceEvent: Equatable, Sendable {
   case heartbeat(InsteonAddress, group: Int?)
   /// A device reported that its status changed; consumers can explicitly request status.
   case statusChanged(InsteonAddress)
+  /// The modem isn't reachable. Events and device changes may be missed until the next
+  /// ``modemReconnected``, and commands are refused.
+  case modemUnavailable(ModemUnavailability)
+  /// The modem is connected and its device information was read again. Anything heard while
+  /// it was away is lost, so consumers refresh what they display.
+  case modemReconnected
 
   init?(_ event: DeviceMonitorEvent) {
     switch event {

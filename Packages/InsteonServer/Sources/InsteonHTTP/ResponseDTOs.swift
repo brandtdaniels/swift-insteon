@@ -6,7 +6,83 @@ import InsteonService
 struct DeviceListDTO: Encodable {
   let version = 1
   let devices: [DeviceDTO]
-  init(_ devices: [ServiceDevice]) { self.devices = devices.map(DeviceDTO.init) }
+  /// Whether the values come from saved information because the modem is away.
+  let stale: Bool
+  let cause: String?
+  init(_ devices: [ServiceDevice], modem: ModemConnectionState = .connected) {
+    self.devices = devices.map(DeviceDTO.init)
+    stale = modem.cause != nil
+    cause = modem.cause?.wireName
+  }
+
+  func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(version, forKey: .version)
+    try container.encode(devices, forKey: .devices)
+    try container.encode(stale, forKey: .stale)
+    try container.encode(cause, forKey: .cause)
+  }
+  private enum CodingKeys: String, CodingKey { case version, devices, stale, cause }
+}
+
+/// A refusal because nothing was sent: the modem is away.
+struct ModemUnavailableDTO: Encodable {
+  let version = 1
+  let code = "modemUnavailable"
+  let sent = false
+  let cause: String
+  let message: String
+  init(_ cause: ModemUnavailability) { self.cause = cause.wireName; message = cause.refusal }
+}
+
+/// Readiness without device addresses, names or the Hub's location.
+struct HealthDTO: Encodable {
+  let version = 1
+  let status: String
+  let modem: Modem
+  let lastExchangeAgeSeconds: Int?
+  let snapshotAgeSeconds: Int?
+  let persistence: String
+
+  struct Modem: Encodable {
+    let connected: Bool
+    let cause: String?
+    func encode(to encoder: any Encoder) throws {
+      var container = encoder.container(keyedBy: CodingKeys.self)
+      try container.encode(connected, forKey: .connected)
+      try container.encode(cause, forKey: .cause)
+    }
+    private enum CodingKeys: String, CodingKey { case connected, cause }
+  }
+
+  init(_ health: ServiceHealth) {
+    switch health.readiness {
+    case .starting: status = "starting"
+    case .ready: status = "ready"
+    case .degraded: status = "degraded"
+    }
+    modem = Modem(connected: health.modem == .connected, cause: health.modem.cause?.wireName)
+    func age(_ date: Date?) -> Int? { date.map { max(0, Int(health.checkedAt.timeIntervalSince($0))) } }
+    lastExchangeAgeSeconds = age(health.lastHardwareExchange)
+    snapshotAgeSeconds = age(health.deviceInformationUpdated)
+    switch health.persistence {
+    case .notConfigured: persistence = "notConfigured"
+    case .notAttempted: persistence = "notAttempted"
+    case .saved: persistence = "saved"
+    case .failed: persistence = "failed"
+    }
+  }
+
+  func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(version, forKey: .version)
+    try container.encode(status, forKey: .status)
+    try container.encode(modem, forKey: .modem)
+    try container.encode(lastExchangeAgeSeconds, forKey: .lastExchangeAgeSeconds)
+    try container.encode(snapshotAgeSeconds, forKey: .snapshotAgeSeconds)
+    try container.encode(persistence, forKey: .persistence)
+  }
+  private enum CodingKeys: String, CodingKey { case version, status, modem, lastExchangeAgeSeconds, snapshotAgeSeconds, persistence }
 }
 
 struct DeviceDTO: Encodable {
@@ -63,12 +139,18 @@ struct ReceiptDTO: Encodable {
 struct EventDTO: Encodable {
   let version = 1
   let kind: String
-  let address: String
+  let address: String?
   let group: Int?
   let name: String?
   let productName: String?
   let completion: CommandCompletionDTO?
+  let cause: String?
+  let message: String?
   init(_ event: ServiceEvent) {
+    switch event {
+    case let .modemUnavailable(reason): cause = reason.wireName; message = reason.notice
+    default: cause = nil; message = nil
+    }
     if case let .commandCompleted(command, receipt) = event {
       completion = CommandCompletionDTO(command: command, receipt: receipt)
     } else {
@@ -87,6 +169,10 @@ struct EventDTO: Encodable {
       kind = "heartbeat"; self.address = address.description; self.group = group; name = nil; productName = nil
     case let .statusChanged(address):
       kind = "statusChanged"; self.address = address.description; group = nil; name = nil; productName = nil
+    case .modemUnavailable:
+      kind = "modemUnavailable"; address = nil; group = nil; name = nil; productName = nil
+    case .modemReconnected:
+      kind = "reconnected"; address = nil; group = nil; name = nil; productName = nil
     }
   }
 }

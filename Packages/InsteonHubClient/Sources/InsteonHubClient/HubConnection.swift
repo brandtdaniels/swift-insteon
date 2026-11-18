@@ -27,7 +27,8 @@ import InsteonProtocol
 ///
 /// A poll that fails, for example because a request timed out, is tried again at the next
 /// interval. The stream fails after ``HubConnection/defaultFailureLimit`` failed polls in a
-/// row by default, or at once if the Hub answers with an error status. Each request waits
+/// row by default, counting a 5xx status as a failed poll, or at once if the Hub answers with
+/// any other error status. Each request waits
 /// ``Hub/requestTimeout``, so with the defaults a Hub that stops answering fails the stream in
 /// about 16 seconds: three requests of 5 seconds and the intervals between them.
 ///
@@ -342,13 +343,15 @@ public actor HubConnection: ModemConnection {
 
   }
 
-  /// Whether a failed poll is worth trying again: anything but an answer from the Hub that it
-  /// won't serve the request, a request the HTTP client refused, such as one a proxy would
-  /// carry, or cancellation.
+  /// Whether a failed poll is worth trying again: anything but a rejection or other 4xx
+  /// answer from the Hub, a request the HTTP client refused, such as one a proxy would carry,
+  /// or cancellation. A 5xx status counts as a busy Hub, like a timeout.
   private static func isTransient(_ error: any Error) -> Bool {
 
     switch error {
-    case HubError.unexpectedStatus, HubError.invalidEndpoint, is HTTPClientError, is CancellationError:
+    case let HubError.unexpectedStatus(status):
+      (500...599).contains(status)
+    case HubError.invalidEndpoint, is HTTPClientError, is CancellationError:
       false
     default:
       true

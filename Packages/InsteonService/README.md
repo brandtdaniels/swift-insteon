@@ -23,11 +23,29 @@ into an unknown failure.
 
 ## Lifecycle
 
-The host opens one modem session and creates a restored `DeviceNetwork`. Call `run` with the
-host's asynchronous body: the service prepares the modem, subscribes to monitoring, checkpoints,
-and runs the body until it finishes, fails or the connection ends. Shutdown cancels the other
-child task and checkpoints again. The host closes the session. No HTTP server is needed to use
-this runtime. One controlling service should own each modem.
+A service made with a `NetworkOpening` owns the modem connection. The host creates a
+`DeviceNetwork.offline` network over the saved snapshot and calls `run` with its asynchronous
+body. The body starts at once. The service opens the modem, reads its ALL-Link database,
+monitors it and, when the modem and database read succeed, serves the new network and saves a
+snapshot. The cached device list is served throughout.
+
+When the Hub or modem goes away, `run` keeps going. The service refuses commands with
+`ServiceControlError.modemUnavailable(cause)` before anything is sent, publishes
+`ServiceEvent.modemUnavailable(cause)`, and opens a new connection after a delay that doubles
+from 1 second to 60 seconds with up to a quarter taken off at random (`ReconnectPolicy`, from an
+injected clock). Rejected credentials (HTTP 401 or 403) wait 15 minutes between attempts, since
+the same credentials fail the same way; a Hub that answers with a 5xx status is retried like a
+timeout. A configuration error such as a refused Hub address ends the run. When a connection
+succeeds, subscribers get `ServiceEvent.modemReconnected` and refresh what they show. A command
+that failed because the connection dropped is never repeated by a reconnection.
+
+`health()` reports readiness (`starting` before the first connection, `ready`, `degraded`), the
+modem's state and cause, the time of the last hardware exchange and of the last confirmation of
+the cached device information. It sends nothing to hardware and doesn't take the admission gate.
+
+A service made with `init(network:persistence:)` leaves the connection to its host, and `run`
+ends when that connection does. No HTTP server is needed to use this runtime. One controlling
+service should own each modem.
 
 Snapshots include cached state and identities, not event history. Passive changes remain in
 memory until a checkpoint. `lastAnsweredAt` records a device response, not a passive event.
@@ -49,8 +67,9 @@ Completions are published after the cache and persistence result are established
 can immediately query the updated cache once the operation releases admission. The sequence
 has no replay, buffers at most 64 command completions per subscriber, and throws
 `ServiceEventError.slowConsumer` if that subscriber falls behind. Reconnect and refresh after
-a gap. The sequence also ends when the modem's event stream ends. Each subscription has one
-reader, and cancellation releases both underlying readers. Abandoned subscriptions aren't
+a gap. The sequence survives the modem going away and returning, carrying `modemUnavailable`
+and `modemReconnected`; a subscriber that arrives while the modem is away is told first. Each
+subscription has one reader, and cancellation releases it. Abandoned subscriptions aren't
 retained by the service.
 Swift clients consume this throwing sequence with `for try await` and handle a gap by
 subscribing again and refreshing state.

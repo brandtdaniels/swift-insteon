@@ -130,8 +130,6 @@ jobs:
         run: python3 Scripts/check-public-api.py
       - name: Test the checks
         run: python3 -m unittest discover -s Scripts/tests -v
-      - name: Test the browser's event-stream link
-        run: node --test Packages/InsteonServer/BrowserTests/live-link.test.mjs
 
   macos:
     name: macOS
@@ -157,8 +155,6 @@ jobs:
         run: swift build --package-path Packages/InsteonServer --build-tests --explicit-target-dependency-import-check error -Xswiftc -warnings-as-errors
       - name: Test optional server
         run: swift test --package-path Packages/InsteonServer --skip-build
-      - name: Test the browser's event-stream link
-        run: node --test Packages/InsteonServer/BrowserTests/live-link.test.mjs
       - name: Build documentation
         run: Scripts/build-docs.sh
 

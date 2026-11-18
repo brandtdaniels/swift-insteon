@@ -4,7 +4,7 @@ import InsteonCore
 import InsteonService
 
 /// Browser presentation needs only queries and commands, not an event source or modem type.
-actor DeviceWebsite<Service: DeviceQuerying & DeviceCommanding> {
+actor DeviceWebsite<Service: DeviceQuerying & DeviceCommanding & HealthReporting> {
   let service: Service
   private let forms = BrowserFormProtection()
   private var cachedDevices: [ServiceDevice] = []
@@ -31,7 +31,8 @@ actor DeviceWebsite<Service: DeviceQuerying & DeviceCommanding> {
       // a command redirect must not replace the controls with a second busy error page.
       failure = failure ?? .busy
     }
-    let page = HTMLRenderer.page(devices: cachedDevices, formKey: forms.key, notice: notice, error: failure?.message, failedAddress: failedAddress)
+    let hubNotice = await service.health().modem.cause?.notice
+    let page = HTMLRenderer.page(devices: cachedDevices, formKey: forms.key, notice: notice, error: failure?.message, failedAddress: failedAddress, hubNotice: hubNotice)
     return Response(status: .ok, headers: [.contentType: "text/html; charset=utf-8"], body: .init(byteBuffer: ByteBuffer(string: page)))
   }
 
@@ -91,6 +92,7 @@ actor DeviceWebsite<Service: DeviceQuerying & DeviceCommanding> {
 /// Only fixed presentation codes cross the redirect; provider diagnostics stay private.
 private enum BrowserCommandFailure: String {
   case busy, unknownDevice, invalidLevel, unsupportedControl, statusFailed, identifyFailed, controlFailed, expiredForm, invalidForm
+  case modemConnecting, hubUnreachable, credentialsRejected, hubErrorStatus, modemUnreachable, connectionLost
 
   init(_ error: any Error, action: ServiceCommand.Action) {
     switch error {
@@ -98,6 +100,15 @@ private enum BrowserCommandFailure: String {
     case ServiceControlError.unknownDevice: self = .unknownDevice
     case ServiceControlError.invalidLevel: self = .invalidLevel
     case ServiceControlError.unsupportedControl: self = .unsupportedControl
+    case let ServiceControlError.modemUnavailable(cause):
+      switch cause {
+      case .connecting: self = .modemConnecting
+      case .hubUnreachable: self = .hubUnreachable
+      case .credentialsRejected: self = .credentialsRejected
+      case .hubErrorStatus: self = .hubErrorStatus
+      case .modemUnreachable: self = .modemUnreachable
+      case .connectionLost: self = .connectionLost
+      }
     default:
       switch action {
       case .status: self = .statusFailed
@@ -116,6 +127,12 @@ private enum BrowserCommandFailure: String {
     case .statusFailed: "Could not read status. The device may be unreachable or may not support this request. Try Identify or check its connection."
     case .identifyFailed: "Could not identify this device. Check its connection before trying again."
     case .controlFailed: "The control failed and its hardware outcome may be unknown. Read status before deciding whether to repeat it."
+    case .modemConnecting: ModemUnavailability.connecting.refusal
+    case .hubUnreachable: ModemUnavailability.hubUnreachable.refusal
+    case .credentialsRejected: ModemUnavailability.credentialsRejected.refusal
+    case .hubErrorStatus: ModemUnavailability.hubErrorStatus(0).refusal
+    case .modemUnreachable: ModemUnavailability.modemUnreachable.refusal
+    case .connectionLost: ModemUnavailability.connectionLost.refusal
     case .expiredForm: "This form expired. No command was sent. Use the controls on this refreshed page to try again."
     case .invalidForm: "The form could not be read. No command was sent. Check the values and use the controls on this refreshed page to try again."
     }
@@ -128,6 +145,7 @@ private enum BrowserCommandFailure: String {
     case .invalidLevel, .invalidForm: .badRequest
     case .unsupportedControl: .unprocessableContent
     case .expiredForm: .forbidden
+    case .modemConnecting, .hubUnreachable, .credentialsRejected, .hubErrorStatus, .modemUnreachable, .connectionLost: .serviceUnavailable
     case .statusFailed, .identifyFailed, .controlFailed: .badGateway
     }
   }

@@ -3,6 +3,7 @@ import InsteonCLISupport
 import InsteonCore
 import InsteonHubClient
 import InsteonModem
+import InsteonService
 import Logging
 
 /// Why the server stopped, in words for the person who runs it.
@@ -34,6 +35,7 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case serialPortUnavailable = "serial_port_unavailable"
     case stateFileUnusable = "state_file_unusable"
     case modemConnectionEnded = "modem_connection_ended"
+    case modemUnreachable = "modem_unreachable"
     case unexpected = "unexpected_error"
   }
 
@@ -83,16 +85,39 @@ public struct ServerFailure: Error, Equatable, Sendable {
     logger.critical("\(message)", metadata: ["code": "\(code.rawValue)", "exit_status": "\(exitStatus)"])
   }
 
-  /// Whether the Hub rejected its credentials with HTTP 401 or 403.
-  static func isRejectedHubCredentials(_ error: any Error) -> Bool {
-    if case let .unexpectedStatus(status)? = error as? HubError { return status == 401 || status == 403 }
-    return false
+  /// Describes why the modem is away while the server keeps running and retries, or `nil` while it
+  /// is still making its first connection. The wording reuses the startup failures' and ends with
+  /// what the server does next.
+  ///
+  /// - Parameters:
+  ///   - cause: Why the service can't reach its modem.
+  ///   - hub: The Hub the server reaches, or `nil` for a serial modem.
+  static func degraded(_ cause: ModemUnavailability, hub: HubLocation?) -> ServerFailure? {
+    let retries = " The server keeps running and retries; commands get 503 until it answers."
+    switch cause {
+    case .connecting:
+      return nil
+    case .hubUnreachable:
+      guard let hub else { return degraded(.modemUnreachable, hub: nil) }
+      let base = ServerFailure(ServerRunError.hubUnreachable(host: hub.host, port: hub.port))
+      return ServerFailure(.hubUnreachable, base.message + retries, unavailableStatus)
+    case .credentialsRejected:
+      let base = ServerFailure(HubError.unexpectedStatus(401)).message.replacingOccurrences(of: "(HTTP 401)", with: "(HTTP 401 or 403)")
+      return ServerFailure(.hubCredentialsRejected, base + " The server keeps running and retries every 15 minutes; restart it after changing the settings.", configurationStatus)
+    case let .hubErrorStatus(status):
+      let base = ServerFailure(HubError.unexpectedStatus(status)).message.replacingOccurrences(of: " Check the Hub, then start the server again.", with: "")
+      return ServerFailure(.hubAnsweredWithError, base + retries, unavailableStatus)
+    case .modemUnreachable:
+      return ServerFailure(.modemUnreachable, "The modem isn't answering. Check that it's connected and powered." + retries, unavailableStatus)
+    case .connectionLost:
+      return ServerFailure(.modemConnectionEnded, "The connection to the Hub or modem ended." + retries, unavailableStatus)
+    }
   }
 
-  /// A credential-free description of why a running connection stopped.
-  static func cause(of error: any Error) -> String {
-    if HubStoppedAnswering.isUnanswered(error) { return InsteonErrorDescription.hubStoppedAnsweringInline }
-    return InsteonErrorDescription.message(for: error) ?? "unclassified \(type(of: error))"
+  /// Writes the failure as one record at `level`, with its code as metadata, for a failure the
+  /// server survives.
+  func record(in logger: Logger, level: Logger.Level, reminder: Bool = false) {
+    logger.log(level: level, "\(message)", metadata: ["code": "\(code.rawValue)", "retrying": "true", "reminder": "\(reminder)"])
   }
 
   private init(_ code: Code, _ message: String, _ exitStatus: Int32) {
@@ -130,12 +155,6 @@ public struct ServerFailure: Error, Equatable, Sendable {
         ServerFailure(.stateFileUnusable, "The state file \(path) couldn't be read, so it was left as it is. Check that this account may read it.", configurationStatus)
       default:
         ServerFailure(.stateFileUnusable, "The state file \(path) isn't in a format this server reads, so it was left as it is. Move it aside and the server starts a fresh one.", configurationStatus)
-      }
-    case let .disconnected(cause):
-      if let cause {
-        ServerFailure(.modemConnectionEnded, "The modem connection ended: \(cause)\(cause.hasSuffix(".") ? "" : ".") Restart the server after checking the Hub or modem.", unavailableStatus)
-      } else {
-        ServerFailure(.modemConnectionEnded, "The modem connection ended. Restart the server after checking the Hub or modem.", unavailableStatus)
       }
     }
   }
