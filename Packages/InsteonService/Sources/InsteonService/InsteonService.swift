@@ -21,6 +21,7 @@ public actor InsteonService: InsteonServiceAPI {
   private let clock: any Clock<Duration>
   private let now: @Sendable () -> Date
   private let jitter: @Sendable () -> Double
+  private let throughHub: Bool
   private let persistence: (any SnapshotPersisting)?
   private var busy = false
   private var running = false
@@ -53,6 +54,8 @@ public actor InsteonService: InsteonServiceAPI {
   ///   - clock: Times the waits between attempts.
   ///   - now: The current time.
   ///   - jitter: Random numbers from 0 up to, not including, 1 for the delay's jitter.
+  ///   - throughHub: Whether the modem is reached through a Hub. A modem that doesn't answer is then
+  ///     reported as ``ModemUnavailability/hubUnreachable``, because the Hub is what to check.
   public init(
     network: DeviceNetwork,
     opener: any NetworkOpening,
@@ -61,9 +64,10 @@ public actor InsteonService: InsteonServiceAPI {
     reconnect: ReconnectPolicy = .standard,
     clock: any Clock<Duration> = ContinuousClock(),
     now: @escaping @Sendable () -> Date = { Date() },
-    jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) }
+    jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) },
+    throughHub: Bool = false
   ) {
-    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false)
+    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false, throughHub: throughHub)
   }
 
   private init(
@@ -75,7 +79,8 @@ public actor InsteonService: InsteonServiceAPI {
     clock: any Clock<Duration>,
     now: @escaping @Sendable () -> Date,
     jitter: @escaping @Sendable () -> Double,
-    isConnected: Bool
+    isConnected: Bool,
+    throughHub: Bool = false
   ) {
     self.network = network
     self.opener = opener
@@ -83,6 +88,7 @@ public actor InsteonService: InsteonServiceAPI {
     self.clock = clock
     self.now = now
     self.jitter = jitter
+    self.throughHub = throughHub
     self.persistence = persistence
     self.persistenceOutcome = persistence == nil ? .notConfigured : .notAttempted
     self.connection = isConnected ? .connected : .unavailable(.connecting)
@@ -235,7 +241,7 @@ public actor InsteonService: InsteonServiceAPI {
       let cause: ModemUnavailability
       switch ConnectionFailure(failure) {
       case .fatal: throw (failure as? ConnectionRefusal)?.underlying ?? failure
-      case let .retry(reason): cause = reason
+      case let .retry(reason): cause = throughHub && reason == .modemUnreachable ? .hubUnreachable : reason
       }
       noteUnavailable(cause)
       failures = attemptConnected ? 1 : failures + 1

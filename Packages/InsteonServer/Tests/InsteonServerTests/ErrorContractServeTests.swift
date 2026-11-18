@@ -57,6 +57,18 @@ struct ErrorContractServeTests: ServingTests {
     await server.stop()
   }
 
+  @Test(arguments: [(["--hub", "192.168.1.20"], "hubUnreachable", "The Hub is not answering"), (["--serial", "/dev/example-modem"], "modemUnreachable", "The modem is not answering")])
+  func aModemThatDoesNotAnswerIsNamedForItsTarget(_ target: [String], _ cause: String, _ wording: String) async throws {
+    let server = try await start(try scratch(), extra: target, openModem: opener(ScriptedHubOpener([.fail(ModemError.timedOut(.getModemInfo))])))
+    _ = await server.code(cause == "hubUnreachable" ? "hub_unreachable" : "modem_unreachable")
+    let refused = try await command(server, "on")
+    expect(refused, 503, "modemUnavailable", sent: false, cause: cause)
+    #expect((refused.json["message"] as? String)?.hasPrefix(wording) == true)
+    let health = try await server.request("/api/v1/health", password: gatewayPassword)
+    #expect((health.json["modem"] as? [String: Any])?["cause"] as? String == cause)
+    await server.stop()
+  }
+
   @Test func aMalformedAddressIsABadRequest() async throws {
     let (server, _) = try await connected()
     expect(try await command(server, "on", to: "/api/v1/devices/not-an-address/commands"), 400, "invalidAddress", sent: false)

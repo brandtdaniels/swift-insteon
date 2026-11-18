@@ -36,7 +36,7 @@ struct AvailabilityTests {
   }
 
   @Test(arguments: [
-    (ModemUnavailability.hubUnreachable, "hubUnreachable", "unreachable"),
+    (ModemUnavailability.hubUnreachable, "hubUnreachable", "not answering"),
     (.credentialsRejected, "credentialsRejected", "INSTEON_HUB_PASSWORD"),
     (.hubErrorStatus(503), "hubErrorStatus", "error"),
     (.modemUnreachable, "modemUnreachable", "modem"),
@@ -73,7 +73,7 @@ struct AvailabilityTests {
       let response = try await client.execute(uri: "/devices/1A.2B.3C", method: .post, headers: headers, body: ByteBuffer(string: "formKey=\(key)&action=on"))
       #expect(response.status == .serviceUnavailable)
       let html = String(buffer: response.body)
-      #expect(html.contains("The Hub is unreachable"))
+      #expect(html.contains("The Hub is not answering"))
       #expect(html.contains("nothing was sent"))
     }
   }

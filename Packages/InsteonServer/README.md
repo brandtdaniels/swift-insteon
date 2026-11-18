@@ -249,7 +249,7 @@ same status for the same failure.
 | `unsupportedControl` | 422 | false | The device has no such control. |
 | `deviceRejected` | 422 | false | The device answered with a NAK. |
 | `modemRejected` | 503 | false | The modem refused the command (a NAK). |
-| `modemUnavailable` | 503 | false | The Hub or modem is away, or the Hub rejected its credentials. `cause` says why. |
+| `modemUnavailable` | 503 | false | The Hub or modem is away, or the Hub rejected its credentials. `cause` says why; a Hub target that doesn't answer is `hubUnreachable`, a serial modem that doesn't is `modemUnreachable`. |
 | `canceled` | 503 | true for a control, false for a read | The request was canceled while it ran. |
 | `deviceNotAnswering` | 504 | false | A read got no answer, or failed in the modem. |
 | `outcomeUnknown` | 502 | true | A control may have reached the device and no answer proves what happened. Read status before repeating it. |
