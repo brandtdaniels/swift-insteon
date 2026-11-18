@@ -154,7 +154,7 @@ JSON commands need `Content-Type: application/json` and `X-Insteon-Request: 1`. 
 `action` is `identify`, `status`, `on` or `off`. `levelPercent` is optional, accepted only
 for `on`, from 0 through 100, and only when the catalog says the device dims. Unknown fields,
 invalid addresses and malformed values are refused. Request bodies are limited to 8 KiB.
-JSON API errors use a non-success status and a plain-text explanation without hardware diagnostics.
+Every failure of an API route is the JSON body described under Errors, without hardware diagnostics.
 Ordinary browser form failures redirect to the device page with an inline message on the affected
 device's card. Refreshing that page doesn't repeat the command. While the service is busy,
 the website retains its last displayed device list so the message and controls remain visible.
@@ -208,6 +208,55 @@ Control-C or SIGTERM stops the HTTP service and closes the hardware session. A l
 connection doesn't stop the server; it reconnects as described under Staying up. A corrupt or
 unsupported state file is refused rather than overwritten.
 
+## Errors
+
+Every non-2xx response from a route under `/api/` is JSON with the same shape:
+
+```json
+{"version":1,"code":"outcomeUnknown","message":"...","sent":true,"requestId":"..."}
+```
+
+- `code` is a stable string to branch on. It never changes meaning inside `/api/v1`.
+- `message` is for a person. It carries no device address, host or credential, and its wording
+  can change.
+- `sent` is `true` only when a command that changes a device may have reached it, so repeating
+  the command could repeat the change. A read (status, identify), a refusal before anything was
+  sent, and a device's own rejection report `false`: nothing changed, and repeating is safe.
+  Only `outcomeUnknown` and a control that was `canceled` report `true`.
+- `requestId` is the `request_id` of the log record for the same request.
+- `cause` is present only for `modemUnavailable`.
+
+The request log's `code` is the same string, so a client's report and the log line match. The
+browser's own routes (`/`, `/devices/{address}`) keep their HTML and plain-text responses with the
+same status for the same failure.
+
+| Code | Status | `sent` | When |
+| --- | --- | --- | --- |
+| `authenticationRequired` | 401 | false | No Authorization header. `WWW-Authenticate` is set. |
+| `authenticationFailed` | 401 | false | The password is wrong. |
+| `invalidAddress` | 400 | false | The address in the path isn't an Insteon address. |
+| `invalidCommand` | 400 | false | The body isn't valid JSON for a command: unknown field, unknown action, wrong type. |
+| `invalidLevel` | 400 | false | The percentage is outside 0 through 100, or the device or action doesn't take one. |
+| `unknownDevice` | 404 | false | The service doesn't know the device. |
+| `routeNotFound` | 404 | false | No such route. |
+| `apiMarkerMissing` | 403 | false | `X-Insteon-Request: 1` is missing. |
+| `bodyTooLarge` | 413 | false | The body is over 8 KiB. |
+| `unsupportedMediaType` | 415 | false | The content type isn't `application/json`. |
+| `requestRejected` | as the transport chose | false | Another malformed request. |
+| `busy` | 409 | false | Another command is running. Nothing was queued. |
+| `notIdentified` | 409 | false | The device never reported what it is and doesn't answer, so no control was sent. |
+| `notLinked` | 409 | false | The device rejected the modem because it isn't linked to it. |
+| `unsupportedControl` | 422 | false | The device has no such control. |
+| `deviceRejected` | 422 | false | The device answered with a NAK. |
+| `modemRejected` | 503 | false | The modem refused the command (a NAK). |
+| `modemUnavailable` | 503 | false | The Hub or modem is away, or the Hub rejected its credentials. `cause` says why; a Hub target that doesn't answer is `hubUnreachable`, a serial modem that doesn't is `modemUnreachable`. |
+| `canceled` | 503 | true for a control, false for a read | The request was canceled while it ran. |
+| `deviceNotAnswering` | 504 | false | A read got no answer, or failed in the modem. |
+| `outcomeUnknown` | 502 | true | A control may have reached the device and no answer proves what happened. Read status before repeating it. |
+
+A client retries on its own judgment: `sent: false` is safe to repeat once the cause is gone;
+`sent: true` is not, until status has been read. The server never repeats a command itself.
+
 ## Staying up while the Hub is away
 
 The HTTP listener never depends on the Hub. If the Hub is unplugged, restarting, unreachable
@@ -225,7 +274,7 @@ A refused command is never queued or repeated, and a reconnection never replays 
 body is `{"version":1,"code":"modemUnavailable","sent":false,"cause":"hubUnreachable","message":"..."}`.
 Causes are `connecting`, `hubUnreachable`, `credentialsRejected`, `hubErrorStatus`,
 `modemUnreachable` and `connectionLost`. A command that was already sent when the connection
-dropped fails with 502 and an unknown outcome; read status before repeating it.
+dropped fails with 502, `outcomeUnknown` and `sent: true`; read status before repeating it.
 
 `GET /api/v1/health` needs the same authentication and sends nothing to hardware:
 
@@ -296,8 +345,8 @@ The `route` is the matched template, such as `/api/v1/devices/{address}/commands
 `unmatched`; the path, query, headers, body and Authorization value are never logged, so a
 mistyped password and a client's own text can't reach the log. A `duration_ms` covers the time
 until the response starts, so an event stream records its connection, not its length. A request
-without credentials logs `authentication_required` at info level, a wrong password logs
-`authentication_failed` at warning level, and a refused command logs a warning. The log doesn't
+without credentials logs `authenticationRequired` at info level, a wrong password logs
+`authenticationFailed` at warning level, and a refused command logs a warning. The log doesn't
 summarize or rate-limit failed authentication.
 
 The server is a prototype for local and private VPN testing. Tests cover a real local HTTP

@@ -16,80 +16,9 @@ import Testing
 /// comes back, and goes away again. Every wait is on a signal: the listener opening, a log record
 /// or a retry delay the test releases.
 @Suite(.timeLimit(.minutes(1)))
-struct ServeTests {
+struct ServeTests: ServingTests {
   let gatewayPassword = String(repeating: "g", count: 40)
   let device = InsteonAddress(0x1A, 0x2B, 0x3C)
-
-  /// A running server and what a test needs to watch and stop it.
-  private struct Server {
-    let task: Task<Void, any Error>
-    let port: Int
-    let capture: ServerLogCapture
-    let retries: ReleasableClock
-    let reminders: ReleasableClock
-
-    /// The first log record that satisfies `predicate`, waiting for one to arrive.
-    func record(where predicate: @Sendable (ServerLogCapture.Record) -> Bool) async -> ServerLogCapture.Record? {
-      if let found = capture.records.first(where: predicate) { return found }
-      for await _ in capture.messages {
-        if let found = capture.records.first(where: predicate) { return found }
-      }
-      return nil
-    }
-
-    func code(_ code: String) async -> ServerLogCapture.Record? {
-      await record { $0.metadata["code"] == "\(code)" }
-    }
-
-    func stop() async { task.cancel(); _ = await task.result }
-
-    func request(_ path: String, method: String = "GET", body: String? = nil, password: String) async throws -> (status: Int, json: [String: Any]) {
-      var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)\(path)")!)
-      request.httpMethod = method
-      request.setValue("Basic " + Data(("insteon:" + password).utf8).base64EncodedString(), forHTTPHeaderField: "Authorization")
-      if let body {
-        request.httpBody = Data(body.utf8)
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("1", forHTTPHeaderField: "X-Insteon-Request")
-      }
-      let (data, response) = try await URLSession.shared.data(for: request)
-      return ((response as! HTTPURLResponse).statusCode, (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:])
-    }
-  }
-
-  private func scratch(savedDevice: Bool = true) throws -> URL {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("insteon-server-tests-" + UUID().uuidString)
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    if savedDevice {
-      let snapshot = NetworkSnapshot(
-        registry: DeviceRegistrySnapshot(identities: [device: ReportedIdentity(category: 1, subcategory: 125, firmwareVersion: 69)]),
-        devices: [device: NetworkDeviceState(level: 77, lastSeen: Date(timeIntervalSince1970: 1_800_000_000))]
-      )
-      try JSONFileDeviceRegistryStore(fileURL: directory.appendingPathComponent("state.json")).saveNetwork(snapshot)
-    }
-    return directory
-  }
-
-  /// Starts the server, waits until its listener is up, and returns it.
-  private func start(_ directory: URL, extra: [String] = ["--hub", "192.168.1.20"], now: @escaping @Sendable () -> Date = { Date() }, openModem: @escaping ServerRunner.ModemOpener) async throws -> Server {
-    let capture = ServerLogCapture()
-    let port = try FreePort.unused()
-    let retries = ReleasableClock()
-    let reminders = ReleasableClock()
-    let (listening, opened) = AsyncStream<Int>.makeStream()
-    let timing = ServerRunner.Timing(clock: retries, jitter: { 0 }, reminderClock: reminders, now: now, onListening: { opened.yield($0) })
-    let arguments = ["--state", directory.appendingPathComponent("state.json").path, "--port", String(port)] + extra
-    let environment = ["HOME": directory.path, "INSTEON_GATEWAY_PASSWORD": gatewayPassword, "INSTEON_HUB_USERNAME": "hub-user", "INSTEON_HUB_PASSWORD": "hub-secret-pass"]
-    let logger = capture.logger
-    let task = Task { try await ServerRunner.run(arguments: arguments, environment: environment, logger: logger, openModem: openModem, timing: timing) }
-    var ports = listening.makeAsyncIterator()
-    guard let bound = await ports.next() else { throw CancellationError() }
-    return Server(task: task, port: bound, capture: capture, retries: retries, reminders: reminders)
-  }
-
-  private func opener(_ scripted: ScriptedHubOpener) -> ServerRunner.ModemOpener {
-    { _, _, snapshot, onPollSucceeded, body in try await scripted.withNetwork(snapshot: snapshot, onPollSucceeded: onPollSucceeded, body) }
-  }
 
   // MARK: Hub away
 
@@ -264,7 +193,8 @@ struct ServeTests {
 
     // Mid-run failure: HTTP stays up, the command is refused, and nothing is replayed.
     first.drop(with: away)
-    _ = await server.record { $0.metadata["code"] == "hub_unreachable" }
+    // The first outage was logged at start; wait for this one.
+    _ = await server.record { _ in server.capture.records.filter { $0.metadata["code"] == "hub_unreachable" }.count == 2 }
     let degraded = try await server.request("/api/v1/health", password: gatewayPassword)
     #expect(degraded.json["status"] as? String == "degraded")
     #expect((try await server.request("/api/v1/devices/1A.2B.3C/commands", method: "POST", body: #"{"action":"off"}"#, password: gatewayPassword)).status == 503)

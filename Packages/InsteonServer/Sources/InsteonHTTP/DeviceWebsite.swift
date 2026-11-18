@@ -14,7 +14,7 @@ actor DeviceWebsite<Service: DeviceQuerying & DeviceCommanding & HealthReporting
   /// Live refreshes read the service cache only. Busy responses must remain errors so a
   /// client retries its safe GET instead of accepting a stale card as a successful update.
   func device(address: String?) async throws -> Response {
-    guard let address = address.flatMap(InsteonAddress.init) else { throw HTTPInputError.invalid }
+    guard let address = address.flatMap(InsteonAddress.init) else { throw HTTPInputError.invalidAddress }
     cachedDevices = try await service.devices()
     guard let device = cachedDevices.first(where: { $0.address == address }) else { throw ServiceControlError.unknownDevice }
     return Response(status: .ok, headers: [.contentType: "text/html; charset=utf-8"], body: .init(byteBuffer: ByteBuffer(string: HTMLRenderer.card(device, formKey: forms.key))))
@@ -89,25 +89,32 @@ actor DeviceWebsite<Service: DeviceQuerying & DeviceCommanding & HealthReporting
   }
 }
 
-/// Only fixed presentation codes cross the redirect; provider diagnostics stay private.
+/// Only fixed presentation codes cross the redirect; provider diagnostics stay private. The cause
+/// and status come from the same classification the JSON API reports.
 private enum BrowserCommandFailure: String {
-  case busy, unknownDevice, invalidLevel, unsupportedControl, statusFailed, identifyFailed, controlFailed, expiredForm, invalidForm
+  case busy, unknownDevice, invalidLevel, unsupportedControl, notIdentified, notLinked, deviceRejected, modemRejected
+  case statusFailed, identifyFailed, controlFailed, expiredForm, invalidForm
   case modemConnecting, hubUnreachable, credentialsRejected, hubErrorStatus, modemUnreachable, connectionLost
 
   init(_ error: any Error, action: ServiceCommand.Action) {
-    switch error {
-    case ServiceControlError.busy: self = .busy
-    case ServiceControlError.unknownDevice: self = .unknownDevice
-    case ServiceControlError.invalidLevel: self = .invalidLevel
-    case ServiceControlError.unsupportedControl: self = .unsupportedControl
-    case let ServiceControlError.modemUnavailable(cause):
-      switch cause {
-      case .connecting: self = .modemConnecting
-      case .hubUnreachable: self = .hubUnreachable
-      case .credentialsRejected: self = .credentialsRejected
-      case .hubErrorStatus: self = .hubErrorStatus
-      case .modemUnreachable: self = .modemUnreachable
-      case .connectionLost: self = .connectionLost
+    let failure = HTTPFailure(CommandFailure(action: action, underlying: error))
+    switch failure.code {
+    case .busy: self = .busy
+    case .unknownDevice: self = .unknownDevice
+    case .invalidLevel: self = .invalidLevel
+    case .unsupportedControl: self = .unsupportedControl
+    case .notIdentified: self = .notIdentified
+    case .notLinked: self = .notLinked
+    case .deviceRejected: self = .deviceRejected
+    case .modemRejected: self = .modemRejected
+    case .modemUnavailable:
+      switch failure.modemUnavailability {
+      case .hubUnreachable?: self = .hubUnreachable
+      case .credentialsRejected?: self = .credentialsRejected
+      case .hubErrorStatus?: self = .hubErrorStatus
+      case .modemUnreachable?: self = .modemUnreachable
+      case .connectionLost?: self = .connectionLost
+      case .connecting?, nil: self = .modemConnecting
       }
     default:
       switch action {
@@ -124,6 +131,10 @@ private enum BrowserCommandFailure: String {
     case .unknownDevice: "This device is no longer known to the service. Refresh the page."
     case .invalidLevel: "This device or action does not accept that percentage. Use a supported level from 0 through 100."
     case .unsupportedControl: "This device does not support that control."
+    case .notIdentified: "This device has not reported what it is, so no control was sent. Try Identify, or try again when it is awake."
+    case .notLinked: "This device rejected the modem because it is not linked to it. Link it first. Nothing changed."
+    case .deviceRejected: "The device rejected the command. Nothing changed."
+    case .modemRejected: "The modem refused the command. Nothing was sent. Try again."
     case .statusFailed: "Could not read status. The device may be unreachable or may not support this request. Try Identify or check its connection."
     case .identifyFailed: "Could not identify this device. Check its connection before trying again."
     case .controlFailed: "The control failed and its hardware outcome may be unknown. Read status before deciding whether to repeat it."
@@ -138,15 +149,23 @@ private enum BrowserCommandFailure: String {
     }
   }
 
-  var status: HTTPResponse.Status {
+  var code: APIErrorCode {
     switch self {
-    case .busy: .conflict
-    case .unknownDevice: .notFound
-    case .invalidLevel, .invalidForm: .badRequest
-    case .unsupportedControl: .unprocessableContent
-    case .expiredForm: .forbidden
-    case .modemConnecting, .hubUnreachable, .credentialsRejected, .hubErrorStatus, .modemUnreachable, .connectionLost: .serviceUnavailable
-    case .statusFailed, .identifyFailed, .controlFailed: .badGateway
+    case .busy: .busy
+    case .unknownDevice: .unknownDevice
+    case .invalidLevel: .invalidLevel
+    case .invalidForm: .invalidCommand
+    case .unsupportedControl: .unsupportedControl
+    case .notIdentified: .notIdentified
+    case .notLinked: .notLinked
+    case .deviceRejected: .deviceRejected
+    case .modemRejected: .modemRejected
+    case .expiredForm: .formKeyInvalid
+    case .modemConnecting, .hubUnreachable, .credentialsRejected, .hubErrorStatus, .modemUnreachable, .connectionLost: .modemUnavailable
+    case .statusFailed, .identifyFailed: .deviceNotAnswering
+    case .controlFailed: .outcomeUnknown
     }
   }
+
+  var status: HTTPResponse.Status { code.status }
 }

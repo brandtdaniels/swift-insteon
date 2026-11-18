@@ -228,7 +228,7 @@ struct HTTPTests {
       fields[HTTPField.Name("X-Insteon-Fragment")!] = "device"
       let response = try await client.execute(uri: "/devices/1A.2B.3C", method: .post, headers: fields, body: ByteBuffer(string: "action=" + action + "&formKey=" + key))
       let html = String(buffer: response.body)
-      #expect(response.status == (fails ? .badGateway : .ok))
+      #expect(response.status == (fails ? (action == "on" || action == "off" ? .badGateway : .gatewayTimeout) : .ok))
       #expect(response.headers[.location] == nil)
       #expect(response.headers[.contentType] == "text/html; charset=utf-8")
       #expect(html.hasPrefix("<article "))
@@ -439,7 +439,7 @@ struct HTTPTests {
     #expect(await service.reads == 1)
   }
 
-  @Test(arguments: [ServiceControlError.busy, .unknownDevice, .invalidLevel, .unsupportedControl, .modemUnavailable(.hubUnreachable)])
+  @Test(arguments: [ServiceControlError.busy, .unknownDevice, .invalidLevel, .unsupportedControl, .notIdentified, .notLinked, .modemUnavailable(.hubUnreachable)])
   func serviceRefusalsHaveAnHTTPMapping(_ failure: ServiceControlError) async throws {
     let service = FakeService(refusal: failure)
     let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
@@ -450,6 +450,7 @@ struct HTTPTests {
         case .unknownDevice: #expect(response.status == .notFound)
         case .invalidLevel: #expect(response.status == .badRequest)
         case .unsupportedControl: #expect(response.status == .unprocessableContent)
+        case .notIdentified, .notLinked: #expect(response.status == .conflict)
         case .modemUnavailable: #expect(response.status == .serviceUnavailable)
         }
       }
@@ -503,6 +504,7 @@ actor FakeService: InsteonServiceAPI {
   let persistence: PersistenceOutcome
   let fails: Bool
   let refusal: ServiceControlError?
+  let failure: (any Error)?
   let reading: DeviceStatus.Reading
   let eventStream: AsyncStream<ServiceEvent>?
   /// Each subscription gets its own stream that never ends; the actor keeps its continuation open.
@@ -510,9 +512,9 @@ actor FakeService: InsteonServiceAPI {
   private var openSources: [AsyncStream<ServiceEvent>.Continuation] = []
   var reported = ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000))
   let address = InsteonAddress(0x1A, 0x2B, 0x3C)
-  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false) {
+  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false) {
     self.endlessEvents = endlessEvents
-    self.persistence = persistence; self.fails = fails; self.refusal = refusal; self.reading = reading
+    self.persistence = persistence; self.fails = fails; self.refusal = refusal; self.failure = failure; self.reading = reading
     self.eventStream = eventStream
   }
   func devices() async throws -> [ServiceDevice] {
@@ -526,6 +528,7 @@ actor FakeService: InsteonServiceAPI {
   func execute(_ command: ServiceCommand) async throws -> CommandReceipt {
     commands.append(command)
     if let refusal { throw refusal }
+    if let failure { throw failure }
     if fails { throw Diagnostic() }
     let isOn: Bool
     if case let .onOff(value) = reading { isOn = value } else { isOn = true }

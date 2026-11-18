@@ -19,7 +19,7 @@ extension ModemUnavailability {
   public var refusal: String {
     switch self {
     case .connecting: "The service is still connecting to the Hub or modem, so nothing was sent. Try again in a minute."
-    case .hubUnreachable: "The Hub is unreachable, so nothing was sent. The service keeps retrying. Check the Hub's power and network, then try again."
+    case .hubUnreachable: "The Hub is not answering, so nothing was sent. The service keeps retrying. Check that the Hub is powered on and on the same network."
     case .credentialsRejected: "The Hub rejected its user name and password, so nothing was sent. Check INSTEON_HUB_USERNAME and INSTEON_HUB_PASSWORD in the protected environment file, then restart the service."
     case .hubErrorStatus: "The Hub answered with an error, so nothing was sent. The service keeps retrying. Try again in a minute."
     case .modemUnreachable: "The modem is not answering, so nothing was sent. The service keeps retrying. Check that the modem is connected and powered."

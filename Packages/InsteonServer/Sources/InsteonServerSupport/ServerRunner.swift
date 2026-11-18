@@ -170,7 +170,7 @@ public enum ServerRunner {
     logger: Logger,
     timing: Timing
   ) async throws {
-    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter)
+    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter, throughHub: hub != nil)
     let router = makeInsteonRouter(service: service, authentication: authentication, logger: logger)
     let app = Application(
       responder: router.buildResponder(),
@@ -268,11 +268,9 @@ private actor OutageLog {
   func handle(_ event: ServiceEvent) {
     switch event {
     case let .modemUnavailable(cause):
-      // Through a Hub, a modem that doesn't answer is a Hub that doesn't answer: name the Hub.
-      let reason = hub != nil && cause == .modemUnreachable ? ModemUnavailability.hubUnreachable : cause
-      if let logged, logged.continuesOutage(of: reason) { return }
-      logged = reason
-      record(reason, reminder: false)
+      if let logged, logged.continuesOutage(of: cause) { return }
+      logged = cause
+      record(cause, reminder: false)
     case .modemReconnected:
       logged = nil
       logger.info("The Hub or modem is connected.", metadata: ["code": "modem_connected"])

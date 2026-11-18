@@ -132,6 +132,11 @@ public enum ServiceControlError: Error, Equatable {
   case invalidLevel
   /// The main group doesn't support switching.
   case unsupportedControl
+  /// The device's identity isn't known, and it didn't report one when asked, so the service
+  /// can't tell what it does. No control was sent.
+  case notIdentified
+  /// The device rejected the modem because it isn't linked to it. No control took effect.
+  case notLinked
   /// Another operation owns this service's admission gate. Nothing was queued.
   case busy
   /// The modem isn't connected, so nothing was sent. The service keeps reconnecting, and a

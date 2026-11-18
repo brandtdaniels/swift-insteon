@@ -25,14 +25,35 @@ struct DeviceListDTO: Encodable {
   private enum CodingKeys: String, CodingKey { case version, devices, stale, cause }
 }
 
-/// A refusal because nothing was sent: the modem is away.
-struct ModemUnavailableDTO: Encodable {
+/// A failed API request: a code to branch on, whether a command may have reached a device, and an
+/// explanation, with the request id the log record carries.
+struct ErrorDTO: Encodable {
   let version = 1
-  let code = "modemUnavailable"
-  let sent = false
-  let cause: String
+  let code: String
   let message: String
-  init(_ cause: ModemUnavailability) { self.cause = cause.wireName; message = cause.refusal }
+  let sent: Bool
+  let requestId: String
+  /// Why the modem is away, present only for `modemUnavailable`.
+  let cause: String?
+
+  init(_ failure: HTTPFailure, requestID: String) {
+    code = failure.code.rawValue
+    message = failure.message
+    sent = failure.sent
+    requestId = requestID
+    cause = failure.modemUnavailability?.wireName
+  }
+
+  func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(version, forKey: .version)
+    try container.encode(code, forKey: .code)
+    try container.encode(message, forKey: .message)
+    try container.encode(sent, forKey: .sent)
+    try container.encode(requestId, forKey: .requestId)
+    try container.encodeIfPresent(cause, forKey: .cause)
+  }
+  private enum CodingKeys: String, CodingKey { case version, code, message, sent, requestId, cause }
 }
 
 /// Readiness without device addresses, names or the Hub's location.

@@ -4,7 +4,7 @@ import HTTPTypes
 import InsteonCore
 import InsteonService
 
-enum HTTPInputError: Error { case invalid, unsupportedMedia, missingAPIMarker, invalidFormKey }
+enum HTTPInputError: Error { case invalid, invalidAddress, unsupportedMedia, missingAPIMarker, invalidFormKey }
 
 enum HTTPBody {
   static let limit = 8192
@@ -23,7 +23,7 @@ struct HTTPCommand: Decodable {
   let levelPercent: Int?
 
   func serviceCommand(address: String?) throws -> ServiceCommand {
-    guard let address, let address = InsteonAddress(address) else { throw HTTPInputError.invalid }
+    guard let address, let address = InsteonAddress(address) else { throw HTTPInputError.invalidAddress }
     let operation: ServiceCommand.Action
     switch action {
     case .identify: operation = .identify

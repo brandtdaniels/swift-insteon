@@ -60,7 +60,7 @@ struct RequestLoggingTests {
     #expect(record.metadata["method"] == "POST")
     #expect(record.metadata["route"] == "/api/v1/devices/{address}/commands")
     #expect(record.metadata["status"] == "502")
-    #expect(record.metadata["code"] == "operation_failed")
+    #expect(record.metadata["code"] == "outcomeUnknown")
     let expected = try #require(InsteonErrorDescription.message(for: ModemError.deviceTimedOut(address)))
     #expect(record.metadata["cause"] == .string(expected))
     #expect(!record.rendered.contains("1A.2B.3C/commands"))
@@ -75,16 +75,16 @@ struct RequestLoggingTests {
       }
     }
     let record = try #require(capture.records.first)
-    #expect(record.metadata["code"] == "operation_failed")
+    #expect(record.metadata["code"] == "outcomeUnknown")
     #expect(record.metadata["cause"] == "unclassified SecretCarryingError")
     #expect(!record.rendered.contains("hunter2"))
   }
 
   @Test(arguments: [
     (ServiceControlError.busy, "busy", 409),
-    (ServiceControlError.unknownDevice, "unknown_device", 404),
-    (ServiceControlError.invalidLevel, "invalid_level", 400),
-    (ServiceControlError.unsupportedControl, "unsupported_control", 422)
+    (ServiceControlError.unknownDevice, "unknownDevice", 404),
+    (ServiceControlError.invalidLevel, "invalidLevel", 400),
+    (ServiceControlError.unsupportedControl, "unsupportedControl", 422)
   ])
   func refusedCommandsLogAStableCode(_ refusal: ServiceControlError, _ code: String, _ status: Int) async throws {
     let capture = LogCapture()
@@ -115,7 +115,7 @@ struct RequestLoggingTests {
     #expect(capture.records.count == 1)
     #expect(record.level == .warning)
     #expect(record.metadata["status"] == "401")
-    #expect(record.metadata["code"] == "authentication_failed")
+    #expect(record.metadata["code"] == "authenticationFailed")
     #expect(record.metadata["route"] == "/api/v1/devices")
     for secret in ["hunter2-guess", attempt, Data("insteon:hunter2-guess".utf8).base64EncodedString(), password] {
       #expect(!record.rendered.contains(secret))
@@ -136,7 +136,7 @@ struct RequestLoggingTests {
     }
     let record = try #require(capture.records.first)
     #expect(record.level == .info)
-    #expect(record.metadata["code"] == "authentication_required")
+    #expect(record.metadata["code"] == "authenticationRequired")
   }
 
   @Test func anUnmatchedRouteLogsAFixedRouteNameInsteadOfTheClientsPath() async throws {
@@ -150,7 +150,7 @@ struct RequestLoggingTests {
     }
     let record = try #require(capture.records.first)
     #expect(record.metadata["route"] == "unmatched")
-    #expect(record.metadata["code"] == "request_rejected")
+    #expect(record.metadata["code"] == "routeNotFound")
     #expect(!record.rendered.contains("owned"))
     #expect(!record.rendered.contains("forged"))
   }

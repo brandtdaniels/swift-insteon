@@ -1,5 +1,6 @@
 import Foundation
 import InsteonCore
+import InsteonModem
 
 /// One persistent Insteon network's operations, monitoring and snapshot policy.
 ///
@@ -20,6 +21,7 @@ public actor InsteonService: InsteonServiceAPI {
   private let clock: any Clock<Duration>
   private let now: @Sendable () -> Date
   private let jitter: @Sendable () -> Double
+  private let throughHub: Bool
   private let persistence: (any SnapshotPersisting)?
   private var busy = false
   private var running = false
@@ -52,6 +54,8 @@ public actor InsteonService: InsteonServiceAPI {
   ///   - clock: Times the waits between attempts.
   ///   - now: The current time.
   ///   - jitter: Random numbers from 0 up to, not including, 1 for the delay's jitter.
+  ///   - throughHub: Whether the modem is reached through a Hub. A modem that doesn't answer is then
+  ///     reported as ``ModemUnavailability/hubUnreachable``, because the Hub is what to check.
   public init(
     network: DeviceNetwork,
     opener: any NetworkOpening,
@@ -60,9 +64,10 @@ public actor InsteonService: InsteonServiceAPI {
     reconnect: ReconnectPolicy = .standard,
     clock: any Clock<Duration> = ContinuousClock(),
     now: @escaping @Sendable () -> Date = { Date() },
-    jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) }
+    jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) },
+    throughHub: Bool = false
   ) {
-    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false)
+    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false, throughHub: throughHub)
   }
 
   private init(
@@ -74,7 +79,8 @@ public actor InsteonService: InsteonServiceAPI {
     clock: any Clock<Duration>,
     now: @escaping @Sendable () -> Date,
     jitter: @escaping @Sendable () -> Double,
-    isConnected: Bool
+    isConnected: Bool,
+    throughHub: Bool = false
   ) {
     self.network = network
     self.opener = opener
@@ -82,6 +88,7 @@ public actor InsteonService: InsteonServiceAPI {
     self.clock = clock
     self.now = now
     self.jitter = jitter
+    self.throughHub = throughHub
     self.persistence = persistence
     self.persistenceOutcome = persistence == nil ? .notConfigured : .notAttempted
     self.connection = isConnected ? .connected : .unavailable(.connecting)
@@ -108,7 +115,9 @@ public actor InsteonService: InsteonServiceAPI {
 
   /// Executes an operation through InsteonCore and preserves its result if persistence fails.
   /// While the modem isn't connected it throws ``ServiceControlError/modemUnavailable(_:)``
-  /// before sending anything. A failed operation is never repeated.
+  /// before sending anything. A device that isn't identified or isn't linked to the modem throws
+  /// ``ServiceControlError/notIdentified`` or ``ServiceControlError/notLinked``. A failed
+  /// operation is never repeated.
   public func execute(_ command: ServiceCommand) async throws -> CommandReceipt {
     guard !busy else { throw ServiceControlError.busy }
     busy = true
@@ -120,20 +129,35 @@ public actor InsteonService: InsteonServiceAPI {
     let device = network.device(command.address)
     let outcome: CommandReceipt.Outcome
     let status: DeviceStatus?
-    switch command.action {
-    case .identify:
-      _ = try await network.identify(command.address)
-      outcome = .read; status = nil
-    case .status:
-      status = try await device.status()
-      outcome = .read
-    case .on, .off:
-      let capabilities = try await device.capabilities()
-      guard capabilities.canTurnOnAndOff else { throw ServiceControlError.unsupportedControl }
-      if command.levelPercent != nil, !capabilities.canDim { throw ServiceControlError.invalidLevel }
-      if command.action == .on { _ = try await device.turnOn(level: command.levelPercent) }
-      else { try await device.turnOff() }
-      outcome = .acknowledged; status = nil
+    do {
+      switch command.action {
+      case .identify:
+        _ = try await network.identify(command.address)
+        outcome = .read; status = nil
+      case .status:
+        do {
+          status = try await device.status()
+        } catch ModemError.deviceTimedOut {
+          // A device that never reported what it is and doesn't answer a read has no identity to act on.
+          if await network.registry.device(command.address) == nil { throw ServiceControlError.notIdentified }
+          throw ModemError.deviceTimedOut(command.address)
+        }
+        outcome = .read
+      case .on, .off:
+        let capabilities = try await device.capabilities()
+        guard capabilities.isIdentified else { throw ServiceControlError.notIdentified }
+        guard capabilities.canTurnOnAndOff else { throw ServiceControlError.unsupportedControl }
+        if command.levelPercent != nil, !capabilities.canDim { throw ServiceControlError.invalidLevel }
+        if command.action == .on { _ = try await device.turnOn(level: command.levelPercent) }
+        else { try await device.turnOff() }
+        outcome = .acknowledged; status = nil
+      }
+    } catch DeviceControlError.notLinked {
+      throw ServiceControlError.notLinked
+    } catch DeviceControlError.notIdentified {
+      throw ServiceControlError.notIdentified
+    } catch let ModemError.deviceRejected(_, reason) where reason == .notLinked {
+      throw ServiceControlError.notLinked
     }
     lastExchange = now()
     let saved = await persist()
@@ -217,7 +241,7 @@ public actor InsteonService: InsteonServiceAPI {
       let cause: ModemUnavailability
       switch ConnectionFailure(failure) {
       case .fatal: throw (failure as? ConnectionRefusal)?.underlying ?? failure
-      case let .retry(reason): cause = reason
+      case let .retry(reason): cause = throughHub && reason == .modemUnreachable ? .hubUnreachable : reason
       }
       noteUnavailable(cause)
       failures = attemptConnected ? 1 : failures + 1
