@@ -8,3 +8,5 @@ xcuserdata/
 .env
 __pycache__/
 *.pyc
+/Tools/RepoChecks/.build
+/Tools/RepoChecks/.swiftpm
