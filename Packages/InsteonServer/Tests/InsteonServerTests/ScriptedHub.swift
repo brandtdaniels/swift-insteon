@@ -10,6 +10,8 @@ import InsteonService
 actor RecordingModem: LinkingModem {
   private(set) var levels: [InsteonAddress: UInt8] = [:]
   let address = InsteonAddress(0x11, 0x22, 0x33)
+  /// How many requests each device was sent, counting those it then failed.
+  private(set) var requestCounts: [InsteonAddress: Int] = [:]
   private var failures: [InsteonAddress: any Error] = [:]
   private var held: (stream: AsyncStream<Void>, release: AsyncStream<Void>.Continuation)?
   private var entered: AsyncStream<Void>.Continuation?
@@ -39,6 +41,7 @@ actor RecordingModem: LinkingModem {
       entered?.yield()
       for await _ in held.stream {}
     }
+    requestCounts[message.destination, default: 0] += 1
     if let error = failures[message.destination] { throw error }
     let command = message.command
     if [0x11, 0x13].contains(command.command1) {

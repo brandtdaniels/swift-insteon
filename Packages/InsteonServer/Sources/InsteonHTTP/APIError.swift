@@ -12,6 +12,7 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   case authenticationFailed
   case invalidAddress
   case invalidCommand
+  case invalidIdempotencyKey
   case invalidLevel
   case unknownDevice
   case routeNotFound
@@ -20,6 +21,7 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   case bodyTooLarge
   case unsupportedMediaType
   case requestRejected
+  case idempotencyKeyReused
   case busy
   case notIdentified
   case notLinked
@@ -35,14 +37,14 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   var status: HTTPResponse.Status {
     switch self {
     case .authenticationRequired, .authenticationFailed: .unauthorized
-    case .invalidAddress, .invalidCommand, .invalidLevel: .badRequest
+    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel: .badRequest
     case .unknownDevice, .routeNotFound: .notFound
     case .apiMarkerMissing, .formKeyInvalid: .forbidden
     case .bodyTooLarge: .contentTooLarge
     case .unsupportedMediaType: .unsupportedMediaType
     case .requestRejected: .badRequest
     case .busy, .notIdentified, .notLinked: .conflict
-    case .unsupportedControl, .deviceRejected: .unprocessableContent
+    case .unsupportedControl, .deviceRejected, .idempotencyKeyReused: .unprocessableContent
     case .modemRejected, .modemUnavailable, .canceled: .serviceUnavailable
     case .deviceNotAnswering: .gatewayTimeout
     case .outcomeUnknown: .badGateway
@@ -66,6 +68,8 @@ enum APIErrorCode: String, CaseIterable, Sendable {
     case .authenticationFailed: "The credentials were not accepted."
     case .invalidAddress: "The device address is not a valid Insteon address."
     case .invalidCommand: "Invalid command."
+    case .invalidIdempotencyKey: "The Idempotency-Key must be one token of 1 through 128 characters from A-Z, a-z, 0-9 and . _ ~ : -."
+    case .idempotencyKeyReused: "That Idempotency-Key was used for a different command. Use a new key for a new command."
     case .invalidLevel: "The device or action does not accept that percentage."
     case .unknownDevice: "Unknown device."
     case .routeNotFound: "No such route."

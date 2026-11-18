@@ -54,9 +54,12 @@ struct ErrorMappingMiddleware<Context: RequestContext>: RouterMiddleware {
       return response
     }
     catch {
-      return Self.response(HTTPFailure(error), request, context)
+      var response = Self.response(HTTPFailure(error), request, context)
+      if (error as? OutcomeFailure)?.replayed == true { response.headers[.idempotentReplay] = "true" }
+      return response
     }
   }
+
 
   /// An API route answers with the typed JSON error; the browser's own routes answer with plain text.
   private static func response(_ failure: HTTPFailure, _ request: Request, _ context: Context) -> Response {
@@ -71,7 +74,7 @@ struct ErrorMappingMiddleware<Context: RequestContext>: RouterMiddleware {
 /// What a thrown error means to a client and to the log: the code, the status and message the
 /// client sees, whether a command may have reached a device, and for a failed operation a
 /// credential-free cause.
-struct HTTPFailure {
+struct HTTPFailure: Sendable {
   let code: APIErrorCode
   let status: HTTPResponse.Status
   let message: String
@@ -84,8 +87,14 @@ struct HTTPFailure {
     self.init(code, status: code.status)
   }
 
+  init(_ code: APIErrorCode, sent: Bool) {
+    self.init(code, status: code.status, sent: sent)
+  }
+
   init(_ error: any Error) {
-    if let failure = error as? CommandFailure {
+    if let outcome = error as? OutcomeFailure {
+      self = outcome.failure
+    } else if let failure = error as? CommandFailure {
       self.init(classifying: failure.underlying, action: failure.action)
     } else {
       self.init(classifying: error, action: nil)
@@ -109,6 +118,8 @@ struct HTTPFailure {
     case HTTPInputError.missingAPIMarker: self.init(.apiMarkerMissing)
     case HTTPInputError.invalidFormKey: self.init(.formKeyInvalid)
     case HTTPInputError.invalidAddress: self.init(.invalidAddress)
+    case IdempotencyError.invalidKey: self.init(.invalidIdempotencyKey)
+    case IdempotencyError.reused: self.init(.idempotencyKeyReused)
     case is HTTPInputError: self.init(.invalidCommand)
     case is DecodingError: self.init(.invalidCommand)
     case let error as any HTTPResponseError:

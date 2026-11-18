@@ -171,7 +171,7 @@ public enum ServerRunner {
     timing: Timing
   ) async throws {
     let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter, throughHub: hub != nil)
-    let router = makeInsteonRouter(service: service, authentication: authentication, logger: logger)
+    let router = makeInsteonRouter(service: service, authentication: authentication, logger: logger, now: timing.now)
     let app = Application(
       responder: router.buildResponder(),
       server: ConnectionLimits.server,

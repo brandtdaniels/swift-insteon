@@ -1,3 +1,4 @@
+import Foundation
 import Hummingbird
 import InsteonService
 import Logging
@@ -7,14 +8,17 @@ import Logging
 ///
 /// Each request logs one record to `logger`: method, route template, status, duration and a stable
 /// outcome code, with no path, query, header or body.
-public func makeInsteonRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, logger: Logger = Logger(label: "insteon-server")) -> Router<BasicRequestContext> {
+///
+/// A command that carries an `Idempotency-Key` header is recorded for 10 minutes, up to 256 at a time,
+/// measured by `now`, so a repeat returns its outcome without sending anything.
+public func makeInsteonRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, logger: Logger = Logger(label: "insteon-server"), now: @escaping @Sendable () -> Date = { Date() }) -> Router<BasicRequestContext> {
   let router = Router<BasicRequestContext>()
   router.add(middleware: SecurityHeadersMiddleware<BasicRequestContext>())
   router.add(middleware: ErrorMappingMiddleware<BasicRequestContext>())
   router.add(middleware: RequestLogMiddleware<BasicRequestContext>(logger: logger))
   router.add(middleware: AuthenticationMiddleware<BasicRequestContext>(authentication: authentication))
   router.add(middleware: RequestBodyLimitMiddleware<BasicRequestContext>())
-  let api = DeviceAPI(service: service)
+  let api = DeviceAPI(service: service, idempotency: IdempotencyStore(now: now))
   let website = DeviceWebsite(service: service)
   router.get("/controls.js") { _, _ in
     Response(status: .ok, headers: [.contentType: "text/javascript; charset=utf-8"], body: .init(byteBuffer: ByteBuffer(string: BrowserControls.source)))

@@ -10,8 +10,11 @@ struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
   private let clock: any Clock<Duration>
   private let registry: EventStreamRegistry
 
-  init(service: Service, policy: EventStreamPolicy = .standard, clock: any Clock<Duration> = ContinuousClock()) {
+  private let idempotency: IdempotencyStore
+
+  init(service: Service, policy: EventStreamPolicy = .standard, clock: any Clock<Duration> = ContinuousClock(), idempotency: IdempotencyStore = IdempotencyStore()) {
     self.service = service
+    self.idempotency = idempotency
     self.policy = policy
     self.clock = clock
     self.registry = EventStreamRegistry(limit: policy.maximumStreams)
@@ -27,13 +30,44 @@ struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
     try json(HealthDTO(await service.health()))
   }
 
+  /// Runs a command. With an `Idempotency-Key`, a repeat of the same command returns the recorded
+  /// outcome and sends nothing.
   func command(_ request: Request, address: String?) async throws -> Response {
     let input = try await HTTPCommand.json(request)
     let command = try input.serviceCommand(address: address)
+    let key = try IdempotencyKey(header: request.headers[values: .idempotencyKey])
+    guard let key else {
+      return try Self.response(await run(command))
+    }
+    let (outcome, replayed) = try await idempotency.perform(scope: .gateway, key: key.value, fingerprint: Self.fingerprint(command)) { await run(command) }
+    var response = try Self.response(outcome, replayed: replayed)
+    if replayed { response.headers[.idempotentReplay] = "true" }
+    return response
+  }
+
+  private func run(_ command: ServiceCommand) async -> IdempotentOutcome {
     do {
-      return try json(ReceiptDTO(try await service.execute(command)))
+      let encoder = JSONEncoder()
+      encoder.dateEncodingStrategy = .iso8601
+      return .response(.ok, try encoder.encode(ReceiptDTO(try await service.execute(command))))
     } catch {
-      throw CommandFailure(action: command.action, underlying: error)
+      return .failure(HTTPFailure(CommandFailure(action: command.action, underlying: error)))
+    }
+  }
+
+  /// Names a command by what it asks for, not by how the request spelled it: the same action and
+  /// level on the same device are the same command whatever the JSON's key order or spacing.
+  private static func fingerprint(_ command: ServiceCommand) -> String {
+    let canonical = "POST\n/api/v1/devices/\(command.address)/commands\n\(command.action)\n\(command.levelPercent.map(String.init) ?? "")"
+    return SecureDigest.of(canonical).map { String(format: "%02x", $0) }.joined()
+  }
+
+  private static func response(_ outcome: IdempotentOutcome, replayed: Bool = false) throws -> Response {
+    switch outcome {
+    case let .response(status, body):
+      return Response(status: status, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(bytes: body)))
+    case let .failure(failure):
+      throw OutcomeFailure(failure: failure, replayed: replayed)
     }
   }
 
