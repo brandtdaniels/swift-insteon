@@ -42,18 +42,20 @@ public enum ServerRunner {
 
   /// Opens the modem, runs `body` with the network it carries, and closes the modem when `body`
   /// returns or throws. The default opens the Hub or serial port; a test supplies a scripted connection.
+  /// `onPollSucceeded` is called each time a Hub answers a poll; a serial modem has none.
   public typealias ModemOpener = @Sendable (
     _ endpoint: ModemEndpoint,
     _ catalog: ProductCatalog,
     _ snapshot: NetworkSnapshot,
+    _ onPollSucceeded: @escaping @Sendable () async -> Void,
     _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void
   ) async throws -> Void
 
   /// Opens the Hub or serial port the endpoint names.
-  public static let openModem: ModemOpener = { endpoint, catalog, snapshot, body in
+  public static let openModem: ModemOpener = { endpoint, catalog, snapshot, onPollSucceeded, body in
     switch endpoint {
     case let .hub(location, credentials):
-      try await ModemSession.withHub(host: location.host, port: location.port, user: credentials.user, password: credentials.password, catalog: catalog) { session in
+      try await ModemSession.withHub(host: location.host, port: location.port, user: credentials.user, password: credentials.password, catalog: catalog, onPollSucceeded: onPollSucceeded) { session in
         try await body(session.network(catalog: catalog, snapshot: snapshot, hub: session.hub))
       }
     case let .serial(path):
@@ -92,6 +94,7 @@ public enum ServerRunner {
     let jitter: @Sendable () -> Double
     let reminderClock: any Clock<Duration>
     let reminderInterval: Duration
+    let now: @Sendable () -> Date
     let onListening: @Sendable (Int) -> Void
 
     init(
@@ -100,6 +103,7 @@ public enum ServerRunner {
       jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) },
       reminderClock: any Clock<Duration> = ContinuousClock(),
       reminderInterval: Duration = .seconds(900),
+      now: @escaping @Sendable () -> Date = { Date() },
       onListening: @escaping @Sendable (Int) -> Void = { _ in }
     ) {
       self.reconnect = reconnect
@@ -107,6 +111,7 @@ public enum ServerRunner {
       self.jitter = jitter
       self.reminderClock = reminderClock
       self.reminderInterval = reminderInterval
+      self.now = now
       self.onListening = onListening
     }
   }
@@ -165,7 +170,7 @@ public enum ServerRunner {
     logger: Logger,
     timing: Timing
   ) async throws {
-    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, jitter: timing.jitter)
+    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter)
     let router = makeInsteonRouter(service: service, authentication: authentication, logger: logger)
     let app = Application(
       responder: router.buildResponder(),
@@ -220,9 +225,13 @@ private struct EndpointOpener: NetworkOpening {
   }
 
   func withNetwork(snapshot: NetworkSnapshot, _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void) async throws {
+    try await withNetwork(snapshot: snapshot, onPollSucceeded: {}, body)
+  }
+
+  func withNetwork(snapshot: NetworkSnapshot, onPollSucceeded: @escaping @Sendable () async -> Void, _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void) async throws {
     let history = history
     do {
-      try await openModem(endpoint, catalog, snapshot) { network in
+      try await openModem(endpoint, catalog, snapshot, onPollSucceeded) { network in
         await history.markConnected()
         try await body(network)
       }

@@ -139,6 +139,48 @@ struct HubConnectionTests {
 
   }
 
+  @Test func reportsEachPollTheHubAnswersAndNoFailedOne() async throws {
+
+    let fake = FakeHub(failingReads: 1)
+    let polls = PollCounter()
+    let connection = HubConnection(hub: Hub(endpoint: endpoint, httpClient: fake), clock: clock, onPollSucceeded: { await polls.record() })
+    let message: [UInt8] = [0x02, 0x50, 0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33, 0x2B, 0x11, 0xFF]
+
+    async let received = Self.firstChunk(of: connection.receive())
+    await clock.waitForSleeper(until: HubConnection.defaultPollInterval)
+    #expect(await polls.count == 0)
+
+    await fake.deliver(message)
+    clock.advance(by: HubConnection.defaultPollInterval)
+
+    #expect(try await received == message)
+    #expect(await polls.count == 1)
+
+  }
+
+  @Test func reportsAPollThatBringsNoBytes() async throws {
+
+    let polls = PollCounter()
+    let connection = HubConnection(hub: Hub(endpoint: endpoint, httpClient: FakeHub()), clock: clock, onPollSucceeded: { await polls.record() })
+
+    try await withThrowingTaskGroup(of: Void.self) { group in
+
+      group.addTask { for try await _ in connection.receive() {} }
+
+      await clock.waitForSleeper(until: HubConnection.defaultPollInterval)
+      #expect(await polls.count == 1)
+
+      clock.advance(by: HubConnection.defaultPollInterval)
+      await clock.waitForSleeper(until: HubConnection.defaultPollInterval * 2)
+      #expect(await polls.count == 2)
+
+      group.cancelAll()
+      try await group.waitForAll()
+
+    }
+
+  }
+
   @Test func failsAfterTooManyFailedPolls() async {
 
     let connection = makeConnection(FakeHub(failingReads: HubConnection.defaultFailureLimit))
@@ -426,5 +468,14 @@ struct HubConnectionTests {
     #expect(info.address == InsteonAddress(0x1A, 0x2B, 0x3C))
 
   }
+
+}
+
+/// Counts the polls a connection reports.
+private actor PollCounter {
+
+  private(set) var count = 0
+
+  func record() { count += 1 }
 
 }

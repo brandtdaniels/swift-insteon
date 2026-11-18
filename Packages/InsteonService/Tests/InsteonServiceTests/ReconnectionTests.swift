@@ -18,7 +18,7 @@ struct ReconnectionTests {
   let now = Date(timeIntervalSince1970: 1_800_000_000)
   let hubAway = HubStoppedAnswering(underlyingError: URLError(.timedOut))
 
-  private func service(opener: ScriptedOpener, store: (any NetworkSnapshotStore)? = nil, savedAt: Date? = nil, policy: ReconnectPolicy = .standard) -> InsteonService {
+  private func service(opener: ScriptedOpener, store: (any NetworkSnapshotStore)? = nil, savedAt: Date? = nil, policy: ReconnectPolicy = .standard, now clockNow: (@Sendable () -> Date)? = nil) -> InsteonService {
     let identity = ReportedIdentity(category: 1, subcategory: 125, firmwareVersion: 69)
     let snapshot = NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: [address: identity]), devices: [address: NetworkDeviceState(level: 77, lastSeen: now)])
     let current = now
@@ -29,7 +29,7 @@ struct ReconnectionTests {
       snapshotSavedAt: savedAt,
       reconnect: policy,
       clock: clock,
-      now: { current },
+      now: clockNow ?? { current },
       jitter: { 0 }
     )
   }
@@ -96,6 +96,32 @@ struct ReconnectionTests {
       #expect(ready.lastHardwareExchange == now)
       #expect(ready.deviceInformationUpdated == now)
       #expect(await modem.linkingSteps.isEmpty)
+    }
+  }
+
+  @Test func healthSaysWhenTheLinkLastAnsweredAPollApartFromTheLastExchange() async throws {
+    let opener = ScriptedOpener([.connect(ScriptedLink())])
+    let start = now
+    let clock = clock
+    let service = service(opener: opener, now: { start.addingTimeInterval(Double(clock.now.offset.components.seconds)) })
+    try await running(service) { events in
+      var reader = events.makeAsyncIterator()
+      let reconnected = try await reader.next()
+      #expect(reconnected == .modemReconnected)
+      let connected = await service.health()
+      #expect(connected.lastHardwareExchange == start)
+      #expect(connected.lastPoll == nil)
+
+      clock.advance(by: .seconds(90))
+      await opener.poll()
+      let polled = await service.health()
+      #expect(polled.lastPoll == start.addingTimeInterval(90))
+      #expect(polled.lastHardwareExchange == start)
+
+      clock.advance(by: .seconds(30))
+      let quiet = await service.health()
+      #expect(quiet.lastPoll == start.addingTimeInterval(90))
+      #expect(quiet.checkedAt == start.addingTimeInterval(120))
     }
   }
 

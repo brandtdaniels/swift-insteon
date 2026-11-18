@@ -66,6 +66,8 @@ public struct ModemSession: Sendable {
   ///   - catalog: The catalog that describes the modem's serial commands for
   ///     ``write(rawCommand:forcing:collectingFor:clock:onWriting:)``, or `nil` to describe none. Defaults
   ///     to `nil`.
+  ///   - onPollSucceeded: Called each time the Hub answers a poll of its buffer, whether or not
+  ///     the poll brought bytes, or `nil` to report nothing. Defaults to `nil`.
   ///   - body: The work to do with the modem.
   /// - Throws: ``HubAddressRefused`` for a host that isn't a private IPv4 address, the error
   ///   `body` throws, or the connection's, such as the Hub's `HubStoppedAnswering`, which
@@ -76,6 +78,7 @@ public struct ModemSession: Sendable {
     user: String,
     password: String,
     catalog: ProductCatalog? = nil,
+    onPollSucceeded: (@Sendable () async -> Void)? = nil,
     _ body: @Sendable (ModemSession) async throws -> Void
   ) async throws {
 
@@ -90,7 +93,7 @@ public struct ModemSession: Sendable {
     let hub = Hub(endpoint: endpoint, user: user, password: password)
     let location = HubLocation(host: endpoint.host, port: endpoint.port)
 
-    try await Modem.withConnection(HubConnection(hub: hub)) { (modem: Modem) async throws -> Void in
+    try await Modem.withConnection(HubConnection(hub: hub, onPollSucceeded: onPollSucceeded)) { (modem: Modem) async throws -> Void in
 
       try await body(ModemSession(modem: modem, hub: location, catalog: catalog))
 

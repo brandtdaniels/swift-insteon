@@ -57,6 +57,8 @@ public actor HubConnection: ModemConnection {
 
   private let failureLimit: Int
 
+  private let onPollSucceeded: (@Sendable () async -> Void)?
+
   private var cursor = HubBufferCursor()
 
   private var hasClearedBuffer = false
@@ -91,17 +93,23 @@ public actor HubConnection: ModemConnection {
   ///     Defaults to ``HubConnection/defaultFailureLimit``.
   ///   - clock: The clock that times polling. Defaults to a `ContinuousClock`; tests can pass a
   ///     clock they control.
+  ///   - onPollSucceeded: Called each time a poll of the Hub's buffer is answered, whether or not
+  ///     it brought bytes, so a host can tell a quiet Hub from one that has stopped answering.
+  ///     It runs in the task reading the stream, so a slow call delays the next poll. Defaults to
+  ///     `nil`, which reports nothing.
   public init(
     hub: Hub,
     pollInterval: Duration = HubConnection.defaultPollInterval,
     failureLimit: Int = HubConnection.defaultFailureLimit,
-    clock: any Clock<Duration> = ContinuousClock()
+    clock: any Clock<Duration> = ContinuousClock(),
+    onPollSucceeded: (@Sendable () async -> Void)? = nil
   ) {
 
     self.hub = hub
     self.pollInterval = pollInterval
     self.failureLimit = max(1, failureLimit)
     self.clock = clock
+    self.onPollSucceeded = onPollSucceeded
 
   }
 
@@ -219,6 +227,8 @@ public actor HubConnection: ModemConnection {
           }
 
           failedPolls = 0
+
+          await onPollSucceeded?()
 
           if !received.isEmpty {
 

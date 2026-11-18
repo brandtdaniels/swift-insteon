@@ -70,7 +70,7 @@ struct ServerFailureTests {
     let directory = try scratch()
     let occupied = try FreePort.bind(listening: true)
     defer { close(occupied.fileDescriptor) }
-    let result = await failure(arguments: arguments(in: directory, port: occupied.port), environment: environment(in: directory)) { _, catalog, snapshot, body in
+    let result = await failure(arguments: arguments(in: directory, port: occupied.port), environment: environment(in: directory)) { _, catalog, snapshot, _, body in
       try await ScriptedModem.open(ScriptedModem.connection(), catalog: catalog, snapshot: snapshot, body: body)
     }
     #expect(result?.code == .portInUse)
@@ -83,7 +83,7 @@ struct ServerFailureTests {
     let file = directory.appendingPathComponent("env")
     try Data("INSTEON_GATEWAY_PASSWORD=\(gatewayPassword)\n".utf8).write(to: file)
     #expect(chmod(file.path, 0o666) == 0)
-    let result = await failure(arguments: arguments(in: directory, extra: ["--hub", "192.168.1.20", "--env-file", file.path]), environment: ["HOME": directory.path]) { _, _, _, _ in
+    let result = await failure(arguments: arguments(in: directory, extra: ["--hub", "192.168.1.20", "--env-file", file.path]), environment: ["HOME": directory.path]) { _, _, _, _, _ in
       Issue.record("no modem should open")
     }
     #expect(result?.code == .environmentFileUnsafe)
@@ -94,7 +94,7 @@ struct ServerFailureTests {
   @Test func anEnvironmentFileThatIsMissingNamesThePath() async throws {
     let directory = try scratch()
     let path = directory.appendingPathComponent("missing-env").path
-    let result = await failure(arguments: arguments(in: directory, extra: ["--hub", "192.168.1.20", "--env-file", path]), environment: ["HOME": directory.path]) { _, _, _, _ in }
+    let result = await failure(arguments: arguments(in: directory, extra: ["--hub", "192.168.1.20", "--env-file", path]), environment: ["HOME": directory.path]) { _, _, _, _, _ in }
     #expect(result?.code == .environmentFileMissing)
     #expect(result?.message == "The environment file \(path) doesn't exist. Create it, or leave out --env-file to use the default.")
   }
@@ -105,7 +105,7 @@ struct ServerFailureTests {
     try Data("INSTEON_GATEWAY_PASSWORD=short\n".utf8).write(to: file)
     #expect(chmod(file.path, 0o644) == 0)
     let capture = ServerLogCapture()
-    let result = await failure(arguments: arguments(in: directory, extra: ["--hub", "192.168.1.20", "--env-file", file.path]), environment: ["HOME": directory.path], logger: capture.logger) { _, _, _, _ in }
+    let result = await failure(arguments: arguments(in: directory, extra: ["--hub", "192.168.1.20", "--env-file", file.path]), environment: ["HOME": directory.path], logger: capture.logger) { _, _, _, _, _ in }
     #expect(result?.code == .gatewayPasswordInvalid)
     let warning = try #require(capture.records.first { $0.level == .warning })
     #expect(warning.message.contains("others can read the environment file \(file.path)"))
@@ -115,7 +115,7 @@ struct ServerFailureTests {
   @Test func aSerialPathThatDoesNotExistNamesThePath() async throws {
     let directory = try scratch()
     let path = directory.appendingPathComponent("no-such-modem").path
-    let result = await failure(arguments: arguments(in: directory, extra: ["--serial", path]), environment: ["HOME": directory.path, "INSTEON_GATEWAY_PASSWORD": gatewayPassword]) { target, catalog, snapshot, body in
+    let result = await failure(arguments: arguments(in: directory, extra: ["--serial", path]), environment: ["HOME": directory.path, "INSTEON_GATEWAY_PASSWORD": gatewayPassword]) { target, catalog, snapshot, _, body in
       throw SerialPortError.cannotOpen(path: path, code: ENOENT)
     }
     #expect(result?.code == .serialPathMissing)
@@ -127,7 +127,7 @@ struct ServerFailureTests {
     let directory = try scratch()
     let state = directory.appendingPathComponent("state.json")
     try Data("not json".utf8).write(to: state)
-    let result = await failure(arguments: arguments(in: directory), environment: environment(in: directory)) { _, _, _, _ in
+    let result = await failure(arguments: arguments(in: directory), environment: environment(in: directory)) { _, _, _, _, _ in
       Issue.record("no modem should open")
     }
     #expect(result?.code == .stateFileUnusable)
@@ -144,7 +144,7 @@ struct ServerFailureTests {
   ])
   func invalidOptionsNameTheOptionToChange(_ arguments: [String], _ code: ServerFailure.Code) async throws {
     let directory = try scratch()
-    let result = await failure(arguments: arguments, environment: environment(in: directory)) { _, _, _, _ in }
+    let result = await failure(arguments: arguments, environment: environment(in: directory)) { _, _, _, _, _ in }
     #expect(result?.code == code)
     #expect(result?.exitStatus == ServerFailure.configurationStatus)
     #expect(result?.message.contains("--") == true)
@@ -152,7 +152,7 @@ struct ServerFailureTests {
 
   @Test func aMissingGatewayPasswordNamesTheSetting() async throws {
     let directory = try scratch()
-    let result = await failure(arguments: arguments(in: directory), environment: ["HOME": directory.path]) { _, _, _, _ in }
+    let result = await failure(arguments: arguments(in: directory), environment: ["HOME": directory.path]) { _, _, _, _, _ in }
     #expect(result?.code == .gatewayPasswordMissing)
     #expect(result?.message == "INSTEON_GATEWAY_PASSWORD isn't set. Add it to the environment file; it needs 32 through 1024 bytes with no control characters.")
   }

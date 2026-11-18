@@ -41,8 +41,10 @@ succeeds, subscribers get `ServiceEvent.modemReconnected` and refresh what they 
 that failed because the connection dropped is never repeated by a reconnection.
 
 `health()` reports readiness (`starting` before the first connection, `ready`, `degraded`), the
-modem's state and cause, the time of the last hardware exchange and of the last confirmation of
-the cached device information. It sends nothing to hardware and doesn't take the admission gate.
+modem's state and cause, the time of the last hardware exchange, the time of the last poll the
+modem's connection answered (a Hub's connection polls, so this stays recent while a quiet house
+moves the exchange rarely; a serial modem reports none) and of the last confirmation of the
+cached device information. It sends nothing to hardware and doesn't take the admission gate.
 
 A service made with `init(network:persistence:)` leaves the connection to its host, and `run`
 ends when that connection does. No HTTP server is needed to use this runtime. One controlling

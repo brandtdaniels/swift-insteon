@@ -41,6 +41,7 @@ struct HealthDTO: Encodable {
   let status: String
   let modem: Modem
   let lastExchangeAgeSeconds: Int?
+  let lastPollAgeSeconds: Int?
   let snapshotAgeSeconds: Int?
   let persistence: String
 
@@ -64,6 +65,7 @@ struct HealthDTO: Encodable {
     modem = Modem(connected: health.modem == .connected, cause: health.modem.cause?.wireName)
     func age(_ date: Date?) -> Int? { date.map { max(0, Int(health.checkedAt.timeIntervalSince($0))) } }
     lastExchangeAgeSeconds = age(health.lastHardwareExchange)
+    lastPollAgeSeconds = age(health.lastPoll)
     snapshotAgeSeconds = age(health.deviceInformationUpdated)
     switch health.persistence {
     case .notConfigured: persistence = "notConfigured"
@@ -79,10 +81,11 @@ struct HealthDTO: Encodable {
     try container.encode(status, forKey: .status)
     try container.encode(modem, forKey: .modem)
     try container.encode(lastExchangeAgeSeconds, forKey: .lastExchangeAgeSeconds)
+    try container.encode(lastPollAgeSeconds, forKey: .lastPollAgeSeconds)
     try container.encode(snapshotAgeSeconds, forKey: .snapshotAgeSeconds)
     try container.encode(persistence, forKey: .persistence)
   }
-  private enum CodingKeys: String, CodingKey { case version, status, modem, lastExchangeAgeSeconds, snapshotAgeSeconds, persistence }
+  private enum CodingKeys: String, CodingKey { case version, status, modem, lastExchangeAgeSeconds, lastPollAgeSeconds, snapshotAgeSeconds, persistence }
 }
 
 struct DeviceDTO: Encodable {

@@ -230,14 +230,19 @@ dropped fails with 502 and an unknown outcome; read status before repeating it.
 `GET /api/v1/health` needs the same authentication and sends nothing to hardware:
 
 ```json
-{"version":1,"status":"starting","modem":{"connected":false,"cause":"hubUnreachable"},"lastExchangeAgeSeconds":null,"snapshotAgeSeconds":3600,"persistence":"saved"}
+{"version":1,"status":"starting","modem":{"connected":false,"cause":"hubUnreachable"},"lastExchangeAgeSeconds":null,"lastPollAgeSeconds":null,"snapshotAgeSeconds":3600,"persistence":"saved"}
 ```
 
 `status` is `starting` until the first connection, then `ready` or `degraded`. The ages are in
 seconds. `lastExchangeAgeSeconds` is the time since the modem last answered the service or sent
-it something, `null` before the first connection. `snapshotAgeSeconds` is the time since the
-cached device information was last confirmed against the modem's ALL-Link database; before the
-first connection it is the age of the saved state file. It reports no device, address or Hub
+it something, `null` before the first connection; in a quiet house it keeps growing while the
+status stays `ready`. `lastPollAgeSeconds` is the time since the Hub last answered a poll of its
+buffer. The service polls about twice a second, so while the Hub is reachable it stays small even
+when nothing happens, and it grows once the Hub stops answering. It is `null` before the first
+answered poll, and always `null` for a serial modem, which isn't polled. Use it, not
+`lastExchangeAgeSeconds`, to tell a quiet house from a dead link. `snapshotAgeSeconds` is the
+time since the cached device information was last confirmed against the modem's ALL-Link
+database; before the first connection it is the age of the saved state file. It reports no device, address or Hub
 detail. The endpoint answers 200 whatever the status, so a monitor reads the body.
 
 Wrong Hub credentials are reported as `credentialsRejected`. The service retries every 15

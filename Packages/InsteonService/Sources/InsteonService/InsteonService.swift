@@ -27,6 +27,7 @@ public actor InsteonService: InsteonServiceAPI {
   private var connection: ModemConnectionState
   private var hasConnected: Bool
   private var lastExchange: Date?
+  private var lastPoll: Date?
   private var informationUpdated: Date?
   private var attemptConnected = false
 
@@ -151,15 +152,16 @@ public actor InsteonService: InsteonServiceAPI {
     return await persist()
   }
 
-  /// Reports readiness, the modem's state, and the ages of the last hardware exchange and the
-  /// cached device information. It sends nothing to hardware and doesn't take the admission gate.
+  /// Reports readiness, the modem's state, and the times of the last hardware exchange, the last
+  /// answered poll and the last confirmation of the cached device information. It sends nothing
+  /// to hardware and doesn't take the admission gate.
   public func health() -> ServiceHealth {
     let readiness: ServiceHealth.Readiness
     switch connection {
     case .connected: readiness = .ready
     case .unavailable: readiness = hasConnected ? .degraded : .starting
     }
-    return ServiceHealth(readiness: readiness, modem: connection, lastHardwareExchange: lastExchange, deviceInformationUpdated: informationUpdated, persistence: persistenceOutcome, checkedAt: now())
+    return ServiceHealth(readiness: readiness, modem: connection, lastHardwareExchange: lastExchange, lastPoll: lastPoll, deviceInformationUpdated: informationUpdated, persistence: persistenceOutcome, checkedAt: now())
   }
 
   /// Subscribes to typed events. Each subscription is iterated by one caller task. A subscriber
@@ -206,7 +208,7 @@ public actor InsteonService: InsteonServiceAPI {
       var failure: any Error = ServiceLifecycleError.connectionEnded
       do {
         let snapshot = await network.snapshot()
-        try await opener.withNetwork(snapshot: snapshot) { candidate in try await self.serve(candidate) }
+        try await opener.withNetwork(snapshot: snapshot, onPollSucceeded: { await self.pollSucceeded() }) { candidate in try await self.serve(candidate) }
       } catch {
         failure = error
       }
@@ -238,6 +240,10 @@ public actor InsteonService: InsteonServiceAPI {
       if let event = ServiceEvent(event) { publish(event) }
     }
     try Task.checkCancellation()
+  }
+
+  private func pollSucceeded() {
+    lastPoll = now()
   }
 
   private func connected(to candidate: DeviceNetwork) async {
