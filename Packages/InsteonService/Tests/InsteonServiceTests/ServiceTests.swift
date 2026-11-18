@@ -172,8 +172,9 @@ struct ServiceTests {
     try await withThrowingTaskGroup(of: CommandReceipt.self) { group in
       group.addTask { try await service.execute(ServiceCommand(address: address, action: .on)) }
       await gate.waitUntilPaused()
-      let devices = await Result { try await service.devices() }
-      #expect((try? devices.get().map(\.address)) == [address])
+      var listed: [InsteonAddress]?
+      do { listed = try await service.devices().map(\.address) } catch { await gate.release() }
+      #expect(listed == [address])
       #expect(await service.health().readiness == .ready)
       await gate.release()
       let receipt = try await group.next()
