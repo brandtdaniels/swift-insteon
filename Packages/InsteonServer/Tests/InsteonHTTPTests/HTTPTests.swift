@@ -300,6 +300,10 @@ struct HTTPTests {
       let script = String(buffer: response.body)
       #expect(script.contains(LiveLink.source))
       #expect(script.components(separatedBy: "new EventSource(").count == 2)
+      // A first connection refreshes; a resumed one refreshes only when the server reports a gap.
+      #expect(script.contains("onOpen: resumed => { if (!resumed) synchronize(); }"))
+      #expect(script.contains("update.kind === 'gap'"))
+      #expect(script.contains("?lastEventId="))
       #expect(!script.contains("if (events ||"))
     }
   }
@@ -491,7 +495,7 @@ private struct FailingEventWriter: ResponseBodyWriter {
   var failOnGreeting = false
   struct Disconnected: Error {}
   mutating func write(_ buffer: ByteBuffer) async throws {
-    if failOnGreeting || String(buffer: buffer).hasPrefix("data:") { throw Disconnected() }
+    if failOnGreeting || String(buffer: buffer).hasPrefix("id:") { throw Disconnected() }
   }
   consuming func finish(_ trailingHeaders: HTTPFields?) async throws {}
 }
@@ -509,11 +513,16 @@ actor FakeService: InsteonServiceAPI {
   let eventStream: AsyncStream<ServiceEvent>?
   /// Each subscription gets its own stream that never ends; the actor keeps its continuation open.
   let endlessEvents: Bool
+  /// Items a sequenced subscription starts with, such as a gap.
+  let scriptedItems: [SequencedItem]
+  /// The cursor of each sequenced subscription.
+  private(set) var cursors: [EventCursor?] = []
   private var openSources: [AsyncStream<ServiceEvent>.Continuation] = []
   var reported = ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000))
   let address = InsteonAddress(0x1A, 0x2B, 0x3C)
-  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false) {
+  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false, scriptedItems: [SequencedItem] = []) {
     self.endlessEvents = endlessEvents
+    self.scriptedItems = scriptedItems
     self.persistence = persistence; self.fails = fails; self.refusal = refusal; self.failure = failure; self.reading = reading
     self.eventStream = eventStream
   }
@@ -534,6 +543,23 @@ actor FakeService: InsteonServiceAPI {
     if case let .onOff(value) = reading { isOn = value } else { isOn = true }
     let status = command.action == .status ? DeviceStatus(group: 1, value: 128, allLinkDatabaseDelta: 0, reading: reading, isOn: isOn) : nil
     return CommandReceipt(address: address, outcome: command.action == .on || command.action == .off ? .acknowledged : .read, status: status, persistence: persistence)
+  }
+  /// Numbers this service's events 1, 2, 3 in the run named `fake`.
+  func sequencedEvents(after cursor: EventCursor?) async -> SequencedEvents {
+    cursors.append(cursor)
+    let source = await events()
+    let (stream, continuation) = AsyncThrowingStream<SequencedItem, any Error>.makeStream()
+    for item in scriptedItems { continuation.yield(item) }
+    let task = Task {
+      var number: UInt64 = 0
+      for await event in source {
+        number += 1
+        continuation.yield(.event(event, EventCursor(runID: "fake", sequence: number)))
+      }
+      continuation.finish()
+    }
+    continuation.onTermination = { _ in task.cancel() }
+    return SequencedEvents(stream)
   }
   func events() async -> AsyncStream<ServiceEvent> {
     subscriptions += 1

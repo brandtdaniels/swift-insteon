@@ -174,18 +174,20 @@ enum BrowserControls {
       } catch { /* The stream's backoff reports unreachable servers. */ }
     };
     const live = createLiveLink({
-      open: () => new EventSource('/api/v1/events'),
+      open: lastEventId => new EventSource('/api/v1/events' + (lastEventId ? '?lastEventId=' + encodeURIComponent(lastEventId) : '')),
       schedule: (callback, delay) => setTimeout(callback, delay),
       cancel: timer => clearTimeout(timer),
       onState: state => { connected = state === 'connected'; status(liveStatus[state]); },
-      // Every open, including a reconnect after a restart, refreshes the cards and their form keys.
-      onOpen: () => synchronize(),
+      // A first connection refreshes the cards and their form keys. A resumed stream keeps them: the
+      // server replays what was missed, or says so with a gap.
+      onOpen: resumed => { if (!resumed) synchronize(); },
       onClosed: () => { if (!authenticationRequired) checkAuthentication(); },
       onMessage: data => {
         if (!active) return;
         try {
           const update = JSON.parse(data);
           if (update?.version === 1 && update.kind === 'modemUnavailable' && typeof update.message === 'string') { hubStatus(update.message); return; }
+          if (update?.version === 1 && update.kind === 'gap') { synchronize(); return; }
           if (update?.version === 1 && update.kind === 'reconnected') { hubStatus(''); synchronize(); return; }
           if (update?.version !== 1 || !validAddress(update.address)) return;
           if (!['commandCompleted', 'identified', 'setButtonPressed'].includes(update.kind)) return;

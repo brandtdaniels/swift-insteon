@@ -1,4 +1,5 @@
 import Hummingbird
+import HTTPTypes
 import InsteonService
 import Logging
 
@@ -25,7 +26,7 @@ public func makeInsteonRouter<Service: InsteonServiceAPI>(service: Service, auth
   router.post("/api/v1/devices/{address}/commands") { request, context in
     try await api.command(request, address: context.parameters.get("address"))
   }
-  router.get("/api/v1/events") { _, _ in await api.events() }
+  router.get("/api/v1/events") { request, _ in await api.events(resumingAfter: EventCursor(request)) }
   router.get("/devices/{address}") { _, context in
     try await website.device(address: context.parameters.get("address"))
   }
@@ -33,4 +34,16 @@ public func makeInsteonRouter<Service: InsteonServiceAPI>(service: Service, auth
     try await website.command(request, address: context.parameters.get("address"))
   }
   return router
+}
+
+extension EventCursor {
+  /// Where a reconnecting client left off: the `Last-Event-ID` header, or the `lastEventId` query
+  /// parameter for a client that can't set headers. An id the server can't read stands for another
+  /// run, so the client is told to refresh.
+  init?(_ request: Request) {
+    let header = request.headers[HTTPField.Name("Last-Event-ID")!]
+    let query = request.uri.queryParameters["lastEventId"].map { String($0) }
+    guard let text = header ?? query else { return nil }
+    self = EventCursor(token: text) ?? .unrecognized
+  }
 }

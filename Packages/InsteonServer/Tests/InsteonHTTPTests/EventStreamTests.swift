@@ -49,7 +49,7 @@ struct EventStreamTests {
     var chunks = stream.chunks.makeAsyncIterator()
     _ = await chunks.next()
     events.yield(.statusChanged(InsteonAddress(0x1A, 0x2B, 0x3C)))
-    #expect(await chunks.next()?.hasPrefix("data: ") == true)
+    #expect(await chunks.next()?.hasPrefix("id: ") == true)
     await clock.waitForSleepers(1, until: .seconds(10))
     clock.advance(by: .seconds(10))
     #expect(await chunks.next() == ": keepalive\n\n")

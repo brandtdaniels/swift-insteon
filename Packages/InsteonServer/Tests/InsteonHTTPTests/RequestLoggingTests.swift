@@ -174,6 +174,7 @@ private actor ScriptedService: InsteonServiceAPI {
     return CommandReceipt(address: command.address, outcome: .acknowledged, status: nil, persistence: .saved)
   }
   func events() async -> AsyncStream<ServiceEvent> { AsyncStream { $0.finish() } }
+  func sequencedEvents(after cursor: EventCursor?) async -> SequencedEvents { SequencedEvents(AsyncThrowingStream { $0.finish() }) }
   func health() async -> ServiceHealth {
     ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000))
   }

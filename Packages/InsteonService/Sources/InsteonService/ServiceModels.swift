@@ -112,6 +112,9 @@ public protocol DeviceEventSource: Sendable {
   associatedtype Events: AsyncSequence & Sendable where Events.Element == ServiceEvent
   /// Subscribes from the call on, without stored history or an inferred status refresh.
   func events() async -> Events
+  /// Subscribes to numbered events, resuming after `cursor` when the events it missed are still
+  /// kept, and starting with a gap item when they aren't.
+  func sequencedEvents(after cursor: EventCursor?) async -> SequencedEvents
 }
 
 /// The health role of an Insteon service.
