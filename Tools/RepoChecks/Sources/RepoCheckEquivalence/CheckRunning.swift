@@ -33,8 +33,8 @@ public struct ProcessCheckRunner: CheckRunning {
     let scratch = try ScratchDirectory(prefix: "repo-check-run")
     let outputURL = scratch.url(for: "stdout")
     let errorURL = scratch.url(for: "stderr")
-    FileManager.default.createFile(atPath: outputURL.path, contents: nil)
-    FileManager.default.createFile(atPath: errorURL.path, contents: nil)
+    _ = FileManager.default.createFile(atPath: outputURL.path, contents: nil)
+    _ = FileManager.default.createFile(atPath: errorURL.path, contents: nil)
 
     let outputHandle = try FileHandle(forWritingTo: outputURL)
     let errorHandle = try FileHandle(forWritingTo: errorURL)
