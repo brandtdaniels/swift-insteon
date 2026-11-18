@@ -295,6 +295,75 @@ struct HubConnectionTests {
 
   }
 
+  /// Whether a Hub ever answers with a 5xx status is unverified; the stream treats one like a
+  /// request that timed out, so a busy moment doesn't end the connection.
+  @Test func aHubErrorStatusIsTriedAgainAtTheNextPoll() async throws {
+
+    let fake = FakeHub()
+    let connection = makeConnection(fake)
+
+    try await connection.write([0x02, 0x77])
+    await fake.answerNextRequests(with: [503])
+
+    var chunks = connection.receive().makeAsyncIterator()
+
+    // The poll that gets the 503 waits an interval, and the next one reads the reply.
+    async let chunk = chunks.next()
+    await clock.waitForSleeper(until: HubConnection.defaultPollInterval)
+    clock.advance(by: HubConnection.defaultPollInterval)
+
+    #expect(try await chunk == [0x02, 0x77, 0x06])
+
+  }
+
+  @Test func hubErrorStatusesInARowFailTheStreamAtTheFailureLimit() async throws {
+
+    let fake = FakeHub()
+    let connection = makeConnection(fake)
+
+    try await connection.write([0x02, 0x77])
+    await fake.answerNextRequests(with: Array(repeating: 503, count: HubConnection.defaultFailureLimit))
+
+    let stream = connection.receive()
+
+    try await withThrowingTaskGroup(of: Void.self) { group in
+
+      group.addTask {
+
+        await #expect(throws: HubError.unexpectedStatus(503)) {
+
+          for try await _ in stream {}
+
+        }
+
+      }
+
+      for poll in 1..<HubConnection.defaultFailureLimit {
+
+        await clock.waitForSleeper(until: HubConnection.defaultPollInterval * poll)
+        clock.advance(by: HubConnection.defaultPollInterval)
+
+      }
+
+      try await group.waitForAll()
+
+    }
+
+  }
+
+  @Test(arguments: [401, 403, 404])
+  func rejectedCredentialsAndOtherClientErrorsFailTheStreamAtOnce(_ status: Int) async {
+
+    let connection = makeConnection(FakeHub(status: status))
+
+    await #expect(throws: HubError.unexpectedStatus(status)) {
+
+      for try await _ in connection.receive() {}
+
+    }
+
+  }
+
   @Test func aNewStreamFinishesThePreviousOne() async throws {
 
     let connection = makeConnection(FakeHub())

@@ -8,7 +8,13 @@ struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
   let service: Service
 
   func devices() async throws -> Response {
-    try json(DeviceListDTO(try await service.devices()))
+    // Read the list before the state: a modem that goes away in between marks it stale.
+    let devices = try await service.devices()
+    return try json(DeviceListDTO(devices, modem: await service.health().modem))
+  }
+
+  func health() async throws -> Response {
+    try json(HealthDTO(await service.health()))
   }
 
   func command(_ request: Request, address: String?) async throws -> Response {

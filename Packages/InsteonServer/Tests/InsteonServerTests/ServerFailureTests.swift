@@ -63,35 +63,8 @@ struct ServerFailureTests {
 
   // MARK: Startup causes
 
-  @Test func aHubThatRejectsTheCredentialsNamesTheSettingsWithoutTheirValues() async throws {
-    let directory = try scratch()
-    let result = await failure(arguments: arguments(in: directory, port: 18080), environment: environment(in: directory)) { _, _, _, _ in
-      throw HubError.unexpectedStatus(401)
-    }
-    #expect(result?.code == .hubCredentialsRejected)
-    #expect(result?.message == "The Hub rejected its user name and password (HTTP 401). Check INSTEON_HUB_USERNAME and INSTEON_HUB_PASSWORD in the environment file.")
-    #expect(result?.exitStatus == ServerFailure.configurationStatus)
-    #expect(result?.message.contains(hubPassword) == false)
-  }
 
-  @Test func aHubThatForbidsTheCredentialsIsReportedTheSameWay() async throws {
-    let directory = try scratch()
-    let result = await failure(arguments: arguments(in: directory, port: 18080), environment: environment(in: directory)) { _, _, _, _ in
-      throw HubError.unexpectedStatus(403)
-    }
-    #expect(result?.code == .hubCredentialsRejected)
-    #expect(result?.message.contains("HTTP 403") == true)
-  }
 
-  @Test func aHubThatDoesNotAnswerAtStartupNamesItsAddress() async throws {
-    let directory = try scratch()
-    let result = await failure(arguments: arguments(in: directory, port: 18080), environment: environment(in: directory)) { _, _, _, _ in
-      throw URLError(.cannotConnectToHost)
-    }
-    #expect(result?.code == .hubUnreachable)
-    #expect(result?.message == "The Hub at 192.168.1.20:25105 didn't answer. Check that it's powered on and on the same network, and that --hub or INSTEON_HUB_HOST is its address.")
-    #expect(result?.exitStatus == ServerFailure.unavailableStatus)
-  }
 
   @Test func aPortThatIsAlreadyInUseNamesTheListener() async throws {
     let directory = try scratch()
@@ -149,16 +122,6 @@ struct ServerFailureTests {
     #expect(result?.message == "No serial device at \(path). Plug in the modem and check the path given to --serial.")
   }
 
-  @Test func aSerialPortThatCannotBeOpenedForAnotherReasonSaysWhy() async throws {
-    let directory = try scratch()
-    let path = "/dev/example-modem"
-    let result = await failure(arguments: arguments(in: directory, extra: ["--serial", path]), environment: ["HOME": directory.path, "INSTEON_GATEWAY_PASSWORD": gatewayPassword]) { _, _, _, _ in
-      throw SerialPortError.cannotOpen(path: path, code: EACCES)
-    }
-    #expect(result?.code == .serialPortUnavailable)
-    #expect(result?.message.hasPrefix("The serial port \(path) couldn't be opened") == true)
-    #expect(result?.message.hasSuffix("Check that this account may use the device and that no other program has it open.") == true)
-  }
 
   @Test func aCorruptStateFileNamesThePathAndIsLeftAlone() async throws {
     let directory = try scratch()
@@ -194,46 +157,16 @@ struct ServerFailureTests {
     #expect(result?.message == "INSTEON_GATEWAY_PASSWORD isn't set. Add it to the environment file; it needs 32 through 1024 bytes with no control characters.")
   }
 
-  @Test func anErrorTheServerDoesNotKnowReportsOnlyItsType() async throws {
-    let directory = try scratch()
+
+
+
+
+  @Test func anErrorTheServerDoesNotKnowReportsOnlyItsType() {
     struct Surprise: Error, CustomStringConvertible { var description: String { "carries hub-secret-pass" } }
-    let result = await failure(arguments: arguments(in: directory, port: 18080), environment: environment(in: directory)) { _, _, _, _ in throw Surprise() }
-    #expect(result?.code == .unexpected)
-    #expect(result?.message == "The server stopped on an unexpected error (Surprise). Check the Hub or modem, the listener and the state file.")
-    #expect(result?.exitStatus == 1)
-  }
-
-  // MARK: The modem ending
-
-  @Test func aHubThatStopsAnsweringWhileServingIsReportedAsTheModemEndingWithItsCause() async throws {
-    let directory = try scratch()
-    let connection = ScriptedModem.connection(ending: .fails(HubStoppedAnswering(underlyingError: URLError(.timedOut))))
-    let result = await failure(arguments: arguments(in: directory, port: try ephemeralPort()), environment: environment(in: directory)) { _, catalog, snapshot, body in
-      try await ScriptedModem.open(connection, catalog: catalog, snapshot: snapshot, body: body)
-    }
-    #expect(result?.code == .modemConnectionEnded)
-    #expect(result?.message == "The modem connection ended: \(InsteonErrorDescription.hubStoppedAnsweringInline). Restart the server after checking the Hub or modem.")
-    #expect(result?.exitStatus == ServerFailure.unavailableStatus)
-  }
-
-  @Test func anyReaderFailureWhileServingIsReportedAsTheModemEndingWithItsCause() async throws {
-    let directory = try scratch()
-    let connection = ScriptedModem.connection(ending: .fails(HubError.unexpectedStatus(500)))
-    let result = await failure(arguments: arguments(in: directory, port: try ephemeralPort()), environment: environment(in: directory)) { _, catalog, snapshot, body in
-      try await ScriptedModem.open(connection, catalog: catalog, snapshot: snapshot, body: body)
-    }
-    #expect(result?.code == .modemConnectionEnded)
-    #expect(result?.message == "The modem connection ended: The Hub answered with HTTP status 500. Restart the server after checking the Hub or modem.")
-  }
-
-  @Test func aConnectionThatClosesWithoutAnErrorIsReportedAsTheModemEnding() async throws {
-    let directory = try scratch()
-    let connection = ScriptedModem.connection(ending: .closes)
-    let result = await failure(arguments: arguments(in: directory, port: try ephemeralPort()), environment: environment(in: directory)) { _, catalog, snapshot, body in
-      try await ScriptedModem.open(connection, catalog: catalog, snapshot: snapshot, body: body)
-    }
-    #expect(result?.code == .modemConnectionEnded)
-    #expect(result?.message == "The modem connection ended. Restart the server after checking the Hub or modem.")
+    let result = ServerFailure(Surprise())
+    #expect(result.code == .unexpected)
+    #expect(result.message == "The server stopped on an unexpected error (Surprise). Check the Hub or modem, the listener and the state file.")
+    #expect(result.exitStatus == 1)
   }
 
   // MARK: Log lines

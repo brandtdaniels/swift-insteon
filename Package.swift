@@ -33,8 +33,7 @@ let package = Package(
   ],
   dependencies: [
     // SHA-256 for DeviceCatalogUpdater: CryptoKit on Apple platforms, BoringSSL elsewhere.
-    .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMinor(from: "5.0.3")),
-    .package(url: "https://github.com/apple/swift-async-algorithms.git", from: "1.0.4")
+    .package(url: "https://github.com/apple/swift-crypto.git", .upToNextMinor(from: "5.0.3"))
   ],
   targets: [
     .target(
@@ -210,12 +209,12 @@ let package = Package(
     // The application service, independent of authentication, transport and presentation.
     .target(
       name: "InsteonService",
-      dependencies: ["InsteonCore", .product(name: "AsyncAlgorithms", package: "swift-async-algorithms")],
+      dependencies: ["InsteonCore", "InsteonHubClient", "InsteonModem"],
       path: "Packages/InsteonService/Sources/InsteonService"
     ),
     .testTarget(
       name: "InsteonServiceTests",
-      dependencies: ["InsteonService", "InsteonCore", "InsteonProtocol", "InsteonLinkingTestSupport"],
+      dependencies: ["InsteonService", "InsteonCore", "InsteonHubClient", "InsteonModem", "InsteonProtocol", "InsteonLinkingTestSupport", "InsteonTestSupport"],
       path: "Packages/InsteonService/Tests/InsteonServiceTests"
     ),
     // The `insteon` command. Its command-line parsing is in InsteonCLISupport, so it can be tested.

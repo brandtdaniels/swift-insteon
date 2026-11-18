@@ -1,36 +1,35 @@
-import AsyncAlgorithms
-import InsteonCore
-
-/// A subscription combining passive device notifications and explicit command completions.
+/// A subscription to the service's passive device notifications, command completions and
+/// changes in whether the modem is reachable.
 ///
-/// Subscribe before sending a command to observe its completion. Iterate from one task.
-/// Each subscriber buffers up to 64 command completions; falling behind ends the sequence
-/// with an error so the client can reconnect and refresh. Cancellation releases both readers.
+/// Subscribe before sending a command to observe its completion. Iterate from one task. Each
+/// subscriber buffers up to 64 events; falling behind ends the sequence with an error so the
+/// client can reconnect and refresh. The subscription survives the modem going away and coming
+/// back: it carries ``ServiceEvent/modemUnavailable(_:)`` and ``ServiceEvent/modemReconnected``.
+/// Cancellation releases the reader.
 public struct ServiceEvents: AsyncSequence, Sendable {
-  /// A typed notification or a completed command with its confirmed result.
+  /// A typed notification, a completed command with its confirmed result, or a change in the
+  /// modem's availability.
   public typealias Element = ServiceEvent
 
-  private let monitor: MonitorEvents
   private let subscription: CommandEventSubscription
 
-  init(monitor: AsyncStream<DeviceMonitorEvent>, subscription: CommandEventSubscription) {
-    self.monitor = MonitorEvents(events: monitor.compactMap { ServiceEvent($0) }, subscription: subscription)
+  init(subscription: CommandEventSubscription) {
     self.subscription = subscription
   }
 
   /// Creates the subscription's single reader. Retain either the sequence or reader to
-  /// keep receiving command completions.
+  /// keep receiving events.
   public func makeAsyncIterator() -> AsyncIterator {
-    AsyncIterator(base: merge(monitor, subscription.stream).makeAsyncIterator(), subscription: subscription)
+    AsyncIterator(base: subscription.stream.makeAsyncIterator(), subscription: subscription)
   }
 
-  /// A reader that owns both upstream subscriptions for its lifetime.
+  /// A reader that owns the subscription for its lifetime.
   public struct AsyncIterator: AsyncIteratorProtocol {
-    fileprivate var base: AsyncMerge2Sequence<MonitorEvents, AsyncThrowingStream<ServiceEvent, any Error>>.Iterator
+    fileprivate var base: AsyncThrowingStream<ServiceEvent, any Error>.Iterator
     fileprivate let subscription: CommandEventSubscription
 
-    /// Returns the next event, or ends when the modem closes or the reader is canceled.
-    /// Throws if this subscriber fell behind its bounded completion queue.
+    /// Returns the next event, or ends when the reader is canceled.
+    /// Throws if this subscriber fell behind its bounded queue.
     public mutating func next() async throws -> ServiceEvent? {
       try await base.next()
     }
@@ -39,7 +38,7 @@ public struct ServiceEvents: AsyncSequence, Sendable {
 
 /// Indicates a gap in this subscription. Reconnect and refresh cached device information.
 public enum ServiceEventError: Error {
-  /// More than 64 command completions arrived before this client consumed them.
+  /// More than 64 events arrived before this client consumed them.
   case slowConsumer
 }
 
@@ -67,27 +66,7 @@ final class CommandEventSubscription: Sendable {
 }
 
 /// The service doesn't retain abandoned subscriptions or their buffered events. Dead weak
-/// entries are pruned on the next subscription or command, without a detached cleanup task.
+/// entries are pruned on the next subscription or event, without a detached cleanup task.
 struct WeakCommandSubscription: Sendable {
   weak var value: CommandEventSubscription?
-}
-
-fileprivate struct MonitorEvents: AsyncSequence, Sendable {
-  typealias Element = ServiceEvent
-  let events: AsyncCompactMapSequence<AsyncStream<DeviceMonitorEvent>, ServiceEvent>
-  let subscription: CommandEventSubscription
-
-  func makeAsyncIterator() -> Iterator {
-    Iterator(base: events.makeAsyncIterator(), subscription: subscription)
-  }
-
-  struct Iterator: AsyncIteratorProtocol {
-    var base: AsyncCompactMapSequence<AsyncStream<DeviceMonitorEvent>, ServiceEvent>.AsyncIterator
-    let subscription: CommandEventSubscription
-    mutating func next() async -> ServiceEvent? {
-      let event = await base.next()
-      if event == nil { subscription.finish() }
-      return event
-    }
-  }
 }

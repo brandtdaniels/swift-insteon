@@ -17,6 +17,10 @@ enum BrowserControls {
       const node = document.getElementById('live-updates');
       if (node) node.textContent = text;
     };
+    const hubStatus = text => {
+      const node = document.getElementById('hub-status');
+      if (node) node.textContent = text;
+    };
     const parseCard = async (response, id) => {
       if (!(response.headers.get('Content-Type') || '').startsWith('text/html')) throw new Error('Unexpected response');
       const template = document.createElement('template');
@@ -174,6 +178,8 @@ enum BrowserControls {
         if (!active || events !== connection) return;
         try {
           const update = JSON.parse(event.data);
+          if (update?.version === 1 && update.kind === 'modemUnavailable' && typeof update.message === 'string') { hubStatus(update.message); return; }
+          if (update?.version === 1 && update.kind === 'reconnected') { hubStatus(''); synchronize(); return; }
           if (update?.version !== 1 || !validAddress(update.address)) return;
           if (!['commandCompleted', 'identified', 'setButtonPressed'].includes(update.kind)) return;
           queue.add(update.address.toUpperCase());

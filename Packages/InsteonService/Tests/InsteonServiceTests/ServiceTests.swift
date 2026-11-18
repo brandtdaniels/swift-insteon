@@ -69,13 +69,6 @@ struct ServiceTests {
     #expect(try await reader.next() == .commandCompleted(command, receipt))
   }
 
-  @Test func modemStreamEndingAlsoEndsTheIdleCommandSubscription() async throws {
-    let monitor = AsyncStream<DeviceMonitorEvent> { $0.finish() }
-    let events = ServiceEvents(monitor: monitor, subscription: CommandEventSubscription())
-    var reader = events.makeAsyncIterator()
-    #expect(try await reader.next() == nil)
-  }
-
   @Test func cancelingOneSubscriberDoesNotStopOtherSubscribersOrCommands() async throws {
     let service = InsteonService(network: network(InMemoryModem()))
     let canceled = await service.events()
@@ -178,11 +171,19 @@ struct ServiceTests {
     let events = await service.events()
     let other = InsteonAddress(0x1A, 0x2B, 0x44)
     await modem.setIdentity(SetButtonPressed(sender: other, role: .responder, category: 1, subcategory: 125, firmwareVersion: 69))
-    await modem.broadcastIdentity(of: other)
-    var iterator = events.makeAsyncIterator()
-    #expect(try await iterator.next() == .setButtonPressed(other))
-    #expect(await network.registry.device(other) != nil)
-    #expect(await network.state(of: other)?.lastSeen == nil)
+    let (hostStopped, finish) = AsyncStream<Void>.makeStream()
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      group.addTask { _ = try await service.run { for await _ in hostStopped {} } }
+      var iterator = events.makeAsyncIterator()
+      // Passive events flow once the runtime monitors the modem.
+      #expect(try await iterator.next() == .modemReconnected)
+      await modem.broadcastIdentity(of: other)
+      #expect(try await iterator.next() == .setButtonPressed(other))
+      #expect(await network.registry.device(other) != nil)
+      #expect(await network.state(of: other)?.lastSeen == nil)
+      finish.finish()
+      try await group.waitForAll()
+    }
   }
 
   @Test func runtimePreparesAndSavesWithoutAnyHTTPHost() async throws {
@@ -190,7 +191,7 @@ struct ServiceTests {
     let service = InsteonService(network: network(InMemoryModem()), persistence: NetworkSnapshotPersistence(store: store))
     let outcome = try await service.run {}
     #expect(outcome == .saved)
-    #expect(await store.writes == 2)
+    #expect(await store.saved != nil)
   }
 
   @Test func aFailedHostStillCheckpointsBeforeTheRuntimeExits() async throws {
@@ -200,7 +201,7 @@ struct ServiceTests {
     await #expect(throws: HostFailure.self) {
       try await service.run { throw HostFailure() }
     }
-    #expect(await store.writes == 2)
+    #expect(await store.saved != nil)
   }
 
   private func network(_ modem: InMemoryModem) -> DeviceNetwork {

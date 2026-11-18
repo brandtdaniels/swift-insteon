@@ -169,6 +169,26 @@ public actor DeviceNetwork {
 
   }
 
+  /// A network with no modem, which keeps what a snapshot knows and reaches nothing.
+  ///
+  /// A front end reads devices, identities and saved ALL-Link database copies from it while no
+  /// modem is reachable, then builds a network with ``ModemSession/network(catalog:snapshot:hub:)``
+  /// once one is. Every operation that needs the modem throws `ModemError.connectionClosed`
+  /// without sending anything.
+  ///
+  /// - Parameters:
+  ///   - catalog: The catalog to describe devices with, or `nil` to describe them by their
+  ///     identities alone.
+  ///   - snapshot: What the network knew before.
+  ///   - hub: The Hub to record in the network's snapshot, or `nil` to keep the Hub the snapshot
+  ///     names.
+  /// - Returns: The network.
+  public static func offline(catalog: ProductCatalog?, snapshot: NetworkSnapshot, hub: HubLocation?) -> DeviceNetwork {
+
+    DeviceNetwork(modem: UnreachableModem(), catalog: catalog?.catalog, snapshot: snapshot, hub: hub)
+
+  }
+
   // MARK: - What the network knows
 
   /// What the network knows, as a value to save and give back to

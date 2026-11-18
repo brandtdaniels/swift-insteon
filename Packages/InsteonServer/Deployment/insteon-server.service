@@ -1,0 +1,25 @@
+# A systemd user unit: install in ~/.config/systemd/user/, then
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now insteon-server
+#   loginctl enable-linger "$USER"      # keeps it running when you're logged out
+# It runs as you, so it reads ~/.config/insteon/env. The file holds the passwords; this one holds none.
+
+[Unit]
+Description=Insteon server
+Wants=network-online.target
+After=network-online.target
+# Restart as often as it takes; the server stays up while the Hub is away, so a restart means
+# a crash or a configuration error.
+StartLimitIntervalSec=0
+
+[Service]
+# Add --listen 100.100.20.30 for a VPN address, or --serial /dev/ttyUSB0 for a USB modem
+# (a serial modem also needs SupplementaryGroups=dialout).
+ExecStart=%h/.local/bin/insteon-server
+Restart=always
+RestartSec=10
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=default.target
