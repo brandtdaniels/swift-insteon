@@ -2,6 +2,7 @@
 enum BrowserControls {
   static let source = #"""
   (() => {
+    \#(LiveLink.source)
     if (!window.fetch || !window.FormData || !window.URLSearchParams) return;
 
     const message = (card, text, error = false) => {
@@ -61,7 +62,7 @@ enum BrowserControls {
     const queue = new Set();
     const validAddress = address => typeof address === 'string' && /^[0-9A-F]{2}(\.[0-9A-F]{2}){2}$/i.test(address);
     let reading = false, listNeeded = false, retryTimer = 0, retryDelay = 500;
-    let active = true, generation = 0, authenticationRequired = false, events = null, connected = false;
+    let active = true, generation = 0, authenticationRequired = false, connected = false;
     let cacheController = null, cacheTimeout = 0;
     const liveSupported = Boolean(window.EventSource && window.AbortController);
     const readCache = url => {
@@ -73,8 +74,7 @@ enum BrowserControls {
     };
     const authenticate = () => {
       authenticationRequired = true;
-      events?.close();
-      events = null;
+      live.stop();
       queue.clear();
       listNeeded = false;
       clearTimeout(retryTimer);
@@ -160,24 +160,31 @@ enum BrowserControls {
       retryDelay = 500;
       drain();
     };
-    const connect = () => {
-      if (!liveSupported) { status('Live updates are unavailable in this browser. Use Refresh page.'); return; }
-      if (events || !active || authenticationRequired) return;
-      status('Connecting live updates…');
-      const connection = new EventSource('/api/v1/events');
-      events = connection;
-      connection.onopen = () => {
-        if (!active || events !== connection) return;
-        connected = true; status('Live updates connected.'); synchronize();
-      };
-      connection.onerror = () => {
-        if (!active || events !== connection) return;
-        connected = false; status('Live updates paused. Displayed values may be stale.');
-      };
-      connection.onmessage = event => {
-        if (!active || events !== connection) return;
+    const liveStatus = {
+      connecting: 'Connecting live updates…',
+      connected: 'Live updates connected.',
+      paused: 'Live updates paused. Displayed values may be stale.',
+      reconnecting: 'Live updates paused. Reconnecting… Displayed values may be stale.'
+    };
+    // A closed stream can't say why. A 401 on the cache read shows the sign-in message.
+    const checkAuthentication = async () => {
+      try {
+        const response = await fetch('/api/v1/devices', { credentials: 'same-origin', redirect: 'error', cache: 'no-store' });
+        if (response.status === 401) authenticate();
+      } catch { /* The stream's backoff reports unreachable servers. */ }
+    };
+    const live = createLiveLink({
+      open: () => new EventSource('/api/v1/events'),
+      schedule: (callback, delay) => setTimeout(callback, delay),
+      cancel: timer => clearTimeout(timer),
+      onState: state => { connected = state === 'connected'; status(liveStatus[state]); },
+      // Every open, including a reconnect after a restart, refreshes the cards and their form keys.
+      onOpen: () => synchronize(),
+      onClosed: () => { if (!authenticationRequired) checkAuthentication(); },
+      onMessage: data => {
+        if (!active) return;
         try {
-          const update = JSON.parse(event.data);
+          const update = JSON.parse(data);
           if (update?.version === 1 && update.kind === 'modemUnavailable' && typeof update.message === 'string') { hubStatus(update.message); return; }
           if (update?.version === 1 && update.kind === 'reconnected') { hubStatus(''); synchronize(); return; }
           if (update?.version !== 1 || !validAddress(update.address)) return;
@@ -185,7 +192,12 @@ enum BrowserControls {
           queue.add(update.address.toUpperCase());
           drain();
         } catch { /* Unknown or malformed events don't execute commands. */ }
-      };
+      }
+    });
+    const connect = () => {
+      if (!liveSupported) { status('Live updates are unavailable in this browser. Use Refresh page.'); return; }
+      if (!active || authenticationRequired) return;
+      live.start();
     };
 
     document.addEventListener('submit', async event => {
@@ -228,8 +240,7 @@ enum BrowserControls {
       active = false;
       generation++;
       connected = false;
-      events?.close();
-      events = null;
+      live.stop();
       clearTimeout(retryTimer);
       retryTimer = 0;
       cacheController?.abort();

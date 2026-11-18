@@ -292,6 +292,18 @@ struct HTTPTests {
     #expect(await service.commands.isEmpty)
   }
 
+  @Test func browserHelperReconnectsThroughTheTestedLinkInsteadOfKeepingAClosedStream() async throws {
+    let service = FakeService()
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
+    try await app.test(.router) { client in
+      let response = try await client.execute(uri: "/controls.js", method: .get, headers: headers())
+      let script = String(buffer: response.body)
+      #expect(script.contains(LiveLink.source))
+      #expect(script.components(separatedBy: "new EventSource(").count == 2)
+      #expect(!script.contains("if (events ||"))
+    }
+  }
+
   @Test(arguments: ["action=off", "action=off&formKey=expired", "action=on&levelPercent=invalid&formKey=VALID", "action=off&action=on&formKey=VALID"])
   func invalidBrowserFormsReturnToThePageWithoutSendingCommands(_ form: String) async throws {
     let service = FakeService()
@@ -493,9 +505,13 @@ actor FakeService: InsteonServiceAPI {
   let refusal: ServiceControlError?
   let reading: DeviceStatus.Reading
   let eventStream: AsyncStream<ServiceEvent>?
+  /// Each subscription gets its own stream that never ends; the actor keeps its continuation open.
+  let endlessEvents: Bool
+  private var openSources: [AsyncStream<ServiceEvent>.Continuation] = []
   var reported = ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000))
   let address = InsteonAddress(0x1A, 0x2B, 0x3C)
-  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil) {
+  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false) {
+    self.endlessEvents = endlessEvents
     self.persistence = persistence; self.fails = fails; self.refusal = refusal; self.reading = reading
     self.eventStream = eventStream
   }
@@ -518,6 +534,11 @@ actor FakeService: InsteonServiceAPI {
   }
   func events() async -> AsyncStream<ServiceEvent> {
     subscriptions += 1
+    if endlessEvents {
+      let (stream, continuation) = AsyncStream<ServiceEvent>.makeStream()
+      openSources.append(continuation)
+      return stream
+    }
     if let eventStream { return eventStream }
     let address = self.address
     return AsyncStream { continuation in

@@ -180,9 +180,17 @@ readback. Failed or refused commands don't produce a completion, and no extra ha
 is sent to generate events. These completions cover commands sent through this service.
 Subscribe before issuing commands to receive them. Passive events don't imply that cached values have been refreshed. The browser
 subscribes to completion and identity events and refreshes affected cards from cached state;
-native clients can subscribe and request status as needed. Idle event
-streams have no heartbeat or replay mechanism, so clients must reconnect and refresh state
-after a dropped connection. Event responses end during graceful server shutdown. The HTTP
+native clients can subscribe and request status as needed. The stream has no replay
+mechanism, so clients must reconnect and refresh state after a dropped connection. The
+browser does both after any closure, with backoff from 0.5 to 30 seconds, and refreshes its
+form keys with its cards.
+
+An idle stream carries a `: keepalive` comment every 15 seconds and ends cleanly after 10
+minutes, so a client whose network vanished without closing the connection releases its slot;
+a browser reconnects at once. At most 16 streams are open at once, and opening one more ends
+the oldest. The listener accepts 32 connections, so streams never take more than half. A
+connection that sends no complete request within 30 seconds, or whose write doesn't finish
+within 30 seconds, is closed. Event responses end during graceful server shutdown. The HTTP
 adapter buffers at most 64 pending events per response; a client that falls behind is
 disconnected and must reconnect and refresh state. Requests have no idempotency-key or
 deduplication support.

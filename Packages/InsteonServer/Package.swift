@@ -26,13 +26,15 @@ let package = Package(
         .product(name: "Crypto", package: "swift-crypto"),
         .product(name: "Logging", package: "swift-log"),
         .product(name: "Hummingbird", package: "hummingbird"),
+        .product(name: "HummingbirdCore", package: "hummingbird"),
+        .product(name: "NIOCore", package: "swift-nio"),
         .product(name: "ServiceLifecycle", package: "swift-service-lifecycle"),
         .product(name: "HTTPTypes", package: "swift-http-types")
       ]
     ),
     .testTarget(
       name: "InsteonHTTPTests",
-      dependencies: ["InsteonHTTP", .product(name: "InsteonModem", package: "swift-insteon"), .product(name: "InsteonService", package: "swift-insteon"), .product(name: "InsteonCore", package: "swift-insteon"), .product(name: "HummingbirdTesting", package: "hummingbird"), .product(name: "Hummingbird", package: "hummingbird"), .product(name: "HTTPTypes", package: "swift-http-types"), .product(name: "ServiceLifecycleTestKit", package: "swift-service-lifecycle"), .product(name: "Logging", package: "swift-log")]
+      dependencies: ["InsteonHTTP", .product(name: "InsteonModem", package: "swift-insteon"), .product(name: "InsteonService", package: "swift-insteon"), .product(name: "InsteonCore", package: "swift-insteon"), .product(name: "HummingbirdTesting", package: "hummingbird"), .product(name: "Hummingbird", package: "hummingbird"), .product(name: "HTTPTypes", package: "swift-http-types"), .product(name: "ServiceLifecycleTestKit", package: "swift-service-lifecycle"), .product(name: "Logging", package: "swift-log"), .product(name: "NIOCore", package: "swift-nio"), .product(name: "NIOEmbedded", package: "swift-nio")]
     ),
     .target(
       name: "InsteonServerSupport",
