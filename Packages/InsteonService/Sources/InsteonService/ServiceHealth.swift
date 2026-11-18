@@ -20,6 +20,10 @@ public struct ServiceHealth: Equatable, Sendable {
   /// When the modem last answered the service or sent it something, or `nil` if it never has
   /// since the service started.
   public let lastHardwareExchange: Date?
+  /// When the modem's connection last answered a poll, or `nil` if it never has since the
+  /// service started or the connection doesn't poll, as a serial modem's doesn't. A quiet house
+  /// moves `lastHardwareExchange` rarely; a connection that is up keeps this one recent.
+  public let lastPoll: Date?
   /// When the cached device information was last confirmed against the modem's ALL-Link
   /// database. Until the first connection it is when the saved snapshot was written, or `nil`
   /// if there is none.
@@ -30,10 +34,11 @@ public struct ServiceHealth: Equatable, Sendable {
   public let checkedAt: Date
 
   /// Creates a report.
-  public init(readiness: Readiness, modem: ModemConnectionState, lastHardwareExchange: Date?, deviceInformationUpdated: Date?, persistence: PersistenceOutcome, checkedAt: Date) {
+  public init(readiness: Readiness, modem: ModemConnectionState, lastHardwareExchange: Date?, lastPoll: Date? = nil, deviceInformationUpdated: Date?, persistence: PersistenceOutcome, checkedAt: Date) {
     self.readiness = readiness
     self.modem = modem
     self.lastHardwareExchange = lastHardwareExchange
+    self.lastPoll = lastPoll
     self.deviceInformationUpdated = deviceInformationUpdated
     self.persistence = persistence
     self.checkedAt = checkedAt

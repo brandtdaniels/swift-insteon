@@ -55,10 +55,19 @@ actor ScriptedHubOpener: NetworkOpening {
   struct StillAway: Error {}
 
   private var script: [Attempt]
+  private var report: (@Sendable () async -> Void)?
 
   init(_ script: [Attempt]) { self.script = script }
 
+  /// Reports one answered poll on the connection that is open, as a Hub's polling does.
+  func poll() async { await report?() }
+
   func withNetwork(snapshot: NetworkSnapshot, _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void) async throws {
+    try await withNetwork(snapshot: snapshot, onPollSucceeded: {}, body)
+  }
+
+  func withNetwork(snapshot: NetworkSnapshot, onPollSucceeded: @escaping @Sendable () async -> Void, _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void) async throws {
+    report = onPollSucceeded
     switch script.isEmpty ? Attempt.fail(StillAway()) : script.removeFirst() {
     case let .fail(error):
       throw error
@@ -96,4 +105,16 @@ final class ReleasableClock: Clock, Sendable {
 /// Saves nothing, as a read-only state directory would not.
 struct NoSnapshots: SnapshotPersisting {
   func save(_ snapshot: NetworkSnapshot) async -> PersistenceOutcome { .saved }
+}
+
+/// A date a test moves by hand.
+final class ManualNow: @unchecked Sendable {
+  private let lock = NSLock()
+  private var date: Date
+
+  init(_ date: Date) { self.date = date }
+
+  var now: Date { lock.withLock { date } }
+
+  func advance(by seconds: TimeInterval) { lock.withLock { date = date.addingTimeInterval(seconds) } }
 }

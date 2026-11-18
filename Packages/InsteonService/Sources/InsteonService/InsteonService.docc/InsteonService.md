@@ -9,8 +9,8 @@ models are independent of authentication, HTTP, HTML and serialization. Hosts op
 session and supply the body that runs during the service lifecycle.
 
 Cached queries send no hardware requests. Commands retain typed status readings and report
-persistence outcomes separately from hardware outcomes. One admission gate protects operations
-across all adapters. Query, command and event protocols describe the roles adapters consume.
+persistence outcomes separately from hardware outcomes. One admission gate protects operations that
+talk to hardware or save the snapshot across all adapters. Cached queries never take it. Query, command and event protocols describe the roles adapters consume.
 
 ## Topics
 

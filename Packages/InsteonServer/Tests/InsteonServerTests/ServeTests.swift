@@ -71,13 +71,13 @@ struct ServeTests {
   }
 
   /// Starts the server, waits until its listener is up, and returns it.
-  private func start(_ directory: URL, extra: [String] = ["--hub", "192.168.1.20"], openModem: @escaping ServerRunner.ModemOpener) async throws -> Server {
+  private func start(_ directory: URL, extra: [String] = ["--hub", "192.168.1.20"], now: @escaping @Sendable () -> Date = { Date() }, openModem: @escaping ServerRunner.ModemOpener) async throws -> Server {
     let capture = ServerLogCapture()
     let port = try FreePort.unused()
     let retries = ReleasableClock()
     let reminders = ReleasableClock()
     let (listening, opened) = AsyncStream<Int>.makeStream()
-    let timing = ServerRunner.Timing(clock: retries, jitter: { 0 }, reminderClock: reminders, onListening: { opened.yield($0) })
+    let timing = ServerRunner.Timing(clock: retries, jitter: { 0 }, reminderClock: reminders, now: now, onListening: { opened.yield($0) })
     let arguments = ["--state", directory.appendingPathComponent("state.json").path, "--port", String(port)] + extra
     let environment = ["HOME": directory.path, "INSTEON_GATEWAY_PASSWORD": gatewayPassword, "INSTEON_HUB_USERNAME": "hub-user", "INSTEON_HUB_PASSWORD": "hub-secret-pass"]
     let logger = capture.logger
@@ -88,7 +88,7 @@ struct ServeTests {
   }
 
   private func opener(_ scripted: ScriptedHubOpener) -> ServerRunner.ModemOpener {
-    { _, _, snapshot, body in try await scripted.withNetwork(snapshot: snapshot, body) }
+    { _, _, snapshot, onPollSucceeded, body in try await scripted.withNetwork(snapshot: snapshot, onPollSucceeded: onPollSucceeded, body) }
   }
 
   // MARK: Hub away
@@ -153,6 +153,44 @@ struct ServeTests {
     await server.stop()
   }
 
+  @Test func aHubThatAnswersNothingToTheFirstModemRequestIsLoggedAsTheHubOnce() async throws {
+    let link = HubLink()
+    let server = try await start(try scratch(), openModem: opener(ScriptedHubOpener([.fail(ModemError.timedOut(.getModemInfo)), .connect(link)])))
+    let record = try #require(await server.record { $0.level == .warning })
+    #expect(record.metadata["code"] == "hub_unreachable")
+    #expect(record.message.contains("192.168.1.20:25105"))
+    server.retries.release()
+    _ = await server.code("modem_connected")
+    #expect(server.capture.records.filter { $0.level == .warning }.count == 1)
+    await server.stop()
+  }
+
+  // MARK: Health liveness
+
+  @Test func healthTellsAQuietLinkFromADeadOneWithoutAskingTheHub() async throws {
+    let scripted = ScriptedHubOpener([.connect(HubLink())])
+    let manual = ManualNow(Date(timeIntervalSince1970: 1_800_000_000))
+    let server = try await start(try scratch(), now: { manual.now }, openModem: opener(scripted))
+    _ = await server.code("modem_connected")
+    let first = try await server.request("/api/v1/health", password: gatewayPassword)
+    #expect(first.json["lastPollAgeSeconds"] is NSNull)
+
+    // A quiet house: the Hub answers polls and nothing else happens.
+    manual.advance(by: 600)
+    await scripted.poll()
+    manual.advance(by: 4)
+    let quiet = try await server.request("/api/v1/health", password: gatewayPassword)
+    #expect(quiet.json["status"] as? String == "ready")
+    #expect(quiet.json["lastExchangeAgeSeconds"] as? Int == 604)
+    #expect(quiet.json["lastPollAgeSeconds"] as? Int == 4)
+
+    // The polls stop: the age keeps growing.
+    manual.advance(by: 60)
+    let silent = try await server.request("/api/v1/health", password: gatewayPassword)
+    #expect(silent.json["lastPollAgeSeconds"] as? Int == 64)
+    await server.stop()
+  }
+
   // MARK: Transitions, not retries
 
   @Test func eachChangeIsLoggedOnceAndRetriesOfTheSameCauseAreNot() async throws {
@@ -172,6 +210,32 @@ struct ServeTests {
     link.drop(with: away)
     _ = await server.record { $0.metadata["code"] == "hub_unreachable" && $0.metadata["reminder"] == "false" && server.capture.records.filter { $0.metadata["code"] == "hub_unreachable" }.count == 2 }
     #expect(server.capture.records.filter { $0.metadata["code"] == "hub_unreachable" }.count == 2)
+    await server.stop()
+  }
+
+  @Test func oneOutageThatChangesBetweenUnreachableCausesIsLoggedOnceWithTheFirstCause() async throws {
+    let link = HubLink()
+    let scripted = ScriptedHubOpener([.fail(HubStoppedAnswering(underlyingError: URLError(.timedOut))), .fail(ModemError.timedOut(.getModemInfo)), .connect(link)])
+    let server = try await start(try scratch(), openModem: opener(scripted))
+    _ = await server.code("hub_unreachable")
+    server.retries.release()
+    server.retries.release()
+    _ = await server.code("modem_connected")
+    let warnings = server.capture.records.filter { $0.level == .warning }.compactMap { $0.metadata["code"] }
+    #expect(warnings == ["hub_unreachable"])
+    await server.stop()
+  }
+
+  @Test func aMaterialChangeOfCauseDuringAnOutageIsLoggedAgain() async throws {
+    let link = HubLink()
+    let scripted = ScriptedHubOpener([.fail(HubStoppedAnswering(underlyingError: URLError(.timedOut))), .fail(HubError.unexpectedStatus(401)), .connect(link)])
+    let server = try await start(try scratch(), openModem: opener(scripted))
+    _ = await server.code("hub_unreachable")
+    server.retries.release()
+    server.retries.release()
+    _ = await server.code("modem_connected")
+    let problems = server.capture.records.filter { $0.level != .info }.compactMap { $0.metadata["code"] }
+    #expect(problems == ["hub_unreachable", "hub_credentials_rejected"])
     await server.stop()
   }
 
@@ -222,7 +286,7 @@ struct ServeTests {
         arguments: ["--hub", "203.0.113.5", "--port", String(try FreePort.unused()), "--state", directory.appendingPathComponent("state.json").path],
         environment: ["HOME": directory.path, "INSTEON_GATEWAY_PASSWORD": gatewayPassword, "INSTEON_HUB_USERNAME": "u", "INSTEON_HUB_PASSWORD": "p"],
         logger: capture.logger,
-        openModem: { _, _, _, _ in Issue.record("no connection should open") }
+        openModem: { _, _, _, _, _ in Issue.record("no connection should open") }
       )
       Issue.record("the run should end")
     } catch {
@@ -238,7 +302,7 @@ struct ServeTests {
         arguments: ["--hub", "192.168.1.20", "--port", String(try FreePort.unused()), "--state", directory.appendingPathComponent("state.json").path],
         environment: ["HOME": directory.path, "INSTEON_GATEWAY_PASSWORD": gatewayPassword, "INSTEON_HUB_USERNAME": "u", "INSTEON_HUB_PASSWORD": "p"],
         logger: ServerLogCapture().logger,
-        openModem: { _, _, _, _ in throw HubAddressRefused(host: "example.com") }
+        openModem: { _, _, _, _, _ in throw HubAddressRefused(host: "example.com") }
       )
       Issue.record("the run should end")
     } catch {
@@ -254,7 +318,7 @@ struct ServeTests {
         arguments: ["--serial", "/dev/example-modem", "--port", String(try FreePort.unused()), "--state", directory.appendingPathComponent("state.json").path],
         environment: ["HOME": directory.path, "INSTEON_GATEWAY_PASSWORD": gatewayPassword],
         logger: ServerLogCapture().logger,
-        openModem: { _, _, _, _ in throw missing }
+        openModem: { _, _, _, _, _ in throw missing }
       )
       Issue.record("the run should end")
     } catch {

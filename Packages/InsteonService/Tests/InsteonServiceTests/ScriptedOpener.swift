@@ -39,6 +39,7 @@ actor ScriptedOpener: NetworkOpening {
   private var script: [Attempt]
   private let now: @Sendable () -> Date
   private(set) var snapshots: [NetworkSnapshot] = []
+  private var report: (@Sendable () async -> Void)?
 
   init(_ script: [Attempt], now: @escaping @Sendable () -> Date = { Date(timeIntervalSince1970: 1_800_000_000) }) {
     self.script = script
@@ -48,7 +49,15 @@ actor ScriptedOpener: NetworkOpening {
 
   func append(_ attempt: Attempt) { script.append(attempt) }
 
+  /// Reports one answered poll on the connection that is open, as a Hub's polling does.
+  func poll() async { await report?() }
+
   func withNetwork(snapshot: NetworkSnapshot, _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void) async throws {
+    try await withNetwork(snapshot: snapshot, onPollSucceeded: {}, body)
+  }
+
+  func withNetwork(snapshot: NetworkSnapshot, onPollSucceeded: @escaping @Sendable () async -> Void, _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void) async throws {
+    report = onPollSucceeded
     snapshots.append(snapshot)
     let attempt = script.isEmpty ? Attempt.fail(StillAway()) : script.removeFirst()
     startedContinuation.yield(snapshots.count)

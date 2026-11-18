@@ -9,7 +9,8 @@ dependencies. The [optional server](../InsteonServer) supplies those adapters.
 `InsteonService` owns queries, explicit device operations, monitoring, lifecycle and snapshot
 policy. Its single admission gate covers all callers; a concurrent operation is refused with
 `ServiceControlError.busy` rather than queued. Device lists use cached identities and values,
-without polling hardware. Unknown identities expose no switching controls until identified.
+without polling hardware, and never take the gate: a list answers while an operation is in
+flight, and a list never makes an operation refuse. Unknown identities expose no switching controls until identified.
 
 `DeviceQuerying`, `DeviceCommanding` and `DeviceEventSource` describe separate client roles;
 `InsteonServiceAPI` composes them for adapters that need all three. Commands and events carry
@@ -40,8 +41,10 @@ succeeds, subscribers get `ServiceEvent.modemReconnected` and refresh what they 
 that failed because the connection dropped is never repeated by a reconnection.
 
 `health()` reports readiness (`starting` before the first connection, `ready`, `degraded`), the
-modem's state and cause, the time of the last hardware exchange and of the last confirmation of
-the cached device information. It sends nothing to hardware and doesn't take the admission gate.
+modem's state and cause, the time of the last hardware exchange, the time of the last poll the
+modem's connection answered (a Hub's connection polls, so this stays recent while a quiet house
+moves the exchange rarely; a serial modem reports none) and of the last confirmation of the
+cached device information. It sends nothing to hardware and doesn't take the admission gate.
 
 A service made with `init(network:persistence:)` leaves the connection to its host, and `run`
 ends when that connection does. No HTTP server is needed to use this runtime. One controlling

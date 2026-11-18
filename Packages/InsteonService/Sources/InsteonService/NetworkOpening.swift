@@ -9,6 +9,17 @@ import InsteonCore
 public protocol NetworkOpening: Sendable {
   /// Opens a connection, runs `body` with a network built from `snapshot`, and closes it.
   func withNetwork(snapshot: NetworkSnapshot, _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void) async throws
+
+  /// Opens a connection like ``withNetwork(snapshot:_:)``, and calls `onPollSucceeded` each time
+  /// the connection's modem answers a poll, whether or not the poll brought anything. A
+  /// connection that doesn't poll never calls it. The default opens without reporting.
+  func withNetwork(snapshot: NetworkSnapshot, onPollSucceeded: @escaping @Sendable () async -> Void, _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void) async throws
+}
+
+extension NetworkOpening {
+  public func withNetwork(snapshot: NetworkSnapshot, onPollSucceeded: @escaping @Sendable () async -> Void, _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void) async throws {
+    try await withNetwork(snapshot: snapshot, body)
+  }
 }
 
 /// An error an opener throws to end the service's run, because trying again can't help, such as

@@ -42,18 +42,20 @@ public enum ServerRunner {
 
   /// Opens the modem, runs `body` with the network it carries, and closes the modem when `body`
   /// returns or throws. The default opens the Hub or serial port; a test supplies a scripted connection.
+  /// `onPollSucceeded` is called each time a Hub answers a poll; a serial modem has none.
   public typealias ModemOpener = @Sendable (
     _ endpoint: ModemEndpoint,
     _ catalog: ProductCatalog,
     _ snapshot: NetworkSnapshot,
+    _ onPollSucceeded: @escaping @Sendable () async -> Void,
     _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void
   ) async throws -> Void
 
   /// Opens the Hub or serial port the endpoint names.
-  public static let openModem: ModemOpener = { endpoint, catalog, snapshot, body in
+  public static let openModem: ModemOpener = { endpoint, catalog, snapshot, onPollSucceeded, body in
     switch endpoint {
     case let .hub(location, credentials):
-      try await ModemSession.withHub(host: location.host, port: location.port, user: credentials.user, password: credentials.password, catalog: catalog) { session in
+      try await ModemSession.withHub(host: location.host, port: location.port, user: credentials.user, password: credentials.password, catalog: catalog, onPollSucceeded: onPollSucceeded) { session in
         try await body(session.network(catalog: catalog, snapshot: snapshot, hub: session.hub))
       }
     case let .serial(path):
@@ -92,6 +94,7 @@ public enum ServerRunner {
     let jitter: @Sendable () -> Double
     let reminderClock: any Clock<Duration>
     let reminderInterval: Duration
+    let now: @Sendable () -> Date
     let onListening: @Sendable (Int) -> Void
 
     init(
@@ -100,6 +103,7 @@ public enum ServerRunner {
       jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) },
       reminderClock: any Clock<Duration> = ContinuousClock(),
       reminderInterval: Duration = .seconds(900),
+      now: @escaping @Sendable () -> Date = { Date() },
       onListening: @escaping @Sendable (Int) -> Void = { _ in }
     ) {
       self.reconnect = reconnect
@@ -107,6 +111,7 @@ public enum ServerRunner {
       self.jitter = jitter
       self.reminderClock = reminderClock
       self.reminderInterval = reminderInterval
+      self.now = now
       self.onListening = onListening
     }
   }
@@ -165,7 +170,7 @@ public enum ServerRunner {
     logger: Logger,
     timing: Timing
   ) async throws {
-    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, jitter: timing.jitter)
+    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter)
     let router = makeInsteonRouter(service: service, authentication: authentication, logger: logger)
     let app = Application(
       responder: router.buildResponder(),
@@ -220,9 +225,13 @@ private struct EndpointOpener: NetworkOpening {
   }
 
   func withNetwork(snapshot: NetworkSnapshot, _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void) async throws {
+    try await withNetwork(snapshot: snapshot, onPollSucceeded: {}, body)
+  }
+
+  func withNetwork(snapshot: NetworkSnapshot, onPollSucceeded: @escaping @Sendable () async -> Void, _ body: @escaping @Sendable (DeviceNetwork) async throws -> Void) async throws {
     let history = history
     do {
-      try await openModem(endpoint, catalog, snapshot) { network in
+      try await openModem(endpoint, catalog, snapshot, onPollSucceeded) { network in
         await history.markConnected()
         try await body(network)
       }
@@ -241,10 +250,15 @@ private actor ConnectionHistory {
 }
 
 /// Logs each change in whether the modem is reachable, and repeats an outage that lasts.
+///
+/// One outage is one record. While the modem stays away, a change between causes that all mean
+/// "nothing answered" (the Hub, the modem or the connection) isn't a new record: the first cause
+/// stands, and the reminder repeats it. A change to a cause that asks for a different action,
+/// such as rejected credentials, is logged.
 private actor OutageLog {
   private let hub: HubLocation?
   private let logger: Logger
-  private var cause: ModemUnavailability?
+  private var logged: ModemUnavailability?
 
   init(hub: HubLocation?, logger: Logger) {
     self.hub = hub
@@ -253,11 +267,14 @@ private actor OutageLog {
 
   func handle(_ event: ServiceEvent) {
     switch event {
-    case let .modemUnavailable(reason):
-      cause = reason
+    case let .modemUnavailable(cause):
+      // Through a Hub, a modem that doesn't answer is a Hub that doesn't answer: name the Hub.
+      let reason = hub != nil && cause == .modemUnreachable ? ModemUnavailability.hubUnreachable : cause
+      if let logged, logged.continuesOutage(of: reason) { return }
+      logged = reason
       record(reason, reminder: false)
     case .modemReconnected:
-      cause = nil
+      logged = nil
       logger.info("The Hub or modem is connected.", metadata: ["code": "modem_connected"])
     default:
       break
@@ -265,12 +282,26 @@ private actor OutageLog {
   }
 
   func remind() {
-    if let cause { record(cause, reminder: true) }
+    if let logged { record(logged, reminder: true) }
   }
 
   private func record(_ reason: ModemUnavailability, reminder: Bool) {
     guard let failure = ServerFailure.degraded(reason, hub: hub) else { return }
     failure.record(in: logger, level: reason == .credentialsRejected ? .error : .warning, reminder: reminder)
+  }
+}
+
+private extension ModemUnavailability {
+  /// Whether `other` is the same outage seen from a different side: nothing answered, and the
+  /// person has the same thing to check.
+  func continuesOutage(of other: ModemUnavailability) -> Bool {
+    func nothingAnswered(_ cause: ModemUnavailability) -> Bool {
+      switch cause {
+      case .hubUnreachable, .modemUnreachable, .connectionLost: true
+      case .connecting, .credentialsRejected, .hubErrorStatus: false
+      }
+    }
+    return self == other || (nothingAnswered(self) && nothingAnswered(other))
   }
 }
 

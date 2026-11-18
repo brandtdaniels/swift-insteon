@@ -27,8 +27,8 @@ struct AvailabilityTests {
     Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
   }
 
-  private func health(_ readiness: ServiceHealth.Readiness, _ modem: ModemConnectionState, exchange: TimeInterval? = nil, updated: TimeInterval? = nil) -> ServiceHealth {
-    ServiceHealth(readiness: readiness, modem: modem, lastHardwareExchange: exchange.map { checkedAt.addingTimeInterval(-$0) }, deviceInformationUpdated: updated.map { checkedAt.addingTimeInterval(-$0) }, persistence: .saved, checkedAt: checkedAt)
+  private func health(_ readiness: ServiceHealth.Readiness, _ modem: ModemConnectionState, exchange: TimeInterval? = nil, poll: TimeInterval? = nil, updated: TimeInterval? = nil) -> ServiceHealth {
+    ServiceHealth(readiness: readiness, modem: modem, lastHardwareExchange: exchange.map { checkedAt.addingTimeInterval(-$0) }, lastPoll: poll.map { checkedAt.addingTimeInterval(-$0) }, deviceInformationUpdated: updated.map { checkedAt.addingTimeInterval(-$0) }, persistence: .saved, checkedAt: checkedAt)
   }
 
   private func object(_ response: TestResponse) throws -> [String: Any] {
@@ -97,19 +97,20 @@ struct AvailabilityTests {
         #expect(response.status == .ok)
         #expect(response.headers[.cacheControl] == "no-store")
         let body = try object(response)
-        #expect(Set(body.keys) == ["version", "status", "modem", "lastExchangeAgeSeconds", "snapshotAgeSeconds", "persistence"])
+        #expect(Set(body.keys) == ["version", "status", "modem", "lastExchangeAgeSeconds", "lastPollAgeSeconds", "snapshotAgeSeconds", "persistence"])
         #expect(body["version"] as? Int == 1)
         #expect(body["status"] as? String == "starting")
         let modem = try #require(body["modem"] as? [String: Any])
         #expect(modem["connected"] as? Bool == false)
         #expect(modem["cause"] as? String == "hubUnreachable")
         #expect(body["lastExchangeAgeSeconds"] is NSNull)
+        #expect(body["lastPollAgeSeconds"] is NSNull)
         #expect(body["snapshotAgeSeconds"] as? Int == 3_600)
         #expect(body["persistence"] as? String == "saved")
         let text = String(buffer: response.body)
         #expect(!text.contains(address.description))
       }
-      await service.setHealth(health(.ready, .connected, exchange: 12, updated: 30))
+      await service.setHealth(health(.ready, .connected, exchange: 12, poll: 2, updated: 30))
       try await client.execute(uri: "/api/v1/health", method: .get, headers: authorization) { response in
         let body = try object(response)
         #expect(body["status"] as? String == "ready")
@@ -117,6 +118,7 @@ struct AvailabilityTests {
         #expect(modem["connected"] as? Bool == true)
         #expect(modem["cause"] is NSNull)
         #expect(body["lastExchangeAgeSeconds"] as? Int == 12)
+        #expect(body["lastPollAgeSeconds"] as? Int == 2)
       }
     }
   }
