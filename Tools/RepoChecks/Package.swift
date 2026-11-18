@@ -7,9 +7,27 @@ import PackageDescription
 let package = Package(
   name: "RepoChecks",
   platforms: [.macOS(.v13)],
+  products: [
+    .executable(name: "repo-check", targets: ["repo-check"])
+  ],
+  dependencies: [
+    .package(url: "https://github.com/apple/swift-argument-parser.git", .upToNextMinor(from: "1.8.2"))
+  ],
   targets: [
     // Reading files the way the Python scripts did, and the output conventions of a check.
     .target(name: "RepoCheckSupport"),
-    .testTarget(name: "RepoCheckSupportTests", dependencies: ["RepoCheckSupport"])
+    // One type per check.
+    .target(name: "RepoChecks", dependencies: ["RepoCheckSupport"]),
+    // The command: one subcommand per check.
+    .executableTarget(
+      name: "repo-check",
+      dependencies: [
+        "RepoChecks",
+        "RepoCheckSupport",
+        .product(name: "ArgumentParser", package: "swift-argument-parser")
+      ]
+    ),
+    .testTarget(name: "RepoCheckSupportTests", dependencies: ["RepoCheckSupport"]),
+    .testTarget(name: "RepoCheckTests", dependencies: ["RepoChecks", "RepoCheckSupport"])
   ]
 )
