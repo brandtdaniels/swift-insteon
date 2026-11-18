@@ -142,7 +142,7 @@ aren't implemented.
 | GET | `/api/v1/devices` | `{ "version": 1, "devices": [...], "stale": false, "cause": null }`; doesn't poll hardware. `stale` is `true`, with the `cause`, while the Hub or modem is away |
 | GET | `/api/v1/health` | Readiness, modem state, ages; sends nothing to hardware (see Staying up) |
 | POST | `/api/v1/devices/1A.2B.3C/commands` | Identify, read status, On or Off for a known device's main group |
-| GET | `/api/v1/events` | Server-sent JSON events for changes heard after subscription; no history |
+| GET | `/api/v1/events` | Server-sent JSON events, numbered; resumes from `Last-Event-ID` (see Event ids and resuming) |
 | GET | `/devices/1A.2B.3C` | Authenticated card fragment from cached state; no hardware polling |
 
 JSON commands need `Content-Type: application/json` and `X-Insteon-Request: 1`. Example body:
@@ -180,10 +180,9 @@ readback. Failed or refused commands don't produce a completion, and no extra ha
 is sent to generate events. These completions cover commands sent through this service.
 Subscribe before issuing commands to receive them. Passive events don't imply that cached values have been refreshed. The browser
 subscribes to completion and identity events and refreshes affected cards from cached state;
-native clients can subscribe and request status as needed. The stream has no replay
-mechanism, so clients must reconnect and refresh state after a dropped connection. The
-browser does both after any closure, with backoff from 0.5 to 30 seconds, and refreshes its
-form keys with its cards.
+native clients can subscribe and request status as needed. A client that reconnects with the
+id of the last event it saw is replayed what it missed, or told to refresh (see Event ids and
+resuming). The browser reconnects after any closure with backoff from 0.5 to 30 seconds.
 
 An idle stream carries a `: keepalive` comment every 15 seconds and ends cleanly after 10
 minutes, so a client whose network vanished without closing the connection releases its slot;
@@ -192,8 +191,59 @@ the oldest. The listener accepts 32 connections, so streams never take more than
 connection that sends no complete request within 30 seconds, or whose write doesn't finish
 within 30 seconds, is closed. Event responses end during graceful server shutdown. The HTTP
 adapter buffers at most 64 pending events per response; a client that falls behind is
-disconnected and must reconnect and refresh state. Requests have no idempotency-key or
-deduplication support.
+disconnected, and reconnects from the last id it saw.
+
+## Event ids and resuming
+
+Each frame of `/api/v1/events` is one event with an SSE `id:` and a JSON `data:` line:
+
+```
+id: 9f3a0c41d27e5b86-42
+data: {"version":1,"runId":"9f3a0c41d27e5b86","sequence":42,"kind":"commandCompleted", ...}
+```
+
+- A **run** is one start of the service, named by `runId`, an opaque token of letters and digits
+  that is different at every start. Its events are numbered `sequence` 1, 2, 3 and so on, shared by
+  every client: all clients see the same number for the same event. Numbers restart with a new run.
+- The `id:` is `<runId>-<sequence>`: the run and the number together, because a number means
+  something only with its run. Treat it as opaque and send it back unchanged.
+- Every kind of event is numbered: `commandCompleted`, `identified`, `setButtonPressed`,
+  `groupCommand`, `heartbeat`, `statusChanged`, `modemUnavailable` and `reconnected`.
+- A comment line (`: connected`, `: keepalive`) is not an event and has no id. A new stream with no
+  id sent first writes a bare `id:` with the run's current position and no data, so a browser that
+  sees no event before it reconnects can still resume.
+- The server keeps the newest **256** events in memory, with no age limit. Nothing is written to
+  disk, and a restart forgets them.
+
+A client resumes by sending the last id it saw as the `Last-Event-ID` header, which a browser's
+`EventSource` does by itself when it reconnects, or as the `lastEventId` query parameter for a
+client that can't set headers (the header wins). The stream starts according to the client's id:
+
+| Client's id | The stream starts with |
+| --- | --- |
+| In this run, and everything after it is still kept | The events after it, in order, then live events. No gap. |
+| In this run, but newer events were dropped (`tooOld`), or numbered past the newest (`ahead`) | A `gap` event, then live events. |
+| From another run, or not an id the server made (`otherRun`) | A `gap` event, then live events. |
+| None | A bare `id:` with the current position, the modem's state if it is away, then live events. |
+
+A `gap` event tells the client it missed events the server can't replay, so it refreshes
+everything it shows (the device list and each card) and continues from the events that follow:
+
+```
+id: 9f3a0c41d27e5b86-42
+data: {"version":1,"kind":"gap","reason":"tooOld","runId":"9f3a0c41d27e5b86","sequence":42}
+```
+
+`reason` is `otherRun`, `tooOld` or `ahead`; `runId` and `sequence` are the run's current
+position, and the `id:` is the same position. A gap is an ordinary frame, not a named SSE event, so
+`EventSource.onmessage` receives it; branch on `kind`. After a gap, an away modem is announced with a
+`modemUnavailable` event at the current number.
+
+Resuming doesn't repeat a command and doesn't read hardware. The 10 minute lifetime of a stream
+and a client that falls more than 64 events behind both end the stream cleanly; the client
+reconnects with its last id and, while the missed events are still kept, resumes without a refresh.
+The browser helper refreshes its cards on a gap and on its first connection, not on a resume. A
+reconnect after a server restart is a gap, and so replaces the browser's form keys.
 
 ## Persistence and lifecycle
 

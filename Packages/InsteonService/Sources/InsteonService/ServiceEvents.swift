@@ -25,13 +25,16 @@ public struct ServiceEvents: AsyncSequence, Sendable {
 
   /// A reader that owns the subscription for its lifetime.
   public struct AsyncIterator: AsyncIteratorProtocol {
-    fileprivate var base: AsyncThrowingStream<ServiceEvent, any Error>.Iterator
+    fileprivate var base: AsyncThrowingStream<SequencedItem, any Error>.Iterator
     fileprivate let subscription: CommandEventSubscription
 
     /// Returns the next event, or ends when the reader is canceled.
     /// Throws if this subscriber fell behind its bounded queue.
     public mutating func next() async throws -> ServiceEvent? {
-      try await base.next()
+      while let item = try await base.next() {
+        if case let .event(event, _) = item { return event }
+      }
+      return nil
     }
   }
 }
@@ -44,15 +47,16 @@ public enum ServiceEventError: Error {
 
 /// Immutable ownership of a continuation is Sendable; no task is launched by a subscription.
 final class CommandEventSubscription: Sendable {
-  let stream: AsyncThrowingStream<ServiceEvent, any Error>
-  private let continuation: AsyncThrowingStream<ServiceEvent, any Error>.Continuation
+  let stream: AsyncThrowingStream<SequencedItem, any Error>
+  private let continuation: AsyncThrowingStream<SequencedItem, any Error>.Continuation
 
-  init() {
-    (stream, continuation) = AsyncThrowingStream.makeStream(bufferingPolicy: .bufferingOldest(64))
+  /// - Parameter capacity: How many items it holds before the subscriber counts as slow.
+  init(capacity: Int = 64) {
+    (stream, continuation) = AsyncThrowingStream.makeStream(bufferingPolicy: .bufferingOldest(capacity))
   }
 
-  func publish(_ event: ServiceEvent) -> Bool {
-    switch continuation.yield(event) {
+  func publish(_ item: SequencedItem) -> Bool {
+    switch continuation.yield(item) {
     case .enqueued: return true
     case .dropped:
       continuation.finish(throwing: ServiceEventError.slowConsumer)

@@ -72,16 +72,18 @@ struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
   }
 
   private enum StreamItem: Sendable {
-    case event(ServiceEvent)
+    case event(SequencedItem)
     case keepalive
   }
 
-  func events() async -> Response {
+  /// - Parameter cursor: Where the client left off, from `Last-Event-ID` or the `lastEventId` query
+  ///   parameter. The stream starts with the events it missed, or with a `gap` frame.
+  func events(resumingAfter cursor: EventCursor? = nil) async -> Response {
     let body = ResponseBody { writer in
       do {
         // A response can be discarded without its body being written.
         // Subscribe only while a structured producer can own and cancel the reader.
-        let events = await service.events()
+        let events = await service.sequencedEvents(after: cursor)
         let lease = await registry.admit()
         let policy = self.policy, clock = self.clock
         do {
@@ -128,9 +130,17 @@ struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
             for try await item in buffered {
               try Task.checkCancellation()
               switch item {
-              case let .event(event):
-                let data = try encoder.encode(EventDTO(event))
-                try await writer.write(ByteBuffer(string: "data: " + String(decoding: data, as: UTF8.self) + "\n\n"))
+              case let .event(sequenced):
+                let frame: (id: String, data: Data)
+                switch sequenced {
+                case let .event(event, position): frame = (position.token, try encoder.encode(EventDTO(event, at: position)))
+                case let .gap(reason, current): frame = (current.token, try encoder.encode(GapDTO(reason: reason, current: current)))
+                case let .position(current):
+                  // An id with no data sets the browser's place without dispatching an event.
+                  try await writer.write(ByteBuffer(string: "id: " + current.token + "\n\n"))
+                  continue
+                }
+                try await writer.write(ByteBuffer(string: "id: " + frame.id + "\ndata: " + String(decoding: frame.data, as: UTF8.self) + "\n\n"))
               case .keepalive:
                 try await writer.write(ByteBuffer(string: ": keepalive\n\n"))
               }

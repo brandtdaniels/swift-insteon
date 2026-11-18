@@ -160,8 +160,24 @@ struct ReceiptDTO: Encodable {
   }
 }
 
+/// Tells a reconnecting client that events it missed can't be replayed, so it refreshes everything.
+struct GapDTO: Encodable {
+  let version = 1
+  let kind = "gap"
+  let reason: String
+  let runId: String
+  let sequence: UInt64
+  init(reason: EventGapReason, current: EventCursor) {
+    self.reason = reason.rawValue
+    runId = current.runID
+    sequence = current.sequence
+  }
+}
+
 struct EventDTO: Encodable {
   let version = 1
+  let runId: String
+  let sequence: UInt64
   let kind: String
   let address: String?
   let group: Int?
@@ -170,7 +186,9 @@ struct EventDTO: Encodable {
   let completion: CommandCompletionDTO?
   let cause: String?
   let message: String?
-  init(_ event: ServiceEvent) {
+  init(_ event: ServiceEvent, at position: EventCursor) {
+    runId = position.runID
+    sequence = position.sequence
     switch event {
     case let .modemUnavailable(reason): cause = reason.wireName; message = reason.notice
     default: cause = nil; message = nil

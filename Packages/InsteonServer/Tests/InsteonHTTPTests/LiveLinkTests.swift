@@ -11,6 +11,8 @@ private final class LinkHarness {
   let context = JSContext()!
   var sources: [JSValue] = []
   var log: [String] = []
+  /// The last event id the link passed to each source it opened.
+  var openedWith: [String] = []
   private var timers: [(id: Int, callback: JSValue, delay: Int)] = []
   private var nextTimer = 1
   private var link: JSValue!
@@ -23,7 +25,8 @@ private final class LinkHarness {
     func provide(_ name: String, _ block: AnyObject) {
       dependencies.setObject(block, forKeyedSubscript: name as NSString)
     }
-    let open: @convention(block) () -> JSValue = { [unowned self] in
+    let open: @convention(block) (String) -> JSValue = { [unowned self] id in
+      openedWith.append(id)
       let source = context.evaluateScript("({ readyState: 0, closeCount: 0, close() { this.readyState = 2; this.closeCount++; } })")!
       sources.append(source)
       return source
@@ -35,7 +38,7 @@ private final class LinkHarness {
     }
     let cancel: @convention(block) (Int) -> Void = { [unowned self] id in timers.removeAll { $0.id == id } }
     let onState: @convention(block) (String) -> Void = { [unowned self] in log.append("state:" + $0) }
-    let onOpen: @convention(block) () -> Void = { [unowned self] in log.append("open") }
+    let onOpen: @convention(block) (Bool) -> Void = { [unowned self] in log.append($0 ? "open:resumed" : "open:fresh") }
     let onClosed: @convention(block) () -> Void = { [unowned self] in log.append("closed") }
     let onMessage: @convention(block) (String) -> Void = { [unowned self] in log.append("message:" + $0) }
     provide("open", unsafeBitCast(open, to: AnyObject.self))
@@ -67,8 +70,8 @@ private final class LinkHarness {
     sources[index].setValue(state, forProperty: "readyState")
     handler("onerror", of: index)
   }
-  func says(_ index: Int, _ data: String) {
-    let event = JSValue(object: ["data": data], in: context)!
+  func says(_ index: Int, _ data: String, id: String = "") {
+    let event = JSValue(object: ["data": data, "lastEventId": id], in: context)!
     let handler = sources[index].forProperty("onmessage")!
     if !handler.isUndefined && !handler.isNull { handler.call(withArguments: [event]) }
   }
@@ -96,7 +99,7 @@ struct LiveLinkTests {
     h.start()
     h.opens(0)
     #expect(h.states == ["connecting", "connected"])
-    #expect(h.count("open") == 1)
+    #expect(h.count("open:fresh") == 1)
   }
 
   @Test func aSourceTheBrowserClosedAfterA502IsReplacedThenThePageRefreshes() {
@@ -111,7 +114,7 @@ struct LiveLinkTests {
     #expect(h.states.last == "connecting")
     h.opens(1)
     #expect(h.states.last == "connected")
-    #expect(h.count("open") == 2)
+    #expect(h.count("open:fresh") == 2)
   }
 
   @Test func backoffDoublesToACapAndASuccessfulOpenResetsIt() {
@@ -201,6 +204,62 @@ struct LiveLinkTests {
     h.opens(0)
     h.says(0, #"{"version":1}"#)
     #expect(h.log.last == #"message:{"version":1}"#)
+  }
+  // MARK: Resuming
+
+  @Test func aFirstConnectionOpensWithoutAnIdAndAsksThePageToRefresh() {
+    let h = LinkHarness()
+    h.start()
+    h.opens(0)
+    #expect(h.openedWith == [""])
+    #expect(h.count("open:fresh") == 1)
+    #expect(h.count("open:resumed") == 0)
+  }
+
+  @Test func aReplacementSourceOpensFromTheLastIdSeenAndTheOpenIsAResume() {
+    let h = LinkHarness()
+    h.start()
+    h.opens(0)
+    h.says(0, "{}", id: "run1-4")
+    h.says(0, "{}", id: "run1-5")
+    h.fails(0, state: LinkHarness.closed)
+    h.fireNextTimer()
+    #expect(h.openedWith == ["", "run1-5"])
+    h.opens(1)
+    #expect(h.count("open:resumed") == 1)
+    #expect(h.count("open:fresh") == 1)
+  }
+
+  @Test func aMessageWithoutAnIdKeepsTheIdAlreadySeen() {
+    let h = LinkHarness()
+    h.start()
+    h.opens(0)
+    h.says(0, "{}", id: "run1-9")
+    h.says(0, "{}")
+    h.fails(0, state: LinkHarness.closed)
+    h.fireNextTimer()
+    #expect(h.openedWith.last == "run1-9")
+  }
+
+  @Test func theBrowsersOwnReconnectOfAnOpenedSourceIsAResumeEvenBeforeAnyMessage() {
+    let h = LinkHarness()
+    h.start()
+    h.opens(0)
+    h.fails(0, state: LinkHarness.connecting)
+    h.opens(0)
+    #expect(h.count("open:fresh") == 1)
+    #expect(h.count("open:resumed") == 1)
+    #expect(h.sources.count == 1)
+  }
+
+  @Test func theIdSurvivesStopAndStart() {
+    let h = LinkHarness()
+    h.start()
+    h.opens(0)
+    h.says(0, "{}", id: "run1-3")
+    h.stop()
+    h.start()
+    #expect(h.openedWith == ["", "run1-3"])
   }
 }
 #endif

@@ -26,6 +26,9 @@ public actor InsteonService: InsteonServiceAPI {
   private var busy = false
   private var running = false
   private var subscriptions: [WeakCommandSubscription] = []
+  private let runID: String
+  private var sequence: UInt64 = 0
+  private var retained: [(sequence: UInt64, event: ServiceEvent)] = []
   private var connection: ModemConnectionState
   private var hasConnected: Bool
   private var lastExchange: Date?
@@ -33,13 +36,17 @@ public actor InsteonService: InsteonServiceAPI {
   private var informationUpdated: Date?
   private var attemptConnected = false
 
+  /// How many of the newest events the service keeps for a client to resume from. Memory is
+  /// bounded by this count; nothing is kept on disk, and a restart forgets every event.
+  public static let retainedEventCount = 256
+
   /// The latest snapshot outcome, independent of any device acknowledgment or reading.
   public private(set) var persistenceOutcome: PersistenceOutcome
 
   /// Creates a service for a network whose connection the host keeps open, and an optional
   /// persistence policy. The run ends if that connection does.
-  public init(network: DeviceNetwork, persistence: (any SnapshotPersisting)? = nil, clock: any Clock<Duration> = ContinuousClock()) {
-    self.init(network: network, opener: FixedNetworkOpener(network: network), persistence: persistence, snapshotSavedAt: nil, reconnect: .never, clock: clock, now: { Date() }, jitter: { 0 }, isConnected: true)
+  public init(network: DeviceNetwork, persistence: (any SnapshotPersisting)? = nil, clock: any Clock<Duration> = ContinuousClock(), runID: String? = nil) {
+    self.init(network: network, opener: FixedNetworkOpener(network: network), persistence: persistence, snapshotSavedAt: nil, reconnect: .never, clock: clock, now: { Date() }, jitter: { 0 }, isConnected: true, runID: runID)
   }
 
   /// Creates a service that opens and reopens its own modem connection.
@@ -54,6 +61,7 @@ public actor InsteonService: InsteonServiceAPI {
   ///   - clock: Times the waits between attempts.
   ///   - now: The current time.
   ///   - jitter: Random numbers from 0 up to, not including, 1 for the delay's jitter.
+  ///   - runID: Names this run in event ids. Defaults to a random token, so every start has its own.
   ///   - throughHub: Whether the modem is reached through a Hub. A modem that doesn't answer is then
   ///     reported as ``ModemUnavailability/hubUnreachable``, because the Hub is what to check.
   public init(
@@ -65,9 +73,10 @@ public actor InsteonService: InsteonServiceAPI {
     clock: any Clock<Duration> = ContinuousClock(),
     now: @escaping @Sendable () -> Date = { Date() },
     jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) },
-    throughHub: Bool = false
+    throughHub: Bool = false,
+    runID: String? = nil
   ) {
-    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false, throughHub: throughHub)
+    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false, throughHub: throughHub, runID: runID)
   }
 
   private init(
@@ -80,7 +89,8 @@ public actor InsteonService: InsteonServiceAPI {
     now: @escaping @Sendable () -> Date,
     jitter: @escaping @Sendable () -> Double,
     isConnected: Bool,
-    throughHub: Bool = false
+    throughHub: Bool = false,
+    runID: String? = nil
   ) {
     self.network = network
     self.opener = opener
@@ -89,6 +99,7 @@ public actor InsteonService: InsteonServiceAPI {
     self.now = now
     self.jitter = jitter
     self.throughHub = throughHub
+    self.runID = runID ?? Self.randomRunID()
     self.persistence = persistence
     self.persistenceOutcome = persistence == nil ? .notConfigured : .notAttempted
     self.connection = isConnected ? .connected : .unavailable(.connecting)
@@ -194,10 +205,64 @@ public actor InsteonService: InsteonServiceAPI {
     subscriptions.removeAll { $0.value == nil }
     let subscription = CommandEventSubscription()
     if case let .unavailable(cause) = connection, cause != .connecting {
-      _ = subscription.publish(.modemUnavailable(cause))
+      _ = subscription.publish(.event(.modemUnavailable(cause), currentCursor))
     }
     subscriptions.append(WeakCommandSubscription(value: subscription))
     return ServiceEvents(subscription: subscription)
+  }
+
+  /// Subscribes to numbered events, resuming from `cursor`.
+  ///
+  /// With no cursor, the subscription starts at the call with the run's current position, and a subscriber that arrives while the
+  /// modem is unreachable is told so first, at the run's current number. With a cursor of this
+  /// run whose missed events are still kept (the newest ``retainedEventCount``), the subscription
+  /// starts with them, in order, then continues with live events. With any other cursor it starts
+  /// with a gap saying why and the run's current position, then the modem's state if it is
+  /// unreachable, then live events. Events and the replay are delivered without a gap between
+  /// them: the service admits one call at a time.
+  ///
+  /// - Parameter cursor: The last position the client saw.
+  public func sequencedEvents(after cursor: EventCursor? = nil) async -> SequencedEvents {
+    subscriptions.removeAll { $0.value == nil }
+    var backlog: [SequencedItem] = []
+    var announce = true
+    if cursor == nil { backlog.append(.position(currentCursor)) }
+    if let cursor {
+      switch coverage(of: cursor) {
+      case let .covered(missed):
+        backlog = missed.map { .event($0.event, EventCursor(runID: runID, sequence: $0.sequence)) }
+        announce = false
+      case let .gap(reason):
+        backlog = [.gap(reason, current: currentCursor)]
+      }
+    }
+    if announce, case let .unavailable(cause) = connection, cause != .connecting {
+      backlog.append(.event(.modemUnavailable(cause), currentCursor))
+    }
+    let subscription = CommandEventSubscription(capacity: 64 + backlog.count)
+    for item in backlog { _ = subscription.publish(item) }
+    subscriptions.append(WeakCommandSubscription(value: subscription))
+    return SequencedEvents(subscription: subscription)
+  }
+
+  private var currentCursor: EventCursor { EventCursor(runID: runID, sequence: sequence) }
+
+  private enum Coverage {
+    case covered([(sequence: UInt64, event: ServiceEvent)])
+    case gap(EventGapReason)
+  }
+
+  private func coverage(of cursor: EventCursor) -> Coverage {
+    guard cursor.runID == runID else { return .gap(.otherRun) }
+    guard cursor.sequence <= sequence else { return .gap(.ahead) }
+    let missed = retained.filter { $0.sequence > cursor.sequence }
+    // Everything after the cursor is kept when the oldest kept event follows it directly, or none is missed.
+    guard UInt64(missed.count) == sequence - cursor.sequence else { return .gap(.tooOld) }
+    return .covered(missed)
+  }
+
+  private static func randomRunID() -> String {
+    String(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased().prefix(16))
   }
 
   /// Keeps the modem connected and monitored while a host body runs, then checkpoints on
@@ -289,9 +354,13 @@ public actor InsteonService: InsteonServiceAPI {
   }
 
   private func publish(_ event: ServiceEvent) {
+    sequence += 1
+    retained.append((sequence, event))
+    if retained.count > Self.retainedEventCount { retained.removeFirst(retained.count - Self.retainedEventCount) }
+    let item = SequencedItem.event(event, currentCursor)
     subscriptions.removeAll { entry in
       guard let subscription = entry.value else { return true }
-      return !subscription.publish(event)
+      return !subscription.publish(item)
     }
   }
 
