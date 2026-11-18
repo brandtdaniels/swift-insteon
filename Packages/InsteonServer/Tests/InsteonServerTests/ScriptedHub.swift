@@ -10,6 +10,23 @@ import InsteonService
 actor RecordingModem: LinkingModem {
   private(set) var levels: [InsteonAddress: UInt8] = [:]
   let address = InsteonAddress(0x11, 0x22, 0x33)
+  private var failures: [InsteonAddress: any Error] = [:]
+  private var held: (stream: AsyncStream<Void>, release: AsyncStream<Void>.Continuation)?
+  private var entered: AsyncStream<Void>.Continuation?
+
+  /// Makes every request to a device throw `error`, as a device that never answers does.
+  func fail(_ device: InsteonAddress, with error: any Error) { failures[device] = error }
+
+  /// Holds each request until ``release()``, and returns a stream that yields when one arrives.
+  func hold() -> AsyncStream<Void> {
+    let (stream, release) = AsyncStream<Void>.makeStream()
+    held = (stream, release)
+    let (arrivals, arrived) = AsyncStream<Void>.makeStream()
+    entered = arrived
+    return arrivals
+  }
+
+  func release() { held?.release.finish(); held = nil }
 
   func send(_ command: SerialCommand) async throws {}
 
@@ -18,6 +35,11 @@ actor RecordingModem: LinkingModem {
   }
 
   func request(_ message: StandardMessage, timeout: Duration) async throws -> ReceivedMessage {
+    if let held {
+      entered?.yield()
+      for await _ in held.stream {}
+    }
+    if let error = failures[message.destination] { throw error }
     let command = message.command
     if [0x11, 0x13].contains(command.command1) {
       levels[message.destination] = command.command1 == 0x11 ? command.command2 : 0x00

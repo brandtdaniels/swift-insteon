@@ -2,6 +2,8 @@ import Foundation
 import Hummingbird
 import HTTPTypes
 import InsteonCore
+import InsteonHubClient
+import InsteonModem
 import InsteonService
 import Logging
 
@@ -46,62 +48,104 @@ struct ErrorMappingMiddleware<Context: RequestContext>: RouterMiddleware {
   func handle(_ request: Request, context: Context, next: (Request, Context) async throws -> Response) async throws -> Response {
     do { return try await next(request, context) }
     catch let failure as AuthenticationFailure {
-      return Response(status: .unauthorized, headers: [.wwwAuthenticate: failure.challenge], body: .init(byteBuffer: ByteBuffer(string: "Authentication required.")))
+      let code: APIErrorCode = failure.presentedCredentials ? .authenticationFailed : .authenticationRequired
+      var response = Self.response(HTTPFailure(code), request, context)
+      response.headers[.wwwAuthenticate] = failure.challenge
+      return response
     }
     catch {
-      let failure = HTTPFailure(error)
-      if let unavailable = failure.modemUnavailability {
-        // A machine-readable refusal: nothing was sent, and the cause says why.
-        let body = (try? JSONEncoder().encode(ModemUnavailableDTO(unavailable))) ?? Data()
-        return Response(status: failure.status, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(bytes: body)))
-      }
+      return Self.response(HTTPFailure(error), request, context)
+    }
+  }
+
+  /// An API route answers with the typed JSON error; the browser's own routes answer with plain text.
+  private static func response(_ failure: HTTPFailure, _ request: Request, _ context: Context) -> Response {
+    guard request.uri.path.hasPrefix("/api/") else {
       return Response(status: failure.status, headers: [.contentType: "text/plain; charset=utf-8"], body: .init(byteBuffer: ByteBuffer(string: failure.message)))
     }
+    let body = (try? JSONEncoder().encode(ErrorDTO(failure, requestID: "\(context.id)"))) ?? Data()
+    return Response(status: failure.status, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(bytes: body)))
   }
 }
 
-/// What a thrown error means to a client and to the log: the status and message the client
-/// sees, a stable code for the log, and for a failed operation a credential-free cause.
+/// What a thrown error means to a client and to the log: the code, the status and message the
+/// client sees, whether a command may have reached a device, and for a failed operation a
+/// credential-free cause.
 struct HTTPFailure {
+  let code: APIErrorCode
   let status: HTTPResponse.Status
   let message: String
-  let code: String
+  let sent: Bool
   let cause: String?
   /// Set when the modem is away, so the response can say why in a body clients can branch on.
   let modemUnavailability: ModemUnavailability?
 
+  init(_ code: APIErrorCode) {
+    self.init(code, status: code.status)
+  }
+
   init(_ error: any Error) {
+    if let failure = error as? CommandFailure {
+      self.init(classifying: failure.underlying, action: failure.action)
+    } else {
+      self.init(classifying: error, action: nil)
+    }
+  }
+
+  /// - Parameter action: What the failed command asked for. A read changes nothing, so its failure
+  ///   is safe to repeat; an unknown action is treated as a control.
+  private init(classifying error: any Error, action: ServiceCommand.Action?) {
+    let isRead = action == .status || action == .identify
     switch error {
     case let ServiceControlError.modemUnavailable(unavailable):
-      self.init(.serviceUnavailable, unavailable.refusal, "modem_unavailable", modemUnavailability: unavailable)
-    case ServiceControlError.busy: self.init(.conflict, "The service is busy. Try again explicitly; nothing was queued.", "busy")
-    case ServiceControlError.unknownDevice: self.init(.notFound, "Unknown device.", "unknown_device")
-    case ServiceControlError.invalidLevel: self.init(.badRequest, "The device or action does not accept that percentage.", "invalid_level")
-    case ServiceControlError.unsupportedControl: self.init(.unprocessableContent, "The device does not support that control.", "unsupported_control")
-    case HTTPInputError.unsupportedMedia: self.init(.unsupportedMediaType, "Unsupported content type.", "unsupported_media")
-    case HTTPInputError.missingAPIMarker: self.init(.forbidden, "An explicit API request is required.", "api_marker_missing")
-    case HTTPInputError.invalidFormKey: self.init(.forbidden, "The form expired. Reload the page and try again.", "form_key_invalid")
-    case is HTTPInputError: self.init(.badRequest, "Invalid command or form.", "input_invalid")
-    case is DecodingError: self.init(.badRequest, "Invalid command.", "command_invalid")
+      self.init(.modemUnavailable, message: unavailable.refusal, modemUnavailability: unavailable)
+    case ServiceControlError.busy: self.init(.busy)
+    case ServiceControlError.unknownDevice: self.init(.unknownDevice)
+    case ServiceControlError.invalidLevel: self.init(.invalidLevel)
+    case ServiceControlError.unsupportedControl: self.init(.unsupportedControl)
+    case ServiceControlError.notIdentified: self.init(.notIdentified)
+    case ServiceControlError.notLinked: self.init(.notLinked)
+    case HTTPInputError.unsupportedMedia: self.init(.unsupportedMediaType)
+    case HTTPInputError.missingAPIMarker: self.init(.apiMarkerMissing)
+    case HTTPInputError.invalidFormKey: self.init(.formKeyInvalid)
+    case HTTPInputError.invalidAddress: self.init(.invalidAddress)
+    case is HTTPInputError: self.init(.invalidCommand)
+    case is DecodingError: self.init(.invalidCommand)
     case let error as any HTTPResponseError:
-      let tooLarge = error.status == .contentTooLarge
-      self.init(error.status, tooLarge ? "Request body too large." : "Invalid request.", tooLarge ? "body_too_large" : "request_rejected")
+      switch error.status {
+      case .contentTooLarge: self.init(.bodyTooLarge)
+      case .notFound: self.init(.routeNotFound)
+      default: self.init(.requestRejected, status: error.status)
+      }
     case is CancellationError:
-      self.init(.serviceUnavailable, "Request canceled. Its hardware outcome may be unknown; read status before retrying.", "canceled")
+      self.init(.canceled, sent: !isRead)
     default:
       // A library error's description never carries credentials. Any other error is named by type only,
       // because its description can carry request details.
       let cause = InsteonErrorDescription.message(for: error) ?? "unclassified \(type(of: error))"
-      self.init(.badGateway, "Operation failed. Its hardware outcome may be unknown; read status before retrying.", "operation_failed", cause: cause)
+      switch error {
+      case let HubError.unexpectedStatus(status) where status == 401 || status == 403:
+        // The Hub refused the request before it reached the modem.
+        self.init(.modemUnavailable, message: ModemUnavailability.credentialsRejected.refusal, cause: cause, modemUnavailability: .credentialsRejected)
+      case let ModemError.deviceRejected(_, reason) where reason == .notLinked:
+        self.init(.notLinked, cause: cause)
+      case DeviceControlError.notLinked: self.init(.notLinked, cause: cause)
+      case DeviceControlError.notIdentified: self.init(.notIdentified, cause: cause)
+      case is DeviceControlError: self.init(.unsupportedControl, cause: cause)
+      case ModemError.deviceRejected: self.init(.deviceRejected, cause: cause)
+      case ModemError.rejected: self.init(.modemRejected, cause: cause)
+      default: self.init(isRead ? .deviceNotAnswering : .outcomeUnknown, cause: cause)
+      }
     }
   }
 
-  private init(_ status: HTTPResponse.Status, _ message: String, _ code: String, cause: String? = nil, modemUnavailability: ModemUnavailability? = nil) {
-    self.modemUnavailability = modemUnavailability
-    self.status = status
-    self.message = message
+  private init(_ code: APIErrorCode, status: HTTPResponse.Status? = nil, message: String? = nil, sent: Bool? = nil, cause: String? = nil, modemUnavailability: ModemUnavailability? = nil) {
     self.code = code
+    self.status = status ?? code.status
+    self.message = message ?? code.message
+    self.sent = sent ?? code.sent
     self.cause = cause
+    self.modemUnavailability = modemUnavailability
   }
 }
 
@@ -120,13 +164,13 @@ struct RequestLogMiddleware<Context: RequestContext>: RouterMiddleware {
     let outcome: Outcome
     do {
       let response = try await next(request, context)
-      outcome = Outcome(status: response.status, code: response.status.code < 400 ? "ok" : "error_response", level: Self.level(for: response.status), cause: nil)
+      outcome = Outcome(status: response.status, code: response.status.code < 400 ? "ok" : "errorResponse", level: Self.level(for: response.status), cause: nil)
       log(outcome, request, context, since: start)
       return response
     } catch let failure as AuthenticationFailure {
       outcome = Outcome(
         status: .unauthorized,
-        code: failure.presentedCredentials ? "authentication_failed" : "authentication_required",
+        code: (failure.presentedCredentials ? APIErrorCode.authenticationFailed : .authenticationRequired).rawValue,
         level: failure.presentedCredentials ? .warning : .info,
         cause: nil
       )
@@ -134,7 +178,7 @@ struct RequestLogMiddleware<Context: RequestContext>: RouterMiddleware {
       throw failure
     } catch {
       let failure = HTTPFailure(error)
-      outcome = Outcome(status: failure.status, code: failure.code, level: Self.level(for: failure.status), cause: failure.cause)
+      outcome = Outcome(status: failure.status, code: failure.code.rawValue, level: Self.level(for: failure.status), cause: failure.cause)
       log(outcome, request, context, since: start)
       throw error
     }

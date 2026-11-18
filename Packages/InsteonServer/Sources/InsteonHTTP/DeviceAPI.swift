@@ -29,8 +29,12 @@ struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
 
   func command(_ request: Request, address: String?) async throws -> Response {
     let input = try await HTTPCommand.json(request)
-    let receipt = try await service.execute(input.serviceCommand(address: address))
-    return try json(ReceiptDTO(receipt))
+    let command = try input.serviceCommand(address: address)
+    do {
+      return try json(ReceiptDTO(try await service.execute(command)))
+    } catch {
+      throw CommandFailure(action: command.action, underlying: error)
+    }
   }
 
   private enum StreamItem: Sendable {
