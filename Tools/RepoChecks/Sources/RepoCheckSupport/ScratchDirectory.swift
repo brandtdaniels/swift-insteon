@@ -6,9 +6,12 @@ public final class ScratchDirectory {
   /// The directory.
   public let url: URL
 
-  public init(prefix: String = "repo-checks") throws {
-    url = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-      .appendingPathComponent("\(prefix)-\(UUID().uuidString)", isDirectory: true)
+  public init(prefix: String = "repo-checks", resolvingSymlinks: Bool = false) throws {
+    var base = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+    if resolvingSymlinks {
+      base = base.resolvingSymlinksInPath()
+    }
+    url = base.appendingPathComponent("\(prefix)-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
   }
 

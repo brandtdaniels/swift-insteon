@@ -22,14 +22,15 @@ public struct EquivalenceRun {
 
   /// Runs the comparison on a copy of the repository and reports each round to `progress`.
   public func run(repository: URL, progress: (String) -> Void = { _ in }) throws -> EquivalenceReport {
-    let tree = try MutableTree(copying: repository)
-    let mutants = try subject.makeMutants(tree)
     var report = EquivalenceReport(checkName: subject.name)
 
     var baseline = EquivalenceReport.Round(index: 0, seed: nil)
-    try compare(in: tree, round: &baseline, mutant: 0, description: "the repository")
+    try compare(in: try MutableTree(copying: repository), round: &baseline, mutant: 0, description: "the repository")
     report.rounds.append(baseline)
     progress("the repository: \(baseline.differences.count) differences")
+
+    let tree = try MutableTree(copying: repository, including: subject.mutationCorpus)
+    let mutants = try subject.makeMutants(tree)
 
     for index in 1...max(rounds, 1) where index <= rounds {
       let roundSeed = seed &+ UInt64(index)
@@ -56,8 +57,22 @@ public struct EquivalenceRun {
     mutant: Int,
     description: String
   ) throws {
-    let oracle = try subject.oracle.run(in: tree.root)
-    let candidate = try subject.candidate.run(in: tree.root)
+    let pairs = [(subject.oracle, subject.candidate)] + (subject.updateRunners.map { [($0.oracle, $0.candidate)] } ?? [])
+    for (index, pair) in pairs.enumerated() {
+      try compareOne(oracle: pair.0, candidate: pair.1, in: tree, round: &round, mutant: mutant, description: index == 0 ? description : description + " (with --update)")
+    }
+  }
+
+  private func compareOne(
+    oracle oracleRunner: CheckRunning,
+    candidate candidateRunner: CheckRunning,
+    in tree: MutableTree,
+    round: inout EquivalenceReport.Round,
+    mutant: Int,
+    description: String
+  ) throws {
+    let oracle = try oracleRunner.run(in: tree.root)
+    let candidate = try candidateRunner.run(in: tree.root)
     round.compared += 1
     if oracle.status != 0 {
       round.withFindings += 1

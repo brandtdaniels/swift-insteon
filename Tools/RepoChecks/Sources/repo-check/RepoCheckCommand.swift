@@ -9,7 +9,7 @@ struct RepoCheckCommand: ParsableCommand {
     commandName: "repo-check",
     abstract: "Checks the repository against its rules.",
     discussion: "Each check exits with status 0 if it finds nothing and 1 if it finds a problem.",
-    subcommands: [WorkflowsCommand.self]
+    subcommands: [WorkflowsCommand.self, TermsCommand.self]
   )
 }
 
@@ -26,7 +26,14 @@ struct RootOptions: ParsableArguments {
 extension RepoCheck {
   /// Runs the check on standard output and exits with its status if it didn't pass.
   func runAsCommand(_ options: RootOptions) throws {
-    let status = try run(in: options.rootURL, console: StandardConsole())
+    let console = StandardConsole()
+    let status: CheckStatus
+    do {
+      status = try run(in: options.rootURL, console: console)
+    } catch let failure as CheckFailure {
+      console.writeError(failure.message)
+      throw ExitCode.failure
+    }
     if status != .passed {
       throw ExitCode(status.rawValue)
     }
@@ -44,4 +51,26 @@ struct WorkflowsCommand: ParsableCommand {
   func run() throws {
     try WorkflowsCheck().runAsCommand(options)
   }
+}
+
+struct TermsCommand: ParsableCommand {
+  static let configuration = CommandConfiguration(
+    commandName: "terms",
+    abstract: "Checks the docs and comments for the terms CONVENTIONS.md rules out."
+  )
+
+  @OptionGroup var options: RootOptions
+
+  func run() throws {
+    try TermsCheck().runAsCommand(options)
+  }
+}
+
+/// The options of a check that keeps an allow-list.
+struct AllowListOptions: ParsableArguments {
+  @Option(help: "The known lines. Scripts/ under the repository by default.")
+  var allowlist: String?
+
+  @Flag(help: "Write the allow-list from the sources.")
+  var update = false
 }

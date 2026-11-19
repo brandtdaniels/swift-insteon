@@ -48,3 +48,18 @@ struct PythonPatternTests {
     #expect(pattern.match("e\u{301}") == nil)
   }
 }
+
+@Suite("PythonPattern byte order mark")
+struct PythonPatternByteOrderMarkTests {
+  @Test("keeps a leading byte order mark in the text its matches are cut from")
+  func keepsByteOrderMark() {
+    let text = "\u{FEFF}INSTEON now"
+    let pattern = PythonPattern(python: #"\bINSTEON\b"#)
+
+    #expect(pattern.search(text)?.text == "INSTEON")
+    #expect(pattern.search(text)?.startOffset == 1)
+    #expect(pattern.allMatches(in: text) == ["INSTEON"])
+    #expect(pattern.replacingAll(in: text, with: "") == "\u{FEFF} now")
+    #expect(PythonPattern("now").allMatchPrefixes(in: text) == ["\u{FEFF}INSTEON "])
+  }
+}

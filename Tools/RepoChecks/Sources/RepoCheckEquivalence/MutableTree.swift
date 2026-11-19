@@ -25,11 +25,13 @@ public final class MutableTree {
   /// The copy's root.
   public var root: URL { scratch.url }
 
-  /// Copies the repository, files and directories, into a scratch directory.
-  public init(copying source: URL) throws {
-    scratch = try ScratchDirectory(prefix: "repo-check-tree")
-    for entry in try SourceFiles.entries(under: source, pruning: Self.leftOut) {
+  /// Copies the repository into a scratch directory, leaving out the entries `including` refuses.
+  /// The directory is made from its resolved path, which is the one the Python scripts compute.
+  public init(copying source: URL, including: (SourceEntry) -> Bool = { _ in true }) throws {
+    scratch = try ScratchDirectory(prefix: "repo-check-tree", resolvingSymlinks: true)
+    for entry in try SourceFiles.entries(under: source, pruning: Self.leftOut) where including(entry) {
       let destination = entry.url(under: scratch.url)
+      try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
       if entry.isDirectory {
         try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
       } else {
@@ -104,5 +106,15 @@ public final class MutableTree {
     }
 
     let steps: [Step]
+  }
+}
+
+extension MutableTree {
+  /// The relative paths of the files whose names end in one of the suffixes, in path order,
+  /// leaving out those under a name in `skipping`.
+  public func filesWithSuffixes(_ suffixes: [String], skipping: Set<String> = [".build", ".git"]) throws -> [String] {
+    try SourceFiles.entries(under: root, pruning: skipping)
+      .filter { entry in !entry.isDirectory && suffixes.contains { entry.components.last!.hasSuffix($0) } }
+      .map(\.relativePath)
   }
 }
