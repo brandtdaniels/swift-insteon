@@ -60,7 +60,7 @@ enum BrowserControls {
 
     // Queue and coalesce safe cache reads. Hardware POSTs are never retried.
     const queue = new Set();
-    const validAddress = address => typeof address === 'string' && /^[0-9A-F]{2}(\.[0-9A-F]{2}){2}$/i.test(address);
+    const validAddress = isDeviceAddress;
     let reading = false, listNeeded = false, retryTimer = 0, retryDelay = 500;
     let active = true, generation = 0, authenticationRequired = false, connected = false;
     let cacheController = null, cacheTimeout = 0;
@@ -184,16 +184,13 @@ enum BrowserControls {
       onClosed: () => { if (!authenticationRequired) checkAuthentication(); },
       onMessage: data => {
         if (!active) return;
-        try {
-          const update = JSON.parse(data);
-          if (update?.version === 1 && update.kind === 'modemUnavailable' && typeof update.message === 'string') { hubStatus(update.message); return; }
-          if (update?.version === 1 && update.kind === 'gap') { synchronize(); return; }
-          if (update?.version === 1 && update.kind === 'reconnected') { hubStatus(''); synchronize(); return; }
-          if (update?.version !== 1 || !validAddress(update.address)) return;
-          if (!['commandCompleted', 'identified', 'setButtonPressed'].includes(update.kind)) return;
-          queue.add(update.address.toUpperCase());
-          drain();
-        } catch { /* Unknown or malformed events don't execute commands. */ }
+        const frame = interpretFrame(data);
+        if (frame.action === 'hubAway') { hubStatus(frame.message); return; }
+        if (frame.action === 'synchronize') { synchronize(); return; }
+        if (frame.action === 'reconnected') { hubStatus(''); synchronize(); return; }
+        if (frame.action !== 'refreshCard') return;
+        queue.add(frame.address);
+        drain();
       }
     });
     const connect = () => {

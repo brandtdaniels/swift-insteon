@@ -15,6 +15,10 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   case unknownClient
   case clientLimitReached
   case clientsNotSaved
+  case invalidNotificationRule
+  case unknownNotificationRule
+  case notificationRuleLimitReached
+  case notificationRulesNotSaved
   case invalidAddress
   case invalidCommand
   case invalidIdempotencyKey
@@ -42,14 +46,14 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   var status: HTTPResponse.Status {
     switch self {
     case .authenticationRequired, .authenticationFailed: .unauthorized
-    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel, .invalidClient: .badRequest
-    case .unknownDevice, .routeNotFound, .unknownClient: .notFound
+    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel, .invalidClient, .invalidNotificationRule: .badRequest
+    case .unknownDevice, .routeNotFound, .unknownClient, .unknownNotificationRule: .notFound
     case .forbidden, .apiMarkerMissing, .formKeyInvalid: .forbidden
     case .bodyTooLarge: .contentTooLarge
     case .unsupportedMediaType: .unsupportedMediaType
     case .requestRejected: .badRequest
-    case .busy, .notIdentified, .notLinked, .clientLimitReached: .conflict
-    case .clientsNotSaved: .internalServerError
+    case .busy, .notIdentified, .notLinked, .clientLimitReached, .notificationRuleLimitReached: .conflict
+    case .clientsNotSaved, .notificationRulesNotSaved: .internalServerError
     case .unsupportedControl, .deviceRejected, .idempotencyKeyReused: .unprocessableContent
     case .modemRejected, .modemUnavailable, .canceled: .serviceUnavailable
     case .deviceNotAnswering: .gatewayTimeout
@@ -76,6 +80,10 @@ enum APIErrorCode: String, CaseIterable, Sendable {
     case .unknownClient: "Unknown client."
     case .clientLimitReached: "The service keeps at most \(ClientStore.maximumClients) clients. Revoke one first."
     case .clientsNotSaved: "The clients could not be read or saved. Nothing changed."
+    case .invalidNotificationRule: "A rule needs an identifier and a name of 1 through 64 characters, a trigger the device's product reports, a cooldown of 0 through \(ServiceNotificationRule.longestCooldownSeconds) seconds, and no other field."
+    case .unknownNotificationRule: "Unknown notification rule."
+    case .notificationRuleLimitReached: "The service keeps at most \(ServiceNotificationRule.maximumCount) notification rules. Remove one first."
+    case .notificationRulesNotSaved: "The notification rules could not be read or saved. Nothing changed."
     case .forbidden: "This credential's scope does not allow that. Nothing was sent."
     case .invalidAddress: "The device address is not a valid Insteon address."
     case .invalidCommand: "Invalid command."

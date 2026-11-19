@@ -9,7 +9,7 @@ import Testing
 @testable import InsteonServerSupport
 
 /// An event stream read frame by frame. The test waits on frames arriving, never on time.
-private final class EventStreamReader: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+final class EventStreamReader: NSObject, URLSessionDataDelegate, @unchecked Sendable {
   struct Frame: @unchecked Sendable {
     let id: String?
     let json: [String: Any]
@@ -25,12 +25,12 @@ private final class EventStreamReader: NSObject, URLSessionDataDelegate, @unchec
   private var session: URLSession?
   private var task: URLSessionDataTask?
 
-  init(port: Int, password: String, lastEventID: String? = nil, query: String? = nil) {
+  init(port: Int, password: String, bearer: String? = nil, lastEventID: String? = nil, query: String? = nil) {
     (frames, continuation) = AsyncStream<Frame>.makeStream()
     (ready, readyContinuation) = AsyncStream<Void>.makeStream()
     super.init()
     var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)/api/v1/events" + (query.map { "?" + $0 } ?? ""))!)
-    request.setValue("Basic " + Data(("insteon:" + password).utf8).base64EncodedString(), forHTTPHeaderField: "Authorization")
+    request.setValue(bearer.map { "Bearer " + $0 } ?? "Basic " + Data(("insteon:" + password).utf8).base64EncodedString(), forHTTPHeaderField: "Authorization")
     if let lastEventID { request.setValue(lastEventID, forHTTPHeaderField: "Last-Event-ID") }
     let session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
     self.session = session

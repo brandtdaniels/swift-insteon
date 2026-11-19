@@ -175,10 +175,19 @@ struct EventDTO: Encodable {
   let productName: String?
   let completion: CommandCompletionDTO?
   let cause: String?
+  let ruleId: String?
+  let ruleName: String?
+  let firedAt: String?
   let message: String?
   init(_ event: ServiceEvent, at position: EventCursor) {
     runId = position.runID
     sequence = position.sequence
+    if case let .notification(note) = event {
+      ruleId = note.ruleID; ruleName = note.ruleName
+      firedAt = ISO8601DateFormatter().string(from: note.firedAt)
+    } else {
+      ruleId = nil; ruleName = nil; firedAt = nil
+    }
     switch event {
     case let .modemUnavailable(reason): cause = reason.wireName; message = reason.notice
     default: cause = nil; message = nil
@@ -205,6 +214,8 @@ struct EventDTO: Encodable {
       kind = EventKind.modemUnavailable.rawValue; address = nil; group = nil; name = nil; productName = nil
     case .modemReconnected:
       kind = EventKind.reconnected.rawValue; address = nil; group = nil; name = nil; productName = nil
+    case let .notification(note):
+      kind = EventKind.notification.rawValue; address = note.device.description; group = nil; name = note.eventName; productName = nil
     }
   }
 }

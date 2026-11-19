@@ -6,6 +6,7 @@ import HTTPTypes
 enum APIOperation: String, CaseIterable, Sendable {
   case listDevices, health, executeCommand, streamEvents, openAPI
   case listClients, createClient, revokeClient, createPairing
+  case listNotificationRules, putNotificationRule, deleteNotificationRule
   case browserIndex, browserControls, browserCard, browserCommand
 
   struct Parameter: Sendable {
@@ -39,7 +40,7 @@ enum APIOperation: String, CaseIterable, Sendable {
   /// A browser route answers HTML and plain text for a person; the rest answer machines.
   var isAPI: Bool {
     switch self {
-    case .listDevices, .health, .executeCommand, .streamEvents, .openAPI, .listClients, .createClient, .revokeClient, .createPairing: true
+    case .listDevices, .health, .executeCommand, .streamEvents, .openAPI, .listClients, .createClient, .revokeClient, .createPairing, .listNotificationRules, .putNotificationRule, .deleteNotificationRule: true
     case .browserIndex, .browserControls, .browserCard, .browserCommand: false
     }
   }
@@ -47,7 +48,8 @@ enum APIOperation: String, CaseIterable, Sendable {
   var method: HTTPRequest.Method {
     switch self {
     case .executeCommand, .browserCommand, .createClient, .createPairing: .post
-    case .revokeClient: .delete
+    case .revokeClient, .deleteNotificationRule: .delete
+    case .putNotificationRule: .put
     default: .get
     }
   }
@@ -63,6 +65,8 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listClients, .createClient: "/api/v1/clients"
     case .revokeClient: "/api/v1/clients/{id}"
     case .createPairing: "/api/v1/clients/{id}/pairing"
+    case .listNotificationRules: "/api/v1/notification-rules"
+    case .putNotificationRule, .deleteNotificationRule: "/api/v1/notification-rules/{id}"
     case .browserIndex: "/"
     case .browserControls: "/controls.js"
     case .browserCard, .browserCommand: "/devices/{address}"
@@ -80,6 +84,9 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .createClient: "Create a client and its pairing document"
     case .revokeClient: "Revoke a client"
     case .createPairing: "Replace a client's credential and return its pairing document"
+    case .listNotificationRules: "List the notification rules"
+    case .putNotificationRule: "Store a notification rule"
+    case .deleteNotificationRule: "Remove a notification rule"
     case .browserIndex: "The browser page"
     case .browserControls: "The browser page's script"
     case .browserCard: "One device's card, from cached state"
@@ -98,6 +105,9 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .createClient: "Creates a client with a name and a scope, and returns the `PairingDocument` that carries its token. The token is shown only here: the service keeps a salted hash. Needs the `admin` scope."
     case .revokeClient: "Removes the client. Its token stops working at once and its open event streams end. Needs the `admin` scope."
     case .createPairing: "Gives the client a new credential and returns it in a `PairingDocument`. The client's previous token stops working and its open event streams end. Needs the `admin` scope."
+    case .listNotificationRules: "The rules the service evaluates against what devices report, in the order they were added. Needs the `read` scope."
+    case .putNotificationRule: "Adds the rule, or replaces the rule with that identifier. A replacement with the same trigger keeps the rule's cooldown running. The change applies to the next device report. A rule that fires publishes a `notification` event on `/api/v1/events`, which carries the rule, the device and the time, and names the event only when `includeDetail` is true. Needs the `admin` scope."
+    case .deleteNotificationRule: "Removes the rule, which stops firing at once. Needs the `admin` scope."
     case .browserIndex, .browserControls, .browserCard, .browserCommand: "Part of the browser page, not of the versioned API contract."
     }
   }
@@ -105,6 +115,7 @@ enum APIOperation: String, CaseIterable, Sendable {
   private static let addressParameter = Parameter(name: "address", location: "path", required: true, schema: Schema.string(description: "A device address such as 1A.2B.3C."), description: "The device's Insteon address.")
 
   private static let clientParameter = Parameter(name: "id", location: "path", required: true, schema: Schema.string(description: "A client's identifier."), description: "The client's identifier, from the list or the creation response.")
+  private static let ruleParameter = Parameter(name: "id", location: "path", required: true, schema: Schema.string(description: "A rule's identifier: letters, digits, `-`, `_` and `.`, at most 64 characters."), description: "The rule's identifier. A client chooses it.")
   private static let markerParameter = Parameter(name: "X-Insteon-Request", location: "header", required: true, schema: Schema.constant("1"), description: "Marks an explicit API request, so a browser page can't change clients by accident.")
 
   var parameters: [Parameter] {
@@ -122,6 +133,7 @@ enum APIOperation: String, CaseIterable, Sendable {
       ]
     case .createClient: [Self.markerParameter]
     case .revokeClient, .createPairing: [Self.clientParameter, Self.markerParameter]
+    case .putNotificationRule, .deleteNotificationRule: [Self.ruleParameter, Self.markerParameter]
     case .browserCard, .browserCommand:
       [Self.addressParameter]
     default:
@@ -133,6 +145,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     switch self {
     case .executeCommand: Body(contentType: "application/json", schema: Schema.ref("Command"), description: "The command. Unknown fields are refused. The body is at most 8 KiB.")
     case .createClient: Body(contentType: "application/json", schema: Schema.ref("ClientRequest"), description: "The client's name and scope. Unknown fields are refused.")
+    case .putNotificationRule: Body(contentType: "application/json", schema: Schema.ref("NotificationRuleRequest"), description: "The rule without its identifier, which the path gives. Unknown fields are refused. The body is at most 8 KiB.")
     case .browserCommand: Body(contentType: "application/x-www-form-urlencoded", schema: Schema.string(), description: "The page's form: `action`, optional `levelPercent`, and the page's `formKey`.")
     default: nil
     }
@@ -142,9 +155,9 @@ enum APIOperation: String, CaseIterable, Sendable {
   /// browser route takes only the password.
   var requiredScope: ClientScope {
     switch self {
-    case .listDevices, .health, .streamEvents, .openAPI: .read
+    case .listDevices, .health, .streamEvents, .openAPI, .listNotificationRules: .read
     case .executeCommand: .control
-    case .listClients, .createClient, .revokeClient, .createPairing: .admin
+    case .listClients, .createClient, .revokeClient, .createPairing, .putNotificationRule, .deleteNotificationRule: .admin
     case .browserIndex, .browserControls, .browserCard, .browserCommand: .admin
     }
   }
@@ -162,6 +175,9 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listClients: codes += [.clientsNotSaved]
     case .createClient: codes += [.invalidClient, .clientLimitReached, .clientsNotSaved, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected]
     case .revokeClient, .createPairing: codes += [.unknownClient, .clientsNotSaved, .apiMarkerMissing]
+    case .listNotificationRules: codes += [.notificationRulesNotSaved]
+    case .putNotificationRule: codes += [.invalidNotificationRule, .unknownDevice, .notificationRuleLimitReached, .notificationRulesNotSaved, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected]
+    case .deleteNotificationRule: codes += [.unknownNotificationRule, .notificationRulesNotSaved, .apiMarkerMissing]
     case .browserCard:
       codes += [.invalidAddress, .unknownDevice, .busy]
     case .browserCommand:
@@ -183,6 +199,9 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .createClient: [Reply(status: 201, description: "The client, and the pairing document that carries its token.", contentType: "application/json", schema: Schema.ref("ClientCreated"), headers: [:])]
     case .revokeClient: [Reply(status: 204, description: "The client is revoked.", contentType: nil, schema: nil, headers: [:])]
     case .createPairing: [Reply(status: 200, description: "The pairing document, with the new credential.", contentType: "application/json", schema: Schema.ref("PairingDocument"), headers: [:])]
+    case .listNotificationRules: [Reply(status: 200, description: "The rules.", contentType: "application/json", schema: Schema.ref("NotificationRuleList"), headers: [:])]
+    case .putNotificationRule: [Reply(status: 200, description: "The stored rule.", contentType: "application/json", schema: Schema.ref("NotificationRuleStored"), headers: [:])]
+    case .deleteNotificationRule: [Reply(status: 204, description: "The rule is removed.", contentType: nil, schema: nil, headers: [:])]
     case .browserIndex: [Reply(status: 200, description: "The page.", contentType: "text/html", schema: nil, headers: [:])]
     case .browserControls: [Reply(status: 200, description: "The script.", contentType: "text/javascript", schema: nil, headers: [:])]
     case .browserCard: [Reply(status: 200, description: "The device's card.", contentType: "text/html", schema: nil, headers: [:])]

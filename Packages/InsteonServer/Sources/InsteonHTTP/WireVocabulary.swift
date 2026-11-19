@@ -37,8 +37,15 @@ enum HealthStatusName: String, CaseIterable, Sendable {
 enum EventKind: String, CaseIterable, Sendable {
   case commandCompleted, identified, setButtonPressed, groupCommand, heartbeat, statusChanged
   case modemUnavailable, reconnected
+  /// A notification rule fired.
+  case notification
   /// The client missed events the server can't replay.
   case gap
+}
+
+/// What makes a notification rule fire.
+enum NotificationTriggerKind: String, CaseIterable, Sendable {
+  case event, groupCommand
 }
 
 extension ModemUnavailability {

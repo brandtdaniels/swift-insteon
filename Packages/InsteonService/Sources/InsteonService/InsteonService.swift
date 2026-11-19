@@ -1,6 +1,9 @@
 import Foundation
 import InsteonCore
+import InsteonDeviceCatalog
 import InsteonModem
+import InsteonNotifications
+import InsteonProtocol
 
 /// One persistent Insteon network's operations, monitoring and snapshot policy.
 ///
@@ -35,6 +38,10 @@ public actor InsteonService: InsteonServiceAPI {
   private var lastPoll: Date?
   private var informationUpdated: Date?
   private var attemptConnected = false
+  private let notificationPersistence: (any NotificationRulePersisting)?
+  private var ruleBook: NotificationRuleBook?
+  private var rulesAreBeingEdited = false
+  private var waitingToEditRules: [CheckedContinuation<Void, Never>] = []
 
   /// How many of the newest events the service keeps for a client to resume from. Memory is
   /// bounded by this count; nothing is kept on disk, and a restart forgets every event.
@@ -64,6 +71,7 @@ public actor InsteonService: InsteonServiceAPI {
   ///   - runID: Names this run in event ids. Defaults to a random token, so every start has its own.
   ///   - throughHub: Whether the modem is reached through a Hub. A modem that doesn't answer is then
   ///     reported as ``ModemUnavailability/hubUnreachable``, because the Hub is what to check.
+  ///   - notificationRules: Where the notification rules are kept, if anywhere. Without it they last as long as the service.
   public init(
     network: DeviceNetwork,
     opener: any NetworkOpening,
@@ -74,9 +82,10 @@ public actor InsteonService: InsteonServiceAPI {
     now: @escaping @Sendable () -> Date = { Date() },
     jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) },
     throughHub: Bool = false,
-    runID: String? = nil
+    runID: String? = nil,
+    notificationRules: (any NotificationRulePersisting)? = nil
   ) {
-    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false, throughHub: throughHub, runID: runID)
+    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false, throughHub: throughHub, runID: runID, notificationRules: notificationRules)
   }
 
   private init(
@@ -90,8 +99,10 @@ public actor InsteonService: InsteonServiceAPI {
     jitter: @escaping @Sendable () -> Double,
     isConnected: Bool,
     throughHub: Bool = false,
-    runID: String? = nil
+    runID: String? = nil,
+    notificationRules: (any NotificationRulePersisting)? = nil
   ) {
+    self.notificationPersistence = notificationRules
     self.network = network
     self.opener = opener
     self.reconnect = reconnect
@@ -185,6 +196,103 @@ public actor InsteonService: InsteonServiceAPI {
     busy = true
     defer { busy = false }
     return await persist()
+  }
+
+  // MARK: Notification rules
+
+  /// The rules, in the order they were added.
+  ///
+  /// - Throws: ``NotificationRuleError/notSaved`` when the stored rules can't be read.
+  public func notificationRules() async throws -> [ServiceNotificationRule] {
+    try await loadNotificationRules()
+    return ruleBook?.rules ?? []
+  }
+
+  /// Validates a rule and stores it, so it applies to the next device report.
+  ///
+  /// A rule with the identifier of an existing one replaces it, and keeps its cooldown running when the trigger
+  /// is the same. The rules are saved before they change, so a failure to save changes nothing.
+  ///
+  /// - Throws: ``NotificationRuleError``.
+  public func putNotificationRule(_ rule: ServiceNotificationRule) async throws {
+    try await loadNotificationRules()
+    try await editingRules {
+      let rule = try await validated(rule)
+      var updated = ruleBook ?? NotificationRuleBook()
+      guard updated.contains(rule.id) || updated.rules.count < ServiceNotificationRule.maximumCount else { throw NotificationRuleError.limitReached }
+      updated.put(rule)
+      try await save(updated)
+      ruleBook = updated
+    }
+  }
+
+  /// Removes a rule, which stops firing at once.
+  ///
+  /// - Throws: ``NotificationRuleError/unknownRule`` when no rule has the identifier.
+  public func removeNotificationRule(id: String) async throws {
+    try await loadNotificationRules()
+    try await editingRules {
+      var updated = ruleBook ?? NotificationRuleBook()
+      guard updated.contains(id) else { throw NotificationRuleError.unknownRule }
+      updated.remove(id)
+      try await save(updated)
+      ruleBook = updated
+    }
+  }
+
+  /// Reads the stored rules once. Until it succeeds, the service has no rules and refuses to change them.
+  public func loadNotificationRules() async throws {
+    guard ruleBook == nil else { return }
+    let stored: [ServiceNotificationRule]?
+    do { stored = try await notificationPersistence?.load() } catch { throw NotificationRuleError.notSaved }
+    if ruleBook == nil { ruleBook = NotificationRuleBook(rules: stored ?? []) }
+  }
+
+  private func save(_ book: NotificationRuleBook) async throws {
+    do { try await notificationPersistence?.save(book.rules) } catch { throw NotificationRuleError.notSaved }
+  }
+
+  /// Runs a change to the rules alone, so two changes never start from the same rules and lose one of them.
+  private func editingRules<Result>(_ work: () async throws -> Result) async rethrows -> Result {
+    if rulesAreBeingEdited { await withCheckedContinuation { waitingToEditRules.append($0) } } else { rulesAreBeingEdited = true }
+    // The next waiter inherits the turn, so a new caller can't slip in between.
+    defer { if waitingToEditRules.isEmpty { rulesAreBeingEdited = false } else { waitingToEditRules.removeFirst().resume() } }
+    return try await work()
+  }
+
+  private func validated(_ rule: ServiceNotificationRule) async throws -> ServiceNotificationRule {
+    var rule = rule
+    let limit = ServiceNotificationRule.longestTextLength
+    guard (1...limit).contains(rule.id.count), rule.id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "-_.".contains($0)) }) else { throw NotificationRuleError.invalidRule }
+    rule.name = rule.name.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard (1...limit).contains(rule.name.count), !rule.name.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { throw NotificationRuleError.invalidRule }
+    guard (0...ServiceNotificationRule.longestCooldownSeconds).contains(rule.cooldownSeconds) else { throw NotificationRuleError.invalidRule }
+    switch rule.trigger {
+    case let .event(name, _):
+      guard (1...limit).contains(name.count), name.first?.isLowercase == true, name.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else { throw NotificationRuleError.invalidRule }
+    case let .groupCommand(_, group, _):
+      guard (1...255).contains(group) else { throw NotificationRuleError.invalidRule }
+    }
+    let network = network
+    guard Self.addresses(in: await network.snapshot()).contains(rule.trigger.device) else { throw NotificationRuleError.unknownDevice }
+    if case let .event(name, device) = rule.trigger, let names = await eventNames(of: device, in: network), !names.contains(name) { throw NotificationRuleError.invalidRule }
+    return rule
+  }
+
+  /// The events the catalog says a device's product reports, or `nil` when the catalog has no profile for the device.
+  private func eventNames(of device: InsteonAddress, in network: DeviceNetwork) async -> Set<String>? {
+    guard let identity = await network.registry.device(device)?.identity, let catalog = await network.registry.catalog,
+          let profile = catalog.profile(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion) else { return nil }
+    var names: Set<String> = []
+    for case let .groupEvents(events) in profile.capabilities { names.formUnion(events.map(\.event.rawValue)) }
+    return names
+  }
+
+  private func evaluateNotificationRules(for event: DeviceMonitorEvent) {
+    guard var book = ruleBook, !book.rules.isEmpty, let event = DeviceEvent(event) else { return }
+    let fired = book.notifications(for: event, at: now())
+    ruleBook = book
+    for notification in fired { publish(.notification(notification)) }
   }
 
   /// Reports readiness, the modem's state, and the times of the last hardware exchange, the last
@@ -320,6 +428,8 @@ public actor InsteonService: InsteonServiceAPI {
   private func serve(_ candidate: DeviceNetwork) async throws {
     _ = try await candidate.modemInfo()
     _ = try await candidate.modemDatabase()
+    // A rules file that can't be read leaves the rules off; changing them reports why.
+    try? await loadNotificationRules()
     // Subscribe before announcing the connection so nothing heard from then on is missed.
     let changes = await candidate.monitor.changes()
     await connected(to: candidate)
@@ -327,6 +437,7 @@ public actor InsteonService: InsteonServiceAPI {
       try Task.checkCancellation()
       lastExchange = now()
       if let event = ServiceEvent(event) { publish(event) }
+      evaluateNotificationRules(for: event)
     }
     try Task.checkCancellation()
   }

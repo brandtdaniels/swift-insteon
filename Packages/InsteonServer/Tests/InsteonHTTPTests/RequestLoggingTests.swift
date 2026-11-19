@@ -175,6 +175,9 @@ private actor ScriptedService: InsteonServiceAPI {
   }
   func events() async -> AsyncStream<ServiceEvent> { AsyncStream { $0.finish() } }
   func sequencedEvents(after cursor: EventCursor?) async -> SequencedEvents { SequencedEvents(AsyncThrowingStream { $0.finish() }) }
+  func notificationRules() async throws -> [ServiceNotificationRule] { [] }
+  func putNotificationRule(_ rule: ServiceNotificationRule) async throws {}
+  func removeNotificationRule(id: String) async throws {}
   func health() async -> ServiceHealth {
     ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000))
   }

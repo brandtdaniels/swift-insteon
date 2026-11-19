@@ -1,5 +1,7 @@
 import Foundation
 import InsteonCore
+import InsteonDeviceCatalog
+import InsteonProtocol
 
 /// A cached device description, independent of any transport or presentation format.
 public struct ServiceDevice: Equatable, Sendable {
@@ -123,9 +125,23 @@ public protocol HealthReporting: Sendable {
   func health() async -> ServiceHealth
 }
 
+/// Builds the catalog's view of a group command a monitor heard, for matching against notification rules.
+extension DeviceEvent {
+  init?(_ event: DeviceMonitorEvent) {
+    switch event {
+    case let .groupCommand(command):
+      guard let group = UInt8(exactly: command.group) else { return nil }
+      let controller = GroupCommand(controller: command.device, group: AllLinkGroupNumber(rawValue: group), command1: command.command1, command2: nil, source: .broadcast)
+      self = .groupCommand(controller, event: command.event.map { DeviceEventName(rawValue: $0) })
+    default:
+      return nil
+    }
+  }
+}
+
 /// The cohesive API consumed by an adapter that needs queries, commands, events and health.
 /// A single instance supplies all four roles, preventing mismatched device networks.
-public protocol InsteonServiceAPI: DeviceQuerying, DeviceCommanding, DeviceEventSource, HealthReporting {}
+public protocol InsteonServiceAPI: DeviceQuerying, DeviceCommanding, DeviceEventSource, HealthReporting, NotificationRuleManaging {}
 
 /// A refused operation, independent of HTTP status codes or display wording.
 public enum ServiceControlError: Error, Equatable {
@@ -176,6 +192,8 @@ public enum ServiceEvent: Equatable, Sendable {
   case modemUnavailable(ModemUnavailability)
   /// The modem is connected and its device information was read again. Anything heard while
   /// it was away is lost, so consumers refresh what they display.
+  /// A notification rule fired. Numbered and retained like every other event.
+  case notification(ServiceNotification)
   case modemReconnected
 
   init?(_ event: DeviceMonitorEvent) {

@@ -36,6 +36,7 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case serialPortUnavailable = "serial_port_unavailable"
     case stateFileUnusable = "state_file_unusable"
     case clientFileUnusable = "client_file_unusable"
+    case notificationRulesFileUnusable = "notification_rules_file_unusable"
     case clientLimitReached = "client_limit_reached"
     case advertiseURLInvalid = "advertise_url_invalid"
     case homeNameInvalid = "home_name_invalid"
@@ -162,6 +163,8 @@ public struct ServerFailure: Error, Equatable, Sendable {
       ServerFailure(.clientLimitReached, "The service keeps at most \(ClientStore.maximumClients) clients. Revoke one with DELETE /api/v1/clients/{id}, then pair again.", configurationStatus)
     case let .clientFileUnusable(path):
       ServerFailure(.clientFileUnusable, "The client file \(path) couldn't be read or isn't in a format this server reads, so it was left as it is. Move it aside to start with no clients; every client must pair again.", configurationStatus)
+    case let .notificationRulesFileUnusable(path):
+      ServerFailure(.notificationRulesFileUnusable, "The notification rules file \(path) couldn't be read or isn't in a format this server reads, so it was left as it is. Move it aside to start with no rules.", configurationStatus)
     case let .stateFileUnusable(path, reason):
       switch reason {
       case .unreadableFile:

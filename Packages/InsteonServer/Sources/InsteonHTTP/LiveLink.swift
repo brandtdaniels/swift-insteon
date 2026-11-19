@@ -5,6 +5,21 @@
 /// the page keeps what it shows and refreshes only when the server says it missed events.
 enum LiveLink {
   static let source = #"""
+  const isDeviceAddress = address => typeof address === 'string' && /^[0-9A-F]{2}(\.[0-9A-F]{2}){2}$/i.test(address);
+  // What the page does with one frame of the stream. A frame of a kind it does not know, such as a notification,
+  // changes nothing the page shows.
+  const interpretFrame = data => {
+    try {
+      const update = JSON.parse(data);
+      if (update?.version !== 1) return { action: 'ignore' };
+      if (update.kind === 'modemUnavailable' && typeof update.message === 'string') return { action: 'hubAway', message: update.message };
+      if (update.kind === 'gap') return { action: 'synchronize' };
+      if (update.kind === 'reconnected') return { action: 'reconnected' };
+      if (!isDeviceAddress(update.address)) return { action: 'ignore' };
+      if (!['commandCompleted', 'identified', 'setButtonPressed'].includes(update.kind)) return { action: 'ignore' };
+      return { action: 'refreshCard', address: update.address.toUpperCase() };
+    } catch { return { action: 'ignore' }; }
+  };
   const createLiveLink = ({ open, schedule, cancel, onState, onOpen, onClosed, onMessage }) => {
     const CLOSED = 2, firstDelay = 500, longestDelay = 30000;
     let source = null, timer = 0, delay = firstDelay, lastEventId = '';

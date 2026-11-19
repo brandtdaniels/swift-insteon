@@ -1,5 +1,6 @@
 import Foundation
 import InsteonCore
+import InsteonDeviceCatalog
 import InsteonLinkingTestSupport
 import InsteonService
 
@@ -38,12 +39,16 @@ actor ScriptedOpener: NetworkOpening {
   private let startedContinuation: AsyncStream<Int>.Continuation
   private var script: [Attempt]
   private let now: @Sendable () -> Date
+  private let catalog: DeviceCatalog?
+  private let deviceClock: any Clock<Duration>
   private(set) var snapshots: [NetworkSnapshot] = []
   private var report: (@Sendable () async -> Void)?
 
-  init(_ script: [Attempt], now: @escaping @Sendable () -> Date = { Date(timeIntervalSince1970: 1_800_000_000) }) {
+  init(_ script: [Attempt], now: @escaping @Sendable () -> Date = { Date(timeIntervalSince1970: 1_800_000_000) }, catalog: DeviceCatalog? = nil, clock: any Clock<Duration> = ContinuousClock()) {
     self.script = script
     self.now = now
+    self.catalog = catalog
+    self.deviceClock = clock
     (started, startedContinuation) = AsyncStream.makeStream()
   }
 
@@ -65,7 +70,7 @@ actor ScriptedOpener: NetworkOpening {
     case let .fail(error):
       throw error
     case let .connect(link):
-      let network = DeviceNetwork(modem: link.modem, catalog: nil, snapshot: snapshot, now: now)
+      let network = DeviceNetwork(modem: link.modem, catalog: catalog, snapshot: snapshot, clock: deviceClock, now: now)
       try await withThrowingTaskGroup(of: Void.self) { group in
         group.addTask { try await body(network) }
         group.addTask { try await link.waitUntilDropped() }

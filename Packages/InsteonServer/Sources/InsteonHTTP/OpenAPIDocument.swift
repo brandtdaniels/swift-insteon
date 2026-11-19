@@ -161,8 +161,11 @@ enum OpenAPIDocument {
         "productName": Schema.nullable(Schema.string()),
         "completion": Schema.nullable(Schema.ref("CommandCompletion")),
         "cause": Schema.nullable(Schema.ref("ModemCause")),
-        "message": Schema.nullable(Schema.string())
-      ], required: ["version", "runId", "sequence", "kind"], description: "The `data` of one frame. `commandCompleted` carries `completion`; `modemUnavailable` carries `cause` and `message`; `reconnected` says the modem is back and a client refreshes what it shows."),
+        "message": Schema.nullable(Schema.string()),
+        "ruleId": Schema.string(description: "On `notification`: the rule's identifier."),
+        "ruleName": Schema.string(description: "On `notification`: the rule's name."),
+        "firedAt": ["type": "string", "format": "date-time", "description": "On `notification`: when the rule fired."]
+      ], required: ["version", "runId", "sequence", "kind"], description: "The `data` of one frame. `commandCompleted` carries `completion`; `modemUnavailable` carries `cause` and `message`; `reconnected` says the modem is back and a client refreshes what it shows. `notification` carries `ruleId`, `ruleName`, the device as `address` and `firedAt`, and `name` only when the rule includes detail."),
       "Gap": Schema.object([
         "version": version,
         "kind": Schema.constant(EventKind.gap.rawValue),
@@ -174,6 +177,30 @@ enum OpenAPIDocument {
         "oneOf": [Schema.ref("Event"), Schema.ref("Gap")],
         "description": "The JSON of one `data` line. The frame's SSE `id` is `<runId>-<sequence>`; send it back as `Last-Event-ID`. Lines that start with a colon are keepalives, and a frame with an `id` and no data sets the client's place."
       ],
+      "NotificationTrigger": [
+        "oneOf": [
+          Schema.object(["kind": Schema.constant(NotificationTriggerKind.event.rawValue), "event": Schema.string(description: "An event the device's product reports, in lower camel case, such as `wet`."), "device": address], required: ["kind", "event", "device"]),
+          Schema.object(["kind": Schema.constant(NotificationTriggerKind.groupCommand.rawValue), "command1": Schema.integer(minimum: 0, maximum: 255), "group": Schema.integer(minimum: 1, maximum: 255), "device": address], required: ["kind", "command1", "group", "device"])
+        ],
+        "description": "What makes a rule fire: a device reports an event its product's profile names, or sends a command to one of its groups. A heartbeat is not a group command here."
+      ],
+      "NotificationRule": Schema.object([
+        "id": Schema.string(description: "The rule's identifier: letters, digits, `-`, `_` and `.`, at most 64 characters."),
+        "name": Schema.string(description: "1 through 64 characters, without control characters."),
+        "trigger": Schema.ref("NotificationTrigger"),
+        "cooldownSeconds": Schema.integer(minimum: 0, maximum: ServiceNotificationRule.longestCooldownSeconds, description: "Seconds the rule stays quiet after it fires."),
+        "enabled": Schema.boolean,
+        "includeDetail": ["type": "boolean", "description": "Whether a notification names the event. Off, a notification carries only the rule, the device and the time."]
+      ], required: ["id", "name", "trigger", "cooldownSeconds", "enabled", "includeDetail"]),
+      "NotificationRuleList": Schema.object(["version": version, "rules": Schema.array(of: Schema.ref("NotificationRule"))], required: ["version", "rules"]),
+      "NotificationRuleStored": Schema.object(["version": version, "rule": Schema.ref("NotificationRule")], required: ["version", "rule"]),
+      "NotificationRuleRequest": Schema.object([
+        "name": Schema.string(description: "1 through 64 characters, without control characters."),
+        "trigger": Schema.ref("NotificationTrigger"),
+        "cooldownSeconds": Schema.integer(minimum: 0, maximum: ServiceNotificationRule.longestCooldownSeconds, description: "Defaults to 0."),
+        "enabled": Schema.boolean,
+        "includeDetail": Schema.boolean
+      ], required: ["name", "trigger"], description: "A rule without its identifier. Defaults: `cooldownSeconds` 0, `enabled` true, `includeDetail` false."),
       "ClientScope": Schema.string(enum: ClientScope.allCases.map(\.rawValue), description: "What a credential may do. `read` reads devices and health and follows events. `control` also sends commands. `admin` also manages clients. The gateway password is `admin`."),
       "Client": Schema.object([
         "id": Schema.string(description: "The identifier in the client's token and in `/api/v1/clients/{id}`."),
