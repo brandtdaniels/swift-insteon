@@ -174,6 +174,43 @@ enum OpenAPIDocument {
         "oneOf": [Schema.ref("Event"), Schema.ref("Gap")],
         "description": "The JSON of one `data` line. The frame's SSE `id` is `<runId>-<sequence>`; send it back as `Last-Event-ID`. Lines that start with a colon are keepalives, and a frame with an `id` and no data sets the client's place."
       ],
+      "ClientScope": Schema.string(enum: ClientScope.allCases.map(\.rawValue), description: "What a credential may do. `read` reads devices and health and follows events. `control` also sends commands. `admin` also manages clients. The gateway password is `admin`."),
+      "Client": Schema.object([
+        "id": Schema.string(description: "The identifier in the client's token and in `/api/v1/clients/{id}`."),
+        "name": Schema.string(description: "A name a person chose."),
+        "scope": Schema.ref("ClientScope"),
+        "createdAt": ["type": "string", "format": "date-time"]
+      ], required: ["id", "name", "scope", "createdAt"], description: "A client of the service. Its token is never part of it."),
+      "ClientList": Schema.object(["version": version, "clients": Schema.array(of: Schema.ref("Client"))], required: ["version", "clients"]),
+      "ClientRequest": Schema.object([
+        "name": Schema.string(description: "1 through 64 characters, without control characters."),
+        "scope": Schema.ref("ClientScope")
+      ], required: ["name", "scope"]),
+      "ClientCreated": Schema.object(["version": version, "client": Schema.ref("Client"), "pairing": Schema.ref("PairingDocument")], required: ["version", "client", "pairing"]),
+      "PairingRoute": [
+        "type": "object",
+        "required": ["kind"],
+        "properties": [
+          "kind": Schema.string(description: "`lan` for a direct address, or the identifier of a transport. A client skips a kind it doesn't know."),
+          "url": Schema.string(description: "Where a `lan` route is reached."),
+          "ticket": Schema.string(description: "What a transport needs to reach the service. Only that transport reads it.")
+        ],
+        "description": "One way to reach the service. A client tries a document's routes in order and uses the first that answers `GET /api/v1/health`."
+      ],
+      "PairingDocument": [
+        "type": "object",
+        "required": ["version", "serviceId", "name", "credential", "scope", "api", "routes"],
+        "properties": [
+          "version": version,
+          "serviceId": Schema.string(description: "Names the service, the same for every client that pairs with it."),
+          "name": Schema.string(description: "The home's name, for a client to show."),
+          "credential": Schema.string(description: "The client's token. Send it as `Authorization: Bearer <credential>`. It is shown once."),
+          "scope": Schema.ref("ClientScope"),
+          "api": Schema.string(description: "The path every API route sits under."),
+          "routes": Schema.array(of: Schema.ref("PairingRoute"))
+        ],
+        "description": "What a client needs to pair with the service. A reader ignores fields it doesn't know."
+      ],
       "OpenAPIDocument": [
         "type": "object",
         "required": ["openapi", "info", "paths"],

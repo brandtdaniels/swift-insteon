@@ -11,24 +11,26 @@ import Logging
 /// outcome code, with no path, query, header or body.
 ///
 /// A `Bearer` token authenticates a client the `clients` store holds, with the scope the client was
-/// given; the gateway password authenticates as `admin`.
+/// given; the gateway password authenticates as `admin`. A pairing document lists `pairing`'s routes.
 ///
 /// A command that carries an `Idempotency-Key` header is recorded for 10 minutes, up to 256 at a time,
 /// measured by `now`, so a repeat returns its outcome without sending anything.
-public func makeInsteonRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, clients: any ClientStoring = ClientStore(persistence: InMemoryClientPersistence()), logger: Logger = Logger(label: "insteon-server"), now: @escaping @Sendable () -> Date = { Date() }) -> Router<BasicRequestContext> {
-  makeRegisteredRouter(service: service, authentication: authentication, clients: clients, logger: logger, now: now).router
+public func makeInsteonRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, clients: any ClientStoring = ClientStore(persistence: InMemoryClientPersistence()), pairing: PairingConfiguration = PairingConfiguration(), logger: Logger = Logger(label: "insteon-server"), now: @escaping @Sendable () -> Date = { Date() }) -> Router<BasicRequestContext> {
+  makeRegisteredRouter(service: service, authentication: authentication, clients: clients, pairing: pairing, logger: logger, now: now).router
 }
 
 /// Builds the router and says which operations it registered. Every route comes from ``APIOperation``,
 /// so the routes served and the routes described are the same list.
-func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, clients: any ClientStoring = ClientStore(persistence: InMemoryClientPersistence()), logger: Logger, now: @escaping @Sendable () -> Date) -> (router: Router<BasicRequestContext>, registered: [APIOperation]) {
+func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, clients: any ClientStoring = ClientStore(persistence: InMemoryClientPersistence()), pairing: PairingConfiguration = PairingConfiguration(), logger: Logger, now: @escaping @Sendable () -> Date) -> (router: Router<BasicRequestContext>, registered: [APIOperation]) {
   let router = Router<BasicRequestContext>()
   router.add(middleware: SecurityHeadersMiddleware<BasicRequestContext>())
   router.add(middleware: ErrorMappingMiddleware<BasicRequestContext>())
   router.add(middleware: RequestLogMiddleware<BasicRequestContext>(logger: logger))
   router.add(middleware: AuthenticationMiddleware<BasicRequestContext>(authentication: authentication, clients: clients))
   router.add(middleware: RequestBodyLimitMiddleware<BasicRequestContext>())
-  let api = DeviceAPI(service: service, idempotency: IdempotencyStore(now: now))
+  let streams = EventStreamRegistry(limit: EventStreamPolicy.standard.maximumStreams)
+  let api = DeviceAPI(service: service, idempotency: IdempotencyStore(now: now), registry: streams)
+  let clientAPI = ClientAPI(clients: clients, pairing: pairing, streams: streams)
   let website = DeviceWebsite(service: service)
 
   // The one place a route is registered. The switch is exhaustive, so an operation without a handler doesn't compile.
@@ -39,6 +41,10 @@ func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authenti
     case .executeCommand: { request, context in try await api.command(request, address: context.parameters.get("address")) }
     case .streamEvents: { request, _ in await api.events(resumingAfter: EventCursor(request)) }
     case .openAPI: { _, _ in Response(status: .ok, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(bytes: OpenAPIDocument.bytes))) }
+    case .listClients: { _, _ in try await clientAPI.list() }
+    case .createClient: { request, _ in try await clientAPI.create(request) }
+    case .revokeClient: { request, context in try await clientAPI.revoke(request, id: context.parameters.get("id")) }
+    case .createPairing: { request, context in try await clientAPI.pair(request, id: context.parameters.get("id")) }
     case .browserIndex: { request, _ in try await website.index(request) }
     case .browserControls: { _, _ in Response(status: .ok, headers: [.contentType: "text/javascript; charset=utf-8"], body: .init(byteBuffer: ByteBuffer(string: BrowserControls.source))) }
     case .browserCard: { _, context in try await website.device(address: context.parameters.get("address")) }

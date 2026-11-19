@@ -27,17 +27,19 @@ public struct EventStreamPolicy: Sendable, Equatable {
 actor EventStreamRegistry {
   struct Lease: Sendable {
     fileprivate let id: Int
+    fileprivate let clientID: String?
     /// Yields once if the registry ended this stream to make room.
     let evictions: AsyncStream<Void>
   }
 
   private let limit: Int
   private var nextID = 0
-  private var open: [(id: Int, evict: AsyncStream<Void>.Continuation)] = []
+  private var open: [(id: Int, clientID: String?, evict: AsyncStream<Void>.Continuation)] = []
 
   init(limit: Int) { self.limit = max(limit, 1) }
 
-  func admit() -> Lease {
+  /// - Parameter clientID: The client that opened the stream, or `nil` for the gateway password.
+  func admit(clientID: String? = nil) -> Lease {
     while open.count >= limit {
       let oldest = open.removeFirst()
       oldest.evict.yield()
@@ -45,8 +47,17 @@ actor EventStreamRegistry {
     }
     let (evictions, evict) = AsyncStream<Void>.makeStream()
     defer { nextID += 1 }
-    open.append((nextID, evict))
-    return Lease(id: nextID, evictions: evictions)
+    open.append((nextID, clientID, evict))
+    return Lease(id: nextID, clientID: clientID, evictions: evictions)
+  }
+
+  /// Ends every open stream the client opened.
+  func end(clientID: String) {
+    for stream in open where stream.clientID == clientID {
+      stream.evict.yield()
+      stream.evict.finish()
+    }
+    open.removeAll { $0.clientID == clientID }
   }
 
   func release(_ lease: Lease) {

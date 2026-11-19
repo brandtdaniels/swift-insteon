@@ -5,6 +5,7 @@ import HTTPTypes
 /// exist without being described or be described without existing.
 enum APIOperation: String, CaseIterable, Sendable {
   case listDevices, health, executeCommand, streamEvents, openAPI
+  case listClients, createClient, revokeClient, createPairing
   case browserIndex, browserControls, browserCard, browserCommand
 
   struct Parameter: Sendable {
@@ -38,14 +39,15 @@ enum APIOperation: String, CaseIterable, Sendable {
   /// A browser route answers HTML and plain text for a person; the rest answer machines.
   var isAPI: Bool {
     switch self {
-    case .listDevices, .health, .executeCommand, .streamEvents, .openAPI: true
+    case .listDevices, .health, .executeCommand, .streamEvents, .openAPI, .listClients, .createClient, .revokeClient, .createPairing: true
     case .browserIndex, .browserControls, .browserCard, .browserCommand: false
     }
   }
 
   var method: HTTPRequest.Method {
     switch self {
-    case .executeCommand, .browserCommand: .post
+    case .executeCommand, .browserCommand, .createClient, .createPairing: .post
+    case .revokeClient: .delete
     default: .get
     }
   }
@@ -58,6 +60,9 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .executeCommand: "/api/v1/devices/{address}/commands"
     case .streamEvents: "/api/v1/events"
     case .openAPI: "/api/v1/openapi.json"
+    case .listClients, .createClient: "/api/v1/clients"
+    case .revokeClient: "/api/v1/clients/{id}"
+    case .createPairing: "/api/v1/clients/{id}/pairing"
     case .browserIndex: "/"
     case .browserControls: "/controls.js"
     case .browserCard, .browserCommand: "/devices/{address}"
@@ -71,6 +76,10 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .executeCommand: "Identify, read status, turn on or turn off a device's main group"
     case .streamEvents: "Follow events as server-sent events, resuming from the last id"
     case .openAPI: "Describe this API"
+    case .listClients: "List the clients"
+    case .createClient: "Create a client and its pairing document"
+    case .revokeClient: "Revoke a client"
+    case .createPairing: "Replace a client's credential and return its pairing document"
     case .browserIndex: "The browser page"
     case .browserControls: "The browser page's script"
     case .browserCard: "One device's card, from cached state"
@@ -85,11 +94,18 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .executeCommand: "A command is sent at most once. With an `Idempotency-Key`, a repeat of the same command returns the recorded answer with `Idempotent-Replay: true` and sends nothing. `sent` in an error says whether a command that changes a device may have reached it."
     case .streamEvents: "Each frame has an SSE `id` of `<runId>-<sequence>` and a JSON `data` line. A client resumes with `Last-Event-ID` (or `lastEventId`) and receives what it missed, or a `gap` frame telling it to refresh everything."
     case .openAPI: "This document. It is generated from the server's route table."
+    case .listClients: "The clients without their tokens. Needs the `admin` scope."
+    case .createClient: "Creates a client with a name and a scope, and returns the `PairingDocument` that carries its token. The token is shown only here: the service keeps a salted hash. Needs the `admin` scope."
+    case .revokeClient: "Removes the client. Its token stops working at once and its open event streams end. Needs the `admin` scope."
+    case .createPairing: "Gives the client a new credential and returns it in a `PairingDocument`. The client's previous token stops working and its open event streams end. Needs the `admin` scope."
     case .browserIndex, .browserControls, .browserCard, .browserCommand: "Part of the browser page, not of the versioned API contract."
     }
   }
 
   private static let addressParameter = Parameter(name: "address", location: "path", required: true, schema: Schema.string(description: "A device address such as 1A.2B.3C."), description: "The device's Insteon address.")
+
+  private static let clientParameter = Parameter(name: "id", location: "path", required: true, schema: Schema.string(description: "A client's identifier."), description: "The client's identifier, from the list or the creation response.")
+  private static let markerParameter = Parameter(name: "X-Insteon-Request", location: "header", required: true, schema: Schema.constant("1"), description: "Marks an explicit API request, so a browser page can't change clients by accident.")
 
   var parameters: [Parameter] {
     switch self {
@@ -104,6 +120,8 @@ enum APIOperation: String, CaseIterable, Sendable {
         Parameter(name: "Last-Event-ID", location: "header", required: false, schema: Schema.string(), description: "The id of the last frame the client saw. A browser's EventSource sends it by itself."),
         Parameter(name: "lastEventId", location: "query", required: false, schema: Schema.string(), description: "The same, for a client that can't set headers. The header wins.")
       ]
+    case .createClient: [Self.markerParameter]
+    case .revokeClient, .createPairing: [Self.clientParameter, Self.markerParameter]
     case .browserCard, .browserCommand:
       [Self.addressParameter]
     default:
@@ -114,6 +132,7 @@ enum APIOperation: String, CaseIterable, Sendable {
   var requestBody: Body? {
     switch self {
     case .executeCommand: Body(contentType: "application/json", schema: Schema.ref("Command"), description: "The command. Unknown fields are refused. The body is at most 8 KiB.")
+    case .createClient: Body(contentType: "application/json", schema: Schema.ref("ClientRequest"), description: "The client's name and scope. Unknown fields are refused.")
     case .browserCommand: Body(contentType: "application/x-www-form-urlencoded", schema: Schema.string(), description: "The page's form: `action`, optional `levelPercent`, and the page's `formKey`.")
     default: nil
     }
@@ -125,6 +144,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     switch self {
     case .listDevices, .health, .streamEvents, .openAPI: .read
     case .executeCommand: .control
+    case .listClients, .createClient, .revokeClient, .createPairing: .admin
     case .browserIndex, .browserControls, .browserCard, .browserCommand: .admin
     }
   }
@@ -139,6 +159,9 @@ enum APIOperation: String, CaseIterable, Sendable {
     switch self {
     case .executeCommand:
       codes += [.invalidAddress, .invalidCommand, .invalidLevel, .invalidIdempotencyKey, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected, .unknownDevice, .idempotencyKeyReused, .busy, .notIdentified, .notLinked, .unsupportedControl, .deviceRejected, .modemRejected, .modemUnavailable, .canceled, .deviceNotAnswering, .outcomeUnknown]
+    case .listClients: codes += [.clientsNotSaved]
+    case .createClient: codes += [.invalidClient, .clientLimitReached, .clientsNotSaved, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected]
+    case .revokeClient, .createPairing: codes += [.unknownClient, .clientsNotSaved, .apiMarkerMissing]
     case .browserCard:
       codes += [.invalidAddress, .unknownDevice, .busy]
     case .browserCommand:
@@ -156,6 +179,10 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .executeCommand: [Reply(status: 200, description: "The command's receipt.", contentType: "application/json", schema: Schema.ref("Receipt"), headers: ["Idempotent-Replay": ["$ref": "#/components/headers/IdempotentReplay"]])]
     case .streamEvents: [Reply(status: 200, description: "A stream of frames. It ends cleanly after 10 minutes, and the client reconnects with its last id.", contentType: "text/event-stream", schema: Schema.ref("StreamFrame"), headers: [:])]
     case .openAPI: [Reply(status: 200, description: "The OpenAPI 3.1 description.", contentType: "application/json", schema: Schema.ref("OpenAPIDocument"), headers: [:])]
+    case .listClients: [Reply(status: 200, description: "The clients.", contentType: "application/json", schema: Schema.ref("ClientList"), headers: [:])]
+    case .createClient: [Reply(status: 201, description: "The client, and the pairing document that carries its token.", contentType: "application/json", schema: Schema.ref("ClientCreated"), headers: [:])]
+    case .revokeClient: [Reply(status: 204, description: "The client is revoked.", contentType: nil, schema: nil, headers: [:])]
+    case .createPairing: [Reply(status: 200, description: "The pairing document, with the new credential.", contentType: "application/json", schema: Schema.ref("PairingDocument"), headers: [:])]
     case .browserIndex: [Reply(status: 200, description: "The page.", contentType: "text/html", schema: nil, headers: [:])]
     case .browserControls: [Reply(status: 200, description: "The script.", contentType: "text/javascript", schema: nil, headers: [:])]
     case .browserCard: [Reply(status: 200, description: "The device's card.", contentType: "text/html", schema: nil, headers: [:])]

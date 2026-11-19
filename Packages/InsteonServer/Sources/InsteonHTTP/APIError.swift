@@ -11,6 +11,10 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   case authenticationRequired
   case authenticationFailed
   case forbidden
+  case invalidClient
+  case unknownClient
+  case clientLimitReached
+  case clientsNotSaved
   case invalidAddress
   case invalidCommand
   case invalidIdempotencyKey
@@ -38,13 +42,14 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   var status: HTTPResponse.Status {
     switch self {
     case .authenticationRequired, .authenticationFailed: .unauthorized
-    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel: .badRequest
-    case .unknownDevice, .routeNotFound: .notFound
+    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel, .invalidClient: .badRequest
+    case .unknownDevice, .routeNotFound, .unknownClient: .notFound
     case .forbidden, .apiMarkerMissing, .formKeyInvalid: .forbidden
     case .bodyTooLarge: .contentTooLarge
     case .unsupportedMediaType: .unsupportedMediaType
     case .requestRejected: .badRequest
-    case .busy, .notIdentified, .notLinked: .conflict
+    case .busy, .notIdentified, .notLinked, .clientLimitReached: .conflict
+    case .clientsNotSaved: .internalServerError
     case .unsupportedControl, .deviceRejected, .idempotencyKeyReused: .unprocessableContent
     case .modemRejected, .modemUnavailable, .canceled: .serviceUnavailable
     case .deviceNotAnswering: .gatewayTimeout
@@ -67,6 +72,10 @@ enum APIErrorCode: String, CaseIterable, Sendable {
     switch self {
     case .authenticationRequired: "Authentication required."
     case .authenticationFailed: "The credentials were not accepted."
+    case .invalidClient: "A client needs a name of 1 through 64 characters without control characters, and a scope of read, control or admin."
+    case .unknownClient: "Unknown client."
+    case .clientLimitReached: "The service keeps at most \(ClientStore.maximumClients) clients. Revoke one first."
+    case .clientsNotSaved: "The clients could not be read or saved. Nothing changed."
     case .forbidden: "This credential's scope does not allow that. Nothing was sent."
     case .invalidAddress: "The device address is not a valid Insteon address."
     case .invalidCommand: "Invalid command."

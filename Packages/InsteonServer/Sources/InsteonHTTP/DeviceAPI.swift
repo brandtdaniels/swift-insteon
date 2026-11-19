@@ -12,12 +12,12 @@ struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
 
   private let idempotency: IdempotencyStore
 
-  init(service: Service, policy: EventStreamPolicy = .standard, clock: any Clock<Duration> = ContinuousClock(), idempotency: IdempotencyStore = IdempotencyStore()) {
+  init(service: Service, policy: EventStreamPolicy = .standard, clock: any Clock<Duration> = ContinuousClock(), idempotency: IdempotencyStore = IdempotencyStore(), registry: EventStreamRegistry? = nil) {
     self.service = service
     self.idempotency = idempotency
     self.policy = policy
     self.clock = clock
-    self.registry = EventStreamRegistry(limit: policy.maximumStreams)
+    self.registry = registry ?? EventStreamRegistry(limit: policy.maximumStreams)
   }
 
   func devices() async throws -> Response {
@@ -79,12 +79,14 @@ struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
   /// - Parameter cursor: Where the client left off, from `Last-Event-ID` or the `lastEventId` query
   ///   parameter. The stream starts with the events it missed, or with a `gap` frame.
   func events(resumingAfter cursor: EventCursor? = nil) async -> Response {
+    // The principal is read here, while the request is being handled; the body runs later.
+    let clientID = RequestPrincipal.current?.clientID
     let body = ResponseBody { writer in
       do {
         // A response can be discarded without its body being written.
         // Subscribe only while a structured producer can own and cancel the reader.
         let events = await service.sequencedEvents(after: cursor)
-        let lease = await registry.admit()
+        let lease = await registry.admit(clientID: clientID)
         let policy = self.policy, clock = self.clock
         do {
           try await withThrowingTaskGroup(of: Void.self) { group in
