@@ -9,7 +9,7 @@ struct RepoCheckCommand: ParsableCommand {
     commandName: "repo-check",
     abstract: "Checks the repository against its rules.",
     discussion: "Each check exits with status 0 if it finds nothing and 1 if it finds a problem.",
-    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self, ConcurrencyCommand.self, CredentialsCommand.self, DeviceNeutralCommand.self, TimeLimitsCommand.self]
+    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self, ConcurrencyCommand.self, CredentialsCommand.self, DeviceNeutralCommand.self, TimeLimitsCommand.self, PublicAPICommand.self]
   )
 }
 
@@ -173,5 +173,31 @@ struct TimeLimitsCommand: ParsableCommand {
     var check = TimeLimitsCheck()
     check.roots = tests.isEmpty ? nil : tests.map { URL(fileURLWithPath: $0, isDirectory: true) }
     try check.runAsCommand(options)
+  }
+}
+
+struct PublicAPICommand: ParsableCommand {
+  static let configuration = CommandConfiguration(
+    commandName: "public-api",
+    abstract: "Checks that InsteonCore's public API matches its list."
+  )
+
+  @OptionGroup var options: RootOptions
+
+  @Option(help: "InsteonCore's sources. Packages/InsteonCore/Sources/InsteonCore under the repository by default.")
+  var sources: String?
+
+  @Option(name: .customLong("list"), help: "The committed list. Scripts/insteoncore-public-api.txt by default.")
+  var list: String?
+
+  @Flag(help: "Write the list from the sources.")
+  var update = false
+
+  func run() throws {
+    try PublicAPICheck(
+      sources: sources.map { URL(fileURLWithPath: $0, isDirectory: true) },
+      list: list.map { URL(fileURLWithPath: $0) },
+      update: update
+    ).runAsCommand(options)
   }
 }

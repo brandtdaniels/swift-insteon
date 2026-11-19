@@ -19,6 +19,10 @@ public struct EquivalenceSubject {
   /// always compared whole; a smaller tree makes the mutants cheaper to run.
   public let mutationCorpus: (SourceEntry) -> Bool
 
+  /// Called on each copy of the repository before anything runs on it, such as to make it a git
+  /// repository.
+  public var prepare: (URL) throws -> Void = { _ in }
+
   /// Runners of the check with `--update`, when its written file is compared too.
   public internal(set) var updateRunners: (oracle: CheckRunning, candidate: CheckRunning)?
 
@@ -40,7 +44,7 @@ public struct EquivalenceSubject {
 /// The checks that can be compared.
 public enum EquivalenceSubjects {
   /// The names of the checks, in the order they are ported.
-  public static let names = ["workflows", "terms", "cli-thin", "concurrency", "credentials", "device-neutral", "time-limits"]
+  public static let names = ["workflows", "terms", "cli-thin", "concurrency", "credentials", "device-neutral", "time-limits", "public-api"]
 
   /// The subject for the named check, or nil if the name isn't one.
   ///
@@ -177,6 +181,23 @@ public enum EquivalenceSubjects {
           )
         }
       )
+    case "public-api":
+      return EquivalenceSubject(
+        name: name,
+        oracle: PythonOracle.runner(interpreter: interpreter, script: "Scripts/check-public-api.py"),
+        candidate: ProcessCheckRunner(command: [repoCheck, name]),
+        mutationCorpus: { entry in
+          entry.components.first != "Packages" || entry.isDirectory 
+            || (entry.relativePath.hasPrefix("Packages/InsteonCore/Sources/InsteonCore/") && sample(entry, every: 3))
+        },
+        makeMutants: { try PublicAPIMutations.generator(tree: $0) }
+      ).comparingUpdates(
+        oracle: UpdatingRunner(
+          base: PythonOracle.runner(interpreter: interpreter, script: "Scripts/check-public-api.py") { _ in ["--update"] },
+          file: PublicAPIMutations.listPath
+        ),
+        candidate: UpdatingRunner(base: ProcessCheckRunner(command: [repoCheck, name, "--update"]), file: PublicAPIMutations.listPath)
+      )
     default:
       return nil
     }
@@ -216,4 +237,15 @@ func sampleSources(_ entry: SourceEntry, every: Int) -> Bool {
     return sample(entry, every: every)
   }
   return false
+}
+
+/// Keeps a scratch directory alive for as long as the process runs.
+enum ScratchDirectoryHolder {
+  nonisolated(unsafe) private static var kept: [ScratchDirectory] = []
+
+  static func make() throws -> ScratchDirectory {
+    let directory = try ScratchDirectory(prefix: "repo-check-legacy")
+    kept.append(directory)
+    return directory
+  }
 }
