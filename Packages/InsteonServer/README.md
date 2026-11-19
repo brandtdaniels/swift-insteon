@@ -147,6 +147,8 @@ scope, command all devices known by this service. Per-device permissions aren't 
 | GET, POST | `/api/v1/clients` | List the clients, or create one and its pairing document (`admin`) |
 | DELETE | `/api/v1/clients/{id}` | Revoke a client (`admin`) |
 | POST | `/api/v1/clients/{id}/pairing` | Replace a client's credential and return its pairing document (`admin`) |
+| GET | `/api/v1/notification-rules` | List the notification rules (`read`; see Notifications) |
+| PUT, DELETE | `/api/v1/notification-rules/{id}` | Store or remove a rule (`admin`) |
 | GET | `/devices/1A.2B.3C` | Authenticated card fragment from cached state; no hardware polling |
 
 JSON commands need `Content-Type: application/json` and `X-Insteon-Request: 1`. Example body:
@@ -310,7 +312,7 @@ data: {"version":1,"runId":"9f3a0c41d27e5b86","sequence":42,"kind":"commandCompl
 - The `id:` is `<runId>-<sequence>`: the run and the number together, because a number means
   something only with its run. Treat it as opaque and send it back unchanged.
 - Every kind of event is numbered: `commandCompleted`, `identified`, `setButtonPressed`,
-  `groupCommand`, `heartbeat`, `statusChanged`, `modemUnavailable` and `reconnected`.
+  `groupCommand`, `heartbeat`, `statusChanged`, `notification`, `modemUnavailable` and `reconnected`.
 - A comment line (`: connected`, `: keepalive`) is not an event and has no id. A new stream with no
   id sent first writes a bare `id:` with the run's current position and no data, so a browser that
   sees no event before it reconnects can still resume.
@@ -346,6 +348,99 @@ and a client that falls more than 64 events behind both end the stream cleanly; 
 reconnects with its last id and, while the missed events are still kept, resumes without a refresh.
 The browser helper refreshes its cards on a gap and on its first connection, not on a resume. A
 reconnect after a server restart is a gap, and so replaces the browser's form keys.
+
+## Notifications
+
+The service evaluates notification rules against what devices report, and publishes a `notification`
+event on `/api/v1/events` each time one fires. It sends nothing itself: a separate process, a notifier,
+follows the stream and delivers the notification by push, email or webhook. The service never holds a
+push credential or opens a connection out of the house.
+
+### Rules
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/api/v1/notification-rules` | `{ "version": 1, "rules": [...] }`, in the order they were added (`read`) |
+| PUT | `/api/v1/notification-rules/{id}` | Adds the rule, or replaces the rule with that identifier (`admin`) |
+| DELETE | `/api/v1/notification-rules/{id}` | Removes the rule, which stops firing at once (`admin`) |
+
+A write needs `Content-Type: application/json` and `X-Insteon-Request: 1`. The identifier is in the path:
+letters, digits, `-`, `_` and `.`, at most 64 characters. The body is the rule without it, and unknown
+fields are refused:
+
+```json
+{
+  "name": "Basement leak",
+  "trigger": { "kind": "event", "event": "wet", "device": "1A.2B.3C" },
+  "cooldownSeconds": 300,
+  "enabled": true,
+  "includeDetail": false
+}
+```
+
+- `name`: 1 through 64 characters, without control characters.
+- `trigger`: `{ "kind": "event", "event": "wet", "device": "1A.2B.3C" }` fires when the device reports an
+  event its product's catalog profile names, in lower camel case. When the catalog has a profile for the
+  device, the event must be one it names. `{ "kind": "groupCommand", "command1": 19, "group": 5,
+  "device": "1A.2B.3C" }` fires when the device sends that command to that group (1 through 255), for a
+  product whose profile names no event for it. A heartbeat is not a group command here.
+- `cooldownSeconds`: 0 (the default) through 604800. After a rule fires it stays quiet for this long.
+- `enabled`: `true` by default. A disabled rule never fires.
+- `includeDetail`: `false` by default (see Content-free by default).
+
+The device must be one the service knows, and the service keeps at most 64 rules. Rules take effect on the
+next device report, with no restart. Replacing a rule with one that has the same trigger, such as renaming
+it, keeps its cooldown running; a different trigger starts afresh. Removing or disabling a rule stops it
+at once.
+
+Rules are kept in `<state file name>-notification-rules.json` beside the state file (for the default
+state file, `gateway-notification-rules.json`), readable only by the current user and replaced atomically
+on each change. A change is saved before it applies, so a failed save changes nothing and answers
+`notificationRulesNotSaved`. A file the server can't read, or that is in a newer format, is left as it is
+and the server refuses to start; move it aside to start with no rules. Cooldowns are kept in memory, and
+a restart forgets them.
+
+Four error codes are added: `invalidNotificationRule` (400), `unknownNotificationRule` (404),
+`notificationRuleLimitReached` (409) and `notificationRulesNotSaved` (500). A rule for a device the service
+doesn't know is `unknownDevice`. See Errors.
+
+### The event
+
+```
+id: 9f3a0c41d27e5b86-43
+data: {"version":1,"runId":"9f3a0c41d27e5b86","sequence":43,"kind":"notification","ruleId":"basement-leak","ruleName":"Basement leak","address":"1A.2B.3C","firedAt":"2027-01-15T08:00:00Z"}
+```
+
+A `notification` is numbered and kept like every other event, so `Last-Event-ID` resumes it, and a client
+that fell behind the newest 256 events gets a `gap` instead of missing one silently. The browser page
+ignores it.
+
+#### Content-free by default
+
+A notification carries the rule's identifier and name, the device's address and the time, and nothing
+else. A rule with `includeDetail: true` adds `name`, the event that fired it, such as `wet`. A notifier
+that sends a message out of the house puts no more in it than the rule's name and the time unless the
+person turned detail on.
+
+### Writing a notifier
+
+A notifier is an ordinary client of the stream:
+
+1. Create a `read` client (`POST /api/v1/clients`) and give the notifier its token.
+2. Follow `GET /api/v1/events` with `Authorization: Bearer <token>`, and act only on frames whose `kind`
+   is `notification`. Ignore every other kind, and any field or kind it doesn't know.
+3. Deliver once. Record the id of the last notification delivered, and send it as `Last-Event-ID` when
+   reconnecting. The server replays what was missed, so the notifier delivers a notification only when its
+   id is newer than the one it recorded in the same `runId`.
+4. A `gap`, or an id from another run, means notifications may have been missed. Keep the recorded id as
+   the run's new position and decide whether to tell the person. Delivery that fails is the notifier's to
+   retry; the service is not waiting for it.
+
+### Versioning
+
+Everything here is additive inside `/api/v1`: three routes, four error codes and one event kind, with
+optional response fields on events. A client that doesn't know `notification` ignores it, as the browser
+page does. Changing a field's meaning, the content-free default or the event id needs `/api/v2`.
 
 ## Persistence and lifecycle
 
@@ -442,6 +537,10 @@ same status for the same failure.
 | `unknownClient` | 404 | false | No client has that id. |
 | `clientLimitReached` | 409 | false | The service keeps at most 64 clients. |
 | `clientsNotSaved` | 500 | false | The client file couldn't be read or written, so nothing changed. |
+| `invalidNotificationRule` | 400 | false | A rule needs a name of 1 through 64 characters, a valid trigger and cooldown, and no other field. |
+| `unknownNotificationRule` | 404 | false | No rule has that id. |
+| `notificationRuleLimitReached` | 409 | false | The service keeps at most 64 rules. |
+| `notificationRulesNotSaved` | 500 | false | The rules file couldn't be read or written, so nothing changed. |
 | `invalidAddress` | 400 | false | The address in the path isn't an Insteon address. |
 | `invalidCommand` | 400 | false | The body isn't valid JSON for a command: unknown field, unknown action, wrong type. |
 | `invalidLevel` | 400 | false | The percentage is outside 0 through 100, or the device or action doesn't take one. |
