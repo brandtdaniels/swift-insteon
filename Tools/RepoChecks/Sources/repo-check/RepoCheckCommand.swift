@@ -9,7 +9,7 @@ struct RepoCheckCommand: ParsableCommand {
     commandName: "repo-check",
     abstract: "Checks the repository against its rules.",
     discussion: "Each check exits with status 0 if it finds nothing and 1 if it finds a problem.",
-    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self, ConcurrencyCommand.self]
+    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self, ConcurrencyCommand.self, CredentialsCommand.self]
   )
 }
 
@@ -109,6 +109,27 @@ struct ConcurrencyCommand: ParsableCommand {
 
   func run() throws {
     try ConcurrencyCheck(
+      packages: packages.map { URL(fileURLWithPath: $0, isDirectory: true) },
+      allowlist: allowList.allowlist.map { URL(fileURLWithPath: $0) },
+      update: allowList.update
+    ).runAsCommand(options)
+  }
+}
+
+struct CredentialsCommand: ParsableCommand {
+  static let configuration = CommandConfiguration(
+    commandName: "credentials",
+    abstract: "Checks that no credential is written into a string by interpolation."
+  )
+
+  @OptionGroup var options: RootOptions
+  @OptionGroup var allowList: AllowListOptions
+
+  @Option(help: "The packages directory, each package with Sources. Packages/ under the repository by default.")
+  var packages: String?
+
+  func run() throws {
+    try CredentialsCheck(
       packages: packages.map { URL(fileURLWithPath: $0, isDirectory: true) },
       allowlist: allowList.allowlist.map { URL(fileURLWithPath: $0) },
       update: allowList.update

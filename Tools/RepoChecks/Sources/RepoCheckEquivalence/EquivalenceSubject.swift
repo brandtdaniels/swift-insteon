@@ -40,7 +40,7 @@ public struct EquivalenceSubject {
 /// The checks that can be compared.
 public enum EquivalenceSubjects {
   /// The names of the checks, in the order they are ported.
-  public static let names = ["workflows", "terms", "cli-thin", "concurrency"]
+  public static let names = ["workflows", "terms", "cli-thin", "concurrency", "credentials"]
 
   /// The subject for the named check, or nil if the name isn't one.
   ///
@@ -115,6 +115,27 @@ public enum EquivalenceSubjects {
       ).comparingUpdates(
         oracle: UpdatingRunner(
           base: PythonOracle.runner(interpreter: interpreter, script: "Scripts/check-concurrency.py") { _ in ["--update"] },
+          file: file
+        ),
+        candidate: UpdatingRunner(base: ProcessCheckRunner(command: [repoCheck, name, "--update"]), file: file)
+      )
+    case "credentials":
+      let file = "Scripts/check-credentials-allowlist.txt"
+      return EquivalenceSubject(
+        name: name,
+        oracle: PythonOracle.runner(interpreter: interpreter, script: "Scripts/check-credentials.py"),
+        candidate: ProcessCheckRunner(command: [repoCheck, name]),
+        mutationCorpus: { sampleSources($0, every: 6) },
+        makeMutants: { tree in
+          let sources = try tree.filesWithSuffixes([".swift"]).filter { $0.hasPrefix("Packages/") && $0.contains("/Sources/") }
+          return WeightedMutations([
+            (try TextFileMutations(tree: tree, paths: sources, operators: CredentialsMutations.sourceOperators), 8),
+            (try TextFileMutations(tree: tree, paths: [file], operators: CredentialsMutations.allowListOperators), 2)
+          ])
+        }
+      ).comparingUpdates(
+        oracle: UpdatingRunner(
+          base: PythonOracle.runner(interpreter: interpreter, script: "Scripts/check-credentials.py") { _ in ["--update"] },
           file: file
         ),
         candidate: UpdatingRunner(base: ProcessCheckRunner(command: [repoCheck, name, "--update"]), file: file)
