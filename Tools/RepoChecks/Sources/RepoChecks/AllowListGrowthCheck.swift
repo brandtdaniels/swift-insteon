@@ -58,17 +58,16 @@ public struct AllowListGrowthCheck: RepoCheck {
         continue
       }
 
-      let added: [String]
+      let added: [[UInt8]]
       let noun: String
 
       switch list.kind {
       case .lines:
-        added = try git.diff(ref: base, path: list.path).split(separator: "\n", omittingEmptySubsequences: false)
-          .map(String.init).filter(Self.isAddedLine)
+        added = Self.byteLines(try git.diff(ref: base, path: list.path)).filter(Self.isAddedLine)
         noun = "lines"
       case .entries(let columns):
-        let head = try Self.entries(from: Self.readHead(root.appendingPathComponent(list.path)), columns: columns)
-        let before = try Self.entries(from: git.show(ref: base, path: list.path), columns: columns)
+        let head = Self.entries(from: Self.readHead(root.appendingPathComponent(list.path)), columns: columns)
+        let before = Self.entries(from: try git.show(ref: base, path: list.path), columns: columns)
         added = Self.subtracting(before, from: head)
         noun = "entries"
       }
@@ -79,7 +78,7 @@ public struct AllowListGrowthCheck: RepoCheck {
         failed = true
         console.write("These \(noun) were added to \(list.path), which may only lose \(noun):")
         for line in added {
-          console.write(line)
+          console.write(bytes: line)
         }
         console.write(list.advice)
       }
@@ -88,35 +87,39 @@ public struct AllowListGrowthCheck: RepoCheck {
     return failed ? .failed : .passed
   }
 
-  /// `grep -E '^\+[^+#]'`.
-  private static func isAddedLine(_ line: String) -> Bool {
-    let scalars = Array(line.unicodeScalars)
-    return scalars.count >= 2 && scalars[0] == "+" && scalars[1] != "+" && scalars[1] != "#"
+  /// `grep -E '^\+[^+#]'`, on bytes as grep reads them in the C locale.
+  private static func isAddedLine(_ line: [UInt8]) -> Bool {
+    line.count >= 2 && line[0] == 0x2B && line[1] != 0x2B && line[1] != 0x23
   }
 
-  private static func readHead(_ url: URL) throws -> String {
-    FileManager.default.fileExists(atPath: url.path) ? try TextFile.read(url) : ""
+  /// The file's bytes, or none if it's missing. The shell blocks read bytes, so a carriage return
+  /// or a byte that isn't UTF-8 is part of a line, not an error.
+  private static func readHead(_ url: URL) -> [UInt8] {
+    (try? Array(Data(contentsOf: url))) ?? []
   }
 
-  /// `grep -v -e '^#' -e '^$' | cut -fN | sort`.
-  private static func entries(from text: String, columns: Int) -> [String] {
-    PythonText.splitLines(text)
-      .filter { !$0.isEmpty && !PythonText.hasPrefix($0, "#") }
-      .map { AllowListFile.columns(of: $0).prefix(columns).joined(separator: "\t") }
-      .sorted { byteOrdered($0, $1) }
+  /// The lines of the bytes, split at each newline.
+  private static func byteLines(_ bytes: [UInt8]) -> [[UInt8]] {
+    bytes.split(separator: 0x0A, omittingEmptySubsequences: false).map(Array.init)
   }
 
-  private static func byteOrdered(_ a: String, _ b: String) -> Bool {
-    a.utf8.lexicographicallyPrecedes(b.utf8)
+  /// `grep -v -e '^#' -e '^$' | cut -fN | sort`, on bytes.
+  private static func entries(from bytes: [UInt8], columns: Int) -> [[UInt8]] {
+    byteLines(bytes)
+      .filter { !$0.isEmpty && $0[0] != 0x23 }
+      .map { line in
+        Array(line.split(separator: 0x09, maxSplits: Int.max, omittingEmptySubsequences: false).prefix(columns).joined(separator: [0x09]))
+      }
+      .sorted { $0.lexicographicallyPrecedes($1) }
   }
 
   /// `comm -13 BASE HEAD`: the lines of the head that the base doesn't have as many times.
-  private static func subtracting(_ base: [String], from head: [String]) -> [String] {
-    var counts: [String: Int] = [:]
+  private static func subtracting(_ base: [[UInt8]], from head: [[UInt8]]) -> [[UInt8]] {
+    var counts: [[UInt8]: Int] = [:]
     for line in base {
       counts[line, default: 0] += 1
     }
-    var added: [String] = []
+    var added: [[UInt8]] = []
     for line in head {
       if let count = counts[line], count > 0 {
         counts[line] = count - 1

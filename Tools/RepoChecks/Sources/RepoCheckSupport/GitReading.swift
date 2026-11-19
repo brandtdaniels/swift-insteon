@@ -5,11 +5,11 @@ public protocol GitReading {
   /// Whether the path exists at the ref.
   func fileExists(ref: String, path: String) -> Bool
 
-  /// The file's text at the ref.
-  func show(ref: String, path: String) throws -> String
+  /// The file's bytes at the ref.
+  func show(ref: String, path: String) throws -> [UInt8]
 
   /// `git diff --no-color --unified=0 REF -- PATH`: the changes from the ref to the working tree.
-  func diff(ref: String, path: String) throws -> String
+  func diff(ref: String, path: String) throws -> [UInt8]
 }
 
 /// Reads from the git repository in a directory by running `git`.
@@ -24,15 +24,15 @@ public struct GitProcess: GitReading {
     (try? run(["cat-file", "-e", "\(ref):\(path)"])) != nil
   }
 
-  public func show(ref: String, path: String) throws -> String {
+  public func show(ref: String, path: String) throws -> [UInt8] {
     try run(["show", "\(ref):\(path)"])
   }
 
-  public func diff(ref: String, path: String) throws -> String {
+  public func diff(ref: String, path: String) throws -> [UInt8] {
     try run(["diff", "--no-color", "--unified=0", ref, "--", path])
   }
 
-  private func run(_ arguments: [String]) throws -> String {
+  private func run(_ arguments: [String]) throws -> [UInt8] {
     let scratch = try ScratchDirectory(prefix: "repo-check-git")
     let output = scratch.url(for: "out")
     _ = FileManager.default.createFile(atPath: output.path, contents: nil)
@@ -51,6 +51,6 @@ public struct GitProcess: GitReading {
     guard process.terminationStatus == 0 else {
       throw CheckFailure("git \(arguments.joined(separator: " ")) failed with status \(process.terminationStatus)")
     }
-    return String(decoding: try Data(contentsOf: output), as: UTF8.self)
+    return Array(try Data(contentsOf: output))
   }
 }

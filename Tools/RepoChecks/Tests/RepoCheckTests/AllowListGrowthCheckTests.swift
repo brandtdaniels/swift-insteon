@@ -10,8 +10,8 @@ private struct StubGit: GitReading {
   var diffs: [String: String] = [:]
 
   func fileExists(ref: String, path: String) -> Bool { base[path] != nil }
-  func show(ref: String, path: String) throws -> String { base[path] ?? "" }
-  func diff(ref: String, path: String) throws -> String { diffs[path] ?? "" }
+  func show(ref: String, path: String) throws -> [UInt8] { Array((base[path] ?? "").utf8) }
+  func diff(ref: String, path: String) throws -> [UInt8] { Array((diffs[path] ?? "").utf8) }
 }
 
 private let cliThin = "Scripts/check-cli-thin-allowlist.txt"
@@ -115,5 +115,26 @@ struct AllowListGrowthCheckTests {
 
     #expect(output.contains("Leave the credential out of the string instead of allowing it.\n"))
     #expect(output.contains("Take the name from the catalog, or use an invented one, instead of allowing it.\n"))
+  }
+}
+
+@Suite("allowlist-growth bytes")
+struct AllowListGrowthBytesTests {
+  @Test("reads a carriage return and a byte that isn't UTF-8 as part of a line, as the shell did")
+  func readsBytes() throws {
+    let directory = try ScratchDirectory()
+    try directory.write(Data("a\tb\tc\tr\r\nbad\u{FF}".utf8).dropLast(2) + Data([0xFF]), to: concurrency)
+    var git = StubGit()
+    git.base[concurrency] = "a\tb\tc\tr\n"
+    git.base[cliThin] = ""
+    git.base[credentials] = ""
+    git.base[deviceNeutral] = ""
+    let console = RecordingConsole()
+
+    let status = try AllowListGrowthCheck(base: "origin/main", git: git).run(in: directory.url, console: console)
+
+    #expect(status == .failed)
+    #expect(console.lines.contains("These entries were added to \(concurrency), which may only lose entries:"))
+    #expect(console.lines.contains("bad\u{FFFD}"))
   }
 }

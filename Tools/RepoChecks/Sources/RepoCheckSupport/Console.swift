@@ -9,6 +9,15 @@ public protocol Console {
 
   /// Writes a line to standard error.
   func writeError(_ line: String)
+
+  /// Writes a line of bytes, which need not be UTF-8, to standard output.
+  func write(bytes: [UInt8])
+}
+
+extension Console {
+  public func write(bytes: [UInt8]) {
+    write(String(decoding: bytes, as: UTF8.self))
+  }
 }
 
 /// A console on the process's standard output and standard error.
@@ -21,6 +30,10 @@ public struct StandardConsole: Console {
 
   public func writeError(_ line: String) {
     FileHandle.standardError.write(Data((line + "\n").utf8))
+  }
+
+  public func write(bytes: [UInt8]) {
+    FileHandle.standardOutput.write(Data(bytes + [0x0A]))
   }
 }
 
