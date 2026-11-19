@@ -9,7 +9,7 @@ struct RepoCheckCommand: ParsableCommand {
     commandName: "repo-check",
     abstract: "Checks the repository against its rules.",
     discussion: "Each check exits with status 0 if it finds nothing and 1 if it finds a problem.",
-    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self, ConcurrencyCommand.self, CredentialsCommand.self, DeviceNeutralCommand.self]
+    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self, ConcurrencyCommand.self, CredentialsCommand.self, DeviceNeutralCommand.self, TimeLimitsCommand.self]
   )
 }
 
@@ -155,5 +155,23 @@ struct DeviceNeutralCommand: ParsableCommand {
       allowlist: allowList.allowlist.map { URL(fileURLWithPath: $0) },
       update: allowList.update
     ).runAsCommand(options)
+  }
+}
+
+struct TimeLimitsCommand: ParsableCommand {
+  static let configuration = CommandConfiguration(
+    commandName: "time-limits",
+    abstract: "Checks that every async test has a time limit."
+  )
+
+  @OptionGroup var options: RootOptions
+
+  @Option(name: .customLong("tests"), help: "A directory of tests to check; may be given more than once.")
+  var tests: [String] = []
+
+  func run() throws {
+    var check = TimeLimitsCheck()
+    check.roots = tests.isEmpty ? nil : tests.map { URL(fileURLWithPath: $0, isDirectory: true) }
+    try check.runAsCommand(options)
   }
 }

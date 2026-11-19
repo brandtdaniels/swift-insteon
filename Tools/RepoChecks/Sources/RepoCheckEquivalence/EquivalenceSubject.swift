@@ -40,7 +40,7 @@ public struct EquivalenceSubject {
 /// The checks that can be compared.
 public enum EquivalenceSubjects {
   /// The names of the checks, in the order they are ported.
-  public static let names = ["workflows", "terms", "cli-thin", "concurrency", "credentials", "device-neutral"]
+  public static let names = ["workflows", "terms", "cli-thin", "concurrency", "credentials", "device-neutral", "time-limits"]
 
   /// The subject for the named check, or nil if the name isn't one.
   ///
@@ -157,6 +157,25 @@ public enum EquivalenceSubjects {
           file: file
         ),
         candidate: UpdatingRunner(base: ProcessCheckRunner(command: [repoCheck, name, "--update"]), file: file)
+      )
+    case "time-limits":
+      return EquivalenceSubject(
+        name: name,
+        oracle: PythonOracle.runner(interpreter: interpreter, script: "Scripts/check-time-limits.py"),
+        candidate: ProcessCheckRunner(command: [repoCheck, name]),
+        mutationCorpus: { entry in
+          entry.components.first != "Packages" || entry.isDirectory || (entry.components.contains("Tests") && sample(entry, every: 10))
+        },
+        makeMutants: { tree in
+          let tests = try tree.filesWithSuffixes([".swift"]).filter { $0.hasPrefix("Packages/") && $0.contains("/Tests/") }
+          return try TextFileMutations(
+            tree: tree,
+            paths: tests,
+            operators: TimeLimitsMutations.operators,
+            addDirectory: "Packages/InsteonCore/Tests/InsteonCoreTests",
+            addNames: ["Extra.swift", "Extra+More.swift", "dir.swift", "Notes.txt"]
+          )
+        }
       )
     default:
       return nil
