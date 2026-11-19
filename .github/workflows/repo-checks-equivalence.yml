@@ -29,7 +29,11 @@ jobs:
       - name: Test the tool
         run: swift test --package-path Tools/RepoChecks --skip-build
       - name: Compare the Swift checks with the Python scripts
-        run: Tools/RepoChecks/.build/debug/repo-check-dev equivalence --check workflows --rounds 10 --mutants 100
+        run: |
+          swift build --package-path Tools/RepoChecks -c release -Xswiftc -warnings-as-errors
+          for check in workflows terms cli-thin concurrency credentials device-neutral time-limits public-api allowlist-growth; do
+            Tools/RepoChecks/.build/release/repo-check-dev equivalence --check "$check" --rounds 3 --mutants 50
+          done
 
   linux:
     name: Equivalence (Linux)
@@ -46,4 +50,8 @@ jobs:
       - name: Test the tool
         run: swift test --package-path Tools/RepoChecks --skip-build
       - name: Compare the Swift checks with the Python scripts
-        run: Tools/RepoChecks/.build/debug/repo-check-dev equivalence --check workflows --rounds 10 --mutants 100
+        run: |
+          swift build --package-path Tools/RepoChecks -c release -Xswiftc -warnings-as-errors
+          for check in workflows terms cli-thin concurrency credentials device-neutral time-limits public-api allowlist-growth; do
+            Tools/RepoChecks/.build/release/repo-check-dev equivalence --check "$check" --rounds 3 --mutants 50
+          done
