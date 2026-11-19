@@ -16,7 +16,7 @@ enum OpenAPIDocument {
         "title": "Insteon gateway API",
         "version": "1",
         "summary": "Control and monitor an Insteon network through a Hub or a serial modem.",
-        "description": "Version 1 of the gateway's JSON API. Additions inside /api/v1 are compatible: new optional fields, new error codes and new event kinds. Removing or retyping a field, changing an error's status classification or the event id format needs /api/v2. Clients ignore fields and event kinds they don't know. A path the server doesn't serve answers 404 `routeNotFound`."
+        "description": "Version 1 of the gateway's JSON API. Additions inside /api/v1 are compatible: new optional fields, new error codes and new event kinds. Removing or retyping a field, changing an error's status classification or the event id format needs /api/v2. Clients ignore fields and event kinds they don't know. A path the server doesn't serve answers 404 `routeNotFound`. Send the gateway password as Basic authentication or a client token as `Authorization: Bearer`; each operation lists the least scope it needs."
       ],
       "servers": [["url": "/"]],
       "security": [["bearerAuth": []], ["basicAuth": []]],
