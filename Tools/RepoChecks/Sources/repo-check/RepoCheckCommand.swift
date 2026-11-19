@@ -9,7 +9,7 @@ struct RepoCheckCommand: ParsableCommand {
     commandName: "repo-check",
     abstract: "Checks the repository against its rules.",
     discussion: "Each check exits with status 0 if it finds nothing and 1 if it finds a problem.",
-    subcommands: [WorkflowsCommand.self, TermsCommand.self]
+    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self]
   )
 }
 
@@ -73,4 +73,24 @@ struct AllowListOptions: ParsableArguments {
 
   @Flag(help: "Write the allow-list from the sources.")
   var update = false
+}
+
+struct CLIThinCommand: ParsableCommand {
+  static let configuration = CommandConfiguration(
+    commandName: "cli-thin",
+    abstract: "Checks that the insteon command leaves device behavior to the libraries."
+  )
+
+  @OptionGroup var options: RootOptions
+  @OptionGroup var allowList: AllowListOptions
+
+  @Option(name: .customLong("sources"), help: "A directory of sources to check; may be given more than once.")
+  var sources: [String] = []
+
+  func run() throws {
+    var check = CLIThinCheck(update: allowList.update)
+    check.sources = sources.isEmpty ? nil : sources.map { URL(fileURLWithPath: $0, isDirectory: true) }
+    check.allowlist = allowList.allowlist.map { URL(fileURLWithPath: $0) }
+    try check.runAsCommand(options)
+  }
 }

@@ -40,7 +40,7 @@ public struct EquivalenceSubject {
 /// The checks that can be compared.
 public enum EquivalenceSubjects {
   /// The names of the checks, in the order they are ported.
-  public static let names = ["workflows", "terms"]
+  public static let names = ["workflows", "terms", "cli-thin"]
 
   /// The subject for the named check, or nil if the name isn't one.
   ///
@@ -74,6 +74,29 @@ public enum EquivalenceSubjects {
             addNames: ["Extra.md", "Extra.swift", "CONVENTIONS.md", "notes.txt", ".md", "x.MD", "dir.md"]
           )
         }
+      )
+    case "cli-thin":
+      return EquivalenceSubject(
+        name: name,
+        oracle: PythonOracle.runner(interpreter: interpreter, script: "Scripts/check-cli-thin.py"),
+        candidate: ProcessCheckRunner(command: [repoCheck, name]),
+        mutationCorpus: { $0.components.first != "Packages" || $0.components.prefix(3) == ["Packages", "InsteonCLI", "Sources"] || $0.components.count < 3 },
+        makeMutants: { tree in
+          let sources = try tree.filesWithSuffixes([".swift"]).filter { $0.hasPrefix("Packages/InsteonCLI/Sources/") }
+          return WeightedMutations([
+            (try TextFileMutations(tree: tree, paths: sources, operators: CLIThinMutations.sourceOperators), 8),
+            (try TextFileMutations(tree: tree, paths: ["Scripts/check-cli-thin-allowlist.txt"], operators: CLIThinMutations.allowListOperators), 2)
+          ])
+        }
+      ).comparingUpdates(
+        oracle: UpdatingRunner(
+          base: PythonOracle.runner(interpreter: interpreter, script: "Scripts/check-cli-thin.py") { _ in ["--update"] },
+          file: "Scripts/check-cli-thin-allowlist.txt"
+        ),
+        candidate: UpdatingRunner(
+          base: ProcessCheckRunner(command: [repoCheck, name, "--update"]),
+          file: "Scripts/check-cli-thin-allowlist.txt"
+        )
       )
     default:
       return nil
