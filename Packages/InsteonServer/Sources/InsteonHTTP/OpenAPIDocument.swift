@@ -19,10 +19,13 @@ enum OpenAPIDocument {
         "description": "Version 1 of the gateway's JSON API. Additions inside /api/v1 are compatible: new optional fields, new error codes and new event kinds. Removing or retyping a field, changing an error's status classification or the event id format needs /api/v2. Clients ignore fields and event kinds they don't know. A path the server doesn't serve answers 404 `routeNotFound`."
       ],
       "servers": [["url": "/"]],
-      "security": [["basicAuth": []]],
+      "security": [["bearerAuth": []], ["basicAuth": []]],
       "paths": .object(paths),
       "components": [
-        "securitySchemes": ["basicAuth": ["type": "http", "scheme": "basic", "description": "The gateway password, with any user name."]],
+        "securitySchemes": [
+          "basicAuth": ["type": "http", "scheme": "basic", "description": "The gateway password, with any user name. It has the `admin` scope."],
+          "bearerAuth": ["type": "http", "scheme": "bearer", "description": "A client token. The scopes listed in an operation's security requirement are the least one the client needs: `read` reads and follows events, `control` also sends commands, `admin` also manages clients."]
+        ],
         "headers": ["IdempotentReplay": [
           "description": "`true` when the response repeats an earlier answer to the same Idempotency-Key and the command wasn't sent again.",
           "schema": Schema.constant("true")
@@ -50,6 +53,8 @@ enum OpenAPIDocument {
       "summary": .string(operation.summary),
       "description": .string(operation.details),
       "tags": [operation.isAPI ? "api" : "browser"],
+      "x-required-scope": .string(operation.requiredScope.rawValue),
+      "security": operation.acceptsClientTokens ? [["bearerAuth": [.string(operation.requiredScope.rawValue)]], ["basicAuth": []]] : [["basicAuth": []]],
       "responses": .object(Dictionary(uniqueKeysWithValues: operation.replies.map { (String($0.status), describe($0)) }))
     ]
     if !operation.parameters.isEmpty {

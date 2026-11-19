@@ -29,6 +29,12 @@ enum APIOperation: String, CaseIterable, Sendable {
     let headers: [String: JSONValue]
   }
 
+  /// The operation a request matched: its method and the route template Hummingbird matched it to.
+  init?(method: HTTPRequest.Method, template: String?) {
+    guard let template, let match = Self.allCases.first(where: { $0.path == template && $0.method == method }) else { return nil }
+    self = match
+  }
+
   /// A browser route answers HTML and plain text for a person; the rest answer machines.
   var isAPI: Bool {
     switch self {
@@ -113,9 +119,23 @@ enum APIOperation: String, CaseIterable, Sendable {
     }
   }
 
+  /// The weakest scope a credential needs for the operation. The gateway password is `admin`, and a
+  /// browser route takes only the password.
+  var requiredScope: ClientScope {
+    switch self {
+    case .listDevices, .health, .streamEvents, .openAPI: .read
+    case .executeCommand: .control
+    case .browserIndex, .browserControls, .browserCard, .browserCommand: .admin
+    }
+  }
+
+  /// Whether a client token authenticates the operation. A browser route takes the gateway password only.
+  var acceptsClientTokens: Bool { isAPI }
+
   /// The failures the operation can answer with, besides the ones every authenticated route has.
   var errorCodes: [APIErrorCode] {
     var codes: [APIErrorCode] = [.authenticationRequired, .authenticationFailed]
+    if isAPI, requiredScope > .read { codes.append(.forbidden) }
     switch self {
     case .executeCommand:
       codes += [.invalidAddress, .invalidCommand, .invalidLevel, .invalidIdempotencyKey, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected, .unknownDevice, .idempotencyKeyReused, .busy, .notIdentified, .notLinked, .unsupportedControl, .deviceRejected, .modemRejected, .modemUnavailable, .canceled, .deviceNotAnswering, .outcomeUnknown]

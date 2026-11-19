@@ -10,20 +10,23 @@ import Logging
 /// Each request logs one record to `logger`: method, route template, status, duration and a stable
 /// outcome code, with no path, query, header or body.
 ///
+/// A `Bearer` token authenticates a client the `clients` store holds, with the scope the client was
+/// given; the gateway password authenticates as `admin`.
+///
 /// A command that carries an `Idempotency-Key` header is recorded for 10 minutes, up to 256 at a time,
 /// measured by `now`, so a repeat returns its outcome without sending anything.
-public func makeInsteonRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, logger: Logger = Logger(label: "insteon-server"), now: @escaping @Sendable () -> Date = { Date() }) -> Router<BasicRequestContext> {
-  makeRegisteredRouter(service: service, authentication: authentication, logger: logger, now: now).router
+public func makeInsteonRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, clients: any ClientStoring = ClientStore(persistence: InMemoryClientPersistence()), logger: Logger = Logger(label: "insteon-server"), now: @escaping @Sendable () -> Date = { Date() }) -> Router<BasicRequestContext> {
+  makeRegisteredRouter(service: service, authentication: authentication, clients: clients, logger: logger, now: now).router
 }
 
 /// Builds the router and says which operations it registered. Every route comes from ``APIOperation``,
 /// so the routes served and the routes described are the same list.
-func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, logger: Logger, now: @escaping @Sendable () -> Date) -> (router: Router<BasicRequestContext>, registered: [APIOperation]) {
+func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, clients: any ClientStoring = ClientStore(persistence: InMemoryClientPersistence()), logger: Logger, now: @escaping @Sendable () -> Date) -> (router: Router<BasicRequestContext>, registered: [APIOperation]) {
   let router = Router<BasicRequestContext>()
   router.add(middleware: SecurityHeadersMiddleware<BasicRequestContext>())
   router.add(middleware: ErrorMappingMiddleware<BasicRequestContext>())
   router.add(middleware: RequestLogMiddleware<BasicRequestContext>(logger: logger))
-  router.add(middleware: AuthenticationMiddleware<BasicRequestContext>(authentication: authentication))
+  router.add(middleware: AuthenticationMiddleware<BasicRequestContext>(authentication: authentication, clients: clients))
   router.add(middleware: RequestBodyLimitMiddleware<BasicRequestContext>())
   let api = DeviceAPI(service: service, idempotency: IdempotencyStore(now: now))
   let website = DeviceWebsite(service: service)

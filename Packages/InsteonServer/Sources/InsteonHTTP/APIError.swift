@@ -10,6 +10,7 @@ import InsteonService
 enum APIErrorCode: String, CaseIterable, Sendable {
   case authenticationRequired
   case authenticationFailed
+  case forbidden
   case invalidAddress
   case invalidCommand
   case invalidIdempotencyKey
@@ -39,7 +40,7 @@ enum APIErrorCode: String, CaseIterable, Sendable {
     case .authenticationRequired, .authenticationFailed: .unauthorized
     case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel: .badRequest
     case .unknownDevice, .routeNotFound: .notFound
-    case .apiMarkerMissing, .formKeyInvalid: .forbidden
+    case .forbidden, .apiMarkerMissing, .formKeyInvalid: .forbidden
     case .bodyTooLarge: .contentTooLarge
     case .unsupportedMediaType: .unsupportedMediaType
     case .requestRejected: .badRequest
@@ -66,6 +67,7 @@ enum APIErrorCode: String, CaseIterable, Sendable {
     switch self {
     case .authenticationRequired: "Authentication required."
     case .authenticationFailed: "The credentials were not accepted."
+    case .forbidden: "This credential's scope does not allow that. Nothing was sent."
     case .invalidAddress: "The device address is not a valid Insteon address."
     case .invalidCommand: "Invalid command."
     case .invalidIdempotencyKey: "The Idempotency-Key must be one token of 1 through 128 characters from A-Z, a-z, 0-9 and . _ ~ : -."
