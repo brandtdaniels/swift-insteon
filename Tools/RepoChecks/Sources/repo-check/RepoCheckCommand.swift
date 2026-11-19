@@ -9,7 +9,7 @@ struct RepoCheckCommand: ParsableCommand {
     commandName: "repo-check",
     abstract: "Checks the repository against its rules.",
     discussion: "Each check exits with status 0 if it finds nothing and 1 if it finds a problem.",
-    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self, ConcurrencyCommand.self, CredentialsCommand.self]
+    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self, ConcurrencyCommand.self, CredentialsCommand.self, DeviceNeutralCommand.self]
   )
 }
 
@@ -131,6 +131,27 @@ struct CredentialsCommand: ParsableCommand {
   func run() throws {
     try CredentialsCheck(
       packages: packages.map { URL(fileURLWithPath: $0, isDirectory: true) },
+      allowlist: allowList.allowlist.map { URL(fileURLWithPath: $0) },
+      update: allowList.update
+    ).runAsCommand(options)
+  }
+}
+
+struct DeviceNeutralCommand: ParsableCommand {
+  static let configuration = CommandConfiguration(
+    commandName: "device-neutral",
+    abstract: "Checks that the core, the command and the in-memory modem name no real device."
+  )
+
+  @OptionGroup var options: RootOptions
+  @OptionGroup var allowList: AllowListOptions
+
+  @Option(help: "The catalog the words come from. The bundled one by default.")
+  var catalog: String?
+
+  func run() throws {
+    try DeviceNeutralCheck(
+      catalog: catalog.map { URL(fileURLWithPath: $0) },
       allowlist: allowList.allowlist.map { URL(fileURLWithPath: $0) },
       update: allowList.update
     ).runAsCommand(options)

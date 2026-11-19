@@ -40,7 +40,7 @@ public struct EquivalenceSubject {
 /// The checks that can be compared.
 public enum EquivalenceSubjects {
   /// The names of the checks, in the order they are ported.
-  public static let names = ["workflows", "terms", "cli-thin", "concurrency", "credentials"]
+  public static let names = ["workflows", "terms", "cli-thin", "concurrency", "credentials", "device-neutral"]
 
   /// The subject for the named check, or nil if the name isn't one.
   ///
@@ -136,6 +136,24 @@ public enum EquivalenceSubjects {
       ).comparingUpdates(
         oracle: UpdatingRunner(
           base: PythonOracle.runner(interpreter: interpreter, script: "Scripts/check-credentials.py") { _ in ["--update"] },
+          file: file
+        ),
+        candidate: UpdatingRunner(base: ProcessCheckRunner(command: [repoCheck, name, "--update"]), file: file)
+      )
+    case "device-neutral":
+      let file = DeviceNeutralMutations.allowlistPath
+      return EquivalenceSubject(
+        name: name,
+        oracle: PythonOracle.runner(interpreter: interpreter, script: "Scripts/check-device-neutral.py"),
+        candidate: ProcessCheckRunner(command: [repoCheck, name]),
+        mutationCorpus: { entry in
+          entry.components.first != "Packages" || entry.isDirectory || entry.relativePath == DeviceNeutralMutations.catalogPath
+            || (DeviceNeutralMutations.directories.contains { entry.relativePath.hasPrefix($0) } && sample(entry, every: 3))
+        },
+        makeMutants: { try DeviceNeutralMutations.generator(tree: $0) }
+      ).comparingUpdates(
+        oracle: UpdatingRunner(
+          base: PythonOracle.runner(interpreter: interpreter, script: "Scripts/check-device-neutral.py") { _ in ["--update"] },
           file: file
         ),
         candidate: UpdatingRunner(base: ProcessCheckRunner(command: [repoCheck, name, "--update"]), file: file)
