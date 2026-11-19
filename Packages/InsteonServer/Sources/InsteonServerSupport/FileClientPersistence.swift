@@ -1,10 +1,5 @@
 import Foundation
 import InsteonHTTP
-#if canImport(Darwin)
-import Darwin
-#else
-import Glibc
-#endif
 
 /// Keeps the client registry in a JSON file readable only by the current user.
 ///
@@ -20,35 +15,9 @@ struct FileClientPersistence: ClientPersisting {
     return state.deletingLastPathComponent().appendingPathComponent(state.deletingPathExtension().lastPathComponent + "-clients.json")
   }
 
-  func load() async throws -> ClientRegistry? {
-    var info = stat()
-    guard lstat(url.path, &info) == 0 else {
-      if errno == ENOENT { return nil }
-      throw FileError.unreadable
-    }
-    guard (info.st_mode & S_IFMT) == S_IFREG, let data = FileManager.default.contents(atPath: url.path) else { throw FileError.unreadable }
-    let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
-    guard let registry = try? decoder.decode(ClientRegistry.self, from: data), registry.version == 1 else { throw FileError.unreadable }
-    return registry
-  }
+  private var file: PrivateJSONFile<ClientRegistry> { PrivateJSONFile(url: url, accepts: { $0.version == 1 }) }
 
-  func save(_ registry: ClientRegistry) async throws {
-    // Refuse to replace what load() would refuse to read.
-    _ = try await load()
-    let directory = url.deletingLastPathComponent()
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    encoder.dateEncodingStrategy = .iso8601
-    let data = try encoder.encode(registry)
-    let temporary = directory.appendingPathComponent("." + url.lastPathComponent + "." + UUID().uuidString)
-    guard FileManager.default.createFile(atPath: temporary.path, contents: data, attributes: [.posixPermissions: 0o600]) else { throw FileError.unwritable }
-    guard rename(temporary.path, url.path) == 0 else {
-      try? FileManager.default.removeItem(at: temporary)
-      throw FileError.unwritable
-    }
-  }
+  func load() async throws -> ClientRegistry? { try file.load() }
 
-  private enum FileError: Error { case unreadable, unwritable }
+  func save(_ registry: ClientRegistry) async throws { try file.save(registry) }
 }
