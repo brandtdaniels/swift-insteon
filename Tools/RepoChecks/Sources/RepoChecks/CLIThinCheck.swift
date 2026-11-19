@@ -128,7 +128,7 @@ public struct CLIThinCheck: RepoCheck {
   }()
 
   static let allowlistHeader = """
-    # Lines of the `insteon` command that Scripts/check-cli-thin.py knows break its rules, waiting
+    # Lines of the `insteon` command that `repo-check cli-thin` knows break its rules, waiting
     # to move into the libraries. Each entry is a path under Packages/InsteonCLI/Sources, the rule,
     # and the line's code without comments or strings, separated by tabs. Entries only go: a
     # change that moves code into the libraries removes them, with --update, and CI fails a pull

@@ -73,7 +73,7 @@ public struct DeviceNeutralCheck: RepoCheck {
   static let transportCapabilities: Set<String> = ["modem", "hub"]
 
   static let allowlistHeader = """
-    # Files that Scripts/check-device-neutral.py knows name a real product or operating flag, each
+    # Files that `repo-check device-neutral` knows name a real product or operating flag, each
     # with a reason. Each entry is a path from the repository's root, the word, and why it stays,
     # separated by tabs. Entries only go: CI fails a pull request that adds one.
 

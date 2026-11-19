@@ -36,9 +36,9 @@ public struct PublicAPICheck: RepoCheck {
   }
 
   static let listHeader = """
-    # InsteonCore's public declarations, as Scripts/check-public-api.py lists them. CI fails when the
+    # InsteonCore's public declarations, as `repo-check public-api` lists them. CI fails when the
     # sources and this list differ, so a change to InsteonCore's public API shows here in review.
-    # After a deliberate change, run `python3 Scripts/check-public-api.py --update` and commit this
+    # After a deliberate change, run `repo-check public-api --update` and commit this
     # file with it.
 
     """
@@ -71,7 +71,7 @@ public struct PublicAPICheck: RepoCheck {
     if !added.isEmpty || !removed.isEmpty {
       console.write(
         "InsteonCore's public API differs from its list. If the change is deliberate, run "
-          + "`python3 Scripts/check-public-api.py --update` and commit the list with it."
+          + "`repo-check public-api --update` and commit the list with it."
       )
       return .failed
     }

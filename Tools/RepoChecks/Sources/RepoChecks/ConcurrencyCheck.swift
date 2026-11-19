@@ -86,7 +86,7 @@ public struct ConcurrencyCheck: RepoCheck {
   ]
 
   static let allowlistHeader = """
-    # Lines of the libraries that Scripts/check-concurrency.py knows break its rules, each with a
+    # Lines of the libraries that `repo-check concurrency` knows break its rules, each with a
     # reason. Each entry is a path under Packages, the rule, the line's code without comments or
     # strings, and why it's needed, separated by tabs. Entries only go: CI fails a pull request
     # that adds one.
