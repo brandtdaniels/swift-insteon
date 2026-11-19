@@ -34,7 +34,7 @@ public struct EventCursor: Hashable, Sendable {
 }
 
 /// Why a reconnecting client can't be given what it missed.
-public enum EventGapReason: String, Sendable, Equatable {
+public enum EventGapReason: String, CaseIterable, Sendable, Equatable {
   /// The client's run isn't this one: the service restarted, or the id isn't one the service made.
   case otherRun
   /// The service doesn't keep the events the client missed.
