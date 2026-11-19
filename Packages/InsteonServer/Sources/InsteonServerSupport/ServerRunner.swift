@@ -139,6 +139,10 @@ public enum ServerRunner {
     // Reading the registry before listening keeps an unusable file from surfacing as a failed request.
     do { _ = try await clients.serviceID() }
     catch { throw ServerRunError.clientFileUnusable(path: clientFile.path) }
+    let rulesFile = FileNotificationRulePersistence.url(besideState: options.statePath)
+    let notificationRules = FileNotificationRulePersistence(url: rulesFile)
+    do { _ = try await notificationRules.load() }
+    catch { throw ServerRunError.notificationRulesFileUnusable(path: rulesFile.path) }
     let snapshot: NetworkSnapshot
     do { snapshot = try store.loadNetwork() }
     catch let error as DeviceRegistryStoreError { throw ServerRunError.stateFileUnusable(path: options.statePath, reason: error) }
@@ -166,6 +170,7 @@ public enum ServerRunner {
       authentication: authentication,
       clients: clients,
       pairing: pairingConfiguration(for: options),
+      notificationRules: notificationRules,
       logger: logger,
       timing: timing
     )
@@ -188,10 +193,11 @@ public enum ServerRunner {
     authentication: any HTTPAuthenticating,
     clients: any ClientStoring,
     pairing: PairingConfiguration,
+    notificationRules: any NotificationRulePersisting,
     logger: Logger,
     timing: Timing
   ) async throws {
-    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter, throughHub: hub != nil)
+    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter, throughHub: hub != nil, notificationRules: notificationRules)
     let router = makeInsteonRouter(service: service, authentication: authentication, clients: clients, pairing: pairing, logger: logger, now: timing.now)
     let app = Application(
       responder: router.buildResponder(),
@@ -338,6 +344,8 @@ public enum ServerRunError: Error, CustomStringConvertible, Equatable {
   case stateFileUnusable(path: String, reason: DeviceRegistryStoreError)
   /// The client file exists but can't be used.
   case clientFileUnusable(path: String)
+  /// The notification rules file exists but can't be used.
+  case notificationRulesFileUnusable(path: String)
   /// The service already keeps the most clients it allows.
   case clientLimitReached
 

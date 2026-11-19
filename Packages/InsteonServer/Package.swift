@@ -59,6 +59,7 @@ let package = Package(
       dependencies: [
         "InsteonServerSupport",
         "InsteonHTTP",
+        .product(name: "InsteonDeviceCatalog", package: "swift-insteon"),
         .product(name: "InsteonLinking", package: "swift-insteon"),
         .product(name: "InsteonProtocol", package: "swift-insteon"),
         .product(name: "InsteonCore", package: "swift-insteon"),
