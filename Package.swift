@@ -209,12 +209,12 @@ let package = Package(
     // The application service, independent of authentication, transport and presentation.
     .target(
       name: "InsteonService",
-      dependencies: ["InsteonCore", "InsteonHubClient", "InsteonModem"],
+      dependencies: ["InsteonCore", "InsteonDeviceCatalog", "InsteonHubClient", "InsteonModem", "InsteonNotifications", "InsteonProtocol"],
       path: "Packages/InsteonService/Sources/InsteonService"
     ),
     .testTarget(
       name: "InsteonServiceTests",
-      dependencies: ["InsteonService", "InsteonCore", "InsteonHubClient", "InsteonModem", "InsteonProtocol", "InsteonLinkingTestSupport", "InsteonTestSupport"],
+      dependencies: ["InsteonService", "InsteonCore", "InsteonDeviceCatalog", "InsteonHubClient", "InsteonModem", "InsteonProtocol", "InsteonLinkingTestSupport", "InsteonTestSupport"],
       path: "Packages/InsteonService/Tests/InsteonServiceTests"
     ),
     // The `insteon` command. Its command-line parsing is in InsteonCLISupport, so it can be tested.
