@@ -18,7 +18,7 @@ enum HTTPBody {
 
 /// Input decoding belongs to HTTP; domain validation remains in the service.
 struct HTTPCommand: Decodable {
-  enum Action: String, Decodable { case identify, status, on, off }
+  enum Action: String, Decodable, CaseIterable { case identify, status, on, off }
   let action: Action
   let levelPercent: Int?
 

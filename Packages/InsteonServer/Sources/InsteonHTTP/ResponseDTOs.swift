@@ -79,21 +79,16 @@ struct HealthDTO: Encodable {
 
   init(_ health: ServiceHealth) {
     switch health.readiness {
-    case .starting: status = "starting"
-    case .ready: status = "ready"
-    case .degraded: status = "degraded"
+    case .starting: status = HealthStatusName.starting.rawValue
+    case .ready: status = HealthStatusName.ready.rawValue
+    case .degraded: status = HealthStatusName.degraded.rawValue
     }
     modem = Modem(connected: health.modem == .connected, cause: health.modem.cause?.wireName)
     func age(_ date: Date?) -> Int? { date.map { max(0, Int(health.checkedAt.timeIntervalSince($0))) } }
     lastExchangeAgeSeconds = age(health.lastHardwareExchange)
     lastPollAgeSeconds = age(health.lastPoll)
     snapshotAgeSeconds = age(health.deviceInformationUpdated)
-    switch health.persistence {
-    case .notConfigured: persistence = "notConfigured"
-    case .notAttempted: persistence = "notAttempted"
-    case .saved: persistence = "saved"
-    case .failed: persistence = "failed"
-    }
+    persistence = PersistenceName(health.persistence).rawValue
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -133,10 +128,10 @@ struct StatusDTO: Encodable {
   init(_ status: DeviceStatus) {
     group = status.group; value = status.value; isOn = status.isOn
     switch status.reading {
-    case let .percent(number): kind = "percent"; percent = number; label = nil
-    case .onOff: kind = "onOff"; percent = nil; label = nil
-    case let .named(name): kind = "named"; percent = nil; label = name
-    case .raw: kind = "raw"; percent = nil; label = nil
+    case let .percent(number): kind = ReadingKind.percent.rawValue; percent = number; label = nil
+    case .onOff: kind = ReadingKind.onOff.rawValue; percent = nil; label = nil
+    case let .named(name): kind = ReadingKind.named.rawValue; percent = nil; label = name
+    case .raw: kind = ReadingKind.raw.rawValue; percent = nil; label = nil
     }
   }
 }
@@ -149,21 +144,16 @@ struct ReceiptDTO: Encodable {
   let persistence: String
   init(_ receipt: CommandReceipt) {
     address = receipt.address.description
-    outcome = receipt.outcome == .acknowledged ? "acknowledged" : "read"
+    outcome = (receipt.outcome == .acknowledged ? ReceiptOutcome.acknowledged : .read).rawValue
     status = receipt.status.map(StatusDTO.init)
-    switch receipt.persistence {
-    case .notConfigured: persistence = "notConfigured"
-    case .notAttempted: persistence = "notAttempted"
-    case .saved: persistence = "saved"
-    case .failed: persistence = "failed"
-    }
+    persistence = PersistenceName(receipt.persistence).rawValue
   }
 }
 
 /// Tells a reconnecting client that events it missed can't be replayed, so it refreshes everything.
 struct GapDTO: Encodable {
   let version = 1
-  let kind = "gap"
+  let kind = EventKind.gap.rawValue
   let reason: String
   let runId: String
   let sequence: UInt64
@@ -200,21 +190,21 @@ struct EventDTO: Encodable {
     }
     switch event {
     case let .commandCompleted(command, _):
-      kind = "commandCompleted"; address = command.address.description; group = nil; name = nil; productName = nil
+      kind = EventKind.commandCompleted.rawValue; address = command.address.description; group = nil; name = nil; productName = nil
     case let .identified(address, productName):
-      kind = "identified"; self.address = address.description; group = nil; name = nil; self.productName = productName
+      kind = EventKind.identified.rawValue; self.address = address.description; group = nil; name = nil; self.productName = productName
     case let .setButtonPressed(address):
-      kind = "setButtonPressed"; self.address = address.description; group = nil; name = nil; productName = nil
+      kind = EventKind.setButtonPressed.rawValue; self.address = address.description; group = nil; name = nil; productName = nil
     case let .groupCommand(address, group, name):
-      kind = "groupCommand"; self.address = address.description; self.group = group; self.name = name; productName = nil
+      kind = EventKind.groupCommand.rawValue; self.address = address.description; self.group = group; self.name = name; productName = nil
     case let .heartbeat(address, group):
-      kind = "heartbeat"; self.address = address.description; self.group = group; name = nil; productName = nil
+      kind = EventKind.heartbeat.rawValue; self.address = address.description; self.group = group; name = nil; productName = nil
     case let .statusChanged(address):
-      kind = "statusChanged"; self.address = address.description; group = nil; name = nil; productName = nil
+      kind = EventKind.statusChanged.rawValue; self.address = address.description; group = nil; name = nil; productName = nil
     case .modemUnavailable:
-      kind = "modemUnavailable"; address = nil; group = nil; name = nil; productName = nil
+      kind = EventKind.modemUnavailable.rawValue; address = nil; group = nil; name = nil; productName = nil
     case .modemReconnected:
-      kind = "reconnected"; address = nil; group = nil; name = nil; productName = nil
+      kind = EventKind.reconnected.rawValue; address = nil; group = nil; name = nil; productName = nil
     }
   }
 }
@@ -226,10 +216,10 @@ struct CommandCompletionDTO: Encodable {
 
   init(command: ServiceCommand, receipt: CommandReceipt) {
     switch command.action {
-    case .identify: action = "identify"
-    case .status: action = "status"
-    case .on: action = "on"
-    case .off: action = "off"
+    case .identify: action = HTTPCommand.Action.identify.rawValue
+    case .status: action = HTTPCommand.Action.status.rawValue
+    case .on: action = HTTPCommand.Action.on.rawValue
+    case .off: action = HTTPCommand.Action.off.rawValue
     }
     levelPercent = command.levelPercent
     result = ReceiptDTO(receipt)

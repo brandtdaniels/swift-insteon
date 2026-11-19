@@ -143,6 +143,7 @@ aren't implemented.
 | GET | `/api/v1/health` | Readiness, modem state, ages; sends nothing to hardware (see Staying up) |
 | POST | `/api/v1/devices/1A.2B.3C/commands` | Identify, read status, On or Off for a known device's main group |
 | GET | `/api/v1/events` | Server-sent JSON events, numbered; resumes from `Last-Event-ID` (see Event ids and resuming) |
+| GET | `/api/v1/openapi.json` | The OpenAPI 3.1 description of every route below, generated from the server's route table |
 | GET | `/devices/1A.2B.3C` | Authenticated card fragment from cached state; no hardware polling |
 
 JSON commands need `Content-Type: application/json` and `X-Insteon-Request: 1`. Example body:
@@ -257,6 +258,53 @@ passive events aren't stored as history.
 Control-C or SIGTERM stops the HTTP service and closes the hardware session. A lost Hub or modem
 connection doesn't stop the server; it reconnects as described under Staying up. A corrupt or
 unsupported state file is refused rather than overwritten.
+
+## The API contract
+
+`GET /api/v1/openapi.json` (authenticated like every route) returns an OpenAPI 3.1 description of
+the server: every route, its parameters and headers (`X-Insteon-Request`, `Idempotency-Key`,
+`Last-Event-ID`, and the `Idempotent-Replay` response header), the request and response schemas,
+every error code with its HTTP status and `sent` value, and the event stream's frames, including
+`gap` and its reasons. The bytes are the same on every request.
+
+The description is generated from the Swift types that implement the server, so it can't drift:
+the router registers its routes from the same table the description is built from, the error codes
+come from the enumeration the errors use, and the tests encode the real response types and check
+that they satisfy the schemas. A browser route (`/`, `/controls.js`, `/devices/{address}`) is listed
+under the `browser` tag and isn't part of the versioned contract.
+
+A client app:
+
+- reads the document once, or generates its types from it, and sends it the gateway password with
+  any user name (Basic authentication);
+- branches on `code` in an error body, never on `message`, and on `sent` before it repeats a command;
+- repeats a command it didn't get an answer to with the same `Idempotency-Key`;
+- follows `/api/v1/events` with the last id it saw, and refreshes everything it shows on a `gap`;
+- ignores fields, event kinds and error codes it doesn't know.
+
+### Versioning
+
+The path carries the version: everything under `/api/v1` keeps the meaning it has. These are
+additive, so they happen inside `/api/v1`:
+
+- a new route, or a new optional request field or header;
+- a new field in a response or event, and a new value of a field that documents itself as open
+  (error `code`, event `kind`, `cause`);
+- a new error code, with the status and `sent` its class already has;
+- a new event kind, which a client that doesn't know it ignores.
+
+These are breaking and need `/api/v2`:
+
+- removing or renaming a route, a field or an enumeration value, or changing a field's type, range
+  or meaning;
+- making an optional request field required, or refusing a request that was accepted;
+- changing the HTTP status or `sent` of an existing error code, or reclassifying a failure into a
+  different code;
+- changing the format of an event `id` (`<runId>-<sequence>`) or the rules for resuming from it;
+- changing authentication.
+
+A client must tolerate additions. The wording of `message` and the order of keys aren't part of the
+contract.
 
 ## Errors
 

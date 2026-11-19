@@ -12,6 +12,8 @@ enum IdempotencyError: Error, Equatable {
 /// A client-chosen token that names one command, so a repeat of it can be recognized.
 struct IdempotencyKey: Equatable, Sendable {
   static let maximumLength = 128
+  /// The syntax as a regular expression, for the API description.
+  static let pattern = "^[A-Za-z0-9._~:-]{1,128}$"
   private static let allowed = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._~:-")
 
   let value: String

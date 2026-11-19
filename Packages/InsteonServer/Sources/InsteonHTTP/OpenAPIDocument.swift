@@ -1,0 +1,185 @@
+import Foundation
+import InsteonService
+
+/// The OpenAPI 3.1 description of the server, built from ``APIOperation``, ``APIErrorCode`` and the
+/// wire vocabulary. Nothing in it is typed twice: routes, error codes and enumerations come from the
+/// Swift types that implement them, and the tests encode the real response types and check that they
+/// satisfy the schemas written here.
+enum OpenAPIDocument {
+  /// The document, encoded with sorted keys, so every request returns the same bytes.
+  static let bytes: Data = (try? document.encoded()) ?? Data()
+
+  static var document: JSONValue {
+    [
+      "openapi": "3.1.0",
+      "info": [
+        "title": "Insteon gateway API",
+        "version": "1",
+        "summary": "Control and monitor an Insteon network through a Hub or a serial modem.",
+        "description": "Version 1 of the gateway's JSON API. Additions inside /api/v1 are compatible: new optional fields, new error codes and new event kinds. Removing or retyping a field, changing an error's status classification or the event id format needs /api/v2. Clients ignore fields and event kinds they don't know. A path the server doesn't serve answers 404 `routeNotFound`."
+      ],
+      "servers": [["url": "/"]],
+      "security": [["basicAuth": []]],
+      "paths": .object(paths),
+      "components": [
+        "securitySchemes": ["basicAuth": ["type": "http", "scheme": "basic", "description": "The gateway password, with any user name."]],
+        "headers": ["IdempotentReplay": [
+          "description": "`true` when the response repeats an earlier answer to the same Idempotency-Key and the command wasn't sent again.",
+          "schema": Schema.constant("true")
+        ]],
+        "schemas": .object(schemas)
+      ]
+    ]
+  }
+
+  // MARK: Paths
+
+  private static var paths: [String: JSONValue] {
+    var paths: [String: JSONValue] = [:]
+    for operation in APIOperation.allCases {
+      var item = paths[operation.path]?.members ?? [:]
+      item[operation.method.rawValue.lowercased()] = describe(operation)
+      paths[operation.path] = .object(item)
+    }
+    return paths
+  }
+
+  private static func describe(_ operation: APIOperation) -> JSONValue {
+    var members: [String: JSONValue] = [
+      "operationId": .string(operation.rawValue),
+      "summary": .string(operation.summary),
+      "description": .string(operation.details),
+      "tags": [operation.isAPI ? "api" : "browser"],
+      "responses": .object(Dictionary(uniqueKeysWithValues: operation.replies.map { (String($0.status), describe($0)) }))
+    ]
+    if !operation.parameters.isEmpty {
+      members["parameters"] = .array(operation.parameters.map { parameter in
+        ["name": .string(parameter.name), "in": .string(parameter.location), "required": .bool(parameter.required), "description": .string(parameter.description), "schema": parameter.schema]
+      })
+    }
+    if let body = operation.requestBody {
+      members["requestBody"] = ["required": true, "description": .string(body.description), "content": .object([body.contentType: ["schema": body.schema]])]
+    }
+    return .object(members)
+  }
+
+  private static func describe(_ reply: APIOperation.Reply) -> JSONValue {
+    var members: [String: JSONValue] = ["description": .string(reply.description)]
+    if let contentType = reply.contentType {
+      members["content"] = .object([contentType: reply.schema.map { ["schema": $0] } ?? [:]])
+    }
+    if !reply.headers.isEmpty { members["headers"] = .object(reply.headers) }
+    return .object(members)
+  }
+
+  // MARK: Schemas
+
+  private static let address = Schema.string(description: "An Insteon address such as 1A.2B.3C.")
+  private static let version = JSONValue.object(["type": "integer", "const": 1, "description": "The wire format's version."])
+
+  private static var schemas: [String: JSONValue] {
+    let causes = ModemUnavailability.allWireNames
+    return [
+      "ErrorCode": [
+        "type": "string",
+        "enum": .array(APIErrorCode.allCases.map { .string($0.rawValue) }),
+        "description": "A stable code to branch on. A new code is an additive change.",
+        "x-codes": .array(APIErrorCode.allCases.map { code in
+          ["code": .string(code.rawValue), "status": .integer(Int(code.status.code)), "sent": .bool(code.sent), "message": .string(code.message)]
+        })
+      ],
+      "ModemCause": Schema.string(enum: causes, description: "Why the Hub or modem is away."),
+      "Error": Schema.object([
+        "version": version,
+        "code": Schema.ref("ErrorCode"),
+        "message": Schema.string(description: "For a person. The wording can change."),
+        "sent": ["type": "boolean", "description": "True only when a command that changes a device may have reached it, so repeating the command could repeat the change."],
+        "requestId": Schema.string(description: "The request_id of the log record for this request."),
+        "cause": Schema.ref("ModemCause")
+      ], required: ["version", "code", "message", "sent", "requestId"], description: "Every non-2xx response of an API route."),
+      "Command": Schema.object([
+        "action": Schema.string(enum: HTTPCommand.Action.allCases.map(\.rawValue)),
+        "levelPercent": Schema.integer(minimum: 0, maximum: 100, description: "Only for `on`, and only for a device that dims.")
+      ], required: ["action"]),
+      "Status": Schema.object([
+        "group": Schema.nullable(Schema.integer()),
+        "kind": Schema.string(enum: ReadingKind.allCases.map(\.rawValue)),
+        "value": Schema.integer(minimum: 0, maximum: 255),
+        "isOn": Schema.boolean,
+        "percent": Schema.nullable(Schema.integer(minimum: 0, maximum: 100)),
+        "label": Schema.nullable(Schema.string())
+      ], required: ["kind", "value", "isOn"]),
+      "Receipt": Schema.object([
+        "version": version,
+        "address": address,
+        "outcome": Schema.string(enum: ReceiptOutcome.allCases.map(\.rawValue)),
+        "status": Schema.ref("Status"),
+        "persistence": Schema.ref("Persistence")
+      ], required: ["version", "address", "outcome", "persistence"], description: "An acknowledged control is not a status reading."),
+      "Persistence": Schema.string(enum: PersistenceName.allCases.map(\.rawValue), description: "Whether the snapshot was saved, independent of the device result."),
+      "Device": Schema.object([
+        "address": address,
+        "productName": Schema.nullable(Schema.string()),
+        "canTurnOnAndOff": Schema.boolean,
+        "canDim": Schema.boolean,
+        "value": Schema.nullable(Schema.integer(minimum: 0, maximum: 255)),
+        "lastAnsweredAt": Schema.nullable(["type": "string", "format": "date-time"])
+      ], required: ["address", "canTurnOnAndOff", "canDim"]),
+      "DeviceList": Schema.object([
+        "version": version,
+        "devices": Schema.array(of: Schema.ref("Device")),
+        "stale": Schema.boolean,
+        "cause": Schema.nullable(Schema.ref("ModemCause"))
+      ], required: ["version", "devices", "stale", "cause"]),
+      "Health": Schema.object([
+        "version": version,
+        "status": Schema.string(enum: HealthStatusName.allCases.map(\.rawValue)),
+        "modem": Schema.object(["connected": Schema.boolean, "cause": Schema.nullable(Schema.ref("ModemCause"))], required: ["connected", "cause"]),
+        "lastExchangeAgeSeconds": Schema.nullable(Schema.integer(minimum: 0)),
+        "lastPollAgeSeconds": Schema.nullable(Schema.integer(minimum: 0)),
+        "snapshotAgeSeconds": Schema.nullable(Schema.integer(minimum: 0)),
+        "persistence": Schema.ref("Persistence")
+      ], required: ["version", "status", "modem", "lastExchangeAgeSeconds", "lastPollAgeSeconds", "snapshotAgeSeconds", "persistence"]),
+      "CommandCompletion": Schema.object([
+        "action": Schema.string(enum: HTTPCommand.Action.allCases.map(\.rawValue)),
+        "levelPercent": Schema.nullable(Schema.integer(minimum: 0, maximum: 100)),
+        "result": Schema.ref("Receipt")
+      ], required: ["action", "levelPercent", "result"]),
+      "Event": Schema.object([
+        "version": version,
+        "runId": Schema.string(description: "Names the service run. Different at every start."),
+        "sequence": Schema.integer(minimum: 0, description: "The event's number in the run: 1, 2, 3. Shared by every client."),
+        "kind": Schema.string(enum: EventKind.allCases.filter { $0 != .gap }.map(\.rawValue)),
+        "address": Schema.nullable(address),
+        "group": Schema.nullable(Schema.integer()),
+        "name": Schema.nullable(Schema.string()),
+        "productName": Schema.nullable(Schema.string()),
+        "completion": Schema.nullable(Schema.ref("CommandCompletion")),
+        "cause": Schema.nullable(Schema.ref("ModemCause")),
+        "message": Schema.nullable(Schema.string())
+      ], required: ["version", "runId", "sequence", "kind"], description: "The `data` of one frame. `commandCompleted` carries `completion`; `modemUnavailable` carries `cause` and `message`; `reconnected` says the modem is back and a client refreshes what it shows."),
+      "Gap": Schema.object([
+        "version": version,
+        "kind": Schema.constant(EventKind.gap.rawValue),
+        "reason": Schema.string(enum: EventGapReason.allCases.map(\.rawValue), description: "`otherRun`: the service restarted or the id isn't one it made. `tooOld`: the events after the id were dropped (the newest 256 are kept). `ahead`: the id is past the run's newest event."),
+        "runId": Schema.string(),
+        "sequence": Schema.integer(minimum: 0)
+      ], required: ["version", "kind", "reason", "runId", "sequence"], description: "The client missed events the server can't replay. It refreshes everything it shows, then continues with the frames that follow."),
+      "StreamFrame": [
+        "oneOf": [Schema.ref("Event"), Schema.ref("Gap")],
+        "description": "The JSON of one `data` line. The frame's SSE `id` is `<runId>-<sequence>`; send it back as `Last-Event-ID`. Lines that start with a colon are keepalives, and a frame with an `id` and no data sets the client's place."
+      ],
+      "OpenAPIDocument": [
+        "type": "object",
+        "required": ["openapi", "info", "paths"],
+        "description": "An OpenAPI 3.1 document."
+      ]
+    ]
+  }
+}
+
+extension JSONValue {
+  fileprivate var members: [String: JSONValue]? {
+    if case let .object(members) = self { members } else { nil }
+  }
+}
