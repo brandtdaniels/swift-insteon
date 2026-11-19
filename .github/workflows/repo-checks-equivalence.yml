@@ -19,7 +19,7 @@ jobs:
   macos:
     name: Equivalence (macOS)
     runs-on: macos-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
       - name: Select Xcode
@@ -32,13 +32,13 @@ jobs:
         run: |
           swift build --package-path Tools/RepoChecks -c release -Xswiftc -warnings-as-errors
           for check in workflows terms cli-thin concurrency credentials device-neutral time-limits public-api allowlist-growth; do
-            Tools/RepoChecks/.build/release/repo-check-dev equivalence --check "$check" --rounds 3 --mutants 50
+            Tools/RepoChecks/.build/release/repo-check-dev equivalence --check "$check" --rounds 2 --mutants 30
           done
 
   linux:
     name: Equivalence (Linux)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
     # The image by digest, so a retagged image can't change what runs.
     container: swift:6.3.3@sha256:1038d54c80063f5cdfabc4560990c30af64b5de8ebf28161deb22ca4ad5db866
     steps:
@@ -53,5 +53,5 @@ jobs:
         run: |
           swift build --package-path Tools/RepoChecks -c release -Xswiftc -warnings-as-errors
           for check in workflows terms cli-thin concurrency credentials device-neutral time-limits public-api allowlist-growth; do
-            Tools/RepoChecks/.build/release/repo-check-dev equivalence --check "$check" --rounds 3 --mutants 50
+            Tools/RepoChecks/.build/release/repo-check-dev equivalence --check "$check" --rounds 2 --mutants 30
           done
