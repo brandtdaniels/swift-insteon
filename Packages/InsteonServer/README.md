@@ -130,11 +130,11 @@ also supplies a secure browser origin and an address suitable for password-manag
 
 ## API
 
-Authenticate every endpoint with the same HTTP Basic credential as the website. There is no
-public health, discovery or device endpoint: even the health report is authenticated, because
-when the Hub is away is itself information about the household. Authenticated clients may list and control all
-devices known by this service. Pairing, individual client tokens and per-device permissions
-aren't implemented.
+Authenticate every endpoint with the gateway password (HTTP Basic, as the website does) or, on
+the API routes, with a client token (see Clients, scopes and pairing). There is no public health,
+discovery or device endpoint: even the health report is authenticated, because when the Hub is
+away is itself information about the household. A credential may list and, with the `control`
+scope, command all devices known by this service. Per-device permissions aren't implemented.
 
 | Method | Path | Behavior |
 | --- | --- | --- |
@@ -144,6 +144,9 @@ aren't implemented.
 | POST | `/api/v1/devices/1A.2B.3C/commands` | Identify, read status, On or Off for a known device's main group |
 | GET | `/api/v1/events` | Server-sent JSON events, numbered; resumes from `Last-Event-ID` (see Event ids and resuming) |
 | GET | `/api/v1/openapi.json` | The OpenAPI 3.1 description of every route below, generated from the server's route table |
+| GET, POST | `/api/v1/clients` | List the clients, or create one and its pairing document (`admin`) |
+| DELETE | `/api/v1/clients/{id}` | Revoke a client (`admin`) |
+| POST | `/api/v1/clients/{id}/pairing` | Replace a client's credential and return its pairing document (`admin`) |
 | GET | `/devices/1A.2B.3C` | Authenticated card fragment from cached state; no hardware polling |
 
 JSON commands need `Content-Type: application/json` and `X-Insteon-Request: 1`. Example body:
@@ -193,6 +196,104 @@ connection that sends no complete request within 30 seconds, or whose write does
 within 30 seconds, is closed. Event responses end during graceful server shutdown. The HTTP
 adapter buffers at most 64 pending events per response; a client that falls behind is
 disconnected, and reconnects from the last id it saw.
+
+## Clients, scopes and pairing
+
+The gateway password is one credential for the whole household, and it can't be taken back from
+one phone without changing it everywhere. A client is its own credential: a name, a scope and a
+token that the service can revoke alone.
+
+| Scope | Allows |
+| --- | --- |
+| `read` | List devices, read health, follow events, read the API description. |
+| `control` | Everything `read` allows, and send commands to devices. |
+| `admin` | Everything `control` allows, and create, list, revoke and re-pair clients. |
+
+The gateway password acts as `admin`, so nothing that works with it changes. A client token goes
+in `Authorization: Bearer <token>`, on the API routes only. The browser routes (`/`,
+`/controls.js`, `/devices/{address}`) take the gateway password only and keep their form key
+protection. Each operation in the OpenAPI description lists the least scope it needs, so the route
+table is the one place a scope is decided: an operation can't be added without one. A client
+whose scope is too low gets `forbidden` (403, `sent` false) and nothing reaches a device. A
+token that is wrong, altered or revoked gets `authenticationFailed`, the same as a wrong password.
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/api/v1/clients` | The clients: `id`, `name`, `scope` and `createdAt`. Never a token. |
+| POST | `/api/v1/clients` | Body `{"name":"Phone","scope":"control"}`. Creates a client and returns `{ "version": 1, "client": {...}, "pairing": {...} }`, where `pairing.credential` is the token. |
+| DELETE | `/api/v1/clients/{id}` | Revokes the client: 204. |
+| POST | `/api/v1/clients/{id}/pairing` | Gives the client a fresh credential and returns the pairing document. |
+
+All four need the `admin` scope, `X-Insteon-Request: 1`, and for the POST that creates a client,
+`Content-Type: application/json`. The service keeps at most 64 clients. A name is 1 through 64
+characters without control characters, and two clients may share one.
+
+### Pairing
+
+A pairing document is one JSON object that carries a credential and the ways to reach the
+service. A QR code, a link or a file can carry it, and a client reads it the same way each time.
+
+```json
+{
+  "version": 1,
+  "serviceId": "3f2a0c5d9e8b4a71b6d0c2e4f8a91357",
+  "name": "Home",
+  "credential": "<the client's token, shown once>",
+  "scope": "control",
+  "api": "/api/v1",
+  "routes": [
+    { "kind": "lan", "url": "http://insteon.local:8080" }
+  ]
+}
+```
+
+A client tries `routes` in order and uses the first that answers `GET /api/v1/health` with the
+credential. It skips a route `kind` it doesn't know and ignores fields it doesn't know, so a
+transport or a field can be added inside version 1. `serviceId` is chosen once and stays with the
+service, so a client can tell two homes apart. The `lan` route is `http://LISTEN:PORT` from
+`--listen` and `--port`, or `--advertise-url` when the address a client uses differs, such as a
+name the router resolves. The service never binds a public address, so a route that crosses the
+internet is a `kind` that a separate transport process supplies.
+
+```sh
+swift run --package-path Packages/InsteonServer insteon-server pair --name Phone --advertise-url http://insteon.local:8080
+```
+
+`pair` creates a `control` client (`--scope read|control|admin` chooses another), prints the
+document, and on a terminal follows it with a QR code. `--no-qr` prints the document only, and
+output that isn't a terminal never has the code. Run it with the same `--state` as the server: it
+writes the client file, and a running server recognizes the client at once. It needs neither the
+gateway password nor a modem. A document that is too long for a QR code, which holds about 2,900
+bytes, is printed without one.
+
+### Keeping tokens safe
+
+- A token is `<id>.<secret>`. The secret is 32 bytes from the operating system's secure random
+  generator, shown once, in the creation response or the `pair` output.
+- The service keeps a salted SHA-256 of the secret, never the token. The comparison reads every
+  byte, whatever the first difference. A token can't be recovered from the service.
+- The clients live in `<state>-clients.json` beside the state file, readable only by the current
+  user: `gateway.json` has `gateway-clients.json`. The state file's own format and its promise to
+  hold no credentials stay as they are. A client file that can't be read, or is in a format this
+  server doesn't know, is left as it is and the server stops with `client_file_unusable`; move it
+  aside to start with no clients.
+- No log record, error body or message carries a token or the password. The request log records a
+  route and a code, as before.
+
+### Revoking and rotating
+
+`DELETE /api/v1/clients/{id}` takes effect at once. The client's next request is refused with
+`authenticationFailed`, and its open event streams end, so a lost phone stops receiving events
+without waiting for its stream's 10-minute limit. A pairing document made for it is useless from
+then on, whichever route it names.
+
+`POST /api/v1/clients/{id}/pairing` rotates: the client keeps its id, name and scope, its old
+token stops working, its open streams end, and the response is a document with the fresh token.
+To replace a lost device, revoke its client and pair a new one. To change what a client may do,
+revoke it and create another with the other scope: a scope never changes in place.
+
+To rotate the gateway password itself, change `INSTEON_GATEWAY_PASSWORD` and restart the server;
+clients are unaffected.
 
 ## Event ids and resuming
 
@@ -288,6 +389,8 @@ The path carries the version: everything under `/api/v1` keeps the meaning it ha
 additive, so they happen inside `/api/v1`:
 
 - a new route, or a new optional request field or header;
+- a new credential kind or scope, as long as every credential that worked keeps working and every
+  operation keeps the scope it needed;
 - a new field in a response or event, and a new value of a field that documents itself as open
   (error `code`, event `kind`, `cause`);
 - a new error code, with the status and `sent` its class already has;
@@ -301,7 +404,9 @@ These are breaking and need `/api/v2`:
 - changing the HTTP status or `sent` of an existing error code, or reclassifying a failure into a
   different code;
 - changing the format of an event `id` (`<runId>-<sequence>`) or the rules for resuming from it;
-- changing authentication.
+- revoking what a credential could do: requiring a higher scope for an operation, or dropping a
+  credential kind;
+- changing how the gateway password authenticates.
 
 A client must tolerate additions. The wording of `message` and the order of keys aren't part of the
 contract.
@@ -331,7 +436,12 @@ same status for the same failure.
 | Code | Status | `sent` | When |
 | --- | --- | --- | --- |
 | `authenticationRequired` | 401 | false | No Authorization header. `WWW-Authenticate` is set. |
-| `authenticationFailed` | 401 | false | The password is wrong. |
+| `authenticationFailed` | 401 | false | The password or token is wrong, altered or revoked. |
+| `forbidden` | 403 | false | The credential's scope doesn't allow the operation. Nothing was sent. |
+| `invalidClient` | 400 | false | A client needs a name of 1 through 64 characters and a scope of `read`, `control` or `admin`, and no other field. |
+| `unknownClient` | 404 | false | No client has that id. |
+| `clientLimitReached` | 409 | false | The service keeps at most 64 clients. |
+| `clientsNotSaved` | 500 | false | The client file couldn't be read or written, so nothing changed. |
 | `invalidAddress` | 400 | false | The address in the path isn't an Insteon address. |
 | `invalidCommand` | 400 | false | The body isn't valid JSON for a command: unknown field, unknown action, wrong type. |
 | `invalidLevel` | 400 | false | The percentage is outside 0 through 100, or the device or action doesn't take one. |
@@ -452,7 +562,7 @@ message never contains the Hub's or the gateway's password.
 
 | Exit status | Meaning |
 | --- | --- |
-| 78 | A setting, option or file to change: options, the environment file, credentials the Hub rejects, a missing serial path, the state file. |
+| 78 | A setting, option or file to change: options, the environment file, credentials the Hub rejects, a missing serial path, the state file, the client file. |
 | 69 | A port that isn't available, or a serial modem path that can't be opened for another reason. |
 | 1 | An error the server doesn't recognize. The message names its type only. |
 
@@ -472,8 +582,9 @@ The `route` is the matched template, such as `/api/v1/devices/{address}/commands
 `unmatched`; the path, query, headers, body and Authorization value are never logged, so a
 mistyped password and a client's own text can't reach the log. A `duration_ms` covers the time
 until the response starts, so an event stream records its connection, not its length. A request
-without credentials logs `authenticationRequired` at info level, a wrong password logs
-`authenticationFailed` at warning level, and a refused command logs a warning. The log doesn't
+without credentials logs `authenticationRequired` at info level, a wrong password or token logs
+`authenticationFailed` at warning level, a credential whose scope is too low logs `forbidden`, and
+a refused command logs a warning. The log doesn't
 summarize or rate-limit failed authentication.
 
 The server is a prototype for local and private VPN testing. Tests cover a real local HTTP
@@ -494,7 +605,8 @@ swift test --package-path Packages/InsteonServer --skip-build
 - `SnapshotPersisting`: replaceable persistence policy. The file-store adapter reports storage
   outcomes independently of hardware outcomes.
 - `InsteonHTTP` (optional target): HTTP authentication and middleware, versioned JSON DTOs,
-  API routing, browser form handling and a separate HTML renderer. Both commands and event
+  API routing, browser form handling and a separate HTML renderer. Clients, scopes and
+  pairing documents live here too: the route table gives each operation its scope. Both commands and event
   streams use the same injected service. Authentication can be replaced independently.
 - `InsteonServerSupport`: composition and configuration. Opens the hardware session, restores
   state, creates the service and adapters, and hosts HTTP during the service runtime.

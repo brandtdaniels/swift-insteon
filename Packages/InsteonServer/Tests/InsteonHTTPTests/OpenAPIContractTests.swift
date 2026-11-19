@@ -57,7 +57,7 @@ struct OpenAPIContractTests {
     let routes = described(document).map { (method: $0.method, path: $0.path) }
     try await app.test(.router) { client in
       for route in routes {
-        let uri = route.path.replacingOccurrences(of: "{address}", with: "1A.2B.3C")
+        let uri = route.path.replacingOccurrences(of: "{address}", with: "1A.2B.3C").replacingOccurrences(of: "{id}", with: "0123456789abcdef")
         let method = HTTPRequest.Method(rawValue: route.method)!
         let response = try await client.execute(uri: uri, method: method, headers: authorization)
         #expect(String(buffer: response.body) != "No such route.", "\(route.method) \(route.path) is described but not served")
@@ -229,6 +229,28 @@ struct OpenAPIContractTests {
           validate(try json(ReceiptDTO(CommandReceipt(address: address, outcome: outcome, status: outcome == .read ? status : nil, persistence: persistence))), as: "Receipt", in: document)
         }
       }
+    }
+  }
+
+  @Test func theClientTypesSatisfyTheirSchemasAndTheRequestSchemaMatchesWhatTheServerAccepts() async throws {
+    let (_, document) = try await fetch()
+    let record = ClientRecord(id: "0123456789abcdef", name: "Phone", scope: .control, createdAt: Date(timeIntervalSince1970: 1_800_000_000))
+    let issued = IssuedClient(client: record, token: "0123456789abcdef.token")
+    let pairing = PairingConfiguration(homeName: "Home", routes: [PairingRoute(kind: "lan", url: "http://insteon.local:8080"), PairingRoute(kind: "other", ticket: "t")])
+    let pairingDocument = pairing.document(for: issued, serviceID: "abc")
+    validate(try json(ClientListDTO(clients: [record])), as: "ClientList", in: document)
+    validate(try json(ClientListDTO(clients: [])), as: "ClientList", in: document)
+    validate(try json(ClientCreatedDTO(client: record, pairing: pairingDocument)), as: "ClientCreated", in: document)
+    validate(try json(pairingDocument), as: "PairingDocument", in: document)
+    validate(try json(PairingConfiguration().document(for: issued, serviceID: "abc")), as: "PairingDocument", in: document)
+    let validator = SchemaValidator(document: document)
+    let request: [String: Any] = ["$ref": "#/components/schemas/ClientRequest"]
+    for scope in ClientScope.allCases {
+      let body = try JSONSerialization.jsonObject(with: Data(("{\"name\":\"Phone\",\"scope\":\"" + scope.rawValue + "\"}").utf8))
+      #expect(validator.validate(body, against: request, path: "ClientRequest").isEmpty)
+    }
+    for body in [#"{"name":"Phone"}"#, #"{"name":"Phone","scope":"root"}"#, #"{"name":"Phone","scope":"read","extra":1}"#] {
+      #expect(!validator.validate(try JSONSerialization.jsonObject(with: Data(body.utf8)), against: request, path: "ClientRequest").isEmpty, "\(body)")
     }
   }
 

@@ -18,6 +18,17 @@ struct InsteonServer {
     LoggingSystem.bootstrap { StreamLogHandler.standardError(label: $0) }
     let logger = Logger(label: "insteon-server")
     do {
+      if arguments.first == "pair" {
+        let options = Array(arguments.dropFirst())
+        if options == ["--help"] || options == ["-h"] {
+          print(PairCommand.help)
+          return
+        }
+        let text = try await PairCommand.run(arguments: options, environment: ProcessInfo.processInfo.environment, showsQRCode: isatty(STDOUT_FILENO) != 0)
+        print(text, terminator: "")
+        FileHandle.standardError.write(Data((PairCommand.notice + "\n").utf8))
+        return
+      }
       try await ServerRunner.run(arguments: arguments, environment: ProcessInfo.processInfo.environment, logger: logger)
     } catch is CancellationError {
       return

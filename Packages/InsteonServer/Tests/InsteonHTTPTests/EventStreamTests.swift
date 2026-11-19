@@ -164,7 +164,7 @@ struct WriteStallTests {
   }
 }
 
-private struct ChunkRecorder: ResponseBodyWriter {
+struct ChunkRecorder: ResponseBodyWriter {
   static let finished = "<finished>"
   let chunks: AsyncStream<String>.Continuation
   mutating func write(_ buffer: ByteBuffer) async throws { chunks.yield(String(buffer: buffer)) }

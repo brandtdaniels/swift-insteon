@@ -9,14 +9,50 @@ import Logging
 
 struct AuthenticationMiddleware<Context: RequestContext>: RouterMiddleware {
   let authentication: any HTTPAuthenticating
+  let clients: any ClientStoring
+
   func handle(_ request: Request, context: Context, next: (Request, Context) async throws -> Response) async throws -> Response {
     let header = request.headers[.authorization]
-    guard authentication.authorizes(header) else {
+    let operation = APIOperation(method: request.method, template: context.endpointPath)
+    guard let principal = await principal(for: header, operation: operation) else {
       throw AuthenticationFailure(challenge: authentication.challenge, presentedCredentials: header != nil)
     }
-    return try await next(request, context)
+    if let operation, !principal.scope.allows(operation.requiredScope) { throw ScopeRefusal() }
+    return try await RequestPrincipal.$current.withValue(principal) { try await next(request, context) }
+  }
+
+  /// A client token if the header is a Bearer one, otherwise the gateway password acting as `admin`.
+  private func principal(for header: String?, operation: APIOperation?) async -> RequestPrincipal? {
+    if let token = BearerToken(header) {
+      guard operation?.acceptsClientTokens ?? true, let client = await clients.authenticate(token: token.value) else { return nil }
+      return RequestPrincipal(scope: client.scope, clientID: client.id)
+    }
+    return authentication.authorizes(header) ? RequestPrincipal(scope: .admin, clientID: nil) : nil
   }
 }
+
+/// Who made the request and what they may do, for the handler that runs for it.
+struct RequestPrincipal: Sendable {
+  let scope: ClientScope
+  /// The client, or `nil` for the gateway password.
+  let clientID: String?
+  @TaskLocal static var current: RequestPrincipal?
+}
+
+/// A `Bearer` Authorization header and the token it carries.
+struct BearerToken {
+  let value: String
+  init?(_ header: String?) {
+    guard let header, header.utf8.count <= 4096 else { return nil }
+    let parts = header.split(separator: " ", omittingEmptySubsequences: true)
+    guard parts.count >= 1, parts[0].lowercased() == "bearer" else { return nil }
+    // A header that has a scheme but no usable token is a Bearer attempt that fails.
+    value = parts.count == 2 ? String(parts[1]) : ""
+  }
+}
+
+/// A request whose credential is valid but whose scope doesn't allow the operation.
+struct ScopeRefusal: Error {}
 
 /// A request that the authentication policy refused, turned into a 401 by ``ErrorMappingMiddleware``.
 struct AuthenticationFailure: Error {
@@ -114,6 +150,11 @@ struct HTTPFailure: Sendable {
     case ServiceControlError.unsupportedControl: self.init(.unsupportedControl)
     case ServiceControlError.notIdentified: self.init(.notIdentified)
     case ServiceControlError.notLinked: self.init(.notLinked)
+    case is ScopeRefusal: self.init(.forbidden)
+    case ClientError.invalidName, is ClientRequestError: self.init(.invalidClient)
+    case ClientError.unknownClient: self.init(.unknownClient)
+    case ClientError.limitReached: self.init(.clientLimitReached)
+    case ClientError.notSaved: self.init(.clientsNotSaved)
     case HTTPInputError.unsupportedMedia: self.init(.unsupportedMediaType)
     case HTTPInputError.missingAPIMarker: self.init(.apiMarkerMissing)
     case HTTPInputError.invalidFormKey: self.init(.formKeyInvalid)
