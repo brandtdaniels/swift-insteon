@@ -16,8 +16,17 @@ download="$(mktemp)"
 manifest="$(mktemp)"
 trap 'rm -f "$download" "$manifest"' EXIT
 
+# The repository's own tool reads the manifests. REPO_CHECK can name a built repo-check instead.
+repo_check() {
+  if [ -n "${REPO_CHECK:-}" ]; then
+    "$REPO_CHECK" "$@"
+  else
+    swift run --quiet --package-path Tools/RepoChecks repo-check "$@"
+  fi
+}
+
 curl --fail --silent --show-error --output "$manifest" "$base/manifest.json"
-read -r expected version < <(python3 -I -c 'import json, sys; manifest = json.load(open(sys.argv[1])); print(manifest["sha256"], manifest["version"])' "$manifest")
+read -r expected version < <(repo_check catalog-manifest "$manifest")
 
 curl --fail --silent --show-error --output "$download" "$base/catalog.json"
 
@@ -32,7 +41,7 @@ if [ "$actual" != "$expected" ]; then
   exit 1
 fi
 
-previous="$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["version"])' "$resources/manifest.json" 2> /dev/null || true)"
+previous="$(repo_check catalog-manifest "$resources/manifest.json" --field version 2> /dev/null || true)"
 
 chmod 644 "$download" "$manifest"
 mv "$download" "$resources/catalog.json"

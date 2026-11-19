@@ -9,7 +9,7 @@ struct RepoCheckCommand: ParsableCommand {
     commandName: "repo-check",
     abstract: "Checks the repository against its rules.",
     discussion: "Each check exits with status 0 if it finds nothing and 1 if it finds a problem.",
-    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self, ConcurrencyCommand.self, CredentialsCommand.self, DeviceNeutralCommand.self, TimeLimitsCommand.self, PublicAPICommand.self, AllowListGrowthCommand.self]
+    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self, ConcurrencyCommand.self, CredentialsCommand.self, DeviceNeutralCommand.self, TimeLimitsCommand.self, PublicAPICommand.self, AllowListGrowthCommand.self, CatalogManifestCommand.self]
   )
 }
 
@@ -215,5 +215,36 @@ struct AllowListGrowthCommand: ParsableCommand {
 
   func run() throws {
     try AllowListGrowthCheck(base: base).runAsCommand(options)
+  }
+}
+
+struct CatalogManifestCommand: ParsableCommand {
+  static let configuration = CommandConfiguration(
+    commandName: "catalog-manifest",
+    abstract: "Prints a field of a catalog manifest: sha256, version, or both."
+  )
+
+  @Argument(help: "The manifest.json file.")
+  var file: String
+
+  @Option(help: "The field to print: sha256 or version. Both, separated by a space, by default.")
+  var field: String?
+
+  func run() throws {
+    let url = URL(fileURLWithPath: file)
+    let console = StandardConsole()
+    do {
+      if let field {
+        guard let known = CatalogManifest.Field(rawValue: field) else {
+          throw ValidationError("The field is sha256 or version.")
+        }
+        console.write(try CatalogManifest.value(of: known, at: url))
+      } else {
+        console.write(try CatalogManifest.value(of: .sha256, at: url) + " " + CatalogManifest.value(of: .version, at: url))
+      }
+    } catch let failure as CheckFailure {
+      console.writeError(failure.message)
+      throw ExitCode.failure
+    }
   }
 }
