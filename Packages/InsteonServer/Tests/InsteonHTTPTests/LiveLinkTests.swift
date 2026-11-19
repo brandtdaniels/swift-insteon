@@ -262,4 +262,37 @@ struct LiveLinkTests {
     #expect(h.openedWith == ["", "run1-3"])
   }
 }
+
+/// What the page does with each frame of the stream, read from the DOM-free function `/controls.js` embeds.
+@Suite(.timeLimit(.minutes(1)))
+struct FrameActionTests {
+  private func action(_ json: String) -> String {
+    let context = JSContext()!
+    let interpret = context.evaluateScript(LiveLink.source + "\ninterpretFrame;")!
+    return interpret.call(withArguments: [json])!.forProperty("action").toString()
+  }
+
+  @Test func aNotificationIsIgnoredSoNoCardRefreshes() {
+    let frame = #"{"version":1,"runId":"run1","sequence":7,"kind":"notification","ruleId":"leak","ruleName":"Leak","address":"1A.2B.3C","firedAt":"2027-01-15T08:00:00Z"}"#
+    #expect(action(frame) == "ignore")
+    #expect(action(frame.replacingOccurrences(of: "\"firedAt\"", with: "\"name\":\"wet\",\"firedAt\"")) == "ignore")
+  }
+
+  @Test func theFramesThatChangeWhatThePageShowsStillDo() {
+    #expect(action(#"{"version":1,"kind":"commandCompleted","address":"1A.2B.3C"}"#) == "refreshCard")
+    #expect(action(#"{"version":1,"kind":"identified","address":"1a.2b.3c"}"#) == "refreshCard")
+    #expect(action(#"{"version":1,"kind":"setButtonPressed","address":"1A.2B.3C"}"#) == "refreshCard")
+    #expect(action(#"{"version":1,"kind":"gap","reason":"tooOld"}"#) == "synchronize")
+    #expect(action(#"{"version":1,"kind":"reconnected"}"#) == "reconnected")
+    #expect(action(#"{"version":1,"kind":"modemUnavailable","message":"The Hub is away."}"#) == "hubAway")
+  }
+
+  @Test func aFrameTheLinkCannotReadIsIgnored() {
+    #expect(action("not json") == "ignore")
+    #expect(action(#"{"version":2,"kind":"commandCompleted","address":"1A.2B.3C"}"#) == "ignore")
+    #expect(action(#"{"version":1,"kind":"commandCompleted","address":"nonsense"}"#) == "ignore")
+    #expect(action(#"{"version":1,"kind":"heartbeat","address":"1A.2B.3C"}"#) == "ignore")
+    #expect(action(#"{"version":1,"kind":"somethingNew","address":"1A.2B.3C"}"#) == "ignore")
+  }
+}
 #endif

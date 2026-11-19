@@ -515,12 +515,16 @@ actor FakeService: InsteonServiceAPI {
   let endlessEvents: Bool
   /// Items a sequenced subscription starts with, such as a gap.
   let scriptedItems: [SequencedItem]
+  /// The notification rules the service holds, and the refusal every rule call answers with.
+  private(set) var rules: [ServiceNotificationRule] = []
+  let ruleFailure: NotificationRuleError?
   /// The cursor of each sequenced subscription.
   private(set) var cursors: [EventCursor?] = []
   private var openSources: [AsyncStream<ServiceEvent>.Continuation] = []
   var reported = ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000))
   let address = InsteonAddress(0x1A, 0x2B, 0x3C)
-  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false, scriptedItems: [SequencedItem] = []) {
+  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false, scriptedItems: [SequencedItem] = [], ruleFailure: NotificationRuleError? = nil) {
+    self.ruleFailure = ruleFailure
     self.endlessEvents = endlessEvents
     self.scriptedItems = scriptedItems
     self.persistence = persistence; self.fails = fails; self.refusal = refusal; self.failure = failure; self.reading = reading
@@ -530,6 +534,19 @@ actor FakeService: InsteonServiceAPI {
     reads += 1
     if queriesBusy { throw ServiceControlError.busy }
     return [ServiceDevice(address: address, productName: "<script>Example</script>", canTurnOnAndOff: true, canDim: true, value: 128, lastAnsweredAt: nil)]
+  }
+  func notificationRules() async throws -> [ServiceNotificationRule] {
+    if let ruleFailure { throw ruleFailure }
+    return rules
+  }
+  func putNotificationRule(_ rule: ServiceNotificationRule) async throws {
+    if let ruleFailure { throw ruleFailure }
+    if let index = rules.firstIndex(where: { $0.id == rule.id }) { rules[index] = rule } else { rules.append(rule) }
+  }
+  func removeNotificationRule(id: String) async throws {
+    if let ruleFailure { throw ruleFailure }
+    guard rules.contains(where: { $0.id == id }) else { throw NotificationRuleError.unknownRule }
+    rules.removeAll { $0.id == id }
   }
   func setQueriesBusy(_ busy: Bool) { queriesBusy = busy }
   func setHealth(_ health: ServiceHealth) { reported = health }

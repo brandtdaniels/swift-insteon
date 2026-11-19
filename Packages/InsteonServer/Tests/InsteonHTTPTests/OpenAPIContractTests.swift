@@ -267,7 +267,9 @@ struct OpenAPIContractTests {
       .commandCompleted(command, receipt), .identified(address, productName: "Example"), .identified(address, productName: nil),
       .setButtonPressed(address), .groupCommand(address, group: 3, name: "On"), .groupCommand(address, group: 3, name: nil),
       .heartbeat(address, group: 1), .heartbeat(address, group: nil), .statusChanged(address),
-      .modemUnavailable(.hubUnreachable), .modemUnavailable(.hubErrorStatus(503)), .modemReconnected
+      .modemUnavailable(.hubUnreachable), .modemUnavailable(.hubErrorStatus(503)), .modemReconnected,
+      .notification(ServiceNotification(ruleID: "basement-leak", ruleName: "Basement leak", device: address, firedAt: Date(timeIntervalSince1970: 1_800_000_000), eventName: nil)),
+      .notification(ServiceNotification(ruleID: "basement-leak", ruleName: "Basement leak", device: address, firedAt: Date(timeIntervalSince1970: 1_800_000_000), eventName: "wet"))
     ]
     var kinds = Set<String>()
     for (index, event) in events.enumerated() {
@@ -282,6 +284,40 @@ struct OpenAPIContractTests {
       let gap = GapDTO(reason: reason, current: EventCursor(runID: "run1", sequence: 9))
       validate(try json(gap), as: "Gap", in: document)
       validate(try json(gap), as: "StreamFrame", in: document)
+    }
+  }
+
+  @Test func theNotificationRuleTypesSatisfyTheirSchemasAndTheRequestSchemaMatchesWhatTheServerAccepts() async throws {
+    let (_, document) = try await fetch()
+    let rules = [
+      ServiceNotificationRule(id: "basement-leak", name: "Basement leak", trigger: .event("wet", device: address), cooldownSeconds: 300, isEnabled: true, includesDetail: true),
+      ServiceNotificationRule(id: "paddle", name: "Paddle", trigger: .groupCommand(command1: 0x13, group: 5, device: address), cooldownSeconds: 0, isEnabled: false, includesDetail: false)
+    ]
+    validate(try json(NotificationRuleListDTO(rules: rules.map(NotificationRuleRecord.init))), as: "NotificationRuleList", in: document)
+    validate(try json(NotificationRuleListDTO(rules: [])), as: "NotificationRuleList", in: document)
+    for rule in rules { validate(try json(NotificationRuleStoredDTO(rule: NotificationRuleRecord(rule))), as: "NotificationRuleStored", in: document) }
+
+    let validator = SchemaValidator(document: document)
+    let request: [String: Any] = ["$ref": "#/components/schemas/NotificationRuleRequest"]
+    let accepted = [
+      NotificationRoutesTests.body,
+      #"{"name":"Paddle","trigger":{"kind":"groupCommand","command1":19,"group":5,"device":"1A.2B.3C"}}"#,
+      #"{"name":"Leak","trigger":{"kind":"event","event":"wet","device":"1A.2B.3C"},"enabled":false}"#
+    ]
+    let refused = [
+      "{}", #"{"name":"Leak"}"#, #"{"trigger":{"kind":"event","event":"wet","device":"1A.2B.3C"}}"#,
+      #"{"name":"Leak","trigger":{"kind":"silence","device":"1A.2B.3C"}}"#,
+      #"{"name":"Leak","trigger":{"kind":"event","event":"wet","device":"1A.2B.3C"},"extra":1}"#,
+      #"{"name":"Leak","trigger":{"kind":"groupCommand","command1":300,"group":5,"device":"1A.2B.3C"}}"#,
+      #"{"name":"Leak","trigger":{"kind":"event","event":"wet","device":"1A.2B.3C"},"cooldownSeconds":"5"}"#
+    ]
+    for body in accepted {
+      #expect(validator.validate(try JSONSerialization.jsonObject(with: Data(body.utf8)), against: request, path: "NotificationRuleRequest").isEmpty, "\(body)")
+      #expect((try? NotificationRuleBody(Data(body.utf8))) != nil, "\(body)")
+    }
+    for body in refused {
+      #expect(!validator.validate(try JSONSerialization.jsonObject(with: Data(body.utf8)), against: request, path: "NotificationRuleRequest").isEmpty, "\(body)")
+      #expect((try? NotificationRuleBody(Data(body.utf8))) == nil, "\(body)")
     }
   }
 
