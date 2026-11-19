@@ -29,7 +29,7 @@ func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authenti
   router.add(middleware: AuthenticationMiddleware<BasicRequestContext>(authentication: authentication, clients: clients))
   router.add(middleware: RequestBodyLimitMiddleware<BasicRequestContext>())
   let streams = EventStreamRegistry(limit: EventStreamPolicy.standard.maximumStreams)
-  let api = DeviceAPI(service: service, idempotency: IdempotencyStore(now: now), registry: streams)
+  let api = DeviceAPI(service: service, idempotency: IdempotencyStore(now: now), registry: streams, isClientActive: { id in ((try? await clients.clients()) ?? []).contains { $0.id == id } })
   let clientAPI = ClientAPI(clients: clients, pairing: pairing, streams: streams)
   let website = DeviceWebsite(service: service)
 

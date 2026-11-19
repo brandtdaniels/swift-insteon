@@ -51,6 +51,9 @@ actor EventStreamRegistry {
     return Lease(id: nextID, clientID: clientID, evictions: evictions)
   }
 
+  /// How many streams the client has open.
+  func openStreamCount(clientID: String) -> Int { open.filter { $0.clientID == clientID }.count }
+
   /// Ends every open stream the client opened.
   func end(clientID: String) {
     for stream in open where stream.clientID == clientID {

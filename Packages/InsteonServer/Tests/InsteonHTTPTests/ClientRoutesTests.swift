@@ -246,9 +246,14 @@ struct ClientRoutesTests {
     }
     let first = open(revoked.client.id), second = open(revoked.client.id), other = open(kept.client.id), gateway = open(nil)
     var iterators = [first.chunks, second.chunks, other.chunks, gateway.chunks].map { $0.makeAsyncIterator() }
+    // A regression fails here instead of waiting on a stream that never ends.
+    defer { for open in [first, second, other, gateway] { open.task.cancel() } }
     for index in iterators.indices { #expect(await iterators[index].next() == ": connected\n\n") }
 
     try await clientAPI.revoke(id: revoked.client.id)
+    // The registry no longer holds the client's streams, so the check is on state, not on a wait.
+    try #require(await streams.openStreamCount(clientID: revoked.client.id) == 0)
+    try #require(await streams.openStreamCount(clientID: kept.client.id) == 1)
     _ = await first.task.result
     _ = await second.task.result
     #expect(await iterators[0].next() == ChunkRecorder.finished)
@@ -261,5 +266,26 @@ struct ClientRoutesTests {
     #expect(await iterators[3].next() == ": keepalive\n\n")
     other.task.cancel(); gateway.task.cancel()
     _ = await other.task.result; _ = await gateway.task.result
+  }
+
+  /// The request authenticated, the client was revoked, and only then did the stream register: the interleaving that left a revoked client with a stream.
+  @Test func aStreamThatRegistersAfterItsClientWasRevokedEndsWithoutWritingAnything() async throws {
+    let streams = EventStreamRegistry(limit: 8)
+    let clients = ClientStore(persistence: InMemoryClientPersistence())
+    let api = DeviceAPI(service: FakeService(endlessEvents: true), clock: ManualClock(), registry: streams, isClientActive: { id in ((try? await clients.clients()) ?? []).contains { $0.id == id } })
+    let clientAPI = ClientAPI(clients: clients, pairing: PairingConfiguration(), streams: streams)
+    let phone = try await clients.issue(name: "Phone", scope: .read)
+
+    let response = await RequestPrincipal.$current.withValue(RequestPrincipal(scope: .read, clientID: phone.client.id)) { await api.events() }
+    try await clientAPI.revoke(id: phone.client.id)
+
+    let (chunks, continuation) = AsyncStream<String>.makeStream()
+    let task = Task { try await response.body.write(ChunkRecorder(chunks: continuation)) }
+    defer { task.cancel() }
+    var iterator = chunks.makeAsyncIterator()
+    // The first thing written is either the greeting of an open stream or the end of a closed one.
+    try #require(await iterator.next() == ChunkRecorder.finished)
+    _ = await task.result
+    #expect(await streams.openStreamCount(clientID: phone.client.id) == 0)
   }
 }
