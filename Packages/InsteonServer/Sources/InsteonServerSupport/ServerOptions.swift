@@ -14,12 +14,17 @@ public struct ServerOptions: Sendable {
   public let envFilePath: String?
   /// The gateway's own snapshot file, separate from the CLI's cache.
   public let statePath: String
+  /// Where a client reaches this server on the local network, such as `http://insteon.local:8080`,
+  /// or nil to use the listen address and port.
+  public let advertiseURL: String?
+  /// The home's name in a pairing document.
+  public let homeName: String
 
   /// Parses pairs of options, rejecting duplicates, public listeners and wildcard binds.
   /// Hub resolution and file permissions are checked by the CLI's existing helpers.
   public init(arguments: [String], environment: [String: String]) throws {
     var options: [String: String] = [:]
-    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state"]
+    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--home-name"]
     var index = 0
     while index < arguments.count {
       let name = arguments[index]
@@ -42,6 +47,17 @@ public struct ServerOptions: Sendable {
     let home = environment["HOME"].flatMap { $0.hasPrefix("/") ? $0 : nil }
     self.statePath = options["--state"] ?? ((stateHome ?? home.map { $0 + "/.local/state" } ?? FileManager.default.homeDirectoryForCurrentUser.path + "/.local/state") + "/insteon/gateway.json")
     guard statePath.hasPrefix("/") else { throw ServerOptionError.invalidStatePath }
+    advertiseURL = try options["--advertise-url"].map { try Self.normalized(advertisedURL: $0) }
+    let homeName = options["--home-name"] ?? "Home"
+    guard (1...64).contains(homeName.count), !homeName.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { throw ServerOptionError.invalidHomeName }
+    self.homeName = homeName
+  }
+
+  /// The address without a trailing slash, or an error if it isn't a plain http or https address.
+  private static func normalized(advertisedURL text: String) throws -> String {
+    guard let url = URL(string: text), let scheme = url.scheme, ["http", "https"].contains(scheme), let host = url.host(percentEncoded: false), !host.isEmpty,
+          url.user == nil, url.password == nil, url.query == nil, url.fragment == nil, url.path.isEmpty || url.path == "/" else { throw ServerOptionError.invalidAdvertiseURL }
+    return text.hasSuffix("/") ? String(text.dropLast()) : text
   }
 
   private static func allowedListener(_ address: String) -> Bool {
@@ -63,6 +79,12 @@ public enum ServerOptionError: Error, CustomStringConvertible {
   case invalidPort
   /// The state file's path isn't absolute.
   case invalidStatePath
+  /// The advertised address isn't an http or https address without credentials, path or query.
+  case invalidAdvertiseURL
+  /// The home's name is empty, over 64 characters or has control characters.
+  case invalidHomeName
+  /// A `pair` command needs a client name of 1 through 64 characters and a scope of read, control or admin.
+  case invalidClient
 
   /// A safe explanation suitable for standard error.
   public var description: String { ServerFailure(self).message }

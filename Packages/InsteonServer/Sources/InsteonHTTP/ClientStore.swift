@@ -184,7 +184,8 @@ public actor ClientStore: ClientStoring {
       var registry = try await freshRegistry()
       guard registry.clients.count < Self.maximumClients else { throw ClientError.limitReached }
       let id = Self.hex(await randomness.bytes(Self.idBytes))
-      let record = ClientRecord(id: id, name: name, scope: scope, createdAt: now())
+      // Whole seconds, which is all the registry file keeps, so a client reads back equal to the one issued.
+      let record = ClientRecord(id: id, name: name, scope: scope, createdAt: Date(timeIntervalSince1970: now().timeIntervalSince1970.rounded(.down)))
       let (stored, token) = await credential(for: record)
       registry.clients.append(stored)
       try await store(registry)

@@ -1,6 +1,7 @@
 import Foundation
 import InsteonCLISupport
 import InsteonCore
+import InsteonHTTP
 import InsteonHubClient
 import InsteonModem
 import InsteonService
@@ -34,6 +35,11 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case serialPathMissing = "serial_path_missing"
     case serialPortUnavailable = "serial_port_unavailable"
     case stateFileUnusable = "state_file_unusable"
+    case clientFileUnusable = "client_file_unusable"
+    case clientLimitReached = "client_limit_reached"
+    case advertiseURLInvalid = "advertise_url_invalid"
+    case homeNameInvalid = "home_name_invalid"
+    case pairingOptionsInvalid = "pairing_options_invalid"
     case modemConnectionEnded = "modem_connection_ended"
     case modemUnreachable = "modem_unreachable"
     case unexpected = "unexpected_error"
@@ -136,6 +142,9 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case .invalidListener: ServerFailure(.listenAddressInvalid, "--listen must be a literal IPv4 address on this computer's loopback or a private network, such as 127.0.0.1 or a VPN address. Wildcard and public addresses are refused.", configurationStatus)
     case .invalidPort: ServerFailure(.portInvalid, "--port must be a number from 1 through 65535.", configurationStatus)
     case .invalidStatePath: ServerFailure(.stateFileUnusable, "--state must be an absolute path.", configurationStatus)
+    case .invalidAdvertiseURL: ServerFailure(.advertiseURLInvalid, "--advertise-url must be an http or https address with a host, such as http://insteon.local:8080, and no credentials, path or query.", configurationStatus)
+    case .invalidClient: ServerFailure(.pairingOptionsInvalid, "pair needs --name with 1 through 64 characters and no control characters, and takes --scope read, control or admin. Run insteon-server pair --help.", configurationStatus)
+    case .invalidHomeName: ServerFailure(.homeNameInvalid, "--home-name must be 1 through 64 characters without control characters.", configurationStatus)
     }
   }
 
@@ -149,6 +158,10 @@ public struct ServerFailure: Error, Equatable, Sendable {
       ServerFailure(.hubUnreachable, "The Hub at \(host):\(port) didn't answer. Check that it's powered on and on the same network, and that --hub or INSTEON_HUB_HOST is its address.", unavailableStatus)
     case let .portInUse(host, port):
       ServerFailure(.portInUse, "\(host):\(port) is already in use. Stop the other program or choose another port with --port.", unavailableStatus)
+    case .clientLimitReached:
+      ServerFailure(.clientLimitReached, "The service keeps at most \(ClientStore.maximumClients) clients. Revoke one with DELETE /api/v1/clients/{id}, then pair again.", configurationStatus)
+    case let .clientFileUnusable(path):
+      ServerFailure(.clientFileUnusable, "The client file \(path) couldn't be read or isn't in a format this server reads, so it was left as it is. Move it aside to start with no clients; every client must pair again.", configurationStatus)
     case let .stateFileUnusable(path, reason):
       switch reason {
       case .unreadableFile:

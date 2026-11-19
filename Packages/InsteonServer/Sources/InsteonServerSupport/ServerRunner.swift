@@ -21,12 +21,19 @@ public enum ServerRunner {
   --port PORT       Server port (default: 8080), separate from the Hub's port.
   --env-file PATH   Read settings from this file instead of ~/.config/insteon/env.
   --state PATH      Absolute path to the gateway's own network snapshot.
+  --advertise-url URL  Where clients reach this server, such as http://insteon.local:8080,
+                   for the pairing document (default: http://LISTEN:PORT).
+  --home-name NAME  The home's name in a pairing document (default: Home).
   --help           Show this help without connecting.
 
   Settings are read from the same protected per-user environment file as insteon.
   A Hub uses INSTEON_HUB_HOST, INSTEON_HUB_PORT, INSTEON_HUB_USERNAME and
   INSTEON_HUB_PASSWORD. The website and API use the user name insteon and a
   separate INSTEON_GATEWAY_PASSWORD of 32 through 1024 bytes.
+
+  Clients: the gateway password acts as an admin. A client has its own token and a scope
+  (read, control or admin), is created with `insteon-server pair --name NAME` or the API,
+  and is revoked with the API. Tokens are kept only as salted hashes.
 
   Use an encrypted VPN for remote HTTP access. The server supplies no VPN and
   uses no Insteon cloud service. Do not forward this server's or the Hub's port.
@@ -127,6 +134,11 @@ public enum ServerRunner {
     catch { throw ServerRunError.invalidPassword }
     let catalog = try ProductCatalog.load(contentsOf: ProductCatalog.bundledCatalogURL())
     let store = JSONFileDeviceRegistryStore(fileURL: URL(fileURLWithPath: options.statePath))
+    let clientFile = FileClientPersistence.url(besideState: options.statePath)
+    let clients = ClientStore(persistence: FileClientPersistence(url: clientFile))
+    // Reading the registry before listening keeps an unusable file from surfacing as a failed request.
+    do { _ = try await clients.serviceID() }
+    catch { throw ServerRunError.clientFileUnusable(path: clientFile.path) }
     let snapshot: NetworkSnapshot
     do { snapshot = try store.loadNetwork() }
     catch let error as DeviceRegistryStoreError { throw ServerRunError.stateFileUnusable(path: options.statePath, reason: error) }
@@ -152,9 +164,16 @@ public enum ServerRunner {
       persistence: NetworkSnapshotPersistence(store: store),
       options: options,
       authentication: authentication,
+      clients: clients,
+      pairing: pairingConfiguration(for: options),
       logger: logger,
       timing: timing
     )
+  }
+
+  /// The pairing document's home name and its local network route: the advertised address, or the one the server listens on.
+  static func pairingConfiguration(for options: ServerOptions) -> PairingConfiguration {
+    PairingConfiguration(homeName: options.homeName, routes: [PairingRoute(kind: "lan", url: options.advertiseURL ?? "http://" + options.listen + ":" + String(options.port))])
   }
 
   /// Serves HTTP while the service keeps its modem connected. The listener opens first and serves
@@ -167,11 +186,13 @@ public enum ServerRunner {
     persistence: any SnapshotPersisting,
     options: ServerOptions,
     authentication: any HTTPAuthenticating,
+    clients: any ClientStoring,
+    pairing: PairingConfiguration,
     logger: Logger,
     timing: Timing
   ) async throws {
     let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter, throughHub: hub != nil)
-    let router = makeInsteonRouter(service: service, authentication: authentication, logger: logger, now: timing.now)
+    let router = makeInsteonRouter(service: service, authentication: authentication, clients: clients, pairing: pairing, logger: logger, now: timing.now)
     let app = Application(
       responder: router.buildResponder(),
       server: ConnectionLimits.server,
@@ -315,6 +336,10 @@ public enum ServerRunError: Error, CustomStringConvertible, Equatable {
   case portInUse(host: String, port: Int)
   /// The state file exists but can't be used.
   case stateFileUnusable(path: String, reason: DeviceRegistryStoreError)
+  /// The client file exists but can't be used.
+  case clientFileUnusable(path: String)
+  /// The service already keeps the most clients it allows.
+  case clientLimitReached
 
   /// A safe explanation for the person running the server.
   public var description: String { ServerFailure(self).message }

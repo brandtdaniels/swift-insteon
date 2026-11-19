@@ -40,10 +40,10 @@ public struct PairingDocument: Codable, Sendable, Equatable {
   /// How to reach the service, most preferred first.
   public let routes: [PairingRoute]
 
-  /// The document as JSON with sorted keys and indentation.
-  public func encoded() throws -> Data {
+  /// The document as JSON with sorted keys, indented when `prettyPrinted`.
+  public func encoded(prettyPrinted: Bool = false) throws -> Data {
     let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    encoder.outputFormatting = prettyPrinted ? [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes] : [.sortedKeys, .withoutEscapingSlashes]
     return try encoder.encode(self)
   }
 }
