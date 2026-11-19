@@ -44,7 +44,7 @@ public struct EquivalenceSubject {
 /// The checks that can be compared.
 public enum EquivalenceSubjects {
   /// The names of the checks, in the order they are ported.
-  public static let names = ["workflows", "terms", "cli-thin", "concurrency", "credentials", "device-neutral", "time-limits", "public-api"]
+  public static let names = ["workflows", "terms", "cli-thin", "concurrency", "credentials", "device-neutral", "time-limits", "public-api", "allowlist-growth"]
 
   /// The subject for the named check, or nil if the name isn't one.
   ///
@@ -198,6 +198,8 @@ public enum EquivalenceSubjects {
         ),
         candidate: UpdatingRunner(base: ProcessCheckRunner(command: [repoCheck, name, "--update"]), file: PublicAPIMutations.listPath)
       )
+    case "allowlist-growth":
+      return try? GrowthMutations.subject(repoCheck: repoCheck)
     default:
       return nil
     }

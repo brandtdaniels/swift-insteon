@@ -9,7 +9,7 @@ struct RepoCheckCommand: ParsableCommand {
     commandName: "repo-check",
     abstract: "Checks the repository against its rules.",
     discussion: "Each check exits with status 0 if it finds nothing and 1 if it finds a problem.",
-    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self, ConcurrencyCommand.self, CredentialsCommand.self, DeviceNeutralCommand.self, TimeLimitsCommand.self, PublicAPICommand.self]
+    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self, ConcurrencyCommand.self, CredentialsCommand.self, DeviceNeutralCommand.self, TimeLimitsCommand.self, PublicAPICommand.self, AllowListGrowthCommand.self]
   )
 }
 
@@ -199,5 +199,21 @@ struct PublicAPICommand: ParsableCommand {
       list: list.map { URL(fileURLWithPath: $0) },
       update: update
     ).runAsCommand(options)
+  }
+}
+
+struct AllowListGrowthCommand: ParsableCommand {
+  static let configuration = CommandConfiguration(
+    commandName: "allowlist-growth",
+    abstract: "Checks that no allow-list gained an entry compared with the base."
+  )
+
+  @OptionGroup var options: RootOptions
+
+  @Option(help: "The ref to compare with, such as origin/main.")
+  var base: String
+
+  func run() throws {
+    try AllowListGrowthCheck(base: base).runAsCommand(options)
   }
 }

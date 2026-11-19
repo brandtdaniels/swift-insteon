@@ -25,11 +25,14 @@ public struct EquivalenceRun {
     var report = EquivalenceReport(checkName: subject.name)
 
     var baseline = EquivalenceReport.Round(index: 0, seed: nil)
-    try compare(in: try MutableTree(copying: repository), round: &baseline, mutant: 0, description: "the repository")
+    let whole = try MutableTree(copying: repository)
+    try subject.prepare(whole.root)
+    try compare(in: whole, round: &baseline, mutant: 0, description: "the repository")
     report.rounds.append(baseline)
     progress("the repository: \(baseline.differences.count) differences")
 
     let tree = try MutableTree(copying: repository, including: subject.mutationCorpus)
+    try subject.prepare(tree.root)
     let mutants = try subject.makeMutants(tree)
 
     for index in 1...max(rounds, 1) where index <= rounds {
@@ -59,7 +62,7 @@ public struct EquivalenceRun {
   ) throws {
     let pairs = [(subject.oracle, subject.candidate)] + (subject.updateRunners.map { [($0.oracle, $0.candidate)] } ?? [])
     for (index, pair) in pairs.enumerated() {
-      try compareOne(oracle: pair.0, candidate: pair.1, in: tree, round: &round, mutant: mutant, description: index == 0 ? description : description + " (with --update)")
+      try compareOne(oracle: pair.0, candidate: pair.1, in: tree, round: &round, mutant: mutant, description: index == 0 ? description : description + " (second run)")
     }
   }
 
