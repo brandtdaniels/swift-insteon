@@ -1,3 +1,4 @@
+import Foundation
 import InsteonCLISupport
 import InsteonCore
 
@@ -104,6 +105,8 @@ enum DiscoverCommand {
 
     Output.table([["ADDRESS", "INSTEON ID", "PRODUCT", "FOUND BY"]] + rows)
 
+    printHubFiles(hubs)
+
     if let note = HubText.candidateNote(options) {
 
       Output.note(note)
@@ -115,6 +118,18 @@ enum DiscoverCommand {
       Output.note(note)
 
     }
+
+  }
+
+  /// Prints the file to save each Hub's settings in, and the command that uses the Hub by name.
+  private static func printHubFiles(_ hubs: [HubCandidate]) {
+
+    let directory = HubFiles(store: LocalHubFiles(), environment: ProcessInfo.processInfo.environment).hubsDirectory
+    let sources = hubs.map { HubFileSuggestion.Source(isHubPro: $0.isHubPro, insteonID: $0.insteonID.map { "\($0)" }, host: $0.host, port: $0.port) }
+
+    Output.line()
+    Output.line(HubFileSuggestion.note)
+    Output.table(HubFileSuggestion.rows(for: sources, directory: directory))
 
   }
 

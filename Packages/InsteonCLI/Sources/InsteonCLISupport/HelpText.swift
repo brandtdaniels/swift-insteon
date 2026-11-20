@@ -144,6 +144,11 @@ public enum HelpText {
       --identify HOST[:PORT]
                           Ask only the Hub found at HOST, on PORT or port 25105, without
                           asking first.
+
+    For each Hub it lists, it also shows the name of the file to save the Hub's settings in,
+    in the hubs directory beside the environment file, and the command that then uses the
+    Hub by name, such as 'insteon --hub hub-2b3c info'. The name is the Hub's type and the
+    end of its Insteon ID or address.
     """
 
   /// The help for `insteon info`.
