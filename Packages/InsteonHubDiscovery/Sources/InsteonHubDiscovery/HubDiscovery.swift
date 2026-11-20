@@ -60,11 +60,25 @@ public struct HubDiscovery: Sendable {
   /// The ports the Hub Pro's HTTP interface is looked for on, after the Hub's port.
   public let hubProPorts: [Int]
 
+  /// The model numbers the Insteon device catalog gives to products with a Hub Pro's interface,
+  /// such as the ones ``ProductCatalog/hubProModels`` reads, which a Bonjour service's model
+  /// record is matched against by prefix.
+  public let hubProModels: [String]
+
+  /// What browses Bonjour for a Hub Pro before the addresses are asked, or `nil` to browse
+  /// nothing.
+  public let bonjour: (any BonjourBrowsing)?
+
+  /// How long the Bonjour browse runs: 3 seconds by default.
+  public let browseTimeout: Duration
+
   /// How long each address has to answer, in all.
   public let probeTimeout: Duration
 
   /// How many addresses are asked at once.
   public let concurrentProbes: Int
+
+  private let clock: any Clock<Duration>
 
   /// Creates a discovery.
   ///
@@ -78,6 +92,14 @@ public struct HubDiscovery: Sendable {
   ///   - hubProPorts: The ports to look for a Hub Pro's HTTP interface on, such as the ones
   ///     the Insteon device catalog's `hubPro` capability gives. Defaults to none, which looks
   ///     for no Hub Pro.
+  ///   - hubProModels: The model numbers of products with a Hub Pro's interface. Defaults to
+  ///     none, which lists no service Bonjour finds.
+  ///   - bonjour: What browses Bonjour for `_hap._tcp` services, which a Hub Pro advertises, before
+  ///     the addresses are asked. A service is listed only when its model record starts with one
+  ///     of `hubProModels`, and then only once ``HubProProbe`` confirms the address it resolves to.
+  ///     Defaults to `nil`.
+  ///   - browseTimeout: How long the Bonjour browse runs. Defaults to 3 seconds.
+  ///   - clock: The clock that times the browse. Defaults to a `ContinuousClock`.
   ///   - probeTimeout: How long each address has to answer, in all. Defaults to
   ///     ``HubDiscovery/defaultProbeTimeout``.
   ///   - concurrentProbes: How many addresses to ask at once. Defaults to
@@ -87,6 +109,10 @@ public struct HubDiscovery: Sendable {
     network: any LocalNetwork = InterfaceNetwork(),
     port: Int = HubEndpoint.defaultPort,
     hubProPorts: [Int] = [],
+    hubProModels: [String] = [],
+    bonjour: (any BonjourBrowsing)? = nil,
+    browseTimeout: Duration = .seconds(3),
+    clock: any Clock<Duration> = ContinuousClock(),
     probeTimeout: Duration = HubDiscovery.defaultProbeTimeout,
     concurrentProbes: Int = HubDiscovery.defaultConcurrentProbes
   ) {
@@ -95,6 +121,10 @@ public struct HubDiscovery: Sendable {
     self.network = network
     self.port = port
     self.hubProPorts = hubProPorts
+    self.hubProModels = hubProModels
+    self.bonjour = bonjour
+    self.browseTimeout = browseTimeout
+    self.clock = clock
     self.probeTimeout = probeTimeout
     self.concurrentProbes = max(1, concurrentProbes)
 
@@ -133,7 +163,17 @@ public struct HubDiscovery: Sendable {
       .filter { $0.isPrivate && $0.prefixLength >= Self.shortestPrefixLength }
       .reduce(into: Set<UInt32>()) { $0.formUnion($1.hostAddresses) }
       .sorted()
-    let hosts = addresses.map(IPv4Subnet.dottedDecimal)
+    let viaBonjour = try await hubsFromBonjour()
+
+    for hub in viaBonjour {
+
+      await found(hub)
+
+    }
+
+    // An address Bonjour found a Hub Pro at has been confirmed, so the scan leaves it alone.
+    let confirmed = Set(viaBonjour.map(\.endpoint.host))
+    let hosts = addresses.map(IPv4Subnet.dottedDecimal).filter { !confirmed.contains($0) }
     let probes: [any HubProbe] = [HubInterfaceProbe(httpClient: httpClient, port: port, timeout: probeTimeout)]
       + hubProPorts.map { HubProProbe(port: $0, httpClient: httpClient, timeout: probeTimeout) }
 
@@ -199,7 +239,121 @@ public struct HubDiscovery: Sendable {
 
     try Task.checkCancellation()
 
-    return hubs.sorted { $0.index < $1.index }.map(\.hub)
+    let scanned = hubs.sorted { $0.index < $1.index }.map(\.hub)
+
+    return (viaBonjour + scanned).sorted { Self.order(of: $0) < Self.order(of: $1) }
+
+  }
+
+}
+
+extension HubDiscovery {
+
+  /// The service type a Hub Pro advertises for HomeKit.
+  static let bonjourServiceType = "_hap._tcp"
+
+  /// An address's place in address order, with an address that isn't IPv4 last.
+  fileprivate static func order(of hub: DiscoveredHub) -> UInt32 {
+
+    IPv4Subnet(address: hub.endpoint.host, prefixLength: 32)?.address ?? .max
+
+  }
+
+  /// Browses Bonjour for HomeKit accessories, and confirms each whose model record starts with
+  /// one of ``HubDiscovery/hubProModels``.
+  ///
+  /// Only a matching service is resolved, and only an address in a private range is asked, with
+  /// the same requests ``HubProProbe`` sends any address. The browse ends after
+  /// ``HubDiscovery/browseTimeout``.
+  private func hubsFromBonjour() async throws -> [DiscoveredHub] {
+
+    guard let bonjour, !hubProModels.isEmpty, !hubProPorts.isEmpty else {
+
+      return []
+
+    }
+
+    let services = await Self.collect(await bonjour.browse(type: Self.bonjourServiceType), for: browseTimeout, on: clock)
+    var hubs: [DiscoveredHub] = []
+
+    for service in services {
+
+      try Task.checkCancellation()
+
+      guard
+        let model = service.model,
+        hubProModels.contains(where: { model.hasPrefix($0) }),
+        let address = await bonjour.resolveAddress(of: service),
+        IPv4Subnet(address: address, prefixLength: 32)?.isPrivate == true,
+        !hubs.contains(where: { $0.endpoint.host == address })
+      else {
+
+        continue
+
+      }
+
+      for port in hubProPorts {
+
+        let probe = HubProProbe(port: port, httpClient: httpClient, timeout: probeTimeout)
+
+        if var hub = try await probe.probe(host: address) {
+
+          hub.foundBy = [.bonjour]
+          hubs.append(hub)
+
+          break
+
+        }
+
+      }
+
+    }
+
+    return hubs
+
+  }
+
+  /// What a stream lists before it ends or the time is up, whichever is first.
+  private static func collect(_ stream: AsyncStream<BonjourService>, for timeout: Duration, on clock: any Clock<Duration>) async -> [BonjourService] {
+
+    let collected = ServiceCollector()
+
+    await withTaskGroup(of: Void.self) { group in
+
+      group.addTask {
+
+        for await service in stream {
+
+          await collected.add(service)
+
+        }
+
+      }
+
+      group.addTask {
+
+        try? await clock.sleep(for: timeout)
+
+      }
+
+      await group.next()
+      group.cancelAll()
+
+    }
+
+    return await collected.services
+
+  }
+
+}
+
+private actor ServiceCollector {
+
+  private(set) var services: [BonjourService] = []
+
+  func add(_ service: BonjourService) {
+
+    services.append(service)
 
   }
 

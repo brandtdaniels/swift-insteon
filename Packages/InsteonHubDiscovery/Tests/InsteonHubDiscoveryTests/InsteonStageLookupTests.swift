@@ -69,6 +69,7 @@ struct InsteonStageLookupTests {
         subcategory: 0x3A,
         modemFirmwareVersion: 0x9D,
         unitType: "HubPro",
+        firmware: "s:1.0.2-stage|c:5.0.1",
         kind: .hubPro
       ),
     ])

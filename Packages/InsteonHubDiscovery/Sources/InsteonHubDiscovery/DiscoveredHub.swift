@@ -47,6 +47,11 @@ public struct DiscoveredHub: Hashable, Sendable {
   /// it; ``HubDiscovery`` doesn't.
   public var unitType: String?
 
+  /// The Hub's own firmware, as the Get Info page prints it, such as `1019` for a Hub 2245 or
+  /// `s:1.0.2|c:5.0.1` for a Hub Pro, when the way it was found reports one.
+  /// ``InsteonConnectLookup`` reports it; ``HubDiscovery`` doesn't.
+  public var firmware: String?
+
   /// Which of Insteon's two local interfaces the Hub answers on. ``HubDiscovery`` reads it from
   /// the way the address answered; ``InsteonConnectLookup`` reads it from the unit type.
   public var kind: HubKind
@@ -72,6 +77,8 @@ public struct DiscoveredHub: Hashable, Sendable {
   ///   - modemFirmwareVersion: The firmware version of the Hub's modem, if known. Defaults to
   ///     `nil`.
   ///   - unitType: The kind of Hub as Insteon's servers name it, if known. Defaults to `nil`.
+  ///   - firmware: The Hub's own firmware as the Get Info page prints it, if known. Defaults to
+  ///     `nil`.
   ///   - kind: Which local interface the Hub answers on. Defaults to ``HubKind/hub``.
   ///   - hubProSettings: The settings a Hub Pro reported, if known. Defaults to `nil`.
   ///   - foundBy: The ways this Hub was found. Defaults to none.
@@ -82,6 +89,7 @@ public struct DiscoveredHub: Hashable, Sendable {
     subcategory: DeviceSubcategory? = nil,
     modemFirmwareVersion: FirmwareVersion? = nil,
     unitType: String? = nil,
+    firmware: String? = nil,
     kind: HubKind = .hub,
     hubProSettings: HubProSettings? = nil,
     foundBy: Set<DiscoverySource> = []
@@ -93,6 +101,7 @@ public struct DiscoveredHub: Hashable, Sendable {
     self.subcategory = subcategory
     self.modemFirmwareVersion = modemFirmwareVersion
     self.unitType = unitType
+    self.firmware = firmware
     self.kind = kind
     self.hubProSettings = hubProSettings
     self.foundBy = foundBy
@@ -113,6 +122,7 @@ public struct DiscoveredHub: Hashable, Sendable {
     subcategory = subcategory ?? other.subcategory
     modemFirmwareVersion = modemFirmwareVersion ?? other.modemFirmwareVersion
     unitType = unitType ?? other.unitType
+    firmware = firmware ?? other.firmware
 
     hubProSettings = hubProSettings ?? other.hubProSettings
 

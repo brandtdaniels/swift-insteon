@@ -35,7 +35,7 @@ public enum InsteonConnectError: Error, Hashable, Sendable {
 /// and its `Accept-Language` is `en` rather than the person's languages.
 /// Insteon still sees the network's public IP address, as it does for any request. The page
 /// also lists each Hub's MAC address, public IP address and network settings; only the Hub's
-/// local address, Insteon ID, modem category, subcategory and firmware version, and unit type
+/// local address, Insteon ID, modem category, subcategory and firmware version, the Hub's own firmware, and unit type
 /// are kept. The default client keeps nothing on the device: its session has no cache, no
 /// cookies and no credential storage, so the page is never saved. It follows a redirect only
 /// to HTTPS on Insteon Connect's own host, so no other host's page decides which addresses
@@ -179,9 +179,9 @@ public struct InsteonConnectLookup: Sendable {
   /// The table also lists the gateway and subnet mask, so an address given as text starts a
   /// block only when it carries a port or follows the "found" line.
   ///
-  /// The table's Device Category, Sub Category and PLM Firmware, in hexadecimal, and its Unit
-  /// Type, such as `HUB2`, are kept with the Hub; its Firmware, the Hub's own version in
-  /// decimal, isn't.
+  /// The table's Device Category, Sub Category and PLM Firmware, in hexadecimal, its Unit
+  /// Type, such as `HUB2`, and its Firmware, the Hub's own version as the page prints it, are
+  /// kept with the Hub.
   ///
   /// Only Hubs at a private address (`10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16`) are
   /// kept, since the address is where the Hub's password will be sent, and each address is
@@ -232,6 +232,8 @@ public struct InsteonConnectLookup: Sendable {
           hubs[current].category = byte(value).map(DeviceCategory.init(rawValue:))
         case "sub category", "your sub category":
           hubs[current].subcategory = byte(value).map(DeviceSubcategory.init(rawValue:))
+        case "firmware", "your firmware":
+          hubs[current].firmware = firmware(value)
         case "plm firmware", "your plm firmware":
           hubs[current].modemFirmwareVersion = byte(value).map(FirmwareVersion.init(rawValue:))
         case "unit type", "your device's unit type":
@@ -367,6 +369,22 @@ public struct InsteonConnectLookup: Sendable {
     }
 
     return UInt8(text, radix: 16)
+
+  }
+
+  /// A firmware version as the page prints it, such as `1019` or `s:1.0.2|c:5.0.1`: up to 40
+  /// letters, digits and `.`, `:`, `|`, `_` or `-`, or `nil` for anything else.
+  private static func firmware(_ text: String) -> String? {
+
+    let allowed = Set(".:|_-")
+
+    guard (1...40).contains(text.count), text.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || allowed.contains($0)) }) else {
+
+      return nil
+
+    }
+
+    return text
 
   }
 
