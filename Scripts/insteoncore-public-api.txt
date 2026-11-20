@@ -1,6 +1,6 @@
-# InsteonCore's public declarations, as Scripts/check-public-api.py lists them. CI fails when the
+# InsteonCore's public declarations, as `repo-check public-api` lists them. CI fails when the
 # sources and this list differ, so a change to InsteonCore's public API shows here in review.
-# After a deliberate change, run `python3 Scripts/check-public-api.py --update` and commit this
+# After a deliberate change, run `repo-check public-api --update` and commit this
 # file with it.
 actor DeviceNetwork
 actor DeviceRegistry

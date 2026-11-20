@@ -1,7 +1,7 @@
 # Working in swift-insteon
 
 Read [CONVENTIONS.md](CONVENTIONS.md) first. It sets the names, spelling and style that
-`Scripts/check-terms.py` and the other `Scripts/check-*.py` checks hold the repository to.
+`repo-check terms` and the other `repo-check` checks, in `Tools/RepoChecks`, hold the repository to.
 
 ## What the packages know
 
@@ -31,8 +31,8 @@ Read [CONVENTIONS.md](CONVENTIONS.md) first. It sets the names, spelling and sty
 ## Before pushing
 
 - `swift build -Xswiftc -warnings-as-errors` and `swift test` in the packages you touched.
-- Every `python3 Scripts/check-*.py`, and `python3 -m unittest discover -s Scripts/tests`.
-- `python3 Scripts/check-public-api.py --update` when InsteonCore's public API changes.
+- In `Tools/RepoChecks`: `swift build -Xswiftc -warnings-as-errors` and `swift test`, then each check as `swift run --package-path Tools/RepoChecks repo-check NAME`: `terms`, `workflows`, `time-limits`, `cli-thin`, `concurrency`, `credentials`, `device-neutral` and `public-api`.
+- `repo-check public-api --update` when InsteonCore's public API changes.
 - An allow-list file only shrinks; CI fails a pull request that adds a line.
 - No em dash or en dash anywhere, in code, comments, docs, commit messages or pull request text.
 - Check `git log -1 --format=%ae` against the identity the repository is configured with before
