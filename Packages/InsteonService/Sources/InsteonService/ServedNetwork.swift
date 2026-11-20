@@ -5,7 +5,7 @@ import InsteonProtocol
 /// The network of one connection, as the service reaches it: what it knows, how its devices are
 /// operated, and what changes on it.
 ///
-/// A modem's ``DeviceNetwork`` and a Hub Pro's ``HubProNetwork`` both serve this way, so the
+/// A modem's `DeviceNetwork` and a Hub Pro's `HubProNetwork` both serve this way, so the
 /// service's gate, cache, events and reconnection are the same for either.
 public protocol ServedNetwork: Sendable {
 
