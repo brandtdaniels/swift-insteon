@@ -39,8 +39,40 @@ enum EventKind: String, CaseIterable, Sendable {
   case modemUnavailable, reconnected
   /// A notification rule fired.
   case notification
+  /// A schedule or a timer ran, or a run was missed.
+  case schedule
   /// The client missed events the server can't replay.
   case gap
+}
+
+/// What a health note is about.
+enum HealthNoteCode: String, CaseIterable, Sendable {
+  case timeZoneUnavailable, hubClockDrift
+}
+
+/// What a run of a schedule or a timer came to.
+enum ScheduleOutcomeName: String, CaseIterable, Sendable {
+  case acknowledged, missed, unavailable, refused, unknown
+}
+
+/// Whether a schedule or a timer ran.
+enum ScheduleSourceName: String, CaseIterable, Sendable {
+  case schedule, timer
+}
+
+/// How a schedule's time of day is written.
+enum ScheduleTimeKind: String, CaseIterable, Sendable {
+  case clock, sunrise, sunset
+}
+
+/// What a scheduled action does.
+enum ScheduleActionName: String, CaseIterable, Sendable {
+  case on, off
+}
+
+/// The days of the week, as a schedule writes them.
+enum WeekdayName: String, CaseIterable, Sendable {
+  case sunday, monday, tuesday, wednesday, thursday, friday, saturday
 }
 
 /// What makes a notification rule fire.

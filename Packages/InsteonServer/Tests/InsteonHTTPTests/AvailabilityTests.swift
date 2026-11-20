@@ -97,7 +97,7 @@ struct AvailabilityTests {
         #expect(response.status == .ok)
         #expect(response.headers[.cacheControl] == "no-store")
         let body = try object(response)
-        #expect(Set(body.keys) == ["version", "status", "modem", "lastExchangeAgeSeconds", "lastPollAgeSeconds", "snapshotAgeSeconds", "persistence"])
+        #expect(Set(body.keys) == ["version", "status", "modem", "lastExchangeAgeSeconds", "lastPollAgeSeconds", "snapshotAgeSeconds", "persistence", "notes"])
         #expect(body["version"] as? Int == 1)
         #expect(body["status"] as? String == "starting")
         let modem = try #require(body["modem"] as? [String: Any])

@@ -178,6 +178,12 @@ private actor ScriptedService: InsteonServiceAPI {
   func notificationRules() async throws -> [ServiceNotificationRule] { [] }
   func putNotificationRule(_ rule: ServiceNotificationRule) async throws {}
   func removeNotificationRule(id: String) async throws {}
+  func schedules() async throws -> [ScheduleEntry] { [] }
+  func putSchedule(_ schedule: ServiceSchedule) async throws -> ScheduleEntry { ScheduleEntry(schedule: schedule, nextRun: nil) }
+  func removeSchedule(id: String) async throws {}
+  func timers() async throws -> [TimerEntry] { [] }
+  func putTimer(_ timer: ServiceTimer) async throws -> TimerEntry { TimerEntry(timer: timer, dueAt: Date(timeIntervalSince1970: 0), remainingSeconds: timer.delaySeconds) }
+  func removeTimer(id: String) async throws {}
   func health() async -> ServiceHealth {
     ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000))
   }

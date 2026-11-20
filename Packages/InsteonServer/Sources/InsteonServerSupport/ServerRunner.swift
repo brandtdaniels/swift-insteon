@@ -7,6 +7,7 @@ import InsteonHTTP
 import InsteonHubClient
 import InsteonModem
 import InsteonNetworking
+import InsteonScheduling
 import InsteonService
 import Logging
 import NIOCore
@@ -28,6 +29,11 @@ public enum ServerRunner {
   --advertise-url URL  Where clients reach this server, such as http://insteon.local:8080,
                    for the pairing document (default: http://LISTEN:PORT).
   --home-name NAME  The home's name in a pairing document (default: Home).
+  --latitude DEGREES, --longitude DEGREES  The home's place, given together, for schedules at
+                   sunrise or sunset. The server remembers it with its schedules.
+  --time-zone NAME  The home's IANA time zone, such as America/Los_Angeles, which a clock time
+                   in a schedule follows through daylight saving changes (default: the one
+                   the server remembers, else this computer's).
   --help           Show this help without connecting.
 
   Settings are read from the same protected per-user environment file as insteon.
@@ -171,6 +177,10 @@ public enum ServerRunner {
     let notificationRules = FileNotificationRulePersistence(url: rulesFile)
     do { _ = try await notificationRules.load() }
     catch { throw ServerRunError.notificationRulesFileUnusable(path: rulesFile.path) }
+    let schedulesFile = FileSchedulePersistence.url(besideState: options.statePath)
+    let schedulePersistence = FileSchedulePersistence(url: schedulesFile)
+    do { _ = try await schedulePersistence.load() }
+    catch { throw ServerRunError.schedulesFileUnusable(path: schedulesFile.path) }
     let routesFile = FileRoutePersistence.url(besideState: options.statePath)
     let routes = RouteStore(persistence: FileRoutePersistence(url: routesFile))
     do { _ = try await routes.routes() }
@@ -212,6 +222,7 @@ public enum ServerRunner {
       pairing: pairingConfiguration(for: options),
       routes: routes,
       notificationRules: notificationRules,
+      scheduling: ScheduleConfiguration(settings: ScheduleSettings(timeZoneIdentifier: options.timeZone, location: options.location), store: schedulePersistence),
       logger: logger,
       timing: timing
     )
@@ -236,10 +247,11 @@ public enum ServerRunner {
     pairing: PairingConfiguration,
     routes: any RouteStoring,
     notificationRules: any NotificationRulePersisting,
+    scheduling: ScheduleConfiguration,
     logger: Logger,
     timing: Timing
   ) async throws {
-    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter, throughHub: hub != nil, notificationRules: notificationRules)
+    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter, throughHub: hub != nil, notificationRules: notificationRules, scheduling: scheduling)
     let router = makeInsteonRouter(service: service, authentication: authentication, clients: clients, pairing: pairing, routes: routes, logger: logger, now: timing.now)
     let app = Application(
       responder: router.buildResponder(),
@@ -386,6 +398,8 @@ public enum ServerRunError: Error, CustomStringConvertible, Equatable {
   case stateFileUnusable(path: String, reason: DeviceRegistryStoreError)
   /// The client file exists but can't be used.
   case clientFileUnusable(path: String)
+  /// The schedules file exists but can't be used.
+  case schedulesFileUnusable(path: String)
   /// The notification rules file exists but can't be used.
   case notificationRulesFileUnusable(path: String)
   /// The routes file exists but can't be used.
