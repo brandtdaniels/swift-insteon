@@ -42,15 +42,16 @@ public enum HelpText {
     Commands:
       discover            Find Hubs on the local network
       hubs                List the Hub files, with each Hub's address
-      info                Show the modem's Insteon ID, identity and product
+      info                Show the modem's Insteon ID, identity and product; for a Hub Pro,
+                          its versions and devices
       links               List the modem's ALL-Link database
       link [ADDRESS]      Link a device to the modem, by its address or its SET button
       unlink [ADDRESS]    Unlink a device from the modem, with its SET button or, with
                           --all, by its address
       remove ADDRESS      Remove a device from the network: unlink it from the modem,
                           forget it and show its factory reset steps
-      observe ADDRESS     Record what a device did, as a JSON file to share, using
-                          only reads
+      observe [ADDRESS]   Record what a device did, or with no ADDRESS what a Hub Pro
+                          reports, as a JSON file to share, using only reads
       device ADDRESS ...  Control a device, read and change its settings, or read its
                           ALL-Link database
       scene GROUP on|off  Turn the devices in one of the modem's groups on or off
@@ -62,9 +63,14 @@ public enum HelpText {
 
     Options:
       --hub HOST[:PORT]   The Hub to use, by its private IPv4 address, such as 192.168.1.20.
-                          Defaults to INSTEON_HUB_HOST and INSTEON_HUB_PORT.
+                          Defaults to INSTEON_HUB_HOST and INSTEON_HUB_PORT. A host that
+                          answers as a Hub Pro is read and controlled over its local HTTP
+                          interface, without a user name or password, one request at a
+                          time: info, observe and device ADDRESS id, status, on, off,
+                          ping and beep. Any other command says a Hub Pro can't do it.
       --hub NAME          The Hub whose file is hubs/NAME.env next to the environment file.
                           A name uses a-z, 0-9, hyphen and underscore, 1 to 32 characters.
+                          A file may hold only the address: a Hub Pro needs no credentials.
       --serial PATH       A modem on a serial or USB port, such as /dev/ttyUSB0 (macOS and Linux).
       --env-file PATH     Read environment variables from PATH instead of the default file.
       --json              Print JSON, where the command supports it.
@@ -123,8 +129,8 @@ public enum HelpText {
                           then asks each address for a Hub's page and, for a Hub Pro's
                           interface, a read of its root and its settings. Results are
                           candidates: check the address before sending a password there.
-                          The default. A Hub Pro is listed with its address, and the command
-                          can't control it yet.
+                          The default. A Hub Pro is listed with its address; use --hub with
+                          it to read and control its devices.
       --all               Ask every address on the local network, rather than stopping at
                           the first Hub.
       --insteon-connect   Ask Insteon Connect, which lists the Hubs that reported from this
@@ -387,8 +393,17 @@ public enum HelpText {
 
   /// The help for `insteon observe`.
   public static let observe = """
-    Usage: insteon [--hub HOST[:PORT] | --serial PATH] observe ADDRESS [--note TEXT]
+    Usage: insteon [--hub HOST[:PORT] | --serial PATH] observe [ADDRESS] [--note TEXT]
                    [--output PATH] [--json]
+
+    For a Hub Pro, leave out ADDRESS: it records the Hub Pro's software versions, the kinds of
+    device it lists and, for each device, its category, subcategory, firmware version, SKU
+    and the names of the commands it lists, with the product the catalog names. It sends only
+    reads, one at a time, never a command. The file has the format
+    insteon-hubpro-observation/1, described by
+    Packages/InsteonCLI/Schemas/insteon-hubpro-observation-1.schema.json, and holds no
+    address, name or place; share it so the catalog can learn which firmware versions behave
+    alike.
 
     Records what a device did, as a small JSON file you can attach to an issue or a pull
     request, so others can help check the Insteon device catalog. The device must be linked
@@ -425,6 +440,11 @@ public enum HelpText {
     Usage: insteon [--hub HOST[:PORT] | --serial PATH] device ADDRESS ACTION [--json]
 
     ADDRESS is the device's Insteon address, such as 1A.2B.3C, printed on it.
+
+    On a Hub Pro, id, status, on, off, ping and beep run, each only when the Hub Pro lists the
+    command for the device, and on and off take --fast when it lists FastOn and FastOff. The
+    other actions say a Hub Pro can't do them. A command the Hub Pro doesn't confirm may have
+    reached the device, and is never sent again.
 
     Actions:
       id                  Ask for the device's engine (Get Insteon Engine Version), its

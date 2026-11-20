@@ -63,7 +63,7 @@ public struct HubFileSuggestion: Hashable, Sendable {
   }
 
   /// What to do with the files, as one line for a person.
-  public static let note = "To use a Hub by name, save its INSTEON_HUB_USERNAME, INSTEON_HUB_PASSWORD and INSTEON_HUB_HOST in the file shown, readable only by you with chmod 600."
+  public static let note = "To use a Hub by name, save its INSTEON_HUB_USERNAME, INSTEON_HUB_PASSWORD and INSTEON_HUB_HOST in the file shown, readable only by you with chmod 600. A Hub Pro needs only its INSTEON_HUB_HOST."
 
   /// A suggestion for each Hub, in order.
   ///

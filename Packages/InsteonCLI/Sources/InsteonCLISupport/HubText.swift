@@ -1,22 +1,5 @@
 import InsteonCore
 
-/// A host that answered like a Hub Pro, with the settings it reported, if it did.
-public struct RecognizedHubPro: Sendable {
-
-  /// The settings the Hub Pro reported.
-  public var settings: HubProSettings?
-
-  /// Creates a recognized Hub Pro.
-  ///
-  /// - Parameter settings: The settings it reported, if it did.
-  public init(settings: HubProSettings?) {
-
-    self.settings = settings
-
-  }
-
-}
-
 /// What the command says about a Hub: when a request to it gets no answer, and what came of
 /// asking it for Get IM Info. No message carries the Hub's credentials.
 public enum HubText {
@@ -86,49 +69,7 @@ public enum HubText {
 
   }
 
-  /// What the command says about a host that answers like a Hub Pro, in place of asking for a
-  /// user name and password or saying the Hub didn't answer.
-  ///
-  /// - Parameters:
-  ///   - host: The Hub Pro's host.
-  ///   - settings: The settings it reported, if it did.
-  /// - Returns: A message that says it's a Hub Pro the command can't control yet.
-  public static func hubPro(host: String, settings: HubProSettings?) -> String {
-
-    var message = "\(host) is a Hub Pro, which 'insteon' can't control yet."
-
-    if let settings {
-
-      message += " It reports its address as \(settings.network.address), "
-        + "configuration version \(settings.version.config.version) and server version \(settings.version.server.version)."
-
-    }
-
-    return message + " No user name or password is needed or sent."
-
-  }
-
-  /// The failure for a host that answers like a Hub Pro, or `nil` for any other host.
-  ///
-  /// - Parameters:
-  ///   - host: The host named with `--hub`.
-  ///   - recognize: Asks the host whether it's a Hub Pro, with reads that carry no credentials.
-  /// - Returns: A failure that explains the Hub Pro, or `nil`.
-  /// - Throws: The error `recognize` throws, such as `CancellationError`.
-  public static func hubProRefusal(host: String, recognize: () async throws -> RecognizedHubPro?) async throws -> CommandFailure? {
-
-    guard let hubPro = try await recognize() else {
-
-      return nil
-
-    }
-
-    return CommandFailure(description: Self.hubPro(host: host, settings: hubPro.settings))
-
-  }
-
-  /// What `insteon discover` says under the table when it lists Hub Pros: that the command
-  /// can't control them yet, and what each reported.
+  /// What `insteon discover` says under the table when it lists Hub Pros: what the command does with them, and what each reported.
   ///
   /// - Parameter settings: The settings each Hub Pro listed reported, `nil` for one that
   ///   reported none.
@@ -143,8 +84,8 @@ public enum HubText {
 
     var notes = [
       settings.count == 1
-        ? "A Hub Pro is listed, but 'insteon' can't control it yet."
-        : "Hub Pros are listed, but 'insteon' can't control them yet."
+        ? "A Hub Pro is listed. Use --hub with its address to read and control its devices; it has no ALL-Link database to change."
+        : "Hub Pros are listed. Use --hub with an address to read and control a Hub Pro's devices; they have no ALL-Link database to change."
     ]
 
     for case let reported? in settings {

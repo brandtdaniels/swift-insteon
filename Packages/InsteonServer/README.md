@@ -21,7 +21,7 @@ swift run --package-path Packages/InsteonServer insteon-server --help
 The server reads the CLI's protected `~/.config/insteon/env`, or
 `$XDG_CONFIG_HOME/insteon/env`. An explicit `--env-file` can name another file. Process
 environment variables take precedence. The server serves one Hub: run one server per Hub,
-each with its own `--env-file` (the CLI's `hubs/NAME.env` files are written in the same form).
+each with its own `--env-file` (the CLI's `hubs/NAME.env` files are written in the same form, and a Hub Pro's file holds only its `INSTEON_HUB_HOST`).
 Use the Hub's local credentials, not an Insteon
 account login:
 
@@ -759,6 +759,16 @@ find out: the server returns the recorded answer and sends nothing.
 - Keys belong to the authenticated principal. The gateway has one password, so one principal; a
   per-client scope changes the scope, not the rule.
 - The server never repeats a command on its own, and browser form posts don't use keys.
+
+## Serving a Hub Pro
+
+`insteon-server --hub ADDRESS` serves a Hub Pro the same way, when no `INSTEON_HUB_USERNAME` and `INSTEON_HUB_PASSWORD` are set: a Hub Pro has no user name or password, and a host that answers as one is served through its local HTTP interface. The API, the website and the errors are the same.
+
+- The server asks the Hub Pro one request at a time, because a Hub Pro can stop answering under load. It reads the Hub Pro's settings and device list when it connects, and describes each device so the catalog can describe it.
+- A Hub Pro sends nothing on its own, so the server polls every device's level at an interval and publishes a device event when a level changes. `--poll-interval SECONDS` sets it: 5 seconds by default and 2 at the least. A change made at a device is seen at the next poll.
+- A command is sent once and only when the Hub Pro lists it for the device. One the Hub Pro doesn't confirm is `outcomeUnknown` with `sent: true`, and is never sent again.
+- A Hub Pro that doesn't answer is `hubUnreachable`, like a Hub, and the server reconnects by itself. A failed poll is how it finds out.
+- The server never adds or removes a device on a Hub Pro, changes a link or starts an update: use the Hub Pro's SET buttons to add or remove a device. Scenes, groups, settings and ALL-Link databases aren't offered for a Hub Pro.
 
 ## Staying up while the Hub is away
 

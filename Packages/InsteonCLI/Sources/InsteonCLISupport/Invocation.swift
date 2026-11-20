@@ -611,8 +611,8 @@ public struct UnlinkOptions: Hashable, Sendable {
 /// What `insteon observe` records, and where it puts the file.
 public struct ObserveOptions: Hashable, Sendable {
 
-  /// The device to observe.
-  public var device: InsteonAddress
+  /// The device to observe, or `nil` to observe a Hub Pro as a whole.
+  public var device: InsteonAddress?
 
   /// The text given with `--note`, or `nil`.
   public var note: String?
@@ -623,10 +623,10 @@ public struct ObserveOptions: Hashable, Sendable {
   /// Creates observe options.
   ///
   /// - Parameters:
-  ///   - device: The device to observe.
+  ///   - device: The device to observe, or `nil` for a Hub Pro as a whole. Defaults to `nil`.
   ///   - note: The text to record with the observation. Defaults to `nil`.
   ///   - outputPath: The file to write. Defaults to `nil`, for standard output.
-  public init(device: InsteonAddress, note: String? = nil, outputPath: String? = nil) {
+  public init(device: InsteonAddress? = nil, note: String? = nil, outputPath: String? = nil) {
 
     self.device = device
     self.note = note

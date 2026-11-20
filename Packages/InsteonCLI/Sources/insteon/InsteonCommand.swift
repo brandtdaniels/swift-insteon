@@ -158,7 +158,11 @@ struct InsteonCommand {
 
     let names = ProductNames()
 
-    try await CommandSession.run(invocation, catalog: names.catalog) { (session: ModemSession) async throws -> Void in
+    try await CommandSession.run(
+      invocation,
+      catalog: names.catalog,
+      hubPro: { network, host in try await HubProCommands.run(invocation, network: network, host: host, names: names) }
+    ) { (session: ModemSession) async throws -> Void in
 
       try await body(session, names)
 
@@ -175,7 +179,11 @@ struct InsteonCommand {
 
     let names = ProductNames()
 
-    try await CommandSession.run(invocation, catalog: names.catalog) { (session: ModemSession) async throws -> Void in
+    try await CommandSession.run(
+      invocation,
+      catalog: names.catalog,
+      hubPro: { network, host in try await HubProCommands.run(invocation, network: network, host: host, names: names) }
+    ) { (session: ModemSession) async throws -> Void in
 
       try await body(session, names, session.hub)
 

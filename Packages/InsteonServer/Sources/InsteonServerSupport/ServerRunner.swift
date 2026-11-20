@@ -6,6 +6,7 @@ import InsteonCore
 import InsteonHTTP
 import InsteonHubClient
 import InsteonModem
+import InsteonNetworking
 import InsteonService
 import Logging
 import NIOCore
@@ -21,6 +22,9 @@ public enum ServerRunner {
   --port PORT       Server port (default: 8080), separate from the Hub's port.
   --env-file PATH   Read settings from this file instead of ~/.config/insteon/env.
   --state PATH      Absolute path to the gateway's own network snapshot.
+  --poll-interval SECONDS  How often a Hub Pro is asked for its devices' levels, from 2
+                   seconds (default: 5). A Hub Pro sends nothing on its own, so a change
+                   made at a device is seen at the next poll.
   --advertise-url URL  Where clients reach this server, such as http://insteon.local:8080,
                    for the pairing document (default: http://LISTEN:PORT).
   --home-name NAME  The home's name in a pairing document (default: Home).
@@ -28,7 +32,8 @@ public enum ServerRunner {
 
   Settings are read from the same protected per-user environment file as insteon.
   A Hub uses INSTEON_HUB_HOST, INSTEON_HUB_PORT, INSTEON_HUB_USERNAME and
-  INSTEON_HUB_PASSWORD. The website and API use the user name insteon and a
+  INSTEON_HUB_PASSWORD. A Hub Pro has no user name or password: with none set, a host
+  that answers as a Hub Pro is served as one, one request at a time. The website and API use the user name insteon and a
   separate INSTEON_GATEWAY_PASSWORD of 32 through 1024 bytes.
 
   Clients: the gateway password acts as an admin. A client has its own token and a scope
@@ -91,7 +96,30 @@ public enum ServerRunner {
   ///   - openModem: Opens the modem. Defaults to ``openModem``.
   /// - Throws: A ``ServerFailure`` source error: describe it with ``ServerFailure/init(_:)``.
   public static func run(arguments: [String], environment: [String: String], logger: Logger = Logger(label: "insteon-server"), openModem: @escaping ModemOpener = ServerRunner.openModem) async throws {
-    try await run(arguments: arguments, environment: environment, logger: logger, openModem: openModem, timing: Timing())
+    try await run(arguments: arguments, environment: environment, logger: logger, openModem: openModem, timing: Timing(), hubPro: .live)
+  }
+
+  /// How the server finds out that a host is a Hub Pro, and talks to one.
+  struct HubProAccess: Sendable {
+    /// The port of the host's Hub Pro interface, or `nil` when the host doesn't answer as a Hub Pro.
+    let recognize: @Sendable (_ host: String, _ catalog: ProductCatalog) async throws -> Int?
+    let httpClient: any HTTPClient
+    let clock: any Clock<Duration>
+
+    init(
+      recognize: @escaping @Sendable (_ host: String, _ catalog: ProductCatalog) async throws -> Int?,
+      httpClient: any HTTPClient = URLSessionHTTPClient.localNetwork(),
+      clock: any Clock<Duration> = ContinuousClock()
+    ) {
+      self.recognize = recognize
+      self.httpClient = httpClient
+      self.clock = clock
+    }
+
+    /// Asks the host's Hub Pro ports, as a search does.
+    static let live = HubProAccess(recognize: { host, catalog in
+      try await HubSearch(hubProPorts: catalog.hubProPorts, hubProModels: catalog.hubProModels).recognizeHubPro(at: host)?.port
+    })
   }
 
   /// How long the server waits between attempts to reach its modem, and between reminders.
@@ -123,7 +151,7 @@ public enum ServerRunner {
     }
   }
 
-  static func run(arguments: [String], environment: [String: String], logger: Logger, openModem: @escaping ModemOpener, timing: Timing) async throws {
+  static func run(arguments: [String], environment: [String: String], logger: Logger, openModem: @escaping ModemOpener, timing: Timing, hubPro: HubProAccess) async throws {
     let options = try ServerOptions(arguments: arguments, environment: environment)
     let environment = try EnvironmentFile.load(explicitPath: options.envFilePath, environment: environment, warn: { logger.warning("\($0)") })
     let target = try ModemTarget.resolve(hub: options.hub, serialPath: options.serialPath, environment: environment)
@@ -151,22 +179,30 @@ public enum ServerRunner {
     do { snapshot = try store.loadNetwork() }
     catch let error as DeviceRegistryStoreError { throw ServerRunError.stateFileUnusable(path: options.statePath, reason: error) }
     let savedAt = (try? FileManager.default.attributesOfItem(atPath: options.statePath))?[.modificationDate] as? Date
-    let endpoint: ModemEndpoint
+    let opener: any ServedNetworkOpening
     let hub: HubLocation?
     switch target {
     case let .hub(host, port):
       let location = try ModemTarget.hubLocation(host: host, port: port)
-      endpoint = .hub(location, try HubCredentials(environment: environment))
       hub = location
-      logger.info("Starting: opening the Hub at \(location.host):\(location.port)")
+      if let credentials = try? HubCredentials(environment: environment) {
+        opener = EndpointOpener(endpoint: .hub(location, credentials), catalog: catalog, openModem: openModem)
+        logger.info("Starting: opening the Hub at \(location.host):\(location.port)")
+      } else if let hubProPort = try await hubPro.recognize(host, catalog) {
+        // A Hub Pro has no user name or password, so a host that answers as one is served as one.
+        opener = HubProOpener(host: host, port: hubProPort, catalog: catalog, httpClient: hubPro.httpClient, pollInterval: .seconds(options.pollIntervalSeconds), clock: hubPro.clock)
+        logger.info("Starting: opening the Hub Pro at \(host):\(hubProPort)")
+      } else {
+        opener = EndpointOpener(endpoint: .hub(location, try HubCredentials(environment: environment)), catalog: catalog, openModem: openModem)
+      }
     case let .serial(path):
-      endpoint = .serial(path: path)
+      opener = EndpointOpener(endpoint: .serial(path: path), catalog: catalog, openModem: openModem)
       hub = nil
       logger.info("Starting: opening the serial port")
     }
     try await serve(
       network: DeviceNetwork.offline(catalog: catalog, snapshot: snapshot, hub: hub),
-      opener: EndpointOpener(endpoint: endpoint, catalog: catalog, openModem: openModem),
+      opener: opener,
       hub: hub,
       snapshotSavedAt: savedAt,
       persistence: NetworkSnapshotPersistence(store: store),
@@ -190,7 +226,7 @@ public enum ServerRunner {
   /// the saved device list, so a Hub that is away never keeps the server down.
   static func serve(
     network: DeviceNetwork,
-    opener: any NetworkOpening,
+    opener: any ServedNetworkOpening,
     hub: HubLocation?,
     snapshotSavedAt: Date?,
     persistence: any SnapshotPersisting,

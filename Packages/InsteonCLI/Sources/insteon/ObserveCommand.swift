@@ -12,6 +12,12 @@ enum ObserveCommand {
 
   static func run(_ options: ObserveOptions, modem: ModemSession, hub: HubLocation?, names: ProductNames) async throws {
 
+    guard let address = options.device else {
+
+      throw CommandFailure(description: "observe needs a device's ADDRESS, such as 1A.2B.3C, unless --hub is a Hub Pro, which is observed as a whole.")
+
+    }
+
     // Refused before the device is asked, so nothing is lost to a note that can't be recorded.
     if let note = options.note, ObservationRedaction.strip(note) != note {
 
@@ -21,9 +27,9 @@ enum ObserveCommand {
 
     try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (cached: CachedNetwork) async throws -> Void in
 
-      let source = DeviceSource(device: cached.network.device(options.device), network: cached.network, names: names)
+      let source = DeviceSource(device: cached.network.device(address), network: cached.network, names: names)
 
-      Output.note("Asking \(options.device) read-only questions...")
+      Output.note("Asking \(address) read-only questions...")
 
       let findings: ObservationFindings
 
@@ -33,7 +39,7 @@ enum ObserveCommand {
 
       } catch let error as DeviceControlError {
 
-        throw CommandFailure(description: DeviceText.failure(error, device: options.device))
+        throw CommandFailure(description: DeviceText.failure(error, device: address))
 
       }
 
@@ -80,7 +86,7 @@ enum ObserveCommand {
   }
 
   /// Creates files on disk, never over one that is there.
-  private struct DiskFiles: ObservationFiles {
+  struct DiskFiles: ObservationFiles {
 
     func createFile(_ data: Data, at path: String) throws -> Bool {
 

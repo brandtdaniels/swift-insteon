@@ -18,8 +18,8 @@ import InsteonProtocol
 /// opens the connection again after a capped, jittered delay. A command is never repeated by a
 /// reconnection. A service made with a network leaves the connection to its host.
 public actor InsteonService: InsteonServiceAPI {
-  private var network: DeviceNetwork
-  private let opener: any NetworkOpening
+  private var network: any ServedNetwork
+  private let opener: any ServedNetworkOpening
   private let reconnect: ReconnectPolicy
   private let clock: any Clock<Duration>
   private let now: @Sendable () -> Date
@@ -74,7 +74,7 @@ public actor InsteonService: InsteonServiceAPI {
   ///   - notificationRules: Where the notification rules are kept, if anywhere. Without it they last as long as the service.
   public init(
     network: DeviceNetwork,
-    opener: any NetworkOpening,
+    opener: any ServedNetworkOpening,
     persistence: (any SnapshotPersisting)? = nil,
     snapshotSavedAt: Date? = nil,
     reconnect: ReconnectPolicy = .standard,
@@ -90,7 +90,7 @@ public actor InsteonService: InsteonServiceAPI {
 
   private init(
     network: DeviceNetwork,
-    opener: any NetworkOpening,
+    opener: any ServedNetworkOpening,
     persistence: (any SnapshotPersisting)?,
     snapshotSavedAt: Date?,
     reconnect: ReconnectPolicy,
@@ -103,7 +103,7 @@ public actor InsteonService: InsteonServiceAPI {
     notificationRules: (any NotificationRulePersisting)? = nil
   ) {
     self.notificationPersistence = notificationRules
-    self.network = network
+    self.network = ModemServedNetwork(network: network)
     self.opener = opener
     self.reconnect = reconnect
     self.clock = clock
@@ -128,8 +128,8 @@ public actor InsteonService: InsteonServiceAPI {
     let snapshot = await network.snapshot()
     var result: [ServiceDevice] = []
     for address in Self.addresses(in: snapshot) {
-      let known = await network.registry.device(address)
-      let capabilities = known == nil ? nil : try await network.device(address).capabilities()
+      let known = await network.registeredDevice(address)
+      let capabilities = known == nil ? nil : try await network.operations(of: address).capabilities()
       result.append(ServiceDevice(address: address, productName: capabilities?.productName, canTurnOnAndOff: capabilities?.canTurnOnAndOff ?? false, canDim: capabilities?.canDim ?? false, value: snapshot.devices[address]?.level, lastAnsweredAt: snapshot.devices[address]?.lastSeen))
     }
     return result
@@ -148,20 +148,20 @@ public actor InsteonService: InsteonServiceAPI {
     guard Self.addresses(in: await network.snapshot()).contains(command.address) else { throw ServiceControlError.unknownDevice }
     if let level = command.levelPercent, command.action != .on || !(0...100).contains(level) { throw ServiceControlError.invalidLevel }
     if case let .unavailable(cause) = connection { throw ServiceControlError.modemUnavailable(cause) }
-    let device = network.device(command.address)
+    let device = network.operations(of: command.address)
     let outcome: CommandReceipt.Outcome
     let status: DeviceStatus?
     do {
       switch command.action {
       case .identify:
-        _ = try await network.identify(command.address)
+        try await network.identifyDevice(command.address)
         outcome = .read; status = nil
       case .status:
         do {
           status = try await device.status()
         } catch ModemError.deviceTimedOut {
           // A device that never reported what it is and doesn't answer a read has no identity to act on.
-          if await network.registry.device(command.address) == nil { throw ServiceControlError.notIdentified }
+          if await network.registeredDevice(command.address) == nil { throw ServiceControlError.notIdentified }
           throw ModemError.deviceTimedOut(command.address)
         }
         outcome = .read
@@ -280,8 +280,8 @@ public actor InsteonService: InsteonServiceAPI {
   }
 
   /// The events the catalog says a device's product reports, or `nil` when the catalog has no profile for the device.
-  private func eventNames(of device: InsteonAddress, in network: DeviceNetwork) async -> Set<String>? {
-    guard let identity = await network.registry.device(device)?.identity, let catalog = await network.registry.catalog,
+  private func eventNames(of device: InsteonAddress, in network: any ServedNetwork) async -> Set<String>? {
+    guard let identity = await network.registeredDevice(device)?.identity, let catalog = await network.catalog(),
           let profile = catalog.profile(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion) else { return nil }
     var names: Set<String> = []
     for case let .groupEvents(events) in profile.capabilities { names.formUnion(events.map(\.event.rawValue)) }
@@ -405,7 +405,7 @@ public actor InsteonService: InsteonServiceAPI {
       var failure: any Error = ServiceLifecycleError.connectionEnded
       do {
         let snapshot = await network.snapshot()
-        try await opener.withNetwork(snapshot: snapshot, onPollSucceeded: { await self.pollSucceeded() }) { candidate in try await self.serve(candidate) }
+        try await opener.withServedNetwork(snapshot: snapshot, onPollSucceeded: { await self.pollSucceeded() }) { candidate in try await self.serve(candidate) }
       } catch {
         failure = error
       }
@@ -425,28 +425,39 @@ public actor InsteonService: InsteonServiceAPI {
   /// Prepares one connection's network, serves it, and monitors it until the connection ends.
   /// The network replaces the previous one only after the modem answers and its ALL-Link
   /// database is read, so the cached list stays whole while connecting.
-  private func serve(_ candidate: DeviceNetwork) async throws {
-    _ = try await candidate.modemInfo()
-    _ = try await candidate.modemDatabase()
+  private func serve(_ candidate: any ServedNetwork) async throws {
+    try await candidate.prepare()
     // A rules file that can't be read leaves the rules off; changing them reports why.
     try? await loadNotificationRules()
     // Subscribe before announcing the connection so nothing heard from then on is missed.
-    let changes = await candidate.monitor.changes()
+    let changes = try await candidate.changes()
     await connected(to: candidate)
-    for await event in changes {
-      try Task.checkCancellation()
-      lastExchange = now()
-      if let event = ServiceEvent(event) { publish(event) }
-      evaluateNotificationRules(for: event)
+    switch changes {
+    case let .heard(events):
+      for await event in events {
+        try Task.checkCancellation()
+        heard(event)
+      }
+    case let .polled(events):
+      for try await event in events {
+        try Task.checkCancellation()
+        heard(event)
+      }
     }
     try Task.checkCancellation()
+  }
+
+  private func heard(_ event: DeviceMonitorEvent) {
+    lastExchange = now()
+    if let event = ServiceEvent(event) { publish(event) }
+    evaluateNotificationRules(for: event)
   }
 
   private func pollSucceeded() {
     lastPoll = now()
   }
 
-  private func connected(to candidate: DeviceNetwork) async {
+  private func connected(to candidate: any ServedNetwork) async {
     network = candidate
     connection = .connected
     hasConnected = true

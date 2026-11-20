@@ -139,7 +139,13 @@ public struct Device: Sendable {
   /// - Throws: The errors of ``info()``.
   public func capabilities() async throws -> DeviceCapabilities {
 
-    let model: DeviceControlModel = try await controlModel()
+    Self.capabilities(of: try await controlModel())
+
+  }
+
+  /// What a device can do, from the model of its description.
+  static func capabilities(of model: DeviceControlModel) -> DeviceCapabilities {
+
     let commands: CommandSet? = model.commandSet
 
     let groups: [DeviceGroup] = model.groups.map { (group: DeviceControlModel.Group) -> DeviceGroup in

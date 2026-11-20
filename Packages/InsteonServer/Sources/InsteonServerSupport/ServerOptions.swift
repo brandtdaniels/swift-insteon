@@ -19,12 +19,14 @@ public struct ServerOptions: Sendable {
   public let advertiseURL: String?
   /// The home's name in a pairing document.
   public let homeName: String
+  /// How often a Hub Pro is asked for its devices' levels, in seconds: from 2, and 5 by default.
+  public let pollIntervalSeconds: Int
 
   /// Parses pairs of options, rejecting duplicates, public listeners and wildcard binds.
   /// Hub resolution and file permissions are checked by the CLI's existing helpers.
   public init(arguments: [String], environment: [String: String]) throws {
     var options: [String: String] = [:]
-    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--home-name"]
+    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--home-name", "--poll-interval"]
     var index = 0
     while index < arguments.count {
       let name = arguments[index]
@@ -51,6 +53,8 @@ public struct ServerOptions: Sendable {
     let homeName = options["--home-name"] ?? "Home"
     guard (1...64).contains(homeName.count), !homeName.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { throw ServerOptionError.invalidHomeName }
     self.homeName = homeName
+    guard let pollInterval = Int(options["--poll-interval"] ?? "5"), (2...3600).contains(pollInterval) else { throw ServerOptionError.invalidPollInterval }
+    self.pollIntervalSeconds = pollInterval
   }
 
   /// The address without a trailing slash, or an error if it isn't a plain http or https address.
@@ -83,6 +87,8 @@ public enum ServerOptionError: Error, CustomStringConvertible {
   case invalidAdvertiseURL
   /// The home's name is empty, over 64 characters or has control characters.
   case invalidHomeName
+  /// `--poll-interval` isn't a whole number of seconds from 2 through 3600.
+  case invalidPollInterval
   /// A `pair` command needs a client name of 1 through 64 characters and a scope of read, control or admin.
   case invalidClient
 

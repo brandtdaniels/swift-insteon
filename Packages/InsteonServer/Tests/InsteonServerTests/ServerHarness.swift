@@ -77,7 +77,7 @@ extension ServingTests {
   }
 
   /// Starts the server, waits until its listener is up, and returns it.
-  func start(_ directory: URL, extra: [String] = ["--hub", "192.168.1.20"], now: @escaping @Sendable () -> Date = { Date() }, openModem: @escaping ServerRunner.ModemOpener) async throws -> RunningServer {
+  func start(_ directory: URL, extra: [String] = ["--hub", "192.168.1.20"], environment extraEnvironment: [String: String]? = nil, hubPro: ServerRunner.HubProAccess = .live, now: @escaping @Sendable () -> Date = { Date() }, openModem: @escaping ServerRunner.ModemOpener) async throws -> RunningServer {
     // Another suite can take the port between choosing it and binding it: the run ends before it
     // listens, and a different port is chosen.
     for _ in 0..<5 {
@@ -88,9 +88,9 @@ extension ServingTests {
       let (listening, opened) = AsyncStream<Int>.makeStream()
       let timing = ServerRunner.Timing(clock: retries, jitter: { 0 }, reminderClock: reminders, now: now, onListening: { opened.yield($0) })
       let arguments = ["--state", directory.appendingPathComponent("state.json").path, "--port", String(port)] + extra
-      let environment = ["HOME": directory.path, "INSTEON_GATEWAY_PASSWORD": gatewayPassword, "INSTEON_HUB_USERNAME": "hub-user", "INSTEON_HUB_PASSWORD": "hub-secret-pass"]
+      let environment = extraEnvironment ?? ["HOME": directory.path, "INSTEON_GATEWAY_PASSWORD": gatewayPassword, "INSTEON_HUB_USERNAME": "hub-user", "INSTEON_HUB_PASSWORD": "hub-secret-pass"]
       let logger = capture.logger
-      let task = Task { try await ServerRunner.run(arguments: arguments, environment: environment, logger: logger, openModem: openModem, timing: timing) }
+      let task = Task { try await ServerRunner.run(arguments: arguments, environment: environment, logger: logger, openModem: openModem, timing: timing, hubPro: hubPro) }
       let ended = Task { _ = await task.result; opened.finish() }
       var ports = listening.makeAsyncIterator()
       let bound = await ports.next()

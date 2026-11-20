@@ -51,9 +51,17 @@ enum CommandSession {
   /// - Parameters:
   ///   - invocation: The command line, which names the modem with `--hub` or `--serial`.
   ///   - catalog: The catalog the session describes the modem's serial commands with.
+  ///   - hubPro: The work to do when the host `--hub` names is a Hub Pro, which needs no user
+  ///     name or password, with the Hub Pro's network and host. A command a Hub Pro can't run is
+  ///     refused before anything is sent.
   ///   - body: The work to do with the modem. The session's `hub` is the Hub's host and port,
   ///     or `nil` for a serial modem; the Hub's credentials aren't part of it.
-  static func run(_ invocation: Invocation, catalog: ProductCatalog? = nil, _ body: @escaping @Sendable (ModemSession) async throws -> Void) async throws {
+  static func run(
+    _ invocation: Invocation,
+    catalog: ProductCatalog? = nil,
+    hubPro: @escaping @Sendable (HubProNetwork, String) async throws -> Void,
+    _ body: @escaping @Sendable (ModemSession) async throws -> Void
+  ) async throws {
 
     let hubName = hubName(of: invocation)
     let environment = try loadEnvironment(explicitPath: invocation.envFilePath, hubName: hubName)
@@ -73,9 +81,11 @@ enum CommandSession {
 
       } catch ConfigurationError.missingCredentials {
 
-        if let refusal = try await hubProRefusal(host: host, catalog: catalog) {
+        if let port = try await hubProPort(host: host, catalog: catalog) {
 
-          throw refusal
+          try await runOnHubPro(invocation, host: host, port: port, catalog: catalog, hubPro)
+
+          return
 
         }
 
@@ -114,9 +124,11 @@ enum CommandSession {
         if let failure = HubText.failure(error, host: host, port: hubPort, device: invocation.device, hubHasAnswered: hubHasAnswered) {
 
           // A Hub Pro doesn't listen on the Hub's port, so it reads as a Hub that didn't answer.
-          if HubFailure(error, hubHasAnswered: hubHasAnswered) == .unanswered, let refusal = try await hubProRefusal(host: host, catalog: catalog) {
+          if HubFailure(error, hubHasAnswered: hubHasAnswered) == .unanswered, let port = try await hubProPort(host: host, catalog: catalog) {
 
-            throw refusal
+            try await runOnHubPro(invocation, host: host, port: port, catalog: catalog, hubPro)
+
+            return
 
           }
 
@@ -147,19 +159,44 @@ enum CommandSession {
 
   }
 
-  /// The failure that explains a host that answers like a Hub Pro, or `nil` for any other host.
+  /// The port of a Hub Pro's interface when the host answers like one, or `nil` for any other
+  /// host.
   ///
   /// The ports and models that identify a Hub Pro come from the catalog the session was given,
   /// or the bundled one, so a catalog that names none recognizes none.
-  private static func hubProRefusal(host: String, catalog: ProductCatalog?) async throws -> CommandFailure? {
+  private static func hubProPort(host: String, catalog: ProductCatalog?) async throws -> Int? {
 
     let names = ProductNames()
     let source: ProductCatalog? = catalog ?? names.catalog
     let search = HubSearch(hubProPorts: source?.hubProPorts ?? [], hubProModels: source?.hubProModels ?? [])
 
-    return try await HubText.hubProRefusal(host: host) { () async throws -> RecognizedHubPro? in
+    return try await search.recognizeHubPro(at: host)?.port
 
-      try await search.recognizeHubPro(at: host).map { RecognizedHubPro(settings: $0.hubProSettings) }
+  }
+
+  /// Runs a command on a Hub Pro, or refuses one a Hub Pro can't run before anything is sent.
+  private static func runOnHubPro(
+    _ invocation: Invocation,
+    host: String,
+    port: Int,
+    catalog: ProductCatalog?,
+    _ hubPro: @escaping @Sendable (HubProNetwork, String) async throws -> Void
+  ) async throws {
+
+    guard HubProText.runsOnAHubPro(invocation.subcommand) else {
+
+      throw CommandFailure(description: HubProText.cannot(invocation.subcommand, host: host))
+
+    }
+
+    // A Hub Pro has no user name or password, so none is sent.
+    Output.note("Connecting to the Hub Pro at \(host):\(port)")
+
+    let network = HubProNetwork(host: host, port: port, catalog: catalog)
+
+    try await Interrupt.cancellingOnInterrupt {
+
+      try await hubPro(network, host)
 
     }
 

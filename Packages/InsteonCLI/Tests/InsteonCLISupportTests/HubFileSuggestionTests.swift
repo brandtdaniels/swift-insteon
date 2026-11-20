@@ -98,6 +98,7 @@ struct HubFileSuggestionTests {
     #expect(HubFileSuggestion.note.contains("chmod 600"))
     #expect(HubFileSuggestion.note.contains("INSTEON_HUB_USERNAME"))
     #expect(HubFileSuggestion.note.contains("INSTEON_HUB_HOST"))
+    #expect(HubFileSuggestion.note.contains("A Hub Pro needs only its INSTEON_HUB_HOST"))
 
   }
 

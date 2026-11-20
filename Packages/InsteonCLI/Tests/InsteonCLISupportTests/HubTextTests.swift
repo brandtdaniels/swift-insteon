@@ -77,46 +77,14 @@ struct HubTextTests {
     )
   )
 
-  @Test func explainsAHubProPlainlyWithoutAskingForAPassword() {
-
-    let message = HubText.hubPro(host: "192.168.1.50", settings: settings)
-
-    #expect(
-      message == "192.168.1.50 is a Hub Pro, which 'insteon' can't control yet. It reports its address as 192.168.1.50, "
-        + "configuration version 5.0.1 and server version 1.0.2. No user name or password is needed or sent."
-    )
-    #expect(!message.contains("INSTEON_HUB_USERNAME"))
-
-  }
-
-  @Test func explainsAHubProWithoutSettings() {
-
-    #expect(HubText.hubPro(host: "192.168.1.50", settings: nil) == "192.168.1.50 is a Hub Pro, which 'insteon' can't control yet. No user name or password is needed or sent.")
-
-  }
-
-  @Test func saysUnderTheTableThatHubProsAreListedButNotControlled() {
+  @Test func saysUnderTheTableHowToUseTheHubProsListed() {
 
     #expect(HubText.hubProNote(settings: [settings]) == [
-      "A Hub Pro is listed, but 'insteon' can't control it yet.",
+      "A Hub Pro is listed. Use --hub with its address to read and control its devices; it has no ALL-Link database to change.",
       "Hub Pro at 192.168.1.50 reports configuration version 5.0.1 and server version 1.0.2.",
     ])
-    #expect(HubText.hubProNote(settings: [nil, nil]) == ["Hub Pros are listed, but 'insteon' can't control them yet."])
+    #expect(HubText.hubProNote(settings: [nil, nil]) == ["Hub Pros are listed. Use --hub with an address to read and control a Hub Pro's devices; they have no ALL-Link database to change."])
     #expect(HubText.hubProNote(settings: []).isEmpty)
-
-  }
-
-  @Test(.timeLimit(.minutes(1))) func refusesAHostThatIsAHubProInPlaceOfAskingForCredentials() async throws {
-
-    let refusal = try await HubText.hubProRefusal(host: "192.168.1.50") { RecognizedHubPro(settings: settings) }
-
-    #expect(refusal == CommandFailure(description: HubText.hubPro(host: "192.168.1.50", settings: settings)))
-
-  }
-
-  @Test(.timeLimit(.minutes(1))) func refusesNothingForAHostThatIsNotAHubPro() async throws {
-
-    #expect(try await HubText.hubProRefusal(host: "192.168.1.20") { nil } == nil)
 
   }
 
