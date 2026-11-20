@@ -126,7 +126,7 @@ public actor HubProNetwork {
 
   /// Reads the Hub Pro's settings and device list, describes each device, and reads each level.
   ///
-  /// - Throws: ``HubProError``, or the transport's error, such as `URLError` when the Hub Pro
+  /// - Throws: `HubProError`, or the transport's error, such as `URLError` when the Hub Pro
   ///   doesn't answer.
   public func open() async throws {
 

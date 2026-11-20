@@ -758,6 +758,16 @@ find out: the server returns the recorded answer and sends nothing.
   per-client scope changes the scope, not the rule.
 - The server never repeats a command on its own, and browser form posts don't use keys.
 
+## Serving a Hub Pro
+
+`insteon-server --hub ADDRESS` serves a Hub Pro the same way, when no `INSTEON_HUB_USERNAME` and `INSTEON_HUB_PASSWORD` are set: a Hub Pro has no user name or password, and a host that answers as one is served through its local HTTP interface. The API, the website and the errors are the same.
+
+- The server asks the Hub Pro one request at a time, because a Hub Pro can stop answering under load. It reads the Hub Pro's settings and device list when it connects, and describes each device so the catalog can describe it.
+- A Hub Pro sends nothing on its own, so the server polls every device's level at an interval and publishes a device event when a level changes. `--poll-interval SECONDS` sets it: 5 seconds by default and 2 at the least. A change made at a device is seen at the next poll.
+- A command is sent once and only when the Hub Pro lists it for the device. One the Hub Pro doesn't confirm is `outcomeUnknown` with `sent: true`, and is never sent again.
+- A Hub Pro that doesn't answer is `hubUnreachable`, like a Hub, and the server reconnects by itself. A failed poll is how it finds out.
+- The server never adds or removes a device on a Hub Pro, changes a link or starts an update: use the Hub Pro's SET buttons to add or remove a device. Scenes, groups, settings and ALL-Link databases aren't offered for a Hub Pro.
+
 ## Staying up while the Hub is away
 
 The HTTP listener never depends on the Hub. If the Hub is unplugged, restarting, unreachable

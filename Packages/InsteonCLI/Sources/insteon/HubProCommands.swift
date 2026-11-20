@@ -4,7 +4,7 @@ import InsteonCore
 import InsteonModem
 
 /// The commands that run on a Hub Pro: `info`, `observe`, and `device ADDRESS` with `id`,
-/// `status`, `on`, `off`, `on-fast`, `off-fast`, `ping` and `beep`. The decisions are in
+/// `status`, `on`, `off` (each with `--fast`), `ping` and `beep`. The decisions are in
 /// InsteonCLISupport's `HubProText` and `HubProObservationRun`; this asks the Hub Pro and prints.
 enum HubProCommands {
 

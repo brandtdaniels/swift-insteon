@@ -138,7 +138,7 @@ public enum HubProObservationRun {
         category: description.category.map(Hex.byte),
         subcategory: description.subcategory.map(Hex.byte),
         firmware: description.firmwareVersion.map(Hex.byte),
-        sku: description.sku.map(ObservationRedaction.strip),
+        sku: description.sku.map(plain),
         model: model,
         commands: description.commands.map { HubProObservedCommand(name: ObservationRedaction.strip($0.name), parameters: $0.parameters.map(ObservationRedaction.strip)) }
       ))
@@ -152,17 +152,19 @@ public enum HubProObservationRun {
     }
 
     return HubProFindings(
-      configVersion: versions.map { version(from: $0.config.version) },
-      serverVersion: versions.map { version(from: $0.server.version) },
+      configVersion: versions.map { plain($0.config.version) },
+      serverVersion: versions.map { plain($0.server.version) },
       deviceTypes: Array(Set(listing.map { ObservationRedaction.strip($0.deviceType) })).sorted(),
       devices: devices
     )
 
   }
 
-  /// A version as the Hub Pro reports it when it looks like one, and the placeholder when it
-  /// holds anything else, such as an address.
-  private static func version(from text: String) -> String {
+  /// A version or model number as the Hub Pro reports it when it looks like one, and the
+  /// placeholder when it holds anything else, such as an address. Letters, digits, dots,
+  /// underscores and hyphens, up to 32, are kept as they are: a model number such as 2457D2 would
+  /// otherwise read as an address.
+  private static func plain(_ text: String) -> String {
 
     let allowed = CharacterSet(charactersIn: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz._-")
 

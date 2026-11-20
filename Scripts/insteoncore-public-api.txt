@@ -424,6 +424,7 @@ func HubProNetwork.description(of:)
 func HubProNetwork.device(_:)
 func HubProNetwork.devices()
 func HubProNetwork.identify(_:)
+func HubProNetwork.listing()
 func HubProNetwork.open()
 func HubProNetwork.refreshDevices()
 func HubProNetwork.snapshot()
@@ -509,6 +510,7 @@ init HubFailure?(_:hubHasAnswered:)
 init HubLinkingLeg(device:index:count:modemRole:modemGroup:deviceGroup:remoteEnterLinkingMode:allGroupsWhen:)
 init HubLinkingLegOutcome(leg:status:)
 init HubLocation(host:port:insteonID:)
+init HubProNetwork(host:port:catalog:snapshot:)
 init HubProNetwork(transport:catalog:snapshot:pollInterval:clock:listRefreshPolls:now:onPollSucceeded:)
 init HubProNetwork(transport:catalog:snapshot:pollInterval:clock:onPollSucceeded:)
 init HubSearch(hubProPorts:hubProModels:)
@@ -742,7 +744,10 @@ typealias DeviceSubcategory
 typealias FirmwareVersion
 typealias GuardWeakening
 typealias HubKind
+typealias HubProDescription
+typealias HubProListedDevice
 typealias HubProSettings
+typealias HubProVersions
 typealias InsteonAddress
 typealias InsteonEngine
 typealias LinkingDirection

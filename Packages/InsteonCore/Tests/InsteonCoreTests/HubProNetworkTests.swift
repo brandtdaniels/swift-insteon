@@ -444,21 +444,38 @@ struct HubProNetworkTests {
 
   @Test func keepsThePollIntervalAtOrAboveItsFloor() async throws {
 
-    let clock = TestClock()
+    let clock = IntervalClock()
     let http = Self.unit()
     let network = HubProNetwork(transport: HubProTransport(host: HubProUnit.host, httpClient: http), catalog: ControlExample.catalog, pollInterval: .milliseconds(10), clock: clock)
     try await network.open()
 
     let first = Task { try await network.changes().first { _ in true } }
+    var waits = clock.requested.makeAsyncIterator()
 
-    await clock.waitForSleeper(until: HubProNetwork.minimumPollInterval)
-    await http.answer("GET /insteon/status", with: answerJSON(Self.levels([("3A.4B.01", 3)])))
-    clock.advance(by: HubProNetwork.minimumPollInterval)
+    #expect(await waits.next() == HubProNetwork.minimumPollInterval)
 
-    _ = try await first.value
+    first.cancel()
+    _ = try? await first.value
 
     #expect(HubProNetwork.minimumPollInterval == .seconds(2))
     #expect(HubProNetwork.defaultPollInterval == .seconds(5))
+
+  }
+
+  @Test func waitsTheIntervalItIsGivenAboveTheFloor() async throws {
+
+    let clock = IntervalClock()
+    let http = Self.unit()
+    let network = HubProNetwork(transport: HubProTransport(host: HubProUnit.host, httpClient: http), catalog: ControlExample.catalog, pollInterval: .seconds(9), clock: clock)
+    try await network.open()
+
+    let first = Task { try await network.changes().first { _ in true } }
+    var waits = clock.requested.makeAsyncIterator()
+
+    #expect(await waits.next() == .seconds(9))
+
+    first.cancel()
+    _ = try? await first.value
 
   }
 
@@ -469,6 +486,39 @@ struct HubProNetworkTests {
     let http = RoutedHTTPClient()
 
     await #expect(throws: HubProError.unexpectedStatus(404)) { try await network(http).open() }
+
+  }
+
+}
+
+/// A clock that never moves: it says how long each sleep was asked for, and waits to be canceled.
+final class IntervalClock: Clock, Sendable {
+
+  typealias Instant = ContinuousClock.Instant
+
+  private let start = ContinuousClock.now
+  let requested: AsyncStream<Duration>
+  private let continuation: AsyncStream<Duration>.Continuation
+  private let never: AsyncStream<Void>
+
+  init() {
+
+    (requested, continuation) = AsyncStream.makeStream()
+    never = AsyncStream { _ in }
+
+  }
+
+  var now: Instant { start }
+
+  var minimumResolution: Duration { .zero }
+
+  func sleep(until deadline: Instant, tolerance: Duration?) async throws {
+
+    continuation.yield(start.duration(to: deadline))
+
+    for await _ in never {}
+
+    throw CancellationError()
 
   }
 

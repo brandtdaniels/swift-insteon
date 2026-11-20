@@ -60,7 +60,7 @@ public enum HubProText {
   /// - Parameter host: The Hub Pro's host.
   public static func offered(host: String) -> String {
 
-    "'insteon' reads and controls the devices a Hub Pro already has: device ADDRESS status, on, off, on-fast, off-fast, ping, beep and id, "
+    "'insteon' reads and controls the devices a Hub Pro already has: device ADDRESS status, on, off (each with --fast), ping, beep and id, "
       + "and info and observe. Use --hub \(host) with them. No user name or password is needed or sent."
 
   }
