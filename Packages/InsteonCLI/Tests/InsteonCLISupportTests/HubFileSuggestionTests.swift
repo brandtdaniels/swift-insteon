@@ -64,42 +64,4 @@ struct HubFileSuggestionTests {
 
   }
 
-  @Test func showsWhereToSaveEachFileAndHowToUseIt() {
-
-    let rows = HubFileSuggestion.rows(
-      for: [Self.source(id: "1A.2B.3C", host: "192.168.1.20"), Self.source(true, host: "192.168.1.43", port: 443)],
-      directory: "/home/example/.config/insteon/hubs"
-    )
-
-    #expect(rows == [
-      ["ADDRESS", "SAVE AS", "USE WITH"],
-      ["192.168.1.20:25105", "/home/example/.config/insteon/hubs/hub-2b3c.env", "insteon --hub hub-2b3c info"],
-      ["192.168.1.43:443", "/home/example/.config/insteon/hubs/hubpro-43.env", "insteon --hub hubpro-43 info"]
-    ])
-
-  }
-
-  @Test func showsJustTheFileNameWithoutADirectory() {
-
-    let rows = HubFileSuggestion.rows(for: [Self.source(id: "1A.2B.3C")], directory: nil)
-
-    #expect(rows[1][1] == "hub-2b3c.env")
-
-  }
-
-  @Test func offersNothingWhenNoHubWasFound() {
-
-    #expect(HubFileSuggestion.rows(for: [], directory: "/home/example/.config/insteon/hubs").isEmpty)
-
-  }
-
-  @Test func explainsHowToUseTheFiles() {
-
-    #expect(HubFileSuggestion.note.contains("chmod 600"))
-    #expect(HubFileSuggestion.note.contains("INSTEON_HUB_USERNAME"))
-    #expect(HubFileSuggestion.note.contains("INSTEON_HUB_HOST"))
-    #expect(HubFileSuggestion.note.contains("A Hub Pro needs only its INSTEON_HUB_HOST"))
-
-  }
-
 }

@@ -69,35 +69,24 @@ public enum HubText {
 
   }
 
-  /// What `insteon discover` says under the table when it lists Hub Pros: what the command does with them, and what each reported.
+  /// What `insteon discover` says about the configuration and server versions each Hub Pro it
+  /// lists reported.
   ///
   /// - Parameter settings: The settings each Hub Pro listed reported, `nil` for one that
   ///   reported none.
-  /// - Returns: The notes, none when no Hub Pro is listed.
+  /// - Returns: A note for each Hub Pro that reported settings.
   public static func hubProNote(settings: [HubProSettings?]) -> [String] {
 
-    guard !settings.isEmpty else {
+    settings.compactMap { (reported: HubProSettings?) -> String? in
 
-      return []
+      reported.map { (reported: HubProSettings) -> String in
 
-    }
-
-    var notes = [
-      settings.count == 1
-        ? "A Hub Pro is listed. Use --hub with its address to read and control its devices; it has no ALL-Link database to change."
-        : "Hub Pros are listed. Use --hub with an address to read and control a Hub Pro's devices; they have no ALL-Link database to change."
-    ]
-
-    for case let reported? in settings {
-
-      notes.append(
         "Hub Pro at \(reported.network.address) reports configuration version \(reported.version.config.version) "
           + "and server version \(reported.version.server.version)."
-      )
+
+      }
 
     }
-
-    return notes
 
   }
 
