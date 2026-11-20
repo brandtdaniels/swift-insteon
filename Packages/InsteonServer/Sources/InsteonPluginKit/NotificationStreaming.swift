@@ -68,21 +68,20 @@ public struct ServiceEventSource: NotificationStreaming {
       self.continuation = continuation
     }
 
-    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void) {
-      if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-        continuation.yield(.refused(status: http.statusCode))
-        completionHandler(.cancel)
-      } else {
-        completionHandler(.allow)
-      }
-    }
-
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-      continuation.yield(.data(data))
+      if !reportRefusal(of: dataTask) { continuation.yield(.data(data)) }
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+      if reportRefusal(of: task) { return }
       if error == nil { continuation.finish() } else { continuation.finish(throwing: PluginError.unreachable) }
+    }
+
+    /// Tells the reader when the service answered with anything but a stream, and returns whether it did.
+    private func reportRefusal(of task: URLSessionTask) -> Bool {
+      guard let http = task.response as? HTTPURLResponse, http.statusCode != 200 else { return false }
+      continuation.yield(.refused(status: http.statusCode))
+      return true
     }
   }
 

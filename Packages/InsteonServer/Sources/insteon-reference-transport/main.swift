@@ -62,7 +62,7 @@ let status: Int32 = await withTaskGroup(of: Int32.self) { group in
     do {
       try await transport.run { port in
         print("Forwarding 127.0.0.1:\(port) to the service and registered route \(routeKind). Stop with Control-C.")
-        fflush(stdout)
+        fflush(nil)
       }
       return 0
     } catch {
