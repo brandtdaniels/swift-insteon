@@ -8,6 +8,8 @@ enum APIOperation: String, CaseIterable, Sendable {
   case listClients, createClient, revokeClient, createPairing
   case listNotificationRules, putNotificationRule, deleteNotificationRule
   case listRoutes, putRoute, deleteRoute
+  case listSchedules, putSchedule, deleteSchedule
+  case listTimers, putTimer, deleteTimer
   case browserIndex, browserControls, browserCard, browserCommand
 
   struct Parameter: Sendable {
@@ -41,7 +43,7 @@ enum APIOperation: String, CaseIterable, Sendable {
   /// A browser route answers HTML and plain text for a person; the rest answer machines.
   var isAPI: Bool {
     switch self {
-    case .listDevices, .health, .executeCommand, .streamEvents, .openAPI, .listClients, .createClient, .revokeClient, .createPairing, .listNotificationRules, .putNotificationRule, .deleteNotificationRule, .listRoutes, .putRoute, .deleteRoute: true
+    case .listDevices, .health, .executeCommand, .streamEvents, .openAPI, .listClients, .createClient, .revokeClient, .createPairing, .listNotificationRules, .putNotificationRule, .deleteNotificationRule, .listRoutes, .putRoute, .deleteRoute, .listSchedules, .putSchedule, .deleteSchedule, .listTimers, .putTimer, .deleteTimer: true
     case .browserIndex, .browserControls, .browserCard, .browserCommand: false
     }
   }
@@ -49,8 +51,8 @@ enum APIOperation: String, CaseIterable, Sendable {
   var method: HTTPRequest.Method {
     switch self {
     case .executeCommand, .browserCommand, .createClient, .createPairing: .post
-    case .revokeClient, .deleteNotificationRule, .deleteRoute: .delete
-    case .putNotificationRule, .putRoute: .put
+    case .revokeClient, .deleteNotificationRule, .deleteRoute, .deleteSchedule, .deleteTimer: .delete
+    case .putNotificationRule, .putRoute, .putSchedule, .putTimer: .put
     default: .get
     }
   }
@@ -70,6 +72,10 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .putNotificationRule, .deleteNotificationRule: "/api/v1/notification-rules/{id}"
     case .listRoutes: "/api/v1/routes"
     case .putRoute, .deleteRoute: "/api/v1/routes/{kind}"
+    case .listSchedules: "/api/v1/schedules"
+    case .putSchedule, .deleteSchedule: "/api/v1/schedules/{id}"
+    case .listTimers: "/api/v1/timers"
+    case .putTimer, .deleteTimer: "/api/v1/timers/{id}"
     case .browserIndex: "/"
     case .browserControls: "/controls.js"
     case .browserCard, .browserCommand: "/devices/{address}"
@@ -93,6 +99,12 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listRoutes: "List the routes transports registered"
     case .putRoute: "Register a transport's route"
     case .deleteRoute: "Remove a transport's route"
+    case .listSchedules: "List the schedules and when each runs next"
+    case .putSchedule: "Store a schedule"
+    case .deleteSchedule: "Remove a schedule"
+    case .listTimers: "List the timers and when each fires"
+    case .putTimer: "Start a timer"
+    case .deleteTimer: "Cancel a timer"
     case .browserIndex: "The browser page"
     case .browserControls: "The browser page's script"
     case .browserCard: "One device's card, from cached state"
@@ -117,6 +129,12 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listRoutes: "The routes that separate transport processes registered, in the order they were registered. A pairing document lists them after the `lan` route. A ticket is a locator that only its transport reads, never a secret. Needs the `read` scope."
     case .putRoute: "Registers the route, or replaces the ticket of the route with that kind, which keeps its place. Every pairing document issued afterward lists it; a document issued earlier is unchanged and keeps working, because routes are only hints. Needs the `admin` scope."
     case .deleteRoute: "Removes the route from the pairing documents issued afterward. Needs the `admin` scope."
+    case .listSchedules: "The schedules in the order they were added, each with the time it runs next in the service's time zone. Needs the `read` scope."
+    case .putSchedule: "Adds the schedule, or replaces the schedule with that identifier, which keeps nothing of the old schedule's last run. It takes effect at once. A clock time is wall-clock time in the service's time zone, so it follows daylight saving time: a time the clocks skip runs once, when the skipped span ends, and a time that happens twice runs at its first occurrence. A run less than a minute late happens; a later one is skipped, unless `catchUp` is true and it is less than 15 minutes late. Each run publishes a `schedule` event on `/api/v1/events`. Needs the `admin` scope."
+    case .deleteSchedule: "Removes the schedule, which stops at once. Needs the `admin` scope."
+    case .listTimers: "The timers that haven't fired, in the order they were started. Needs the `read` scope."
+    case .putTimer: "Starts the timer, or restarts the timer with that identifier. It counts elapsed time, so a change of the clock neither lengthens nor shortens it, fires once, and is then removed. A restart keeps the time the timer had left. Its run publishes a `schedule` event with `source` `timer`. Needs the `admin` scope."
+    case .deleteTimer: "Cancels the timer. Needs the `admin` scope."
     case .browserIndex, .browserControls, .browserCard, .browserCommand: "Part of the browser page, not of the versioned API contract."
     }
   }
@@ -125,6 +143,8 @@ enum APIOperation: String, CaseIterable, Sendable {
 
   private static let clientParameter = Parameter(name: "id", location: "path", required: true, schema: Schema.string(description: "A client's identifier."), description: "The client's identifier, from the list or the creation response.")
   private static let ruleParameter = Parameter(name: "id", location: "path", required: true, schema: Schema.string(description: "A rule's identifier: letters, digits, `-`, `_` and `.`, at most 64 characters."), description: "The rule's identifier. A client chooses it.")
+  private static let scheduleParameter = Parameter(name: "id", location: "path", required: true, schema: Schema.string(description: "A schedule's identifier: letters, digits, `-`, `_` and `.`, at most 64 characters."), description: "The schedule's identifier. A client chooses it.")
+  private static let timerParameter = Parameter(name: "id", location: "path", required: true, schema: Schema.string(description: "A timer's identifier: letters, digits, `-`, `_` and `.`, at most 64 characters."), description: "The timer's identifier. A client chooses it.")
   private static let routeParameter = Parameter(name: "kind", location: "path", required: true, schema: Schema.string(pattern: "^[a-z][a-z0-9-]{0,31}$", description: "A transport's identifier: 1 through 32 lowercase letters, digits and `-`, starting with a letter. `lan` is reserved."), description: "The transport's kind. The transport chooses it.")
   private static let markerParameter = Parameter(name: "X-Insteon-Request", location: "header", required: true, schema: Schema.constant("1"), description: "Marks an explicit API request, so a browser page can't change clients by accident.")
 
@@ -145,6 +165,8 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .revokeClient, .createPairing: [Self.clientParameter, Self.markerParameter]
     case .putNotificationRule, .deleteNotificationRule: [Self.ruleParameter, Self.markerParameter]
     case .putRoute, .deleteRoute: [Self.routeParameter, Self.markerParameter]
+    case .putSchedule, .deleteSchedule: [Self.scheduleParameter, Self.markerParameter]
+    case .putTimer, .deleteTimer: [Self.timerParameter, Self.markerParameter]
     case .browserCard, .browserCommand:
       [Self.addressParameter]
     default:
@@ -157,6 +179,8 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .executeCommand: Body(contentType: "application/json", schema: Schema.ref("Command"), description: "The command. Unknown fields are refused. The body is at most 8 KiB.")
     case .createClient: Body(contentType: "application/json", schema: Schema.ref("ClientRequest"), description: "The client's name and scope. Unknown fields are refused.")
     case .putNotificationRule: Body(contentType: "application/json", schema: Schema.ref("NotificationRuleRequest"), description: "The rule without its identifier, which the path gives. Unknown fields are refused. The body is at most 8 KiB.")
+    case .putSchedule: Body(contentType: "application/json", schema: Schema.ref("ScheduleRequest"), description: "The schedule without its identifier, which the path gives. Unknown fields are refused. The body is at most 8 KiB.")
+    case .putTimer: Body(contentType: "application/json", schema: Schema.ref("TimerRequest"), description: "The timer without its identifier, which the path gives. Unknown fields are refused. The body is at most 8 KiB.")
     case .putRoute: Body(contentType: "application/json", schema: Schema.ref("RouteRequest"), description: "The route's ticket. Unknown fields are refused. The body is at most 8 KiB.")
     case .browserCommand: Body(contentType: "application/x-www-form-urlencoded", schema: Schema.string(), description: "The page's form: `action`, optional `levelPercent`, and the page's `formKey`.")
     default: nil
@@ -167,9 +191,9 @@ enum APIOperation: String, CaseIterable, Sendable {
   /// browser route takes only the password.
   var requiredScope: ClientScope {
     switch self {
-    case .listDevices, .health, .streamEvents, .openAPI, .listNotificationRules, .listRoutes: .read
+    case .listDevices, .health, .streamEvents, .openAPI, .listNotificationRules, .listRoutes, .listSchedules, .listTimers: .read
     case .executeCommand: .control
-    case .listClients, .createClient, .revokeClient, .createPairing, .putNotificationRule, .deleteNotificationRule, .putRoute, .deleteRoute: .admin
+    case .listClients, .createClient, .revokeClient, .createPairing, .putNotificationRule, .deleteNotificationRule, .putRoute, .deleteRoute, .putSchedule, .deleteSchedule, .putTimer, .deleteTimer: .admin
     case .browserIndex, .browserControls, .browserCard, .browserCommand: .admin
     }
   }
@@ -190,6 +214,11 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listNotificationRules: codes += [.notificationRulesNotSaved]
     case .putNotificationRule: codes += [.invalidNotificationRule, .unknownDevice, .notificationRuleLimitReached, .notificationRulesNotSaved, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected]
     case .deleteNotificationRule: codes += [.unknownNotificationRule, .notificationRulesNotSaved, .apiMarkerMissing]
+    case .listSchedules, .listTimers: codes += [.schedulesNotSaved]
+    case .putSchedule: codes += [.invalidSchedule, .unknownDevice, .unsupportedControl, .locationNotConfigured, .timeZoneUnavailable, .scheduleLimitReached, .schedulesNotSaved, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected]
+    case .putTimer: codes += [.invalidTimer, .unknownDevice, .unsupportedControl, .timerLimitReached, .schedulesNotSaved, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected]
+    case .deleteSchedule: codes += [.unknownSchedule, .schedulesNotSaved, .apiMarkerMissing]
+    case .deleteTimer: codes += [.unknownTimer, .schedulesNotSaved, .apiMarkerMissing]
     case .listRoutes: codes += [.routeRegistrationsNotSaved]
     case .putRoute: codes += [.invalidRouteRegistration, .routeRegistrationLimitReached, .routeRegistrationsNotSaved, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected]
     case .deleteRoute: codes += [.unknownRouteRegistration, .routeRegistrationsNotSaved, .apiMarkerMissing]
@@ -216,6 +245,12 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .createPairing: [Reply(status: 200, description: "The pairing document, with the new credential.", contentType: "application/json", schema: Schema.ref("PairingDocument"), headers: [:])]
     case .listNotificationRules: [Reply(status: 200, description: "The rules.", contentType: "application/json", schema: Schema.ref("NotificationRuleList"), headers: [:])]
     case .putNotificationRule: [Reply(status: 200, description: "The stored rule.", contentType: "application/json", schema: Schema.ref("NotificationRuleStored"), headers: [:])]
+    case .listSchedules: [Reply(status: 200, description: "The schedules.", contentType: "application/json", schema: Schema.ref("ScheduleList"), headers: [:])]
+    case .putSchedule: [Reply(status: 200, description: "The stored schedule, with its next run.", contentType: "application/json", schema: Schema.ref("ScheduleStored"), headers: [:])]
+    case .deleteSchedule: [Reply(status: 204, description: "The schedule is removed.", contentType: nil, schema: nil, headers: [:])]
+    case .listTimers: [Reply(status: 200, description: "The timers.", contentType: "application/json", schema: Schema.ref("TimerList"), headers: [:])]
+    case .putTimer: [Reply(status: 200, description: "The started timer.", contentType: "application/json", schema: Schema.ref("TimerStored"), headers: [:])]
+    case .deleteTimer: [Reply(status: 204, description: "The timer is canceled.", contentType: nil, schema: nil, headers: [:])]
     case .listRoutes: [Reply(status: 200, description: "The routes.", contentType: "application/json", schema: Schema.ref("RouteList"), headers: [:])]
     case .putRoute: [Reply(status: 200, description: "The stored route.", contentType: "application/json", schema: Schema.ref("RouteStored"), headers: [:])]
     case .deleteRoute: [Reply(status: 204, description: "The route is removed.", contentType: nil, schema: nil, headers: [:])]

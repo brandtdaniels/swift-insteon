@@ -32,6 +32,7 @@ let package = Package(
         .product(name: "InsteonService", package: "swift-insteon"),
         .product(name: "InsteonCore", package: "swift-insteon"),
         .product(name: "InsteonProtocol", package: "swift-insteon"),
+        .product(name: "InsteonScheduling", package: "swift-insteon"),
         .product(name: "InsteonModem", package: "swift-insteon"),
         .product(name: "InsteonHubClient", package: "swift-insteon"),
         .product(name: "Crypto", package: "swift-crypto"),
@@ -45,7 +46,7 @@ let package = Package(
     ),
     .testTarget(
       name: "InsteonHTTPTests",
-      dependencies: ["InsteonHTTP", .product(name: "InsteonModem", package: "swift-insteon"), .product(name: "InsteonHubClient", package: "swift-insteon"), .product(name: "InsteonService", package: "swift-insteon"), .product(name: "InsteonCore", package: "swift-insteon"), .product(name: "HummingbirdTesting", package: "hummingbird"), .product(name: "Hummingbird", package: "hummingbird"), .product(name: "HTTPTypes", package: "swift-http-types"), .product(name: "ServiceLifecycleTestKit", package: "swift-service-lifecycle"), .product(name: "Logging", package: "swift-log"), .product(name: "NIOCore", package: "swift-nio"), .product(name: "NIOEmbedded", package: "swift-nio")]
+      dependencies: ["InsteonHTTP", .product(name: "InsteonScheduling", package: "swift-insteon"), .product(name: "InsteonModem", package: "swift-insteon"), .product(name: "InsteonHubClient", package: "swift-insteon"), .product(name: "InsteonService", package: "swift-insteon"), .product(name: "InsteonCore", package: "swift-insteon"), .product(name: "HummingbirdTesting", package: "hummingbird"), .product(name: "Hummingbird", package: "hummingbird"), .product(name: "HTTPTypes", package: "swift-http-types"), .product(name: "ServiceLifecycleTestKit", package: "swift-service-lifecycle"), .product(name: "Logging", package: "swift-log"), .product(name: "NIOCore", package: "swift-nio"), .product(name: "NIOEmbedded", package: "swift-nio")]
     ),
     .target(
       name: "InsteonServerSupport",

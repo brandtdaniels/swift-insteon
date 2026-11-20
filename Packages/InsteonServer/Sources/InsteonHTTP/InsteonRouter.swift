@@ -33,6 +33,7 @@ func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authenti
   let clientAPI = ClientAPI(clients: clients, pairing: pairing, routes: routes, streams: streams)
   let routeAPI = RouteAPI(routes: routes)
   let ruleAPI = NotificationRuleAPI(service: service)
+  let scheduleAPI = ScheduleAPI(service: service)
   let website = DeviceWebsite(service: service)
 
   // The one place a route is registered. The switch is exhaustive, so an operation without a handler doesn't compile.
@@ -50,6 +51,12 @@ func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authenti
     case .listNotificationRules: { _, _ in try await ruleAPI.list() }
     case .putNotificationRule: { request, context in try await ruleAPI.put(request, id: context.parameters.get("id")) }
     case .deleteNotificationRule: { request, context in try await ruleAPI.remove(request, id: context.parameters.get("id")) }
+    case .listSchedules: { _, _ in try await scheduleAPI.listSchedules() }
+    case .putSchedule: { request, context in try await scheduleAPI.putSchedule(request, id: context.parameters.get("id")) }
+    case .deleteSchedule: { request, context in try await scheduleAPI.removeSchedule(request, id: context.parameters.get("id")) }
+    case .listTimers: { _, _ in try await scheduleAPI.listTimers() }
+    case .putTimer: { request, context in try await scheduleAPI.putTimer(request, id: context.parameters.get("id")) }
+    case .deleteTimer: { request, context in try await scheduleAPI.removeTimer(request, id: context.parameters.get("id")) }
     case .listRoutes: { _, _ in try await routeAPI.list() }
     case .putRoute: { request, context in try await routeAPI.put(request, kind: context.parameters.get("kind")) }
     case .deleteRoute: { request, context in try await routeAPI.remove(request, kind: context.parameters.get("kind")) }
