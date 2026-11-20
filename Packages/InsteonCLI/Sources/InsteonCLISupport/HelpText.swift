@@ -108,26 +108,35 @@ public enum HelpText {
 
   /// The help for `insteon discover`.
   public static let discover = """
-    Usage: insteon discover [--local] [--insteon-connect] [--all]
+    Usage: insteon discover [--local] [--insteon-connect | --insteon-stage] [--all]
                             [--identify [HOST[:PORT]]] [--json]
 
-    Finds Hubs in two ways. Only the local network is searched unless --insteon-connect is
-    given; give both options for both ways.
-      --local             Ask the addresses on the local private subnets for a Hub's page,
-                          without credentials, stopping at the first Hub. Results are
+    Finds Hubs and Hub Pros. Only the local network is searched unless --insteon-connect or
+    --insteon-stage is given; give --local as well for both ways. A run asks one of Insteon's
+    services at most, so --insteon-connect and --insteon-stage can't be given together.
+      --local             Look on the local private subnets, without credentials, stopping at
+                          the first Hub. On macOS it first browses Bonjour for a Hub Pro. It
+                          then asks each address for a Hub's page and, for a Hub Pro's
+                          interface, a read of its root and its settings. Results are
                           candidates: check the address before sending a password there.
-                          The default.
+                          The default. A Hub Pro is listed with its address, and the command
+                          can't control it yet.
       --all               Ask every address on the local network, rather than stopping at
                           the first Hub.
       --insteon-connect   Ask Insteon Connect, which lists the Hubs that reported from this
                           network in the past 24 hours, with their Insteon IDs and models.
-                          This shares the network's public IP address with Insteon.
+                          This sends the network's public IP address to Insteon Connect.
+      --insteon-stage     Ask Insteon's staging service, which lists the Hubs that reported to
+                          it from this network, such as a Hub Pro that announces only there,
+                          with their Insteon IDs, models and firmware. This sends the
+                          network's public IP address to Insteon's staging service.
       --identify          Ask Hubs found at a private address for Get IM Info, with the
                           configured INSTEON_HUB_USERNAME and INSTEON_HUB_PASSWORD, to show
                           their Insteon IDs and models. This sends the password, unencrypted,
                           so the command asks before sending it to each Hub found on port
-                          25105, and stops at the first Hub that rejects it. Without a
-                          terminal to ask at, name the one Hub instead.
+                          25105, and stops at the first Hub that rejects it. A Hub Pro is
+                          never sent a password. Without a terminal to ask at, name the one
+                          Hub instead.
       --identify HOST[:PORT]
                           Ask only the Hub found at HOST, on PORT or port 25105, without
                           asking first.

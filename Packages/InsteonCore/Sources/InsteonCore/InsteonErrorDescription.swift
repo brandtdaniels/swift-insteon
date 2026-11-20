@@ -358,7 +358,7 @@ public enum HubFailure: Hashable, Sendable {
   /// Reads a failure from an error a session with a Hub threw.
   ///
   /// A Hub that never answers a poll leaves the modem's first command to time out, which
-  /// ``ModemError/timedOut(_:)`` reports as the modem not answering. Say the Hub has never
+  /// `ModemError.timedOut` reports as the modem not answering. Say the Hub has never
   /// answered with `hubHasAnswered`, and that timeout reads as ``unanswered``.
   ///
   /// - Parameters:

@@ -69,7 +69,7 @@ public struct InsteonConnectLookup: Sendable {
 
   /// The address of the page the lookup requests: ``InsteonConnectLookup/pageURL`` or
   /// ``InsteonConnectLookup/stagingPageURL``.
-  public let pageURL: URL
+  public let url: URL
 
   /// The client the page is requested with, which can't carry credentials.
   public let httpClient: UnauthenticatedHTTPClient
@@ -112,7 +112,7 @@ public struct InsteonConnectLookup: Sendable {
     timeout: Duration = InsteonConnectLookup.defaultTimeout
   ) {
 
-    self.pageURL = pageURL
+    self.url = pageURL
     self.httpClient = httpClient
     self.timeout = timeout
 
@@ -130,7 +130,7 @@ public struct InsteonConnectLookup: Sendable {
   ///   `HTTPClientError.redirectRefused` for a redirect to another host.
   public func hubs() async throws -> [DiscoveredHub] {
 
-    var request = URLRequest(url: pageURL)
+    var request = URLRequest(url: url)
     request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
     // Cookies would let Insteon link one lookup to the next.
     request.httpShouldHandleCookies = false

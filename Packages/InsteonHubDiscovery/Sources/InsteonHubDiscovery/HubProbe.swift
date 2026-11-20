@@ -58,7 +58,7 @@ struct HubInterfaceProbe: HubProbe {
 /// Asks a host whether it's a Hub Pro.
 ///
 /// The Hub Pro's HTTP interface answers `GET /` with `401 Unauthorized` and no
-/// `WWW-Authenticate` header, and `GET /settings` with the JSON that ``HubProSettings`` reads. Only a host that answers the first request that way is sent the second,
+/// `WWW-Authenticate` header, and `GET /settings` with the JSON that `HubProSettings` reads. Only a host that answers the first request that way is sent the second,
 /// so a printer, a router or any other web server is sent one request and nothing more. Both
 /// requests are reads that carry no credentials.
 public struct HubProProbe: HubProbe {

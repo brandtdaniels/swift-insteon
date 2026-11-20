@@ -82,7 +82,7 @@ struct InsteonStageLookupTests {
 
     #expect(try await lookup.hubs().isEmpty)
     #expect(await client.requests.compactMap(\.url?.absoluteString) == ["https://connect.insteon.com/GetInfo.aspx"])
-    #expect(InsteonConnectLookup().pageURL == InsteonConnectLookup.pageURL)
+    #expect(InsteonConnectLookup().url == InsteonConnectLookup.pageURL)
 
   }
 

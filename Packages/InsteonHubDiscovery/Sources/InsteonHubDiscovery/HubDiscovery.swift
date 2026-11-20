@@ -61,7 +61,7 @@ public struct HubDiscovery: Sendable {
   public let hubProPorts: [Int]
 
   /// The model numbers the Insteon device catalog gives to products with a Hub Pro's interface,
-  /// such as the ones ``ProductCatalog/hubProModels`` reads, which a Bonjour service's model
+  /// such as the ones `ProductCatalog.hubProModels` reads, which a Bonjour service's model
   /// record is matched against by prefix.
   public let hubProModels: [String]
 
