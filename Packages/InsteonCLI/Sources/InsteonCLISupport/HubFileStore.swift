@@ -42,10 +42,10 @@ public struct LocalHubFiles: HubFileStore {
 
   }
 
-  /// The names of the entries in a directory, or `nil` if it can't be listed.
+  /// The names of the entries in a directory, sorted, or `nil` if it can't be listed.
   public func fileNames(inDirectory path: String) -> [String]? {
 
-    try? FileManager.default.contentsOfDirectory(atPath: path)
+    try? FileManager.default.contentsOfDirectory(atPath: path).sorted()
 
   }
 
