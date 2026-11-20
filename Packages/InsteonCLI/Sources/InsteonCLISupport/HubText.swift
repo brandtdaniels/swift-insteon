@@ -120,6 +120,8 @@ public enum HubText {
       return nil
     case .skippedNonPrivateAddress:
       return "\(host) isn't a private address, so it wasn't sent the password."
+    case .skippedHubPro:
+      return "\(address) is a Hub Pro, which takes no user name or password, so it wasn't sent the password."
     case .skippedNonHubPort:
       return "\(address) isn't on the Hub's port, \(HubLocation.defaultPort), so it wasn't sent the password. "
         + "'insteon discover --identify \(address)' sends it."

@@ -270,7 +270,7 @@ enum DiscoverCommand {
   /// Connect before the local network when both found it.
   private static func foundByRawValues(_ sources: Set<HubSource>) -> [String] {
 
-    [HubSource.insteonConnect, .localNetwork]
+    [HubSource.insteonConnect, .insteonStage, .localNetwork]
       .filter(sources.contains)
       .map { method(for: $0).rawValue }
 
@@ -282,6 +282,7 @@ enum DiscoverCommand {
     switch source {
     case .localNetwork: .local
     case .insteonConnect: .insteonConnect
+    case .insteonStage: .insteonStage
     }
 
   }

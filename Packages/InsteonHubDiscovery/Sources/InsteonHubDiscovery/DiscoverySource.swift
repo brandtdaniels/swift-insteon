@@ -11,4 +11,8 @@ public enum DiscoverySource: String, Hashable, Sendable, CaseIterable {
   /// By asking Insteon Connect, as ``InsteonConnectLookup`` does.
   case insteonConnect
 
+  /// By asking Insteon's staging service, as ``InsteonConnectLookup`` does with
+  /// ``InsteonConnectLookup/stagingPageURL``.
+  case insteonStage
+
 }

@@ -42,12 +42,20 @@ public enum InsteonConnectError: Error, Hashable, Sendable {
 /// are offered for the Hub's password. A Hub that hasn't reported recently, or can't reach
 /// the internet, isn't listed; power-cycling it makes it report again.
 ///
+/// Insteon's staging service has a page of the same layout at
+/// ``InsteonConnectLookup/stagingPageURL``. It lists the Hubs that reported to the staging
+/// service, and reads the same way.
+///
 /// The page is HTML for people rather than an API, so it's read by its labels, and a change
 /// to its wording can stop the lookup with ``InsteonConnectError/unrecognizedPage``.
 public struct InsteonConnectLookup: Sendable {
 
   /// The address of Insteon Connect's Get Info page.
   public static let pageURL = URL(string: "https://connect.insteon.com/GetInfo.aspx")!
+
+  /// The address of the Get Info page of Insteon's staging service, which lists the Hubs that
+  /// reported to it, such as a Hub Pro that announces only there.
+  public static let stagingPageURL = URL(string: "https://sfstage.insteon.com/GetInfo.aspx")!
 
   /// How long to wait for the page by default: 10 seconds.
   public static let defaultTimeout: Duration = .seconds(10)
@@ -58,6 +66,10 @@ public struct InsteonConnectLookup: Sendable {
   /// The `User-Agent` the lookup sends, which names this package rather than the app, its
   /// version or the device's system.
   public static let userAgent: String = "swift-insteon"
+
+  /// The address of the page the lookup requests: ``InsteonConnectLookup/pageURL`` or
+  /// ``InsteonConnectLookup/stagingPageURL``.
+  public let pageURL: URL
 
   /// The client the page is requested with, which can't carry credentials.
   public let httpClient: UnauthenticatedHTTPClient
@@ -87,15 +99,20 @@ public struct InsteonConnectLookup: Sendable {
   /// Creates a lookup.
   ///
   /// - Parameters:
+  ///   - pageURL: The Get Info page to request: ``InsteonConnectLookup/pageURL``, or
+  ///     ``InsteonConnectLookup/stagingPageURL`` for Insteon's staging service. Defaults to
+  ///     ``InsteonConnectLookup/pageURL``.
   ///   - httpClient: The client to request the page with, which can't carry credentials.
   ///     Defaults to ``InsteonConnectLookup/defaultClient()``.
   ///   - timeout: How long to wait for the page, in all. Defaults to
   ///     ``InsteonConnectLookup/defaultTimeout``.
   public init(
+    pageURL: URL = InsteonConnectLookup.pageURL,
     httpClient: UnauthenticatedHTTPClient = InsteonConnectLookup.defaultClient(),
     timeout: Duration = InsteonConnectLookup.defaultTimeout
   ) {
 
+    self.pageURL = pageURL
     self.httpClient = httpClient
     self.timeout = timeout
 
@@ -113,7 +130,7 @@ public struct InsteonConnectLookup: Sendable {
   ///   `HTTPClientError.redirectRefused` for a redirect to another host.
   public func hubs() async throws -> [DiscoveredHub] {
 
-    var request = URLRequest(url: Self.pageURL)
+    var request = URLRequest(url: pageURL)
     request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
     // Cookies would let Insteon link one lookup to the next.
     request.httpShouldHandleCookies = false
@@ -219,6 +236,12 @@ public struct InsteonConnectLookup: Sendable {
           hubs[current].modemFirmwareVersion = byte(value).map(FirmwareVersion.init(rawValue:))
         case "unit type", "your device's unit type":
           hubs[current].unitType = unitType(value)
+
+          if hubs[current].unitType?.lowercased() == "hubpro" {
+
+            hubs[current].kind = .hubPro
+
+          }
         default:
           break
         }

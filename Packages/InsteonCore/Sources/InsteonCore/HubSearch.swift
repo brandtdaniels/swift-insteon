@@ -29,12 +29,18 @@ public struct HubSearch: Sendable {
 
   private let identifier: HubIdentifier
 
-  /// Creates a search that asks the local network and Insteon Connect, and identifies Hubs on
-  /// the Hub's default port, ``HubLocation/defaultPort``.
-  public init() {
+  private let hubProPorts: [Int]
 
-    self.finder = HubFinder()
+  /// Creates a search that asks the local network, Insteon Connect and Insteon's staging
+  /// service, and identifies Hubs on the Hub's default port, ``HubLocation/defaultPort``.
+  ///
+  /// - Parameter hubProPorts: The ports to look for a Hub Pro's interface on, such as
+  ///   ``ProductCatalog/hubProPorts``. Defaults to none, which looks for no Hub Pro.
+  public init(hubProPorts: [Int] = []) {
+
+    self.finder = HubFinder(discovery: HubDiscovery(hubProPorts: hubProPorts))
     self.identifier = HubIdentifier()
+    self.hubProPorts = hubProPorts
 
   }
 
@@ -62,6 +68,68 @@ public struct HubSearch: Sendable {
       return HubCandidate(found)
 
     }
+
+  }
+
+  /// Asks Insteon's staging service for the Hubs that reported to it from this network's public
+  /// IP address, such as a Hub Pro that announces only there.
+  ///
+  /// - Returns: The Hubs, each found by ``HubSource/insteonStage``.
+  /// - Throws: The lookup's error, or `CancellationError`.
+  public func insteonStageHubs() async throws -> [HubCandidate] {
+
+    let lookup = InsteonConnectLookup(
+      pageURL: InsteonConnectLookup.stagingPageURL,
+      httpClient: finder.lookup.httpClient,
+      timeout: finder.lookup.timeout
+    )
+
+    return try await lookup.hubs().map { (hub: DiscoveredHub) -> HubCandidate in
+
+      var found: DiscoveredHub = hub
+      found.foundBy = [.insteonStage]
+
+      return HubCandidate(found)
+
+    }
+
+  }
+
+  /// Asks one host whether it's a Hub Pro, with the requests a search sends each address and
+  /// no credentials.
+  ///
+  /// - Parameter host: The host's IPv4 address.
+  /// - Returns: The Hub Pro, or `nil` if the host doesn't answer as one on any of the search's
+  ///   Hub Pro ports.
+  /// - Throws: `CancellationError`.
+  public func recognizeHubPro(at host: String) async throws -> HubCandidate? {
+
+    for port in hubProPorts {
+
+      let probe = HubProProbe(port: port, httpClient: finder.discovery.httpClient)
+
+      do {
+
+        if let hub = try await probe.probe(host: host) {
+
+          return HubCandidate(hub)
+
+        }
+
+      } catch is CancellationError {
+
+        throw CancellationError()
+
+      } catch {
+
+        // A client that won't send the requests, or an unusable port, recognizes nothing.
+        continue
+
+      }
+
+    }
+
+    return nil
 
   }
 
@@ -179,6 +247,9 @@ public enum HubSource: Hashable, Sendable {
   /// Insteon Connect listed the Hub for this network's public IP address.
   case insteonConnect
 
+  /// Insteon's staging service listed the Hub for this network's public IP address.
+  case insteonStage
+
 }
 
 /// A Hub that ``HubSearch`` found, which is only a candidate until it's identified.
@@ -216,6 +287,13 @@ public struct HubCandidate: Hashable, Sendable {
   /// The kind of Hub as Insteon's servers name it, such as `"HUB2"`, if it's known.
   public var unitType: String? { discovered.unitType }
 
+  /// Which local interface the Hub answers on: the Hub's, which the command drives a modem
+  /// through, or the Hub Pro's, which it only reads.
+  public var kind: HubKind { discovered.kind }
+
+  /// The settings a Hub Pro reported to the search that found it, if it did.
+  public var hubProSettings: HubProSettings? { discovered.hubProSettings }
+
   /// The ways the Hub was found.
   public var foundBy: Set<HubSource> {
 
@@ -224,6 +302,7 @@ public struct HubCandidate: Hashable, Sendable {
       switch source {
       case .localNetwork: .localNetwork
       case .insteonConnect: .insteonConnect
+      case .insteonStage: .insteonStage
       }
 
     })
@@ -273,6 +352,10 @@ public enum HubIdentification: Sendable {
   /// The caller chose not to send credentials to the Hub.
   case declined
 
+  /// The candidate is a Hub Pro, whose interface takes no user name or password, so none was
+  /// sent.
+  case skippedHubPro
+
   /// The Hub didn't answer in time.
   case didNotAnswer
 
@@ -289,6 +372,8 @@ public enum HubIdentification: Sendable {
       self = .identified(info)
     case .skippedNonPrivateAddress:
       self = .skippedNonPrivateAddress
+    case .skippedHubPro:
+      self = .skippedHubPro
     case .skippedNonHubPort:
       self = .skippedNonHubPort
     case .declined:
