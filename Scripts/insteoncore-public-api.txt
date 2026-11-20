@@ -5,6 +5,33 @@
 actor DeviceNetwork
 actor DeviceRegistry
 actor HubProNetwork
+case BackupEngine.i1
+case BackupEngine.i2
+case BackupEngine.i2cs
+case BackupProgress.deviceUnreadable(_:_:)
+case BackupProgress.readingDevice(_:position:total:)
+case BackupProgress.readingModem
+case BackupRecordRole.controller
+case BackupRecordRole.responder
+case BackupRecordState.end
+case BackupRecordState.free
+case BackupRecordState.inUse
+case BackupSourceKind.hubPro
+case BackupSourceKind.modem
+case BackupSourceKind.service
+case BackupUnreadableReason.damagedRecords
+case BackupUnreadableReason.failed
+case BackupUnreadableReason.incomplete
+case BackupUnreadableReason.noAnswer
+case BackupUnreadableReason.notCached
+case BackupUnreadableReason.rejectedModem
+case BackupUnreadableReason.unavailableFromSource
+case BackupValue.array(_:)
+case BackupValue.bool(_:)
+case BackupValue.integer(_:)
+case BackupValue.null
+case BackupValue.object(String:)
+case BackupValue.string(_:)
 case DatabaseLinkDirection.link
 case DatabaseLinkDirection.unlink
 case DatabaseLinkRefusal.changedSincePlanned(_:)
@@ -115,6 +142,10 @@ case DeviceStatus.Reading.percent(_:)
 case DeviceStatus.Reading.raw
 case ExpectedProductKey.key(_:)
 case ExpectedProductKey.notReported
+case HomeBackupError.checksumMismatch
+case HomeBackupError.notABackup(_:)
+case HomeBackupError.notJSON
+case HomeBackupError.unsupportedFormat(_:)
 case HubFailure.stoppedAnswering
 case HubFailure.unanswered
 case HubIdentification.declined
@@ -303,6 +334,13 @@ case TwoWayLinking.whenDeviceControls
 case UnidentifiedReason.failed(_:)
 case UnidentifiedReason.noIdentity
 case UnidentifiedReason.notLinked
+enum BackupEngine
+enum BackupProgress
+enum BackupRecordRole
+enum BackupRecordState
+enum BackupSourceKind
+enum BackupUnreadableReason
+enum BackupValue
 enum DatabaseLinkDirection
 enum DatabaseLinkRefusal
 enum DatabaseLinkResult.DeviceCheck
@@ -321,6 +359,8 @@ enum DeviceSettingFieldProblem
 enum DeviceSettingInput.Form
 enum DeviceStatus.Reading
 enum ExpectedProductKey
+enum HomeBackupError
+enum HomeBackupReader
 enum HubFailure
 enum HubIdentification
 enum HubLinkingJoin
@@ -357,6 +397,11 @@ enum SendRefusal
 enum SerialCommandPolicy
 enum TwoWayLinking
 enum UnidentifiedReason
+func BackupDevice.encode(to:)
+func BackupIdentity.encode(to:)
+func BackupModem.encode(to:)
+func BackupRecord.encode(to:)
+func BackupValue.encode(to:)
 func Device.beep()
 func Device.capabilities()
 func Device.changeInstantly(to:)
@@ -409,6 +454,8 @@ func DeviceRegistry.setCatalog(_:)
 func DeviceRegistryStore.load()
 func DeviceRegistryStore.save(_:)
 func DeviceSettingsReading.raw(for:button:)
+func HomeBackup.encoded()
+func HomeBackup.including(notificationRules:routes:)
 func HubCandidate.record(_:)
 func HubLocation.isSameEndpoint(as:)
 func HubProDevice.beep()
@@ -465,6 +512,23 @@ func ProductCatalogStore.cachedJSON()
 func ProductCatalogStore.cachedVersion()
 func ProductCatalogStore.save(json:version:)
 func SelfTestReport.check(_:)
+init BackupDatabase(delta:records:)
+init BackupDevice(address:name:type:identity:engine:allLinkDatabase:)
+init BackupDevice(address:name:type:identity:engine:unreadable:)
+init BackupDevice(from:)
+init BackupEngine(_:)
+init BackupIdentity(_:)
+init BackupIdentity(category:subcategory:firmwareVersion:)
+init BackupIdentity(from:)
+init BackupModem(address:identity:allLinkDatabase:)
+init BackupModem(address:identity:unreadable:)
+init BackupModem(from:)
+init BackupRecord(_:)
+init BackupRecord(from:)
+init BackupRecord(state:role:group:address:data:memoryAddress:)
+init BackupRoute(kind:ticket:)
+init BackupUnreadable(reason:detail:)
+init BackupValue(from:)
 init DatabaseLinkInterrupted(result:cause:)
 init DatabaseLinkResult.StepResult(step:outcome:)
 init DatabaseMismatch(isDevice:memoryAddress:expected:found:)
@@ -505,6 +569,8 @@ init DeviceUnlinkingResult(link:remainingLinks:)
 init DirectMessage(to:command1:command2:data:hasChecksum:)
 init FactoryResetSteps(address:info:procedure:erases:)
 init ForgottenDevice(address:device:)
+init HomeBackup(createdAt:source:modem:devices:notificationRules:routes:)
+init HomeBackup(parsing:)
 init HubAddressRefused(host:)
 init HubFailure?(_:hubHasAnswered:)
 init HubLinkingLeg(device:index:count:modemRole:modemGroup:deviceGroup:remoteEnterLinkingMode:allGroupsWhen:)
@@ -574,6 +640,14 @@ let DeviceNetwork.registry
 let DirectMessage.command1
 let DirectMessage.command2
 let DirectMessage.device
+let HomeBackup.checksum
+let HomeBackup.createdAt
+let HomeBackup.devices
+let HomeBackup.format
+let HomeBackup.modem
+let HomeBackup.notificationRules
+let HomeBackup.routes
+let HomeBackup.source
 let HubAddressRefused.host
 let HubProDevice.address
 let HubProNetwork.registry
@@ -591,6 +665,10 @@ static func DeviceMonitor.replyKind(_:)
 static func DeviceNetwork.offline(catalog:snapshot:hub:)
 static func DeviceSettingChange.OtherSettings.compared(_:unread:)
 static func DeviceSettingChange.OtherSettings.notReread(_:)
+static func HomeBackup.check(_:)
+static func HomeBackupReader.backup(from:modem:catalog:createdAt:)
+static func HomeBackupReader.read(hubPro:createdAt:)
+static func HomeBackupReader.read(network:createdAt:progress:)
 static func HubLinkingLeg.canSucceedOnRetry(after:)
 static func HubSearch.merge(_:into:)
 static func InsteonErrorDescription.didntConfirmSending(to:)
@@ -639,6 +717,7 @@ static let DeviceSettingChange.OtherSettings.ReadFailure.canceled
 static let DeviceSettingChange.OtherSettings.ReadFailure.connectionClosed
 static let DeviceSettingChange.OtherSettings.ReadFailure.failed
 static let DeviceSettingChange.OtherSettings.ReadFailure.notAnswered
+static let HomeBackup.currentFormat
 static let HubLocation.defaultPort
 static let HubProNetwork.defaultListRefreshPolls
 static let HubProNetwork.defaultPollInterval
@@ -647,6 +726,13 @@ static let InsteonErrorDescription.hubStoppedAnsweringInline
 static let JSONFileDeviceRegistryStore.formatVersion
 static let ProductCatalog.updateLocation
 static var ProductCatalog.bundleName
+struct BackupDatabase
+struct BackupDevice
+struct BackupIdentity
+struct BackupModem
+struct BackupRecord
+struct BackupRoute
+struct BackupUnreadable
 struct DatabaseLinkInterrupted
 struct DatabaseLinkPlan
 struct DatabaseLinkResult
@@ -690,6 +776,9 @@ struct DeviceUnlinkingResult
 struct DirectMessage
 struct FactoryResetSteps
 struct ForgottenDevice
+struct HomeBackup
+struct HomeBackupCheck
+struct HomeBackupCheck.UnreadableDevice
 struct HubAddressRefused
 struct HubCandidate
 struct HubLinkingLeg
@@ -759,6 +848,34 @@ typealias NAKReason
 typealias ProductKey
 typealias ReportedIdentity
 typealias SettingName
+var BackupDatabase.delta
+var BackupDatabase.isComplete
+var BackupDatabase.records
+var BackupDevice.address
+var BackupDevice.allLinkDatabase
+var BackupDevice.engine
+var BackupDevice.identity
+var BackupDevice.name
+var BackupDevice.type
+var BackupDevice.unreadable
+var BackupIdentity.category
+var BackupIdentity.firmwareVersion
+var BackupIdentity.subcategory
+var BackupModem.address
+var BackupModem.allLinkDatabase
+var BackupModem.identity
+var BackupModem.unreadable
+var BackupRecord.address
+var BackupRecord.data
+var BackupRecord.group
+var BackupRecord.isInUse
+var BackupRecord.memoryAddress
+var BackupRecord.role
+var BackupRecord.state
+var BackupRoute.kind
+var BackupRoute.ticket
+var BackupUnreadable.detail
+var BackupUnreadable.reason
 var DatabaseLinkPlan.deviceSteps
 var DatabaseLinkPlan.isEmpty
 var DatabaseLinkPlan.modemSteps
@@ -940,6 +1057,16 @@ var FactoryResetSteps.info
 var FactoryResetSteps.procedure
 var ForgottenDevice.address
 var ForgottenDevice.device
+var HomeBackupCheck.UnreadableDevice.address
+var HomeBackupCheck.UnreadableDevice.unreadable
+var HomeBackupCheck.backup
+var HomeBackupCheck.checksumMatches
+var HomeBackupCheck.isComplete
+var HomeBackupCheck.modemRecordCount
+var HomeBackupCheck.readableDeviceCount
+var HomeBackupCheck.unreadableDevices
+var HomeBackupError.description
+var HomeBackupError.errorDescription
 var HubAddressRefused.description
 var HubCandidate.category
 var HubCandidate.firmware
