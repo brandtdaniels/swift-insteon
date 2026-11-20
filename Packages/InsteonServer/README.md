@@ -20,7 +20,9 @@ swift run --package-path Packages/InsteonServer insteon-server --help
 
 The server reads the CLI's protected `~/.config/insteon/env`, or
 `$XDG_CONFIG_HOME/insteon/env`. An explicit `--env-file` can name another file. Process
-environment variables take precedence. Use the Hub's local credentials, not an Insteon
+environment variables take precedence. The server serves one Hub: run one server per Hub,
+each with its own `--env-file` (the CLI's `hubs/NAME.env` files are written in the same form, and a Hub Pro's file holds only its `INSTEON_HUB_HOST`).
+Use the Hub's local credentials, not an Insteon
 account login:
 
 ```dotenv

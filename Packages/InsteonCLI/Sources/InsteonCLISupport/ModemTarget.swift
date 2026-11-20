@@ -31,19 +31,21 @@ public enum ModemTarget: Hashable, Sendable {
   /// Works out the modem from `--hub` or `--serial`, or else from the environment.
   ///
   /// `--hub` and `--serial` can't both be given. Without either, the Hub's host comes from
-  /// `INSTEON_HUB_HOST`. A host without a port takes its port from `INSTEON_HUB_PORT`, if it's
+  /// `INSTEON_HUB_HOST`, which a Hub file named with `--hub NAME` can set. An address given
+  /// with `--hub` wins over the host in a file. A host without a port takes its port from `INSTEON_HUB_PORT`, if it's
   /// set.
   ///
   /// - Parameters:
   ///   - hub: The value of `--hub`, `HOST` or `HOST:PORT`, if given.
+  ///   - hubName: The Hub file's name, if `--hub` gave a name rather than an address.
   ///   - serialPath: The value of `--serial`, if given.
   ///   - environment: The environment, with any environment file merged in.
   /// - Returns: The modem to talk to.
   /// - Throws: ``ConfigurationError`` if no modem was given, both kinds were, or the host or
   ///   port isn't valid.
-  public static func resolve(hub: String?, serialPath: String?, environment: [String: String]) throws(ConfigurationError) -> ModemTarget {
+  public static func resolve(hub: String?, hubName: String? = nil, serialPath: String?, environment: [String: String]) throws(ConfigurationError) -> ModemTarget {
 
-    if hub != nil, serialPath != nil {
+    if hub != nil || hubName != nil, serialPath != nil {
 
       throw ConfigurationError.conflictingModems
 
@@ -62,6 +64,12 @@ public enum ModemTarget: Hashable, Sendable {
     }
 
     guard let text = hub ?? nonEmpty(environment[EnvironmentKey.hubHost]) else {
+
+      if let hubName {
+
+        throw ConfigurationError.namedHubWithoutHost(hubName)
+
+      }
 
       throw ConfigurationError.noModem
 
@@ -237,6 +245,17 @@ extension HubCredentials: CustomStringConvertible, CustomDebugStringConvertible,
 
 }
 
+/// How a Hub's name was given.
+public enum HubNameSource: Hashable, Sendable {
+
+  /// With `--hub NAME`.
+  case option
+
+  /// With the `INSTEON_HUB` environment variable.
+  case variable
+
+}
+
 /// A modem or Hub the `insteon` command can't use as configured, with a message that says why.
 public enum ConfigurationError: Error, Hashable, Sendable {
 
@@ -258,6 +277,19 @@ public enum ConfigurationError: Error, Hashable, Sendable {
   /// A serial port was asked for on a platform without serial ports.
   case serialUnavailable
 
+  /// A Hub was named, with `--hub` or `INSTEON_HUB`, and its file doesn't exist. The values
+  /// are the name, the file that would hold it, and the names of the Hub files that exist.
+  case unknownHub(name: String, path: String, known: [String], source: HubNameSource)
+
+  /// `INSTEON_HUB` is set to something that isn't a Hub's name.
+  case invalidHubVariable(String)
+
+  /// A Hub file was asked for, and neither `XDG_CONFIG_HOME` nor `HOME` says where they are.
+  case noConfigurationDirectory
+
+  /// A Hub was named with `--hub NAME`, and its file sets no `INSTEON_HUB_HOST`.
+  case namedHubWithoutHost(String)
+
 }
 
 extension ConfigurationError: CustomStringConvertible {
@@ -267,7 +299,7 @@ extension ConfigurationError: CustomStringConvertible {
 
     switch self {
     case .noModem:
-      "No modem given: use --hub HOST[:PORT], set INSTEON_HUB_HOST, or use --serial PATH."
+      "No modem given: use --hub HOST[:PORT] or --hub NAME, set INSTEON_HUB_HOST or INSTEON_HUB, or use --serial PATH."
     case .conflictingModems:
       "Use either --hub or --serial, not both."
     case let .invalidHost(text):
@@ -275,10 +307,41 @@ extension ConfigurationError: CustomStringConvertible {
     case let .invalidPort(text):
       "'\(text)' isn't a valid port: expected a number from 1 to 65535."
     case .missingCredentials:
-      "The Hub's user name and password are missing: set INSTEON_HUB_USERNAME and INSTEON_HUB_PASSWORD in the environment or in ~/.config/insteon/env."
+      "The Hub's user name and password are missing: set INSTEON_HUB_USERNAME and INSTEON_HUB_PASSWORD in the environment or in the Hub's environment file (~/.config/insteon/env, or hubs/NAME.env beside it)."
     case .serialUnavailable:
       "Serial ports are available only on macOS and Linux."
+    case let .unknownHub(name, path, known, source):
+      Self.unknownHubMessage(name: name, path: path, known: known, source: source)
+    case let .invalidHubVariable(value):
+      "INSTEON_HUB is '\(value)', which isn't a Hub's name. A name uses the letters a-z, the digits 0-9, hyphen and underscore, 1 to 32 characters."
+    case .noConfigurationDirectory:
+      "There's no place to look for Hub files: neither XDG_CONFIG_HOME nor HOME is set."
+    case let .namedHubWithoutHost(name):
+      "The Hub file for '\(name)' sets no INSTEON_HUB_HOST. Add INSTEON_HUB_HOST=ADDRESS to it, or give the address with --hub ADDRESS."
     }
+
+  }
+
+}
+
+extension ConfigurationError {
+
+  private static func unknownHubMessage(name: String, path: String, known: [String], source: HubNameSource) -> String {
+
+    let lead: String = switch source {
+    case .option:
+      "No Hub is named '\(name)': \(path) doesn't exist."
+    case .variable:
+      "INSTEON_HUB names the Hub '\(name)', but \(path) doesn't exist."
+    }
+
+    guard !known.isEmpty else {
+
+      return lead + " No Hub files exist yet. Create it with the Hub's INSTEON_HUB_USERNAME, INSTEON_HUB_PASSWORD and INSTEON_HUB_HOST, and make it readable only by you: chmod 600 \(path)"
+
+    }
+
+    return lead + " The Hub files that exist are: \(known.joined(separator: ", ")). 'insteon hubs' lists them."
 
   }
 

@@ -14,6 +14,7 @@ struct HubProTextTests {
 
   @Test(arguments: [
     Subcommand.info,
+    .hubs,
     .observe(ObserveOptions(device: nil)),
     .device(InsteonAddress(0x3A, 0x4B, 0x01), .id),
     .device(InsteonAddress(0x3A, 0x4B, 0x01), .ping),

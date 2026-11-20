@@ -42,6 +42,9 @@ public enum ArgumentError: Error, Hashable, Sendable {
   /// `--hub` was given a user name or password, as in `user:password@host`.
   case credentialsInHub
 
+  /// `--hub` was given a value that is neither an IPv4 address nor a Hub's name.
+  case invalidHubName(String)
+
   /// An option that takes a Hub's address, named here, was given a user name or password.
   case credentialsInOption(String)
 
@@ -95,6 +98,8 @@ extension ArgumentError: CustomStringConvertible {
       "There's no help for '\(topic)'. Run 'insteon --help' for the list of commands."
     case .credentialsInHub:
       "The option '--hub' takes only HOST[:PORT]. Set the Hub's user name and password in the environment or the environment file instead."
+    case let .invalidHubName(text):
+      "'\(text)' isn't a Hub: '--hub' takes a private IPv4 address, such as 192.168.1.20, or the name of a Hub file. A name uses the letters a-z, the digits 0-9, hyphen and underscore, 1 to 32 characters."
     case let .credentialsInOption(option):
       "The option '\(option)' takes only HOST[:PORT]. Set the Hub's user name and password in the environment or the environment file instead."
     case let .missingArgument(argument, subcommand):

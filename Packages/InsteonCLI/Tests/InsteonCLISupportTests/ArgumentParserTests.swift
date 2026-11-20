@@ -874,4 +874,89 @@ extension ArgumentParserTests {
 
   }
 
+
+  // MARK: - Named Hubs
+
+  @Test func takesANameForTheHubFile() throws {
+
+    #expect(try Invocation.parse(["--hub", "basement", "info"]) == Invocation(hubName: "basement", subcommand: .info))
+    #expect(try Invocation.parse(["info", "--hub=hub-pro_2"]) == Invocation(hubName: "hub-pro_2", subcommand: .info))
+
+  }
+
+  @Test func keepsAnAddressAsTheHub() throws {
+
+    #expect(try Invocation.parse(["--hub", "192.168.1.20:8080", "info"]) == Invocation(hub: "192.168.1.20:8080", subcommand: .info))
+
+  }
+
+  @Test(arguments: ["../secrets", "a/b", "/etc/passwd", ".", "..", "Basement", "hub.local", "::1", "has space", "192.168.1", "x\u{2F}y"])
+  func refusesAValueThatIsNeitherAnAddressNorAName(value: String) {
+
+    #expect(throws: ArgumentError.invalidHubName(value)) {
+
+      try Invocation.parse(["--hub", value, "info"])
+
+    }
+
+  }
+
+  @Test func refusesATooLongName() {
+
+    let name = String(repeating: "a", count: 33)
+
+    #expect(throws: ArgumentError.invalidHubName(name)) {
+
+      try Invocation.parse(["--hub", name, "info"])
+
+    }
+
+  }
+
+  @Test func saysWhatANameLooksLike() {
+
+    let message = String(describing: ArgumentError.invalidHubName("../x"))
+
+    #expect(message.contains("a-z"))
+    #expect(message.contains("0-9"))
+    #expect(message.contains("hyphen"))
+    #expect(message.contains("underscore"))
+    #expect(message.contains("1 to 32"))
+    #expect(message.contains("IPv4"))
+
+  }
+
+  @Test func parsesTheHubsCommand() throws {
+
+    #expect(try Invocation.parse(["hubs"]) == Invocation(subcommand: .hubs))
+    #expect(try Invocation.parse(["hubs", "--help"]) == Invocation(subcommand: .help(topic: "hubs")))
+
+  }
+
+  @Test func helpsWithHubs() {
+
+    #expect(HelpText.text(for: "hubs") == HelpText.hubs)
+    #expect(HelpText.overview.contains("hubs "))
+    #expect(HelpText.hubs.contains("hubs/NAME.env"))
+    #expect(HelpText.hubs.contains("INSTEON_HUB"))
+    #expect(HelpText.hubs.contains("insteon --hub NAME info"))
+    #expect(HelpText.hubs.contains("never"))
+
+  }
+
+  @Test func theHubsCommandTakesNoArguments() {
+
+    #expect(throws: ArgumentError.unexpectedArgument("basement", subcommand: "hubs")) {
+
+      try Invocation.parse(["hubs", "basement"])
+
+    }
+    #expect(throws: ArgumentError.unknownOption("--all", subcommand: "hubs")) {
+
+      try Invocation.parse(["hubs", "--all"])
+
+    }
+
+  }
+
 }

@@ -15,6 +15,7 @@ public enum HelpText {
 
     return switch topic {
     case "discover": discover
+    case "hubs": hubs
     case "info": info
     case "links": links
     case "link": link
@@ -36,10 +37,11 @@ public enum HelpText {
   public static let overview = """
     Drive an Insteon Hub or modem, and its devices, from the terminal.
 
-    Usage: insteon [--hub HOST[:PORT] | --serial PATH] [--env-file PATH] [--json] COMMAND [OPTIONS]
+    Usage: insteon [--hub HOST[:PORT] | --hub NAME | --serial PATH] [--env-file PATH] [--json] COMMAND [OPTIONS]
 
     Commands:
       discover            Find Hubs on the local network
+      hubs                List the Hub files, with each Hub's address
       info                Show the modem's Insteon ID, identity and product; for a Hub Pro,
                           its versions and devices
       links               List the modem's ALL-Link database
@@ -66,6 +68,9 @@ public enum HelpText {
                           interface, without a user name or password, one request at a
                           time: info, observe and device ADDRESS id, status, on, off,
                           ping and beep. Any other command says a Hub Pro can't do it.
+      --hub NAME          The Hub whose file is hubs/NAME.env next to the environment file.
+                          A name uses a-z, 0-9, hyphen and underscore, 1 to 32 characters.
+                          A file may hold only the address: a Hub Pro needs no credentials.
       --serial PATH       A modem on a serial or USB port, such as /dev/ttyUSB0 (macOS and Linux).
       --env-file PATH     Read environment variables from PATH instead of the default file.
       --json              Print JSON, where the command supports it.
@@ -145,6 +150,11 @@ public enum HelpText {
       --identify HOST[:PORT]
                           Ask only the Hub found at HOST, on PORT or port 25105, without
                           asking first.
+
+    For each Hub it lists, it also shows the name of the file to save the Hub's settings in,
+    in the hubs directory beside the environment file, and the command that then uses the
+    Hub by name, such as 'insteon --hub hub-2b3c info'. The name is the Hub's type and the
+    end of its Insteon ID or address.
     """
 
   /// The help for `insteon info`.
@@ -613,6 +623,27 @@ public enum HelpText {
 
       --raw               Also print each message's bytes as the modem sent them, such as
                           0250 1A2B3C 012041 8F 01 00.
+    """
+
+  /// The help for `insteon hubs`.
+  public static let hubs = """
+    Usage: insteon hubs
+
+    Lists the Hub files: the default environment file, and each NAME.env in the hubs
+    directory beside it, hubs/NAME.env in $XDG_CONFIG_HOME/insteon or ~/.config/insteon. For
+    each it shows the name to give '--hub', the address the file sets and a note. The default
+    file is the one a command reads when it names no Hub; when INSTEON_HUB names a Hub, that
+    Hub's file is the default instead.
+
+    A file that can't be used says why: others can write to it, another user owns it, it
+    isn't a regular file, it can't be read, or a line isn't NAME=VALUE. A file others can read
+    is listed with a reminder to run chmod 600. It never shows a user name or a password.
+
+    With no files, it says where it looked and how to create one, and exits with status 0.
+    It needs no Hub or modem.
+
+    Example:
+      insteon --hub NAME info
     """
 
   /// The help for `insteon catalog`.

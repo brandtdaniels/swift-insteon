@@ -18,6 +18,7 @@ The script, run from the package's root, builds the command for release and copi
 ## Connecting
 
 - `--hub HOST[:PORT]`: a Hub 2245 or Hub 2242 on the local network, by its private IPv4 address, as described below. A Hub Pro at that address is read and controlled over its local HTTP interface instead, as described under Hub Pro below, and is asked for no user name or password. Without `--hub`, the host comes from `INSTEON_HUB_HOST`, and a host without a port takes it from `INSTEON_HUB_PORT`, or else uses the Hub's port, 25105.
+- `--hub NAME`: a Hub kept in its own file, `hubs/NAME.env` in your configuration directory, described below. A value for `--hub` that isn't an IPv4 address is a name. A name uses the letters a-z, the digits 0-9, hyphen and underscore, 1 to 32 characters, so it can't hold a slash or a dot and can't reach outside that directory.
 - `--serial PATH`: a PowerLinc Modem or USB Adapter on a serial or USB port, such as `/dev/ttyUSB0`, on macOS and Linux.
 - `--env-file PATH`: the environment file to read in place of the default one, described below.
 
@@ -32,6 +33,26 @@ INSTEON_HUB_HOST=192.168.1.20
 
 Make it readable only by you with `chmod 600 ~/.config/insteon/env`. The command reads the file only if you own it and no one else can write to it, and warns if others can read it. It never reads a file from the current directory, so a project you clone can't point the command, and your password, at another Hub. `--env-file PATH` reads another file, with the same checks.
 
+### Several Hubs
+
+A network can have more than one Hub, such as a Hub 2 and a Hub Pro. Keep each Hub's settings in its own file in the `hubs` directory beside the environment file, `$XDG_CONFIG_HOME/insteon/hubs/NAME.env` or `~/.config/insteon/hubs/NAME.env`, in the same form and under the same checks as the environment file, and never read from the current directory:
+
+```sh
+# ~/.config/insteon/hubs/basement.env
+INSTEON_HUB_USERNAME=your-hub-user-name
+INSTEON_HUB_PASSWORD=your-hub-password
+INSTEON_HUB_HOST=192.168.1.30
+```
+
+A Hub file can set `INSTEON_HUB_HOST` and `INSTEON_HUB_PORT`, so `insteon --hub basement info` needs no address. An address given with `--hub` still wins over a host in a file, and a variable set in the environment wins over the file. The file the command reads is the first of these that applies:
+
+1. `--env-file PATH`.
+2. `--hub NAME`.
+3. The `INSTEON_HUB` environment variable, which names a Hub as `--hub NAME` does: `INSTEON_HUB=basement insteon info`.
+4. The default file, `~/.config/insteon/env`, as before.
+
+A name with no file is an error that names the file the command looked for and the Hub files that exist. `INSTEON_HUB` naming a file that doesn't exist is an error too; the command never falls back to the default file. `insteon hubs` lists the files, and `insteon discover` shows the file name and command to use for each Hub it finds. To run the server for several Hubs, run one server per Hub, each with its own `--env-file`.
+
 Each line is `KEY=VALUE`, optionally after `export`; lines starting with `#` are comments. A value can be wrapped in single or double quotes, and nothing in it is expanded. A variable set in the environment wins over the file.
 
 The command sends the Hub's user name and password only to an IPv4 address in `10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16`, where a Hub on a home network is, whether the address comes from `--hub` or `INSTEON_HUB_HOST`. A host name, an IPv6, loopback or link-local address, and a public address, such as a mistyped one, are refused before anything is sent, and there's no option to allow them. Through a VPN, give the Hub's address on the home network. Requests go to the Hub directly, never through a proxy, which would read the password. On Linux, where `http_proxy`, `HTTP_PROXY`, `all_proxy` or `ALL_PROXY` can name a proxy the command can't turn off, it refuses to connect unless `no_proxy` names the Hub's exact address, such as `no_proxy=192.168.1.20`; an address range there isn't read, and `*` counts only as the whole value.
@@ -45,6 +66,7 @@ The Hub's interface is plain HTTP, so the password is readable on the network: u
 | Command | What it does |
 | --- | --- |
 | `discover [--local] [--insteon-connect \| --insteon-stage] [--all] [--identify [HOST[:PORT]]]` | Finds Hubs and Hub Pros by asking the addresses on the local network, stopping at the first Hub unless `--all` is given, with progress on standard error. On macOS the search first browses Bonjour for a Hub Pro, which advertises itself as a HomeKit accessory; the Hub Pro's model comes from the Insteon device catalog, and the address Bonjour resolves is confirmed with the two reads below. Each address is asked for a Hub's page on the Hub's port and, for each port the catalog gives a Hub Pro's interface, a read of its root and, only when the root answers 401 without a `WWW-Authenticate` header, its settings. A Hub Pro is listed with its address and the versions it reports; use `--hub` with it to read and control its devices. `--insteon-connect` asks Insteon Connect instead, which lists the Hubs that reported from your network with their Insteon IDs and models, and `--insteon-stage` asks Insteon's staging service, which lists a Hub Pro that announces only there with its firmware; each sends your network's public IP address to that service, a run asks only one, and giving both is an error. Give `--local` with either for both ways. `--identify` asks Hubs found at a private address for Get IM Info with your configured credentials, which sends them the password unencrypted: it asks you before each Hub on port 25105 and stops at the first Hub that rejects the password, and it never sends a password to a Hub Pro. `--identify HOST[:PORT]` asks only that Hub, and is how to identify one without a terminal to answer at. Nothing `discover` sends carries credentials unless `--identify` does. |
+| `hubs` | Lists the Hub files: the default file and each `hubs/NAME.env`, with the address each sets and a note, marking the default, which is the Hub `INSTEON_HUB` names or else the default file. A file that can't be used says why: others can write to it, another user owns it, it isn't a regular file, it can't be read, a line is malformed, or its name is unusable. It never shows a user name or a password, and needs no Hub. With no files it says where it looked and how to create one, and exits with status 0. |
 | `info` | The modem's Get IM Info: its Insteon ID, category, subcategory and firmware version, and the product the Insteon device catalog has for them. |
 | `links [--identify]` | Reads the modem's whole ALL-Link database and lists each record, with the product of each device whose identity is known. `--identify` asks each device with ID Request. |
 | `link ADDRESS [--two-way]` | Links a device by its Insteon address, without its SET button: a device the catalog says is a light or switched load is turned fully on with Light On, so it links with full on as its on-level, and any other device, such as an I/O module or a lock, links with whatever on-level it captures; then the modem starts ALL-Linking as controller and sends the device Enter Linking Mode, extended for i2CS. A device that doesn't answer is linked with its SET button instead. A device the catalog says can control, or any device with `--two-way`, is then linked back with the modem as its responder, unless `--one-way` is given. |
@@ -222,4 +244,4 @@ A host that answers as a Hub Pro is read and controlled through its local HTTP i
 
 A command the Hub Pro doesn't confirm may have reached the device: it is reported as such and never sent again. Everything else, such as `links`, `link`, `unlink`, `remove`, `scene`, `watch`, a device's settings and `modem send`, says a Hub Pro can't do it, before anything is sent. Add and remove devices with the Hub Pro's SET buttons, as its manual describes: `insteon` never asks a Hub Pro to add or remove a device, change a link or update, and sends none of the commands that write or clear a link.
 
-A Hub Pro is recognized when `--hub` names a host that answers as one, whether or not credentials are set. The Hub Pro sends nothing on its own, so a change made at a device shows at the next read.
+A Hub Pro is recognized when `--hub` names a host, or a Hub file whose address is one, that answers as a Hub Pro, whether or not credentials are set. Its Hub file, `hubs/NAME.env`, needs only `INSTEON_HUB_HOST`: `insteon hubs` lists it and `insteon --hub NAME info` reaches it. The Hub Pro sends nothing on its own, so a change made at a device shows at the next read.

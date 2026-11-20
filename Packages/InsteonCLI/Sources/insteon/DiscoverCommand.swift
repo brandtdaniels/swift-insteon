@@ -1,3 +1,4 @@
+import Foundation
 import InsteonCLISupport
 import InsteonCore
 
@@ -42,11 +43,11 @@ enum DiscoverCommand {
   /// How often the local search says it's still going.
   private static let progressInterval: Duration = .seconds(5)
 
-  static func run(_ options: DiscoverOptions, envFilePath: String?, printsJSON: Bool) async throws {
+  static func run(_ options: DiscoverOptions, envFilePath: String?, hubName: String? = nil, printsJSON: Bool) async throws {
 
     // Read before searching, so a missing user name or password stops the command at once.
     let credentials: HubCredentials? = try options.identifiesHubs
-      ? Self.credentials(envFilePath: envFilePath)
+      ? Self.credentials(envFilePath: envFilePath, hubName: hubName)
       : nil
 
     // Without a person to ask before each Hub is sent the password, it's sent only to the one
@@ -104,6 +105,8 @@ enum DiscoverCommand {
 
     Output.table([["ADDRESS", "INSTEON ID", "PRODUCT", "FOUND BY"]] + rows)
 
+    printHubFiles(hubs)
+
     if let note = HubText.candidateNote(options) {
 
       Output.note(note)
@@ -115,6 +118,18 @@ enum DiscoverCommand {
       Output.note(note)
 
     }
+
+  }
+
+  /// Prints the file to save each Hub's settings in, and the command that uses the Hub by name.
+  private static func printHubFiles(_ hubs: [HubCandidate]) {
+
+    let directory = HubFiles(store: LocalHubFiles(), environment: ProcessInfo.processInfo.environment).hubsDirectory
+    let sources = hubs.map { HubFileSuggestion.Source(isHubPro: $0.isHubPro, insteonID: $0.insteonID.map { "\($0)" }, host: $0.host, port: $0.port) }
+
+    Output.line()
+    Output.line(HubFileSuggestion.note)
+    Output.table(HubFileSuggestion.rows(for: sources, directory: directory))
 
   }
 
@@ -313,9 +328,9 @@ enum DiscoverCommand {
   }
 
   /// Reads the Hub's user name and password from the environment, for identifying Hubs.
-  private static func credentials(envFilePath: String?) throws -> HubCredentials {
+  private static func credentials(envFilePath: String?, hubName: String?) throws -> HubCredentials {
 
-    try HubCredentials(environment: CommandSession.loadEnvironment(explicitPath: envFilePath))
+    try HubCredentials(environment: CommandSession.loadEnvironment(explicitPath: envFilePath, hubName: hubName))
 
   }
 

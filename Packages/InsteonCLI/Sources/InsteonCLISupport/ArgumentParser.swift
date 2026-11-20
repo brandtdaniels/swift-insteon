@@ -3,7 +3,7 @@ import InsteonCore
 extension Invocation {
 
   /// The subcommands, in the order the help lists them.
-  public static let subcommandNames = ["discover", "info", "links", "link", "unlink", "remove", "observe", "device", "scene", "beep", "modem", "watch", "catalog"]
+  public static let subcommandNames = ["discover", "hubs", "info", "links", "link", "unlink", "remove", "observe", "device", "scene", "beep", "modem", "watch", "catalog"]
 
   /// Other names for subcommands: `group` for `scene`.
   public static let subcommandAliases = ["group": "scene"]
@@ -26,6 +26,7 @@ extension Invocation {
   public static func parse(_ arguments: [String]) throws(ArgumentError) -> Invocation {
 
     var hub: String?
+    var hubName: String?
     var serialPath: String?
     var envFilePath: String?
     var printsJSON = false
@@ -49,7 +50,21 @@ extension Invocation {
 
         }
 
-        hub = text
+        if HubName.isAddress(text) {
+
+          hub = text
+          hubName = nil
+
+        } else if HubName.isValid(text) {
+
+          hubName = text
+          hub = nil
+
+        } else {
+
+          throw ArgumentError.invalidHubName(text)
+
+        }
       case "--serial":
         serialPath = try value(of: name, inline: inlineValue, in: arguments, at: &index)
       case "--env-file":
@@ -71,7 +86,7 @@ extension Invocation {
 
     let subcommand = try parseSubcommand(rest, asksForHelp: asksForHelp)
 
-    return Invocation(hub: hub, serialPath: serialPath, envFilePath: envFilePath, printsJSON: printsJSON, subcommand: subcommand)
+    return Invocation(hub: hub, hubName: hubName, serialPath: serialPath, envFilePath: envFilePath, printsJSON: printsJSON, subcommand: subcommand)
 
   }
 
@@ -143,6 +158,9 @@ extension Invocation {
     switch name {
     case "discover":
       return try .discover(parseDiscover(rest))
+    case "hubs":
+      try expectNoArguments(rest, subcommand: name)
+      return .hubs
     case "info":
       try expectNoArguments(rest, subcommand: name)
       return .info
