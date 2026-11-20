@@ -262,7 +262,7 @@ public enum SettingsText {
     switch error {
     case .notIdentified:
       return "\(device) didn't report its identity, so its settings can't be looked up. Check that it's linked and in range."
-    case let .noSettings(product):
+    case let .settingsAbsent(product):
       return "The Insteon device catalog doesn't describe the settings of \(product)."
     case let .noSuchSetting(name, product):
       return "The Insteon device catalog has no setting '\(name)' for \(product). 'insteon device \(device) settings --advanced' lists them."

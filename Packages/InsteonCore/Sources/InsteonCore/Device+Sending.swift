@@ -826,7 +826,7 @@ extension Device {
 
     guard let commands = description.commandSet else {
 
-      throw DeviceSettingError.noSettings(product: DeviceControlModel.product(of: description))
+      throw DeviceSettingError.settingsAbsent(product: DeviceControlModel.product(of: description))
 
     }
 
