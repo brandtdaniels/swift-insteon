@@ -48,6 +48,7 @@ public actor HubProNetwork {
   private var listed: [HubProListedDevice] = []
   private var descriptions: [InsteonAddress: HubProDescription] = [:]
   private var versions: HubProSettings.Versions?
+  private var time: String?
 
   /// Creates a network.
   ///
@@ -130,7 +131,9 @@ public actor HubProNetwork {
   ///   doesn't answer.
   public func open() async throws {
 
-    versions = try await transport.settings().version
+    let settings = try await transport.settings()
+    versions = settings.version
+    time = settings.time
 
     try await refreshDevices()
 
@@ -166,6 +169,14 @@ public actor HubProNetwork {
   public var softwareVersions: HubProSettings.Versions? {
 
     versions
+
+  }
+
+  /// The time the Hub Pro reported when the network opened, as it wrote it: the home's local time, such as
+  /// `11/20/2026 02:38:39 PM`, with no time zone.
+  public var reportedTime: String? {
+
+    time
 
   }
 

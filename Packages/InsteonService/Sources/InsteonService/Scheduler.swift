@@ -66,6 +66,9 @@ actor Scheduler {
 
   private var timeZoneIdentifier: String { settings.timeZoneIdentifier ?? configuration.systemTimeZoneIdentifier }
 
+  /// The time zone schedules are worked out in, or `nil` when the host doesn't have it.
+  var homeTimeZone: TimeZone? { timeZone }
+
   /// What the scheduler reports about itself.
   var notes: [ServiceHealthNote] {
     timeZone == nil ? [.timeZoneUnavailable(timeZoneIdentifier)] : []

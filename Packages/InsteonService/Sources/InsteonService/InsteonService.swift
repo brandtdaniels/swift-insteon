@@ -44,6 +44,7 @@ public actor InsteonService: InsteonServiceAPI {
   private var waitingToEditRules: [CheckedContinuation<Void, Never>] = []
   private let scheduling: ScheduleConfiguration
   private var scheduler: Scheduler?
+  private var hubClock: (reported: String, readAt: Date)?
 
   /// How many of the newest events the service keeps for a client to resume from. Memory is
   /// bounded by this count; nothing is kept on disk, and a restart forgets every event.
@@ -366,6 +367,15 @@ public actor InsteonService: InsteonServiceAPI {
     publish(.schedule(run))
   }
 
+  private func healthNotes() async -> [ServiceHealthNote] {
+    let scheduler = schedulerInstance()
+    var notes = await scheduler.notes
+    if let hubClock, let zone = await scheduler.homeTimeZone, let seconds = HubClockDrift.seconds(reported: hubClock.reported, in: zone, at: hubClock.readAt) {
+      notes.append(.hubClockDrift(seconds: seconds))
+    }
+    return notes
+  }
+
   /// Reports readiness, the modem's state, and the times of the last hardware exchange, the last
   /// answered poll and the last confirmation of the cached device information. It sends nothing
   /// to hardware and doesn't take the admission gate.
@@ -375,7 +385,7 @@ public actor InsteonService: InsteonServiceAPI {
     case .connected: readiness = .ready
     case .unavailable: readiness = hasConnected ? .degraded : .starting
     }
-    return ServiceHealth(readiness: readiness, modem: connection, lastHardwareExchange: lastExchange, lastPoll: lastPoll, deviceInformationUpdated: informationUpdated, persistence: persistenceOutcome, checkedAt: now(), notes: await schedulerInstance().notes)
+    return ServiceHealth(readiness: readiness, modem: connection, lastHardwareExchange: lastExchange, lastPoll: lastPoll, deviceInformationUpdated: informationUpdated, persistence: persistenceOutcome, checkedAt: now(), notes: await healthNotes())
   }
 
   /// Subscribes to typed events. Each subscription is iterated by one caller task. A subscriber
@@ -504,6 +514,8 @@ public actor InsteonService: InsteonServiceAPI {
     try? await loadNotificationRules()
     // Subscribe before announcing the connection so nothing heard from then on is missed.
     let changes = try await candidate.changes()
+    // A Hub that reports its clock lets the service say when it differs; the service never sets it.
+    hubClock = await candidate.reportedLocalTime().map { ($0, now()) }
     await connected(to: candidate)
     switch changes {
     case let .heard(events):
