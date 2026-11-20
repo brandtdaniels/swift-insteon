@@ -20,7 +20,9 @@ public enum CatalogManifest {
       throw CheckFailure("\(url.path): can't be read")
     }
 
-    guard let manifest = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+    try StrictJSON.validate(Array(data), named: url.path)
+
+    guard let manifest = (try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)) as? [String: Any] else {
       throw CheckFailure("\(url.path): isn't a JSON object")
     }
 

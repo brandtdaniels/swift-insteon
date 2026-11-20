@@ -332,3 +332,40 @@ struct DeviceNeutralCheckTests {
       try DeviceNeutralCheck().run(in: root, console: console) == .passed, "\(console.output)")
   }
 }
+
+@Suite("check-device-neutral catalog file")
+struct DeviceNeutralCatalogFileTests {
+  private func run(catalog: Data) throws -> CheckStatus {
+    let fixture = Fixture()
+    try catalog.write(to: fixture.catalogURL)
+    return try fixture.check().run(in: fixture.directory.url, console: RecordingConsole())
+  }
+
+  @Test("refuses a catalog that isn't valid JSON, in the forms Python's json.loads refuses")
+  func refusesInvalidJSON() throws {
+    let valid = try JSONSerialization.data(withJSONObject: defaultCatalog)
+    let bom = Data([0xEF, 0xBB, 0xBF]) + valid
+    let trailingComma = Data(#"{"devices": [],"commandSets": [],}"#.utf8)
+
+    for bytes in [bom, trailingComma, Data(#"{"a": [1,2,],"b":1}"#.utf8), Data(), Data(#"{"devices": ["#.utf8)] {
+      #expect(throws: CheckFailure.self) { try run(catalog: bytes) }
+    }
+  }
+
+  @Test("names the file and keeps to one line in the message")
+  func namesFile() throws {
+    do {
+      _ = try run(catalog: Data("[1,]".utf8))
+      Issue.record("expected a failure")
+    } catch let failure as CheckFailure {
+      #expect(failure.message.contains("catalog.json: isn't valid JSON"))
+      #expect(!failure.message.contains("\n"))
+    }
+  }
+
+  @Test("refuses JSON that isn't an object, and passes an object that holds no catalog, as the script did")
+  func objectOnly() throws {
+    #expect(throws: CheckFailure.self) { try run(catalog: Data("[]".utf8)) }
+    #expect(try run(catalog: Data("{}".utf8)) == .passed)
+  }
+}

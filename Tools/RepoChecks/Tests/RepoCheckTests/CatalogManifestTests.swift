@@ -31,6 +31,14 @@ struct CatalogManifestTests {
     #expect(throws: CheckFailure.self) { try CatalogManifest.value(of: .version, at: directory.url(for: "missing.json")) }
   }
 
+  @Test("refuses a manifest with a trailing comma")
+  func refusesTrailingComma() throws {
+    let (directory, url) = try manifest(#"{"sha256": "abc", "version": "1",}"#)
+    _ = directory
+
+    #expect(throws: CheckFailure.self) { try CatalogManifest.value(of: .version, at: url) }
+  }
+
   @Test("reads the bundled manifest")
   func bundledManifest() throws {
     let root = URL(fileURLWithPath: #filePath)

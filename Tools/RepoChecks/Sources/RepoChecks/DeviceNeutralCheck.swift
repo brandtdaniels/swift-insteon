@@ -156,7 +156,10 @@ public struct DeviceNeutralCheck: RepoCheck {
   /// in its own case matches each of its spellings.
   public static func forbiddenWords(catalog url: URL) throws -> [String: (anyCase: Bool, spellings: [String])] {
     let data = try Data(contentsOf: url)
-    let catalog = (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    try StrictJSON.validate(Array(data), named: url.path)
+    guard let catalog = (try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)) as? [String: Any] else {
+      throw CheckFailure("\(url.path): isn't a JSON object")
+    }
 
     // By case-folded form: the first spelling, whether any spelling matches in any case, and
     // every spelling.
