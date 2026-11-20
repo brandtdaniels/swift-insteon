@@ -468,7 +468,7 @@ public enum DeviceSettingError: Error, Sendable {
 
   /// The catalog doesn't describe the device's settings. The associated value is the product,
   /// as a sentence names it.
-  case noSettings(product: String)
+  case settingsAbsent(product: String)
 
   /// The catalog has no setting by the name or label. The associated values are the name as
   /// given and the product.
