@@ -166,9 +166,9 @@ public struct HubProClient: Sendable {
 
   }
 
-  /// Sends a request to a path, with the device as its `device` query item, and returns the
-  /// answer, whatever its status.
-  private func send(_ method: String, _ path: String, device: InsteonAddress? = nil) async throws -> HTTPResponse {
+  /// Sends a request to a path, with the device as its `device` query item or the query items
+  /// given, and returns the answer, whatever its status.
+  func send(_ method: String, _ path: String, device: InsteonAddress? = nil, queryItems: [URLQueryItem] = []) async throws -> HTTPResponse {
 
     var components = URLComponents()
     components.scheme = "http"
@@ -182,6 +182,10 @@ public struct HubProClient: Sendable {
         URLQueryItem(name: "sync", value: "true"),
         URLQueryItem(name: "device", value: device.hexString),
       ]
+
+    } else if !queryItems.isEmpty {
+
+      components.queryItems = queryItems
 
     }
 
