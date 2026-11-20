@@ -922,4 +922,37 @@ extension ArgumentParserTests {
 
   }
 
+  @Test func parsesTheHubsCommand() throws {
+
+    #expect(try Invocation.parse(["hubs"]) == Invocation(subcommand: .hubs))
+    #expect(try Invocation.parse(["hubs", "--help"]) == Invocation(subcommand: .help(topic: "hubs")))
+
+  }
+
+  @Test func helpsWithHubs() {
+
+    #expect(HelpText.text(for: "hubs") == HelpText.hubs)
+    #expect(HelpText.overview.contains("hubs "))
+    #expect(HelpText.hubs.contains("hubs/NAME.env"))
+    #expect(HelpText.hubs.contains("INSTEON_HUB"))
+    #expect(HelpText.hubs.contains("insteon --hub NAME info"))
+    #expect(HelpText.hubs.contains("never"))
+
+  }
+
+  @Test func theHubsCommandTakesNoArguments() {
+
+    #expect(throws: ArgumentError.unexpectedArgument("basement", subcommand: "hubs")) {
+
+      try Invocation.parse(["hubs", "basement"])
+
+    }
+    #expect(throws: ArgumentError.unknownOption("--all", subcommand: "hubs")) {
+
+      try Invocation.parse(["hubs", "--all"])
+
+    }
+
+  }
+
 }

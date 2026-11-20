@@ -92,6 +92,10 @@ public enum Subcommand: Hashable, Sendable {
   /// Asks the modem about itself with Get IM Info.
   case info
 
+  /// Lists the Hub files in the per-user directory, with each Hub's address and port, and says
+  /// which one is the default. Needs no modem, and reads no Hub's password.
+  case hubs
+
   /// Reads and lists the modem's ALL-Link database.
   case links(LinksOptions)
 

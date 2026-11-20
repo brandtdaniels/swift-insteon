@@ -52,6 +52,8 @@ struct InsteonCommand {
       Output.line(HelpText.text(for: topic) ?? HelpText.overview)
     case let .discover(options):
       try await DiscoverCommand.run(options, envFilePath: invocation.envFilePath, hubName: CommandSession.hubName(of: invocation), printsJSON: printsJSON)
+    case .hubs:
+      try HubsCommand.run()
     case .info:
       try await withModem(invocation) { modem, names in
 

@@ -3,7 +3,7 @@ import InsteonCore
 extension Invocation {
 
   /// The subcommands, in the order the help lists them.
-  public static let subcommandNames = ["discover", "info", "links", "link", "unlink", "remove", "observe", "device", "scene", "beep", "modem", "watch", "catalog"]
+  public static let subcommandNames = ["discover", "hubs", "info", "links", "link", "unlink", "remove", "observe", "device", "scene", "beep", "modem", "watch", "catalog"]
 
   /// Other names for subcommands: `group` for `scene`.
   public static let subcommandAliases = ["group": "scene"]
@@ -158,6 +158,9 @@ extension Invocation {
     switch name {
     case "discover":
       return try .discover(parseDiscover(rest))
+    case "hubs":
+      try expectNoArguments(rest, subcommand: name)
+      return .hubs
     case "info":
       try expectNoArguments(rest, subcommand: name)
       return .info

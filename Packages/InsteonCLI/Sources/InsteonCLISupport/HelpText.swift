@@ -15,6 +15,7 @@ public enum HelpText {
 
     return switch topic {
     case "discover": discover
+    case "hubs": hubs
     case "info": info
     case "links": links
     case "link": link
@@ -40,6 +41,7 @@ public enum HelpText {
 
     Commands:
       discover            Find Hubs on the local network
+      hubs                List the Hub files, with each Hub's address
       info                Show the modem's Insteon ID, identity and product
       links               List the modem's ALL-Link database
       link [ADDRESS]      Link a device to the modem, by its address or its SET button
@@ -596,6 +598,27 @@ public enum HelpText {
 
       --raw               Also print each message's bytes as the modem sent them, such as
                           0250 1A2B3C 012041 8F 01 00.
+    """
+
+  /// The help for `insteon hubs`.
+  public static let hubs = """
+    Usage: insteon hubs
+
+    Lists the Hub files: the default environment file, and each NAME.env in the hubs
+    directory beside it, hubs/NAME.env in $XDG_CONFIG_HOME/insteon or ~/.config/insteon. For
+    each it shows the name to give '--hub', the address the file sets and a note. The default
+    file is the one a command reads when it names no Hub; when INSTEON_HUB names a Hub, that
+    Hub's file is the default instead.
+
+    A file that can't be used says why: others can write to it, another user owns it, it
+    isn't a regular file, it can't be read, or a line isn't NAME=VALUE. A file others can read
+    is listed with a reminder to run chmod 600. It never shows a user name or a password.
+
+    With no files, it says where it looked and how to create one, and exits with status 0.
+    It needs no Hub or modem.
+
+    Example:
+      insteon --hub NAME info
     """
 
   /// The help for `insteon catalog`.
