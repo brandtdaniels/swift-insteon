@@ -43,6 +43,7 @@ public actor HubProNetwork {
   private let now: @Sendable () -> Date
   private let pollInterval: Duration
   private let listRefreshPolls: Int
+  let pollSucceeded: @Sendable () async -> Void
   private var states: [InsteonAddress: NetworkDeviceState]
   private var listed: [HubProListedDevice] = []
   private var descriptions: [InsteonAddress: HubProDescription] = [:]
@@ -61,6 +62,7 @@ public actor HubProNetwork {
   ///   - listRefreshPolls: How many polls pass between reads of the device list. Defaults to
   ///     ``defaultListRefreshPolls``.
   ///   - now: The current time, for when a device last answered.
+  ///   - onPollSucceeded: Called each time the Hub Pro answers a poll, whether or not a level changed.
   public init(
     transport: HubProTransport,
     catalog: DeviceCatalog?,
@@ -68,9 +70,11 @@ public actor HubProNetwork {
     pollInterval: Duration = HubProNetwork.defaultPollInterval,
     clock: any Clock<Duration> = ContinuousClock(),
     listRefreshPolls: Int = HubProNetwork.defaultListRefreshPolls,
-    now: @escaping @Sendable () -> Date = { Date() }
+    now: @escaping @Sendable () -> Date = { Date() },
+    onPollSucceeded: @escaping @Sendable () async -> Void = {}
   ) {
 
+    self.pollSucceeded = onPollSucceeded
     self.transport = transport
     self.registry = DeviceRegistry(catalog: catalog, snapshot: snapshot.registry)
     self.states = snapshot.devices
@@ -121,7 +125,7 @@ public actor HubProNetwork {
 
   }
 
-  /// What the network knows, to save and give back to ``init(transport:catalog:snapshot:pollInterval:clock:listRefreshPolls:now:)``.
+  /// What the network knows, to save and give back to ``init(transport:catalog:snapshot:pollInterval:clock:listRefreshPolls:now:onPollSucceeded:)``.
   public func snapshot() async -> NetworkSnapshot {
 
     NetworkSnapshot(registry: await registry.snapshot, devices: states, modemDatabase: nil, hub: nil)
@@ -240,6 +244,8 @@ public actor HubProNetwork {
         }
 
         pending = try await network.readLevels()
+
+        await network.pollSucceeded()
 
       }
 
