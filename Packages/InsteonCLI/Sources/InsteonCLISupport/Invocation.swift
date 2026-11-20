@@ -116,6 +116,12 @@ public enum Subcommand: Hashable, Sendable {
   /// Asks a device read-only questions and records its answers as a JSON file to share.
   case observe(ObserveOptions)
 
+  /// Reads the modem's network, or a Hub Pro's device list, into a backup file.
+  case backup(BackupOptions)
+  /// Checks a backup file and says what it holds. Needs no modem.
+  case backupCheck(path: String)
+  /// Plans how a backup's devices move to the connected modem, and writes nothing.
+  case transferPlan(TransferPlanOptions)
   /// Sends a device a command, or reads its ALL-Link database.
   case device(InsteonAddress, DeviceAction)
 
@@ -141,6 +147,41 @@ public enum Subcommand: Hashable, Sendable {
   /// lists every difference between the published catalog's safeguards and the bundled copy's.
   case catalogUpdate(explains: Bool)
 
+}
+
+/// How `insteon backup` writes its file.
+public struct BackupOptions: Hashable, Sendable {
+  /// The file to write.
+  public var path: String
+  /// Whether `--force` lets the command replace a file that's already there.
+  public var overwrites: Bool
+  /// Creates options.
+  ///
+  /// - Parameters:
+  ///   - path: The file to write.
+  ///   - overwrites: Whether to replace a file that's already there. Defaults to `false`.
+  public init(path: String, overwrites: Bool = false) {
+    self.path = path
+    self.overwrites = overwrites
+  }
+}
+
+/// How `insteon transfer plan` plans.
+public struct TransferPlanOptions: Hashable, Sendable {
+  /// The backup file to plan from.
+  public var path: String
+  /// What to do when the connected modem already holds links: `--merge` or
+  /// `--replace-database`, and otherwise refuse.
+  public var existingLinks: ExistingLinksChoice
+  /// Creates options.
+  ///
+  /// - Parameters:
+  ///   - path: The backup file.
+  ///   - existingLinks: What to do about links the modem already holds. Defaults to refusing.
+  public init(path: String, existingLinks: ExistingLinksChoice = .refuse) {
+    self.path = path
+    self.existingLinks = existingLinks
+  }
 }
 
 /// A serial command for `insteon modem send` to write as given.

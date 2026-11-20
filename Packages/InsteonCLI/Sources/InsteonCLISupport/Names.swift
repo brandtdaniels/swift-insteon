@@ -18,6 +18,24 @@ public struct CommandFailure: Error, CustomStringConvertible, Hashable, Sendable
 
 }
 
+/// A command that did what was asked but not all of it, such as a backup that holds no
+/// ALL-Link database for some devices. Its report is already printed.
+public struct IncompleteResult: Error, CustomStringConvertible, Hashable, Sendable {
+
+  /// The sentence for standard error that says what is missing.
+  public let description: String
+
+  /// Creates a result.
+  ///
+  /// - Parameter description: The sentence for standard error.
+  public init(description: String) {
+
+    self.description = description
+
+  }
+
+}
+
 /// Names for the values the `insteon` command prints.
 public enum Names {
 
@@ -71,6 +89,8 @@ public enum Names {
     case is CancellationError:
       return "Interrupted."
     case let error as CommandFailure:
+      return error.description
+    case let error as IncompleteResult:
       return error.description
     case let error as RelayStateLinkingError:
       return LinkingEventText.relayStateMessage(error)

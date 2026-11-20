@@ -390,6 +390,18 @@ public struct HomeBackupCheck: Hashable, Sendable {
   /// Whether the file's checksum matches its contents.
   public var checksumMatches: Bool
 
+  /// Creates a check.
+  ///
+  /// - Parameters:
+  ///   - backup: The backup.
+  ///   - checksumMatches: Whether the file's checksum matches its contents.
+  public init(backup: HomeBackup, checksumMatches: Bool) {
+
+    self.backup = backup
+    self.checksumMatches = checksumMatches
+
+  }
+
   /// The devices that have no complete ALL-Link database, each with the reason, in address
   /// order.
   public var unreadableDevices: [UnreadableDevice] {
