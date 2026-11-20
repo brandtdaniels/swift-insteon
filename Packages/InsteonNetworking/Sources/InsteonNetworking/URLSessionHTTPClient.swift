@@ -446,7 +446,7 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
   /// - Parameters:
   ///   - response: The response the session returned.
   ///   - request: The request that was sent.
-  /// - Returns: `true` if the status is a redirect (300–399), or the response came from a
+  /// - Returns: `true` if the status is a redirect (300-399), or the response came from a
   ///   different scheme, host or port than the request was sent to.
   static func isRedirect(_ response: HTTPURLResponse, for request: URLRequest) -> Bool {
 
