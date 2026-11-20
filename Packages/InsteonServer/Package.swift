@@ -52,6 +52,7 @@ let package = Package(
       name: "InsteonServerSupport",
       dependencies: [
         "InsteonHTTP",
+        .product(name: "InsteonScheduling", package: "swift-insteon"),
         .product(name: "InsteonService", package: "swift-insteon"),
         .product(name: "InsteonCore", package: "swift-insteon"),
         .product(name: "InsteonCLISupport", package: "swift-insteon"),
@@ -84,6 +85,7 @@ let package = Package(
         "InsteonPluginKit",
         "InsteonLoopbackTransport",
         .product(name: "InsteonDeviceCatalog", package: "swift-insteon"),
+        .product(name: "InsteonScheduling", package: "swift-insteon"),
         .product(name: "InsteonLinking", package: "swift-insteon"),
         .product(name: "InsteonProtocol", package: "swift-insteon"),
         .product(name: "InsteonCore", package: "swift-insteon"),

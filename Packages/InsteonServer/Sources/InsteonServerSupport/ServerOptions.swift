@@ -1,4 +1,5 @@
 import Foundation
+import InsteonScheduling
 
 /// The listener, hardware and files selected before a server opens a connection.
 public struct ServerOptions: Sendable {
@@ -21,12 +22,19 @@ public struct ServerOptions: Sendable {
   public let homeName: String
   /// How often a Hub Pro is asked for its devices' levels, in seconds: from 2, and 5 by default.
   public let pollIntervalSeconds: Int
+  /// The home's latitude in degrees, positive north, or nil. Given with ``longitude``.
+  public let latitude: Double?
+  /// The home's longitude in degrees, positive east, or nil. Given with ``latitude``.
+  public let longitude: Double?
+  /// The home's IANA time zone, such as `America/Los_Angeles`, or nil for the one the server remembers
+  /// or the computer's. The host's time zone database decides whether the server can use it.
+  public let timeZone: String?
 
   /// Parses pairs of options, rejecting duplicates, public listeners and wildcard binds.
   /// Hub resolution and file permissions are checked by the CLI's existing helpers.
   public init(arguments: [String], environment: [String: String]) throws {
     var options: [String: String] = [:]
-    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--home-name", "--poll-interval"]
+    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--home-name", "--poll-interval", "--latitude", "--longitude", "--time-zone"]
     var index = 0
     while index < arguments.count {
       let name = arguments[index]
@@ -55,6 +63,22 @@ public struct ServerOptions: Sendable {
     self.homeName = homeName
     guard let pollInterval = Int(options["--poll-interval"] ?? "5"), (2...3600).contains(pollInterval) else { throw ServerOptionError.invalidPollInterval }
     self.pollIntervalSeconds = pollInterval
+    switch (options["--latitude"], options["--longitude"]) {
+    case (nil, nil):
+      latitude = nil
+      longitude = nil
+    case let (latitudeText?, longitudeText?):
+      guard let latitude = Double(latitudeText), let longitude = Double(longitudeText), GeographicCoordinate(latitude: latitude, longitude: longitude) != nil else { throw ServerOptionError.invalidLocation }
+      self.latitude = latitude
+      self.longitude = longitude
+    default:
+      throw ServerOptionError.invalidLocation
+    }
+    let timeZone = options["--time-zone"]
+    if let timeZone {
+      guard (1...64).contains(timeZone.count), timeZone.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "/_+-".contains($0)) }) else { throw ServerOptionError.invalidTimeZone }
+    }
+    self.timeZone = timeZone
   }
 
   /// The address without a trailing slash, or an error if it isn't a plain http or https address.
@@ -89,6 +113,10 @@ public enum ServerOptionError: Error, CustomStringConvertible {
   case invalidHomeName
   /// `--poll-interval` isn't a whole number of seconds from 2 through 3600.
   case invalidPollInterval
+  /// `--latitude` and `--longitude` are given together, as numbers within the Earth's range.
+  case invalidLocation
+  /// `--time-zone` isn't an IANA time zone's name of 1 through 64 letters, digits and `/_+-`.
+  case invalidTimeZone
   /// A `pair` command needs a client name of 1 through 64 characters and a scope of read, control or admin.
   case invalidClient
 
