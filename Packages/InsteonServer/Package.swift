@@ -13,7 +13,8 @@ let package = Package(
     .executable(name: "insteon-server", targets: ["insteon-server"]),
     .library(name: "InsteonPluginKit", targets: ["InsteonPluginKit"]),
     .library(name: "InsteonLoopbackTransport", targets: ["InsteonLoopbackTransport"]),
-    .executable(name: "insteon-reference-transport", targets: ["insteon-reference-transport"])
+    .executable(name: "insteon-reference-transport", targets: ["insteon-reference-transport"]),
+    .executable(name: "insteon-reference-notifier", targets: ["insteon-reference-notifier"])
   ],
   dependencies: [
     .package(name: "swift-insteon", path: "../.."),
@@ -71,6 +72,8 @@ let package = Package(
       ]
     ),
     .executableTarget(name: "insteon-reference-transport", dependencies: ["InsteonLoopbackTransport", "InsteonPluginKit"]),
+    .executableTarget(name: "insteon-reference-notifier", dependencies: ["InsteonPluginKit"]),
+    .testTarget(name: "InsteonPluginKitTests", dependencies: ["InsteonPluginKit"]),
     .executableTarget(name: "insteon-server", dependencies: ["InsteonServerSupport", .product(name: "Logging", package: "swift-log")]),
     .testTarget(
       name: "InsteonServerTests",
