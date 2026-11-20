@@ -42,6 +42,8 @@ public actor InsteonService: InsteonServiceAPI {
   private var ruleBook: NotificationRuleBook?
   private var rulesAreBeingEdited = false
   private var waitingToEditRules: [CheckedContinuation<Void, Never>] = []
+  private let scheduling: ScheduleConfiguration
+  private var scheduler: Scheduler?
 
   /// How many of the newest events the service keeps for a client to resume from. Memory is
   /// bounded by this count; nothing is kept on disk, and a restart forgets every event.
@@ -52,8 +54,8 @@ public actor InsteonService: InsteonServiceAPI {
 
   /// Creates a service for a network whose connection the host keeps open, and an optional
   /// persistence policy. The run ends if that connection does.
-  public init(network: DeviceNetwork, persistence: (any SnapshotPersisting)? = nil, clock: any Clock<Duration> = ContinuousClock(), runID: String? = nil) {
-    self.init(network: network, opener: FixedNetworkOpener(network: network), persistence: persistence, snapshotSavedAt: nil, reconnect: .never, clock: clock, now: { Date() }, jitter: { 0 }, isConnected: true, runID: runID)
+  public init(network: DeviceNetwork, persistence: (any SnapshotPersisting)? = nil, clock: any Clock<Duration> = ContinuousClock(), runID: String? = nil, scheduling: ScheduleConfiguration = ScheduleConfiguration()) {
+    self.init(network: network, opener: FixedNetworkOpener(network: network), persistence: persistence, snapshotSavedAt: nil, reconnect: .never, clock: clock, now: { Date() }, jitter: { 0 }, isConnected: true, runID: runID, scheduling: scheduling)
   }
 
   /// Creates a service that opens and reopens its own modem connection.
@@ -72,6 +74,7 @@ public actor InsteonService: InsteonServiceAPI {
   ///   - throughHub: Whether the modem is reached through a Hub. A modem that doesn't answer is then
   ///     reported as ``ModemUnavailability/hubUnreachable``, because the Hub is what to check.
   ///   - notificationRules: Where the notification rules are kept, if anywhere. Without it they last as long as the service.
+  ///   - scheduling: The home's time zone and location and where schedules and timers are kept. Schedules and timers run on `clock` and `now`.
   public init(
     network: DeviceNetwork,
     opener: any ServedNetworkOpening,
@@ -83,9 +86,10 @@ public actor InsteonService: InsteonServiceAPI {
     jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) },
     throughHub: Bool = false,
     runID: String? = nil,
-    notificationRules: (any NotificationRulePersisting)? = nil
+    notificationRules: (any NotificationRulePersisting)? = nil,
+    scheduling: ScheduleConfiguration = ScheduleConfiguration()
   ) {
-    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false, throughHub: throughHub, runID: runID, notificationRules: notificationRules)
+    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false, throughHub: throughHub, runID: runID, notificationRules: notificationRules, scheduling: scheduling)
   }
 
   private init(
@@ -100,8 +104,10 @@ public actor InsteonService: InsteonServiceAPI {
     isConnected: Bool,
     throughHub: Bool = false,
     runID: String? = nil,
-    notificationRules: (any NotificationRulePersisting)? = nil
+    notificationRules: (any NotificationRulePersisting)? = nil,
+    scheduling: ScheduleConfiguration = ScheduleConfiguration()
   ) {
+    self.scheduling = scheduling
     self.notificationPersistence = notificationRules
     self.network = ModemServedNetwork(network: network)
     self.opener = opener
@@ -295,16 +301,81 @@ public actor InsteonService: InsteonServiceAPI {
     for notification in fired { publish(.notification(notification)) }
   }
 
+  // MARK: Schedules and timers
+
+  /// The scheduler, made on first use. It reaches back to the service through weak references, so
+  /// neither keeps the other alive.
+  private func schedulerInstance() -> Scheduler {
+    if let scheduler { return scheduler }
+    let host = ScheduleHost(
+      devices: { [weak self] in try await self?.devices() ?? [] },
+      execute: { [weak self] command in
+        guard let self else { throw CancellationError() }
+        return try await self.execute(command)
+      },
+      publish: { [weak self] run in await self?.publishSchedule(run) }
+    )
+    let made = Scheduler(configuration: scheduling, now: now, host: host)
+    scheduler = made
+    return made
+  }
+
+  /// The schedules, in the order they were added, each with its next run.
+  ///
+  /// - Throws: ``ScheduleError/notSaved`` when the stored schedules can't be read.
+  public func schedules() async throws -> [ScheduleEntry] {
+    try await schedulerInstance().schedules()
+  }
+
+  /// Validates a schedule against the cached devices and the home's place, stores it, and works out its next
+  /// run, so it takes effect without a restart. A schedule with the identifier of an existing one replaces it
+  /// and keeps nothing of its last run.
+  ///
+  /// - Throws: ``ScheduleError``.
+  public func putSchedule(_ schedule: ServiceSchedule) async throws -> ScheduleEntry {
+    try await schedulerInstance().putSchedule(schedule)
+  }
+
+  /// Removes a schedule, which stops at once.
+  ///
+  /// - Throws: ``ScheduleError/unknownSchedule`` when no schedule has the identifier.
+  public func removeSchedule(id: String) async throws {
+    try await schedulerInstance().removeSchedule(id: id)
+  }
+
+  /// The timers that haven't fired, in the order they were added.
+  public func timers() async throws -> [TimerEntry] {
+    try await schedulerInstance().timers()
+  }
+
+  /// Starts a timer, or restarts the timer with its identifier.
+  ///
+  /// - Throws: ``ScheduleError``.
+  public func putTimer(_ timer: ServiceTimer) async throws -> TimerEntry {
+    try await schedulerInstance().putTimer(timer)
+  }
+
+  /// Cancels a timer.
+  ///
+  /// - Throws: ``ScheduleError/unknownTimer`` when no timer has the identifier.
+  public func removeTimer(id: String) async throws {
+    try await schedulerInstance().removeTimer(id: id)
+  }
+
+  private func publishSchedule(_ run: ScheduleRun) {
+    publish(.schedule(run))
+  }
+
   /// Reports readiness, the modem's state, and the times of the last hardware exchange, the last
   /// answered poll and the last confirmation of the cached device information. It sends nothing
   /// to hardware and doesn't take the admission gate.
-  public func health() -> ServiceHealth {
+  public func health() async -> ServiceHealth {
     let readiness: ServiceHealth.Readiness
     switch connection {
     case .connected: readiness = .ready
     case .unavailable: readiness = hasConnected ? .degraded : .starting
     }
-    return ServiceHealth(readiness: readiness, modem: connection, lastHardwareExchange: lastExchange, lastPoll: lastPoll, deviceInformationUpdated: informationUpdated, persistence: persistenceOutcome, checkedAt: now())
+    return ServiceHealth(readiness: readiness, modem: connection, lastHardwareExchange: lastExchange, lastPoll: lastPoll, deviceInformationUpdated: informationUpdated, persistence: persistenceOutcome, checkedAt: now(), notes: await schedulerInstance().notes)
   }
 
   /// Subscribes to typed events. Each subscription is iterated by one caller task. A subscriber
@@ -387,6 +458,8 @@ public actor InsteonService: InsteonServiceAPI {
       try await withThrowingTaskGroup(of: Void.self) { group in
         group.addTask { try await body() }
         group.addTask { try await self.maintainConnection() }
+        let scheduler = self.schedulerInstance()
+        group.addTask { await scheduler.run() }
         defer { group.cancelAll() }
         _ = try await group.next()
       }
