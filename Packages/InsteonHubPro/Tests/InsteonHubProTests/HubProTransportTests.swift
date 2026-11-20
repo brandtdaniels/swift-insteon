@@ -12,7 +12,7 @@ struct HubProTransportTests {
 
   func transport(_ http: RoutedHTTPClient) -> HubProTransport {
 
-    HubProTransport(host: Unit.host, httpClient: http)
+    HubProTransport(host: HubProUnit.host, httpClient: http)
 
   }
 
@@ -20,13 +20,13 @@ struct HubProTransportTests {
 
   @Test func listsTheDevicesAndMarksItsOwnModem() async throws {
 
-    let http = RoutedHTTPClient(["GET /insteon/list": json(Unit.list)])
+    let http = RoutedHTTPClient(["GET /insteon/list": answerJSON(HubProUnit.list)])
 
     let devices = try await transport(http).devices()
 
     #expect(devices == [
       HubProListedDevice(address: InsteonAddress(0xAA, 0xBB, 0xCC), name: "(PLM)", deviceType: "Hub Pro", isModem: true),
-      HubProListedDevice(address: lamp, name: "Lamp Dimmer", deviceType: "Lamp Dimmer", isModem: false),
+      HubProListedDevice(address: lamp, name: "Example Dimmer", deviceType: "Example Dimmer", isModem: false),
     ])
     #expect(await http.sent == ["GET /insteon/list"])
 
@@ -34,7 +34,7 @@ struct HubProTransportTests {
 
   @Test func readsEveryDevicesOnLevel() async throws {
 
-    let http = RoutedHTTPClient(["GET /insteon/status": json(Unit.status)])
+    let http = RoutedHTTPClient(["GET /insteon/status": answerJSON(HubProUnit.status)])
 
     #expect(try await transport(http).levels() == [lamp: 0])
 
@@ -42,17 +42,17 @@ struct HubProTransportTests {
 
   @Test func describesADevice() async throws {
 
-    let http = RoutedHTTPClient(["GET /insteon/describe?device=11.22.33": json(Unit.describe)])
+    let http = RoutedHTTPClient(["GET /insteon/describe?device=11.22.33": answerJSON(HubProUnit.describe)])
 
     let description = try await transport(http).describe(lamp)
 
     #expect(description.address == lamp)
-    #expect(description.name == "Lamp Dimmer")
-    #expect(description.deviceType == "Lamp Dimmer")
+    #expect(description.name == "Example Dimmer")
+    #expect(description.deviceType == "Example Dimmer")
     #expect(description.category == 1)
     #expect(description.subcategory == 14)
     #expect(description.firmwareVersion == 59)
-    #expect(description.sku == "2457D2")
+    #expect(description.sku == "9101X1")
     #expect(description.commandNames.contains("On"))
     #expect(description.parameters(of: "On") == ["OnLevel"])
     #expect(description.offers(.statusRequest))
@@ -65,7 +65,7 @@ struct HubProTransportTests {
   @Test func readsTheSettings() async throws {
 
     let settings = #"{"time":"2026-10-28 05:00:00","network":{"address":"192.0.2.10"},"version":{"config":{"version":"5.0.6"},"server":{"version":"1.0.8.9"}}}"#
-    let http = RoutedHTTPClient(["GET /settings": json(settings)])
+    let http = RoutedHTTPClient(["GET /settings": answerJSON(settings)])
 
     #expect(try await transport(http).settings().version.config.version == "5.0.6")
 
@@ -73,7 +73,7 @@ struct HubProTransportTests {
 
   @Test func reportsAnAnswerItCantReadAsMalformed() async {
 
-    let http = RoutedHTTPClient(["GET /insteon/list": json(#"{"nothing":1}"#), "GET /insteon/status": json("[1]")])
+    let http = RoutedHTTPClient(["GET /insteon/list": answerJSON(#"{"nothing":1}"#), "GET /insteon/status": answerJSON("[1]")])
 
     await #expect(throws: HubProError.malformedResponse) { try await transport(http).devices() }
     await #expect(throws: HubProError.malformedResponse) { try await transport(http).levels() }
@@ -84,7 +84,7 @@ struct HubProTransportTests {
 
   @Test func readsADevicesStatusWithStatusRequest() async throws {
 
-    let http = RoutedHTTPClient(["GET /insteon/command?device=11.22.33&key=StatusRequest": json(Unit.statusRequest)])
+    let http = RoutedHTTPClient(["GET /insteon/command?device=11.22.33&key=StatusRequest": answerJSON(HubProUnit.statusRequest)])
 
     let result = try await transport(http).perform(.statusRequest, on: lamp)
 
@@ -95,8 +95,8 @@ struct HubProTransportTests {
   @Test func turnsADeviceOnWithALevelAndOff() async throws {
 
     let http = RoutedHTTPClient([
-      "GET /insteon/command?device=11.22.33&key=On&OnLevel=255": json(Unit.succeeded),
-      "GET /insteon/command?device=11.22.33&key=Off": json(Unit.succeeded),
+      "GET /insteon/command?device=11.22.33&key=On&OnLevel=255": answerJSON(HubProUnit.succeeded),
+      "GET /insteon/command?device=11.22.33&key=Off": answerJSON(HubProUnit.succeeded),
     ])
     let unit = transport(http)
 
@@ -111,7 +111,7 @@ struct HubProTransportTests {
 
   @Test func sendsNoLevelWhenTheCommandHasNone() async throws {
 
-    let http = RoutedHTTPClient(["GET /insteon/command?device=11.22.33&key=FastOn": json(Unit.succeeded)])
+    let http = RoutedHTTPClient(["GET /insteon/command?device=11.22.33&key=FastOn": answerJSON(HubProUnit.succeeded)])
 
     _ = try await transport(http).perform(.fastOn(level: nil), on: lamp)
 
@@ -121,7 +121,7 @@ struct HubProTransportTests {
 
   @Test func reportsADeviceTheUnitDoesNotKnow() async {
 
-    let http = RoutedHTTPClient(["GET /insteon/command?device=11.22.33&key=Off": json(Unit.unknownDevice)])
+    let http = RoutedHTTPClient(["GET /insteon/command?device=11.22.33&key=Off": answerJSON(HubProUnit.unknownDevice)])
 
     await #expect(throws: HubProControlError.unknownDevice(lamp)) { try await transport(http).perform(.off, on: lamp) }
 
@@ -129,7 +129,7 @@ struct HubProTransportTests {
 
   @Test func reportsACommandTheDeviceDoesNotSupport() async {
 
-    let http = RoutedHTTPClient(["GET /insteon/command?device=11.22.33&key=Off": json(Unit.unsupportedKey)])
+    let http = RoutedHTTPClient(["GET /insteon/command?device=11.22.33&key=Off": answerJSON(HubProUnit.unsupportedKey)])
 
     await #expect(throws: HubProControlError.notSupported(command: "Off", device: lamp)) { try await transport(http).perform(.off, on: lamp) }
 
@@ -137,7 +137,7 @@ struct HubProTransportTests {
 
   @Test func reportsAnyOtherErrorAsRejected() async {
 
-    let http = RoutedHTTPClient(["GET /insteon/command?device=11.22.33&key=Off": json(Unit.missingParameters)])
+    let http = RoutedHTTPClient(["GET /insteon/command?device=11.22.33&key=Off": answerJSON(HubProUnit.missingParameters)])
 
     await #expect(throws: HubProError.rejected("The following required parameters were not specified: 'device, key'")) {
       try await transport(http).perform(.off, on: lamp)
@@ -148,7 +148,7 @@ struct HubProTransportTests {
   @Test(arguments: [#"{"result":"failed"}"#, #"{"result":"pending"}"#, #"{"command":"Off"}"#, "{}"])
   func reportsAnyResultButSuccessfulAsNotConfirmed(body: String) async {
 
-    let http = RoutedHTTPClient(["GET /insteon/command?device=11.22.33&key=Off": json(body)])
+    let http = RoutedHTTPClient(["GET /insteon/command?device=11.22.33&key=Off": answerJSON(body)])
 
     await #expect(throws: HubProControlError.notConfirmed) { try await transport(http).perform(.off, on: lamp) }
 
@@ -184,10 +184,10 @@ struct HubProTransportTests {
   @Test func reachesNoPathButTheReadsAndTheCommand() async throws {
 
     let http = RoutedHTTPClient([
-      "GET /settings": json(#"{"time":"t","network":{"address":"a"},"version":{"config":{"version":"1"},"server":{"version":"1"}}}"#),
-      "GET /insteon/list": json(Unit.list),
-      "GET /insteon/status": json(Unit.status),
-      "GET /insteon/describe?device=11.22.33": json(Unit.describe),
+      "GET /settings": answerJSON(#"{"time":"t","network":{"address":"a"},"version":{"config":{"version":"1"},"server":{"version":"1"}}}"#),
+      "GET /insteon/list": answerJSON(HubProUnit.list),
+      "GET /insteon/status": answerJSON(HubProUnit.status),
+      "GET /insteon/describe?device=11.22.33": answerJSON(HubProUnit.describe),
     ])
     let unit = transport(http)
 
@@ -217,7 +217,7 @@ struct HubProTransportTests {
 
   @Test func sendsOneRequestAtATime() async throws {
 
-    let http = RoutedHTTPClient(["GET /insteon/list": json(Unit.list), "GET /insteon/status": json(Unit.status)])
+    let http = RoutedHTTPClient(["GET /insteon/list": answerJSON(HubProUnit.list), "GET /insteon/status": answerJSON(HubProUnit.status)])
     let unit = transport(http)
 
     await http.holdNextRequest()
@@ -246,9 +246,9 @@ struct HubProTransportTests {
   func asksAgainWithAPostWhenAGetIsNotAllowedAndRemembersIt(status: Int) async throws {
 
     let http = RoutedHTTPClient([
-      "GET /insteon/list": json("", status: status),
-      "POST /insteon/list": json(Unit.list),
-      "POST /insteon/status": json(Unit.status),
+      "GET /insteon/list": answerJSON("", status: status),
+      "POST /insteon/list": answerJSON(HubProUnit.list),
+      "POST /insteon/status": answerJSON(HubProUnit.status),
     ])
     let unit = transport(http)
 
@@ -261,7 +261,7 @@ struct HubProTransportTests {
 
   @Test func doesNotAskAgainForAnotherStatus() async {
 
-    let http = RoutedHTTPClient(["GET /insteon/list": json("", status: 500), "POST /insteon/list": json(Unit.list)])
+    let http = RoutedHTTPClient(["GET /insteon/list": answerJSON("", status: 500), "POST /insteon/list": answerJSON(HubProUnit.list)])
 
     await #expect(throws: HubProError.unexpectedStatus(500)) { try await transport(http).devices() }
     #expect(await http.sent == ["GET /insteon/list"])
@@ -271,8 +271,8 @@ struct HubProTransportTests {
   @Test func asksAgainWithAPostForACommandToo() async throws {
 
     let http = RoutedHTTPClient([
-      "GET /insteon/command?device=11.22.33&key=Off": json("", status: 405),
-      "POST /insteon/command?device=11.22.33&key=Off": json(Unit.succeeded),
+      "GET /insteon/command?device=11.22.33&key=Off": answerJSON("", status: 405),
+      "POST /insteon/command?device=11.22.33&key=Off": answerJSON(HubProUnit.succeeded),
     ])
 
     _ = try await transport(http).perform(.off, on: lamp)
@@ -285,10 +285,10 @@ struct HubProTransportTests {
 
   @Test func limitsEachRequestToTheTimeout() async throws {
 
-    let http = StubHTTPClient(response: json(Unit.status))
+    let http = StubHTTPClient(response: answerJSON(HubProUnit.status))
 
-    _ = try await HubProTransport(host: Unit.host, httpClient: http, timeout: .seconds(7)).levels()
-    _ = try await HubProTransport(host: Unit.host, httpClient: http).levels()
+    _ = try await HubProTransport(host: HubProUnit.host, httpClient: http, timeout: .seconds(7)).levels()
+    _ = try await HubProTransport(host: HubProUnit.host, httpClient: http).levels()
 
     let timeouts = await http.requests.map(\.timeoutInterval)
 
