@@ -82,3 +82,13 @@ public typealias HubKind = InsteonHubDiscovery.HubKind
 
 /// A Hub Pro's network settings and software versions, as it reports them.
 public typealias HubProSettings = InsteonHubPro.HubProSettings
+
+/// What a Hub Pro reports about one device it lists: its identity, SKU and the commands it lists
+/// for it.
+public typealias HubProDescription = InsteonHubPro.HubProDescription
+
+/// One entry of a Hub Pro's device list.
+public typealias HubProListedDevice = InsteonHubPro.HubProListedDevice
+
+/// The versions of a Hub Pro's two pieces of software, as it reports them.
+public typealias HubProVersions = InsteonHubPro.HubProSettings.Versions

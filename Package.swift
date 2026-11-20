@@ -240,7 +240,9 @@ let package = Package(
         "InsteonHubPro",
         "InsteonHubClient",
         "InsteonLinking",
-        "InsteonProtocol"
+        "InsteonNetworking",
+        "InsteonProtocol",
+        "InsteonTestSupport"
       ],
       path: "Packages/InsteonCLI/Tests/InsteonCLISupportTests",
       swiftSettings: memberImportVisibility

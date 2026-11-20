@@ -643,12 +643,6 @@ extension Invocation {
 
     }
 
-    guard let device else {
-
-      throw ArgumentError.missingArgument("a device's ADDRESS, such as 1A.2B.3C", subcommand: "observe")
-
-    }
-
     return ObserveOptions(device: device, note: note, outputPath: outputPath)
 
   }

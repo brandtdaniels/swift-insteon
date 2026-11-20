@@ -108,6 +108,20 @@ public actor HubProNetwork {
 
   }
 
+  /// Creates a network for the Hub Pro at an address, reached over plain HTTP.
+  ///
+  /// - Parameters:
+  ///   - host: The Hub Pro's host name or IP address.
+  ///   - port: The port of its HTTP interface, 80 unless the Hub Pro answers on another.
+  ///   - catalog: The catalog to describe devices with, or `nil` to describe them by their
+  ///     identities alone.
+  ///   - snapshot: What the network knew before. Defaults to nothing.
+  public init(host: String, port: Int = 80, catalog: ProductCatalog?, snapshot: NetworkSnapshot = NetworkSnapshot()) {
+
+    self.init(transport: HubProTransport(host: host, port: port), catalog: catalog, snapshot: snapshot)
+
+  }
+
   // MARK: - What the network knows
 
   /// Reads the Hub Pro's settings and device list, describes each device, and reads each level.
@@ -121,6 +135,13 @@ public actor HubProNetwork {
     try await refreshDevices()
 
     try await readLevels()
+
+  }
+
+  /// Everything the Hub Pro lists, its own modem included, in its order.
+  public func listing() -> [HubProListedDevice] {
+
+    listed
 
   }
 

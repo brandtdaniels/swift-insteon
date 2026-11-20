@@ -843,13 +843,17 @@ extension ArgumentParserTests {
 
   }
 
-  @Test func needsAnAddressForObserve() {
+  @Test func observeWithoutAnAddressIsForAHubPro() throws {
 
-    #expect(throws: ArgumentError.missingArgument("a device's ADDRESS, such as 1A.2B.3C", subcommand: "observe")) {
+    let invocation = try Invocation.parse(["observe", "--note", "Early unit"])
 
-      try Invocation.parse(["observe"])
+    #expect(invocation.subcommand == .observe(ObserveOptions(device: nil, note: "Early unit")))
+    #expect(invocation.device == nil)
 
-    }
+  }
+
+  @Test func rejectsAnObserveOption() {
+
     #expect(throws: ArgumentError.missingValue(option: "--output")) {
 
       try Invocation.parse(["observe", "1A.2B.3C", "--output"])
