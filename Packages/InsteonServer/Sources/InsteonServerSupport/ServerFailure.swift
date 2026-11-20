@@ -41,6 +41,7 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case clientLimitReached = "client_limit_reached"
     case advertiseURLInvalid = "advertise_url_invalid"
     case homeNameInvalid = "home_name_invalid"
+    case pollIntervalInvalid = "poll_interval_invalid"
     case pairingOptionsInvalid = "pairing_options_invalid"
     case modemConnectionEnded = "modem_connection_ended"
     case modemUnreachable = "modem_unreachable"
@@ -146,6 +147,7 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case .invalidStatePath: ServerFailure(.stateFileUnusable, "--state must be an absolute path.", configurationStatus)
     case .invalidAdvertiseURL: ServerFailure(.advertiseURLInvalid, "--advertise-url must be an http or https address with a host, such as http://insteon.local:8080, and no credentials, path or query.", configurationStatus)
     case .invalidClient: ServerFailure(.pairingOptionsInvalid, "pair needs --name with 1 through 64 characters and no control characters, and takes --scope read, control or admin. Run insteon-server pair --help.", configurationStatus)
+    case .invalidPollInterval: ServerFailure(.pollIntervalInvalid, "--poll-interval must be a whole number of seconds from 2 through 3600.", configurationStatus)
     case .invalidHomeName: ServerFailure(.homeNameInvalid, "--home-name must be 1 through 64 characters without control characters.", configurationStatus)
     }
   }

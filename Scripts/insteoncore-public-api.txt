@@ -510,6 +510,7 @@ init HubLinkingLeg(device:index:count:modemRole:modemGroup:deviceGroup:remoteEnt
 init HubLinkingLegOutcome(leg:status:)
 init HubLocation(host:port:insteonID:)
 init HubProNetwork(transport:catalog:snapshot:pollInterval:clock:listRefreshPolls:now:onPollSucceeded:)
+init HubProNetwork(transport:catalog:snapshot:pollInterval:clock:onPollSucceeded:)
 init HubSearch(hubProPorts:hubProModels:)
 init InstructionStep(text:expectation:isOnOtherDevice:)
 init Instructions(steps:notes:)

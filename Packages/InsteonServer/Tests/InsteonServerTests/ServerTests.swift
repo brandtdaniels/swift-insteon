@@ -28,6 +28,17 @@ struct ServerTests {
 }
 
 extension ServerTests {
+  @Test func theHubProPollIntervalDefaultsToFiveSecondsAndStartsAtTwo() throws {
+    #expect(try ServerOptions(arguments: [], environment: [:]).pollIntervalSeconds == 5)
+    #expect(try ServerOptions(arguments: ["--poll-interval", "2"], environment: [:]).pollIntervalSeconds == 2)
+    #expect(try ServerOptions(arguments: ["--poll-interval", "3600"], environment: [:]).pollIntervalSeconds == 3600)
+  }
+
+  @Test(arguments: ["1", "0", "-5", "3601", "fast", "2.5"])
+  func aPollIntervalBelowTheFloorOrNotANumberIsRefused(_ value: String) {
+    #expect(throws: ServerOptionError.invalidPollInterval) { try ServerOptions(arguments: ["--poll-interval", value], environment: [:]) }
+  }
+
   @Test func theAdvertisedAddressAndHomeNameAreOptionsWithDefaults() throws {
     let defaults = try ServerOptions(arguments: [], environment: [:])
     #expect(defaults.advertiseURL == nil)

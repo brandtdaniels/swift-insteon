@@ -85,6 +85,29 @@ public actor HubProNetwork {
 
   }
 
+  /// Creates a network that describes devices with a catalog a front end loaded.
+  ///
+  /// - Parameters:
+  ///   - transport: How the Hub Pro is reached.
+  ///   - catalog: The catalog to describe devices with, or `nil` to describe them by their
+  ///     identities alone.
+  ///   - snapshot: What the network knew before. Defaults to nothing.
+  ///   - pollInterval: How long to wait between polls, at least ``minimumPollInterval``.
+  ///   - clock: The clock that times the polls. Defaults to a `ContinuousClock`.
+  ///   - onPollSucceeded: Called each time the Hub Pro answers a poll.
+  public init(
+    transport: HubProTransport,
+    catalog: ProductCatalog?,
+    snapshot: NetworkSnapshot = NetworkSnapshot(),
+    pollInterval: Duration = HubProNetwork.defaultPollInterval,
+    clock: any Clock<Duration> = ContinuousClock(),
+    onPollSucceeded: @escaping @Sendable () async -> Void = {}
+  ) {
+
+    self.init(transport: transport, catalog: catalog?.catalog, snapshot: snapshot, pollInterval: pollInterval, clock: clock, onPollSucceeded: onPollSucceeded)
+
+  }
+
   // MARK: - What the network knows
 
   /// Reads the Hub Pro's settings and device list, describes each device, and reads each level.

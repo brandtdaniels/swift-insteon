@@ -1,6 +1,5 @@
 import Foundation
 import InsteonCore
-import InsteonDeviceCatalog
 import InsteonHubPro
 import InsteonNetworking
 
@@ -69,7 +68,7 @@ struct FixedNetworkOpener: NetworkOpening {
 public struct HubProOpener: ServedNetworkOpening {
   private let host: String
   private let port: Int
-  private let catalog: DeviceCatalog?
+  private let catalog: ProductCatalog?
   private let httpClient: any HTTPClient
   private let pollInterval: Duration
   private let clock: any Clock<Duration>
@@ -86,7 +85,7 @@ public struct HubProOpener: ServedNetworkOpening {
   public init(
     host: String,
     port: Int = HubProClient.defaultPort,
-    catalog: DeviceCatalog?,
+    catalog: ProductCatalog?,
     httpClient: any HTTPClient = URLSessionHTTPClient.localNetwork(),
     pollInterval: Duration = HubProNetwork.defaultPollInterval,
     clock: any Clock<Duration> = ContinuousClock()
