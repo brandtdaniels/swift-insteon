@@ -7,6 +7,7 @@ import HTTPTypes
 struct ClientAPI: Sendable {
   let clients: any ClientStoring
   let pairing: PairingConfiguration
+  let routes: any RouteStoring
   let streams: EventStreamRegistry
 
   func list() async throws -> Response {
@@ -17,8 +18,10 @@ struct ClientAPI: Sendable {
     guard HTTPBody.mediaType(request) == "application/json" else { throw HTTPInputError.unsupportedMedia }
     try HTTPBody.requireMarker(request)
     let input = try ClientRequest(try await HTTPBody.read(request))
+    // Read first, so routes that can't be read leave no client behind.
+    let registered = try await routes.routes()
     let issued = try await clients.issue(name: input.name, scope: input.scope)
-    let document = pairing.document(for: issued, serviceID: try await clients.serviceID())
+    let document = pairing.document(for: issued, serviceID: try await clients.serviceID(), registered: registered)
     return try json(ClientCreatedDTO(client: issued.client, pairing: document), status: .created)
   }
 
@@ -38,10 +41,11 @@ struct ClientAPI: Sendable {
   func pair(_ request: Request, id: String?) async throws -> Response {
     try HTTPBody.requireMarker(request)
     guard let id else { throw ClientError.unknownClient }
+    let registered = try await routes.routes()
     let issued = try await clients.rotate(id: id)
     // Streams opened with the old credential end, so only the new one is in use.
     await streams.end(clientID: id)
-    return try json(pairing.document(for: issued, serviceID: try await clients.serviceID()))
+    return try json(pairing.document(for: issued, serviceID: try await clients.serviceID(), registered: registered))
   }
 
   private func json(_ value: some Encodable, status: HTTPResponse.Status = .ok) throws -> Response {

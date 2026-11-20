@@ -19,6 +19,10 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   case unknownNotificationRule
   case notificationRuleLimitReached
   case notificationRulesNotSaved
+  case invalidRouteRegistration
+  case unknownRouteRegistration
+  case routeRegistrationLimitReached
+  case routeRegistrationsNotSaved
   case invalidAddress
   case invalidCommand
   case invalidIdempotencyKey
@@ -46,14 +50,14 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   var status: HTTPResponse.Status {
     switch self {
     case .authenticationRequired, .authenticationFailed: .unauthorized
-    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel, .invalidClient, .invalidNotificationRule: .badRequest
-    case .unknownDevice, .routeNotFound, .unknownClient, .unknownNotificationRule: .notFound
+    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel, .invalidClient, .invalidNotificationRule, .invalidRouteRegistration: .badRequest
+    case .unknownDevice, .routeNotFound, .unknownClient, .unknownNotificationRule, .unknownRouteRegistration: .notFound
     case .forbidden, .apiMarkerMissing, .formKeyInvalid: .forbidden
     case .bodyTooLarge: .contentTooLarge
     case .unsupportedMediaType: .unsupportedMediaType
     case .requestRejected: .badRequest
-    case .busy, .notIdentified, .notLinked, .clientLimitReached, .notificationRuleLimitReached: .conflict
-    case .clientsNotSaved, .notificationRulesNotSaved: .internalServerError
+    case .busy, .notIdentified, .notLinked, .clientLimitReached, .notificationRuleLimitReached, .routeRegistrationLimitReached: .conflict
+    case .clientsNotSaved, .notificationRulesNotSaved, .routeRegistrationsNotSaved: .internalServerError
     case .unsupportedControl, .deviceRejected, .idempotencyKeyReused: .unprocessableContent
     case .modemRejected, .modemUnavailable, .canceled: .serviceUnavailable
     case .deviceNotAnswering: .gatewayTimeout
@@ -84,6 +88,10 @@ enum APIErrorCode: String, CaseIterable, Sendable {
     case .unknownNotificationRule: "Unknown notification rule."
     case .notificationRuleLimitReached: "The service keeps at most \(ServiceNotificationRule.maximumCount) notification rules. Remove one first."
     case .notificationRulesNotSaved: "The notification rules could not be read or saved. Nothing changed."
+    case .invalidRouteRegistration: "A route needs a kind of 1 through \(RouteStore.longestKind) lowercase letters, digits and `-` that starts with a letter and isn't `lan`, and a ticket of 1 through \(RouteStore.longestTicket) printable ASCII characters without spaces, and no other field."
+    case .unknownRouteRegistration: "No route is registered for that kind."
+    case .routeRegistrationLimitReached: "The service keeps at most \(RouteStore.maximumRoutes) routes. Remove one first."
+    case .routeRegistrationsNotSaved: "The registered routes could not be read or saved. Nothing changed."
     case .forbidden: "This credential's scope does not allow that. Nothing was sent."
     case .invalidAddress: "The device address is not a valid Insteon address."
     case .invalidCommand: "Invalid command."

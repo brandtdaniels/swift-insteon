@@ -15,13 +15,13 @@ import Logging
 ///
 /// A command that carries an `Idempotency-Key` header is recorded for 10 minutes, up to 256 at a time,
 /// measured by `now`, so a repeat returns its outcome without sending anything.
-public func makeInsteonRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, clients: any ClientStoring = ClientStore(persistence: InMemoryClientPersistence()), pairing: PairingConfiguration = PairingConfiguration(), logger: Logger = Logger(label: "insteon-server"), now: @escaping @Sendable () -> Date = { Date() }) -> Router<BasicRequestContext> {
-  makeRegisteredRouter(service: service, authentication: authentication, clients: clients, pairing: pairing, logger: logger, now: now).router
+public func makeInsteonRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, clients: any ClientStoring = ClientStore(persistence: InMemoryClientPersistence()), pairing: PairingConfiguration = PairingConfiguration(), routes: any RouteStoring = RouteStore(), logger: Logger = Logger(label: "insteon-server"), now: @escaping @Sendable () -> Date = { Date() }) -> Router<BasicRequestContext> {
+  makeRegisteredRouter(service: service, authentication: authentication, clients: clients, pairing: pairing, routes: routes, logger: logger, now: now).router
 }
 
 /// Builds the router and says which operations it registered. Every route comes from ``APIOperation``,
 /// so the routes served and the routes described are the same list.
-func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, clients: any ClientStoring = ClientStore(persistence: InMemoryClientPersistence()), pairing: PairingConfiguration = PairingConfiguration(), logger: Logger, now: @escaping @Sendable () -> Date) -> (router: Router<BasicRequestContext>, registered: [APIOperation]) {
+func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authentication: any HTTPAuthenticating, clients: any ClientStoring = ClientStore(persistence: InMemoryClientPersistence()), pairing: PairingConfiguration = PairingConfiguration(), routes: any RouteStoring = RouteStore(), logger: Logger, now: @escaping @Sendable () -> Date) -> (router: Router<BasicRequestContext>, registered: [APIOperation]) {
   let router = Router<BasicRequestContext>()
   router.add(middleware: SecurityHeadersMiddleware<BasicRequestContext>())
   router.add(middleware: ErrorMappingMiddleware<BasicRequestContext>())
@@ -30,7 +30,8 @@ func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authenti
   router.add(middleware: RequestBodyLimitMiddleware<BasicRequestContext>())
   let streams = EventStreamRegistry(limit: EventStreamPolicy.standard.maximumStreams)
   let api = DeviceAPI(service: service, idempotency: IdempotencyStore(now: now), registry: streams, isClientActive: { id in ((try? await clients.clients()) ?? []).contains { $0.id == id } })
-  let clientAPI = ClientAPI(clients: clients, pairing: pairing, streams: streams)
+  let clientAPI = ClientAPI(clients: clients, pairing: pairing, routes: routes, streams: streams)
+  let routeAPI = RouteAPI(routes: routes)
   let ruleAPI = NotificationRuleAPI(service: service)
   let website = DeviceWebsite(service: service)
 
@@ -49,6 +50,9 @@ func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authenti
     case .listNotificationRules: { _, _ in try await ruleAPI.list() }
     case .putNotificationRule: { request, context in try await ruleAPI.put(request, id: context.parameters.get("id")) }
     case .deleteNotificationRule: { request, context in try await ruleAPI.remove(request, id: context.parameters.get("id")) }
+    case .listRoutes: { _, _ in try await routeAPI.list() }
+    case .putRoute: { request, context in try await routeAPI.put(request, kind: context.parameters.get("kind")) }
+    case .deleteRoute: { request, context in try await routeAPI.remove(request, kind: context.parameters.get("kind")) }
     case .browserIndex: { request, _ in try await website.index(request) }
     case .browserControls: { _, _ in Response(status: .ok, headers: [.contentType: "text/javascript; charset=utf-8"], body: .init(byteBuffer: ByteBuffer(string: BrowserControls.source))) }
     case .browserCard: { _, context in try await website.device(address: context.parameters.get("address")) }

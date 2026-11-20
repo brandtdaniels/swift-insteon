@@ -254,6 +254,25 @@ struct OpenAPIContractTests {
     }
   }
 
+  @Test func theRouteTypesSatisfyTheirSchemasAndTheRequestSchemaMatchesWhatTheServerAccepts() async throws {
+    let (_, document) = try await fetch()
+    let routes = [RegisteredRoute(kind: "loopback", ticket: "127.0.0.1:9000"), RegisteredRoute(kind: "iroh", ticket: "node-ticket")]
+    validate(try json(RouteListDTO(routes: routes)), as: "RouteList", in: document)
+    validate(try json(RouteListDTO(routes: [])), as: "RouteList", in: document)
+    for route in routes { validate(try json(RouteStoredDTO(route: route)), as: "RouteStored", in: document) }
+
+    let validator = SchemaValidator(document: document)
+    let request: [String: Any] = ["$ref": "#/components/schemas/RouteRequest"]
+    for body in [#"{"ticket":"t"}"#, #"{"ticket":"127.0.0.1:9000"}"#] {
+      #expect(validator.validate(try JSONSerialization.jsonObject(with: Data(body.utf8)), against: request, path: "RouteRequest").isEmpty, "\(body)")
+      #expect((try? RouteRequestBody(Data(body.utf8))) != nil, "\(body)")
+    }
+    for body in ["{}", #"{"ticket":""}"#, #"{"ticket":7}"#, #"{"ticket":"t","extra":1}"#, #"{"ticket":"\#(String(repeating: "t", count: RouteStore.longestTicket + 1))"}"#] {
+      #expect(!validator.validate(try JSONSerialization.jsonObject(with: Data(body.utf8)), against: request, path: "RouteRequest").isEmpty, "\(body.prefix(40))")
+      #expect((try? RouteRequestBody(Data(body.utf8))) == nil, "\(body.prefix(40))")
+    }
+  }
+
   @Test func everyErrorBodyAndEveryEventSatisfiesItsSchema() async throws {
     let (_, document) = try await fetch()
     for code in APIErrorCode.allCases {
@@ -398,6 +417,10 @@ struct SchemaValidator {
     if let number = value as? NSNumber, !(value is Bool), String(cString: number.objCType) != "c" {
       if let minimum = schema["minimum"] as? Int, number.intValue < minimum { problems.append("\(path): below \(minimum)") }
       if let maximum = schema["maximum"] as? Int, number.intValue > maximum { problems.append("\(path): above \(maximum)") }
+    }
+    if let text = value as? String, let pattern = schema["pattern"] as? String, let expression = try? NSRegularExpression(pattern: pattern),
+       expression.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) == nil {
+      problems.append("\(path): doesn't match \(pattern)")
     }
     if let object = value as? [String: Any], schema["type"] as? String == "object" {
       let properties = schema["properties"] as? [String: [String: Any]] ?? [:]
