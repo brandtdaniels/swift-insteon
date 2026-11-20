@@ -130,6 +130,7 @@ case HubLinkingJoin.setButton
 case HubLinkingLegStatus.failed(_:)
 case HubLinkingLegStatus.linked(_:by:)
 case HubLinkingLegStatus.notRun
+case HubSource.bonjour
 case HubSource.insteonConnect
 case HubSource.insteonStage
 case HubSource.localNetwork
@@ -471,11 +472,11 @@ init DirectMessage(to:command1:command2:data:hasChecksum:)
 init FactoryResetSteps(address:info:procedure:erases:)
 init ForgottenDevice(address:device:)
 init HubAddressRefused(host:)
-init HubFailure?(_:)
+init HubFailure?(_:hubHasAnswered:)
 init HubLinkingLeg(device:index:count:modemRole:modemGroup:deviceGroup:remoteEnterLinkingMode:allGroupsWhen:)
 init HubLinkingLegOutcome(leg:status:)
 init HubLocation(host:port:insteonID:)
-init HubSearch(hubProPorts:)
+init HubSearch(hubProPorts:hubProModels:)
 init InstructionStep(text:expectation:isOnOtherDevice:)
 init Instructions(steps:notes:)
 init JSONFileDeviceRegistryStore(fileURL:)
@@ -890,11 +891,13 @@ var ForgottenDevice.address
 var ForgottenDevice.device
 var HubAddressRefused.description
 var HubCandidate.category
+var HubCandidate.firmware
 var HubCandidate.firmwareVersion
 var HubCandidate.foundBy
 var HubCandidate.host
 var HubCandidate.hubProSettings
 var HubCandidate.insteonID
+var HubCandidate.isHubPro
 var HubCandidate.kind
 var HubCandidate.port
 var HubCandidate.subcategory
@@ -972,6 +975,7 @@ var NetworkSnapshot.hub
 var NetworkSnapshot.isEmpty
 var NetworkSnapshot.modemDatabase
 var NetworkSnapshot.registry
+var ProductCatalog.hubProModels
 var ProductCatalog.hubProPorts
 var ProductCatalogError.errorDescription
 var ProductCatalogStore.catalogPath

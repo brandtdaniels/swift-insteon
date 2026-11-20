@@ -43,6 +43,20 @@ struct InsteonErrorDescriptionTests {
 
   }
 
+  // A Hub whose address nothing answers leaves the modem's first command to time out; that's the
+  // Hub not answering, not the modem.
+  @Test func readsAModemTimeoutAsTheHubNotAnsweringWhenTheHubNeverAnswered() {
+
+    let timedOut = ModemError.timedOut(.getModemInfo)
+
+    #expect(HubFailure(timedOut, hubHasAnswered: false) == .unanswered)
+    #expect(HubFailure(timedOut, hubHasAnswered: true) == nil)
+    #expect(HubFailure(timedOut) == nil)
+    #expect(HubFailure(ModemError.connectionClosed, hubHasAnswered: false) == nil)
+    #expect(HubFailure(URLError(.timedOut), hubHasAnswered: false) == .unanswered)
+
+  }
+
   // MARK: - Linking
 
   @Test func namesTheUnlinkForAControllerLinkTheModemMadeInAnotherGroup() {

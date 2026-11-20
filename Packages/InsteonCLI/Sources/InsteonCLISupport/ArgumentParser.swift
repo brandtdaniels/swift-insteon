@@ -176,6 +176,7 @@ extension Invocation {
 
     var searchesLocalNetwork = false
     var asksInsteonConnect = false
+    var asksInsteonStage = false
     var searchesAllAddresses = false
     var identifiesHubs = false
     var identifyTarget: HubAddress?
@@ -194,6 +195,9 @@ extension Invocation {
       case "--insteon-connect":
         try expectNoValue(name, inlineValue)
         asksInsteonConnect = true
+      case "--insteon-stage":
+        try expectNoValue(name, inlineValue)
+        asksInsteonStage = true
       case "--all":
         try expectNoValue(name, inlineValue)
         searchesAllAddresses = true
@@ -219,11 +223,20 @@ extension Invocation {
 
     }
 
-    // Without --insteon-connect, only the local network is searched, so Insteon Connect is
-    // asked only when someone asks for it.
+    // Each of Insteon's services is sent the network's public IP address, so one run asks one,
+    // chosen explicitly.
+    if asksInsteonConnect, asksInsteonStage {
+
+      throw .conflictingOptions("--insteon-connect", "--insteon-stage")
+
+    }
+
+    // Without either, only the local network is searched, so Insteon's services are asked only
+    // when someone asks for one.
     return DiscoverOptions(
-      searchesLocalNetwork: searchesLocalNetwork || !asksInsteonConnect,
+      searchesLocalNetwork: searchesLocalNetwork || !(asksInsteonConnect || asksInsteonStage),
       asksInsteonConnect: asksInsteonConnect,
+      asksInsteonStage: asksInsteonStage,
       searchesAllAddresses: searchesAllAddresses,
       identifiesHubs: identifiesHubs,
       identifyTarget: identifyTarget

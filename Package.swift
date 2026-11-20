@@ -236,6 +236,7 @@ let package = Package(
         "InsteonCLISupport",
         "InsteonCore",
         "InsteonDeviceCatalog",
+        "InsteonHubPro",
         "InsteonHubClient",
         "InsteonLinking",
         "InsteonProtocol"

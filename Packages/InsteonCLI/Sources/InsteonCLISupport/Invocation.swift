@@ -251,6 +251,9 @@ public struct DiscoverOptions: Hashable, Sendable {
   /// Whether to ask Insteon Connect, which sees the network's public IP address.
   public var asksInsteonConnect: Bool
 
+  /// Whether to ask Insteon's staging service, which sees the network's public IP address.
+  public var asksInsteonStage: Bool
+
   /// Whether the local search asks every address, rather than stopping at the first Hub.
   public var searchesAllAddresses: Bool
 
@@ -268,6 +271,8 @@ public struct DiscoverOptions: Hashable, Sendable {
   ///   - searchesLocalNetwork: Whether to search the local network. Defaults to `true`.
   ///   - asksInsteonConnect: Whether to ask Insteon Connect. Defaults to `false`, so the
   ///     network's public IP address is shared only when asked.
+  ///   - asksInsteonStage: Whether to ask Insteon's staging service. Defaults to `false`, so the
+  ///     network's public IP address is shared only when asked.
   ///   - searchesAllAddresses: Whether the local search goes on after the first Hub.
   ///     Defaults to `false`.
   ///   - identifiesHubs: Whether to ask Hubs found for Get IM Info with the configured
@@ -277,6 +282,7 @@ public struct DiscoverOptions: Hashable, Sendable {
   public init(
     searchesLocalNetwork: Bool = true,
     asksInsteonConnect: Bool = false,
+    asksInsteonStage: Bool = false,
     searchesAllAddresses: Bool = false,
     identifiesHubs: Bool = false,
     identifyTarget: HubAddress? = nil
@@ -284,6 +290,7 @@ public struct DiscoverOptions: Hashable, Sendable {
 
     self.searchesLocalNetwork = searchesLocalNetwork
     self.asksInsteonConnect = asksInsteonConnect
+    self.asksInsteonStage = asksInsteonStage
     self.searchesAllAddresses = searchesAllAddresses
     self.identifiesHubs = identifiesHubs
     self.identifyTarget = identifyTarget

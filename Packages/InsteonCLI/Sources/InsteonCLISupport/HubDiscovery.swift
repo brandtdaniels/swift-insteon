@@ -4,8 +4,8 @@ import InsteonCore
 /// about each, and when finding nothing is a failure.
 public enum HubDiscovery {
 
-  /// Looks for Hubs the ways the options ask for: Insteon Connect first, then the local
-  /// network, merging the Hubs each finds.
+  /// Looks for Hubs the ways the options ask for: Insteon Connect or Insteon's staging service
+  /// first, then the local network, merging the Hubs each finds.
   ///
   /// A way that fails is noted, and the other's Hubs are still reported; the search fails
   /// only when every way it asked failed, with the last error. When the local network finds
@@ -15,6 +15,8 @@ public enum HubDiscovery {
   /// - Parameters:
   ///   - options: The command's options.
   ///   - insteonConnect: Asks Insteon Connect for the Hubs that reported from this network.
+  ///   - insteonStage: Asks Insteon's staging service for the Hubs that reported from this
+  ///     network.
   ///   - localNetwork: Searches the local network, stopping at the first Hub when its
   ///     argument is `true`.
   ///   - merge: Adds a Hub to those found, merging it with one already there, as
@@ -26,6 +28,7 @@ public enum HubDiscovery {
   public static func search<Hub>(
     _ options: DiscoverOptions,
     insteonConnect: () async throws -> [Hub],
+    insteonStage: () async throws -> [Hub],
     localNetwork: (_ stoppingAtFirst: Bool) async throws -> [Hub],
     merge: (Hub, inout [Hub]) -> Void,
     note: (String) -> Void,
@@ -56,6 +59,27 @@ public enum HubDiscovery {
 
     }
 
+    if options.asksInsteonStage {
+
+      note("Asking Insteon's staging service...")
+
+      do {
+
+        for hub in try await insteonStage() {
+
+          merge(hub, &hubs)
+
+        }
+
+      } catch {
+
+        note("Insteon staging: \(message(error))")
+        failures.append(error)
+
+      }
+
+    }
+
     if options.searchesLocalNetwork {
 
       do {
@@ -68,12 +92,13 @@ public enum HubDiscovery {
 
         }
 
-        // Insteon Connect sees the network's public IP address, so it's only suggested.
-        if found.isEmpty, !options.asksInsteonConnect {
+        // Insteon's services see the network's public IP address, so they're only suggested.
+        if found.isEmpty, !options.asksInsteonConnect, !options.asksInsteonStage {
 
           note(
-            "No Hub answered on the local network. 'insteon discover --insteon-connect' asks Insteon Connect "
-              + "for the Hubs that reported from this network, which shares the network's public IP address with Insteon."
+            "No Hub answered on the local network. 'insteon discover --insteon-connect' asks Insteon Connect, and "
+              + "'insteon discover --insteon-stage' asks Insteon's staging service, for the Hubs that reported from this network. "
+              + "Each shares the network's public IP address with Insteon."
           )
 
         }
@@ -92,7 +117,7 @@ public enum HubDiscovery {
     }
 
     // Fail only when every way of looking failed, rather than reporting no Hubs.
-    let ways: Int = (options.asksInsteonConnect ? 1 : 0) + (options.searchesLocalNetwork ? 1 : 0)
+    let ways: Int = (options.asksInsteonConnect ? 1 : 0) + (options.asksInsteonStage ? 1 : 0) + (options.searchesLocalNetwork ? 1 : 0)
 
     if let failure = failures.last, failures.count == ways {
 

@@ -33,6 +33,18 @@ struct HubProPortsTests {
 
   }
 
+  @Test func givesTheModelsOfTheProductsWithAHubProInterface() throws {
+
+    let catalog = try catalog([
+      [#"{ "kind": "hubPro", "port": 8081 }"#],
+      [#"{ "kind": "hub", "port": 25105 }"#],
+      [#"{ "kind": "hubPro", "port": 80 }"#],
+    ])
+
+    #expect(catalog.hubProModels == ["9801", "9821"])
+
+  }
+
   @Test func givesNoPortWhenNoProductHasAHubProInterface() throws {
 
     #expect(try catalog([[#"{ "kind": "hub", "port": 25105 }"#]]).hubProPorts.isEmpty)

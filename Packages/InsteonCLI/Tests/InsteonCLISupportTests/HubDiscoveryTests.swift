@@ -23,6 +23,7 @@ struct HubDiscoveryTests {
   private func search(
     _ options: DiscoverOptions,
     insteonConnect: Result<[String], any Error> = .success([]),
+    insteonStage: Result<[String], any Error> = .success([]),
     localNetwork: Result<[String], any Error> = .success([]),
     record: Record = Record()
   ) async throws -> [String] {
@@ -30,6 +31,7 @@ struct HubDiscoveryTests {
     try await HubDiscovery.search(
       options,
       insteonConnect: { try insteonConnect.get() },
+      insteonStage: { try insteonStage.get() },
       localNetwork: { (stoppingAtFirst: Bool) throws -> [String] in
 
         record.localStoppedAtFirst.append(stoppingAtFirst)
@@ -88,8 +90,9 @@ struct HubDiscoveryTests {
     #expect(hubs.isEmpty)
     #expect(
       record.notes == [
-        "No Hub answered on the local network. 'insteon discover --insteon-connect' asks Insteon Connect "
-          + "for the Hubs that reported from this network, which shares the network's public IP address with Insteon."
+        "No Hub answered on the local network. 'insteon discover --insteon-connect' asks Insteon Connect, and "
+          + "'insteon discover --insteon-stage' asks Insteon's staging service, for the Hubs that reported from this network. "
+          + "Each shares the network's public IP address with Insteon."
       ]
     )
 
@@ -150,6 +153,51 @@ struct HubDiscoveryTests {
     }
 
     #expect(record.notes == ["Asking Insteon Connect..."])
+
+  }
+
+  // MARK: - Insteon's staging service
+
+  @Test func asksTheStagingServiceAloneWhenAskedAndNotInsteonConnect() async throws {
+
+    let record = Record()
+    let hubs = try await search(
+      DiscoverOptions(searchesLocalNetwork: false, asksInsteonStage: true),
+      insteonConnect: .success(["connect:25105"]),
+      insteonStage: .success(["192.168.0.50:80"]),
+      record: record
+    )
+
+    #expect(hubs == ["192.168.0.50:80"])
+    #expect(record.notes == ["Asking Insteon's staging service..."])
+
+  }
+
+  @Test func noteWhichServiceFailedAndFailsWhenItWasTheOnlyWayAsked() async {
+
+    let record = Record()
+
+    await #expect(throws: Unreachable.self) {
+
+      _ = try await search(
+        DiscoverOptions(searchesLocalNetwork: false, asksInsteonStage: true),
+        insteonStage: .failure(Unreachable()),
+        record: record
+      )
+
+    }
+
+    #expect(record.notes == ["Asking Insteon's staging service...", "Insteon staging: unreachable"])
+
+  }
+
+  @Test func doesNotSuggestTheServicesWhenOneWasAsked() async throws {
+
+    let record = Record()
+
+    _ = try await search(DiscoverOptions(asksInsteonStage: true), record: record)
+
+    #expect(record.notes == ["Asking Insteon's staging service..."])
 
   }
 

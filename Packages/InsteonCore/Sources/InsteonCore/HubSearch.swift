@@ -34,11 +34,24 @@ public struct HubSearch: Sendable {
   /// Creates a search that asks the local network, Insteon Connect and Insteon's staging
   /// service, and identifies Hubs on the Hub's default port, ``HubLocation/defaultPort``.
   ///
-  /// - Parameter hubProPorts: The ports to look for a Hub Pro's interface on, such as
-  ///   ``ProductCatalog/hubProPorts``. Defaults to none, which looks for no Hub Pro.
-  public init(hubProPorts: [Int] = []) {
+  /// On platforms with Bonjour, the local-network search first browses it for a Hub Pro, which
+  /// advertises itself as a HomeKit accessory, before it asks each address.
+  ///
+  /// - Parameters:
+  ///   - hubProPorts: The ports to look for a Hub Pro's interface on, such as
+  ///     ``ProductCatalog/hubProPorts``. Defaults to none, which looks for no Hub Pro.
+  ///   - hubProModels: The model numbers of products with a Hub Pro's interface, such as
+  ///     ``ProductCatalog/hubProModels``, which a Bonjour service's model record is matched
+  ///     against by prefix. Defaults to none.
+  public init(hubProPorts: [Int] = [], hubProModels: [String] = []) {
 
-    self.finder = HubFinder(discovery: HubDiscovery(hubProPorts: hubProPorts))
+    #if canImport(Network)
+    let bonjour: (any BonjourBrowsing)? = NetworkBonjourBrowser()
+    #else
+    let bonjour: (any BonjourBrowsing)? = nil
+    #endif
+
+    self.finder = HubFinder(discovery: HubDiscovery(hubProPorts: hubProPorts, hubProModels: hubProModels, bonjour: bonjour))
     self.identifier = HubIdentifier()
     self.hubProPorts = hubProPorts
 
@@ -244,6 +257,9 @@ public enum HubSource: Hashable, Sendable {
   /// The Hub answered on the local network.
   case localNetwork
 
+  /// Bonjour listed the Hub Pro on the local network.
+  case bonjour
+
   /// Insteon Connect listed the Hub for this network's public IP address.
   case insteonConnect
 
@@ -287,9 +303,17 @@ public struct HubCandidate: Hashable, Sendable {
   /// The kind of Hub as Insteon's servers name it, such as `"HUB2"`, if it's known.
   public var unitType: String? { discovered.unitType }
 
+  /// The Hub's own firmware as the way it was found prints it, such as `1019` or
+  /// `s:1.0.2|c:5.0.1`, if it's known.
+  public var firmware: String? { discovered.firmware }
+
   /// Which local interface the Hub answers on: the Hub's, which the command drives a modem
   /// through, or the Hub Pro's, which it only reads.
   public var kind: HubKind { discovered.kind }
+
+  /// Whether the Hub answers on a Hub Pro's interface, which the command lists but can't
+  /// control.
+  public var isHubPro: Bool { discovered.kind == .hubPro }
 
   /// The settings a Hub Pro reported to the search that found it, if it did.
   public var hubProSettings: HubProSettings? { discovered.hubProSettings }
@@ -301,6 +325,7 @@ public struct HubCandidate: Hashable, Sendable {
 
       switch source {
       case .localNetwork: .localNetwork
+      case .bonjour: .bonjour
       case .insteonConnect: .insteonConnect
       case .insteonStage: .insteonStage
       }

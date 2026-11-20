@@ -150,18 +150,22 @@ public enum DiscoveryMethod: String, Hashable, Sendable, CaseIterable {
   /// By asking every address on the local network.
   case local
 
+  /// By browsing Bonjour.
+  case bonjour
+
   /// By asking Insteon Connect.
   case insteonConnect
 
   /// By asking Insteon's staging service.
   case insteonStage
 
-  /// The way in words, as the FOUND BY column shows it: "local network", "Insteon Connect" or
+  /// The way in words, as the FOUND BY column shows it: "local network", "Bonjour", "Insteon Connect" or
   /// "Insteon staging".
   public var label: String {
 
     switch self {
     case .local: "local network"
+    case .bonjour: "Bonjour"
     case .insteonConnect: "Insteon Connect"
     case .insteonStage: "Insteon staging"
     }

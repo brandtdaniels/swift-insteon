@@ -47,6 +47,29 @@ public struct ProductCatalog: Sendable {
 
   }
 
+  /// The model numbers of the catalog's products that have a Hub Pro's own HTTP interface, in
+  /// ascending order, each once, such as for matching a model a device advertises. Empty when
+  /// no product has one.
+  public var hubProModels: [String] {
+
+    Set(catalog.profiles.filter { (profile: DeviceProfile) -> Bool in
+
+      profile.capabilities.contains { (capability: DeviceCapability) -> Bool in
+
+        if case .hubPro = capability {
+
+          return true
+
+        }
+
+        return false
+
+      }
+
+    }.map { (profile: DeviceProfile) -> String in profile.model.rawValue }).sorted()
+
+  }
+
   /// Reads a catalog from its JSON, such as a copy a front end saved.
   ///
   /// A catalog that would let an app send or write more to a device the copy the package ships
