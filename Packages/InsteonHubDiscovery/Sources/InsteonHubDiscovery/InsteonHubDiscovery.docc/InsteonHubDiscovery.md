@@ -100,13 +100,13 @@ let results = try await HubIdentifier().identify(result.hubs) { candidate in
 A Hub Pro doesn't answer on the Hub's port. ``HubDiscovery`` also asks each port it's given with
 ``HubDiscovery/hubProPorts`` for the Hub Pro's root, and only a host that answers `401` without a
 `WWW-Authenticate` header is asked for its settings. A browser given as
-``HubDiscovery/bonjour`` finds one first, through the HomeKit service it advertises.
+``HubDiscovery/bonjour`` finds one first, through the HomeKit service it advertises. On platforms with the Network framework,
+`NetworkBonjourBrowser` is that browser.
 
 - ``HubProbe``
 - ``HubProProbe``
 - ``BonjourBrowsing``
 - ``BonjourService``
-- ``NetworkBonjourBrowser``
 
 ### Confirming a Hub
 
