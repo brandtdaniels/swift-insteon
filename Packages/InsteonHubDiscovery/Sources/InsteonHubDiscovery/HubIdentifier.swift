@@ -78,6 +78,10 @@ public struct HubIdentifier: Sendable {
     /// The candidate's address isn't a private address, so no credentials were sent.
     case skippedNonPrivateAddress
 
+    /// The candidate is a Hub Pro, whose interface takes no user name or password, so no
+    /// credentials were sent.
+    case skippedHubPro
+
     /// The candidate isn't on the Hub's port, so no credentials were sent. Only
     /// ``HubIdentifier/identify(_:provideCredentials:onResult:)`` reports this.
     case skippedNonHubPort
@@ -154,7 +158,8 @@ public struct HubIdentifier: Sendable {
   /// private address on the Hub's ``HubIdentifier/port``, and stopping at the first that rejects
   /// them.
   ///
-  /// For each candidate, in order: a candidate not on the Hub's port is skipped
+  /// For each candidate, in order: a Hub Pro is skipped
+  /// (``HubIdentifier/Outcome/skippedHubPro``), a candidate not on the Hub's port is skipped
   /// (``HubIdentifier/Outcome/skippedNonHubPort``), then a candidate not at a private address is
   /// skipped (``HubIdentifier/Outcome/skippedNonPrivateAddress``), both without asking the caller
   /// for credentials. Otherwise `provideCredentials` is asked; returning `nil` declines the
@@ -186,7 +191,11 @@ public struct HubIdentifier: Sendable {
 
       // The port is checked before the address, so a candidate on another port is told the Hub's
       // port before anything about its address.
-      if hub.endpoint.port != port {
+      if hub.kind == .hubPro {
+
+        outcome = .skippedHubPro
+
+      } else if hub.endpoint.port != port {
 
         outcome = .skippedNonHubPort
 
@@ -234,6 +243,12 @@ public struct HubIdentifier: Sendable {
   ///   ``HubIdentifier/Outcome/declined``.
   /// - Throws: `CancellationError` if the task is canceled.
   public func identify(_ hub: DiscoveredHub, credentials: Credentials) async throws -> Outcome {
+
+    guard hub.kind == .hub else {
+
+      return .skippedHubPro
+
+    }
 
     guard Self.isPrivate(hub.endpoint.host) else {
 

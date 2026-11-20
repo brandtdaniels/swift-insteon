@@ -8,7 +8,15 @@ public enum DiscoverySource: String, Hashable, Sendable, CaseIterable {
   /// By asking every address on the local network, as ``HubDiscovery`` does.
   case localNetwork
 
+  /// By browsing Bonjour for a Hub Pro, as ``HubDiscovery`` does when it's given a browser.
+  /// ``HubFinder`` also tags such a Hub ``DiscoverySource/localNetwork``.
+  case bonjour
+
   /// By asking Insteon Connect, as ``InsteonConnectLookup`` does.
   case insteonConnect
+
+  /// By asking Insteon's staging service, as ``InsteonConnectLookup`` does with
+  /// ``InsteonConnectLookup/stagingPageURL``.
+  case insteonStage
 
 }

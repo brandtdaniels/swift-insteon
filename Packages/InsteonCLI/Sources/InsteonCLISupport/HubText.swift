@@ -1,8 +1,28 @@
 import InsteonCore
 
+/// A host that answered like a Hub Pro, with the settings it reported, if it did.
+public struct RecognizedHubPro: Sendable {
+
+  /// The settings the Hub Pro reported.
+  public var settings: HubProSettings?
+
+  /// Creates a recognized Hub Pro.
+  ///
+  /// - Parameter settings: The settings it reported, if it did.
+  public init(settings: HubProSettings?) {
+
+    self.settings = settings
+
+  }
+
+}
+
 /// What the command says about a Hub: when a request to it gets no answer, and what came of
 /// asking it for Get IM Info. No message carries the Hub's credentials.
 public enum HubText {
+
+  /// How the Hub Pro is named in the command's output.
+  public static let hubProName = "Hub Pro"
 
   /// For a Hub that didn't answer any request, as when its address changed.
   ///
@@ -47,9 +67,11 @@ public enum HubText {
   ///   - device: The device the command was for, if it was for one, which a Hub that stopped
   ///     answering is most likely waiting on.
   /// - Returns: The message, or `nil`.
-  public static func failure(_ error: any Error, host: String, port: Int, device: InsteonAddress?) -> String? {
+  ///   - hubHasAnswered: Whether the Hub answered any poll or request in the session. When it
+  ///     never did, a modem that timed out is the Hub not answering. Defaults to `true`.
+  public static func failure(_ error: any Error, host: String, port: Int, device: InsteonAddress?, hubHasAnswered: Bool = true) -> String? {
 
-    switch HubFailure(error) {
+    switch HubFailure(error, hubHasAnswered: hubHasAnswered) {
     case .stoppedAnswering?:
       // The Hub answered earlier in the run, so it's busy rather than gone, most likely
       // with a device that doesn't answer; 'insteon discover' wouldn't help.
@@ -61,6 +83,80 @@ public enum HubText {
     case nil:
       nil
     }
+
+  }
+
+  /// What the command says about a host that answers like a Hub Pro, in place of asking for a
+  /// user name and password or saying the Hub didn't answer.
+  ///
+  /// - Parameters:
+  ///   - host: The Hub Pro's host.
+  ///   - settings: The settings it reported, if it did.
+  /// - Returns: A message that says it's a Hub Pro the command can't control yet.
+  public static func hubPro(host: String, settings: HubProSettings?) -> String {
+
+    var message = "\(host) is a Hub Pro, which 'insteon' can't control yet."
+
+    if let settings {
+
+      message += " It reports its address as \(settings.network.address), "
+        + "configuration version \(settings.version.config.version) and server version \(settings.version.server.version)."
+
+    }
+
+    return message + " No user name or password is needed or sent."
+
+  }
+
+  /// The failure for a host that answers like a Hub Pro, or `nil` for any other host.
+  ///
+  /// - Parameters:
+  ///   - host: The host named with `--hub`.
+  ///   - recognize: Asks the host whether it's a Hub Pro, with reads that carry no credentials.
+  /// - Returns: A failure that explains the Hub Pro, or `nil`.
+  /// - Throws: The error `recognize` throws, such as `CancellationError`.
+  public static func hubProRefusal(host: String, recognize: () async throws -> RecognizedHubPro?) async throws -> CommandFailure? {
+
+    guard let hubPro = try await recognize() else {
+
+      return nil
+
+    }
+
+    return CommandFailure(description: Self.hubPro(host: host, settings: hubPro.settings))
+
+  }
+
+  /// What `insteon discover` says under the table when it lists Hub Pros: that the command
+  /// can't control them yet, and what each reported.
+  ///
+  /// - Parameter settings: The settings each Hub Pro listed reported, `nil` for one that
+  ///   reported none.
+  /// - Returns: The notes, none when no Hub Pro is listed.
+  public static func hubProNote(settings: [HubProSettings?]) -> [String] {
+
+    guard !settings.isEmpty else {
+
+      return []
+
+    }
+
+    var notes = [
+      settings.count == 1
+        ? "A Hub Pro is listed, but 'insteon' can't control it yet."
+        : "Hub Pros are listed, but 'insteon' can't control them yet."
+    ]
+
+    for case let reported? in settings {
+
+      notes.append(
+        "Hub Pro at \(reported.network.address) reports configuration version \(reported.version.config.version) "
+          + "and server version \(reported.version.server.version)."
+      )
+
+    }
+
+    return notes
 
   }
 
@@ -120,6 +216,8 @@ public enum HubText {
       return nil
     case .skippedNonPrivateAddress:
       return "\(host) isn't a private address, so it wasn't sent the password."
+    case .skippedHubPro:
+      return "\(address) is a Hub Pro, which takes no user name or password, so it wasn't sent the password."
     case .skippedNonHubPort:
       return "\(address) isn't on the Hub's port, \(HubLocation.defaultPort), so it wasn't sent the password. "
         + "'insteon discover --identify \(address)' sends it."

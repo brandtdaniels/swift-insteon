@@ -75,13 +75,13 @@ let package = Package(
 
     .target(
       name: "InsteonHubDiscovery",
-      dependencies: ["InsteonHubClient", "InsteonModem", "InsteonNetworking", "InsteonProtocol"],
+      dependencies: ["InsteonHubClient", "InsteonHubPro", "InsteonModem", "InsteonNetworking", "InsteonProtocol"],
       path: "Packages/InsteonHubDiscovery/Sources/InsteonHubDiscovery",
       swiftSettings: memberImportVisibility
     ),
     .testTarget(
       name: "InsteonHubDiscoveryTests",
-      dependencies: ["InsteonHubDiscovery", "InsteonHubClient", "InsteonModem", "InsteonNetworking", "InsteonProtocol"],
+      dependencies: ["InsteonHubDiscovery", "InsteonHubClient", "InsteonHubPro", "InsteonModem", "InsteonNetworking", "InsteonProtocol"],
       path: "Packages/InsteonHubDiscovery/Tests/InsteonHubDiscoveryTests",
       swiftSettings: memberImportVisibility
     ),
@@ -236,6 +236,7 @@ let package = Package(
         "InsteonCLISupport",
         "InsteonCore",
         "InsteonDeviceCatalog",
+        "InsteonHubPro",
         "InsteonHubClient",
         "InsteonLinking",
         "InsteonProtocol"

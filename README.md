@@ -12,8 +12,8 @@ Swift packages for working with [Insteon](https://www.insteon.com) home automati
 | [InsteonModem](Packages/InsteonModem) | Control Insteon devices through a PowerLinc Modem or USB Adapter on a USB or serial port, or a PowerLinc Controller 2414S |
 | [InsteonLinking](Packages/InsteonLinking) | Link devices to each other and to the modem: by writing their ALL-Link databases, remotely, or with their SET buttons |
 | [InsteonHubClient](Packages/InsteonHubClient) | Control Insteon devices through an Insteon Hub on your local network, by driving its built-in modem with InsteonModem |
-| [InsteonHubDiscovery](Packages/InsteonHubDiscovery) | Find Insteon Hubs on your local network, by asking the network itself or Insteon Connect |
-| [InsteonHubPro](Packages/InsteonHubPro) | The requests only a Hub Pro has: adding Insteon devices to it, reading its settings and updating its software through its local interface. Untested with a Hub Pro |
+| [InsteonHubDiscovery](Packages/InsteonHubDiscovery) | Find Insteon Hubs and Hub Pros on your local network, by asking the network itself, browsing Bonjour for a Hub Pro, or asking Insteon Connect or Insteon's staging service |
+| [InsteonHubPro](Packages/InsteonHubPro) | The requests only a Hub Pro has: adding Insteon devices to it, reading its settings and updating its software through its local interface. Reading the settings has been run against a Hub Pro; adding, removing and updating haven't |
 | [InsteonScheduling](Packages/InsteonScheduling) | Work out when schedules run, at clock times or around sunrise and sunset, in a home's time zone through daylight saving changes |
 | [InsteonDeviceCatalog](Packages/InsteonDeviceCatalog) | Look a device up in the [Insteon device catalog](https://github.com/brandtdaniels/insteon-device-catalog) by the category, subcategory and firmware version it reports, to find what it is and can do, such as its groups, what its group commands mean and its heartbeat interval, and read its messages as named events |
 | [InsteonNotifications](Packages/InsteonNotifications) | Let people know when their devices do something they care about, such as a leak sensor turning wet, a door opening or a sensor going quiet |
@@ -23,7 +23,7 @@ The package also has a command, [`insteon`](Packages/InsteonCLI), for driving a 
 
 For a persistent home service, [InsteonService](Packages/InsteonService) owns device operations, monitoring and snapshot policy. The optional [Swift server](Packages/InsteonServer) supplies authenticated HTTP and browser adapters at a chosen local or VPN interface. Remote clients connect to the service; the service talks to the Hub or serial modem. It uses no Insteon cloud subscription and supplies no VPN. HTTP framework and authentication dependencies stay in the optional package.
 
-InsteonHubPro, InsteonScheduling and InsteonNotifications stand on their own: neither InsteonCore nor the `insteon` command uses them. They're kept for apps that want them. InsteonHubPro follows the Hub Pro's local interface without having been run against a Hub Pro, so treat it as untested.
+InsteonScheduling and InsteonNotifications stand on their own: neither InsteonCore nor the `insteon` command uses them. They're kept for apps that want them. InsteonHubDiscovery reads a Hub Pro's settings with InsteonHubPro to recognize one. InsteonHubPro's adding, removing and updating follow the Hub Pro's local interface without having been run against a Hub Pro, so treat them as untested.
 
 The [Supported Modems](Packages/InsteonModem/Sources/InsteonModem/InsteonModem.docc/SupportedModems.md) article lists every modem, Hub and controller, and how well each is supported.
 

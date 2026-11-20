@@ -1,6 +1,6 @@
 # ``InsteonHubDiscovery``
 
-Find Insteon Hubs on the local network, by asking the network itself or Insteon Connect.
+Find Insteon Hubs and Hub Pros on the local network, by asking the network itself, browsing Bonjour for a Hub Pro, or asking Insteon Connect or Insteon's staging service.
 
 ## Overview
 
@@ -91,8 +91,22 @@ let results = try await HubIdentifier().identify(result.hubs) { candidate in
 - ``HubDiscovery``
 - ``InsteonConnectLookup``
 - ``DiscoveredHub``
+- ``HubKind``
 - ``DiscoverySource``
 - ``InsteonConnectError``
+
+### Finding a Hub Pro
+
+A Hub Pro doesn't answer on the Hub's port. ``HubDiscovery`` also asks each port it's given with
+``HubDiscovery/hubProPorts`` for the Hub Pro's root, and only a host that answers `401` without a
+`WWW-Authenticate` header is asked for its settings. A browser given as
+``HubDiscovery/bonjour`` finds one first, through the HomeKit service it advertises. On platforms with the Network framework,
+`NetworkBonjourBrowser` is that browser.
+
+- ``HubProbe``
+- ``HubProProbe``
+- ``BonjourBrowsing``
+- ``BonjourService``
 
 ### Confirming a Hub
 

@@ -29,7 +29,13 @@ enum DiscoverCommand {
 
     var unitType: String?
 
+    /// The Hub's own firmware as Insteon's service prints it, when asked.
+    var firmware: String?
+
     var product: String?
+
+    /// `hub`, or `hubPro` for a Hub Pro, which the command lists but can't control.
+    var kind: String
 
   }
 
@@ -48,10 +54,13 @@ enum DiscoverCommand {
     try options.checkIdentifying(readsFromTerminal: Terminal.readsFromTerminal)
 
     let names = ProductNames()
-    let search = HubSearch()
+    // The ports and models of a Hub Pro's interface come from the catalog, so a catalog that
+    // gives none finds none.
+    let search = HubSearch(hubProPorts: names.catalog?.hubProPorts ?? [], hubProModels: names.catalog?.hubProModels ?? [])
     var hubs: [HubCandidate] = try await HubDiscovery.search(
       options,
       insteonConnect: { () async throws -> [HubCandidate] in try await search.insteonConnectHubs() },
+      insteonStage: { () async throws -> [HubCandidate] in try await search.insteonStageHubs() },
       localNetwork: { (stoppingAtFirst: Bool) async throws -> [HubCandidate] in try await searchLocalNetwork(search, stoppingAtFirst: stoppingAtFirst) },
       merge: { (hub: HubCandidate, hubs: inout [HubCandidate]) -> Void in HubSearch.merge(hub, into: &hubs) },
       note: Output.note,
@@ -96,6 +105,12 @@ enum DiscoverCommand {
     Output.table([["ADDRESS", "INSTEON ID", "PRODUCT", "FOUND BY"]] + rows)
 
     if let note = HubText.candidateNote(options) {
+
+      Output.note(note)
+
+    }
+
+    for note in HubText.hubProNote(settings: hubs.filter(\.isHubPro).map(\.hubProSettings)) {
 
       Output.note(note)
 
@@ -252,6 +267,13 @@ enum DiscoverCommand {
 
     }
 
+    // A Hub Pro the catalog doesn't name is still named as one.
+    if product == nil, hub.isHubPro {
+
+      product = HubText.hubProName
+
+    }
+
     return FoundHub(
       host: hub.host,
       port: hub.port,
@@ -261,7 +283,9 @@ enum DiscoverCommand {
       subcategory: hub.subcategory.map { "\($0)" },
       firmwareVersion: hub.firmwareVersion.map { "\($0)" },
       unitType: hub.unitType,
-      product: product
+      firmware: hub.firmware,
+      product: product,
+      kind: hub.kind.rawValue
     )
 
   }
@@ -270,7 +294,7 @@ enum DiscoverCommand {
   /// Connect before the local network when both found it.
   private static func foundByRawValues(_ sources: Set<HubSource>) -> [String] {
 
-    [HubSource.insteonConnect, .localNetwork]
+    [HubSource.insteonConnect, .insteonStage, .bonjour, .localNetwork]
       .filter(sources.contains)
       .map { method(for: $0).rawValue }
 
@@ -282,6 +306,8 @@ enum DiscoverCommand {
     switch source {
     case .localNetwork: .local
     case .insteonConnect: .insteonConnect
+    case .insteonStage: .insteonStage
+    case .bonjour: .bonjour
     }
 
   }

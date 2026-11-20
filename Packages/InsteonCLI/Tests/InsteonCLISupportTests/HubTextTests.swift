@@ -3,6 +3,8 @@ import Testing
 import InsteonCLISupport
 import InsteonCore
 import InsteonHubClient
+import InsteonHubPro
+import InsteonModem
 import InsteonProtocol
 
 struct HubTextTests {
@@ -47,6 +49,74 @@ struct HubTextTests {
     )
     #expect(HubText.failure(URLError(.timedOut), host: "hub.example", port: 25105, device: device) == HubText.unanswered(host: "hub.example", port: 25105))
     #expect(HubText.failure(Other(), host: "hub.example", port: 25105, device: device) == nil)
+
+  }
+
+  // A Hub at an unreachable address leaves the modem's first command to time out; the Hub is
+  // what didn't answer.
+  @Test func saysTheHubDidNotAnswerWhenOnlyTheModemTimedOutAndTheHubNeverAnswered() {
+
+    let timedOut = ModemError.timedOut(.getModemInfo)
+
+    #expect(
+      HubText.failure(timedOut, host: "hub.example", port: 25105, device: nil, hubHasAnswered: false)
+        == HubText.unanswered(host: "hub.example", port: 25105)
+    )
+    #expect(HubText.failure(timedOut, host: "hub.example", port: 25105, device: nil, hubHasAnswered: true) == nil)
+
+  }
+
+  // MARK: - A Hub Pro
+
+  private let settings = HubProSettings(
+    time: "t",
+    network: HubProSettings.Network(address: "192.168.1.50"),
+    version: HubProSettings.Versions(
+      config: HubProSettings.SoftwareVersion(version: "5.0.1"),
+      server: HubProSettings.SoftwareVersion(version: "1.0.2")
+    )
+  )
+
+  @Test func explainsAHubProPlainlyWithoutAskingForAPassword() {
+
+    let message = HubText.hubPro(host: "192.168.1.50", settings: settings)
+
+    #expect(
+      message == "192.168.1.50 is a Hub Pro, which 'insteon' can't control yet. It reports its address as 192.168.1.50, "
+        + "configuration version 5.0.1 and server version 1.0.2. No user name or password is needed or sent."
+    )
+    #expect(!message.contains("INSTEON_HUB_USERNAME"))
+
+  }
+
+  @Test func explainsAHubProWithoutSettings() {
+
+    #expect(HubText.hubPro(host: "192.168.1.50", settings: nil) == "192.168.1.50 is a Hub Pro, which 'insteon' can't control yet. No user name or password is needed or sent.")
+
+  }
+
+  @Test func saysUnderTheTableThatHubProsAreListedButNotControlled() {
+
+    #expect(HubText.hubProNote(settings: [settings]) == [
+      "A Hub Pro is listed, but 'insteon' can't control it yet.",
+      "Hub Pro at 192.168.1.50 reports configuration version 5.0.1 and server version 1.0.2.",
+    ])
+    #expect(HubText.hubProNote(settings: [nil, nil]) == ["Hub Pros are listed, but 'insteon' can't control them yet."])
+    #expect(HubText.hubProNote(settings: []).isEmpty)
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func refusesAHostThatIsAHubProInPlaceOfAskingForCredentials() async throws {
+
+    let refusal = try await HubText.hubProRefusal(host: "192.168.1.50") { RecognizedHubPro(settings: settings) }
+
+    #expect(refusal == CommandFailure(description: HubText.hubPro(host: "192.168.1.50", settings: settings)))
+
+  }
+
+  @Test(.timeLimit(.minutes(1))) func refusesNothingForAHostThatIsNotAHubPro() async throws {
+
+    #expect(try await HubText.hubProRefusal(host: "192.168.1.20") { nil } == nil)
 
   }
 

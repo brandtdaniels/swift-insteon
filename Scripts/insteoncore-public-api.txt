@@ -121,6 +121,7 @@ case HubIdentification.didNotAnswer
 case HubIdentification.failed(_:)
 case HubIdentification.identified(_:)
 case HubIdentification.rejected(_:)
+case HubIdentification.skippedHubPro
 case HubIdentification.skippedNonHubPort
 case HubIdentification.skippedNonPrivateAddress
 case HubLinkingJoin.deviceFirst
@@ -129,7 +130,9 @@ case HubLinkingJoin.setButton
 case HubLinkingLegStatus.failed(_:)
 case HubLinkingLegStatus.linked(_:by:)
 case HubLinkingLegStatus.notRun
+case HubSource.bonjour
 case HubSource.insteonConnect
+case HubSource.insteonStage
 case HubSource.localNetwork
 case KeepAwakeEvent.notReleased(_:reason:)
 case KeepAwakeEvent.notSent(_:reason:)
@@ -402,6 +405,8 @@ func HubLocation.isSameEndpoint(as:)
 func HubSearch.identify(_:user:password:)
 func HubSearch.identify(_:user:password:sendsCredentials:onResult:)
 func HubSearch.insteonConnectHubs()
+func HubSearch.insteonStageHubs()
+func HubSearch.recognizeHubPro(at:)
 func HubSearch.searchLocalNetwork(stoppingAtFirstHub:onHubFound:)
 func HubSearch.searchableAddressCount()
 func JSONFileDeviceRegistryStore.load()
@@ -467,11 +472,11 @@ init DirectMessage(to:command1:command2:data:hasChecksum:)
 init FactoryResetSteps(address:info:procedure:erases:)
 init ForgottenDevice(address:device:)
 init HubAddressRefused(host:)
-init HubFailure?(_:)
+init HubFailure?(_:hubHasAnswered:)
 init HubLinkingLeg(device:index:count:modemRole:modemGroup:deviceGroup:remoteEnterLinkingMode:allGroupsWhen:)
 init HubLinkingLegOutcome(leg:status:)
 init HubLocation(host:port:insteonID:)
-init HubSearch()
+init HubSearch(hubProPorts:hubProModels:)
 init InstructionStep(text:expectation:isOnOtherDevice:)
 init Instructions(steps:notes:)
 init JSONFileDeviceRegistryStore(fileURL:)
@@ -691,6 +696,8 @@ typealias DeviceCategory
 typealias DeviceSubcategory
 typealias FirmwareVersion
 typealias GuardWeakening
+typealias HubKind
+typealias HubProSettings
 typealias InsteonAddress
 typealias InsteonEngine
 typealias LinkingDirection
@@ -884,10 +891,14 @@ var ForgottenDevice.address
 var ForgottenDevice.device
 var HubAddressRefused.description
 var HubCandidate.category
+var HubCandidate.firmware
 var HubCandidate.firmwareVersion
 var HubCandidate.foundBy
 var HubCandidate.host
+var HubCandidate.hubProSettings
 var HubCandidate.insteonID
+var HubCandidate.isHubPro
+var HubCandidate.kind
 var HubCandidate.port
 var HubCandidate.subcategory
 var HubCandidate.unitType
@@ -964,6 +975,8 @@ var NetworkSnapshot.hub
 var NetworkSnapshot.isEmpty
 var NetworkSnapshot.modemDatabase
 var NetworkSnapshot.registry
+var ProductCatalog.hubProModels
+var ProductCatalog.hubProPorts
 var ProductCatalogError.errorDescription
 var ProductCatalogStore.catalogPath
 var ProductCatalogStore.directory

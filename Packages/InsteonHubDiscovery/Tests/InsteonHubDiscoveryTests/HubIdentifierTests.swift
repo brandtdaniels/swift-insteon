@@ -71,6 +71,24 @@ struct HubIdentifierTests {
 
   }
 
+  @Test func neverSendsCredentialsToAHubPro() async throws {
+
+    let client = RecordingHTTPClient(status: 401)
+    let identifier = HubIdentifier(httpClient: client)
+    let asked = AskedTracker()
+    let hubPro = DiscoveredHub(endpoint: HubEndpoint(host: "10.0.0.5", port: 80), kind: .hubPro)
+
+    let credentials: HubIdentifier.Credentials = self.credentials
+    let results = try await identifier.identify([hubPro], provideCredentials: { _ in await asked.record(); return credentials })
+    let single = try await identifier.identify(hubPro, credentials: credentials)
+
+    #expect(results.map { "\($0.outcome)" } == ["skippedHubPro"])
+    #expect("\(single)" == "skippedHubPro")
+    #expect(await client.hosts.isEmpty)
+    #expect(await asked.count == 0)
+
+  }
+
   @Test func treats403AsARejection() async throws {
 
     let client = RecordingHTTPClient(status: 403)

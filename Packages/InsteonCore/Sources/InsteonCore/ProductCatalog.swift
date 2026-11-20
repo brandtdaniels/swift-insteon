@@ -27,6 +27,49 @@ public struct ProductCatalog: Sendable {
 
   }
 
+  /// The ports the catalog gives for a Hub Pro's own HTTP interface, in ascending order, each
+  /// once. Empty when no product in the catalog has one.
+  public var hubProPorts: [Int] {
+
+    var ports: Set<Int> = []
+
+    for profile in catalog.profiles {
+
+      for case let .hubPro(port) in profile.capabilities {
+
+        ports.insert(Int(port))
+
+      }
+
+    }
+
+    return ports.sorted()
+
+  }
+
+  /// The model numbers of the catalog's products that have a Hub Pro's own HTTP interface, in
+  /// ascending order, each once, such as for matching a model a device advertises. Empty when
+  /// no product has one.
+  public var hubProModels: [String] {
+
+    Set(catalog.profiles.filter { (profile: DeviceProfile) -> Bool in
+
+      profile.capabilities.contains { (capability: DeviceCapability) -> Bool in
+
+        if case .hubPro = capability {
+
+          return true
+
+        }
+
+        return false
+
+      }
+
+    }.map { (profile: DeviceProfile) -> String in profile.model.rawValue }).sorted()
+
+  }
+
   /// Reads a catalog from its JSON, such as a copy a front end saved.
   ///
   /// A catalog that would let an app send or write more to a device the copy the package ships

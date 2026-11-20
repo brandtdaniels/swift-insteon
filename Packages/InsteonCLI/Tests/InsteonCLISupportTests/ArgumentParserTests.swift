@@ -178,6 +178,37 @@ struct ArgumentParserTests {
 
   }
 
+  @Test func asksTheStagingServiceOnItsOwn() throws {
+
+    #expect(
+      try Invocation.parse(["discover", "--insteon-stage"]).subcommand
+        == .discover(DiscoverOptions(searchesLocalNetwork: false, asksInsteonStage: true))
+    )
+    #expect(
+      try Invocation.parse(["discover", "--local", "--insteon-stage"]).subcommand
+        == .discover(DiscoverOptions(searchesLocalNetwork: true, asksInsteonStage: true))
+    )
+    #expect(DiscoverOptions().asksInsteonStage == false)
+
+  }
+
+  // One run discloses the public IP address to one service, chosen explicitly.
+  @Test func refusesBothServicesInOneRun() {
+
+    #expect(throws: ArgumentError.conflictingOptions("--insteon-connect", "--insteon-stage")) {
+
+      try Invocation.parse(["discover", "--insteon-connect", "--insteon-stage"])
+
+    }
+    #expect(throws: ArgumentError.conflictingOptions("--insteon-connect", "--insteon-stage")) {
+
+      try Invocation.parse(["discover", "--insteon-stage", "--insteon-connect"])
+
+    }
+    #expect(ArgumentError.conflictingOptions("--insteon-connect", "--insteon-stage").description.contains("--insteon-connect"))
+
+  }
+
   @Test func stopsAtTheFirstHubUnlessAskedForAll() throws {
 
     #expect(DiscoverOptions().searchesAllAddresses == false)

@@ -1,4 +1,6 @@
 import InsteonDeviceCatalog
+import InsteonHubDiscovery
+import InsteonHubPro
 import InsteonLinking
 import InsteonModem
 import InsteonProtocol
@@ -74,3 +76,9 @@ public typealias SettingName = InsteonDeviceCatalog.SettingName
 /// What a message does to the device it's sent to, such as `CommandEffect.actuation`, which a
 /// ``SendConsent`` grants and a refusal names.
 public typealias CommandEffect = InsteonDeviceCatalog.CommandEffect
+
+/// Which local interface a Hub answers on, as `InsteonHubDiscovery` reports it.
+public typealias HubKind = InsteonHubDiscovery.HubKind
+
+/// A Hub Pro's network settings and software versions, as it reports them.
+public typealias HubProSettings = InsteonHubPro.HubProSettings
