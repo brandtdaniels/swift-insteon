@@ -3,10 +3,18 @@
 import PackageDescription
 
 // The server is optional: its framework is outside the libraries' dependency graph.
+// The plugin libraries and the reference plugins depend on neither the service nor its HTTP layer:
+// a plugin speaks the public HTTP contract, so a plugin author builds against these two small
+// libraries (or against no Swift at all) and the service builds without them.
 let package = Package(
   name: "InsteonServer",
   platforms: [.macOS(.v14)],
-  products: [.executable(name: "insteon-server", targets: ["insteon-server"])],
+  products: [
+    .executable(name: "insteon-server", targets: ["insteon-server"]),
+    .library(name: "InsteonPluginKit", targets: ["InsteonPluginKit"]),
+    .library(name: "InsteonLoopbackTransport", targets: ["InsteonLoopbackTransport"]),
+    .executable(name: "insteon-reference-transport", targets: ["insteon-reference-transport"])
+  ],
   dependencies: [
     .package(name: "swift-insteon", path: "../.."),
     .package(url: "https://github.com/hummingbird-project/hummingbird.git", .upToNextMinor(from: "2.28.1")),
@@ -53,12 +61,24 @@ let package = Package(
         .product(name: "HummingbirdCore", package: "hummingbird")
       ]
     ),
+    .target(name: "InsteonPluginKit"),
+    .target(
+      name: "InsteonLoopbackTransport",
+      dependencies: [
+        "InsteonPluginKit",
+        .product(name: "NIOCore", package: "swift-nio"),
+        .product(name: "NIOPosix", package: "swift-nio")
+      ]
+    ),
+    .executableTarget(name: "insteon-reference-transport", dependencies: ["InsteonLoopbackTransport", "InsteonPluginKit"]),
     .executableTarget(name: "insteon-server", dependencies: ["InsteonServerSupport", .product(name: "Logging", package: "swift-log")]),
     .testTarget(
       name: "InsteonServerTests",
       dependencies: [
         "InsteonServerSupport",
         "InsteonHTTP",
+        "InsteonPluginKit",
+        "InsteonLoopbackTransport",
         .product(name: "InsteonDeviceCatalog", package: "swift-insteon"),
         .product(name: "InsteonLinking", package: "swift-insteon"),
         .product(name: "InsteonProtocol", package: "swift-insteon"),
