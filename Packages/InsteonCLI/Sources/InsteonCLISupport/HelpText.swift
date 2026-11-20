@@ -649,7 +649,7 @@ public enum HelpText {
   /// The help for `insteon catalog`.
   public static let catalog = """
     Usage: insteon catalog
-           insteon catalog update
+           insteon catalog update [--explain]
 
     The command names products and events from the Insteon device catalog. A copy ships
     next to the command; 'catalog update' keeps a newer one in
@@ -666,6 +666,16 @@ public enum HelpText {
     for the catalog. A catalog in a newer format needs a newer swift-insteon; the current
     copy stays until then. A published catalog older than the copy in use, or than the
     bundled copy, isn't downloaded, and the current copy stays.
+
+    A published catalog that relaxes a safeguard the bundled copy keeps, such as describing a
+    command's effect more loosely, isn't used either, and the current copy stays until a new
+    version of this tool ships a refreshed bundle. The command prints the differences by
+    kind; --explain prints every one, one per line, grouped by kind, to standard output, or
+    as JSON with --json, whether or not the catalog was refused.
+
+    Exit status: 0 when the catalog was updated or kept for another reason, 1 when it
+    couldn't be fetched or checked, 3 when it was refused for relaxing safeguards, and 4 when
+    the copy in use is already the published one.
     """
 
 }

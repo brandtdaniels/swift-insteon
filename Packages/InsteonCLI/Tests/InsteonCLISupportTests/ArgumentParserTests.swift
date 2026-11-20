@@ -662,10 +662,10 @@ struct ArgumentParserTests {
   @Test func readsCatalog() throws {
 
     #expect(try Invocation.parse(["catalog"]).subcommand == .catalog)
-    #expect(try Invocation.parse(["catalog", "update"]).subcommand == .catalogUpdate)
+    #expect(try Invocation.parse(["catalog", "update"]).subcommand == .catalogUpdate(explains: false))
 
     // The command's own options are still read, though the catalog commands use none of them.
-    #expect(try Invocation.parse(["--hub", "192.168.1.20", "catalog", "update"]) == Invocation(hub: "192.168.1.20", subcommand: .catalogUpdate))
+    #expect(try Invocation.parse(["--hub", "192.168.1.20", "catalog", "update"]) == Invocation(hub: "192.168.1.20", subcommand: .catalogUpdate(explains: false)))
 
   }
 

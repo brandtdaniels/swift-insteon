@@ -1116,9 +1116,21 @@ extension Invocation {
 
     }
 
-    try expectNoArguments(Array(arguments.dropFirst()), subcommand: "catalog")
+    var explains = false
 
-    return .catalogUpdate
+    for argument in arguments.dropFirst() {
+
+      guard argument == "--explain" else {
+
+        throw unexpected(argument, subcommand: "catalog")
+
+      }
+
+      explains = true
+
+    }
+
+    return .catalogUpdate(explains: explains)
 
   }
 

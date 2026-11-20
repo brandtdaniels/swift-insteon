@@ -190,36 +190,47 @@ enum CatalogCommand {
 
   /// Downloads the published catalog when it's compatible with the bundled copy, differs
   /// from the copy in use, and is at least as new as that copy and the bundled copy, and
-  /// saves it. `CatalogUpdate.check` decides; this asks the site and saves.
+  /// saves it. `CatalogUpdate.perform` decides and reports; this asks the site and saves.
   ///
   /// Only the catalog's site is asked, over HTTPS, with a session that keeps no cookies or
   /// credentials, so nothing about the Hub is ever sent. A redirect is followed only to HTTPS
   /// on the same host and port.
   ///
-  /// - Throws: `CommandFailure` if the catalog can't be downloaded, checked or saved.
-  static func update() async throws {
+  /// - Parameters:
+  ///   - explains: Whether to list every difference in the published catalog's safeguards.
+  ///   - printsJSON: Whether the list is JSON.
+  /// - Returns: The exit status.
+  static func update(explains: Bool, printsJSON: Bool) async throws -> Int32 {
 
     let location: URL = ProductCatalog.updateLocation
-    let outcome: CatalogUpdateOutcome = try await CatalogUpdate.check(
+    let report: CatalogUpdateReport = try await CatalogUpdate.perform(
       CatalogFiles(),
       isReadable: { (json: Data) -> Bool in (try? ProductCatalog(json: json)) != nil },
       location: location,
-      willAsk: Output.note,
       download: { (current: Data?, currentVersion: DeviceCatalogVersion?) async throws -> ProductCatalogUpdate in
 
         try await ProductCatalog.update(replacing: current, currentVersion: currentVersion, from: location, requestTimeout: requestTimeout)
 
       },
-      message: Names.message(for:)
+      message: Names.message(for:),
+      save: CatalogStore.save(json:version:),
+      explains: explains,
+      printsJSON: printsJSON
     )
 
-    switch outcome {
-    case let .keep(line):
-      Output.line(line)
-    case let .save(json, version):
-      try CatalogStore.save(json: json, version: version)
-      Output.line(CatalogText.updated(to: version))
+    for note in report.notes {
+
+      Output.note(note)
+
     }
+
+    for line in report.output {
+
+      Output.line(line)
+
+    }
+
+    return report.status
 
   }
 
