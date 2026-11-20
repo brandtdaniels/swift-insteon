@@ -387,20 +387,6 @@ public enum CatalogText {
 
   }
 
-  /// What `insteon catalog update` says when the published copy would let more be sent or
-  /// written to a device than the bundled copy does, so it isn't used.
-  ///
-  /// - Parameters:
-  ///   - weakenings: The weakened guards.
-  ///   - current: The version of the copy in use, which stays.
-  /// - Returns: The message.
-  public static func publishedWeakensGuards(_ weakenings: [GuardWeakening], current: DeviceCatalogVersion) -> String {
-
-    "The published Insteon device catalog would let more be sent or written to a device than the bundled copy does, "
-      + "weakening the guards that keep it reachable and unlocked (\(list(weakenings))), so it isn't used and the current copy, \(current), stays."
-
-  }
-
   /// The warning when the cached copy would let more be sent or written to a device than the
   /// bundled copy does, so the bundled copy is used.
   ///

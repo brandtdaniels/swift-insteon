@@ -38,7 +38,7 @@ struct ProductCatalogUpdateTests {
       (HTTPClientError.insecureRedirect, .insecureRedirect),
       (HTTPClientError.redirectRefused, .redirectRefused),
       (notACatalog, .unreadableCatalog),
-      (DeviceCatalogUpdateError.weakensGuards([weakening]), .weakensGuards([weakening])),
+      (DeviceCatalogUpdateError.weakensGuards([weakening], published: version), .weakensGuards([weakening], published: version)),
     ]
 
     for (error, expected) in cases {

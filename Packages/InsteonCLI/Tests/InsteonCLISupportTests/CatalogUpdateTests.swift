@@ -121,7 +121,7 @@ struct CatalogUpdateTests {
     let outcome = try await update(Copies(bundled: bundled), download, location: upper)
 
     #expect(download.asked.count == 1)
-    #expect(outcome == .keep("The Insteon device catalog is up to date (0.6.20)."))
+    #expect(outcome == .current(DeviceCatalogVersion(major: 0, minor: 6, patch: 20)))
 
   }
 
@@ -137,8 +137,7 @@ struct CatalogUpdateTests {
 
     #expect(download.asked.map(\.current) == [cachedJSON])
     #expect(download.asked.map(\.version) == [cached])
-    #expect(outcome == .keep(CatalogText.upToDate(cached)))
-    #expect(outcome == .keep("The Insteon device catalog is up to date (0.6.21)."))
+    #expect(outcome == .current(cached))
     #expect(notes.lines == ["Checking https://catalog.example/insteon/ for a newer Insteon device catalog..."])
 
   }
@@ -154,7 +153,7 @@ struct CatalogUpdateTests {
     #expect(download.asked.count == 1)
     #expect(download.asked.first?.current == nil)
     #expect(download.asked.first?.version == nil)
-    #expect(outcome == .keep(CatalogText.upToDate(bundled)))
+    #expect(outcome == .current(bundled))
 
   }
 
@@ -173,7 +172,7 @@ struct CatalogUpdateTests {
 
     #expect(download.asked.first?.current == nil)
     #expect(download.asked.first?.version == nil)
-    #expect(outcome == .keep(CatalogText.upToDate(bundled)))
+    #expect(outcome == .current(bundled))
 
   }
 

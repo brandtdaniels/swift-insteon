@@ -208,17 +208,12 @@ struct CatalogCacheTests {
 
   }
 
-  @Test func saysWhichGuardsAPublishedOrCachedCatalogWeakens() {
+  @Test func saysWhichGuardsACachedCatalogWeakens() {
 
     let weakenings: [GuardWeakening] = [
       GuardWeakening(category: 0x01, subcategory: 0x7A, firmwareVersion: nil, kind: .unlocksProtectedCommand, detail: "Set Operating Flags 0x0C"),
       GuardWeakening(category: 0x01, subcategory: 0x7A, firmwareVersion: nil, kind: .flagsQuery, detail: "D7 Get Operating Flags 0x00")
     ]
-    let current = DeviceCatalogVersion(major: 0, minor: 6, patch: 21)
-
-    #expect(CatalogText.publishedWeakensGuards(weakenings, current: current) == "The published Insteon device catalog would let more be sent or written to a device than the bundled copy does, "
-      + "weakening the guards that keep it reachable and unlocked (0x01/0x7A unlocksProtectedCommand Set Operating Flags 0x0C, 0x01/0x7A flagsQuery D7 Get Operating Flags 0x00), "
-      + "so it isn't used and the current copy, 0.6.21, stays.")
     #expect(CatalogText.cachedWeakensGuards(path: "/home/example/.cache/insteon/catalog.json", weakenings) == "insteon: warning: the cached Insteon device catalog "
       + "at /home/example/.cache/insteon/catalog.json would let more be sent or written to a device than the bundled copy does, "
       + "weakening the guards that keep it reachable and unlocked (0x01/0x7A unlocksProtectedCommand Set Operating Flags 0x0C, 0x01/0x7A flagsQuery D7 Get Operating Flags 0x00), so the bundled copy is used. "

@@ -207,7 +207,7 @@ case ProductCatalogUpdateError.olderThanCurrent(_:)
 case ProductCatalogUpdateError.redirectRefused
 case ProductCatalogUpdateError.unexpectedStatus(_:)
 case ProductCatalogUpdateError.unreadableCatalog
-case ProductCatalogUpdateError.weakensGuards(_:)
+case ProductCatalogUpdateError.weakensGuards(_:published:)
 case ProtectedCommand.poke
 case ProtectedCommand.setOperatingFlags0x00
 case ProtectedCommand.setOperatingFlags0x0C

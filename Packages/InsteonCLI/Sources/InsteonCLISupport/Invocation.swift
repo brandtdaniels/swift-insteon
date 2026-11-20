@@ -137,8 +137,9 @@ public enum Subcommand: Hashable, Sendable {
   case catalog
 
   /// Downloads the published Insteon device catalog into the cache directory when it's newer
-  /// than the copy in use. Needs no modem, and reads no Hub settings.
-  case catalogUpdate
+  /// than the copy in use. Needs no modem, and reads no Hub settings. With `explains`, it also
+  /// lists every difference between the published catalog's safeguards and the bundled copy's.
+  case catalogUpdate(explains: Bool)
 
 }
 

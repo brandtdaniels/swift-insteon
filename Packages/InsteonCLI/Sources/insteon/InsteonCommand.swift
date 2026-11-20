@@ -29,6 +29,12 @@ struct InsteonCommand {
 
       let invocation = try Invocation.parse(arguments)
 
+      if case let .catalogUpdate(explains) = invocation.subcommand {
+
+        return try await CatalogCommand.update(explains: explains, printsJSON: invocation.printsJSON)
+
+      }
+
       try await run(invocation)
 
       return ExitStatus.success
@@ -144,7 +150,8 @@ struct InsteonCommand {
       // Needs no modem, and reads neither the environment file nor the Hub's settings.
       CatalogCommand.status()
     case .catalogUpdate:
-      try await CatalogCommand.update()
+      // Run by `run(_:)`, which returns its exit status.
+      break
     }
 
   }
