@@ -98,6 +98,9 @@ public enum HubProUnit {
 
   public static let host = "192.0.2.10"
 
+  /// The unit's settings, with invented versions.
+  public static let settings = #"{"time":"2026-10-28 05:00:00","network":{"address":"192.0.2.10"},"version":{"config":{"version":"5.0.6"},"server":{"version":"1.0.8.9"}}}"#
+
   public static let list = #"[{"location":"","name":"(PLM)","device":"AA.BB.CC","deviceType":"Hub Pro"},{"location":"","name":"Example Dimmer","device":"11.22.33","deviceType":"Example Dimmer"}]"#
 
   public static let status = #"[{"OnLevel":0,"device":"11.22.33"}]"#
@@ -113,5 +116,23 @@ public enum HubProUnit {
   public static let unsupportedKey = #"{"command":"insteon/command","device":"11.22.33","error":"Device 11.22.33 does not support command 'k'.","key":"k"}"#
 
   public static let missingParameters = #"{"command":"insteon/command","error":"The following required parameters were not specified: 'device, key'"}"#
+
+  /// A device's description, as the unit answers a describe request.
+  ///
+  /// - Parameters:
+  ///   - device: The device's address, such as `11.22.33`.
+  ///   - category: The category, as a number.
+  ///   - subcategory: The subcategory, as a number.
+  ///   - firmware: The firmware version, as a number.
+  ///   - commands: The commands listed, each as a name and the names of its parameters.
+  public static func describe(device: String, category: Int, subcategory: Int, firmware: Int, commands: [(String, [String])]) -> String {
+
+    let listed = commands.map { name, parameters in
+      parameters.isEmpty ? #"{"name":"\#(name)"}"# : #"{"name":"\#(name)","parameters":[\#(parameters.map { "\"\($0)\"" }.joined(separator: ","))]}"#
+    }.joined(separator: ",")
+
+    return #"{"commands":[\#(listed)],"devCat":\#(category),"device":"\#(device)","deviceType":"Example Dimmer","firmwareVersion":\#(firmware),"links":{"delta":0,"pending":false,"records":[]},"location":"","name":"Example Dimmer","properties":{},"removing":false,"sku":"9101X1","subCat":\#(subcategory)}"#
+
+  }
 
 }
