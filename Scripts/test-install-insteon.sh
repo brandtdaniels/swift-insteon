@@ -9,7 +9,7 @@ here="$(cd "$(dirname "$0")" && pwd)"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 
-# shellcheck source=install-insteon.sh
+# shellcheck disable=SC1091
 source "$here/install-insteon.sh"
 
 fake="$scratch/insteon"
