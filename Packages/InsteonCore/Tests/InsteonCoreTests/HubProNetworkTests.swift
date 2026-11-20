@@ -419,6 +419,31 @@ struct HubProNetworkTests {
 
   }
 
+  @Test func doesNotReportADeviceTheFirstTimeItsLevelIsRead() async throws {
+
+    let clock = TestClock()
+    let http = Self.unit()
+    let network = network(http, clock: clock, listRefreshPolls: 1)
+    try await network.open()
+
+    let first = Task { try await network.changes().first { _ in true } }
+
+    // The unit lists a second device, whose level the next poll reads for the first time.
+    await http.answer("GET /insteon/list", with: answerJSON(Self.listing([("3A.4B.01", "Example Dimmer"), ("3A.4B.02", "Example Relay")])))
+    await http.answer("GET /insteon/describe?device=3A.4B.02", with: answerJSON(Self.describe("3A.4B.02", ControlExample.relayIdentity)))
+    await http.answer("GET /insteon/status", with: answerJSON(Self.levels([("3A.4B.01", 0), ("3A.4B.02", 77)])))
+    await clock.waitForSleeper(until: .seconds(5))
+    clock.advance(by: .seconds(5))
+
+    // Only the dimmer's change is reported, at the poll after.
+    await clock.waitForSleeper(until: .seconds(10))
+    await http.answer("GET /insteon/status", with: answerJSON(Self.levels([("3A.4B.01", 5), ("3A.4B.02", 77)])))
+    clock.advance(by: .seconds(5))
+
+    #expect(try await first.value == .statusChanged(Self.dimmer))
+
+  }
+
   @Test func endsTheChangesWithTheErrorWhenAPollFails() async throws {
 
     let clock = TestClock()

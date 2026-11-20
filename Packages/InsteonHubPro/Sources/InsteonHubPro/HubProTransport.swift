@@ -53,6 +53,13 @@ public actor HubProTransport {
 
   }
 
+  /// How many requests wait for the one in flight.
+  var waitingRequests: Int {
+
+    waiting.count
+
+  }
+
   /// Reads the Hub Pro's network settings and software versions.
   ///
   /// - Throws: ``HubProError`` or the client's error.

@@ -1,5 +1,5 @@
 import Foundation
-import InsteonHubPro
+@testable import InsteonHubPro
 import InsteonNetworking
 import InsteonProtocol
 import InsteonTestSupport
@@ -227,8 +227,17 @@ struct HubProTransportTests {
 
     async let second = unit.levels()
 
-    // The second waits while the first is held: only the first has been sent.
-    await Task.yield()
+    // The second asks to wait for the first, which the unit is still answering.
+    var waiting = await unit.waitingRequests
+
+    for _ in 0..<10_000 where waiting == 0 {
+
+      await Task.yield()
+      waiting = await unit.waitingRequests
+
+    }
+
+    #expect(waiting == 1)
     #expect(await http.sent == ["GET /insteon/list"])
 
     await http.release()
