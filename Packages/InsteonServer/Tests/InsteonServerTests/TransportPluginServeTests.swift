@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import InsteonCore
 import InsteonHubClient
 import InsteonLoopbackTransport
