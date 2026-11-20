@@ -21,6 +21,7 @@ public enum PairCommand {
   --home-name NAME     The home's name in the document (default: Home).
   --state PATH         The state file; the client file sits beside it.
 
+  The document lists the routes that transports registered with the server, after the local one.
   The server recognizes the new client at once, whether it is running or not.
   """
 
@@ -66,6 +67,11 @@ public enum PairCommand {
     guard let name else { throw ServerOptionError.invalidClient }
     let options = try ServerOptions(arguments: rest, environment: environment)
 
+    // Read first, so routes that can't be read leave no client behind.
+    let routesFile = FileRoutePersistence.url(besideState: options.statePath)
+    let registered: [RegisteredRoute]
+    do { registered = try await RouteStore(persistence: FileRoutePersistence(url: routesFile)).routes() }
+    catch { throw ServerRunError.routesFileUnusable(path: routesFile.path) }
     let file = FileClientPersistence.url(besideState: options.statePath)
     let clients = ClientStore(persistence: FileClientPersistence(url: file))
     let issued: IssuedClient
@@ -74,7 +80,7 @@ public enum PairCommand {
     catch ClientError.limitReached { throw ServerRunError.clientLimitReached }
     catch { throw ServerRunError.clientFileUnusable(path: file.path) }
     let document: PairingDocument
-    do { document = ServerRunner.pairingConfiguration(for: options).document(for: issued, serviceID: try await clients.serviceID()) }
+    do { document = ServerRunner.pairingConfiguration(for: options).document(for: issued, serviceID: try await clients.serviceID(), registered: registered) }
     catch { throw ServerRunError.clientFileUnusable(path: file.path) }
 
     var output = String(decoding: try document.encoded(prettyPrinted: true), as: UTF8.self) + "\n"

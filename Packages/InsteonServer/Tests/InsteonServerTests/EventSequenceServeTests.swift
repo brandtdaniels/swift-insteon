@@ -54,9 +54,14 @@ final class EventStreamReader: NSObject, URLSessionDataDelegate, @unchecked Send
     }
   }
 
-  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) { continuation.finish() }
+  func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+    // A connection that ends before the greeting ends the wait for it, so a test fails instead of hanging.
+    readyContinuation.finish()
+    continuation.finish()
+  }
 
   func close() {
+    readyContinuation.finish()
     task?.cancel()
     session?.invalidateAndCancel()
     continuation.finish()

@@ -62,7 +62,9 @@ public struct PairingConfiguration: Sendable, Equatable {
   }
 
   /// The document that hands `issued` to a client of the service named `serviceID`.
-  public func document(for issued: IssuedClient, serviceID: String) -> PairingDocument {
-    PairingDocument(version: 1, serviceId: serviceID, name: homeName, credential: issued.token, scope: issued.client.scope, api: "/api/v1", routes: routes)
+  ///
+  /// It lists this configuration's routes, then `registered`, the routes transports registered, in registration order.
+  public func document(for issued: IssuedClient, serviceID: String, registered: [RegisteredRoute] = []) -> PairingDocument {
+    PairingDocument(version: 1, serviceId: serviceID, name: homeName, credential: issued.token, scope: issued.client.scope, api: "/api/v1", routes: routes + registered.map(\.pairingRoute))
   }
 }

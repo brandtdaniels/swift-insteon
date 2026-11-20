@@ -201,6 +201,15 @@ enum OpenAPIDocument {
         "enabled": Schema.boolean,
         "includeDetail": Schema.boolean
       ], required: ["name", "trigger"], description: "A rule without its identifier. Defaults: `cooldownSeconds` 0, `enabled` true, `includeDetail` false."),
+      "Route": Schema.object([
+        "kind": Schema.string(description: "The transport's identifier."),
+        "ticket": Schema.string(description: "What the transport needs to reach the service. Only that transport reads it.")
+      ], required: ["kind", "ticket"], description: "A route a transport registered. A pairing document lists it after the `lan` route."),
+      "RouteList": Schema.object(["version": version, "routes": Schema.array(of: Schema.ref("Route"))], required: ["version", "routes"]),
+      "RouteStored": Schema.object(["version": version, "route": Schema.ref("Route")], required: ["version", "route"]),
+      "RouteRequest": Schema.object([
+        "ticket": Schema.string(pattern: RouteStore.ticketPattern, description: "1 through \(RouteStore.longestTicket) printable ASCII characters, without spaces.")
+      ], required: ["ticket"], description: "A route without its kind, which the path gives."),
       "ClientScope": Schema.string(enum: ClientScope.allCases.map(\.rawValue), description: "What a credential may do. `read` reads devices and health and follows events. `control` also sends commands. `admin` also manages clients. The gateway password is `admin`."),
       "Client": Schema.object([
         "id": Schema.string(description: "The identifier in the client's token and in `/api/v1/clients/{id}`."),

@@ -232,7 +232,7 @@ struct ClientRoutesTests {
     let streams = EventStreamRegistry(limit: policy.maximumStreams)
     let api = DeviceAPI(service: FakeService(endlessEvents: true), policy: policy, clock: clock, registry: streams)
     let clients = ClientStore(persistence: InMemoryClientPersistence())
-    let clientAPI = ClientAPI(clients: clients, pairing: PairingConfiguration(), streams: streams)
+    let clientAPI = ClientAPI(clients: clients, pairing: PairingConfiguration(), routes: RouteStore(), streams: streams)
     let revoked = try await clients.issue(name: "Phone", scope: .read)
     let kept = try await clients.issue(name: "Tablet", scope: .read)
 
@@ -273,7 +273,7 @@ struct ClientRoutesTests {
     let streams = EventStreamRegistry(limit: 8)
     let clients = ClientStore(persistence: InMemoryClientPersistence())
     let api = DeviceAPI(service: FakeService(endlessEvents: true), clock: ManualClock(), registry: streams, isClientActive: { id in ((try? await clients.clients()) ?? []).contains { $0.id == id } })
-    let clientAPI = ClientAPI(clients: clients, pairing: PairingConfiguration(), streams: streams)
+    let clientAPI = ClientAPI(clients: clients, pairing: PairingConfiguration(), routes: RouteStore(), streams: streams)
     let phone = try await clients.issue(name: "Phone", scope: .read)
 
     let response = await RequestPrincipal.$current.withValue(RequestPrincipal(scope: .read, clientID: phone.client.id)) { await api.events() }

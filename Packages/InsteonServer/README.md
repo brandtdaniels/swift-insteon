@@ -149,6 +149,8 @@ scope, command all devices known by this service. Per-device permissions aren't 
 | POST | `/api/v1/clients/{id}/pairing` | Replace a client's credential and return its pairing document (`admin`) |
 | GET | `/api/v1/notification-rules` | List the notification rules (`read`; see Notifications) |
 | PUT, DELETE | `/api/v1/notification-rules/{id}` | Store or remove a rule (`admin`) |
+| GET | `/api/v1/routes` | List the routes transport plugins registered (`read`; see Writing a plugin) |
+| PUT, DELETE | `/api/v1/routes/{kind}` | Register or remove a transport's route (`admin`) |
 | GET | `/devices/1A.2B.3C` | Authenticated card fragment from cached state; no hardware polling |
 
 JSON commands need `Content-Type: application/json` and `X-Insteon-Request: 1`. Example body:
@@ -255,7 +257,8 @@ transport or a field can be added inside version 1. `serviceId` is chosen once a
 service, so a client can tell two homes apart. The `lan` route is `http://LISTEN:PORT` from
 `--listen` and `--port`, or `--advertise-url` when the address a client uses differs, such as a
 name the router resolves. The service never binds a public address, so a route that crosses the
-internet is a `kind` that a separate transport process supplies.
+internet is a `kind` that a separate transport process supplies: it registers the route with the
+service, and each document issued after a registration lists it after the `lan` route (see Writing a plugin).
 
 ```sh
 swift run --package-path Packages/InsteonServer insteon-server pair --name Phone --advertise-url http://insteon.local:8080
@@ -424,7 +427,7 @@ person turned detail on.
 
 ### Writing a notifier
 
-A notifier is an ordinary client of the stream:
+A notifier is an ordinary client of the stream (Writing a plugin has a reference notifier and a walkthrough):
 
 1. Create a `read` client (`POST /api/v1/clients`) and give the notifier its token.
 2. Follow `GET /api/v1/events` with `Authorization: Bearer <token>`, and act only on frames whose `kind`
@@ -441,6 +444,164 @@ A notifier is an ordinary client of the stream:
 Everything here is additive inside `/api/v1`: three routes, four error codes and one event kind, with
 optional response fields on events. A client that doesn't know `notification` ignores it, as the browser
 page does. Changing a field's meaning, the content-free default or the event id needs `/api/v2`.
+
+## Writing a plugin
+
+Remote access and notification delivery aren't features of the service. Each is a separate process that
+speaks the HTTP contract, so any transport works with any front end and a plugin can be written in any
+language. A plugin can't crash or stall the service, because it shares nothing with it but the contract.
+The service never binds a public address and holds no push credential: a transport carries bytes to the
+service's loopback port, and a notifier turns events into deliveries.
+
+Two reference plugins in this package show each seam. They are small on purpose, and they use the same
+routes and the same credentials a plugin in another language would.
+
+| Target | What it is |
+| --- | --- |
+| `InsteonPluginKit` | The HTTP client, route registration, event stream reader, `Notifier` and `Deliverer` the reference plugins share. Foundation only. |
+| `InsteonLoopbackTransport` | The forwarder and the transport built on it. Depends on SwiftNIO and `InsteonPluginKit`. |
+| `insteon-reference-transport` | Forwards a loopback port to the service and registers it as the `loopback` route. |
+| `insteon-reference-notifier` | Follows the event stream and appends one line per notification to a file or standard output. |
+
+None of them depends on the service's own targets, and the service and the `insteon` command don't depend
+on them. The libraries are products, so a Swift plugin can depend on them.
+
+### Writing a transport
+
+A transport accepts connections from where the client is, carries them to the service, and tells the
+service how a client reaches it. The service lists that in the pairing documents it issues.
+
+1. Create an `admin` client for the transport (`POST /api/v1/clients`, or `insteon-server pair --scope admin`).
+   Registering a route changes what every later pairing document says, so it needs `admin`.
+2. Carry each connection to the service's loopback port. Forward bytes, don't read HTTP: then
+   authentication and scopes, `Idempotency-Key` replay, and event streams that stay open and resume with
+   `Last-Event-ID` behave exactly as on the LAN, and a connection that drops resumes with the last id.
+3. Register the route with `PUT /api/v1/routes/{kind}` and the body `{"ticket":"..."}`. Remove it with
+   `DELETE /api/v1/routes/{kind}` when the transport stops. A transport that dies without removing its route
+   leaves a hint a client will skip; registering the same kind again replaces the ticket in place.
+
+| Method | Path | Behavior |
+| --- | --- | --- |
+| GET | `/api/v1/routes` | `{ "version": 1, "routes": [ { "kind": "...", "ticket": "..." } ] }`, in the order they were registered (`read`) |
+| PUT | `/api/v1/routes/{kind}` | Registers the route, or replaces the ticket of the route with that kind and keeps its place (`admin`) |
+| DELETE | `/api/v1/routes/{kind}` | Removes the route (`admin`) |
+
+A write needs `Content-Type: application/json` and `X-Insteon-Request: 1`. The `kind` is the transport's
+identifier: 1 through 32 lowercase letters, digits and `-`, starting with a letter, and not `lan`, which is
+the service's own. The service keeps at most 8 routes, in `<state file name>-routes.json` beside the state
+file, readable only by the current user and replaced atomically on each change, so a registration survives a
+restart. A file the server can't read, or that is in a newer format, is left as it is and the server refuses
+to start with `routes_file_unusable`; move it aside to start with none.
+
+**A ticket is an opaque locator.** It is 1 through 1024 printable ASCII characters without spaces, and only
+the transport that registered it reads it: an address, a node identifier, a capability URL. The service
+never interprets it. A ticket is not a secret and not a credential. A client still needs its own token
+whatever route it takes, and any `read` client can list the tickets. Keep anything that grants access out
+of a ticket.
+
+Every pairing document the service issues after a registration lists the registered routes after the `lan`
+route, in registration order, and so does `insteon-server pair`, which reads the same file. A document
+issued earlier is unchanged and keeps working: routes are hints a client tries in order, so a client
+that holds an older document reaches the service by the routes it has, and learns of a new transport when
+it pairs again. A client skips a kind it doesn't know.
+
+### Writing a notifier
+
+A notifier is a client with a `read` token that follows `GET /api/v1/events`. The steps are under
+Notifications, Writing a notifier. In short:
+
+- Act only on `notification` frames and ignore every other kind.
+- Record the id of the last event you handled and send it as `Last-Event-ID` when you reconnect, so a
+  restart delivers nothing twice. The reference notifier records it after the delivery, so a crash between
+  the two repeats at most that one notification.
+- On a `gap` (or an id from another run), notifications may have been missed and can't be replayed.
+  Re-list the rules with `GET /api/v1/notification-rules`, tell the person if you choose to, and continue
+  from the id of the `gap` frame.
+- Retry a failing delivery with backoff. The service never waits for a notifier.
+- Put no more in a message than the rule's name and the time unless the person opted into detail.
+
+The reference notifier takes a `Deliverer` (`deliver(_ payload: DeliveryPayload) async throws`), a state
+store and a clock, so its backoff is tested without waiting. Its default deliverer appends the time and
+the rule's name, separated by a tab, as one line to a file or standard output. `--include-detail` adds
+the device and the event.
+
+### Try the reference plugins
+
+With the server running on `127.0.0.1:8080`, from the repository root:
+
+```sh
+BASE=http://127.0.0.1:8080
+create() { curl -s -u "insteon:$INSTEON_GATEWAY_PASSWORD" -H 'X-Insteon-Request: 1' \
+  -H 'Content-Type: application/json' -d "{\"name\":\"$1\",\"scope\":\"$2\"}" $BASE/api/v1/clients; }
+
+# One client per plugin, each with the least scope it needs. Keep the tokens out of your shell history.
+create Transport admin | jq -r .pairing.credential > transport.token
+create Notifier read   | jq -r .pairing.credential > notifier.token
+create Phone control   | jq -r .pairing.credential > phone.token
+
+# Start the transport. It prints the loopback port it forwards from and registers its route.
+INSTEON_PLUGIN_TOKEN=$(cat transport.token) \
+  swift run --package-path Packages/InsteonServer insteon-reference-transport --service $BASE
+```
+
+In another terminal, read the route the transport registered, and pair a client again. The new document
+lists the route after the `lan` route:
+
+```sh
+curl -s -H "Authorization: Bearer $(cat notifier.token)" $BASE/api/v1/routes
+# {"routes":[{"kind":"loopback","ticket":"127.0.0.1:54321"}],"version":1}
+
+curl -s -u "insteon:$INSTEON_GATEWAY_PASSWORD" -H 'X-Insteon-Request: 1' -H 'Content-Type: application/json' \
+  -d '{"name":"Tablet","scope":"control"}' $BASE/api/v1/clients | jq -c .pairing.routes
+# [{"kind":"lan","url":"http://127.0.0.1:8080"},{"kind":"loopback","ticket":"127.0.0.1:54321"}]
+```
+
+Reach the service through the transport instead of the service's own port. The answers are the ones the LAN
+gives, including the typed refusals:
+
+```sh
+PORT=54321
+curl -s -H "Authorization: Bearer $(cat phone.token)" http://127.0.0.1:$PORT/api/v1/health
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:$PORT/api/v1/health      # 401, no credential
+curl -s -H "Authorization: Bearer $(cat notifier.token)" -H 'X-Insteon-Request: 1' \
+  -H 'Content-Type: application/json' -d '{"action":"on"}' \
+  http://127.0.0.1:$PORT/api/v1/devices/1A.2B.3C/commands                            # {"code":"forbidden","sent":false,...}
+```
+
+Follow events through the transport, then resume from the last id you saw. Stop the transport (Control-C) and
+the route disappears from `/api/v1/routes`, while the service keeps serving its own port:
+
+```sh
+curl -s -N -H "Authorization: Bearer $(cat phone.token)" http://127.0.0.1:$PORT/api/v1/events
+curl -s -N -H "Authorization: Bearer $(cat phone.token)" -H 'Last-Event-ID: 9f3a0c41d27e5b86-43' \
+  http://127.0.0.1:$PORT/api/v1/events
+```
+
+Add a notification rule (see Notifications), then run the notifier:
+
+```sh
+INSTEON_PLUGIN_TOKEN=$(cat notifier.token) swift run --package-path Packages/InsteonServer \
+  insteon-reference-notifier --service $BASE --state notifier-state.json --output deliveries.log
+# deliveries.log: 2027-01-15T08:00:00Z<TAB>Basement leak
+```
+
+Stop it and start it again: it resumes from `notifier-state.json` and delivers nothing it already delivered.
+Both plugins read their token from `INSTEON_PLUGIN_TOKEN`, never from an argument, and never print it.
+
+### Plugin versioning
+
+Everything in this section is additive inside `/api/v1`: three routes, four error codes, and no change to an
+existing response. A client or plugin written against an earlier `/api/v1` keeps working. Specifically:
+
+- A pairing document gains only entries in `routes` and stays version 1. A client ignores a route kind it
+  doesn't know and a field it doesn't know.
+- A new transport is a new `kind`. It needs no change to the service, to the clients that don't know it, or
+  to the other transports.
+- A transport or notifier reads the contract from `/api/v1/openapi.json`, which lists these routes, their
+  scopes and their error codes, generated from the same table that serves them.
+- The routes file and the notifier's state file are versioned (`"version": 1`). A file in a newer format is
+  left as it is rather than rewritten.
+- Changing the meaning of a ticket, the registration order, or the `lan` route being first needs `/api/v2`.
 
 ## Persistence and lifecycle
 
@@ -541,6 +702,10 @@ same status for the same failure.
 | `unknownNotificationRule` | 404 | false | No rule has that id. |
 | `notificationRuleLimitReached` | 409 | false | The service keeps at most 64 rules. |
 | `notificationRulesNotSaved` | 500 | false | The rules file couldn't be read or written, so nothing changed. |
+| `invalidRouteRegistration` | 400 | false | A route needs a `kind` of 1 through 32 lowercase letters, digits and `-` that starts with a letter and isn't `lan`, a `ticket` of 1 through 1024 printable ASCII characters without spaces, and no other field. |
+| `unknownRouteRegistration` | 404 | false | No route is registered for that kind. |
+| `routeRegistrationLimitReached` | 409 | false | The service keeps at most 8 routes. |
+| `routeRegistrationsNotSaved` | 500 | false | The routes file couldn't be read or written, so nothing changed. |
 | `invalidAddress` | 400 | false | The address in the path isn't an Insteon address. |
 | `invalidCommand` | 400 | false | The body isn't valid JSON for a command: unknown field, unknown action, wrong type. |
 | `invalidLevel` | 400 | false | The percentage is outside 0 through 100, or the device or action doesn't take one. |
@@ -710,6 +875,9 @@ swift test --package-path Packages/InsteonServer --skip-build
 - `InsteonServerSupport`: composition and configuration. Opens the hardware session, restores
   state, creates the service and adapters, and hosts HTTP during the service runtime.
 - `insteon-server`: executable entry point and safe error reporting.
+- `InsteonPluginKit`, `InsteonLoopbackTransport`, `insteon-reference-transport` and
+  `insteon-reference-notifier`: the reference plugins. They speak the HTTP contract and depend on
+  nothing above, and nothing above depends on them, so the service builds and ships without them.
 
 Transport models are separate from domain models. The query, command and event protocols let
 adapters depend on the roles they use. A different host can use the service without the HTTP
