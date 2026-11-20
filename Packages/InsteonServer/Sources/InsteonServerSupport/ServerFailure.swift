@@ -195,6 +195,9 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case .noModem, .conflictingModems: ServerFailure(.modemNotChosen, error.description, configurationStatus)
     case .invalidHost, .invalidPort: ServerFailure(.hubAddressRefused, error.description, configurationStatus)
     case .serialUnavailable: ServerFailure(.serialPortUnavailable, error.description, configurationStatus)
+    // The server serves one Hub from its environment file and never reads Hub names.
+    case .unknownHub, .noConfigurationDirectory: ServerFailure(.environmentFileMissing, error.description, configurationStatus)
+    case .invalidHubVariable, .namedHubWithoutHost: ServerFailure(.modemNotChosen, error.description, configurationStatus)
     }
   }
 

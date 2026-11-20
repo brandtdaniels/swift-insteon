@@ -12,6 +12,10 @@ public struct Invocation: Hashable, Sendable {
   /// The Hub given with `--hub`, as `HOST` or `HOST:PORT`, if any.
   public var hub: String?
 
+  /// The name of a Hub file given with `--hub`, such as `basement`, if any. It's set instead of
+  /// ``hub`` when the value isn't an address.
+  public var hubName: String?
+
   /// The path of the serial port given with `--serial`, if any.
   public var serialPath: String?
 
@@ -50,12 +54,14 @@ public struct Invocation: Hashable, Sendable {
   ///
   /// - Parameters:
   ///   - hub: The Hub given with `--hub`, if any. Defaults to `nil`.
+  ///   - hubName: The Hub file's name given with `--hub`, if any. Defaults to `nil`.
   ///   - serialPath: The path given with `--serial`, if any. Defaults to `nil`.
   ///   - envFilePath: The path given with `--env-file`, if any. Defaults to `nil`.
   ///   - printsJSON: Whether to print JSON. Defaults to `false`.
   ///   - subcommand: The subcommand to run.
   public init(
     hub: String? = nil,
+    hubName: String? = nil,
     serialPath: String? = nil,
     envFilePath: String? = nil,
     printsJSON: Bool = false,
@@ -63,6 +69,7 @@ public struct Invocation: Hashable, Sendable {
   ) {
 
     self.hub = hub
+    self.hubName = hubName
     self.serialPath = serialPath
     self.envFilePath = envFilePath
     self.printsJSON = printsJSON
@@ -84,6 +91,10 @@ public enum Subcommand: Hashable, Sendable {
 
   /// Asks the modem about itself with Get IM Info.
   case info
+
+  /// Lists the Hub files in the per-user directory, with each Hub's address and port, and says
+  /// which one is the default. Needs no modem, and reads no Hub's password.
+  case hubs
 
   /// Reads and lists the modem's ALL-Link database.
   case links(LinksOptions)
