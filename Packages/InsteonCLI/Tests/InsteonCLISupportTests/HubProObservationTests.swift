@@ -171,12 +171,12 @@ struct HubProObservationTests {
     let http = Self.unit()
     await http.answer(
       "GET /insteon/describe?device=3A.4B.01",
-      with: answerJSON(HubProUnit.describe(device: "3A.4B.01", category: 1, subcategory: 14, firmware: 59, commands: []).replacingOccurrences(of: "9101X1", with: "2457D2"))
+      with: answerJSON(HubProUnit.describe(device: "3A.4B.01", category: 1, subcategory: 14, firmware: 59, commands: []).replacingOccurrences(of: "9101X1", with: "91A1D2"))
     )
 
     let findings = try await Self.findings(http)
 
-    #expect(findings.devices.first { $0.category == "0x01" }?.sku == "2457D2")
+    #expect(findings.devices.first { $0.category == "0x01" }?.sku == "91A1D2")
 
   }
 

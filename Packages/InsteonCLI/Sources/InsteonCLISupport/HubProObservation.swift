@@ -162,7 +162,7 @@ public enum HubProObservationRun {
 
   /// A version or model number as the Hub Pro reports it when it looks like one, and the
   /// placeholder when it holds anything else, such as an address. Letters, digits, dots,
-  /// underscores and hyphens, up to 32, are kept as they are: a model number such as 2457D2 would
+  /// underscores and hyphens, up to 32, are kept as they are: a model number such as 91A1D2 would
   /// otherwise read as an address.
   private static func plain(_ text: String) -> String {
 
