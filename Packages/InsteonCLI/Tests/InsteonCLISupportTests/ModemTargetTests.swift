@@ -117,4 +117,47 @@ struct ModemTargetTests {
 
   }
 
+  // MARK: - Named Hubs
+
+  @Test func takesANamedHubsAddressFromItsFile() throws {
+
+    let environment = ["INSTEON_HUB_HOST": "192.168.1.30", "INSTEON_HUB_PORT": "8080"]
+
+    #expect(try ModemTarget.resolve(hub: nil, hubName: "basement", serialPath: nil, environment: environment) == .hub(host: "192.168.1.30", port: 8080))
+
+  }
+
+  @Test func saysWhenANamedHubsFileHasNoHost() {
+
+    #expect(throws: ConfigurationError.namedHubWithoutHost("basement")) {
+
+      try ModemTarget.resolve(hub: nil, hubName: "basement", serialPath: nil, environment: [:])
+
+    }
+    #expect(throws: ConfigurationError.namedHubWithoutHost("basement")) {
+
+      try ModemTarget.resolve(hub: nil, hubName: "basement", serialPath: nil, environment: ["INSTEON_HUB_HOST": ""])
+
+    }
+
+  }
+
+  @Test func refusesANamedHubWithASerialPort() {
+
+    #expect(throws: ConfigurationError.conflictingModems) {
+
+      try ModemTarget.resolve(hub: nil, hubName: "basement", serialPath: "/dev/ttyUSB0", environment: ["INSTEON_HUB_HOST": "192.168.1.30"])
+
+    }
+
+  }
+
+  @Test func anAddressWinsOverTheHostInANamedHubsFile() throws {
+
+    let environment = ["INSTEON_HUB_HOST": "192.168.1.30"]
+
+    #expect(try ModemTarget.resolve(hub: "192.168.1.99", hubName: "basement", serialPath: nil, environment: environment) == .hub(host: "192.168.1.99", port: nil))
+
+  }
+
 }

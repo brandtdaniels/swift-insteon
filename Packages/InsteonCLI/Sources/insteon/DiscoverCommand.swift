@@ -42,11 +42,11 @@ enum DiscoverCommand {
   /// How often the local search says it's still going.
   private static let progressInterval: Duration = .seconds(5)
 
-  static func run(_ options: DiscoverOptions, envFilePath: String?, printsJSON: Bool) async throws {
+  static func run(_ options: DiscoverOptions, envFilePath: String?, hubName: String? = nil, printsJSON: Bool) async throws {
 
     // Read before searching, so a missing user name or password stops the command at once.
     let credentials: HubCredentials? = try options.identifiesHubs
-      ? Self.credentials(envFilePath: envFilePath)
+      ? Self.credentials(envFilePath: envFilePath, hubName: hubName)
       : nil
 
     // Without a person to ask before each Hub is sent the password, it's sent only to the one
@@ -313,9 +313,9 @@ enum DiscoverCommand {
   }
 
   /// Reads the Hub's user name and password from the environment, for identifying Hubs.
-  private static func credentials(envFilePath: String?) throws -> HubCredentials {
+  private static func credentials(envFilePath: String?, hubName: String?) throws -> HubCredentials {
 
-    try HubCredentials(environment: CommandSession.loadEnvironment(explicitPath: envFilePath))
+    try HubCredentials(environment: CommandSession.loadEnvironment(explicitPath: envFilePath, hubName: hubName))
 
   }
 

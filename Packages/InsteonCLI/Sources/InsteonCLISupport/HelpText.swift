@@ -36,7 +36,7 @@ public enum HelpText {
   public static let overview = """
     Drive an Insteon Hub or modem, and its devices, from the terminal.
 
-    Usage: insteon [--hub HOST[:PORT] | --serial PATH] [--env-file PATH] [--json] COMMAND [OPTIONS]
+    Usage: insteon [--hub HOST[:PORT] | --hub NAME | --serial PATH] [--env-file PATH] [--json] COMMAND [OPTIONS]
 
     Commands:
       discover            Find Hubs on the local network
@@ -61,6 +61,8 @@ public enum HelpText {
     Options:
       --hub HOST[:PORT]   The Hub to use, by its private IPv4 address, such as 192.168.1.20.
                           Defaults to INSTEON_HUB_HOST and INSTEON_HUB_PORT.
+      --hub NAME          The Hub whose file is hubs/NAME.env next to the environment file.
+                          A name uses a-z, 0-9, hyphen and underscore, 1 to 32 characters.
       --serial PATH       A modem on a serial or USB port, such as /dev/ttyUSB0 (macOS and Linux).
       --env-file PATH     Read environment variables from PATH instead of the default file.
       --json              Print JSON, where the command supports it.

@@ -7,15 +7,38 @@ import InsteonCore
 enum CommandSession {
 
   /// The process's environment, with the variables of the environment file merged in, as
-  /// `EnvironmentFile.load(explicitPath:environment:warn:)` reads them; its warnings go to
-  /// standard error.
+  /// `HubFiles.load(explicitPath:hubName:warn:)` reads them; its warnings go to standard error.
   ///
-  /// - Parameter explicitPath: The path given with `--env-file`, if any.
-  /// - Throws: `EnvironmentFileError` if the file can't or mustn't be read, or `DotEnvError`
-  ///   if it has a malformed line.
-  static func loadEnvironment(explicitPath: String?) throws -> [String: String] {
+  /// - Parameters:
+  ///   - explicitPath: The path given with `--env-file`, if any.
+  ///   - hubName: The Hub file's name given with `--hub`, if any.
+  /// - Throws: `EnvironmentFileError` if the file can't or mustn't be read, `DotEnvError`
+  ///   if it has a malformed line, or `ConfigurationError` if a Hub's file doesn't exist.
+  static func loadEnvironment(explicitPath: String?, hubName: String? = nil) throws -> [String: String] {
 
-    try EnvironmentFile.load(explicitPath: explicitPath, environment: ProcessInfo.processInfo.environment, warn: Output.note)
+    try HubFiles(store: LocalHubFiles(), environment: ProcessInfo.processInfo.environment)
+      .load(explicitPath: explicitPath, hubName: hubName, warn: Output.note)
+
+  }
+
+  /// The Hub file's name `--hub` gave, unless `--env-file` names the file to read, which wins.
+  static func hubName(of invocation: Invocation) -> String? {
+
+    guard let name = invocation.hubName else {
+
+      return nil
+
+    }
+
+    guard invocation.envFilePath == nil else {
+
+      Output.note("Ignoring --hub \(name): --env-file names the file to read.")
+
+      return nil
+
+    }
+
+    return name
 
   }
 
@@ -32,8 +55,9 @@ enum CommandSession {
   ///     or `nil` for a serial modem; the Hub's credentials aren't part of it.
   static func run(_ invocation: Invocation, catalog: ProductCatalog? = nil, _ body: @escaping @Sendable (ModemSession) async throws -> Void) async throws {
 
-    let environment = try loadEnvironment(explicitPath: invocation.envFilePath)
-    let target = try ModemTarget.resolve(hub: invocation.hub, serialPath: invocation.serialPath, environment: environment)
+    let hubName = hubName(of: invocation)
+    let environment = try loadEnvironment(explicitPath: invocation.envFilePath, hubName: hubName)
+    let target = try ModemTarget.resolve(hub: invocation.hub, hubName: hubName, serialPath: invocation.serialPath, environment: environment)
 
     switch target {
     case let .hub(host, port):
