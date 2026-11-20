@@ -1,4 +1,5 @@
 import InsteonHubClient
+import InsteonHubPro
 import InsteonProtocol
 
 /// An Insteon Hub that ``HubDiscovery`` found on the local network, or that
@@ -46,6 +47,14 @@ public struct DiscoveredHub: Hashable, Sendable {
   /// it; ``HubDiscovery`` doesn't.
   public var unitType: String?
 
+  /// Which of Insteon's two local interfaces the Hub answers on. ``HubDiscovery`` reads it from
+  /// the way the address answered; ``InsteonConnectLookup`` reads it from the unit type.
+  public var kind: HubKind
+
+  /// The settings a Hub Pro reported when ``HubDiscovery`` or ``HubProProbe`` confirmed it, or
+  /// `nil` for a Hub, or for a Hub Pro found another way.
+  public var hubProSettings: HubProSettings?
+
   /// The ways this Hub was found, such as both the local network and Insteon Connect when both
   /// report it.
   ///
@@ -63,6 +72,8 @@ public struct DiscoveredHub: Hashable, Sendable {
   ///   - modemFirmwareVersion: The firmware version of the Hub's modem, if known. Defaults to
   ///     `nil`.
   ///   - unitType: The kind of Hub as Insteon's servers name it, if known. Defaults to `nil`.
+  ///   - kind: Which local interface the Hub answers on. Defaults to ``HubKind/hub``.
+  ///   - hubProSettings: The settings a Hub Pro reported, if known. Defaults to `nil`.
   ///   - foundBy: The ways this Hub was found. Defaults to none.
   public init(
     endpoint: HubEndpoint,
@@ -71,6 +82,8 @@ public struct DiscoveredHub: Hashable, Sendable {
     subcategory: DeviceSubcategory? = nil,
     modemFirmwareVersion: FirmwareVersion? = nil,
     unitType: String? = nil,
+    kind: HubKind = .hub,
+    hubProSettings: HubProSettings? = nil,
     foundBy: Set<DiscoverySource> = []
   ) {
 
@@ -80,6 +93,8 @@ public struct DiscoveredHub: Hashable, Sendable {
     self.subcategory = subcategory
     self.modemFirmwareVersion = modemFirmwareVersion
     self.unitType = unitType
+    self.kind = kind
+    self.hubProSettings = hubProSettings
     self.foundBy = foundBy
 
   }
@@ -98,8 +113,30 @@ public struct DiscoveredHub: Hashable, Sendable {
     subcategory = subcategory ?? other.subcategory
     modemFirmwareVersion = modemFirmwareVersion ?? other.modemFirmwareVersion
     unitType = unitType ?? other.unitType
+
+    hubProSettings = hubProSettings ?? other.hubProSettings
+
+    if other.kind == .hubPro {
+
+      kind = .hubPro
+
+    }
+
     foundBy.formUnion(other.foundBy)
 
   }
+
+}
+
+/// Which local interface a ``DiscoveredHub`` answers on.
+public enum HubKind: String, Hashable, Sendable, CaseIterable {
+
+  /// The Hub interface: a buffer page that needs the user name and password printed on the
+  /// Hub, and through which the Hub's modem is driven.
+  case hub
+
+  /// The Hub Pro's own HTTP interface, which answers a settings request without credentials and
+  /// doesn't drive a modem the way ``HubKind/hub`` does.
+  case hubPro
 
 }

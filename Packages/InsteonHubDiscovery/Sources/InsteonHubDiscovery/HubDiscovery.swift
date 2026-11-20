@@ -57,6 +57,9 @@ public struct HubDiscovery: Sendable {
   /// The port Hubs are looked for on.
   public let port: Int
 
+  /// The ports the Hub Pro's HTTP interface is looked for on, after the Hub's port.
+  public let hubProPorts: [Int]
+
   /// How long each address has to answer, in all.
   public let probeTimeout: Duration
 
@@ -72,6 +75,9 @@ public struct HubDiscovery: Sendable {
   ///   - network: The network whose subnets to search. Defaults to the device's network
   ///     interfaces.
   ///   - port: The port to look for Hubs on. Defaults to `HubEndpoint.defaultPort`.
+  ///   - hubProPorts: The ports to look for a Hub Pro's HTTP interface on, such as the ones
+  ///     the Insteon device catalog's `hubPro` capability gives. Defaults to none, which looks
+  ///     for no Hub Pro.
   ///   - probeTimeout: How long each address has to answer, in all. Defaults to
   ///     ``HubDiscovery/defaultProbeTimeout``.
   ///   - concurrentProbes: How many addresses to ask at once. Defaults to
@@ -80,6 +86,7 @@ public struct HubDiscovery: Sendable {
     httpClient: UnauthenticatedHTTPClient = .localNetwork(),
     network: any LocalNetwork = InterfaceNetwork(),
     port: Int = HubEndpoint.defaultPort,
+    hubProPorts: [Int] = [],
     probeTimeout: Duration = HubDiscovery.defaultProbeTimeout,
     concurrentProbes: Int = HubDiscovery.defaultConcurrentProbes
   ) {
@@ -87,6 +94,7 @@ public struct HubDiscovery: Sendable {
     self.httpClient = httpClient
     self.network = network
     self.port = port
+    self.hubProPorts = hubProPorts
     self.probeTimeout = probeTimeout
     self.concurrentProbes = max(1, concurrentProbes)
 
@@ -125,42 +133,48 @@ public struct HubDiscovery: Sendable {
       .filter { $0.isPrivate && $0.prefixLength >= Self.shortestPrefixLength }
       .reduce(into: Set<UInt32>()) { $0.formUnion($1.hostAddresses) }
       .sorted()
-    let candidates = try addresses.map { address in
-
-      let endpoint = HubEndpoint(host: IPv4Subnet.dottedDecimal(address), port: port)
-
-      return (endpoint, try HubRequest.readBuffer.urlRequest(for: endpoint))
-
-    }
+    let hosts = addresses.map(IPv4Subnet.dottedDecimal)
+    let probes: [any HubProbe] = [HubInterfaceProbe(httpClient: httpClient, port: port, timeout: probeTimeout)]
+      + hubProPorts.map { HubProProbe(port: $0, httpClient: httpClient, timeout: probeTimeout) }
 
     var hubs: [(index: Int, hub: DiscoveredHub)] = []
 
     try await withThrowingTaskGroup(of: (Int, DiscoveredHub?).self) { group in
 
-      var next = candidates.startIndex
+      var next = hosts.startIndex
 
       // Starts a probe of the next candidate, if there's one left.
       func probeNext() {
 
-        guard next < candidates.endIndex else {
+        guard next < hosts.endIndex else {
 
           return
 
         }
 
         let index = next
-        let (endpoint, request) = candidates[index]
+        let host = hosts[index]
         next += 1
 
         group.addTask {
 
-          (index, try await probe(endpoint, with: request))
+          for probe in probes {
+
+            if let hub = try await probe.probe(host: host) {
+
+              return (index, hub)
+
+            }
+
+          }
+
+          return (index, nil)
 
         }
 
       }
 
-      for _ in 0..<min(concurrentProbes, candidates.count) {
+      for _ in 0..<min(concurrentProbes, hosts.count) {
 
         probeNext()
 
@@ -186,57 +200,6 @@ public struct HubDiscovery: Sendable {
     try Task.checkCancellation()
 
     return hubs.sorted { $0.index < $1.index }.map(\.hub)
-
-  }
-
-  /// Asks one address whether it's a Hub, giving up after ``HubDiscovery/probeTimeout`` in all.
-  ///
-  /// - Returns: The Hub, or `nil` if the address doesn't answer as one.
-  /// - Throws: `HTTPClientError.proxyConfigured` or `HTTPClientError.credentialsRefused` if
-  ///   the client refuses to send the probe, or `CancellationError` if the task is canceled.
-  private func probe(_ endpoint: HubEndpoint, with request: URLRequest) async throws -> DiscoveredHub? {
-
-    var request = request
-    request.timeoutInterval = probeTimeout.timeInterval
-
-    let httpClient: UnauthenticatedHTTPClient = httpClient
-    let sent: URLRequest = request
-    let response: HTTPResponse
-
-    do {
-
-      // The request's own timeout limits only the wait between bytes, so an address that
-      // answers a byte at a time is given up on too.
-      response = try await withDeadline(probeTimeout) {
-
-        try await httpClient.send(sent)
-
-      }
-
-    } catch let error as HTTPClientError where error == .proxyConfigured || error == .credentialsRefused {
-
-      // The client wouldn't send the probe at all, so it wouldn't send any other either.
-      throw error
-
-    } catch {
-
-      // An address with nothing listening, or that doesn't answer in time, isn't a Hub.
-      try Task.checkCancellation()
-
-      return nil
-
-    }
-
-    guard
-      response.statusCode == 401,
-      response.value(forHeader: "WWW-Authenticate")?.lowercased().hasPrefix("basic") == true
-    else {
-
-      return nil
-
-    }
-
-    return DiscoveredHub(endpoint: endpoint)
 
   }
 
