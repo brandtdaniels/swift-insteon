@@ -296,8 +296,8 @@ public struct ProductCatalog: Sendable {
         return ProductCatalogUpdateError.malformedManifest
       case .checksumMismatch:
         return ProductCatalogUpdateError.checksumMismatch
-      case let .weakensGuards(weakenings):
-        return ProductCatalogUpdateError.weakensGuards(weakenings)
+      case let .weakensGuards(weakenings, published):
+        return ProductCatalogUpdateError.weakensGuards(weakenings, published: published)
       }
 
     }
@@ -310,7 +310,7 @@ public struct ProductCatalog: Sendable {
       case .unreadableBundledCatalog:
         return ProductCatalogError.bundledCopyUnreadable
       case let .weakensGuards(weakenings):
-        return ProductCatalogUpdateError.weakensGuards(weakenings)
+        return ProductCatalogUpdateError.weakensGuards(weakenings, published: nil)
       }
 
     }
@@ -421,8 +421,9 @@ public enum ProductCatalogUpdateError: Error, Hashable, Sendable {
   case unreadableCatalog
 
   /// The published catalog would let an app send or write more to a device the copy the
-  /// package ships with knows than that copy does, so it isn't used. The associated value is
-  /// each weakened guard.
-  case weakensGuards([GuardWeakening])
+  /// package ships with knows than that copy does, so it isn't used. The associated values are
+  /// each weakened guard and the published catalog's version, or `nil` if the check that found
+  /// them didn't read it.
+  case weakensGuards([GuardWeakening], published: DeviceCatalogVersion?)
 
 }

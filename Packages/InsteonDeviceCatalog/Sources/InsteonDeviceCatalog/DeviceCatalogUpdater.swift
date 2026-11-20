@@ -49,8 +49,8 @@ public enum DeviceCatalogUpdateError: Error, Hashable, Sendable {
   /// The downloaded catalog would let an app send or write more to a device the guard
   /// baseline knows than the baseline does, the copy the package ships with by default, so the
   /// app keeps its copy.
-  /// The associated value is each weakened guard.
-  case weakensGuards([GuardWeakening])
+  /// The associated values are each weakened guard and the published catalog's version.
+  case weakensGuards([GuardWeakening], published: DeviceCatalogVersion)
 
 }
 
@@ -164,7 +164,7 @@ public struct DeviceCatalogUpdater: Sendable {
   ///   the bundled copy, before it's downloaded; another ``DeviceCatalogUpdateError`` if a
   ///   download fails its checks; `HTTPClientError.responseTooLarge(limit:)` for a file larger
   ///   than ``DeviceCatalogUpdater/maximumResponseSize``;
-  ///   ``DeviceCatalogUpdateError/weakensGuards(_:)`` if the download gives a guard more
+  ///   ``DeviceCatalogUpdateError/weakensGuards(_:published:)`` if the download gives a guard more
   ///   weakly than ``guardBaseline``; `DeviceCatalogError.unreadableBundledCatalog` if the
   ///   shipped copy, the default baseline, can't be read, so nothing is compared or used; `DecodingError` if a catalog that
   ///   matches its SHA-256 doesn't read as a catalog; `DeviceCatalogError.missingBundledCatalog`
@@ -218,7 +218,7 @@ public struct DeviceCatalogUpdater: Sendable {
 
     guard weakenings.isEmpty else {
 
-      throw DeviceCatalogUpdateError.weakensGuards(weakenings)
+      throw DeviceCatalogUpdateError.weakensGuards(weakenings, published: manifest.version)
 
     }
 

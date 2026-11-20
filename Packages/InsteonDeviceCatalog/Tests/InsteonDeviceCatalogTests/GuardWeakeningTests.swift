@@ -708,7 +708,7 @@ struct GuardWeakeningTests {
 
     #expect(!weakenings.isEmpty)
 
-    await #expect(throws: DeviceCatalogUpdateError.weakensGuards(weakenings)) {
+    await #expect(throws: DeviceCatalogUpdateError.weakensGuards(weakenings, published: DeviceCatalogVersion(major: try DeviceCatalog.bundledVersion().major, minor: try DeviceCatalog.bundledVersion().minor, patch: 987))) {
 
       try await DeviceCatalogUpdater(client: files, guardBaseline: baseline).update(replacing: nil, currentVersion: nil)
 
