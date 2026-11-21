@@ -84,6 +84,8 @@ public enum HomeBackupText {
     public var notificationRules: Int?
     /// How many routes the backup holds, if it holds any.
     public var routes: Int?
+    /// How many schedules the backup holds, if it holds any.
+    public var schedules: Int?
 
   }
 
@@ -113,7 +115,8 @@ public enum HomeBackupText {
         Report.Unreadable(address: "\(device.address)", name: names[device.address], reason: device.unreadable.reason.rawValue, detail: device.unreadable.detail)
       },
       notificationRules: backup.notificationRules?.count,
-      routes: backup.routes?.count
+      routes: backup.routes?.count,
+      schedules: backup.schedules?.count
     )
 
   }
@@ -177,6 +180,12 @@ public enum HomeBackupText {
     if let routes = report.routes {
 
       lines.append("Routes: \(routes).")
+
+    }
+
+    if let schedules = report.schedules {
+
+      lines.append("Schedules: \(schedules).")
 
     }
 

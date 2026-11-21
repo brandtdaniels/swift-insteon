@@ -693,7 +693,7 @@ existing response. A client or plugin written against an earlier `/api/v1` keeps
 
 ## Backups
 
-`GET /api/v1/backup` (`admin`) answers with the same document format `insteon backup` writes, as JSON with a `checksum`: the modem's address and ALL-Link database, each device's ALL-Link database, name and identity, the notification rules and the routes. It answers from the cache and sends nothing to the Hub or modem, so a device the service holds no ALL-Link database copy for is listed with the reason `notCached`; run `insteon backup` for a backup that reads each device. The document holds no gateway password, client token or Hub address. A rules or routes file that can't be read fails the request with `notificationRulesNotSaved` or `routeRegistrationsNotSaved`, rather than leaving them out.
+`GET /api/v1/backup` (`admin`) answers with the same document format `insteon backup` writes, as JSON with a `checksum`: the modem's address and ALL-Link database, each device's ALL-Link database, name and identity, the notification rules, the routes and the schedules (each without the time it runs next). Timers are left out, because a timer is a countdown and not configuration. It answers from the cache and sends nothing to the Hub or modem, so a device the service holds no ALL-Link database copy for is listed with the reason `notCached`; run `insteon backup` for a backup that reads each device. The document holds no gateway password, client token or Hub address. A rules, routes or schedules file that can't be read fails the request with `notificationRulesNotSaved`, `routeRegistrationsNotSaved` or `schedulesNotSaved`, rather than leaving it out.
 
 ```sh
 curl -s -H "Authorization: Bearer $(cat admin.token)" $BASE/api/v1/backup > home.json

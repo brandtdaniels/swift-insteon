@@ -16,7 +16,7 @@ public enum BackupSourceKind: String, Codable, Hashable, Sendable {
 /// A home's Insteon network in one JSON file a person can read: the modem's identity and
 /// ALL-Link database, each device's ALL-Link database where it could be read and the reason where
 /// it couldn't, the devices' names and types, and, when a service wrote it, the service's
-/// notification rules and routes.
+/// notification rules, routes and schedules.
 ///
 /// A backup never holds a Hub's user name or password, a client's token, the gateway's password
 /// or the contents of an environment file. It holds addresses and what devices reported.
@@ -62,6 +62,11 @@ public struct HomeBackup: Codable, Hashable, Sendable {
   /// service.
   public let routes: [BackupRoute]?
 
+  /// The service's schedules, each as the schedules file writes it and without the time it runs
+  /// next, or `nil` when the source isn't a service. Timers aren't kept: a timer is a countdown,
+  /// not configuration.
+  public let schedules: [BackupValue]?
+
   /// The SHA-256 of the file's JSON without this key, as `sha256:` and 64 hexadecimal digits.
   public let checksum: String
 
@@ -74,13 +79,15 @@ public struct HomeBackup: Codable, Hashable, Sendable {
   ///   - devices: The devices. They're put in address order.
   ///   - notificationRules: The service's rules, or `nil`. Defaults to `nil`.
   ///   - routes: The service's routes, or `nil`. Defaults to `nil`.
+  ///   - schedules: The service's schedules, or `nil`. Defaults to `nil`.
   public init(
     createdAt: Date,
     source: BackupSourceKind,
     modem: BackupModem?,
     devices: [BackupDevice],
     notificationRules: [BackupValue]? = nil,
-    routes: [BackupRoute]? = nil
+    routes: [BackupRoute]? = nil,
+    schedules: [BackupValue]? = nil
   ) {
 
     self.format = Self.currentFormat
@@ -90,20 +97,22 @@ public struct HomeBackup: Codable, Hashable, Sendable {
     self.devices = devices.sorted { (first: BackupDevice, second: BackupDevice) -> Bool in first.address.bytes.lexicographicallyPrecedes(second.address.bytes) }
     self.notificationRules = notificationRules
     self.routes = routes
-    self.checksum = Self.checksum(of: HomeBackupBody(format: format, createdAt: self.createdAt, source: source, modem: modem, devices: self.devices, notificationRules: notificationRules, routes: routes))
+    self.schedules = schedules
+    self.checksum = Self.checksum(of: HomeBackupBody(format: format, createdAt: self.createdAt, source: source, modem: modem, devices: self.devices, notificationRules: notificationRules, routes: routes, schedules: schedules))
 
   }
 
-  /// This backup with the service's notification rules and routes, and a checksum that covers
-  /// them.
+  /// This backup with the service's notification rules, routes and schedules, and a checksum that
+  /// covers them.
   ///
   /// - Parameters:
   ///   - notificationRules: The rules, each as the service's API writes it.
   ///   - routes: The routes.
+  ///   - schedules: The schedules, each as the schedules file writes it.
   /// - Returns: The backup.
-  public func including(notificationRules: [BackupValue], routes: [BackupRoute]) -> HomeBackup {
+  public func including(notificationRules: [BackupValue], routes: [BackupRoute], schedules: [BackupValue]) -> HomeBackup {
 
-    HomeBackup(createdAt: createdAt, source: source, modem: modem, devices: devices, notificationRules: notificationRules, routes: routes)
+    HomeBackup(createdAt: createdAt, source: source, modem: modem, devices: devices, notificationRules: notificationRules, routes: routes, schedules: schedules)
 
   }
 
@@ -320,6 +329,7 @@ private struct HomeBackupBody: Encodable {
   let devices: [BackupDevice]
   let notificationRules: [BackupValue]?
   let routes: [BackupRoute]?
+  let schedules: [BackupValue]?
 
 }
 

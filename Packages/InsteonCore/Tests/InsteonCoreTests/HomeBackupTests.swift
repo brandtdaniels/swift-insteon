@@ -88,12 +88,36 @@ struct HomeBackupTests {
 
     let rule: BackupValue = .object(["id": .string("front-door"), "includeDetail": .bool(true), "cooldownSeconds": .integer(60)])
     let route = BackupRoute(kind: "relay", ticket: "ticket-1")
-    let backup: HomeBackup = Self.sample.including(notificationRules: [rule], routes: [route])
+    let backup: HomeBackup = Self.sample.including(notificationRules: [rule], routes: [route], schedules: [])
     let restored: HomeBackup = try HomeBackup(parsing: backup.encoded())
 
     #expect(restored.notificationRules == [rule])
     #expect(restored.routes == [route])
     #expect(restored.checksum != Self.sample.checksum)
+
+  }
+
+  @Test func keepsTheServicesSchedulesAndCoversThemWithTheChecksum() throws {
+
+    let schedule: BackupValue = .object(["id": .string("porch"), "enabled": .bool(true)])
+    let without: HomeBackup = Self.sample.including(notificationRules: [], routes: [], schedules: [])
+    let backup: HomeBackup = Self.sample.including(notificationRules: [], routes: [], schedules: [schedule])
+    let restored: HomeBackup = try HomeBackup(parsing: backup.encoded())
+
+    #expect(Self.sample.schedules == nil)
+    #expect(restored.schedules == [schedule])
+    #expect(restored.checksum == backup.checksum)
+    #expect(backup.checksum != without.checksum)
+
+  }
+
+  @Test func refusesAFileWhoseSchedulesChangedAfterItWasWritten() throws {
+
+    let schedule: BackupValue = .object(["id": .string("porch")])
+    let backup: HomeBackup = Self.sample.including(notificationRules: [], routes: [], schedules: [schedule])
+    let text: String = String(decoding: try backup.encoded(), as: UTF8.self).replacingOccurrences(of: "\"porch\"", with: "\"garage\"")
+
+    #expect(throws: HomeBackupError.checksumMismatch) { try HomeBackup(parsing: Data(text.utf8)) }
 
   }
 

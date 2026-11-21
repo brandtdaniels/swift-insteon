@@ -132,7 +132,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listRoutes: "The routes that separate transport processes registered, in the order they were registered. A pairing document lists them after the `lan` route. A ticket is a locator that only its transport reads, never a secret. Needs the `read` scope."
     case .putRoute: "Registers the route, or replaces the ticket of the route with that kind, which keeps its place. Every pairing document issued afterward lists it; a document issued earlier is unchanged and keeps working, because routes are only hints. Needs the `admin` scope."
     case .deleteRoute: "Removes the route from the pairing documents issued afterward. Needs the `admin` scope."
-    case .getBackup: "The same document format `insteon backup` writes: the modem's address and ALL-Link database, each device's ALL-Link database, names and identities, and the notification rules and routes. It answers from the cache and sends nothing to hardware, so a device the service holds no copy of is listed with the reason `notCached`. It holds no password, client token or Hub address. Needs the `admin` scope."
+    case .getBackup: "The same document format `insteon backup` writes: the modem's address and ALL-Link database, each device's ALL-Link database, names and identities, the notification rules, the routes and the schedules (timers are left out). It answers from the cache and sends nothing to hardware, so a device the service holds no copy of is listed with the reason `notCached`. It holds no password, client token or Hub address. Needs the `admin` scope."
     case .listSchedules: "The schedules in the order they were added, each with the time it runs next in the service's time zone. Needs the `read` scope."
     case .putSchedule: "Adds the schedule, or replaces the schedule with that identifier, which keeps nothing of the old schedule's last run. It takes effect at once. A clock time is wall-clock time in the service's time zone, so it follows daylight saving time: a time the clocks skip runs once, when the skipped span ends, and a time that happens twice runs at its first occurrence. A run less than a minute late happens; a later one is skipped, unless `catchUp` is true and it is less than 15 minutes late. Each run publishes a `schedule` event on `/api/v1/events`. Needs the `admin` scope."
     case .deleteSchedule: "Removes the schedule, which stops at once. Needs the `admin` scope."
@@ -226,7 +226,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listRoutes: codes += [.routeRegistrationsNotSaved]
     case .putRoute: codes += [.invalidRouteRegistration, .routeRegistrationLimitReached, .routeRegistrationsNotSaved, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected]
     case .deleteRoute: codes += [.unknownRouteRegistration, .routeRegistrationsNotSaved, .apiMarkerMissing]
-    case .getBackup: codes += [.notificationRulesNotSaved, .routeRegistrationsNotSaved]
+    case .getBackup: codes += [.notificationRulesNotSaved, .routeRegistrationsNotSaved, .schedulesNotSaved]
     case .browserCard:
       codes += [.invalidAddress, .unknownDevice, .busy]
     case .browserCommand:

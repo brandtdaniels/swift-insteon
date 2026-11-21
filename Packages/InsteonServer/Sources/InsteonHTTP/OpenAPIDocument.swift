@@ -219,6 +219,7 @@ enum OpenAPIDocument {
         "devices": Schema.array(of: Schema.ref("BackupDevice")),
         "notificationRules": Schema.array(of: Schema.ref("NotificationRule")),
         "routes": Schema.array(of: Schema.ref("Route")),
+        "schedules": Schema.array(of: Schema.ref("Schedule")),
         "checksum": Schema.string(pattern: "^sha256:[0-9a-f]{64}$", description: "The SHA-256 of the document's JSON without this key, written with sorted keys and no spacing.")
       ], required: ["format", "createdAt", "source", "devices", "checksum"], description: "A home's Insteon network in one document. It holds no password, client token or Hub address."),
       "BackupModem": Schema.object([

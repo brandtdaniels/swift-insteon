@@ -495,7 +495,7 @@ func DeviceRegistryStore.load()
 func DeviceRegistryStore.save(_:)
 func DeviceSettingsReading.raw(for:button:)
 func HomeBackup.encoded()
-func HomeBackup.including(notificationRules:routes:)
+func HomeBackup.including(notificationRules:routes:schedules:)
 func HubCandidate.record(_:)
 func HubLocation.isSameEndpoint(as:)
 func HubProDevice.beep()
@@ -610,7 +610,7 @@ init DeviceUnlinkingResult(link:remainingLinks:)
 init DirectMessage(to:command1:command2:data:hasChecksum:)
 init FactoryResetSteps(address:info:procedure:erases:)
 init ForgottenDevice(address:device:)
-init HomeBackup(createdAt:source:modem:devices:notificationRules:routes:)
+init HomeBackup(createdAt:source:modem:devices:notificationRules:routes:schedules:)
 init HomeBackup(parsing:)
 init HomeBackupCheck(backup:checksumMatches:)
 init HubAddressRefused(host:)
@@ -690,6 +690,7 @@ let HomeBackup.format
 let HomeBackup.modem
 let HomeBackup.notificationRules
 let HomeBackup.routes
+let HomeBackup.schedules
 let HomeBackup.source
 let HubAddressRefused.host
 let HubProDevice.address

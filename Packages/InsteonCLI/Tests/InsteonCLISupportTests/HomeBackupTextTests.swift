@@ -102,13 +102,14 @@ struct HomeBackupTextTests {
 
   }
 
-  @Test func countsRulesAndRoutesWhenTheBackupHoldsThem() {
+  @Test func countsRulesRoutesAndSchedulesWhenTheBackupHoldsThem() {
 
-    let backup = Self.backup().including(notificationRules: [.object([:]), .object([:])], routes: [BackupRoute(kind: "relay", ticket: "t")])
+    let backup = Self.backup().including(notificationRules: [.object([:]), .object([:])], routes: [BackupRoute(kind: "relay", ticket: "t")], schedules: [.object([:]), .object([:]), .object([:])])
     let lines = HomeBackupText.checked(Self.report(backup))
 
     #expect(lines.contains("Notification rules: 2."))
     #expect(lines.contains("Routes: 1."))
+    #expect(lines.contains("Schedules: 3."))
 
   }
 

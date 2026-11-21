@@ -3,6 +3,7 @@ import Hummingbird
 import HummingbirdTesting
 import HTTPTypes
 import InsteonCore
+import InsteonScheduling
 import InsteonService
 import Testing
 @testable import InsteonHTTP
@@ -58,6 +59,24 @@ struct BackupRoutesTests {
     #expect(backup.notificationRules == [expected])
   }
 
+  @Test func includesTheSchedulesAsTheSchedulesFileWritesThemWithoutARunTime() async throws {
+    let setup = try Setup(password: password)
+    let schedule = ServiceSchedule(id: "porch", name: "Porch light", when: Schedule(time: .clock(hour: 18, minute: 30), weekdays: [.monday, .friday]), action: ScheduledAction(device: InsteonAddress(0x1A, 0x2B, 0x3C), kind: .on(levelPercent: 80)))
+    _ = try await setup.service.putSchedule(schedule)
+    let backup = try HomeBackup(parsing: Data(try await fetch(setup, authorization: basic).body.readableBytesView))
+    let expected = try JSONDecoder().decode(BackupValue.self, from: JSONEncoder().encode(ScheduleRecord(schedule)))
+    #expect(backup.schedules == [expected])
+  }
+
+  @Test func leavesTheTimersOutBecauseATimerIsACountdownNotConfiguration() async throws {
+    let setup = try Setup(password: password)
+    let action = ScheduledAction(device: InsteonAddress(0x1A, 0x2B, 0x3C), kind: .off)
+    _ = try await setup.service.putTimer(ServiceTimer(id: "stairs-timer", name: "Stairs", delaySeconds: 600, action: action))
+    let text = String(decoding: try await fetch(setup, authorization: basic).body.readableBytesView, as: UTF8.self)
+    #expect(!text.contains("stairs-timer"))
+    #expect(!text.lowercased().contains("timer"))
+  }
+
   @Test func holdsNoPasswordOrClientTokenOrHubAddress() async throws {
     let setup = try Setup(password: password)
     let issued = try await setup.clients.issue(name: "Phone", scope: .admin)
@@ -106,5 +125,22 @@ struct BackupRoutesTests {
     #expect(response.status != .ok)
     let object = try #require(try JSONSerialization.jsonObject(with: Data(response.body.readableBytesView)) as? [String: Any])
     #expect(object["code"] as? String == "routeRegistrationsNotSaved")
+  }
+
+  @Test func failsWithTheSchedulesErrorWhenTheSchedulesCantBeRead() async throws {
+    let service = FakeService()
+    await service.failSchedules(with: .notSaved)
+    let setup = try Setup(password: password, service: service)
+    let response = try await fetch(setup, authorization: basic)
+    #expect(response.status != .ok)
+    let object = try #require(try JSONSerialization.jsonObject(with: Data(response.body.readableBytesView)) as? [String: Any])
+    #expect(object["code"] as? String == "schedulesNotSaved")
+  }
+
+  @Test func declaresEveryErrorTheBackupCanFailWith() {
+    let codes = APIOperation.getBackup.errorCodes
+    #expect(codes.contains(.notificationRulesNotSaved))
+    #expect(codes.contains(.routeRegistrationsNotSaved))
+    #expect(codes.contains(.schedulesNotSaved))
   }
 }
