@@ -62,9 +62,6 @@ public struct HubFileSuggestion: Hashable, Sendable {
 
   }
 
-  /// What to do with the files, as one line for a person.
-  public static let note = "To use a Hub by name, save its INSTEON_HUB_USERNAME, INSTEON_HUB_PASSWORD and INSTEON_HUB_HOST in the file shown, readable only by you with chmod 600. A Hub Pro needs only its INSTEON_HUB_HOST."
-
   /// A suggestion for each Hub, in order.
   ///
   /// - Parameter hubs: The Hubs found.
@@ -91,35 +88,6 @@ public struct HubFileSuggestion: Hashable, Sendable {
       return HubFileSuggestion(name: name)
 
     }
-
-  }
-
-  /// The table that shows each Hub's address, the file to save it as, and the command to use it:
-  /// a header row, then a row for each Hub.
-  ///
-  /// - Parameters:
-  ///   - hubs: The Hubs found.
-  ///   - directory: The directory of Hub files, or `nil` if it isn't known.
-  /// - Returns: The rows, or none when no Hub was found.
-  public static func rows(for hubs: [Source], directory: String?) -> [[String]] {
-
-    guard !hubs.isEmpty else {
-
-      return []
-
-    }
-
-    let rows = zip(hubs, suggestions(for: hubs)).map { (hub: Source, suggestion: HubFileSuggestion) -> [String] in
-
-      [
-        "\(hub.host):\(hub.port)",
-        directory.map { $0 + "/" + suggestion.fileName } ?? suggestion.fileName,
-        suggestion.command
-      ]
-
-    }
-
-    return [["ADDRESS", "SAVE AS", "USE WITH"]] + rows
 
   }
 

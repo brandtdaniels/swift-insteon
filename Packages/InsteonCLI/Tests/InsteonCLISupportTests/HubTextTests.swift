@@ -77,13 +77,10 @@ struct HubTextTests {
     )
   )
 
-  @Test func saysUnderTheTableHowToUseTheHubProsListed() {
+  @Test func saysWhatVersionsEachHubProListedReported() {
 
-    #expect(HubText.hubProNote(settings: [settings]) == [
-      "A Hub Pro is listed. Use --hub with its address to read and control its devices; it has no ALL-Link database to change.",
-      "Hub Pro at 192.168.1.50 reports configuration version 5.0.1 and server version 1.0.2.",
-    ])
-    #expect(HubText.hubProNote(settings: [nil, nil]) == ["Hub Pros are listed. Use --hub with an address to read and control a Hub Pro's devices; they have no ALL-Link database to change."])
+    #expect(HubText.hubProNote(settings: [settings]) == ["Hub Pro at 192.168.1.50 reports configuration version 5.0.1 and server version 1.0.2."])
+    #expect(HubText.hubProNote(settings: [nil, nil]).isEmpty)
     #expect(HubText.hubProNote(settings: []).isEmpty)
 
   }
