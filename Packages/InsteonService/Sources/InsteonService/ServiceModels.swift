@@ -150,7 +150,7 @@ public protocol HomeBackupProviding: Sendable {
 
 /// The cohesive API consumed by an adapter that needs queries, commands, events and health.
 /// A single instance supplies all four roles, preventing mismatched device networks.
-public protocol InsteonServiceAPI: DeviceQuerying, DeviceCommanding, DeviceEventSource, HealthReporting, NotificationRuleManaging, HomeBackupProviding {}
+public protocol InsteonServiceAPI: DeviceQuerying, DeviceCommanding, DeviceEventSource, HealthReporting, NotificationRuleManaging, ScheduleManaging, HomeBackupProviding {}
 
 /// A refused operation, independent of HTTP status codes or display wording.
 public enum ServiceControlError: Error, Equatable {
@@ -204,6 +204,8 @@ public enum ServiceEvent: Equatable, Sendable {
   /// A notification rule fired. Numbered and retained like every other event.
   case notification(ServiceNotification)
   case modemReconnected
+  /// A schedule or a timer ran, or a run was missed. Numbered and retained like every other event.
+  case schedule(ScheduleRun)
 
   init?(_ event: DeviceMonitorEvent) {
     switch event {

@@ -143,8 +143,13 @@ enum OpenAPIDocument {
         "lastExchangeAgeSeconds": Schema.nullable(Schema.integer(minimum: 0)),
         "lastPollAgeSeconds": Schema.nullable(Schema.integer(minimum: 0)),
         "snapshotAgeSeconds": Schema.nullable(Schema.integer(minimum: 0)),
-        "persistence": Schema.ref("Persistence")
+        "persistence": Schema.ref("Persistence"),
+        "notes": Schema.array(of: Schema.ref("HealthNote"))
       ], required: ["version", "status", "modem", "lastExchangeAgeSeconds", "lastPollAgeSeconds", "snapshotAgeSeconds", "persistence"]),
+      "HealthNote": Schema.object([
+        "code": Schema.string(enum: HealthNoteCode.allCases.map(\.rawValue)),
+        "message": Schema.string(description: "For a person. The wording can change.")
+      ], required: ["code", "message"], description: "Something worth knowing that doesn't change what the service can do, such as a time zone the host doesn't have, or a Hub whose clock differs from the service's. A client ignores a code it doesn't know."),
       "CommandCompletion": Schema.object([
         "action": Schema.string(enum: HTTPCommand.Action.allCases.map(\.rawValue)),
         "levelPercent": Schema.nullable(Schema.integer(minimum: 0, maximum: 100)),
@@ -164,8 +169,13 @@ enum OpenAPIDocument {
         "message": Schema.nullable(Schema.string()),
         "ruleId": Schema.string(description: "On `notification`: the rule's identifier."),
         "ruleName": Schema.string(description: "On `notification`: the rule's name."),
-        "firedAt": ["type": "string", "format": "date-time", "description": "On `notification`: when the rule fired."]
-      ], required: ["version", "runId", "sequence", "kind"], description: "The `data` of one frame. `commandCompleted` carries `completion`; `modemUnavailable` carries `cause` and `message`; `reconnected` says the modem is back and a client refreshes what it shows. `notification` carries `ruleId`, `ruleName`, the device as `address` and `firedAt`, and `name` only when the rule includes detail."),
+        "firedAt": ["type": "string", "format": "date-time", "description": "On `notification`: when the rule fired. On `schedule`: when the service handled the run."],
+        "scheduleId": Schema.string(description: "On `schedule`: the schedule's or timer's identifier."),
+        "source": Schema.string(enum: ScheduleSourceName.allCases.map(\.rawValue), description: "On `schedule`: whether a schedule or a timer ran."),
+        "outcome": Schema.string(enum: ScheduleOutcomeName.allCases.map(\.rawValue), description: "On `schedule`: `acknowledged` when the device acknowledged the command; `missed` when the run time passed while the service wasn't running or the clock moved past it, so nothing was sent; `unavailable` when the Hub or modem was away, so nothing was sent (`cause` says why); `refused` when the service refused the command before sending it (`reason` is the error code); `unknown` when the command may have reached the device. A run is never retried."),
+        "reason": Schema.string(description: "On `schedule` with outcome `refused`: the error code the same command would answer with."),
+        "nextRun": Schema.nullable(["type": "string", "format": "date-time", "description": "On `schedule`: when the schedule runs next, in the service's time zone, or null for a timer or a schedule with no run to come."])
+      ], required: ["version", "runId", "sequence", "kind"], description: "The `data` of one frame. `commandCompleted` carries `completion`; `modemUnavailable` carries `cause` and `message`; `reconnected` says the modem is back and a client refreshes what it shows. `notification` carries `ruleId`, `ruleName`, the device as `address` and `firedAt`, and `name` only when the rule includes detail. `schedule` carries `scheduleId`, `name`, `source`, the device as `address`, `outcome`, `firedAt` and `nextRun`."),
       "Gap": Schema.object([
         "version": version,
         "kind": Schema.constant(EventKind.gap.rawValue),
@@ -247,6 +257,56 @@ enum OpenAPIDocument {
         "reason": Schema.string(enum: ["noAnswer", "rejectedModem", "damagedRecords", "notCached", "unavailableFromSource", "failed", "incomplete"], description: "Why there is no ALL-Link database."),
         "detail": Schema.string(description: "A short note that holds no address or credential.")
       ], required: ["reason"]),
+      "ScheduleAction": Schema.object([
+        "device": address,
+        "action": Schema.string(enum: ScheduleActionName.allCases.map(\.rawValue)),
+        "levelPercent": Schema.integer(minimum: 0, maximum: 100, description: "Only for `on`, and only for a device that dims.")
+      ], required: ["device", "action"], description: "A switching command, the same as a client's command on a device's main group."),
+      "ScheduleTime": [
+        "oneOf": [
+          Schema.object(["kind": Schema.constant(ScheduleTimeKind.clock.rawValue), "hour": Schema.integer(minimum: 0, maximum: 23), "minute": Schema.integer(minimum: 0, maximum: 59)], required: ["kind", "hour", "minute"]),
+          Schema.object(["kind": Schema.constant(ScheduleTimeKind.sunrise.rawValue), "offsetSeconds": Schema.integer(minimum: -ServiceSchedule.longestOffsetSeconds, maximum: ServiceSchedule.longestOffsetSeconds, description: "Seconds after sunrise, negative for before. Defaults to 0.")], required: ["kind"]),
+          Schema.object(["kind": Schema.constant(ScheduleTimeKind.sunset.rawValue), "offsetSeconds": Schema.integer(minimum: -ServiceSchedule.longestOffsetSeconds, maximum: ServiceSchedule.longestOffsetSeconds, description: "Seconds after sunset, negative for before. Defaults to 0.")], required: ["kind"])
+        ],
+        "description": "A clock time is wall-clock time in the service's time zone. Sunrise and sunset are worked out for the service's location and need it."
+      ],
+      "ScheduleWhen": Schema.object([
+        "time": Schema.ref("ScheduleTime"),
+        "weekdays": ["type": "array", "items": Schema.string(enum: WeekdayName.allCases.map(\.rawValue)), "uniqueItems": true, "description": "The days the schedule runs on, without repeats. Defaults to every day."]
+      ], required: ["time"]),
+      "Schedule": Schema.object([
+        "id": Schema.string(description: "The schedule's identifier: letters, digits, `-`, `_` and `.`, at most 64 characters."),
+        "name": Schema.string(description: "1 through 64 characters, without control characters."),
+        "enabled": Schema.boolean,
+        "when": Schema.ref("ScheduleWhen"),
+        "action": Schema.ref("ScheduleAction"),
+        "catchUp": ["type": "boolean", "description": "Whether a run missed while the service was stopped still happens when it is less than 15 minutes late. Off, a missed run is skipped."],
+        "nextRun": Schema.nullable(["type": "string", "format": "date-time", "description": "When the schedule runs next. Null for a disabled schedule or one with no run to come."])
+      ], required: ["id", "name", "enabled", "when", "action", "catchUp"]),
+      "ScheduleList": Schema.object(["version": version, "schedules": Schema.array(of: Schema.ref("Schedule"))], required: ["version", "schedules"]),
+      "ScheduleStored": Schema.object(["version": version, "schedule": Schema.ref("Schedule")], required: ["version", "schedule"]),
+      "ScheduleRequest": Schema.object([
+        "name": Schema.string(description: "1 through 64 characters, without control characters."),
+        "enabled": Schema.boolean,
+        "when": Schema.ref("ScheduleWhen"),
+        "action": Schema.ref("ScheduleAction"),
+        "catchUp": Schema.boolean
+      ], required: ["name", "when", "action"], description: "A schedule without its identifier. Defaults: `enabled` true, `catchUp` false."),
+      "Timer": Schema.object([
+        "id": Schema.string(description: "The timer's identifier."),
+        "name": Schema.string(description: "1 through 64 characters, without control characters."),
+        "delaySeconds": Schema.integer(minimum: 1, maximum: ServiceTimer.longestDelaySeconds),
+        "action": Schema.ref("ScheduleAction"),
+        "dueAt": ["type": "string", "format": "date-time", "description": "When the timer fires by the service's clock. A change of the clock moves this time, not the moment the timer fires."],
+        "remainingSeconds": Schema.integer(minimum: 0, description: "The seconds left, counted in elapsed time.")
+      ], required: ["id", "name", "delaySeconds", "action", "dueAt", "remainingSeconds"]),
+      "TimerList": Schema.object(["version": version, "timers": Schema.array(of: Schema.ref("Timer"))], required: ["version", "timers"]),
+      "TimerStored": Schema.object(["version": version, "timer": Schema.ref("Timer")], required: ["version", "timer"]),
+      "TimerRequest": Schema.object([
+        "name": Schema.string(description: "1 through 64 characters, without control characters."),
+        "delaySeconds": Schema.integer(minimum: 1, maximum: ServiceTimer.longestDelaySeconds),
+        "action": Schema.ref("ScheduleAction")
+      ], required: ["name", "delaySeconds", "action"], description: "A timer without its identifier."),
       "Route": Schema.object([
         "kind": Schema.string(description: "The transport's identifier."),
         "ticket": Schema.string(description: "What the transport needs to reach the service. Only that transport reads it.")

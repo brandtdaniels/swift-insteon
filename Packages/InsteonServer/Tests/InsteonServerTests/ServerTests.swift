@@ -53,3 +53,29 @@ extension ServerTests {
     #expect(throws: ServerOptionError.self) { try ServerOptions(arguments: arguments, environment: [:]) }
   }
 }
+
+extension ServerTests {
+  @Test func theLocationAndTimeZoneAreOptionsWithoutDefaults() throws {
+    let defaults = try ServerOptions(arguments: [], environment: [:])
+    #expect(defaults.latitude == nil && defaults.longitude == nil && defaults.timeZone == nil)
+    let chosen = try ServerOptions(arguments: ["--latitude", "-33.87", "--longitude", "151.21", "--time-zone", "Australia/Sydney"], environment: [:])
+    #expect(chosen.latitude == -33.87 && chosen.longitude == 151.21 && chosen.timeZone == "Australia/Sydney")
+  }
+
+  @Test(arguments: [
+    ["--latitude", "34"], ["--longitude", "-118"], ["--latitude", "91", "--longitude", "0"], ["--latitude", "0", "--longitude", "181"],
+    ["--latitude", "north", "--longitude", "0"], ["--latitude", "nan", "--longitude", "0"]
+  ])
+  func aLocationNeedsBothCoordinatesWithinRange(_ arguments: [String]) {
+    #expect(throws: ServerOptionError.invalidLocation) { try ServerOptions(arguments: arguments, environment: [:]) }
+  }
+
+  @Test(arguments: ["Not a zone", "../etc/localtime", "bad\u{7}zone", String(repeating: "z", count: 65)])
+  func aTimeZoneThatIsNotAZoneNameIsRefused(_ name: String) {
+    #expect(throws: ServerOptionError.invalidTimeZone) { try ServerOptions(arguments: ["--time-zone", name], environment: [:]) }
+  }
+
+  @Test func aTimeZoneTheHostMightNotHaveIsStillAccepted() throws {
+    #expect(try ServerOptions(arguments: ["--time-zone", "Not/AZone"], environment: [:]).timeZone == "Not/AZone")
+  }
+}

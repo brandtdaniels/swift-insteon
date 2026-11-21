@@ -151,6 +151,10 @@ scope, command all devices known by this service. Per-device permissions aren't 
 | POST | `/api/v1/clients/{id}/pairing` | Replace a client's credential and return its pairing document (`admin`) |
 | GET | `/api/v1/notification-rules` | List the notification rules (`read`; see Notifications) |
 | PUT, DELETE | `/api/v1/notification-rules/{id}` | Store or remove a rule (`admin`) |
+| GET | `/api/v1/schedules` | List the schedules with their next runs (`read`; see Schedules and timers) |
+| PUT, DELETE | `/api/v1/schedules/{id}` | Store or remove a schedule (`admin`) |
+| GET | `/api/v1/timers` | List the timers that haven't fired (`read`) |
+| PUT, DELETE | `/api/v1/timers/{id}` | Start, restart or cancel a timer (`admin`) |
 | GET | `/api/v1/routes` | List the routes transport plugins registered (`read`; see Writing a plugin) |
 | PUT, DELETE | `/api/v1/routes/{kind}` | Register or remove a transport's route (`admin`) |
 | GET | `/api/v1/backup` | A backup of the cached network, the format `insteon backup` writes (`admin`; see Backups) |
@@ -448,6 +452,87 @@ Everything here is additive inside `/api/v1`: three routes, four error codes and
 optional response fields on events. A client that doesn't know `notification` ignores it, as the browser
 page does. Changing a field's meaning, the content-free default or the event id needs `/api/v2`.
 
+## Schedules and timers
+
+The service runs schedules and timers itself, with no cloud, so a home keeps its routines when the internet is
+down and after a Hub is replaced. A schedule sends a device command at a time on chosen days; a timer sends one
+after a delay. An action is one of the service's own commands, turn a device's main group on (at a percentage for
+a device that dims) or off, sent the way a client's command is. Reading needs the `read` scope and changing needs `admin`.
+
+| Method and path | What it does |
+| --- | --- |
+| `GET /api/v1/schedules` | `{ "version": 1, "schedules": [...] }`, each with `nextRun` (`read`) |
+| `PUT /api/v1/schedules/{id}` | Adds the schedule, or replaces the one with that identifier (`admin`) |
+| `DELETE /api/v1/schedules/{id}` | Removes it, which stops at once (`admin`) |
+| `GET /api/v1/timers` | `{ "version": 1, "timers": [...] }`, each with `dueAt` and `remainingSeconds` (`read`) |
+| `PUT /api/v1/timers/{id}` | Starts the timer, or restarts the one with that identifier (`admin`) |
+| `DELETE /api/v1/timers/{id}` | Cancels it (`admin`) |
+
+```sh
+curl -X PUT http://127.0.0.1:8080/api/v1/schedules/porch -u insteon:"$INSTEON_GATEWAY_PASSWORD" \
+  -H 'X-Insteon-Request: 1' -H 'Content-Type: application/json' \
+  -d '{"name":"Porch light","when":{"time":{"kind":"sunset","offsetSeconds":-900},"weekdays":["monday","tuesday"]},"action":{"device":"1A.2B.3C","action":"on","levelPercent":80}}'
+```
+
+`when.time` is `{"kind":"clock","hour":18,"minute":30}`, or `{"kind":"sunrise"}` or `{"kind":"sunset"}` with an
+`offsetSeconds` of at most 12 hours either way. `weekdays` defaults to every day. A schedule is checked when it is stored:
+the device is known and offers the action (on and off, and a percentage only for a device that dims), a sun time needs
+a location, and a clock time needs a time zone the host has. The service keeps at most 64 schedules and 64 timers.
+
+### Time zone and location
+
+`--time-zone NAME` (an IANA name such as `America/Los_Angeles`) and `--latitude` and `--longitude` say where the home is.
+The server remembers what it was started with in the schedules file, so a later start without them keeps them, and a
+start with a new time zone recomputes every schedule from its wall-clock time. Without a time zone the computer's is used.
+Without a location, sunrise and sunset schedules are refused with `locationNotConfigured`. A time zone the host's
+time zone database doesn't have is not guessed at: clock times are refused with `timeZoneUnavailable`, and
+`GET /api/v1/health` lists it under `notes`.
+
+### Daylight saving time
+
+A clock time is wall-clock time in the home's time zone, converted each day with the host's time zone database, so a
+schedule follows daylight saving changes with no edit:
+
+- A time that doesn't exist on the night the clocks spring forward (02:30 when 02:00 becomes 03:00) runs once, when the
+  skipped span ends (03:00). In a zone with a half-hour change it runs when that half hour ends.
+- A time that happens twice on the night the clocks fall back (01:30) runs once, at its first occurrence.
+- Sunrise and sunset are worked out in UTC for the date and shown in local time, so they need no special case.
+- A timer counts elapsed time, so a change of the clock neither lengthens nor shortens it.
+
+### Missed runs
+
+A run happens when the service handles it less than a minute after its time. If the service was stopped across a run
+time, or the clock was set past it, the run is skipped and reported as `missed`; it isn't replayed. A schedule with
+`"catchUp": true` still runs when it is less than 15 minutes late. A run is never retried: when the Hub or modem is away
+the run is reported `unavailable`, and the next day's run is unaffected. An edit takes effect at once and keeps nothing of the
+old schedule's last run.
+
+### Timers across a restart
+
+A timer is stored with the time it has left. A restart picks up what a graceful stop saved, so a timer set for 5 minutes
+that ran for 2 fires 3 minutes after the restart. A server that stopped without saving restarts a timer with the time it
+had when it was last stored.
+
+### The event
+
+Each run publishes a numbered `schedule` event on `/api/v1/events` with `scheduleId`, `name`, `source` (`schedule` or
+`timer`), the device as `address`, `outcome`, `firedAt` and `nextRun` (null for a timer). `outcome` is `acknowledged`,
+`missed`, `unavailable` (`cause` says why), `refused` (`reason` is the error code the same command would answer with) or
+`unknown` (the command may have reached the device). The browser page ignores the event.
+
+### What a Hub's own clock does and doesn't do
+
+The service never writes a clock, a schedule or a time zone to a Hub, a modem or a device, and an Insteon device keeps no
+schedule of its own that the service sets. A Hub Pro reports its local time in its settings; the service reads it when it
+connects and adds a `hubClockDrift` health note when it differs from the service's by more than a minute. The Hub's clock
+doesn't run the service's schedules, and a Hub's own schedules, which depended on the vendor's cloud for its clock and
+daylight saving changes, are neither read nor changed.
+
+### Versioning
+
+Everything here is additive inside `/api/v1`: four routes, nine error codes, one event kind, a `notes` field on health,
+and the options above. A client that doesn't know `schedule` ignores it.
+
 ## Writing a plugin
 
 Remote access and notification delivery aren't features of the service. Each is a separate process that
@@ -622,7 +707,9 @@ The service writes its own network snapshot at
 `--state /absolute/path/gateway.json` for another file. It is separate from the CLI's cache
 and contains no credentials. Use a dedicated state file for each configured modem or Hub.
 The file is saved after successful operations and during startup and graceful shutdown;
-passive events aren't stored as history.
+passive events aren't stored as history. The schedules, the timers and the home's time zone and location are kept in
+`gateway-schedules.json` beside it (mode 600, written atomically); a file the server can't read stops it before it
+listens and is left as it is.
 
 Control-C or SIGTERM stops the HTTP service and closes the hardware session. A lost Hub or modem
 connection doesn't stop the server; it reconnects as described under Staying up. A corrupt or
@@ -714,6 +801,15 @@ same status for the same failure.
 | `unknownNotificationRule` | 404 | false | No rule has that id. |
 | `notificationRuleLimitReached` | 409 | false | The service keeps at most 64 rules. |
 | `notificationRulesNotSaved` | 500 | false | The rules file couldn't be read or written, so nothing changed. |
+| `invalidSchedule` | 400 | false | A schedule needs a name, at least one weekday, a clock time or a sunrise or sunset offset of at most 12 hours, an on or off action, and no other field. |
+| `invalidTimer` | 400 | false | A timer needs a name, a delay of 1 through 604800 seconds, an on or off action, and no other field. |
+| `unknownSchedule` | 404 | false | No schedule has that id. |
+| `unknownTimer` | 404 | false | No timer has that id. |
+| `scheduleLimitReached` | 409 | false | The service keeps at most 64 schedules. |
+| `timerLimitReached` | 409 | false | The service keeps at most 64 timers. |
+| `locationNotConfigured` | 409 | false | A sunrise or sunset schedule needs the server's `--latitude` and `--longitude`. |
+| `timeZoneUnavailable` | 409 | false | The configured time zone isn't in the host's time zone database, so a time of day can't be worked out. |
+| `schedulesNotSaved` | 500 | false | The schedules file couldn't be read or written, so nothing changed. |
 | `invalidRouteRegistration` | 400 | false | A route needs a `kind` of 1 through 32 lowercase letters, digits and `-` that starts with a letter and isn't `lan`, a `ticket` of 1 through 1024 printable ASCII characters without spaces, and no other field. |
 | `unknownRouteRegistration` | 404 | false | No route is registered for that kind. |
 | `routeRegistrationLimitReached` | 409 | false | The service keeps at most 8 routes. |

@@ -65,6 +65,13 @@ struct HealthDTO: Encodable {
   let lastPollAgeSeconds: Int?
   let snapshotAgeSeconds: Int?
   let persistence: String
+  let notes: [Note]
+
+  /// Something worth knowing that doesn't change what the service can do.
+  struct Note: Encodable {
+    let code: String
+    let message: String
+  }
 
   struct Modem: Encodable {
     let connected: Bool
@@ -89,6 +96,12 @@ struct HealthDTO: Encodable {
     lastPollAgeSeconds = age(health.lastPoll)
     snapshotAgeSeconds = age(health.deviceInformationUpdated)
     persistence = PersistenceName(health.persistence).rawValue
+    notes = health.notes.map { note in
+      switch note {
+      case .timeZoneUnavailable: Note(code: HealthNoteCode.timeZoneUnavailable.rawValue, message: "The configured time zone isn't in this host's time zone database, so schedules with a time of day are refused.")
+      case let .hubClockDrift(seconds): Note(code: HealthNoteCode.hubClockDrift.rawValue, message: "The Hub's clock differs from the service's by \(abs(seconds)) seconds. The service never changes a Hub's clock.")
+      }
+    }
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -100,8 +113,9 @@ struct HealthDTO: Encodable {
     try container.encode(lastPollAgeSeconds, forKey: .lastPollAgeSeconds)
     try container.encode(snapshotAgeSeconds, forKey: .snapshotAgeSeconds)
     try container.encode(persistence, forKey: .persistence)
+    try container.encode(notes, forKey: .notes)
   }
-  private enum CodingKeys: String, CodingKey { case version, status, modem, lastExchangeAgeSeconds, lastPollAgeSeconds, snapshotAgeSeconds, persistence }
+  private enum CodingKeys: String, CodingKey { case version, status, modem, lastExchangeAgeSeconds, lastPollAgeSeconds, snapshotAgeSeconds, persistence, notes }
 }
 
 struct DeviceDTO: Encodable {
@@ -179,18 +193,43 @@ struct EventDTO: Encodable {
   let ruleName: String?
   let firedAt: String?
   let message: String?
+  let scheduleId: String?
+  let source: String?
+  let outcome: String?
+  let reason: String?
+  let nextRun: String?
   init(_ event: ServiceEvent, at position: EventCursor) {
     runId = position.runID
     sequence = position.sequence
-    if case let .notification(note) = event {
+    switch event {
+    case let .notification(note):
       ruleId = note.ruleID; ruleName = note.ruleName
       firedAt = ISO8601DateFormatter().string(from: note.firedAt)
-    } else {
+    case let .schedule(run):
+      ruleId = nil; ruleName = nil
+      firedAt = ISO8601DateFormatter().string(from: run.firedAt)
+    default:
       ruleId = nil; ruleName = nil; firedAt = nil
     }
     switch event {
     case let .modemUnavailable(reason): cause = reason.wireName; message = reason.notice
+    case let .schedule(run):
+      if case let .unavailable(reason) = run.outcome { cause = reason.wireName; message = reason.notice } else { cause = nil; message = nil }
     default: cause = nil; message = nil
+    }
+    if case let .schedule(run) = event {
+      scheduleId = run.id
+      source = (run.source == .timer ? ScheduleSourceName.timer : .schedule).rawValue
+      switch run.outcome {
+      case .acknowledged: outcome = ScheduleOutcomeName.acknowledged.rawValue; reason = nil
+      case .missed: outcome = ScheduleOutcomeName.missed.rawValue; reason = nil
+      case .unavailable: outcome = ScheduleOutcomeName.unavailable.rawValue; reason = nil
+      case let .refused(error): outcome = ScheduleOutcomeName.refused.rawValue; reason = HTTPFailure(error).code.rawValue
+      case .unknown: outcome = ScheduleOutcomeName.unknown.rawValue; reason = nil
+      }
+      nextRun = run.nextRun.map { ISO8601DateFormatter().string(from: $0) }
+    } else {
+      scheduleId = nil; source = nil; outcome = nil; reason = nil; nextRun = nil
     }
     if case let .commandCompleted(command, receipt) = event {
       completion = CommandCompletionDTO(command: command, receipt: receipt)
@@ -216,6 +255,8 @@ struct EventDTO: Encodable {
       kind = EventKind.reconnected.rawValue; address = nil; group = nil; name = nil; productName = nil
     case let .notification(note):
       kind = EventKind.notification.rawValue; address = note.device.description; group = nil; name = note.eventName; productName = nil
+    case let .schedule(run):
+      kind = EventKind.schedule.rawValue; address = run.device.description; group = nil; name = run.name; productName = nil
     }
   }
 }

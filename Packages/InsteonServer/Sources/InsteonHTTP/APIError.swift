@@ -19,6 +19,15 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   case unknownNotificationRule
   case notificationRuleLimitReached
   case notificationRulesNotSaved
+  case invalidSchedule
+  case invalidTimer
+  case unknownSchedule
+  case unknownTimer
+  case scheduleLimitReached
+  case timerLimitReached
+  case schedulesNotSaved
+  case locationNotConfigured
+  case timeZoneUnavailable
   case invalidRouteRegistration
   case unknownRouteRegistration
   case routeRegistrationLimitReached
@@ -50,14 +59,14 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   var status: HTTPResponse.Status {
     switch self {
     case .authenticationRequired, .authenticationFailed: .unauthorized
-    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel, .invalidClient, .invalidNotificationRule, .invalidRouteRegistration: .badRequest
-    case .unknownDevice, .routeNotFound, .unknownClient, .unknownNotificationRule, .unknownRouteRegistration: .notFound
+    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel, .invalidClient, .invalidNotificationRule, .invalidRouteRegistration, .invalidSchedule, .invalidTimer: .badRequest
+    case .unknownDevice, .routeNotFound, .unknownClient, .unknownNotificationRule, .unknownRouteRegistration, .unknownSchedule, .unknownTimer: .notFound
     case .forbidden, .apiMarkerMissing, .formKeyInvalid: .forbidden
     case .bodyTooLarge: .contentTooLarge
     case .unsupportedMediaType: .unsupportedMediaType
     case .requestRejected: .badRequest
-    case .busy, .notIdentified, .notLinked, .clientLimitReached, .notificationRuleLimitReached, .routeRegistrationLimitReached: .conflict
-    case .clientsNotSaved, .notificationRulesNotSaved, .routeRegistrationsNotSaved: .internalServerError
+    case .busy, .notIdentified, .notLinked, .clientLimitReached, .notificationRuleLimitReached, .routeRegistrationLimitReached, .scheduleLimitReached, .timerLimitReached, .locationNotConfigured, .timeZoneUnavailable: .conflict
+    case .clientsNotSaved, .notificationRulesNotSaved, .routeRegistrationsNotSaved, .schedulesNotSaved: .internalServerError
     case .unsupportedControl, .deviceRejected, .idempotencyKeyReused: .unprocessableContent
     case .modemRejected, .modemUnavailable, .canceled: .serviceUnavailable
     case .deviceNotAnswering: .gatewayTimeout
@@ -88,6 +97,15 @@ enum APIErrorCode: String, CaseIterable, Sendable {
     case .unknownNotificationRule: "Unknown notification rule."
     case .notificationRuleLimitReached: "The service keeps at most \(ServiceNotificationRule.maximumCount) notification rules. Remove one first."
     case .notificationRulesNotSaved: "The notification rules could not be read or saved. Nothing changed."
+    case .invalidSchedule: "A schedule needs a name of 1 through \(ServiceSchedule.longestTextLength) characters without control characters, at least one weekday, a time of day that is a clock time or an offset of at most 12 hours from sunrise or sunset, an action to turn a device on (with a percentage from 0 through 100 for a device that dims) or off, and no other field."
+    case .invalidTimer: "A timer needs a name of 1 through \(ServiceSchedule.longestTextLength) characters without control characters, a delay of 1 through \(ServiceTimer.longestDelaySeconds) seconds, an action to turn a device on (with a percentage from 0 through 100 for a device that dims) or off, and no other field."
+    case .unknownSchedule: "Unknown schedule."
+    case .unknownTimer: "Unknown timer."
+    case .scheduleLimitReached: "The service keeps at most \(ServiceSchedule.maximumCount) schedules. Remove one first."
+    case .timerLimitReached: "The service keeps at most \(ServiceTimer.maximumCount) timers. Remove one first."
+    case .schedulesNotSaved: "The schedules and timers could not be read or saved. Nothing changed."
+    case .locationNotConfigured: "The service has no location, so it can't work out sunrise or sunset. Start it with --latitude and --longitude."
+    case .timeZoneUnavailable: "The service's time zone isn't in this host's time zone database, so it can't work out a time of day. Start it with a --time-zone this host has."
     case .invalidRouteRegistration: "A route needs a kind of 1 through \(RouteStore.longestKind) lowercase letters, digits and `-` that starts with a letter and isn't `lan`, and a ticket of 1 through \(RouteStore.longestTicket) printable ASCII characters without spaces, and no other field."
     case .unknownRouteRegistration: "No route is registered for that kind."
     case .routeRegistrationLimitReached: "The service keeps at most \(RouteStore.maximumRoutes) routes. Remove one first."

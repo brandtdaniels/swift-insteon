@@ -1158,6 +1158,7 @@ var HubLocation.acceptsCredentials
 var HubLocation.host
 var HubLocation.insteonID
 var HubLocation.port
+var HubProNetwork.reportedTime
 var HubProNetwork.softwareVersions
 var InstructionStep.expectation
 var InstructionStep.isOnOtherDevice

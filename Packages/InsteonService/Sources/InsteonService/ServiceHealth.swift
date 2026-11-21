@@ -32,9 +32,11 @@ public struct ServiceHealth: Equatable, Sendable {
   public let persistence: PersistenceOutcome
   /// When this report was made.
   public let checkedAt: Date
+  /// What else is worth knowing, such as a time zone the host doesn't have. It doesn't change readiness.
+  public let notes: [ServiceHealthNote]
 
   /// Creates a report.
-  public init(readiness: Readiness, modem: ModemConnectionState, lastHardwareExchange: Date?, lastPoll: Date? = nil, deviceInformationUpdated: Date?, persistence: PersistenceOutcome, checkedAt: Date) {
+  public init(readiness: Readiness, modem: ModemConnectionState, lastHardwareExchange: Date?, lastPoll: Date? = nil, deviceInformationUpdated: Date?, persistence: PersistenceOutcome, checkedAt: Date, notes: [ServiceHealthNote] = []) {
     self.readiness = readiness
     self.modem = modem
     self.lastHardwareExchange = lastHardwareExchange
@@ -42,5 +44,6 @@ public struct ServiceHealth: Equatable, Sendable {
     self.deviceInformationUpdated = deviceInformationUpdated
     self.persistence = persistence
     self.checkedAt = checkedAt
+    self.notes = notes
   }
 }

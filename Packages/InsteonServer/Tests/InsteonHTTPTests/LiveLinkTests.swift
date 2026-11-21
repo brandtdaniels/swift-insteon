@@ -278,6 +278,12 @@ struct FrameActionTests {
     #expect(action(frame.replacingOccurrences(of: "\"firedAt\"", with: "\"name\":\"wet\",\"firedAt\"")) == "ignore")
   }
 
+  @Test func aScheduleRunIsIgnoredSoNoCardRefreshes() {
+    let frame = #"{"version":1,"runId":"run1","sequence":8,"kind":"schedule","scheduleId":"porch","name":"Porch light","source":"schedule","address":"1A.2B.3C","outcome":"acknowledged","firedAt":"2027-01-15T08:00:00Z","nextRun":"2027-01-16T08:00:00Z"}"#
+    #expect(action(frame) == "ignore")
+    #expect(action(frame.replacingOccurrences(of: "\"acknowledged\"", with: "\"unavailable\",\"cause\":\"hubUnreachable\",\"message\":\"The Hub is away.\"")) == "ignore")
+  }
+
   @Test func theFramesThatChangeWhatThePageShowsStillDo() {
     #expect(action(#"{"version":1,"kind":"commandCompleted","address":"1A.2B.3C"}"#) == "refreshCard")
     #expect(action(#"{"version":1,"kind":"identified","address":"1a.2b.3c"}"#) == "refreshCard")

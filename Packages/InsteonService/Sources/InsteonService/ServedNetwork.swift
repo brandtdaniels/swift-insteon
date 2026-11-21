@@ -34,6 +34,16 @@ public protocol ServedNetwork: Sendable {
   /// connection, if one does.
   func changes() async throws -> NetworkChanges
 
+  /// The local time the Hub reported when the connection opened, as it wrote it, or `nil` for a
+  /// connection that doesn't report one. Reading it changes nothing on the Hub.
+  func reportedLocalTime() async -> String?
+
+}
+
+extension ServedNetwork {
+
+  func reportedLocalTime() async -> String? { nil }
+
 }
 
 extension ServedNetwork {
@@ -103,5 +113,7 @@ struct HubProServedNetwork: ServedNetwork {
   func prepare() async throws {}
 
   func changes() async throws -> NetworkChanges { .polled(network.changes()) }
+
+  func reportedLocalTime() async -> String? { await network.reportedTime }
 
 }

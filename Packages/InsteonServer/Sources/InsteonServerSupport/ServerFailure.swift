@@ -42,6 +42,9 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case advertiseURLInvalid = "advertise_url_invalid"
     case homeNameInvalid = "home_name_invalid"
     case pollIntervalInvalid = "poll_interval_invalid"
+    case locationInvalid = "location_invalid"
+    case timeZoneInvalid = "time_zone_invalid"
+    case schedulesFileUnusable = "schedules_file_unusable"
     case pairingOptionsInvalid = "pairing_options_invalid"
     case modemConnectionEnded = "modem_connection_ended"
     case modemUnreachable = "modem_unreachable"
@@ -148,6 +151,8 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case .invalidAdvertiseURL: ServerFailure(.advertiseURLInvalid, "--advertise-url must be an http or https address with a host, such as http://insteon.local:8080, and no credentials, path or query.", configurationStatus)
     case .invalidClient: ServerFailure(.pairingOptionsInvalid, "pair needs --name with 1 through 64 characters and no control characters, and takes --scope read, control or admin. Run insteon-server pair --help.", configurationStatus)
     case .invalidPollInterval: ServerFailure(.pollIntervalInvalid, "--poll-interval must be a whole number of seconds from 2 through 3600.", configurationStatus)
+    case .invalidLocation: ServerFailure(.locationInvalid, "--latitude and --longitude are given together: latitude from -90 through 90 and longitude from -180 through 180, in degrees.", configurationStatus)
+    case .invalidTimeZone: ServerFailure(.timeZoneInvalid, "--time-zone must be an IANA time zone's name, such as America/Los_Angeles.", configurationStatus)
     case .invalidHomeName: ServerFailure(.homeNameInvalid, "--home-name must be 1 through 64 characters without control characters.", configurationStatus)
     }
   }
@@ -168,6 +173,8 @@ public struct ServerFailure: Error, Equatable, Sendable {
       ServerFailure(.clientFileUnusable, "The client file \(path) couldn't be read or isn't in a format this server reads, so it was left as it is. Move it aside to start with no clients; every client must pair again.", configurationStatus)
     case let .notificationRulesFileUnusable(path):
       ServerFailure(.notificationRulesFileUnusable, "The notification rules file \(path) couldn't be read or isn't in a format this server reads, so it was left as it is. Move it aside to start with no rules.", configurationStatus)
+    case let .schedulesFileUnusable(path):
+      ServerFailure(.schedulesFileUnusable, "The schedules file \(path) couldn't be read or isn't in a format this server reads, so it was left as it is. Move it aside to start with no schedules or timers.", configurationStatus)
     case let .routesFileUnusable(path):
       ServerFailure(.routesFileUnusable, "The routes file \(path) couldn't be read or isn't in a format this server reads, so it was left as it is. Move it aside to start with no registered routes; each transport registers again when it starts.", configurationStatus)
     case let .stateFileUnusable(path, reason):

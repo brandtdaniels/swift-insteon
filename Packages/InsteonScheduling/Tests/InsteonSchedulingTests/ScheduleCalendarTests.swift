@@ -49,12 +49,13 @@ struct ScheduleCalendarTests {
 
   }
 
-  // 2:30 a.m. doesn't exist on March 8, so it runs at 3:30 a.m. daylight time.
-  @Test func runsATimeTheClocksSkipAfterTheChange() throws {
+  // 2:30 a.m. doesn't exist on March 8, so it runs once, at 3:00 a.m. daylight time, when the
+  // skipped hour ends.
+  @Test func runsATimeTheClocksSkipWhenTheSkippedHourEnds() throws {
 
     let early = Schedule(time: .clock(hour: 2, minute: 30))
 
-    #expect(schedules.nextRun(of: early, after: try date("2026-03-07T12:00:00Z")) == (try date("2026-03-08T09:30:00Z")))
+    #expect(schedules.nextRun(of: early, after: try date("2026-03-07T12:00:00Z")) == (try date("2026-03-08T09:00:00Z")))
 
   }
 

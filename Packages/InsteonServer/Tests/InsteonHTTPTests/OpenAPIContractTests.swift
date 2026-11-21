@@ -3,6 +3,7 @@ import Hummingbird
 import HummingbirdTesting
 import HTTPTypes
 import InsteonCore
+import InsteonScheduling
 import InsteonService
 import Testing
 @testable import InsteonHTTP
@@ -220,6 +221,8 @@ struct OpenAPIContractTests {
         validate(try json(HealthDTO(health)), as: "Health", in: document)
       }
     }
+    let noted = ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000), notes: [.timeZoneUnavailable("Not/AZone"), .hubClockDrift(seconds: 90)])
+    validate(try json(HealthDTO(noted)), as: "Health", in: document)
 
     let readings: [DeviceStatus.Reading] = [.percent(50), .onOff(true), .named("Quiet"), .raw]
     for reading in readings {
@@ -301,7 +304,14 @@ struct OpenAPIContractTests {
       .modemUnavailable(.hubUnreachable), .modemUnavailable(.hubErrorStatus(503)), .modemReconnected,
       .notification(ServiceNotification(ruleID: "basement-leak", ruleName: "Basement leak", device: address, firedAt: Date(timeIntervalSince1970: 1_800_000_000), eventName: nil)),
       .notification(ServiceNotification(ruleID: "basement-leak", ruleName: "Basement leak", device: address, firedAt: Date(timeIntervalSince1970: 1_800_000_000), eventName: "wet"))
-    ]
+    ] + [
+      ScheduleRun.Outcome.acknowledged, .missed, .unavailable(.hubUnreachable), .refused(.notLinked), .unknown
+    ].flatMap { outcome in
+      [
+        ServiceEvent.schedule(ScheduleRun(source: .schedule, id: "porch", name: "Porch light", device: address, outcome: outcome, firedAt: Date(timeIntervalSince1970: 1_800_000_000), nextRun: Date(timeIntervalSince1970: 1_800_086_400))),
+        .schedule(ScheduleRun(source: .timer, id: "porch-off", name: "Porch off", device: address, outcome: outcome, firedAt: Date(timeIntervalSince1970: 1_800_000_000), nextRun: nil))
+      ]
+    }
     var kinds = Set<String>()
     for (index, event) in events.enumerated() {
       let frame = EventDTO(event, at: EventCursor(runID: "run1", sequence: UInt64(index + 1)))
@@ -349,6 +359,56 @@ struct OpenAPIContractTests {
     for body in refused {
       #expect(!validator.validate(try JSONSerialization.jsonObject(with: Data(body.utf8)), against: request, path: "NotificationRuleRequest").isEmpty, "\(body)")
       #expect((try? NotificationRuleBody(Data(body.utf8))) == nil, "\(body)")
+    }
+  }
+
+  @Test func theScheduleAndTimerTypesSatisfyTheirSchemasAndTheRequestSchemasMatchWhatTheServerAccepts() async throws {
+    let (_, document) = try await fetch()
+    let schedules = [
+      ServiceSchedule(id: "porch", name: "Porch light", when: Schedule(time: .clock(hour: 18, minute: 30), weekdays: [.monday, .friday]), action: ScheduledAction(device: address, kind: .on(levelPercent: 80)), catchUp: true),
+      ServiceSchedule(id: "dusk", name: "Dusk", when: Schedule(time: .sunset(offset: .seconds(-900))), action: ScheduledAction(device: address, kind: .on(levelPercent: nil))),
+      ServiceSchedule(id: "dawn", name: "Dawn", isEnabled: false, when: Schedule(time: .sunrise(offset: .zero)), action: ScheduledAction(device: address, kind: .off))
+    ]
+    let next = Date(timeIntervalSince1970: 1_800_086_400)
+    validate(try json(ScheduleListDTO(schedules: schedules.map { ScheduleRecord(ScheduleEntry(schedule: $0, nextRun: $0.isEnabled ? next : nil)) })), as: "ScheduleList", in: document)
+    validate(try json(ScheduleListDTO(schedules: [])), as: "ScheduleList", in: document)
+    for schedule in schedules { validate(try json(ScheduleStoredDTO(schedule: ScheduleRecord(ScheduleEntry(schedule: schedule, nextRun: next)))), as: "ScheduleStored", in: document) }
+    let timer = ServiceTimer(id: "porch-off", name: "Porch off", delaySeconds: 600, action: ScheduledAction(device: address, kind: .off))
+    validate(try json(TimerListDTO(timers: [TimerRecord(TimerEntry(timer: timer, dueAt: next, remainingSeconds: 600))])), as: "TimerList", in: document)
+    validate(try json(TimerListDTO(timers: [])), as: "TimerList", in: document)
+    validate(try json(TimerStoredDTO(timer: TimerRecord(TimerEntry(timer: timer, dueAt: next, remainingSeconds: 600)))), as: "TimerStored", in: document)
+
+    let validator = SchemaValidator(document: document)
+    let scheduleRequest: [String: Any] = ["$ref": "#/components/schemas/ScheduleRequest"]
+    let accepted = [
+      ScheduleRoutesTests.body,
+      #"{"name":"Dusk","when":{"time":{"kind":"sunset","offsetSeconds":-900}},"action":{"device":"1A.2B.3C","action":"off"}}"#,
+      #"{"name":"Dawn","enabled":false,"when":{"time":{"kind":"sunrise"},"weekdays":["saturday"]},"action":{"device":"1A.2B.3C","action":"on"}}"#
+    ]
+    let refused = [
+      "{}", #"{"name":"X"}"#,
+      #"{"when":{"time":{"kind":"clock","hour":8,"minute":0}},"action":{"device":"1A.2B.3C","action":"off"}}"#,
+      #"{"name":"X","when":{"time":{"kind":"clock","hour":8,"minute":0}},"action":{"device":"1A.2B.3C","action":"off"},"extra":1}"#,
+      #"{"name":"X","when":{"time":{"kind":"moonrise"}},"action":{"device":"1A.2B.3C","action":"off"}}"#,
+      #"{"name":"X","when":{"time":{"kind":"clock","hour":8}},"action":{"device":"1A.2B.3C","action":"off"}}"#,
+      #"{"name":"X","when":{"time":{"kind":"clock","hour":8,"minute":0},"weekdays":["funday"]},"action":{"device":"1A.2B.3C","action":"off"}}"#,
+      #"{"name":"X","when":{"time":{"kind":"clock","hour":8,"minute":0}},"action":{"device":"1A.2B.3C","action":"dim"}}"#
+    ]
+    for body in accepted {
+      #expect(validator.validate(try JSONSerialization.jsonObject(with: Data(body.utf8)), against: scheduleRequest, path: "ScheduleRequest").isEmpty, "\(body)")
+      #expect((try? ScheduleBody(Data(body.utf8)).schedule(id: "x")) != nil, "\(body)")
+    }
+    for body in refused {
+      #expect(!validator.validate(try JSONSerialization.jsonObject(with: Data(body.utf8)), against: scheduleRequest, path: "ScheduleRequest").isEmpty, "\(body)")
+      #expect((try? ScheduleBody(Data(body.utf8)).schedule(id: "x")) == nil, "\(body)")
+    }
+
+    let timerRequest: [String: Any] = ["$ref": "#/components/schemas/TimerRequest"]
+    #expect(validator.validate(try JSONSerialization.jsonObject(with: Data(ScheduleRoutesTests.timerBody.utf8)), against: timerRequest, path: "TimerRequest").isEmpty)
+    #expect((try? TimerBody(Data(ScheduleRoutesTests.timerBody.utf8)).timer(id: "x")) != nil)
+    for body in ["{}", #"{"name":"X","delaySeconds":60}"#, #"{"name":"X","delaySeconds":"60","action":{"device":"1A.2B.3C","action":"off"}}"#, #"{"name":"X","delaySeconds":60,"action":{"device":"1A.2B.3C","action":"off"},"extra":1}"#] {
+      #expect(!validator.validate(try JSONSerialization.jsonObject(with: Data(body.utf8)), against: timerRequest, path: "TimerRequest").isEmpty, "\(body)")
+      #expect((try? TimerBody(Data(body.utf8)).timer(id: "x")) == nil, "\(body)")
     }
   }
 

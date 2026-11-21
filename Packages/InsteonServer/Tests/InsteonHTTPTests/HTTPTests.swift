@@ -518,6 +518,10 @@ actor FakeService: InsteonServiceAPI {
   /// The notification rules the service holds, and the refusal every rule call answers with.
   private(set) var rules: [ServiceNotificationRule] = []
   let ruleFailure: NotificationRuleError?
+  /// The schedules and timers the service holds, and the refusal every schedule or timer call answers with.
+  private(set) var storedSchedules: [ServiceSchedule] = []
+  private(set) var storedTimers: [ServiceTimer] = []
+  var scheduleFailure: ScheduleError?
   /// The cursor of each sequenced subscription.
   private(set) var cursors: [EventCursor?] = []
   private var openSources: [AsyncStream<ServiceEvent>.Continuation] = []
@@ -559,6 +563,37 @@ actor FakeService: InsteonServiceAPI {
     let sensor = BackupDevice(address: InsteonAddress(0x0A, 0x0B, 0x0C), unreadable: BackupUnreadable(reason: .notCached))
     return HomeBackup(createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .service, modem: BackupModem(address: InsteonAddress(0x11, 0x22, 0x33), allLinkDatabase: [BackupRecord(state: .inUse, role: .controller, group: 1, address: address, data: [1, 2, 3])]), devices: [lamp, sensor])
   }
+  /// The next run the fake reports for every schedule.
+  static let nextRun = Date(timeIntervalSince1970: 1_800_003_600)
+  func schedules() async throws -> [ScheduleEntry] {
+    if let scheduleFailure { throw scheduleFailure }
+    return storedSchedules.map { ScheduleEntry(schedule: $0, nextRun: $0.isEnabled ? Self.nextRun : nil) }
+  }
+  func putSchedule(_ schedule: ServiceSchedule) async throws -> ScheduleEntry {
+    if let scheduleFailure { throw scheduleFailure }
+    if let index = storedSchedules.firstIndex(where: { $0.id == schedule.id }) { storedSchedules[index] = schedule } else { storedSchedules.append(schedule) }
+    return ScheduleEntry(schedule: schedule, nextRun: schedule.isEnabled ? Self.nextRun : nil)
+  }
+  func removeSchedule(id: String) async throws {
+    if let scheduleFailure { throw scheduleFailure }
+    guard storedSchedules.contains(where: { $0.id == id }) else { throw ScheduleError.unknownSchedule }
+    storedSchedules.removeAll { $0.id == id }
+  }
+  func timers() async throws -> [TimerEntry] {
+    if let scheduleFailure { throw scheduleFailure }
+    return storedTimers.map { TimerEntry(timer: $0, dueAt: Self.nextRun, remainingSeconds: $0.delaySeconds) }
+  }
+  func putTimer(_ timer: ServiceTimer) async throws -> TimerEntry {
+    if let scheduleFailure { throw scheduleFailure }
+    if let index = storedTimers.firstIndex(where: { $0.id == timer.id }) { storedTimers[index] = timer } else { storedTimers.append(timer) }
+    return TimerEntry(timer: timer, dueAt: Self.nextRun, remainingSeconds: timer.delaySeconds)
+  }
+  func removeTimer(id: String) async throws {
+    if let scheduleFailure { throw scheduleFailure }
+    guard storedTimers.contains(where: { $0.id == id }) else { throw ScheduleError.unknownTimer }
+    storedTimers.removeAll { $0.id == id }
+  }
+  func failSchedules(with error: ScheduleError?) { scheduleFailure = error }
   func setQueriesBusy(_ busy: Bool) { queriesBusy = busy }
   func setHealth(_ health: ServiceHealth) { reported = health }
   func health() async -> ServiceHealth { reported }
