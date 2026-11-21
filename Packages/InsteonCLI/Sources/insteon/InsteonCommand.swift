@@ -35,6 +35,15 @@ struct InsteonCommand {
 
       }
 
+      if case let .backupCheck(path) = invocation.subcommand {
+
+        // Needs no modem, and reads neither the environment file nor the Hub's settings.
+        try BackupCommand.check(path: path, printsJSON: invocation.printsJSON)
+
+        return ExitStatus.success
+
+      }
+
       try await run(invocation)
 
       return ExitStatus.success
