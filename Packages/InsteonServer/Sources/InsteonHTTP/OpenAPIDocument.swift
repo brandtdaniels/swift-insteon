@@ -201,6 +201,52 @@ enum OpenAPIDocument {
         "enabled": Schema.boolean,
         "includeDetail": Schema.boolean
       ], required: ["name", "trigger"], description: "A rule without its identifier. Defaults: `cooldownSeconds` 0, `enabled` true, `includeDetail` false."),
+      "HomeBackup": Schema.object([
+        "format": ["type": "integer", "const": 1, "description": "The file's format number. It rises when a reader of an older number could misread the file; a key a reader doesn't know is ignored."],
+        "createdAt": ["type": "string", "format": "date-time", "description": "When the backup was taken, to the second, in UTC."],
+        "source": Schema.string(enum: ["modem", "hubPro", "service"], description: "What the backup was taken from. The service's backup is `service`."),
+        "modem": Schema.ref("BackupModem"),
+        "devices": Schema.array(of: Schema.ref("BackupDevice")),
+        "notificationRules": Schema.array(of: Schema.ref("NotificationRule")),
+        "routes": Schema.array(of: Schema.ref("Route")),
+        "checksum": Schema.string(pattern: "^sha256:[0-9a-f]{64}$", description: "The SHA-256 of the document's JSON without this key, written with sorted keys and no spacing.")
+      ], required: ["format", "createdAt", "source", "devices", "checksum"], description: "A home's Insteon network in one document. It holds no password, client token or Hub address."),
+      "BackupModem": Schema.object([
+        "address": address,
+        "identity": Schema.ref("BackupIdentity"),
+        "allLinkDatabase": Schema.array(of: Schema.ref("BackupRecord")),
+        "unreadable": Schema.ref("BackupUnreadable")
+      ], required: ["address"], description: "The modem. It has `allLinkDatabase` or `unreadable`, and not both."),
+      "BackupDevice": Schema.object([
+        "address": address,
+        "name": Schema.string(description: "A name the Hub gave the device."),
+        "type": Schema.string(description: "What the device is."),
+        "identity": Schema.ref("BackupIdentity"),
+        "engine": Schema.string(enum: ["i1", "i2", "i2cs"], description: "The engine the device runs."),
+        "allLinkDatabase": Schema.ref("BackupDatabase"),
+        "unreadable": Schema.ref("BackupUnreadable")
+      ], required: ["address"], description: "A device. It has `allLinkDatabase` or `unreadable`, and not both."),
+      "BackupIdentity": Schema.object([
+        "category": Schema.string(pattern: "^0x[0-9A-F]{2}$", description: "The category."),
+        "subcategory": Schema.string(pattern: "^0x[0-9A-F]{2}$", description: "The subcategory."),
+        "firmwareVersion": Schema.string(pattern: "^0x[0-9A-F]{2}$", description: "The firmware version, if it is known.")
+      ], required: ["category", "subcategory"]),
+      "BackupDatabase": Schema.object([
+        "delta": Schema.integer(minimum: 0, maximum: 255, description: "The delta the device reported when its database was read."),
+        "records": Schema.array(of: Schema.ref("BackupRecord"))
+      ], required: ["delta", "records"], description: "A device's ALL-Link database in the device's order, ending with the record that marks its end when the whole database was read."),
+      "BackupRecord": Schema.object([
+        "state": Schema.string(enum: ["inUse", "free", "end"], description: "Whether the record holds a link, is free, or marks the end of the database."),
+        "role": Schema.string(enum: ["controller", "responder"], description: "Whether the database's owner controls the group or responds to it."),
+        "group": Schema.integer(minimum: 0, maximum: 255, description: "The owner's own group in a controller record, and the other device's in a responder record."),
+        "address": address,
+        "data": Schema.string(pattern: "^[0-9A-F]{2} [0-9A-F]{2} [0-9A-F]{2}$", description: "The record's three data bytes."),
+        "memory": Schema.string(pattern: "^0x[0-9A-F]{4}$", description: "Where the record is in a device's database. A record of the modem's has none.")
+      ], required: ["state", "role", "group", "address", "data"]),
+      "BackupUnreadable": Schema.object([
+        "reason": Schema.string(enum: ["noAnswer", "rejectedModem", "damagedRecords", "notCached", "unavailableFromSource", "failed", "incomplete"], description: "Why there is no ALL-Link database."),
+        "detail": Schema.string(description: "A short note that holds no address or credential.")
+      ], required: ["reason"]),
       "Route": Schema.object([
         "kind": Schema.string(description: "The transport's identifier."),
         "ticket": Schema.string(description: "What the transport needs to reach the service. Only that transport reads it.")

@@ -369,8 +369,7 @@ struct HomeBackupReaderTests {
       ])
     )
 
-    let info = ModemInfo(address: BackupExample.oldModem, category: 0x03, subcategory: 0x15, firmwareVersion: 0x9E)
-    let backup: HomeBackup = await HomeBackupReader.backup(from: snapshot, modem: info, catalog: nil, createdAt: BackupExample.createdAt)
+    let backup: HomeBackup = await HomeBackupReader.backup(from: snapshot, modem: (BackupExample.oldModem, ReportedIdentity(category: 0x03, subcategory: 0x15, firmwareVersion: 0x9E)), catalog: nil, createdAt: BackupExample.createdAt)
     let byAddress: [InsteonAddress: BackupDevice] = Dictionary(uniqueKeysWithValues: backup.devices.map { ($0.address, $0) })
 
     #expect(backup.source == .service)
@@ -379,6 +378,37 @@ struct HomeBackupReaderTests {
     #expect(byAddress[Self.lamp]?.allLinkDatabase?.isComplete == true)
     #expect(byAddress[Self.lamp]?.engine == .i2)
     #expect(byAddress[Self.plug]?.unreadable?.reason == .notCached)
+    #expect(backup.modem?.identity == BackupIdentity(category: 0x03, subcategory: 0x15, firmwareVersion: 0x9E))
+
+  }
+
+  @Test func marksTheModemsDatabaseNotCachedWhenTheSnapshotHoldsNone() async throws {
+
+    let backup: HomeBackup = await HomeBackupReader.backup(from: NetworkSnapshot(), modem: (BackupExample.oldModem, nil), catalog: nil, createdAt: BackupExample.createdAt)
+
+    #expect(backup.modem?.unreadable?.reason == .notCached)
+    #expect(backup.modem?.allLinkDatabase == nil)
+
+  }
+
+  @Test func holdsNoModemWhenItsAddressIsNotKnown() async throws {
+
+    let backup: HomeBackup = await HomeBackupReader.backup(from: NetworkSnapshot(), modem: nil, catalog: nil, createdAt: BackupExample.createdAt)
+
+    #expect(backup.modem == nil)
+
+  }
+
+  @Test func remembersWhatTheModemReportedAboutItself() async throws {
+
+    let modem = await Self.fixture()
+    let net: DeviceNetwork = network(modem)
+
+    #expect(await net.knownModemInfo == nil)
+
+    let info: ModemInfo = try await net.modemInfo()
+
+    #expect(await net.knownModemInfo == info)
 
   }
 
@@ -388,7 +418,7 @@ struct HomeBackupReaderTests {
 
     snapshot.registry.identities[BackupExample.lamp] = ReportedIdentity(category: 0x01, subcategory: 0x02, firmwareVersion: 0x41)
 
-    let backup: HomeBackup = await HomeBackupReader.backup(from: snapshot, modem: ModemInfo(address: BackupExample.oldModem, category: 0x03, subcategory: 0x15, firmwareVersion: 0x9E), catalog: nil, createdAt: BackupExample.createdAt)
+    let backup: HomeBackup = await HomeBackupReader.backup(from: snapshot, modem: (BackupExample.oldModem, nil), catalog: nil, createdAt: BackupExample.createdAt)
     let text: String = String(decoding: try backup.encoded(), as: UTF8.self).lowercased()
 
     for forbidden in ["password", "token", "secret", "hub.example.invalid", "25105", "authorization"] {

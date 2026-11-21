@@ -1,4 +1,5 @@
 import Foundation
+import InsteonDeviceCatalog
 import InsteonHubPro
 import InsteonLinking
 import InsteonModem
@@ -137,13 +138,14 @@ public enum HomeBackupReader {
   ///
   /// - Parameters:
   ///   - snapshot: What the network knows.
-  ///   - modem: The modem's address and identity, or `nil` if they aren't known.
+  ///   - modem: The modem's address and the identity it reported, or `nil` if the address isn't
+  ///     known.
   ///   - catalog: The catalog that names the devices' products, or `nil`.
   ///   - createdAt: When the backup is taken.
   /// - Returns: The backup, from a service as its source.
-  public static func backup(from snapshot: NetworkSnapshot, modem: ModemInfo?, catalog: ProductCatalog?, createdAt: Date) async -> HomeBackup {
+  public static func backup(from snapshot: NetworkSnapshot, modem: (address: InsteonAddress, identity: ReportedIdentity?)?, catalog: DeviceCatalog?, createdAt: Date) async -> HomeBackup {
 
-    let registry: DeviceRegistry = DeviceRegistry(catalog: catalog?.catalog, snapshot: snapshot.registry)
+    let registry: DeviceRegistry = DeviceRegistry(catalog: catalog, snapshot: snapshot.registry)
     let records: [BackupRecord]? = snapshot.modemDatabase.map { (records: [AllLinkRecord]) -> [BackupRecord] in records.map { BackupRecord(LinkRecord($0)) } }
 
     var addresses: Set<InsteonAddress> = Set(snapshot.registry.identities.keys).union(snapshot.devices.keys)
@@ -181,9 +183,9 @@ public enum HomeBackupReader {
 
     }
 
-    let backupModem: BackupModem? = modem.map { (info: ModemInfo) -> BackupModem in
+    let backupModem: BackupModem? = modem.map { (info: (address: InsteonAddress, identity: ReportedIdentity?)) -> BackupModem in
 
-      let identity: BackupIdentity = BackupIdentity(ReportedIdentity(category: info.category, subcategory: info.subcategory, firmwareVersion: info.firmwareVersion))
+      let identity: BackupIdentity? = info.identity.map(BackupIdentity.init)
 
       if let records {
 

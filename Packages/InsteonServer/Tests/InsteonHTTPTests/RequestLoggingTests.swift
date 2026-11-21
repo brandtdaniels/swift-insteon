@@ -178,6 +178,7 @@ private actor ScriptedService: InsteonServiceAPI {
   func notificationRules() async throws -> [ServiceNotificationRule] { [] }
   func putNotificationRule(_ rule: ServiceNotificationRule) async throws {}
   func removeNotificationRule(id: String) async throws {}
+  func homeBackup() async -> HomeBackup { HomeBackup(createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .service, modem: nil, devices: []) }
   func health() async -> ServiceHealth {
     ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000))
   }

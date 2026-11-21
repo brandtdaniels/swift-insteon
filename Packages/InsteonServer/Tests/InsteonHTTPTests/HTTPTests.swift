@@ -548,6 +548,17 @@ actor FakeService: InsteonServiceAPI {
     guard rules.contains(where: { $0.id == id }) else { throw NotificationRuleError.unknownRule }
     rules.removeAll { $0.id == id }
   }
+  /// What the service says its backup holds, and how many times it was asked.
+  private(set) var backups = 0
+  func homeBackup() async -> HomeBackup {
+    backups += 1
+    let lamp = BackupDevice(address: address, type: "Example", identity: BackupIdentity(category: 0x01, subcategory: 0x02, firmwareVersion: 0x41), engine: .i2, allLinkDatabase: BackupDatabase(delta: 0x07, records: [
+      BackupRecord(state: .inUse, role: .responder, group: 1, address: InsteonAddress(0x11, 0x22, 0x33), data: [0xFF, 0x1F, 0x01], memoryAddress: 0x0FFF),
+      BackupRecord(state: .end, role: .responder, group: 0, address: InsteonAddress(0, 0, 0), data: [0, 0, 0], memoryAddress: 0x0FF7)
+    ]))
+    let sensor = BackupDevice(address: InsteonAddress(0x0A, 0x0B, 0x0C), unreadable: BackupUnreadable(reason: .notCached))
+    return HomeBackup(createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .service, modem: BackupModem(address: InsteonAddress(0x11, 0x22, 0x33), allLinkDatabase: [BackupRecord(state: .inUse, role: .controller, group: 1, address: address, data: [1, 2, 3])]), devices: [lamp, sensor])
+  }
   func setQueriesBusy(_ busy: Bool) { queriesBusy = busy }
   func setHealth(_ health: ServiceHealth) { reported = health }
   func health() async -> ServiceHealth { reported }

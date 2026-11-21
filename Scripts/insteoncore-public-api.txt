@@ -1012,6 +1012,7 @@ var DeviceMessageSummary.isExtended
 var DeviceMessageSummary.sender
 var DeviceMessageSummary.type
 var DeviceNetwork.hubLocation
+var DeviceNetwork.knownModemInfo
 var DeviceNetwork.linking
 var DeviceNetwork.monitor
 var DeviceOperating.address

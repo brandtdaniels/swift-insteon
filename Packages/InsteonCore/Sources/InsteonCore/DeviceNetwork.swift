@@ -69,6 +69,7 @@ public actor DeviceNetwork {
   private var modemRecords: [AllLinkRecord]?
 
   private var hub: HubLocation?
+  private var reportedModemInfo: ModemInfo?
 
   /// Whether the modem is the Hub's, because the network was created with a Hub, so the
   /// modem's address is the Hub's Insteon ID.
@@ -228,6 +229,13 @@ public actor DeviceNetwork {
     state.allLinkDatabase = await cache.copies[device]
 
     return state.isEmpty ? nil : state
+
+  }
+
+  /// What the modem last reported about itself to ``modemInfo()``, or `nil` if it hasn't been asked.
+  public var knownModemInfo: ModemInfo? {
+
+    reportedModemInfo
 
   }
 
@@ -449,6 +457,8 @@ public actor DeviceNetwork {
   public func modemInfo() async throws -> ModemInfo {
 
     let info: ModemInfo = try await modem.modemInfo()
+
+    reportedModemInfo = info
 
     if isHubsModem {
 

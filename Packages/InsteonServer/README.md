@@ -153,6 +153,7 @@ scope, command all devices known by this service. Per-device permissions aren't 
 | PUT, DELETE | `/api/v1/notification-rules/{id}` | Store or remove a rule (`admin`) |
 | GET | `/api/v1/routes` | List the routes transport plugins registered (`read`; see Writing a plugin) |
 | PUT, DELETE | `/api/v1/routes/{kind}` | Register or remove a transport's route (`admin`) |
+| GET | `/api/v1/backup` | A backup of the cached network, the format `insteon backup` writes (`admin`; see Backups) |
 | GET | `/devices/1A.2B.3C` | Authenticated card fragment from cached state; no hardware polling |
 
 JSON commands need `Content-Type: application/json` and `X-Insteon-Request: 1`. Example body:
@@ -604,6 +605,15 @@ existing response. A client or plugin written against an earlier `/api/v1` keeps
 - The routes file and the notifier's state file are versioned (`"version": 1`). A file in a newer format is
   left as it is rather than rewritten.
 - Changing the meaning of a ticket, the registration order, or the `lan` route being first needs `/api/v2`.
+
+## Backups
+
+`GET /api/v1/backup` (`admin`) answers with the same document format `insteon backup` writes, as JSON with a `checksum`: the modem's address and ALL-Link database, each device's ALL-Link database, name and identity, the notification rules and the routes. It answers from the cache and sends nothing to the Hub or modem, so a device the service holds no ALL-Link database copy for is listed with the reason `notCached`; run `insteon backup` for a backup that reads each device. The document holds no gateway password, client token or Hub address. A rules or routes file that can't be read fails the request with `notificationRulesNotSaved` or `routeRegistrationsNotSaved`, rather than leaving them out.
+
+```sh
+curl -s -H "Authorization: Bearer $(cat admin.token)" $BASE/api/v1/backup > home.json
+insteon backup --check home.json
+```
 
 ## Persistence and lifecycle
 

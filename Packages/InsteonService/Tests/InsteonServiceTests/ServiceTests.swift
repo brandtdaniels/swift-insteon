@@ -102,6 +102,45 @@ struct ServiceTests {
     #expect(await modem.linkingSteps.isEmpty)
   }
 
+  @Test func aBackupFromTheCacheSendsNothingAndNamesTheDevicesItHasNoDatabaseFor() async throws {
+    let modem = InMemoryModem()
+    let service = InsteonService(network: network(modem))
+    let backup = await service.homeBackup()
+    #expect(backup.source == .service)
+    #expect(backup.devices.map(\.address) == [address])
+    #expect(backup.devices.first?.unreadable?.reason == .notCached)
+    #expect(await modem.linkingSteps.isEmpty)
+    #expect(await modem.modemDatabaseReads == 0)
+    #expect(await modem.writes.isEmpty)
+  }
+
+  @Test func aBackupNamesTheModemOnceItIsKnown() async throws {
+    let modem = InMemoryModem()
+    let net = network(modem)
+    let service = InsteonService(network: net)
+    #expect(await service.homeBackup().modem == nil)
+    _ = try await net.modemInfo()
+    let backup = await service.homeBackup()
+    #expect(backup.modem?.address == InsteonAddress(0x11, 0x22, 0x33))
+    #expect(backup.modem?.identity == BackupIdentity(category: 0x03, subcategory: 0x15, firmwareVersion: 0x9E))
+  }
+
+  @Test func aBackupAnswersWhileACommandIsInFlightWithoutTakingTheGate() async throws {
+    let modem = InMemoryModem()
+    let gate = OperationGate()
+    await modem.setBeforeOperation { _ in await gate.pause() }
+    let service = InsteonService(network: network(modem))
+    try await withThrowingTaskGroup(of: CommandReceipt.self) { group in
+      group.addTask { try await service.execute(ServiceCommand(address: address, action: .on)) }
+      await gate.waitUntilPaused()
+      let backup = await service.homeBackup()
+      #expect(backup.devices.map(\.address) == [address])
+      await gate.release()
+      let receipt = try await group.next()
+      #expect(receipt?.outcome == .acknowledged)
+    }
+  }
+
   @Test func successfulControlsAndStatusHaveTypedResults() async throws {
     let modem = InMemoryModem()
     let store = MemoryStore()
