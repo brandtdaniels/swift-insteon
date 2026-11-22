@@ -216,11 +216,13 @@ public enum HomeBackupReader {
 
       } catch {
 
-        if let unreadable = try unreadable(for: error) {
+        guard let unreadable = try unreadable(for: error) else {
 
-          return BackupDevice(address: address, unreadable: unreadable)
+          throw error
 
         }
+
+        return BackupDevice(address: address, unreadable: unreadable)
 
       }
 

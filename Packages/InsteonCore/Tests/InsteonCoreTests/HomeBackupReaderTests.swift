@@ -231,6 +231,36 @@ struct HomeBackupReaderTests {
 
   }
 
+  @Test func sendsNothingMoreWhenTheModemGoesAwayWhileAskingADeviceWhoItIs() async throws {
+
+    let modem = await Self.fixture(devices: [Self.lamp])
+    let sent = DeviceRequestCount()
+
+    await modem.setBeforeOperation { (operation: InMemoryModem.Operation) async throws -> Void in
+
+      switch operation {
+      case let .standardRequest(message) where message.destination == Self.lamp:
+        await sent.add()
+        throw ModemError.connectionClosed
+      case let .extendedRequest(message) where message.destination == Self.lamp:
+        await sent.add()
+        throw ModemError.connectionClosed
+      default:
+        break
+      }
+
+    }
+
+    await #expect(throws: ModemError.connectionClosed) {
+
+      _ = try await HomeBackupReader.read(network: network(modem, known: []), createdAt: BackupExample.createdAt)
+
+    }
+
+    #expect(await sent.count == 1)
+
+  }
+
   // MARK: - An interrupted backup
 
   @Test func throwsCancellationAndReturnsNothingWhenInterruptedWhileReadingADevice() async throws {
@@ -440,5 +470,18 @@ final class WriteWatch: @unchecked Sendable {
   var all: [String] { lock.withLock { items } }
 
   func add(_ item: String) { lock.withLock { items.append(item) } }
+
+}
+
+/// How many requests reached a device.
+private actor DeviceRequestCount {
+
+  private(set) var count: Int = 0
+
+  func add() {
+
+    count += 1
+
+  }
 
 }
