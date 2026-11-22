@@ -4,16 +4,16 @@
 ///
 /// | Bits | Field |
 /// | --- | --- |
-/// | 7–5 | ``MessageFlags/messageType`` |
+/// | 7-5 | ``MessageFlags/messageType`` |
 /// | 4 | ``MessageFlags/isExtended`` |
-/// | 3–2 | ``MessageFlags/hopsLeft`` |
-/// | 1–0 | ``MessageFlags/maxHops`` |
+/// | 3-2 | ``MessageFlags/hopsLeft`` |
+/// | 1-0 | ``MessageFlags/maxHops`` |
 ///
 /// For example, ``MessageFlags/direct`` is `0x0F`: a standard-length direct message that other devices
 /// may repeat up to three times.
 public struct MessageFlags: Hashable, Sendable {
 
-  /// The kind of an Insteon message, from bits 7–5 of the flags byte.
+  /// The kind of an Insteon message, from bits 7-5 of the flags byte.
   public enum MessageType: UInt8, CaseIterable, Hashable, Sendable {
 
     /// A message addressed to a single device.

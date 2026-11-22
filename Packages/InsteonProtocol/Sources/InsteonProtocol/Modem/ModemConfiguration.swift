@@ -3,8 +3,8 @@
 /// All flags default to off. Setting the configuration replaces every flag at once, so read
 /// the current flags with ``SerialCommand/getModemConfiguration`` before changing one.
 ///
-/// The Insteon Developer's Guide reserves bits 0–3. The Insteon Hub Developer's Guide gives bit 3
-/// a meaning and reserves bits 0–2, and other firmware uses bit 2 to ignore X10 and bits 0 and 1
+/// The Insteon Developer's Guide reserves bits 0-3. The Insteon Hub Developer's Guide gives bit 3
+/// a meaning and reserves bits 0-2, and other firmware uses bit 2 to ignore X10 and bits 0 and 1
 /// for other options, so leave the
 /// bits you don't set as the modem reports them.
 public struct ModemConfiguration: OptionSet, Hashable, Sendable {

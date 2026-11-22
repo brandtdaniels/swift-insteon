@@ -92,20 +92,24 @@ enum DiscoverCommand {
 
     }
 
-    let rows: [[String]] = found.map { hub in
+    let sources: [DiscoveredHub] = zip(found, hubs).map { (hub: FoundHub, candidate: HubCandidate) -> DiscoveredHub in
 
-      [
-        "\(hub.host):\(hub.port)",
-        hub.insteonID ?? "-",
-        hub.product ?? hub.unitType ?? "-",
-        hub.foundBy.compactMap { DiscoveryMethod(rawValue: $0)?.label }.joined(separator: ", ")
-      ]
+      DiscoveredHub(
+        product: hub.product ?? hub.unitType,
+        host: hub.host,
+        port: hub.port,
+        insteonID: hub.insteonID,
+        foundBy: hub.foundBy.compactMap { DiscoveryMethod(rawValue: $0)?.label },
+        isHubPro: candidate.isHubPro
+      )
 
     }
 
-    Output.table([["ADDRESS", "INSTEON ID", "PRODUCT", "FOUND BY"]] + rows)
+    for line in hubFileLines(sources) {
 
-    printHubFiles(hubs)
+      Output.line(line)
+
+    }
 
     if let note = HubText.candidateNote(options) {
 
@@ -121,15 +125,25 @@ enum DiscoverCommand {
 
   }
 
-  /// Prints the file to save each Hub's settings in, and the command that uses the Hub by name.
-  private static func printHubFiles(_ hubs: [HubCandidate]) {
+  /// The lines that list the Hubs and say where to save each one's settings and how to use it by
+  /// name, or that it's already saved.
+  private static func hubFileLines(_ hubs: [DiscoveredHub]) -> [String] {
 
-    let directory = HubFiles(store: LocalHubFiles(), environment: ProcessInfo.processInfo.environment).hubsDirectory
-    let sources = hubs.map { HubFileSuggestion.Source(isHubPro: $0.isHubPro, insteonID: $0.insteonID.map { "\($0)" }, host: $0.host, port: $0.port) }
+    let environment = ProcessInfo.processInfo.environment
+    let files = HubFiles(store: LocalHubFiles(), environment: environment)
+    let saved: [SavedHubFile] = files.listing().entries.compactMap { (entry: HubListing.Entry) -> SavedHubFile? in
 
-    Output.line()
-    Output.line(HubFileSuggestion.note)
-    Output.table(HubFileSuggestion.rows(for: sources, directory: directory))
+      guard let name = entry.name, let address = entry.address, entry.problem == nil else {
+
+        return nil
+
+      }
+
+      return SavedHubFile(name: name, address: address)
+
+    }
+
+    return DiscoverText.lines(for: hubs, directory: files.hubsDirectory, home: environment["HOME"], saved: saved)
 
   }
 

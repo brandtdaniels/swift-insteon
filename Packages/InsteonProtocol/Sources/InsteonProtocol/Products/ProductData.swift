@@ -6,11 +6,11 @@
 /// | Byte | Contents |
 /// | --- | --- |
 /// | D1 | Reserved, `0x00` |
-/// | D2–D4 | ``productKey``, most significant byte first |
+/// | D2-D4 | ``productKey``, most significant byte first |
 /// | D5 | ``category`` |
 /// | D6 | ``subcategory`` |
-/// | D7–D8 | Reserved, `0xFF` |
-/// | D9–D14 | ``userDefined``, which some manufacturers use for the firmware version |
+/// | D7-D8 | Reserved, `0xFF` |
+/// | D9-D14 | ``userDefined``, which some manufacturers use for the firmware version |
 ///
 /// Later sources agree on D2 through D6 but give D1 as a group or button and D7 as a version, so
 /// this type doesn't read D1, D7 or D8.
