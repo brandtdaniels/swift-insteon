@@ -40,6 +40,7 @@ struct RunningServer {
   /// A request with extra headers, answering the response headers as well.
   func exchange(_ path: String, method: String = "GET", body: String? = nil, headers: [String: String], password: String, bearer: String? = nil) async throws -> (status: Int, json: [String: Any], headers: [String: String]) {
     var request = URLRequest(url: URL(string: "http://127.0.0.1:\(port)\(path)")!)
+    request.timeoutInterval = 20
     request.httpMethod = method
     request.setValue(bearer.map { "Bearer " + $0 } ?? "Basic " + Data(("insteon:" + password).utf8).base64EncodedString(), forHTTPHeaderField: "Authorization")
     if let body {
@@ -59,6 +60,10 @@ struct RunningServer {
     let response: URLResponse
     do {
       (data, response) = try await session.data(for: request)
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch let error as URLError where error.code == .cancelled {
+      throw error
     } catch {
       throw HarnessRequestError(description: "\(method) \(path) on port \(port) failed: \(error)")
     }
