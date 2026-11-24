@@ -65,6 +65,13 @@ struct HealthDTO: Encodable {
   let lastPollAgeSeconds: Int?
   let snapshotAgeSeconds: Int?
   let persistence: String
+  let notes: [Note]
+
+  /// Something worth knowing that doesn't change what the service can do.
+  struct Note: Encodable {
+    let code: String
+    let message: String
+  }
 
   struct Modem: Encodable {
     let connected: Bool
@@ -79,20 +86,21 @@ struct HealthDTO: Encodable {
 
   init(_ health: ServiceHealth) {
     switch health.readiness {
-    case .starting: status = "starting"
-    case .ready: status = "ready"
-    case .degraded: status = "degraded"
+    case .starting: status = HealthStatusName.starting.rawValue
+    case .ready: status = HealthStatusName.ready.rawValue
+    case .degraded: status = HealthStatusName.degraded.rawValue
     }
     modem = Modem(connected: health.modem == .connected, cause: health.modem.cause?.wireName)
     func age(_ date: Date?) -> Int? { date.map { max(0, Int(health.checkedAt.timeIntervalSince($0))) } }
     lastExchangeAgeSeconds = age(health.lastHardwareExchange)
     lastPollAgeSeconds = age(health.lastPoll)
     snapshotAgeSeconds = age(health.deviceInformationUpdated)
-    switch health.persistence {
-    case .notConfigured: persistence = "notConfigured"
-    case .notAttempted: persistence = "notAttempted"
-    case .saved: persistence = "saved"
-    case .failed: persistence = "failed"
+    persistence = PersistenceName(health.persistence).rawValue
+    notes = health.notes.map { note in
+      switch note {
+      case .timeZoneUnavailable: Note(code: HealthNoteCode.timeZoneUnavailable.rawValue, message: "The configured time zone isn't in this host's time zone database, so schedules with a time of day are refused.")
+      case let .hubClockDrift(seconds): Note(code: HealthNoteCode.hubClockDrift.rawValue, message: "The Hub's clock differs from the service's by \(abs(seconds)) seconds. The service never changes a Hub's clock.")
+      }
     }
   }
 
@@ -105,8 +113,9 @@ struct HealthDTO: Encodable {
     try container.encode(lastPollAgeSeconds, forKey: .lastPollAgeSeconds)
     try container.encode(snapshotAgeSeconds, forKey: .snapshotAgeSeconds)
     try container.encode(persistence, forKey: .persistence)
+    try container.encode(notes, forKey: .notes)
   }
-  private enum CodingKeys: String, CodingKey { case version, status, modem, lastExchangeAgeSeconds, lastPollAgeSeconds, snapshotAgeSeconds, persistence }
+  private enum CodingKeys: String, CodingKey { case version, status, modem, lastExchangeAgeSeconds, lastPollAgeSeconds, snapshotAgeSeconds, persistence, notes }
 }
 
 struct DeviceDTO: Encodable {
@@ -133,10 +142,10 @@ struct StatusDTO: Encodable {
   init(_ status: DeviceStatus) {
     group = status.group; value = status.value; isOn = status.isOn
     switch status.reading {
-    case let .percent(number): kind = "percent"; percent = number; label = nil
-    case .onOff: kind = "onOff"; percent = nil; label = nil
-    case let .named(name): kind = "named"; percent = nil; label = name
-    case .raw: kind = "raw"; percent = nil; label = nil
+    case let .percent(number): kind = ReadingKind.percent.rawValue; percent = number; label = nil
+    case .onOff: kind = ReadingKind.onOff.rawValue; percent = nil; label = nil
+    case let .named(name): kind = ReadingKind.named.rawValue; percent = nil; label = name
+    case .raw: kind = ReadingKind.raw.rawValue; percent = nil; label = nil
     }
   }
 }
@@ -149,19 +158,30 @@ struct ReceiptDTO: Encodable {
   let persistence: String
   init(_ receipt: CommandReceipt) {
     address = receipt.address.description
-    outcome = receipt.outcome == .acknowledged ? "acknowledged" : "read"
+    outcome = (receipt.outcome == .acknowledged ? ReceiptOutcome.acknowledged : .read).rawValue
     status = receipt.status.map(StatusDTO.init)
-    switch receipt.persistence {
-    case .notConfigured: persistence = "notConfigured"
-    case .notAttempted: persistence = "notAttempted"
-    case .saved: persistence = "saved"
-    case .failed: persistence = "failed"
-    }
+    persistence = PersistenceName(receipt.persistence).rawValue
+  }
+}
+
+/// Tells a reconnecting client that events it missed can't be replayed, so it refreshes everything.
+struct GapDTO: Encodable {
+  let version = 1
+  let kind = EventKind.gap.rawValue
+  let reason: String
+  let runId: String
+  let sequence: UInt64
+  init(reason: EventGapReason, current: EventCursor) {
+    self.reason = reason.rawValue
+    runId = current.runID
+    sequence = current.sequence
   }
 }
 
 struct EventDTO: Encodable {
   let version = 1
+  let runId: String
+  let sequence: UInt64
   let kind: String
   let address: String?
   let group: Int?
@@ -169,11 +189,47 @@ struct EventDTO: Encodable {
   let productName: String?
   let completion: CommandCompletionDTO?
   let cause: String?
+  let ruleId: String?
+  let ruleName: String?
+  let firedAt: String?
   let message: String?
-  init(_ event: ServiceEvent) {
+  let scheduleId: String?
+  let source: String?
+  let outcome: String?
+  let reason: String?
+  let nextRun: String?
+  init(_ event: ServiceEvent, at position: EventCursor) {
+    runId = position.runID
+    sequence = position.sequence
+    switch event {
+    case let .notification(note):
+      ruleId = note.ruleID; ruleName = note.ruleName
+      firedAt = ISO8601DateFormatter().string(from: note.firedAt)
+    case let .schedule(run):
+      ruleId = nil; ruleName = nil
+      firedAt = ISO8601DateFormatter().string(from: run.firedAt)
+    default:
+      ruleId = nil; ruleName = nil; firedAt = nil
+    }
     switch event {
     case let .modemUnavailable(reason): cause = reason.wireName; message = reason.notice
+    case let .schedule(run):
+      if case let .unavailable(reason) = run.outcome { cause = reason.wireName; message = reason.notice } else { cause = nil; message = nil }
     default: cause = nil; message = nil
+    }
+    if case let .schedule(run) = event {
+      scheduleId = run.id
+      source = (run.source == .timer ? ScheduleSourceName.timer : .schedule).rawValue
+      switch run.outcome {
+      case .acknowledged: outcome = ScheduleOutcomeName.acknowledged.rawValue; reason = nil
+      case .missed: outcome = ScheduleOutcomeName.missed.rawValue; reason = nil
+      case .unavailable: outcome = ScheduleOutcomeName.unavailable.rawValue; reason = nil
+      case let .refused(error): outcome = ScheduleOutcomeName.refused.rawValue; reason = HTTPFailure(error).code.rawValue
+      case .unknown: outcome = ScheduleOutcomeName.unknown.rawValue; reason = nil
+      }
+      nextRun = run.nextRun.map { ISO8601DateFormatter().string(from: $0) }
+    } else {
+      scheduleId = nil; source = nil; outcome = nil; reason = nil; nextRun = nil
     }
     if case let .commandCompleted(command, receipt) = event {
       completion = CommandCompletionDTO(command: command, receipt: receipt)
@@ -182,21 +238,25 @@ struct EventDTO: Encodable {
     }
     switch event {
     case let .commandCompleted(command, _):
-      kind = "commandCompleted"; address = command.address.description; group = nil; name = nil; productName = nil
+      kind = EventKind.commandCompleted.rawValue; address = command.address.description; group = nil; name = nil; productName = nil
     case let .identified(address, productName):
-      kind = "identified"; self.address = address.description; group = nil; name = nil; self.productName = productName
+      kind = EventKind.identified.rawValue; self.address = address.description; group = nil; name = nil; self.productName = productName
     case let .setButtonPressed(address):
-      kind = "setButtonPressed"; self.address = address.description; group = nil; name = nil; productName = nil
+      kind = EventKind.setButtonPressed.rawValue; self.address = address.description; group = nil; name = nil; productName = nil
     case let .groupCommand(address, group, name):
-      kind = "groupCommand"; self.address = address.description; self.group = group; self.name = name; productName = nil
+      kind = EventKind.groupCommand.rawValue; self.address = address.description; self.group = group; self.name = name; productName = nil
     case let .heartbeat(address, group):
-      kind = "heartbeat"; self.address = address.description; self.group = group; name = nil; productName = nil
+      kind = EventKind.heartbeat.rawValue; self.address = address.description; self.group = group; name = nil; productName = nil
     case let .statusChanged(address):
-      kind = "statusChanged"; self.address = address.description; group = nil; name = nil; productName = nil
+      kind = EventKind.statusChanged.rawValue; self.address = address.description; group = nil; name = nil; productName = nil
     case .modemUnavailable:
-      kind = "modemUnavailable"; address = nil; group = nil; name = nil; productName = nil
+      kind = EventKind.modemUnavailable.rawValue; address = nil; group = nil; name = nil; productName = nil
     case .modemReconnected:
-      kind = "reconnected"; address = nil; group = nil; name = nil; productName = nil
+      kind = EventKind.reconnected.rawValue; address = nil; group = nil; name = nil; productName = nil
+    case let .notification(note):
+      kind = EventKind.notification.rawValue; address = note.device.description; group = nil; name = note.eventName; productName = nil
+    case let .schedule(run):
+      kind = EventKind.schedule.rawValue; address = run.device.description; group = nil; name = run.name; productName = nil
     }
   }
 }
@@ -208,10 +268,10 @@ struct CommandCompletionDTO: Encodable {
 
   init(command: ServiceCommand, receipt: CommandReceipt) {
     switch command.action {
-    case .identify: action = "identify"
-    case .status: action = "status"
-    case .on: action = "on"
-    case .off: action = "off"
+    case .identify: action = HTTPCommand.Action.identify.rawValue
+    case .status: action = HTTPCommand.Action.status.rawValue
+    case .on: action = HTTPCommand.Action.on.rawValue
+    case .off: action = HTTPCommand.Action.off.rawValue
     }
     levelPercent = command.levelPercent
     result = ReceiptDTO(receipt)

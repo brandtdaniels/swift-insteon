@@ -14,7 +14,7 @@ Six bytes:
 
 | Bytes | Content |
 | --- | --- |
-| 1–3 | Destination address, most significant byte first |
+| 1-3 | Destination address, most significant byte first |
 | 4 | Flags |
 | 5 | cmd1, which selects the operation |
 | 6 | cmd2, which carries its argument |
@@ -28,10 +28,10 @@ messages carry configuration and database records too large for cmd2.
 
 | Bits | Field | Values |
 | --- | --- | --- |
-| 7–5 | Message type | Direct, broadcast, ALL-Link broadcast, ALL-Link cleanup, and acknowledgments of each |
+| 7-5 | Message type | Direct, broadcast, ALL-Link broadcast, ALL-Link cleanup, and acknowledgments of each |
 | 4 | Extended | `1` for extended-length messages |
-| 3–2 | Hops left | Retransmissions remaining, 0–3 |
-| 1–0 | Max hops | Retransmissions allowed, 0–3 |
+| 3-2 | Hops left | Retransmissions remaining, 0-3 |
+| 1-0 | Max hops | Retransmissions allowed, 0-3 |
 
 Insteon devices repeat messages they hear to extend range. Each repeat decrements the hops
 left; a message is not repeated once it reaches zero, or by the device it's addressed to. A
@@ -75,8 +75,8 @@ The Insteon radio layer checks each message, but i2CS devices also verify an ext
 user data before acting on it:
 
 - Most commands use a one-byte checksum in D14 (``ChecksumIntegrity``): the two's complement
-  of the sum of cmd1, cmd2 and D1–D13.
-- Some devices use a two-byte CRC in D13–D14 for certain commands (``CRCIntegrity``).
+  of the sum of cmd1, cmd2 and D1-D13.
+- Some devices use a two-byte CRC in D13-D14 for certain commands (``CRCIntegrity``).
 
 ``ExtendedMessage`` applies the checksum by default. Devices with i1 and i2 engines ignore it,
 so it is safe to send to them.

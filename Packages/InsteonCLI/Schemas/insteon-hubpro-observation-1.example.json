@@ -1,0 +1,50 @@
+{
+  "catalog" : {
+    "version" : "0.9.1"
+  },
+  "devices" : [
+    {
+      "category" : "0x7E",
+      "commands" : [
+        {
+          "name" : "On",
+          "parameters" : [
+            "OnLevel"
+          ]
+        },
+        {
+          "name" : "Off",
+          "parameters" : [
+
+          ]
+        },
+        {
+          "name" : "StatusRequest",
+          "parameters" : [
+
+          ]
+        }
+      ],
+      "deviceType" : "Example Invented Dimmer",
+      "firmware" : "0x41",
+      "model" : "Example Invented Product",
+      "sku" : "0000X1",
+      "subcategory" : "0x7F"
+    }
+  ],
+  "format" : "insteon-hubpro-observation/1",
+  "note" : "Early unit, one dimmer linked.",
+  "observedOn" : "2026-01-15",
+  "tool" : {
+    "name" : "insteon",
+    "version" : "0.1.0"
+  },
+  "unit" : {
+    "configVersion" : "0.0.1",
+    "deviceTypes" : [
+      "Example Invented Dimmer",
+      "Example Invented Hub"
+    ],
+    "serverVersion" : "0.0.2"
+  }
+}

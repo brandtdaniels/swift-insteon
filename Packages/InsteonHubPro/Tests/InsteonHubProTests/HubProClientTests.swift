@@ -95,6 +95,67 @@ struct HubProClientTests {
 
   }
 
+  @Test func readsTheSettingsWithAGetWithoutABody() async throws {
+
+    let http = MethodScriptedHTTPClient(["GET": HTTPResponse(statusCode: 200, body: Data(Self.settingsJSON.utf8))])
+
+    _ = try await HubProClient(host: "192.168.1.20", httpClient: http).settings()
+
+    #expect(await http.sent == ["GET http://192.168.1.20:80/settings"])
+    #expect(await http.bodies == [nil])
+
+  }
+
+  @Test(arguments: [404, 405])
+  func readsTheSettingsWithAPostWhenTheGetIsNotAllowed(status: Int) async throws {
+
+    let http = MethodScriptedHTTPClient([
+      "GET": HTTPResponse(statusCode: status),
+      "POST": HTTPResponse(statusCode: 200, body: Data(Self.settingsJSON.utf8)),
+    ])
+
+    let settings = try await HubProClient(host: "192.168.1.20", httpClient: http).settings()
+
+    #expect(settings.network.address == "192.168.1.20")
+    #expect(await http.sent == ["GET http://192.168.1.20:80/settings", "POST http://192.168.1.20:80/settings"])
+
+  }
+
+  @Test func doesNotFallBackToAPostForAnotherStatusOrAnUnreadableAnswer() async {
+
+    let refused = MethodScriptedHTTPClient(["GET": HTTPResponse(statusCode: 500), "POST": HTTPResponse(statusCode: 200)])
+
+    await #expect(throws: HubProError.unexpectedStatus(500)) {
+      try await HubProClient(host: "192.168.1.20", httpClient: refused).settings()
+    }
+    #expect(await refused.sent == ["GET http://192.168.1.20:80/settings"])
+
+    let unreadable = MethodScriptedHTTPClient(["GET": HTTPResponse(statusCode: 200, body: Data(#"{"error":"Busy"}"#.utf8)), "POST": HTTPResponse(statusCode: 200)])
+
+    await #expect(throws: HubProError.rejected("Busy")) {
+      try await HubProClient(host: "192.168.1.20", httpClient: unreadable).settings()
+    }
+    #expect(await unreadable.sent == ["GET http://192.168.1.20:80/settings"])
+
+  }
+
+  @Test func sendsEveryOtherRequestAsAPostAsBefore() async throws {
+
+    let http = MethodScriptedHTTPClient(["POST": HTTPResponse(statusCode: 200, body: Data("{}".utf8))])
+    let hubPro = HubProClient(host: "192.168.1.20", httpClient: http)
+
+    try await hubPro.addDevice(lamp)
+    try await hubPro.removeDevice(lamp)
+    try await hubPro.startUpdate()
+
+    #expect(await http.sent == [
+      "POST http://192.168.1.20:80/insteon/add?sync=true&device=1A2B3C",
+      "POST http://192.168.1.20:80/insteon/remove?sync=true&device=1A2B3C",
+      "POST http://192.168.1.20:80/update",
+    ])
+
+  }
+
   @Test func reportsSettingsItCantRead() async {
 
     let http = answering(#"{"time":"2026-10-28 05:00:00"}"#)
@@ -130,6 +191,34 @@ struct HubProClientTests {
     await #expect(throws: HubProError.invalidEndpoint) {
       try await HubProClient(host: "192.168.1.20", port: -1, httpClient: answering("{}")).settings()
     }
+
+  }
+
+}
+
+/// Answers each request by its method and records what was sent.
+actor MethodScriptedHTTPClient: HTTPClient {
+
+  private(set) var sent: [String] = []
+
+  private(set) var bodies: [Data?] = []
+
+  private let responses: [String: HTTPResponse]
+
+  init(_ responses: [String: HTTPResponse]) {
+
+    self.responses = responses
+
+  }
+
+  func send(_ request: URLRequest) async throws -> HTTPResponse {
+
+    let method = request.httpMethod ?? "GET"
+
+    sent.append("\(method) \(request.url?.absoluteString ?? "")")
+    bodies.append(request.httpBody)
+
+    return responses[method] ?? HTTPResponse(statusCode: 404)
 
   }
 

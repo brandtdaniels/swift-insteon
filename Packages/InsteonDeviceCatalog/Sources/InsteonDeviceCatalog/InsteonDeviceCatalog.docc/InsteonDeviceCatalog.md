@@ -50,7 +50,7 @@ version the app passes to ``DeviceCatalogUpdater/update(replacing:currentVersion
 the bundled copy is refused with ``DeviceCatalogUpdateError/olderThanCurrent(_:)``, so a stale
 cache or a rolled-back site never takes back newer data. A download that would let an app send
 or write more to a device, at any firmware version, than the bundled
-copy does is refused with ``DeviceCatalogUpdateError/weakensGuards(_:)``;
+copy does is refused with ``DeviceCatalogUpdateError/weakensGuards(_:published:)``;
 ``DeviceCatalog/guardWeakenings(comparedTo:)`` and ``DeviceCatalog/checkGuards(against:)``
 compare any catalog an app loads the same way. ``DeviceCatalog/init(json:)`` and
 ``DeviceCatalog/load(contentsOf:)`` read a catalog without comparing it.

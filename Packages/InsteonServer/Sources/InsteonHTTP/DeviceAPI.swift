@@ -11,13 +11,16 @@ struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
   private let registry: EventStreamRegistry
 
   private let idempotency: IdempotencyStore
+  /// Whether a client is still known. A stream checks it after registering, so a client revoked in between doesn't keep one.
+  private let isClientActive: @Sendable (String) async -> Bool
 
-  init(service: Service, policy: EventStreamPolicy = .standard, clock: any Clock<Duration> = ContinuousClock(), idempotency: IdempotencyStore = IdempotencyStore()) {
+  init(service: Service, policy: EventStreamPolicy = .standard, clock: any Clock<Duration> = ContinuousClock(), idempotency: IdempotencyStore = IdempotencyStore(), registry: EventStreamRegistry? = nil, isClientActive: @escaping @Sendable (String) async -> Bool = { _ in true }) {
+    self.isClientActive = isClientActive
     self.service = service
     self.idempotency = idempotency
     self.policy = policy
     self.clock = clock
-    self.registry = EventStreamRegistry(limit: policy.maximumStreams)
+    self.registry = registry ?? EventStreamRegistry(limit: policy.maximumStreams)
   }
 
   func devices() async throws -> Response {
@@ -72,17 +75,28 @@ struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
   }
 
   private enum StreamItem: Sendable {
-    case event(ServiceEvent)
+    case event(SequencedItem)
     case keepalive
   }
 
-  func events() async -> Response {
+  /// - Parameter cursor: Where the client left off, from `Last-Event-ID` or the `lastEventId` query
+  ///   parameter. The stream starts with the events it missed, or with a `gap` frame.
+  func events(resumingAfter cursor: EventCursor? = nil) async -> Response {
+    // The principal is read here, while the request is being handled; the body runs later.
+    let clientID = RequestPrincipal.current?.clientID
     let body = ResponseBody { writer in
       do {
         // A response can be discarded without its body being written.
+        // Register first, then check the client: a revoke that ran before the registration found
+        // nothing to end, but it had already removed the client, so the check sees it.
+        let lease = await registry.admit(clientID: clientID)
+        if let clientID, await !isClientActive(clientID) {
+          await registry.release(lease)
+          try await writer.finish(nil)
+          return
+        }
         // Subscribe only while a structured producer can own and cancel the reader.
-        let events = await service.events()
-        let lease = await registry.admit()
+        let events = await service.sequencedEvents(after: cursor)
         let policy = self.policy, clock = self.clock
         do {
           try await withThrowingTaskGroup(of: Void.self) { group in
@@ -128,9 +142,17 @@ struct DeviceAPI<Service: InsteonServiceAPI>: Sendable {
             for try await item in buffered {
               try Task.checkCancellation()
               switch item {
-              case let .event(event):
-                let data = try encoder.encode(EventDTO(event))
-                try await writer.write(ByteBuffer(string: "data: " + String(decoding: data, as: UTF8.self) + "\n\n"))
+              case let .event(sequenced):
+                let frame: (id: String, data: Data)
+                switch sequenced {
+                case let .event(event, position): frame = (position.token, try encoder.encode(EventDTO(event, at: position)))
+                case let .gap(reason, current): frame = (current.token, try encoder.encode(GapDTO(reason: reason, current: current)))
+                case let .position(current):
+                  // An id with no data sets the browser's place without dispatching an event.
+                  try await writer.write(ByteBuffer(string: "id: " + current.token + "\n\n"))
+                  continue
+                }
+                try await writer.write(ByteBuffer(string: "id: " + frame.id + "\ndata: " + String(decoding: frame.data, as: UTF8.self) + "\n\n"))
               case .keepalive:
                 try await writer.write(ByteBuffer(string: ": keepalive\n\n"))
               }

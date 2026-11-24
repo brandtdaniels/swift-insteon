@@ -1,5 +1,6 @@
 import InsteonCore
 import InsteonHubClient
+import InsteonHubPro
 import InsteonModem
 
 /// Why the service can't reach its modem, independent of any transport or display wording.
@@ -44,6 +45,10 @@ enum ConnectionFailure: Equatable {
     case let HubError.unexpectedStatus(status) where status == 401 || status == 403:
       self = .retry(.credentialsRejected)
     case let HubError.unexpectedStatus(status):
+      self = .retry(.hubErrorStatus(status))
+    case HubProError.invalidEndpoint:
+      self = .fatal
+    case let HubProError.unexpectedStatus(status):
       self = .retry(.hubErrorStatus(status))
     case is HubStoppedAnswering:
       self = .retry(.hubUnreachable)

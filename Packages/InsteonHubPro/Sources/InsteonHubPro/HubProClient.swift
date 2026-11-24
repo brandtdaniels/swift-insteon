@@ -8,8 +8,10 @@ import InsteonProtocol
 /// Adds and removes Insteon devices on a Hub Pro 2243, reads its settings, and starts
 /// its software update, through its local HTTP interface.
 ///
-/// The interface is plain HTTP on port 80, without authentication, and every request is a
-/// `POST`. Adding and removing a device, and reading the settings, answer with JSON.
+/// The interface is plain HTTP on port 80, without authentication. Adding and removing a
+/// device and starting an update are each a `POST`, and they and the settings answer with JSON.
+/// The settings are read with a `GET`, or with a `POST` for a Hub Pro that doesn't answer a
+/// `GET` for them.
 ///
 /// ```swift
 /// let hubPro = HubProClient(host: "192.168.1.20")
@@ -97,12 +99,29 @@ public struct HubProClient: Sendable {
 
   /// Reads the Hub Pro's network settings and software versions.
   ///
+  /// The settings are asked for with a `GET`, a read that changes nothing. A Hub Pro that
+  /// answers `404 Not Found` or `405 Method Not Allowed` to it is asked again with a `POST`.
+  ///
   /// - Returns: The settings.
   /// - Throws: ``HubProError/malformedResponse`` if the answer can't be read, another
   ///   ``HubProError`` if the Hub Pro refused, or the client's error.
   public func settings() async throws -> HubProSettings {
 
-    let body = try await post("/settings")
+    var response = try await send("GET", "/settings")
+
+    if response.statusCode == 404 || response.statusCode == 405 {
+
+      response = try await send("POST", "/settings")
+
+    }
+
+    guard response.statusCode == 200 else {
+
+      throw HubProError.unexpectedStatus(response.statusCode)
+
+    }
+
+    let body = response.body
 
     guard let settings = try? JSONDecoder().decode(HubProSettings.self, from: body) else {
 
@@ -135,6 +154,22 @@ public struct HubProClient: Sendable {
   /// body of a `200 OK` answer.
   private func post(_ path: String, device: InsteonAddress? = nil) async throws -> Data {
 
+    let response = try await send("POST", path, device: device)
+
+    guard response.statusCode == 200 else {
+
+      throw HubProError.unexpectedStatus(response.statusCode)
+
+    }
+
+    return response.body
+
+  }
+
+  /// Sends a request to a path, with the device as its `device` query item or the query items
+  /// given, and returns the answer, whatever its status.
+  func send(_ method: String, _ path: String, device: InsteonAddress? = nil, queryItems: [URLQueryItem] = []) async throws -> HTTPResponse {
+
     var components = URLComponents()
     components.scheme = "http"
     components.host = host
@@ -147,6 +182,10 @@ public struct HubProClient: Sendable {
         URLQueryItem(name: "sync", value: "true"),
         URLQueryItem(name: "device", value: device.hexString),
       ]
+
+    } else if !queryItems.isEmpty {
+
+      components.queryItems = queryItems
 
     }
 
@@ -165,7 +204,7 @@ public struct HubProClient: Sendable {
     }
 
     var request = URLRequest(url: url)
-    request.httpMethod = "POST"
+    request.httpMethod = method
     request.timeoutInterval = TimeInterval(timeout.components.seconds) + TimeInterval(timeout.components.attoseconds) / 1e18
 
     let httpClient: any HTTPClient = httpClient
@@ -185,13 +224,7 @@ public struct HubProClient: Sendable {
 
     }
 
-    guard response.statusCode == 200 else {
-
-      throw HubProError.unexpectedStatus(response.statusCode)
-
-    }
-
-    return response.body
+    return response
 
   }
 

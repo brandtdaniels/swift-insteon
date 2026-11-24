@@ -1,6 +1,9 @@
 import Foundation
 import InsteonCore
+import InsteonDeviceCatalog
 import InsteonModem
+import InsteonNotifications
+import InsteonProtocol
 
 /// One persistent Insteon network's operations, monitoring and snapshot policy.
 ///
@@ -15,8 +18,8 @@ import InsteonModem
 /// opens the connection again after a capped, jittered delay. A command is never repeated by a
 /// reconnection. A service made with a network leaves the connection to its host.
 public actor InsteonService: InsteonServiceAPI {
-  private var network: DeviceNetwork
-  private let opener: any NetworkOpening
+  private var network: any ServedNetwork
+  private let opener: any ServedNetworkOpening
   private let reconnect: ReconnectPolicy
   private let clock: any Clock<Duration>
   private let now: @Sendable () -> Date
@@ -26,20 +29,34 @@ public actor InsteonService: InsteonServiceAPI {
   private var busy = false
   private var running = false
   private var subscriptions: [WeakCommandSubscription] = []
+  private let runID: String
+  private var sequence: UInt64 = 0
+  private var retained: [(sequence: UInt64, event: ServiceEvent)] = []
   private var connection: ModemConnectionState
   private var hasConnected: Bool
   private var lastExchange: Date?
   private var lastPoll: Date?
   private var informationUpdated: Date?
   private var attemptConnected = false
+  private let notificationPersistence: (any NotificationRulePersisting)?
+  private var ruleBook: NotificationRuleBook?
+  private var rulesAreBeingEdited = false
+  private var waitingToEditRules: [CheckedContinuation<Void, Never>] = []
+  private let scheduling: ScheduleConfiguration
+  private var scheduler: Scheduler?
+  private var hubClock: (reported: String, readAt: Date)?
+
+  /// How many of the newest events the service keeps for a client to resume from. Memory is
+  /// bounded by this count; nothing is kept on disk, and a restart forgets every event.
+  public static let retainedEventCount = 256
 
   /// The latest snapshot outcome, independent of any device acknowledgment or reading.
   public private(set) var persistenceOutcome: PersistenceOutcome
 
   /// Creates a service for a network whose connection the host keeps open, and an optional
   /// persistence policy. The run ends if that connection does.
-  public init(network: DeviceNetwork, persistence: (any SnapshotPersisting)? = nil, clock: any Clock<Duration> = ContinuousClock()) {
-    self.init(network: network, opener: FixedNetworkOpener(network: network), persistence: persistence, snapshotSavedAt: nil, reconnect: .never, clock: clock, now: { Date() }, jitter: { 0 }, isConnected: true)
+  public init(network: DeviceNetwork, persistence: (any SnapshotPersisting)? = nil, clock: any Clock<Duration> = ContinuousClock(), runID: String? = nil, scheduling: ScheduleConfiguration = ScheduleConfiguration()) {
+    self.init(network: network, opener: FixedNetworkOpener(network: network), persistence: persistence, snapshotSavedAt: nil, reconnect: .never, clock: clock, now: { Date() }, jitter: { 0 }, isConnected: true, runID: runID, scheduling: scheduling)
   }
 
   /// Creates a service that opens and reopens its own modem connection.
@@ -54,25 +71,31 @@ public actor InsteonService: InsteonServiceAPI {
   ///   - clock: Times the waits between attempts.
   ///   - now: The current time.
   ///   - jitter: Random numbers from 0 up to, not including, 1 for the delay's jitter.
+  ///   - runID: Names this run in event ids. Defaults to a random token, so every start has its own.
   ///   - throughHub: Whether the modem is reached through a Hub. A modem that doesn't answer is then
   ///     reported as ``ModemUnavailability/hubUnreachable``, because the Hub is what to check.
+  ///   - notificationRules: Where the notification rules are kept, if anywhere. Without it they last as long as the service.
+  ///   - scheduling: The home's time zone and location and where schedules and timers are kept. Schedules and timers run on `clock` and `now`.
   public init(
     network: DeviceNetwork,
-    opener: any NetworkOpening,
+    opener: any ServedNetworkOpening,
     persistence: (any SnapshotPersisting)? = nil,
     snapshotSavedAt: Date? = nil,
     reconnect: ReconnectPolicy = .standard,
     clock: any Clock<Duration> = ContinuousClock(),
     now: @escaping @Sendable () -> Date = { Date() },
     jitter: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) },
-    throughHub: Bool = false
+    throughHub: Bool = false,
+    runID: String? = nil,
+    notificationRules: (any NotificationRulePersisting)? = nil,
+    scheduling: ScheduleConfiguration = ScheduleConfiguration()
   ) {
-    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false, throughHub: throughHub)
+    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false, throughHub: throughHub, runID: runID, notificationRules: notificationRules, scheduling: scheduling)
   }
 
   private init(
     network: DeviceNetwork,
-    opener: any NetworkOpening,
+    opener: any ServedNetworkOpening,
     persistence: (any SnapshotPersisting)?,
     snapshotSavedAt: Date?,
     reconnect: ReconnectPolicy,
@@ -80,15 +103,21 @@ public actor InsteonService: InsteonServiceAPI {
     now: @escaping @Sendable () -> Date,
     jitter: @escaping @Sendable () -> Double,
     isConnected: Bool,
-    throughHub: Bool = false
+    throughHub: Bool = false,
+    runID: String? = nil,
+    notificationRules: (any NotificationRulePersisting)? = nil,
+    scheduling: ScheduleConfiguration = ScheduleConfiguration()
   ) {
-    self.network = network
+    self.scheduling = scheduling
+    self.notificationPersistence = notificationRules
+    self.network = ModemServedNetwork(network: network)
     self.opener = opener
     self.reconnect = reconnect
     self.clock = clock
     self.now = now
     self.jitter = jitter
     self.throughHub = throughHub
+    self.runID = runID ?? Self.randomRunID()
     self.persistence = persistence
     self.persistenceOutcome = persistence == nil ? .notConfigured : .notAttempted
     self.connection = isConnected ? .connected : .unavailable(.connecting)
@@ -106,8 +135,8 @@ public actor InsteonService: InsteonServiceAPI {
     let snapshot = await network.snapshot()
     var result: [ServiceDevice] = []
     for address in Self.addresses(in: snapshot) {
-      let known = await network.registry.device(address)
-      let capabilities = known == nil ? nil : try await network.device(address).capabilities()
+      let known = await network.registeredDevice(address)
+      let capabilities = known == nil ? nil : try await network.operations(of: address).capabilities()
       result.append(ServiceDevice(address: address, productName: capabilities?.productName, canTurnOnAndOff: capabilities?.canTurnOnAndOff ?? false, canDim: capabilities?.canDim ?? false, value: snapshot.devices[address]?.level, lastAnsweredAt: snapshot.devices[address]?.lastSeen))
     }
     return result
@@ -126,20 +155,20 @@ public actor InsteonService: InsteonServiceAPI {
     guard Self.addresses(in: await network.snapshot()).contains(command.address) else { throw ServiceControlError.unknownDevice }
     if let level = command.levelPercent, command.action != .on || !(0...100).contains(level) { throw ServiceControlError.invalidLevel }
     if case let .unavailable(cause) = connection { throw ServiceControlError.modemUnavailable(cause) }
-    let device = network.device(command.address)
+    let device = network.operations(of: command.address)
     let outcome: CommandReceipt.Outcome
     let status: DeviceStatus?
     do {
       switch command.action {
       case .identify:
-        _ = try await network.identify(command.address)
+        try await network.identifyDevice(command.address)
         outcome = .read; status = nil
       case .status:
         do {
           status = try await device.status()
         } catch ModemError.deviceTimedOut {
           // A device that never reported what it is and doesn't answer a read has no identity to act on.
-          if await network.registry.device(command.address) == nil { throw ServiceControlError.notIdentified }
+          if await network.registeredDevice(command.address) == nil { throw ServiceControlError.notIdentified }
           throw ModemError.deviceTimedOut(command.address)
         }
         outcome = .read
@@ -176,16 +205,187 @@ public actor InsteonService: InsteonServiceAPI {
     return await persist()
   }
 
+  // MARK: Notification rules
+
+  /// The rules, in the order they were added.
+  ///
+  /// - Throws: ``NotificationRuleError/notSaved`` when the stored rules can't be read.
+  public func notificationRules() async throws -> [ServiceNotificationRule] {
+    try await loadNotificationRules()
+    return ruleBook?.rules ?? []
+  }
+
+  /// Validates a rule and stores it, so it applies to the next device report.
+  ///
+  /// A rule with the identifier of an existing one replaces it, and keeps its cooldown running when the trigger
+  /// is the same. The rules are saved before they change, so a failure to save changes nothing.
+  ///
+  /// - Throws: ``NotificationRuleError``.
+  public func putNotificationRule(_ rule: ServiceNotificationRule) async throws {
+    try await loadNotificationRules()
+    try await editingRules {
+      let rule = try await validated(rule)
+      var updated = ruleBook ?? NotificationRuleBook()
+      guard updated.contains(rule.id) || updated.rules.count < ServiceNotificationRule.maximumCount else { throw NotificationRuleError.limitReached }
+      updated.put(rule)
+      try await save(updated)
+      ruleBook = updated
+    }
+  }
+
+  /// Removes a rule, which stops firing at once.
+  ///
+  /// - Throws: ``NotificationRuleError/unknownRule`` when no rule has the identifier.
+  public func removeNotificationRule(id: String) async throws {
+    try await loadNotificationRules()
+    try await editingRules {
+      var updated = ruleBook ?? NotificationRuleBook()
+      guard updated.contains(id) else { throw NotificationRuleError.unknownRule }
+      updated.remove(id)
+      try await save(updated)
+      ruleBook = updated
+    }
+  }
+
+  /// Reads the stored rules once. Until it succeeds, the service has no rules and refuses to change them.
+  public func loadNotificationRules() async throws {
+    guard ruleBook == nil else { return }
+    let stored: [ServiceNotificationRule]?
+    do { stored = try await notificationPersistence?.load() } catch { throw NotificationRuleError.notSaved }
+    if ruleBook == nil { ruleBook = NotificationRuleBook(rules: stored ?? []) }
+  }
+
+  private func save(_ book: NotificationRuleBook) async throws {
+    do { try await notificationPersistence?.save(book.rules) } catch { throw NotificationRuleError.notSaved }
+  }
+
+  /// Runs a change to the rules alone, so two changes never start from the same rules and lose one of them.
+  private func editingRules<Result>(_ work: () async throws -> Result) async rethrows -> Result {
+    if rulesAreBeingEdited { await withCheckedContinuation { waitingToEditRules.append($0) } } else { rulesAreBeingEdited = true }
+    // The next waiter inherits the turn, so a new caller can't slip in between.
+    defer { if waitingToEditRules.isEmpty { rulesAreBeingEdited = false } else { waitingToEditRules.removeFirst().resume() } }
+    return try await work()
+  }
+
+  private func validated(_ rule: ServiceNotificationRule) async throws -> ServiceNotificationRule {
+    var rule = rule
+    let limit = ServiceNotificationRule.longestTextLength
+    guard (1...limit).contains(rule.id.count), rule.id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "-_.".contains($0)) }) else { throw NotificationRuleError.invalidRule }
+    rule.name = rule.name.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard (1...limit).contains(rule.name.count), !rule.name.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { throw NotificationRuleError.invalidRule }
+    guard (0...ServiceNotificationRule.longestCooldownSeconds).contains(rule.cooldownSeconds) else { throw NotificationRuleError.invalidRule }
+    switch rule.trigger {
+    case let .event(name, _):
+      guard (1...limit).contains(name.count), name.first?.isLowercase == true, name.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else { throw NotificationRuleError.invalidRule }
+    case let .groupCommand(_, group, _):
+      guard (1...255).contains(group) else { throw NotificationRuleError.invalidRule }
+    }
+    let network = network
+    guard Self.addresses(in: await network.snapshot()).contains(rule.trigger.device) else { throw NotificationRuleError.unknownDevice }
+    if case let .event(name, device) = rule.trigger, let names = await eventNames(of: device, in: network), !names.contains(name) { throw NotificationRuleError.invalidRule }
+    return rule
+  }
+
+  /// The events the catalog says a device's product reports, or `nil` when the catalog has no profile for the device.
+  private func eventNames(of device: InsteonAddress, in network: any ServedNetwork) async -> Set<String>? {
+    guard let identity = await network.registeredDevice(device)?.identity, let catalog = await network.catalog(),
+          let profile = catalog.profile(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion) else { return nil }
+    var names: Set<String> = []
+    for case let .groupEvents(events) in profile.capabilities { names.formUnion(events.map(\.event.rawValue)) }
+    return names
+  }
+
+  private func evaluateNotificationRules(for event: DeviceMonitorEvent) {
+    guard var book = ruleBook, !book.rules.isEmpty, let event = DeviceEvent(event) else { return }
+    let fired = book.notifications(for: event, at: now())
+    ruleBook = book
+    for notification in fired { publish(.notification(notification)) }
+  }
+
+  // MARK: Schedules and timers
+
+  /// The scheduler, made on first use. It reaches back to the service through weak references, so
+  /// neither keeps the other alive.
+  private func schedulerInstance() -> Scheduler {
+    if let scheduler { return scheduler }
+    let host = ScheduleHost(
+      devices: { [weak self] in try await self?.devices() ?? [] },
+      execute: { [weak self] command in
+        guard let self else { throw CancellationError() }
+        return try await self.execute(command)
+      },
+      publish: { [weak self] run in await self?.publishSchedule(run) }
+    )
+    let made = Scheduler(configuration: scheduling, now: now, host: host)
+    scheduler = made
+    return made
+  }
+
+  /// The schedules, in the order they were added, each with its next run.
+  ///
+  /// - Throws: ``ScheduleError/notSaved`` when the stored schedules can't be read.
+  public func schedules() async throws -> [ScheduleEntry] {
+    try await schedulerInstance().schedules()
+  }
+
+  /// Validates a schedule against the cached devices and the home's place, stores it, and works out its next
+  /// run, so it takes effect without a restart. A schedule with the identifier of an existing one replaces it
+  /// and keeps nothing of its last run.
+  ///
+  /// - Throws: ``ScheduleError``.
+  public func putSchedule(_ schedule: ServiceSchedule) async throws -> ScheduleEntry {
+    try await schedulerInstance().putSchedule(schedule)
+  }
+
+  /// Removes a schedule, which stops at once.
+  ///
+  /// - Throws: ``ScheduleError/unknownSchedule`` when no schedule has the identifier.
+  public func removeSchedule(id: String) async throws {
+    try await schedulerInstance().removeSchedule(id: id)
+  }
+
+  /// The timers that haven't fired, in the order they were added.
+  public func timers() async throws -> [TimerEntry] {
+    try await schedulerInstance().timers()
+  }
+
+  /// Starts a timer, or restarts the timer with its identifier.
+  ///
+  /// - Throws: ``ScheduleError``.
+  public func putTimer(_ timer: ServiceTimer) async throws -> TimerEntry {
+    try await schedulerInstance().putTimer(timer)
+  }
+
+  /// Cancels a timer.
+  ///
+  /// - Throws: ``ScheduleError/unknownTimer`` when no timer has the identifier.
+  public func removeTimer(id: String) async throws {
+    try await schedulerInstance().removeTimer(id: id)
+  }
+
+  private func publishSchedule(_ run: ScheduleRun) {
+    publish(.schedule(run))
+  }
+
+  private func healthNotes() async -> [ServiceHealthNote] {
+    let scheduler = schedulerInstance()
+    var notes = await scheduler.notes
+    if let hubClock, let zone = await scheduler.homeTimeZone, let seconds = HubClockDrift.seconds(reported: hubClock.reported, in: zone, at: hubClock.readAt) {
+      notes.append(.hubClockDrift(seconds: seconds))
+    }
+    return notes
+  }
+
   /// Reports readiness, the modem's state, and the times of the last hardware exchange, the last
   /// answered poll and the last confirmation of the cached device information. It sends nothing
   /// to hardware and doesn't take the admission gate.
-  public func health() -> ServiceHealth {
+  public func health() async -> ServiceHealth {
     let readiness: ServiceHealth.Readiness
     switch connection {
     case .connected: readiness = .ready
     case .unavailable: readiness = hasConnected ? .degraded : .starting
     }
-    return ServiceHealth(readiness: readiness, modem: connection, lastHardwareExchange: lastExchange, lastPoll: lastPoll, deviceInformationUpdated: informationUpdated, persistence: persistenceOutcome, checkedAt: now())
+    return ServiceHealth(readiness: readiness, modem: connection, lastHardwareExchange: lastExchange, lastPoll: lastPoll, deviceInformationUpdated: informationUpdated, persistence: persistenceOutcome, checkedAt: now(), notes: await healthNotes())
   }
 
   /// Subscribes to typed events. Each subscription is iterated by one caller task. A subscriber
@@ -194,10 +394,64 @@ public actor InsteonService: InsteonServiceAPI {
     subscriptions.removeAll { $0.value == nil }
     let subscription = CommandEventSubscription()
     if case let .unavailable(cause) = connection, cause != .connecting {
-      _ = subscription.publish(.modemUnavailable(cause))
+      _ = subscription.publish(.event(.modemUnavailable(cause), currentCursor))
     }
     subscriptions.append(WeakCommandSubscription(value: subscription))
     return ServiceEvents(subscription: subscription)
+  }
+
+  /// Subscribes to numbered events, resuming from `cursor`.
+  ///
+  /// With no cursor, the subscription starts at the call with the run's current position, and a subscriber that arrives while the
+  /// modem is unreachable is told so first, at the run's current number. With a cursor of this
+  /// run whose missed events are still kept (the newest ``retainedEventCount``), the subscription
+  /// starts with them, in order, then continues with live events. With any other cursor it starts
+  /// with a gap saying why and the run's current position, then the modem's state if it is
+  /// unreachable, then live events. Events and the replay are delivered without a gap between
+  /// them: the service admits one call at a time.
+  ///
+  /// - Parameter cursor: The last position the client saw.
+  public func sequencedEvents(after cursor: EventCursor? = nil) async -> SequencedEvents {
+    subscriptions.removeAll { $0.value == nil }
+    var backlog: [SequencedItem] = []
+    var announce = true
+    if cursor == nil { backlog.append(.position(currentCursor)) }
+    if let cursor {
+      switch coverage(of: cursor) {
+      case let .covered(missed):
+        backlog = missed.map { .event($0.event, EventCursor(runID: runID, sequence: $0.sequence)) }
+        announce = false
+      case let .gap(reason):
+        backlog = [.gap(reason, current: currentCursor)]
+      }
+    }
+    if announce, case let .unavailable(cause) = connection, cause != .connecting {
+      backlog.append(.event(.modemUnavailable(cause), currentCursor))
+    }
+    let subscription = CommandEventSubscription(capacity: 64 + backlog.count)
+    for item in backlog { _ = subscription.publish(item) }
+    subscriptions.append(WeakCommandSubscription(value: subscription))
+    return SequencedEvents(subscription: subscription)
+  }
+
+  private var currentCursor: EventCursor { EventCursor(runID: runID, sequence: sequence) }
+
+  private enum Coverage {
+    case covered([(sequence: UInt64, event: ServiceEvent)])
+    case gap(EventGapReason)
+  }
+
+  private func coverage(of cursor: EventCursor) -> Coverage {
+    guard cursor.runID == runID else { return .gap(.otherRun) }
+    guard cursor.sequence <= sequence else { return .gap(.ahead) }
+    let missed = retained.filter { $0.sequence > cursor.sequence }
+    // Everything after the cursor is kept when the oldest kept event follows it directly, or none is missed.
+    guard UInt64(missed.count) == sequence - cursor.sequence else { return .gap(.tooOld) }
+    return .covered(missed)
+  }
+
+  private static func randomRunID() -> String {
+    String(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased().prefix(16))
   }
 
   /// Keeps the modem connected and monitored while a host body runs, then checkpoints on
@@ -214,6 +468,8 @@ public actor InsteonService: InsteonServiceAPI {
       try await withThrowingTaskGroup(of: Void.self) { group in
         group.addTask { try await body() }
         group.addTask { try await self.maintainConnection() }
+        let scheduler = self.schedulerInstance()
+        group.addTask { await scheduler.run() }
         defer { group.cancelAll() }
         _ = try await group.next()
       }
@@ -232,7 +488,7 @@ public actor InsteonService: InsteonServiceAPI {
       var failure: any Error = ServiceLifecycleError.connectionEnded
       do {
         let snapshot = await network.snapshot()
-        try await opener.withNetwork(snapshot: snapshot, onPollSucceeded: { await self.pollSucceeded() }) { candidate in try await self.serve(candidate) }
+        try await opener.withServedNetwork(snapshot: snapshot, onPollSucceeded: { await self.pollSucceeded() }) { candidate in try await self.serve(candidate) }
       } catch {
         failure = error
       }
@@ -252,25 +508,41 @@ public actor InsteonService: InsteonServiceAPI {
   /// Prepares one connection's network, serves it, and monitors it until the connection ends.
   /// The network replaces the previous one only after the modem answers and its ALL-Link
   /// database is read, so the cached list stays whole while connecting.
-  private func serve(_ candidate: DeviceNetwork) async throws {
-    _ = try await candidate.modemInfo()
-    _ = try await candidate.modemDatabase()
+  private func serve(_ candidate: any ServedNetwork) async throws {
+    try await candidate.prepare()
+    // A rules file that can't be read leaves the rules off; changing them reports why.
+    try? await loadNotificationRules()
     // Subscribe before announcing the connection so nothing heard from then on is missed.
-    let changes = await candidate.monitor.changes()
+    let changes = try await candidate.changes()
+    // A Hub that reports its clock lets the service say when it differs; the service never sets it.
+    hubClock = await candidate.reportedLocalTime().map { ($0, now()) }
     await connected(to: candidate)
-    for await event in changes {
-      try Task.checkCancellation()
-      lastExchange = now()
-      if let event = ServiceEvent(event) { publish(event) }
+    switch changes {
+    case let .heard(events):
+      for await event in events {
+        try Task.checkCancellation()
+        heard(event)
+      }
+    case let .polled(events):
+      for try await event in events {
+        try Task.checkCancellation()
+        heard(event)
+      }
     }
     try Task.checkCancellation()
+  }
+
+  private func heard(_ event: DeviceMonitorEvent) {
+    lastExchange = now()
+    if let event = ServiceEvent(event) { publish(event) }
+    evaluateNotificationRules(for: event)
   }
 
   private func pollSucceeded() {
     lastPoll = now()
   }
 
-  private func connected(to candidate: DeviceNetwork) async {
+  private func connected(to candidate: any ServedNetwork) async {
     network = candidate
     connection = .connected
     hasConnected = true
@@ -289,9 +561,13 @@ public actor InsteonService: InsteonServiceAPI {
   }
 
   private func publish(_ event: ServiceEvent) {
+    sequence += 1
+    retained.append((sequence, event))
+    if retained.count > Self.retainedEventCount { retained.removeFirst(retained.count - Self.retainedEventCount) }
+    let item = SequencedItem.event(event, currentCursor)
     subscriptions.removeAll { entry in
       guard let subscription = entry.value else { return true }
-      return !subscription.publish(event)
+      return !subscription.publish(item)
     }
   }
 

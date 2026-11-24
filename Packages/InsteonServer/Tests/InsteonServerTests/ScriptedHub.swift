@@ -1,5 +1,6 @@
 import Foundation
 import InsteonCore
+import InsteonDeviceCatalog
 import InsteonLinking
 import InsteonModem
 import InsteonProtocol
@@ -55,7 +56,20 @@ actor RecordingModem: LinkingModem {
   func readAllLinkRecord(of device: InsteonAddress, at address: UInt16, timeout: Duration) async throws -> AllLinkRecordResponse { throw ModemError.connectionClosed }
   func allLinkRecords(group: AllLinkGroupNumber, device: InsteonAddress) async throws -> [AllLinkRecord] { [] }
   func allLinkRecords() async throws -> [AllLinkRecord] { [] }
-  func replies() async -> AsyncStream<ModemReply> { AsyncStream { _ in } }
+  private var listeners: [AsyncStream<ModemReply>.Continuation] = []
+
+  func replies() async -> AsyncStream<ModemReply> {
+    let (stream, continuation) = AsyncStream<ModemReply>.makeStream()
+    listeners.append(continuation)
+    return stream
+  }
+
+  /// A device broadcasts a command to one of its ALL-Link groups, as a sensor does when it reports.
+  func broadcastGroupCommand(from device: InsteonAddress, group: UInt8, command1: UInt8) {
+    let message = ReceivedMessage(sender: device, destination: InsteonAddress(0x00, 0x00, group), flags: MessageFlags(messageType: .allLinkBroadcast), command: Command(command1: command1, command2: 0x00))
+    for listener in listeners { listener.yield(.messageReceived(message)) }
+  }
+
 }
 
 /// A connection that stays up until a test drops it with an error.
@@ -79,10 +93,16 @@ actor ScriptedHubOpener: NetworkOpening {
   }
   struct StillAway: Error {}
 
+  private let catalog: DeviceCatalog?
+  private let deviceClock: any Clock<Duration>
   private var script: [Attempt]
   private var report: (@Sendable () async -> Void)?
 
-  init(_ script: [Attempt]) { self.script = script }
+  init(_ script: [Attempt], catalog: DeviceCatalog? = nil, clock: any Clock<Duration> = ContinuousClock()) {
+    self.script = script
+    self.catalog = catalog
+    deviceClock = clock
+  }
 
   /// Reports one answered poll on the connection that is open, as a Hub's polling does.
   func poll() async { await report?() }
@@ -97,7 +117,7 @@ actor ScriptedHubOpener: NetworkOpening {
     case let .fail(error):
       throw error
     case let .connect(link):
-      let network = DeviceNetwork(modem: link.modem, catalog: nil, snapshot: snapshot)
+      let network = DeviceNetwork(modem: link.modem, catalog: catalog, snapshot: snapshot, clock: deviceClock)
       try await withThrowingTaskGroup(of: Void.self) { group in
         group.addTask { try await body(network) }
         group.addTask { try await link.waitUntilDropped() }
@@ -142,4 +162,18 @@ final class ManualNow: @unchecked Sendable {
   var now: Date { lock.withLock { date } }
 
   func advance(by seconds: TimeInterval) { lock.withLock { date = date.addingTimeInterval(seconds) } }
+}
+
+/// A clock that reads 30 seconds later each time it is read, so two reports of the same press are never
+/// taken for one. Nothing sleeps on it.
+final class SteppingClock: Clock, @unchecked Sendable {
+  typealias Instant = ContinuousClock.Instant
+  private let lock = NSLock()
+  private let base = ContinuousClock.now
+  private var reads: Int64 = 0
+
+  var now: Instant { lock.withLock { reads += 1; return base.advanced(by: .seconds(30 * reads)) } }
+  var minimumResolution: Duration { .zero }
+
+  func sleep(until deadline: Instant, tolerance: Duration?) async throws { throw CancellationError() }
 }

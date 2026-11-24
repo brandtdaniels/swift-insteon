@@ -53,6 +53,13 @@ public enum ExitStatus {
   /// The command line or configuration can't be used: `64`, as in BSD's `sysexits.h`.
   public static let usage: Int32 = 64
 
+  /// `insteon catalog update` found the published catalog relaxes safeguards the bundled copy
+  /// keeps, so it isn't used: `3`.
+  public static let catalogRefused: Int32 = 3
+
+  /// `insteon catalog update` found the copy in use is already the published one: `4`.
+  public static let catalogCurrent: Int32 = 4
+
   /// The person interrupted the command with Control-C: `130`.
   public static let interrupted: Int32 = 130
 

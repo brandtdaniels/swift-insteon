@@ -1,3 +1,4 @@
+import Foundation
 import InsteonCLISupport
 import InsteonCore
 
@@ -29,18 +30,24 @@ enum DiscoverCommand {
 
     var unitType: String?
 
+    /// The Hub's own firmware as Insteon's service prints it, when asked.
+    var firmware: String?
+
     var product: String?
+
+    /// `hub`, or `hubPro` for a Hub Pro, which the command lists but can't control.
+    var kind: String
 
   }
 
   /// How often the local search says it's still going.
   private static let progressInterval: Duration = .seconds(5)
 
-  static func run(_ options: DiscoverOptions, envFilePath: String?, printsJSON: Bool) async throws {
+  static func run(_ options: DiscoverOptions, envFilePath: String?, hubName: String? = nil, printsJSON: Bool) async throws {
 
     // Read before searching, so a missing user name or password stops the command at once.
     let credentials: HubCredentials? = try options.identifiesHubs
-      ? Self.credentials(envFilePath: envFilePath)
+      ? Self.credentials(envFilePath: envFilePath, hubName: hubName)
       : nil
 
     // Without a person to ask before each Hub is sent the password, it's sent only to the one
@@ -48,10 +55,13 @@ enum DiscoverCommand {
     try options.checkIdentifying(readsFromTerminal: Terminal.readsFromTerminal)
 
     let names = ProductNames()
-    let search = HubSearch()
+    // The ports and models of a Hub Pro's interface come from the catalog, so a catalog that
+    // gives none finds none.
+    let search = HubSearch(hubProPorts: names.catalog?.hubProPorts ?? [], hubProModels: names.catalog?.hubProModels ?? [])
     var hubs: [HubCandidate] = try await HubDiscovery.search(
       options,
       insteonConnect: { () async throws -> [HubCandidate] in try await search.insteonConnectHubs() },
+      insteonStage: { () async throws -> [HubCandidate] in try await search.insteonStageHubs() },
       localNetwork: { (stoppingAtFirst: Bool) async throws -> [HubCandidate] in try await searchLocalNetwork(search, stoppingAtFirst: stoppingAtFirst) },
       merge: { (hub: HubCandidate, hubs: inout [HubCandidate]) -> Void in HubSearch.merge(hub, into: &hubs) },
       note: Output.note,
@@ -82,24 +92,58 @@ enum DiscoverCommand {
 
     }
 
-    let rows: [[String]] = found.map { hub in
+    let sources: [DiscoveredHub] = zip(found, hubs).map { (hub: FoundHub, candidate: HubCandidate) -> DiscoveredHub in
 
-      [
-        "\(hub.host):\(hub.port)",
-        hub.insteonID ?? "-",
-        hub.product ?? hub.unitType ?? "-",
-        hub.foundBy.compactMap { DiscoveryMethod(rawValue: $0)?.label }.joined(separator: ", ")
-      ]
+      DiscoveredHub(
+        product: hub.product ?? hub.unitType,
+        host: hub.host,
+        port: hub.port,
+        insteonID: hub.insteonID,
+        foundBy: hub.foundBy.compactMap { DiscoveryMethod(rawValue: $0)?.label },
+        isHubPro: candidate.isHubPro
+      )
 
     }
 
-    Output.table([["ADDRESS", "INSTEON ID", "PRODUCT", "FOUND BY"]] + rows)
+    for line in hubFileLines(sources) {
+
+      Output.line(line)
+
+    }
 
     if let note = HubText.candidateNote(options) {
 
       Output.note(note)
 
     }
+
+    for note in HubText.hubProNote(settings: hubs.filter(\.isHubPro).map(\.hubProSettings)) {
+
+      Output.note(note)
+
+    }
+
+  }
+
+  /// The lines that list the Hubs and say where to save each one's settings and how to use it by
+  /// name, or that it's already saved.
+  private static func hubFileLines(_ hubs: [DiscoveredHub]) -> [String] {
+
+    let environment = ProcessInfo.processInfo.environment
+    let files = HubFiles(store: LocalHubFiles(), environment: environment)
+    let saved: [SavedHubFile] = files.listing().entries.compactMap { (entry: HubListing.Entry) -> SavedHubFile? in
+
+      guard let name = entry.name, let address = entry.address, entry.problem == nil else {
+
+        return nil
+
+      }
+
+      return SavedHubFile(name: name, address: address)
+
+    }
+
+    return DiscoverText.lines(for: hubs, directory: files.hubsDirectory, home: environment["HOME"], saved: saved)
 
   }
 
@@ -252,6 +296,13 @@ enum DiscoverCommand {
 
     }
 
+    // A Hub Pro the catalog doesn't name is still named as one.
+    if product == nil, hub.isHubPro {
+
+      product = HubText.hubProName
+
+    }
+
     return FoundHub(
       host: hub.host,
       port: hub.port,
@@ -261,7 +312,9 @@ enum DiscoverCommand {
       subcategory: hub.subcategory.map { "\($0)" },
       firmwareVersion: hub.firmwareVersion.map { "\($0)" },
       unitType: hub.unitType,
-      product: product
+      firmware: hub.firmware,
+      product: product,
+      kind: hub.kind.rawValue
     )
 
   }
@@ -270,7 +323,7 @@ enum DiscoverCommand {
   /// Connect before the local network when both found it.
   private static func foundByRawValues(_ sources: Set<HubSource>) -> [String] {
 
-    [HubSource.insteonConnect, .localNetwork]
+    [HubSource.insteonConnect, .insteonStage, .bonjour, .localNetwork]
       .filter(sources.contains)
       .map { method(for: $0).rawValue }
 
@@ -282,14 +335,16 @@ enum DiscoverCommand {
     switch source {
     case .localNetwork: .local
     case .insteonConnect: .insteonConnect
+    case .insteonStage: .insteonStage
+    case .bonjour: .bonjour
     }
 
   }
 
   /// Reads the Hub's user name and password from the environment, for identifying Hubs.
-  private static func credentials(envFilePath: String?) throws -> HubCredentials {
+  private static func credentials(envFilePath: String?, hubName: String?) throws -> HubCredentials {
 
-    try HubCredentials(environment: CommandSession.loadEnvironment(explicitPath: envFilePath))
+    try HubCredentials(environment: CommandSession.loadEnvironment(explicitPath: envFilePath, hubName: hubName))
 
   }
 

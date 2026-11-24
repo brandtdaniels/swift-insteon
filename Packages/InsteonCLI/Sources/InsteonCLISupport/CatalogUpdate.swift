@@ -45,6 +45,13 @@ public enum CatalogUpdateOutcome: Hashable, Sendable {
   /// Keep the copy in use, and print the line, which says why.
   case keep(String)
 
+  /// The published copy is the copy in use, with its version.
+  case current(DeviceCatalogVersion)
+
+  /// The published copy relaxes safeguards the bundled copy keeps, so it isn't used and the
+  /// copy in use stays.
+  case refused(CatalogRefusal)
+
 }
 
 /// What `insteon catalog update` decides: which copy is current, whether the site may be
@@ -146,7 +153,7 @@ public enum CatalogUpdate {
 
     switch result {
     case .unchanged:
-      return .keep(CatalogText.upToDate(currentVersion))
+      return .current(currentVersion)
     case let .updated(json, version):
       return .save(json: json, version: version)
     }
@@ -182,8 +189,8 @@ public enum CatalogUpdate {
       )
     case .unreadableCatalog:
       throw CommandFailure(description: "The published Insteon device catalog couldn't be read, so the current copy, \(current), stays.")
-    case let .weakensGuards(weakenings):
-      throw CommandFailure(description: CatalogText.publishedWeakensGuards(weakenings, current: current))
+    case let .weakensGuards(weakenings, published):
+      return .refused(CatalogRefusal(published: published, bundled: bundled, current: current, weakenings: weakenings))
     }
 
   }

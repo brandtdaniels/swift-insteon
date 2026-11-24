@@ -26,3 +26,56 @@ struct ServerTests {
     #expect(throws: ServerOptionError.self) { try ServerOptions(arguments: arguments, environment: [:]) }
   }
 }
+
+extension ServerTests {
+  @Test func theHubProPollIntervalDefaultsToFiveSecondsAndStartsAtTwo() throws {
+    #expect(try ServerOptions(arguments: [], environment: [:]).pollIntervalSeconds == 5)
+    #expect(try ServerOptions(arguments: ["--poll-interval", "2"], environment: [:]).pollIntervalSeconds == 2)
+    #expect(try ServerOptions(arguments: ["--poll-interval", "3600"], environment: [:]).pollIntervalSeconds == 3600)
+  }
+
+  @Test(arguments: ["1", "0", "-5", "3601", "fast", "2.5"])
+  func aPollIntervalBelowTheFloorOrNotANumberIsRefused(_ value: String) {
+    #expect(throws: ServerOptionError.invalidPollInterval) { try ServerOptions(arguments: ["--poll-interval", value], environment: [:]) }
+  }
+
+  @Test func theAdvertisedAddressAndHomeNameAreOptionsWithDefaults() throws {
+    let defaults = try ServerOptions(arguments: [], environment: [:])
+    #expect(defaults.advertiseURL == nil)
+    #expect(defaults.homeName == "Home")
+    let chosen = try ServerOptions(arguments: ["--advertise-url", "https://insteon.example.net:8443/", "--home-name", "Beach house"], environment: [:])
+    #expect(chosen.advertiseURL == "https://insteon.example.net:8443")
+    #expect(chosen.homeName == "Beach house")
+  }
+
+  @Test(arguments: [["--advertise-url", "insteon.local"], ["--advertise-url", "ftp://insteon.local"], ["--advertise-url", "http://u:p@insteon.local"], ["--advertise-url", "http://insteon.local/x"], ["--advertise-url", "http://insteon.local?x=1"], ["--advertise-url", "http://"], ["--home-name", String(repeating: "h", count: 65)], ["--home-name", "bad\u{7}name"]])
+  func anUnusableAdvertisedAddressOrHomeNameIsRefused(_ arguments: [String]) {
+    #expect(throws: ServerOptionError.self) { try ServerOptions(arguments: arguments, environment: [:]) }
+  }
+}
+
+extension ServerTests {
+  @Test func theLocationAndTimeZoneAreOptionsWithoutDefaults() throws {
+    let defaults = try ServerOptions(arguments: [], environment: [:])
+    #expect(defaults.latitude == nil && defaults.longitude == nil && defaults.timeZone == nil)
+    let chosen = try ServerOptions(arguments: ["--latitude", "-33.87", "--longitude", "151.21", "--time-zone", "Australia/Sydney"], environment: [:])
+    #expect(chosen.latitude == -33.87 && chosen.longitude == 151.21 && chosen.timeZone == "Australia/Sydney")
+  }
+
+  @Test(arguments: [
+    ["--latitude", "34"], ["--longitude", "-118"], ["--latitude", "91", "--longitude", "0"], ["--latitude", "0", "--longitude", "181"],
+    ["--latitude", "north", "--longitude", "0"], ["--latitude", "nan", "--longitude", "0"]
+  ])
+  func aLocationNeedsBothCoordinatesWithinRange(_ arguments: [String]) {
+    #expect(throws: ServerOptionError.invalidLocation) { try ServerOptions(arguments: arguments, environment: [:]) }
+  }
+
+  @Test(arguments: ["Not a zone", "../etc/localtime", "bad\u{7}zone", String(repeating: "z", count: 65)])
+  func aTimeZoneThatIsNotAZoneNameIsRefused(_ name: String) {
+    #expect(throws: ServerOptionError.invalidTimeZone) { try ServerOptions(arguments: ["--time-zone", name], environment: [:]) }
+  }
+
+  @Test func aTimeZoneTheHostMightNotHaveIsStillAccepted() throws {
+    #expect(try ServerOptions(arguments: ["--time-zone", "Not/AZone"], environment: [:]).timeZone == "Not/AZone")
+  }
+}

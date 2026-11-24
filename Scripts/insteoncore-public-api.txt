@@ -4,6 +4,7 @@
 # file with it.
 actor DeviceNetwork
 actor DeviceRegistry
+actor HubProNetwork
 case DatabaseLinkDirection.link
 case DatabaseLinkDirection.unlink
 case DatabaseLinkRefusal.changedSincePlanned(_:)
@@ -89,11 +90,11 @@ case DeviceSettingError.missingValue(label:other:)
 case DeviceSettingError.needsConsent(label:effect:)
 case DeviceSettingError.neverWritten(label:)
 case DeviceSettingError.noCommandForState(label:isOn:)
-case DeviceSettingError.noSettings(product:)
 case DeviceSettingError.noSuchSetting(_:product:)
 case DeviceSettingError.notChanged(title:requested:reported:)
 case DeviceSettingError.notIdentified
 case DeviceSettingError.readOnly(label:)
+case DeviceSettingError.settingsAbsent(product:)
 case DeviceSettingError.takesNoButton(label:)
 case DeviceSettingError.unreadableState(_:label:)
 case DeviceSettingError.unreadableValue(_:label:accepts:)
@@ -121,6 +122,7 @@ case HubIdentification.didNotAnswer
 case HubIdentification.failed(_:)
 case HubIdentification.identified(_:)
 case HubIdentification.rejected(_:)
+case HubIdentification.skippedHubPro
 case HubIdentification.skippedNonHubPort
 case HubIdentification.skippedNonPrivateAddress
 case HubLinkingJoin.deviceFirst
@@ -129,7 +131,9 @@ case HubLinkingJoin.setButton
 case HubLinkingLegStatus.failed(_:)
 case HubLinkingLegStatus.linked(_:by:)
 case HubLinkingLegStatus.notRun
+case HubSource.bonjour
 case HubSource.insteonConnect
+case HubSource.insteonStage
 case HubSource.localNetwork
 case KeepAwakeEvent.notReleased(_:reason:)
 case KeepAwakeEvent.notSent(_:reason:)
@@ -203,7 +207,7 @@ case ProductCatalogUpdateError.olderThanCurrent(_:)
 case ProductCatalogUpdateError.redirectRefused
 case ProductCatalogUpdateError.unexpectedStatus(_:)
 case ProductCatalogUpdateError.unreadableCatalog
-case ProductCatalogUpdateError.weakensGuards(_:)
+case ProductCatalogUpdateError.weakensGuards(_:published:)
 case ProtectedCommand.poke
 case ProtectedCommand.setOperatingFlags0x00
 case ProtectedCommand.setOperatingFlags0x0C
@@ -390,6 +394,14 @@ func DeviceNetwork.productData(of:)
 func DeviceNetwork.send(_:collectingFor:consent:onSending:onAcknowledgment:)
 func DeviceNetwork.snapshot()
 func DeviceNetwork.state(of:)
+func DeviceOperating.beep()
+func DeviceOperating.capabilities()
+func DeviceOperating.ping()
+func DeviceOperating.status()
+func DeviceOperating.turnOff()
+func DeviceOperating.turnOffFast()
+func DeviceOperating.turnOn(level:)
+func DeviceOperating.turnOnFast(level:)
 func DeviceRegistry.device(_:)
 func DeviceRegistry.forget(_:)
 func DeviceRegistry.record(_:for:)
@@ -399,9 +411,28 @@ func DeviceRegistryStore.save(_:)
 func DeviceSettingsReading.raw(for:button:)
 func HubCandidate.record(_:)
 func HubLocation.isSameEndpoint(as:)
+func HubProDevice.beep()
+func HubProDevice.capabilities()
+func HubProDevice.ping()
+func HubProDevice.status()
+func HubProDevice.turnOff()
+func HubProDevice.turnOffFast()
+func HubProDevice.turnOn(level:)
+func HubProDevice.turnOnFast(level:)
+func HubProNetwork.changes()
+func HubProNetwork.description(of:)
+func HubProNetwork.device(_:)
+func HubProNetwork.devices()
+func HubProNetwork.identify(_:)
+func HubProNetwork.listing()
+func HubProNetwork.open()
+func HubProNetwork.refreshDevices()
+func HubProNetwork.snapshot()
 func HubSearch.identify(_:user:password:)
 func HubSearch.identify(_:user:password:sendsCredentials:onResult:)
 func HubSearch.insteonConnectHubs()
+func HubSearch.insteonStageHubs()
+func HubSearch.recognizeHubPro(at:)
 func HubSearch.searchLocalNetwork(stoppingAtFirstHub:onHubFound:)
 func HubSearch.searchableAddressCount()
 func JSONFileDeviceRegistryStore.load()
@@ -411,6 +442,14 @@ func JSONFileDeviceRegistryStore.saveNetwork(_:)
 func LinkingObserver.linking(_:)
 func LinkingObserver.waitUntilDeviceIsAwake(_:)
 func LinkingObserver.waitUntilDeviceIsReady(_:)
+func ModemDeviceOperations.beep()
+func ModemDeviceOperations.capabilities()
+func ModemDeviceOperations.ping()
+func ModemDeviceOperations.status()
+func ModemDeviceOperations.turnOff()
+func ModemDeviceOperations.turnOffFast()
+func ModemDeviceOperations.turnOn(level:)
+func ModemDeviceOperations.turnOnFast(level:)
 func ModemScene.responders(in:)
 func ModemScene.send(turningOn:responderCount:through:)
 func ModemSession.beep(isDouble:)
@@ -467,11 +506,14 @@ init DirectMessage(to:command1:command2:data:hasChecksum:)
 init FactoryResetSteps(address:info:procedure:erases:)
 init ForgottenDevice(address:device:)
 init HubAddressRefused(host:)
-init HubFailure?(_:)
+init HubFailure?(_:hubHasAnswered:)
 init HubLinkingLeg(device:index:count:modemRole:modemGroup:deviceGroup:remoteEnterLinkingMode:allGroupsWhen:)
 init HubLinkingLegOutcome(leg:status:)
 init HubLocation(host:port:insteonID:)
-init HubSearch()
+init HubProNetwork(host:port:catalog:snapshot:)
+init HubProNetwork(transport:catalog:snapshot:pollInterval:clock:listRefreshPolls:now:onPollSucceeded:)
+init HubProNetwork(transport:catalog:snapshot:pollInterval:clock:onPollSucceeded:)
+init HubSearch(hubProPorts:hubProModels:)
 init InstructionStep(text:expectation:isOnOtherDevice:)
 init Instructions(steps:notes:)
 init JSONFileDeviceRegistryStore(fileURL:)
@@ -484,6 +526,7 @@ init LinkMade(address:group:mode:category:subcategory:firmwareVersion:)
 init LinkRecord(isController:isInUse:group:address:data:memoryAddress:hasIntactChecksum:isEndOfDatabase:)
 init LinkedDevice(link:device:leg:)
 init ModemDatabaseEntry(record:device:)
+init ModemDeviceOperations(_:)
 init ModemScene(group:)
 init NetworkDeviceState(engine:allLinkDatabase:level:lastSeen:)
 init NetworkSnapshot(registry:devices:modemDatabase:hub:)
@@ -532,11 +575,15 @@ let DirectMessage.command1
 let DirectMessage.command2
 let DirectMessage.device
 let HubAddressRefused.host
+let HubProDevice.address
+let HubProNetwork.registry
 let JSONFileDeviceRegistryStore.fileURL
+let ModemDeviceOperations.device
 let ModemSession.hub
 let ReceivedFrame.frame
 let ReceivedFrame.summary
 private(set) var DeviceRegistry.catalog
+protocol DeviceOperating
 protocol DeviceRegistryStore
 protocol LinkingObserver
 protocol NetworkSnapshotStore
@@ -593,6 +640,9 @@ static let DeviceSettingChange.OtherSettings.ReadFailure.connectionClosed
 static let DeviceSettingChange.OtherSettings.ReadFailure.failed
 static let DeviceSettingChange.OtherSettings.ReadFailure.notAnswered
 static let HubLocation.defaultPort
+static let HubProNetwork.defaultListRefreshPolls
+static let HubProNetwork.defaultPollInterval
+static let HubProNetwork.minimumPollInterval
 static let InsteonErrorDescription.hubStoppedAnsweringInline
 static let JSONFileDeviceRegistryStore.formatVersion
 static let ProductCatalog.updateLocation
@@ -645,6 +695,7 @@ struct HubCandidate
 struct HubLinkingLeg
 struct HubLinkingLegOutcome
 struct HubLocation
+struct HubProDevice
 struct HubSearch
 struct InstructionStep
 struct Instructions
@@ -659,6 +710,7 @@ struct LinkRecord
 struct LinkedDevice
 struct LocalHubSearch
 struct ModemDatabaseEntry
+struct ModemDeviceOperations
 struct ModemScene
 struct ModemSession
 struct NetworkDeviceState
@@ -691,6 +743,11 @@ typealias DeviceCategory
 typealias DeviceSubcategory
 typealias FirmwareVersion
 typealias GuardWeakening
+typealias HubKind
+typealias HubProDescription
+typealias HubProListedDevice
+typealias HubProSettings
+typealias HubProVersions
 typealias InsteonAddress
 typealias InsteonEngine
 typealias LinkingDirection
@@ -788,6 +845,7 @@ var DeviceMessageSummary.type
 var DeviceNetwork.hubLocation
 var DeviceNetwork.linking
 var DeviceNetwork.monitor
+var DeviceOperating.address
 var DeviceOutput.key
 var DeviceOutput.label
 var DeviceProductData.category
@@ -884,10 +942,14 @@ var ForgottenDevice.address
 var ForgottenDevice.device
 var HubAddressRefused.description
 var HubCandidate.category
+var HubCandidate.firmware
 var HubCandidate.firmwareVersion
 var HubCandidate.foundBy
 var HubCandidate.host
+var HubCandidate.hubProSettings
 var HubCandidate.insteonID
+var HubCandidate.isHubPro
+var HubCandidate.kind
 var HubCandidate.port
 var HubCandidate.subcategory
 var HubCandidate.unitType
@@ -910,6 +972,8 @@ var HubLocation.acceptsCredentials
 var HubLocation.host
 var HubLocation.insteonID
 var HubLocation.port
+var HubProNetwork.reportedTime
+var HubProNetwork.softwareVersions
 var InstructionStep.expectation
 var InstructionStep.isOnOtherDevice
 var InstructionStep.text
@@ -953,6 +1017,7 @@ var LocalHubSearch.hubs
 var LocalHubSearch.stoppedAtFirstHub
 var ModemDatabaseEntry.device
 var ModemDatabaseEntry.record
+var ModemDeviceOperations.address
 var ModemScene.group
 var NetworkDeviceState.allLinkDatabase
 var NetworkDeviceState.engine
@@ -964,6 +1029,8 @@ var NetworkSnapshot.hub
 var NetworkSnapshot.isEmpty
 var NetworkSnapshot.modemDatabase
 var NetworkSnapshot.registry
+var ProductCatalog.hubProModels
+var ProductCatalog.hubProPorts
 var ProductCatalogError.errorDescription
 var ProductCatalogStore.catalogPath
 var ProductCatalogStore.directory

@@ -512,6 +512,24 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// A device broadcasts a command to one of its ALL-Link groups, as a sensor does when it reports.
+  public func broadcastGroupCommand(from device: InsteonAddress, group: UInt8, command1: UInt8) {
+
+    let broadcast = ReceivedMessage(
+      sender: device,
+      destination: InsteonAddress(0x00, 0x00, group),
+      flags: MessageFlags(messageType: .allLinkBroadcast),
+      command: Command(command1: command1, command2: 0x00)
+    )
+
+    for subscriber in subscribers.values {
+
+      subscriber.yield(.messageReceived(broadcast))
+
+    }
+
+  }
+
   /// A device broadcasts its identity, if it has one.
   public func broadcastIdentity(of device: InsteonAddress) {
 

@@ -11,6 +11,10 @@ enum HTTPBody {
   static func read(_ request: Request) async throws -> Data {
     Data(try await request.body.collect(upTo: limit).readableBytesView)
   }
+  /// Refuses a request that lacks the explicit API marker, so a browser page can't send it by accident.
+  static func requireMarker(_ request: Request) throws {
+    guard request.headers[HTTPField.Name("X-Insteon-Request")!] == "1" else { throw HTTPInputError.missingAPIMarker }
+  }
   static func mediaType(_ request: Request) -> String? {
     request.headers[.contentType]?.split(separator: ";", maxSplits: 1).first?.trimmingCharacters(in: .whitespaces).lowercased()
   }
@@ -18,7 +22,7 @@ enum HTTPBody {
 
 /// Input decoding belongs to HTTP; domain validation remains in the service.
 struct HTTPCommand: Decodable {
-  enum Action: String, Decodable { case identify, status, on, off }
+  enum Action: String, Decodable, CaseIterable { case identify, status, on, off }
   let action: Action
   let levelPercent: Int?
 
@@ -36,7 +40,7 @@ struct HTTPCommand: Decodable {
 
   static func json(_ request: Request) async throws -> HTTPCommand {
     guard HTTPBody.mediaType(request) == "application/json" else { throw HTTPInputError.unsupportedMedia }
-    guard request.headers[HTTPField.Name("X-Insteon-Request")!] == "1" else { throw HTTPInputError.missingAPIMarker }
+    try HTTPBody.requireMarker(request)
     let data = try await HTTPBody.read(request)
     guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], Set(object.keys).isSubset(of: ["action", "levelPercent"]) else { throw HTTPInputError.invalid }
     return try JSONDecoder().decode(Self.self, from: data)

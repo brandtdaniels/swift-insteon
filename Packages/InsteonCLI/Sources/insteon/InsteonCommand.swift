@@ -29,6 +29,12 @@ struct InsteonCommand {
 
       let invocation = try Invocation.parse(arguments)
 
+      if case let .catalogUpdate(explains) = invocation.subcommand {
+
+        return try await CatalogCommand.update(explains: explains, printsJSON: invocation.printsJSON)
+
+      }
+
       try await run(invocation)
 
       return ExitStatus.success
@@ -51,7 +57,9 @@ struct InsteonCommand {
     case let .help(topic):
       Output.line(HelpText.text(for: topic) ?? HelpText.overview)
     case let .discover(options):
-      try await DiscoverCommand.run(options, envFilePath: invocation.envFilePath, printsJSON: printsJSON)
+      try await DiscoverCommand.run(options, envFilePath: invocation.envFilePath, hubName: CommandSession.hubName(of: invocation), printsJSON: printsJSON)
+    case .hubs:
+      try HubsCommand.run()
     case .info:
       try await withModem(invocation) { modem, names in
 
@@ -142,7 +150,8 @@ struct InsteonCommand {
       // Needs no modem, and reads neither the environment file nor the Hub's settings.
       CatalogCommand.status()
     case .catalogUpdate:
-      try await CatalogCommand.update()
+      // Run by `run(_:)`, which returns its exit status.
+      break
     }
 
   }
@@ -156,7 +165,11 @@ struct InsteonCommand {
 
     let names = ProductNames()
 
-    try await CommandSession.run(invocation, catalog: names.catalog) { (session: ModemSession) async throws -> Void in
+    try await CommandSession.run(
+      invocation,
+      catalog: names.catalog,
+      hubPro: { network, host in try await HubProCommands.run(invocation, network: network, host: host, names: names) }
+    ) { (session: ModemSession) async throws -> Void in
 
       try await body(session, names)
 
@@ -173,7 +186,11 @@ struct InsteonCommand {
 
     let names = ProductNames()
 
-    try await CommandSession.run(invocation, catalog: names.catalog) { (session: ModemSession) async throws -> Void in
+    try await CommandSession.run(
+      invocation,
+      catalog: names.catalog,
+      hubPro: { network, host in try await HubProCommands.run(invocation, network: network, host: host, names: names) }
+    ) { (session: ModemSession) async throws -> Void in
 
       try await body(session, names, session.hub)
 

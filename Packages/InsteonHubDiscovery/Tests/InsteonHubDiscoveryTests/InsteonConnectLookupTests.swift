@@ -107,7 +107,7 @@ struct InsteonConnectLookupTests {
     ))
 
     // The gateway, 192.168.4.1, is a private address too, but it isn't a Hub. The MAC address
-    // and public IP address aren't kept, nor the Hub's own firmware version.
+    // and public IP address aren't kept.
     #expect(try await lookup.hubs() == [
       DiscoveredHub(
         endpoint: HubEndpoint(host: "192.168.4.20"),
@@ -115,7 +115,8 @@ struct InsteonConnectLookupTests {
         category: 0x03,
         subcategory: 0x33,
         modemFirmwareVersion: 0xA5,
-        unitType: "HUB2"
+        unitType: "HUB2",
+        firmware: "1019"
       ),
     ])
 

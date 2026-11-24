@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "insteon-hubpro-observation-1.schema.json",
+  "title": "Insteon Hub Pro observation",
+  "description": "What a Hub Pro reported when `insteon observe` read it: its software versions, the kinds of device it lists, and what it reports about each device. Every request is a read. The file holds no address of a device, the modem or the Hub Pro, no host, no name or place a person gave a device and no account data.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "tool", "catalog", "unit", "devices", "observedOn"],
+  "properties": {
+    "format": {
+      "const": "insteon-hubpro-observation/1"
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string", "description": "A plain string, not necessarily a semantic version." }
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version"],
+      "properties": {
+        "version": { "type": "string", "description": "The version of the Insteon device catalog that named the devices." }
+      }
+    },
+    "unit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configVersion", "serverVersion", "deviceTypes"],
+      "properties": {
+        "configVersion": { "type": ["string", "null"], "description": "The version of the Hub Pro's configuration, as it reports it." },
+        "serverVersion": { "type": ["string", "null"], "description": "The version of the Hub Pro's server, as it reports it." },
+        "deviceTypes": {
+          "type": "array",
+          "description": "The kinds of device the Hub Pro's list names, its own modem's included, each once.",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "devices": {
+      "type": "array",
+      "description": "Each device the Hub Pro lists besides its own modem, in the order of category, subcategory and firmware.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["deviceType", "category", "subcategory", "firmware", "sku", "model", "commands"],
+        "properties": {
+          "deviceType": { "type": "string", "description": "The kind of device, as the Hub Pro names it." },
+          "category": { "type": ["string", "null"], "description": "The category the Hub Pro reports, such as 0x01." },
+          "subcategory": { "type": ["string", "null"], "description": "The subcategory the Hub Pro reports, such as 0x0E." },
+          "firmware": { "type": ["string", "null"], "description": "The firmware version the Hub Pro reports, such as 0x3B." },
+          "sku": { "type": ["string", "null"], "description": "The product's SKU, as the Hub Pro reports it." },
+          "model": { "type": ["string", "null"], "description": "The product the Insteon device catalog names for the device, or null if it names none." },
+          "commands": {
+            "type": "array",
+            "description": "The commands the Hub Pro lists for the device, in its order, with the names of their parameters.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "parameters"],
+              "properties": {
+                "name": { "type": "string" },
+                "parameters": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "note": {
+      "type": "string",
+      "description": "The text the person gave with --note. Absent when none was given."
+    },
+    "observedOn": {
+      "type": "string",
+      "description": "The local date of the observation.",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    }
+  }
+}

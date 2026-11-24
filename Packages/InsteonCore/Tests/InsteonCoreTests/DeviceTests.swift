@@ -866,9 +866,9 @@ struct DeviceTests {
 
     }
 
-    guard case let .noSettings(product)? = error else {
+    guard case let .settingsAbsent(product)? = error else {
 
-      Issue.record("Expected noSettings, got \(String(describing: error)).")
+      Issue.record("Expected settingsAbsent, got \(String(describing: error)).")
 
       return
 

@@ -30,7 +30,7 @@ public protocol SunTimes: Sendable {
 /// hour off. On the days the clocks change:
 ///
 /// - A time that doesn't exist, such as 2:30 a.m. when the clocks spring forward from 2:00 to
-///   3:00, runs the same amount of time after the change: at 3:30 a.m.
+///   3:00, runs once, when the skipped span ends: at 3:00 a.m.
 /// - A time that happens twice, such as 1:30 a.m. when the clocks fall back from 2:00 to 1:00,
 ///   runs the first time.
 ///
@@ -145,6 +145,12 @@ public struct ScheduleCalendar: Sendable {
 
     switch time {
     case let .clock(hour, minute):
+      if let end = endOfSkippedTime(hour: hour, minute: minute, on: day) {
+
+        return end
+
+      }
+
       // Starting just before the day finds the first time the day reaches the hour and minute.
       guard let run = calendar.nextDate(
         after: day.addingTimeInterval(-1),
@@ -152,23 +158,7 @@ public struct ScheduleCalendar: Sendable {
         matchingPolicy: .nextTimePreservingSmallerComponents,
         repeatedTimePolicy: .first,
         direction: .forward
-      ) else {
-
-        return nil
-
-      }
-
-      if calendar.isDate(run, inSameDayAs: day) {
-
-        return run
-
-      }
-
-      // A time the clocks skip late in the evening can move just past midnight; anything
-      // else on another day belongs to that day.
-      let shifted = calendar.component(.hour, from: run) != hour || calendar.component(.minute, from: run) != minute
-
-      guard shifted, let nextDay = calendar.date(byAdding: .day, value: 1, to: day), calendar.isDate(run, inSameDayAs: nextDay) else {
+      ), calendar.isDate(run, inSameDayAs: day) else {
 
         return nil
 
@@ -180,6 +170,44 @@ public struct ScheduleCalendar: Sendable {
     case let .sunset(offset):
       return sunTimes?.sunset(on: day, in: calendar).map { $0.addingTimeInterval(Self.seconds(offset)) }
     }
+
+  }
+
+  /// Whether a time of day doesn't exist on a day, because the clocks skip it.
+  ///
+  /// The calendar moves such a time forward by the length of the skipped span. The action runs
+  /// once, when the span ends, instead.
+  ///
+  /// - Parameters:
+  ///   - hour: The hour, from 0 to 23.
+  ///   - minute: The minute, from 0 to 59.
+  ///   - day: The start of the day.
+  /// - Returns: The moment the skipped span ends, or `nil` if the time exists on the day.
+  private func endOfSkippedTime(hour: Int, minute: Int, on day: Date) -> Date? {
+
+    var parts = calendar.dateComponents([.year, .month, .day], from: day)
+    parts.hour = hour
+    parts.minute = minute
+    parts.second = 0
+
+    guard let moved = calendar.date(from: parts) else {
+
+      return nil
+
+    }
+
+    let actual = calendar.dateComponents([.day, .hour, .minute], from: moved)
+
+    guard actual.day != parts.day || actual.hour != hour || actual.minute != minute,
+          let change = calendar.timeZone.nextDaylightSavingTimeTransition(after: day.addingTimeInterval(-1)),
+          change <= moved,
+          moved.timeIntervalSince(change) < 24 * 3600 else {
+
+      return nil
+
+    }
+
+    return change
 
   }
 

@@ -12,8 +12,8 @@ Swift packages for working with [Insteon](https://www.insteon.com) home automati
 | [InsteonModem](Packages/InsteonModem) | Control Insteon devices through a PowerLinc Modem or USB Adapter on a USB or serial port, or a PowerLinc Controller 2414S |
 | [InsteonLinking](Packages/InsteonLinking) | Link devices to each other and to the modem: by writing their ALL-Link databases, remotely, or with their SET buttons |
 | [InsteonHubClient](Packages/InsteonHubClient) | Control Insteon devices through an Insteon Hub on your local network, by driving its built-in modem with InsteonModem |
-| [InsteonHubDiscovery](Packages/InsteonHubDiscovery) | Find Insteon Hubs on your local network, by asking the network itself or Insteon Connect |
-| [InsteonHubPro](Packages/InsteonHubPro) | The requests only a Hub Pro has: adding Insteon devices to it, reading its settings and updating its software through its local interface. Untested with a Hub Pro |
+| [InsteonHubDiscovery](Packages/InsteonHubDiscovery) | Find Insteon Hubs and Hub Pros on your local network, by asking the network itself, browsing Bonjour for a Hub Pro, or asking Insteon Connect or Insteon's staging service |
+| [InsteonHubPro](Packages/InsteonHubPro) | The requests only a Hub Pro has: adding Insteon devices to it, reading its settings and updating its software through its local interface. `HubProTransport` also lists its devices and runs commands on them, which InsteonCore, the service and the `insteon` command use. Reading the settings and those reads and commands have been run against a Hub Pro; adding, removing and updating haven't |
 | [InsteonScheduling](Packages/InsteonScheduling) | Work out when schedules run, at clock times or around sunrise and sunset, in a home's time zone through daylight saving changes |
 | [InsteonDeviceCatalog](Packages/InsteonDeviceCatalog) | Look a device up in the [Insteon device catalog](https://github.com/brandtdaniels/insteon-device-catalog) by the category, subcategory and firmware version it reports, to find what it is and can do, such as its groups, what its group commands mean and its heartbeat interval, and read its messages as named events |
 | [InsteonNotifications](Packages/InsteonNotifications) | Let people know when their devices do something they care about, such as a leak sensor turning wet, a door opening or a sensor going quiet |
@@ -23,7 +23,7 @@ The package also has a command, [`insteon`](Packages/InsteonCLI), for driving a 
 
 For a persistent home service, [InsteonService](Packages/InsteonService) owns device operations, monitoring and snapshot policy. The optional [Swift server](Packages/InsteonServer) supplies authenticated HTTP and browser adapters at a chosen local or VPN interface. Remote clients connect to the service; the service talks to the Hub or serial modem. It uses no Insteon cloud subscription and supplies no VPN. HTTP framework and authentication dependencies stay in the optional package.
 
-InsteonHubPro, InsteonScheduling and InsteonNotifications stand on their own: neither InsteonCore nor the `insteon` command uses them. They're kept for apps that want them. InsteonHubPro follows the Hub Pro's local interface without having been run against a Hub Pro, so treat it as untested.
+InsteonScheduling and InsteonNotifications stand on their own: neither InsteonCore nor the `insteon` command uses them. They're kept for apps that want them. InsteonHubDiscovery reads a Hub Pro's settings with InsteonHubPro to recognize one. InsteonHubPro's adding, removing and updating follow the Hub Pro's local interface without having been run against a Hub Pro, so treat them as untested; nothing here calls them.
 
 The [Supported Modems](Packages/InsteonModem/Sources/InsteonModem/InsteonModem.docc/SupportedModems.md) article lists every modem, Hub and controller, and how well each is supported.
 
@@ -128,7 +128,7 @@ swift run insteon --hub 192.168.1.20 device 1A.2B.3C on 50%
 swift run insteon --help
 ```
 
-The command reads the credentials only from the environment or that file, never from its arguments or from a file in the current directory. It sends them only to a private IPv4 address, in `10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16`, given with `--hub` or `INSTEON_HUB_HOST`, and refuses a host name or any other address before sending anything. Requests go to the Hub directly, never through a proxy. `Scripts/install-insteon.sh [PREFIX]` installs it, with the Insteon device catalog it names products from, into `PREFIX/bin`, `~/.local/bin` by default. See [InsteonCLI](Packages/InsteonCLI) for every command.
+With more than one Hub, keep each in `~/.config/insteon/hubs/NAME.env` and use `insteon --hub NAME info`; `insteon hubs` lists them. The command reads the credentials only from the environment or those files, never from its arguments or from a file in the current directory. It sends them only to a private IPv4 address, in `10.0.0.0/8`, `172.16.0.0/12` or `192.168.0.0/16`, given with `--hub` or `INSTEON_HUB_HOST`, and refuses a host name or any other address before sending anything. Requests go to the Hub directly, never through a proxy. `Scripts/install-insteon.sh [PREFIX]` installs it, with the Insteon device catalog it names products from, into `PREFIX/bin`, `~/.local/bin` by default. See [InsteonCLI](Packages/InsteonCLI) for every command.
 
 ## Documentation
 

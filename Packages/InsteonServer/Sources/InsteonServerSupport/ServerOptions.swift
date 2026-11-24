@@ -1,4 +1,5 @@
 import Foundation
+import InsteonScheduling
 
 /// The listener, hardware and files selected before a server opens a connection.
 public struct ServerOptions: Sendable {
@@ -14,12 +15,26 @@ public struct ServerOptions: Sendable {
   public let envFilePath: String?
   /// The gateway's own snapshot file, separate from the CLI's cache.
   public let statePath: String
+  /// Where a client reaches this server on the local network, such as `http://insteon.local:8080`,
+  /// or nil to use the listen address and port.
+  public let advertiseURL: String?
+  /// The home's name in a pairing document.
+  public let homeName: String
+  /// How often a Hub Pro is asked for its devices' levels, in seconds: from 2, and 5 by default.
+  public let pollIntervalSeconds: Int
+  /// The home's latitude in degrees, positive north, or nil. Given with ``longitude``.
+  public let latitude: Double?
+  /// The home's longitude in degrees, positive east, or nil. Given with ``latitude``.
+  public let longitude: Double?
+  /// The home's IANA time zone, such as `America/Los_Angeles`, or nil for the one the server remembers
+  /// or the computer's. The host's time zone database decides whether the server can use it.
+  public let timeZone: String?
 
   /// Parses pairs of options, rejecting duplicates, public listeners and wildcard binds.
   /// Hub resolution and file permissions are checked by the CLI's existing helpers.
   public init(arguments: [String], environment: [String: String]) throws {
     var options: [String: String] = [:]
-    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state"]
+    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--home-name", "--poll-interval", "--latitude", "--longitude", "--time-zone"]
     var index = 0
     while index < arguments.count {
       let name = arguments[index]
@@ -42,6 +57,35 @@ public struct ServerOptions: Sendable {
     let home = environment["HOME"].flatMap { $0.hasPrefix("/") ? $0 : nil }
     self.statePath = options["--state"] ?? ((stateHome ?? home.map { $0 + "/.local/state" } ?? FileManager.default.homeDirectoryForCurrentUser.path + "/.local/state") + "/insteon/gateway.json")
     guard statePath.hasPrefix("/") else { throw ServerOptionError.invalidStatePath }
+    advertiseURL = try options["--advertise-url"].map { try Self.normalized(advertisedURL: $0) }
+    let homeName = options["--home-name"] ?? "Home"
+    guard (1...64).contains(homeName.count), !homeName.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { throw ServerOptionError.invalidHomeName }
+    self.homeName = homeName
+    guard let pollInterval = Int(options["--poll-interval"] ?? "5"), (2...3600).contains(pollInterval) else { throw ServerOptionError.invalidPollInterval }
+    self.pollIntervalSeconds = pollInterval
+    switch (options["--latitude"], options["--longitude"]) {
+    case (nil, nil):
+      latitude = nil
+      longitude = nil
+    case let (latitudeText?, longitudeText?):
+      guard let latitude = Double(latitudeText), let longitude = Double(longitudeText), GeographicCoordinate(latitude: latitude, longitude: longitude) != nil else { throw ServerOptionError.invalidLocation }
+      self.latitude = latitude
+      self.longitude = longitude
+    default:
+      throw ServerOptionError.invalidLocation
+    }
+    let timeZone = options["--time-zone"]
+    if let timeZone {
+      guard (1...64).contains(timeZone.count), timeZone.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "/_+-".contains($0)) }) else { throw ServerOptionError.invalidTimeZone }
+    }
+    self.timeZone = timeZone
+  }
+
+  /// The address without a trailing slash, or an error if it isn't a plain http or https address.
+  private static func normalized(advertisedURL text: String) throws -> String {
+    guard let url = URL(string: text), let scheme = url.scheme, ["http", "https"].contains(scheme), let host = url.host(percentEncoded: false), !host.isEmpty,
+          url.user == nil, url.password == nil, url.query == nil, url.fragment == nil, url.path.isEmpty || url.path == "/" else { throw ServerOptionError.invalidAdvertiseURL }
+    return text.hasSuffix("/") ? String(text.dropLast()) : text
   }
 
   private static func allowedListener(_ address: String) -> Bool {
@@ -63,6 +107,18 @@ public enum ServerOptionError: Error, CustomStringConvertible {
   case invalidPort
   /// The state file's path isn't absolute.
   case invalidStatePath
+  /// The advertised address isn't an http or https address without credentials, path or query.
+  case invalidAdvertiseURL
+  /// The home's name is empty, over 64 characters or has control characters.
+  case invalidHomeName
+  /// `--poll-interval` isn't a whole number of seconds from 2 through 3600.
+  case invalidPollInterval
+  /// `--latitude` and `--longitude` are given together, as numbers within the Earth's range.
+  case invalidLocation
+  /// `--time-zone` isn't an IANA time zone's name of 1 through 64 letters, digits and `/_+-`.
+  case invalidTimeZone
+  /// A `pair` command needs a client name of 1 through 64 characters and a scope of read, control or admin.
+  case invalidClient
 
   /// A safe explanation suitable for standard error.
   public var description: String { ServerFailure(self).message }

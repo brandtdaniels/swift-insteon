@@ -6,6 +6,8 @@ import InsteonCore
 import InsteonHTTP
 import InsteonHubClient
 import InsteonModem
+import InsteonNetworking
+import InsteonScheduling
 import InsteonService
 import Logging
 import NIOCore
@@ -21,12 +23,28 @@ public enum ServerRunner {
   --port PORT       Server port (default: 8080), separate from the Hub's port.
   --env-file PATH   Read settings from this file instead of ~/.config/insteon/env.
   --state PATH      Absolute path to the gateway's own network snapshot.
+  --poll-interval SECONDS  How often a Hub Pro is asked for its devices' levels, from 2
+                   seconds (default: 5). A Hub Pro sends nothing on its own, so a change
+                   made at a device is seen at the next poll.
+  --advertise-url URL  Where clients reach this server, such as http://insteon.local:8080,
+                   for the pairing document (default: http://LISTEN:PORT).
+  --home-name NAME  The home's name in a pairing document (default: Home).
+  --latitude DEGREES, --longitude DEGREES  The home's place, given together, for schedules at
+                   sunrise or sunset. The server remembers it with its schedules.
+  --time-zone NAME  The home's IANA time zone, such as America/Los_Angeles, which a clock time
+                   in a schedule follows through daylight saving changes (default: the one
+                   the server remembers, else this computer's).
   --help           Show this help without connecting.
 
   Settings are read from the same protected per-user environment file as insteon.
   A Hub uses INSTEON_HUB_HOST, INSTEON_HUB_PORT, INSTEON_HUB_USERNAME and
-  INSTEON_HUB_PASSWORD. The website and API use the user name insteon and a
+  INSTEON_HUB_PASSWORD. A Hub Pro has no user name or password: with none set, a host
+  that answers as a Hub Pro is served as one, one request at a time. The website and API use the user name insteon and a
   separate INSTEON_GATEWAY_PASSWORD of 32 through 1024 bytes.
+
+  Clients: the gateway password acts as an admin. A client has its own token and a scope
+  (read, control or admin), is created with `insteon-server pair --name NAME` or the API,
+  and is revoked with the API. Tokens are kept only as salted hashes.
 
   Use an encrypted VPN for remote HTTP access. The server supplies no VPN and
   uses no Insteon cloud service. Do not forward this server's or the Hub's port.
@@ -84,7 +102,30 @@ public enum ServerRunner {
   ///   - openModem: Opens the modem. Defaults to ``openModem``.
   /// - Throws: A ``ServerFailure`` source error: describe it with ``ServerFailure/init(_:)``.
   public static func run(arguments: [String], environment: [String: String], logger: Logger = Logger(label: "insteon-server"), openModem: @escaping ModemOpener = ServerRunner.openModem) async throws {
-    try await run(arguments: arguments, environment: environment, logger: logger, openModem: openModem, timing: Timing())
+    try await run(arguments: arguments, environment: environment, logger: logger, openModem: openModem, timing: Timing(), hubPro: .live)
+  }
+
+  /// How the server finds out that a host is a Hub Pro, and talks to one.
+  struct HubProAccess: Sendable {
+    /// The port of the host's Hub Pro interface, or `nil` when the host doesn't answer as a Hub Pro.
+    let recognize: @Sendable (_ host: String, _ catalog: ProductCatalog) async throws -> Int?
+    let httpClient: any HTTPClient
+    let clock: any Clock<Duration>
+
+    init(
+      recognize: @escaping @Sendable (_ host: String, _ catalog: ProductCatalog) async throws -> Int?,
+      httpClient: any HTTPClient = URLSessionHTTPClient.localNetwork(),
+      clock: any Clock<Duration> = ContinuousClock()
+    ) {
+      self.recognize = recognize
+      self.httpClient = httpClient
+      self.clock = clock
+    }
+
+    /// Asks the host's Hub Pro ports, as a search does.
+    static let live = HubProAccess(recognize: { host, catalog in
+      try await HubSearch(hubProPorts: catalog.hubProPorts, hubProModels: catalog.hubProModels).recognizeHubPro(at: host)?.port
+    })
   }
 
   /// How long the server waits between attempts to reach its modem, and between reminders.
@@ -116,7 +157,7 @@ public enum ServerRunner {
     }
   }
 
-  static func run(arguments: [String], environment: [String: String], logger: Logger, openModem: @escaping ModemOpener, timing: Timing) async throws {
+  static func run(arguments: [String], environment: [String: String], logger: Logger, openModem: @escaping ModemOpener, timing: Timing, hubPro: HubProAccess) async throws {
     let options = try ServerOptions(arguments: arguments, environment: environment)
     let environment = try EnvironmentFile.load(explicitPath: options.envFilePath, environment: environment, warn: { logger.warning("\($0)") })
     let target = try ModemTarget.resolve(hub: options.hub, serialPath: options.serialPath, environment: environment)
@@ -127,51 +168,91 @@ public enum ServerRunner {
     catch { throw ServerRunError.invalidPassword }
     let catalog = try ProductCatalog.load(contentsOf: ProductCatalog.bundledCatalogURL())
     let store = JSONFileDeviceRegistryStore(fileURL: URL(fileURLWithPath: options.statePath))
+    let clientFile = FileClientPersistence.url(besideState: options.statePath)
+    let clients = ClientStore(persistence: FileClientPersistence(url: clientFile))
+    // Reading the registry before listening keeps an unusable file from surfacing as a failed request.
+    do { _ = try await clients.serviceID() }
+    catch { throw ServerRunError.clientFileUnusable(path: clientFile.path) }
+    let rulesFile = FileNotificationRulePersistence.url(besideState: options.statePath)
+    let notificationRules = FileNotificationRulePersistence(url: rulesFile)
+    do { _ = try await notificationRules.load() }
+    catch { throw ServerRunError.notificationRulesFileUnusable(path: rulesFile.path) }
+    let schedulesFile = FileSchedulePersistence.url(besideState: options.statePath)
+    let schedulePersistence = FileSchedulePersistence(url: schedulesFile)
+    do { _ = try await schedulePersistence.load() }
+    catch { throw ServerRunError.schedulesFileUnusable(path: schedulesFile.path) }
+    let routesFile = FileRoutePersistence.url(besideState: options.statePath)
+    let routes = RouteStore(persistence: FileRoutePersistence(url: routesFile))
+    do { _ = try await routes.routes() }
+    catch { throw ServerRunError.routesFileUnusable(path: routesFile.path) }
     let snapshot: NetworkSnapshot
     do { snapshot = try store.loadNetwork() }
     catch let error as DeviceRegistryStoreError { throw ServerRunError.stateFileUnusable(path: options.statePath, reason: error) }
     let savedAt = (try? FileManager.default.attributesOfItem(atPath: options.statePath))?[.modificationDate] as? Date
-    let endpoint: ModemEndpoint
+    let opener: any ServedNetworkOpening
     let hub: HubLocation?
     switch target {
     case let .hub(host, port):
       let location = try ModemTarget.hubLocation(host: host, port: port)
-      endpoint = .hub(location, try HubCredentials(environment: environment))
       hub = location
-      logger.info("Starting: opening the Hub at \(location.host):\(location.port)")
+      if let credentials = try? HubCredentials(environment: environment) {
+        opener = EndpointOpener(endpoint: .hub(location, credentials), catalog: catalog, openModem: openModem)
+        logger.info("Starting: opening the Hub at \(location.host):\(location.port)")
+      } else if let hubProPort = try await hubPro.recognize(host, catalog) {
+        // A Hub Pro has no user name or password, so a host that answers as one is served as one.
+        opener = HubProOpener(host: host, port: hubProPort, catalog: catalog, httpClient: hubPro.httpClient, pollInterval: .seconds(options.pollIntervalSeconds), clock: hubPro.clock)
+        logger.info("Starting: opening the Hub Pro at \(host):\(hubProPort)")
+      } else {
+        opener = EndpointOpener(endpoint: .hub(location, try HubCredentials(environment: environment)), catalog: catalog, openModem: openModem)
+      }
     case let .serial(path):
-      endpoint = .serial(path: path)
+      opener = EndpointOpener(endpoint: .serial(path: path), catalog: catalog, openModem: openModem)
       hub = nil
       logger.info("Starting: opening the serial port")
     }
     try await serve(
       network: DeviceNetwork.offline(catalog: catalog, snapshot: snapshot, hub: hub),
-      opener: EndpointOpener(endpoint: endpoint, catalog: catalog, openModem: openModem),
+      opener: opener,
       hub: hub,
       snapshotSavedAt: savedAt,
       persistence: NetworkSnapshotPersistence(store: store),
       options: options,
       authentication: authentication,
+      clients: clients,
+      pairing: pairingConfiguration(for: options),
+      routes: routes,
+      notificationRules: notificationRules,
+      scheduling: ScheduleConfiguration(settings: ScheduleSettings(timeZoneIdentifier: options.timeZone, location: options.location), store: schedulePersistence),
       logger: logger,
       timing: timing
     )
+  }
+
+  /// The pairing document's home name and its local network route: the advertised address, or the one the server listens on.
+  static func pairingConfiguration(for options: ServerOptions) -> PairingConfiguration {
+    PairingConfiguration(homeName: options.homeName, routes: [PairingRoute(kind: "lan", url: options.advertiseURL ?? "http://" + options.listen + ":" + String(options.port))])
   }
 
   /// Serves HTTP while the service keeps its modem connected. The listener opens first and serves
   /// the saved device list, so a Hub that is away never keeps the server down.
   static func serve(
     network: DeviceNetwork,
-    opener: any NetworkOpening,
+    opener: any ServedNetworkOpening,
     hub: HubLocation?,
     snapshotSavedAt: Date?,
     persistence: any SnapshotPersisting,
     options: ServerOptions,
     authentication: any HTTPAuthenticating,
+    clients: any ClientStoring,
+    pairing: PairingConfiguration,
+    routes: any RouteStoring,
+    notificationRules: any NotificationRulePersisting,
+    scheduling: ScheduleConfiguration,
     logger: Logger,
     timing: Timing
   ) async throws {
-    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter, throughHub: hub != nil)
-    let router = makeInsteonRouter(service: service, authentication: authentication, logger: logger, now: timing.now)
+    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter, throughHub: hub != nil, notificationRules: notificationRules, scheduling: scheduling)
+    let router = makeInsteonRouter(service: service, authentication: authentication, clients: clients, pairing: pairing, routes: routes, logger: logger, now: timing.now)
     let app = Application(
       responder: router.buildResponder(),
       server: ConnectionLimits.server,
@@ -315,6 +396,16 @@ public enum ServerRunError: Error, CustomStringConvertible, Equatable {
   case portInUse(host: String, port: Int)
   /// The state file exists but can't be used.
   case stateFileUnusable(path: String, reason: DeviceRegistryStoreError)
+  /// The client file exists but can't be used.
+  case clientFileUnusable(path: String)
+  /// The schedules file exists but can't be used.
+  case schedulesFileUnusable(path: String)
+  /// The notification rules file exists but can't be used.
+  case notificationRulesFileUnusable(path: String)
+  /// The routes file exists but can't be used.
+  case routesFileUnusable(path: String)
+  /// The service already keeps the most clients it allows.
+  case clientLimitReached
 
   /// A safe explanation for the person running the server.
   public var description: String { ServerFailure(self).message }

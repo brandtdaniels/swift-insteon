@@ -27,6 +27,49 @@ public struct ProductCatalog: Sendable {
 
   }
 
+  /// The ports the catalog gives for a Hub Pro's own HTTP interface, in ascending order, each
+  /// once. Empty when no product in the catalog has one.
+  public var hubProPorts: [Int] {
+
+    var ports: Set<Int> = []
+
+    for profile in catalog.profiles {
+
+      for case let .hubPro(port) in profile.capabilities {
+
+        ports.insert(Int(port))
+
+      }
+
+    }
+
+    return ports.sorted()
+
+  }
+
+  /// The model numbers of the catalog's products that have a Hub Pro's own HTTP interface, in
+  /// ascending order, each once, such as for matching a model a device advertises. Empty when
+  /// no product has one.
+  public var hubProModels: [String] {
+
+    Set(catalog.profiles.filter { (profile: DeviceProfile) -> Bool in
+
+      profile.capabilities.contains { (capability: DeviceCapability) -> Bool in
+
+        if case .hubPro = capability {
+
+          return true
+
+        }
+
+        return false
+
+      }
+
+    }.map { (profile: DeviceProfile) -> String in profile.model.rawValue }).sorted()
+
+  }
+
   /// Reads a catalog from its JSON, such as a copy a front end saved.
   ///
   /// A catalog that would let an app send or write more to a device the copy the package ships
@@ -253,8 +296,8 @@ public struct ProductCatalog: Sendable {
         return ProductCatalogUpdateError.malformedManifest
       case .checksumMismatch:
         return ProductCatalogUpdateError.checksumMismatch
-      case let .weakensGuards(weakenings):
-        return ProductCatalogUpdateError.weakensGuards(weakenings)
+      case let .weakensGuards(weakenings, published):
+        return ProductCatalogUpdateError.weakensGuards(weakenings, published: published)
       }
 
     }
@@ -267,7 +310,7 @@ public struct ProductCatalog: Sendable {
       case .unreadableBundledCatalog:
         return ProductCatalogError.bundledCopyUnreadable
       case let .weakensGuards(weakenings):
-        return ProductCatalogUpdateError.weakensGuards(weakenings)
+        return ProductCatalogUpdateError.weakensGuards(weakenings, published: nil)
       }
 
     }
@@ -378,8 +421,9 @@ public enum ProductCatalogUpdateError: Error, Hashable, Sendable {
   case unreadableCatalog
 
   /// The published catalog would let an app send or write more to a device the copy the
-  /// package ships with knows than that copy does, so it isn't used. The associated value is
-  /// each weakened guard.
-  case weakensGuards([GuardWeakening])
+  /// package ships with knows than that copy does, so it isn't used. The associated values are
+  /// each weakened guard and the published catalog's version, or `nil` if the check that found
+  /// them didn't read it.
+  case weakensGuards([GuardWeakening], published: DeviceCatalogVersion?)
 
 }

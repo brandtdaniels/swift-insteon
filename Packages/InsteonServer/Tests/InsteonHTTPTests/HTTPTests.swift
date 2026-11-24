@@ -300,6 +300,10 @@ struct HTTPTests {
       let script = String(buffer: response.body)
       #expect(script.contains(LiveLink.source))
       #expect(script.components(separatedBy: "new EventSource(").count == 2)
+      // A first connection refreshes; a resumed one refreshes only when the server reports a gap.
+      #expect(script.contains("onOpen: resumed => { if (!resumed) synchronize(); }"))
+      #expect(script.contains("update.kind === 'gap'"))
+      #expect(script.contains("?lastEventId="))
       #expect(!script.contains("if (events ||"))
     }
   }
@@ -491,7 +495,7 @@ private struct FailingEventWriter: ResponseBodyWriter {
   var failOnGreeting = false
   struct Disconnected: Error {}
   mutating func write(_ buffer: ByteBuffer) async throws {
-    if failOnGreeting || String(buffer: buffer).hasPrefix("data:") { throw Disconnected() }
+    if failOnGreeting || String(buffer: buffer).hasPrefix("id:") { throw Disconnected() }
   }
   consuming func finish(_ trailingHeaders: HTTPFields?) async throws {}
 }
@@ -509,11 +513,24 @@ actor FakeService: InsteonServiceAPI {
   let eventStream: AsyncStream<ServiceEvent>?
   /// Each subscription gets its own stream that never ends; the actor keeps its continuation open.
   let endlessEvents: Bool
+  /// Items a sequenced subscription starts with, such as a gap.
+  let scriptedItems: [SequencedItem]
+  /// The notification rules the service holds, and the refusal every rule call answers with.
+  private(set) var rules: [ServiceNotificationRule] = []
+  let ruleFailure: NotificationRuleError?
+  /// The schedules and timers the service holds, and the refusal every schedule or timer call answers with.
+  private(set) var storedSchedules: [ServiceSchedule] = []
+  private(set) var storedTimers: [ServiceTimer] = []
+  var scheduleFailure: ScheduleError?
+  /// The cursor of each sequenced subscription.
+  private(set) var cursors: [EventCursor?] = []
   private var openSources: [AsyncStream<ServiceEvent>.Continuation] = []
   var reported = ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000))
   let address = InsteonAddress(0x1A, 0x2B, 0x3C)
-  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false) {
+  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false, scriptedItems: [SequencedItem] = [], ruleFailure: NotificationRuleError? = nil) {
+    self.ruleFailure = ruleFailure
     self.endlessEvents = endlessEvents
+    self.scriptedItems = scriptedItems
     self.persistence = persistence; self.fails = fails; self.refusal = refusal; self.failure = failure; self.reading = reading
     self.eventStream = eventStream
   }
@@ -522,6 +539,50 @@ actor FakeService: InsteonServiceAPI {
     if queriesBusy { throw ServiceControlError.busy }
     return [ServiceDevice(address: address, productName: "<script>Example</script>", canTurnOnAndOff: true, canDim: true, value: 128, lastAnsweredAt: nil)]
   }
+  func notificationRules() async throws -> [ServiceNotificationRule] {
+    if let ruleFailure { throw ruleFailure }
+    return rules
+  }
+  func putNotificationRule(_ rule: ServiceNotificationRule) async throws {
+    if let ruleFailure { throw ruleFailure }
+    if let index = rules.firstIndex(where: { $0.id == rule.id }) { rules[index] = rule } else { rules.append(rule) }
+  }
+  func removeNotificationRule(id: String) async throws {
+    if let ruleFailure { throw ruleFailure }
+    guard rules.contains(where: { $0.id == id }) else { throw NotificationRuleError.unknownRule }
+    rules.removeAll { $0.id == id }
+  }
+  /// The next run the fake reports for every schedule.
+  static let nextRun = Date(timeIntervalSince1970: 1_800_003_600)
+  func schedules() async throws -> [ScheduleEntry] {
+    if let scheduleFailure { throw scheduleFailure }
+    return storedSchedules.map { ScheduleEntry(schedule: $0, nextRun: $0.isEnabled ? Self.nextRun : nil) }
+  }
+  func putSchedule(_ schedule: ServiceSchedule) async throws -> ScheduleEntry {
+    if let scheduleFailure { throw scheduleFailure }
+    if let index = storedSchedules.firstIndex(where: { $0.id == schedule.id }) { storedSchedules[index] = schedule } else { storedSchedules.append(schedule) }
+    return ScheduleEntry(schedule: schedule, nextRun: schedule.isEnabled ? Self.nextRun : nil)
+  }
+  func removeSchedule(id: String) async throws {
+    if let scheduleFailure { throw scheduleFailure }
+    guard storedSchedules.contains(where: { $0.id == id }) else { throw ScheduleError.unknownSchedule }
+    storedSchedules.removeAll { $0.id == id }
+  }
+  func timers() async throws -> [TimerEntry] {
+    if let scheduleFailure { throw scheduleFailure }
+    return storedTimers.map { TimerEntry(timer: $0, dueAt: Self.nextRun, remainingSeconds: $0.delaySeconds) }
+  }
+  func putTimer(_ timer: ServiceTimer) async throws -> TimerEntry {
+    if let scheduleFailure { throw scheduleFailure }
+    if let index = storedTimers.firstIndex(where: { $0.id == timer.id }) { storedTimers[index] = timer } else { storedTimers.append(timer) }
+    return TimerEntry(timer: timer, dueAt: Self.nextRun, remainingSeconds: timer.delaySeconds)
+  }
+  func removeTimer(id: String) async throws {
+    if let scheduleFailure { throw scheduleFailure }
+    guard storedTimers.contains(where: { $0.id == id }) else { throw ScheduleError.unknownTimer }
+    storedTimers.removeAll { $0.id == id }
+  }
+  func failSchedules(with error: ScheduleError?) { scheduleFailure = error }
   func setQueriesBusy(_ busy: Bool) { queriesBusy = busy }
   func setHealth(_ health: ServiceHealth) { reported = health }
   func health() async -> ServiceHealth { reported }
@@ -534,6 +595,23 @@ actor FakeService: InsteonServiceAPI {
     if case let .onOff(value) = reading { isOn = value } else { isOn = true }
     let status = command.action == .status ? DeviceStatus(group: 1, value: 128, allLinkDatabaseDelta: 0, reading: reading, isOn: isOn) : nil
     return CommandReceipt(address: address, outcome: command.action == .on || command.action == .off ? .acknowledged : .read, status: status, persistence: persistence)
+  }
+  /// Numbers this service's events 1, 2, 3 in the run named `fake`.
+  func sequencedEvents(after cursor: EventCursor?) async -> SequencedEvents {
+    cursors.append(cursor)
+    let source = await events()
+    let (stream, continuation) = AsyncThrowingStream<SequencedItem, any Error>.makeStream()
+    for item in scriptedItems { continuation.yield(item) }
+    let task = Task {
+      var number: UInt64 = 0
+      for await event in source {
+        number += 1
+        continuation.yield(.event(event, EventCursor(runID: "fake", sequence: number)))
+      }
+      continuation.finish()
+    }
+    continuation.onTermination = { _ in task.cancel() }
+    return SequencedEvents(stream)
   }
   func events() async -> AsyncStream<ServiceEvent> {
     subscriptions += 1

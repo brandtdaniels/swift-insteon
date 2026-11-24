@@ -15,6 +15,7 @@ public enum HelpText {
 
     return switch topic {
     case "discover": discover
+    case "hubs": hubs
     case "info": info
     case "links": links
     case "link": link
@@ -36,19 +37,21 @@ public enum HelpText {
   public static let overview = """
     Drive an Insteon Hub or modem, and its devices, from the terminal.
 
-    Usage: insteon [--hub HOST[:PORT] | --serial PATH] [--env-file PATH] [--json] COMMAND [OPTIONS]
+    Usage: insteon [--hub HOST[:PORT] | --hub NAME | --serial PATH] [--env-file PATH] [--json] COMMAND [OPTIONS]
 
     Commands:
       discover            Find Hubs on the local network
-      info                Show the modem's Insteon ID, identity and product
+      hubs                List the Hub files, with each Hub's address
+      info                Show the modem's Insteon ID, identity and product; for a Hub Pro,
+                          its versions and devices
       links               List the modem's ALL-Link database
       link [ADDRESS]      Link a device to the modem, by its address or its SET button
       unlink [ADDRESS]    Unlink a device from the modem, with its SET button or, with
                           --all, by its address
       remove ADDRESS      Remove a device from the network: unlink it from the modem,
                           forget it and show its factory reset steps
-      observe ADDRESS     Record what a device did, as a JSON file to share, using
-                          only reads
+      observe [ADDRESS]   Record what a device did, or with no ADDRESS what a Hub Pro
+                          reports, as a JSON file to share, using only reads
       device ADDRESS ...  Control a device, read and change its settings, or read its
                           ALL-Link database
       scene GROUP on|off  Turn the devices in one of the modem's groups on or off
@@ -60,7 +63,14 @@ public enum HelpText {
 
     Options:
       --hub HOST[:PORT]   The Hub to use, by its private IPv4 address, such as 192.168.1.20.
-                          Defaults to INSTEON_HUB_HOST and INSTEON_HUB_PORT.
+                          Defaults to INSTEON_HUB_HOST and INSTEON_HUB_PORT. A host that
+                          answers as a Hub Pro is read and controlled over its local HTTP
+                          interface, without a user name or password, one request at a
+                          time: info, observe and device ADDRESS id, status, on, off,
+                          ping and beep. Any other command says a Hub Pro can't do it.
+      --hub NAME          The Hub whose file is hubs/NAME.env next to the environment file.
+                          A name uses a-z, 0-9, hyphen and underscore, 1 to 32 characters.
+                          A file may hold only the address: a Hub Pro needs no credentials.
       --serial PATH       A modem on a serial or USB port, such as /dev/ttyUSB0 (macOS and Linux).
       --env-file PATH     Read environment variables from PATH instead of the default file.
       --json              Print JSON, where the command supports it.
@@ -108,29 +118,43 @@ public enum HelpText {
 
   /// The help for `insteon discover`.
   public static let discover = """
-    Usage: insteon discover [--local] [--insteon-connect] [--all]
+    Usage: insteon discover [--local] [--insteon-connect | --insteon-stage] [--all]
                             [--identify [HOST[:PORT]]] [--json]
 
-    Finds Hubs in two ways. Only the local network is searched unless --insteon-connect is
-    given; give both options for both ways.
-      --local             Ask the addresses on the local private subnets for a Hub's page,
-                          without credentials, stopping at the first Hub. Results are
+    Finds Hubs and Hub Pros. Only the local network is searched unless --insteon-connect or
+    --insteon-stage is given; give --local as well for both ways. A run asks one of Insteon's
+    services at most, so --insteon-connect and --insteon-stage can't be given together.
+      --local             Look on the local private subnets, without credentials, stopping at
+                          the first Hub. On macOS it first browses Bonjour for a Hub Pro. It
+                          then asks each address for a Hub's page and, for a Hub Pro's
+                          interface, a read of its root and its settings. Results are
                           candidates: check the address before sending a password there.
-                          The default.
+                          The default. A Hub Pro is listed with its address; use --hub with
+                          it to read and control its devices.
       --all               Ask every address on the local network, rather than stopping at
                           the first Hub.
       --insteon-connect   Ask Insteon Connect, which lists the Hubs that reported from this
                           network in the past 24 hours, with their Insteon IDs and models.
-                          This shares the network's public IP address with Insteon.
+                          This sends the network's public IP address to Insteon Connect.
+      --insteon-stage     Ask Insteon's staging service, which lists the Hubs that reported to
+                          it from this network, such as a Hub Pro that announces only there,
+                          with their Insteon IDs, models and firmware. This sends the
+                          network's public IP address to Insteon's staging service.
       --identify          Ask Hubs found at a private address for Get IM Info, with the
                           configured INSTEON_HUB_USERNAME and INSTEON_HUB_PASSWORD, to show
                           their Insteon IDs and models. This sends the password, unencrypted,
                           so the command asks before sending it to each Hub found on port
-                          25105, and stops at the first Hub that rejects it. Without a
-                          terminal to ask at, name the one Hub instead.
+                          25105, and stops at the first Hub that rejects it. A Hub Pro is
+                          never sent a password. Without a terminal to ask at, name the one
+                          Hub instead.
       --identify HOST[:PORT]
                           Ask only the Hub found at HOST, on PORT or port 25105, without
                           asking first.
+
+    For each Hub it lists, it also shows the name of the file to save the Hub's settings in,
+    in the hubs directory beside the environment file, and the command that then uses the
+    Hub by name, such as 'insteon --hub hub-2b3c info'. The name is the Hub's type and the
+    end of its Insteon ID or address.
     """
 
   /// The help for `insteon info`.
@@ -369,8 +393,17 @@ public enum HelpText {
 
   /// The help for `insteon observe`.
   public static let observe = """
-    Usage: insteon [--hub HOST[:PORT] | --serial PATH] observe ADDRESS [--note TEXT]
+    Usage: insteon [--hub HOST[:PORT] | --serial PATH] observe [ADDRESS] [--note TEXT]
                    [--output PATH] [--json]
+
+    For a Hub Pro, leave out ADDRESS: it records the Hub Pro's software versions, the kinds of
+    device it lists and, for each device, its category, subcategory, firmware version, SKU
+    and the names of the commands it lists, with the product the catalog names. It sends only
+    reads, one at a time, never a command. The file has the format
+    insteon-hubpro-observation/1, described by
+    Packages/InsteonCLI/Schemas/insteon-hubpro-observation-1.schema.json, and holds no
+    address, name or place; share it so the catalog can learn which firmware versions behave
+    alike.
 
     Records what a device did, as a small JSON file you can attach to an issue or a pull
     request, so others can help check the Insteon device catalog. The device must be linked
@@ -407,6 +440,11 @@ public enum HelpText {
     Usage: insteon [--hub HOST[:PORT] | --serial PATH] device ADDRESS ACTION [--json]
 
     ADDRESS is the device's Insteon address, such as 1A.2B.3C, printed on it.
+
+    On a Hub Pro, id, status, on, off, ping and beep run, each only when the Hub Pro lists the
+    command for the device, and on and off take --fast when it lists FastOn and FastOff. The
+    other actions say a Hub Pro can't do them. A command the Hub Pro doesn't confirm may have
+    reached the device, and is never sent again.
 
     Actions:
       id                  Ask for the device's engine (Get Insteon Engine Version), its
@@ -587,10 +625,31 @@ public enum HelpText {
                           0250 1A2B3C 012041 8F 01 00.
     """
 
+  /// The help for `insteon hubs`.
+  public static let hubs = """
+    Usage: insteon hubs
+
+    Lists the Hub files: the default environment file, and each NAME.env in the hubs
+    directory beside it, hubs/NAME.env in $XDG_CONFIG_HOME/insteon or ~/.config/insteon. For
+    each it shows the name to give '--hub', the address the file sets and a note. The default
+    file is the one a command reads when it names no Hub; when INSTEON_HUB names a Hub, that
+    Hub's file is the default instead.
+
+    A file that can't be used says why: others can write to it, another user owns it, it
+    isn't a regular file, it can't be read, or a line isn't NAME=VALUE. A file others can read
+    is listed with a reminder to run chmod 600. It never shows a user name or a password.
+
+    With no files, it says where it looked and how to create one, and exits with status 0.
+    It needs no Hub or modem.
+
+    Example:
+      insteon --hub NAME info
+    """
+
   /// The help for `insteon catalog`.
   public static let catalog = """
     Usage: insteon catalog
-           insteon catalog update
+           insteon catalog update [--explain]
 
     The command names products and events from the Insteon device catalog. A copy ships
     next to the command; 'catalog update' keeps a newer one in
@@ -607,6 +666,16 @@ public enum HelpText {
     for the catalog. A catalog in a newer format needs a newer swift-insteon; the current
     copy stays until then. A published catalog older than the copy in use, or than the
     bundled copy, isn't downloaded, and the current copy stays.
+
+    A published catalog that relaxes a safeguard the bundled copy keeps, such as describing a
+    command's effect more loosely, isn't used either, and the current copy stays until a new
+    version of this tool ships a refreshed bundle. The command prints the differences by
+    kind; --explain prints every one, one per line, grouped by kind, to standard output, or
+    as JSON with --json, whether or not the catalog was refused.
+
+    Exit status: 0 when the catalog was updated or kept for another reason, 1 when it
+    couldn't be fetched or checked, 3 when it was refused for relaxing safeguards, and 4 when
+    the copy in use is already the published one.
     """
 
 }

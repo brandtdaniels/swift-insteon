@@ -12,6 +12,10 @@ public struct Invocation: Hashable, Sendable {
   /// The Hub given with `--hub`, as `HOST` or `HOST:PORT`, if any.
   public var hub: String?
 
+  /// The name of a Hub file given with `--hub`, such as `basement`, if any. It's set instead of
+  /// ``hub`` when the value isn't an address.
+  public var hubName: String?
+
   /// The path of the serial port given with `--serial`, if any.
   public var serialPath: String?
 
@@ -50,12 +54,14 @@ public struct Invocation: Hashable, Sendable {
   ///
   /// - Parameters:
   ///   - hub: The Hub given with `--hub`, if any. Defaults to `nil`.
+  ///   - hubName: The Hub file's name given with `--hub`, if any. Defaults to `nil`.
   ///   - serialPath: The path given with `--serial`, if any. Defaults to `nil`.
   ///   - envFilePath: The path given with `--env-file`, if any. Defaults to `nil`.
   ///   - printsJSON: Whether to print JSON. Defaults to `false`.
   ///   - subcommand: The subcommand to run.
   public init(
     hub: String? = nil,
+    hubName: String? = nil,
     serialPath: String? = nil,
     envFilePath: String? = nil,
     printsJSON: Bool = false,
@@ -63,6 +69,7 @@ public struct Invocation: Hashable, Sendable {
   ) {
 
     self.hub = hub
+    self.hubName = hubName
     self.serialPath = serialPath
     self.envFilePath = envFilePath
     self.printsJSON = printsJSON
@@ -84,6 +91,10 @@ public enum Subcommand: Hashable, Sendable {
 
   /// Asks the modem about itself with Get IM Info.
   case info
+
+  /// Lists the Hub files in the per-user directory, with each Hub's address and port, and says
+  /// which one is the default. Needs no modem, and reads no Hub's password.
+  case hubs
 
   /// Reads and lists the modem's ALL-Link database.
   case links(LinksOptions)
@@ -126,8 +137,9 @@ public enum Subcommand: Hashable, Sendable {
   case catalog
 
   /// Downloads the published Insteon device catalog into the cache directory when it's newer
-  /// than the copy in use. Needs no modem, and reads no Hub settings.
-  case catalogUpdate
+  /// than the copy in use. Needs no modem, and reads no Hub settings. With `explains`, it also
+  /// lists every difference between the published catalog's safeguards and the bundled copy's.
+  case catalogUpdate(explains: Bool)
 
 }
 
@@ -251,6 +263,9 @@ public struct DiscoverOptions: Hashable, Sendable {
   /// Whether to ask Insteon Connect, which sees the network's public IP address.
   public var asksInsteonConnect: Bool
 
+  /// Whether to ask Insteon's staging service, which sees the network's public IP address.
+  public var asksInsteonStage: Bool
+
   /// Whether the local search asks every address, rather than stopping at the first Hub.
   public var searchesAllAddresses: Bool
 
@@ -268,6 +283,8 @@ public struct DiscoverOptions: Hashable, Sendable {
   ///   - searchesLocalNetwork: Whether to search the local network. Defaults to `true`.
   ///   - asksInsteonConnect: Whether to ask Insteon Connect. Defaults to `false`, so the
   ///     network's public IP address is shared only when asked.
+  ///   - asksInsteonStage: Whether to ask Insteon's staging service. Defaults to `false`, so the
+  ///     network's public IP address is shared only when asked.
   ///   - searchesAllAddresses: Whether the local search goes on after the first Hub.
   ///     Defaults to `false`.
   ///   - identifiesHubs: Whether to ask Hubs found for Get IM Info with the configured
@@ -277,6 +294,7 @@ public struct DiscoverOptions: Hashable, Sendable {
   public init(
     searchesLocalNetwork: Bool = true,
     asksInsteonConnect: Bool = false,
+    asksInsteonStage: Bool = false,
     searchesAllAddresses: Bool = false,
     identifiesHubs: Bool = false,
     identifyTarget: HubAddress? = nil
@@ -284,6 +302,7 @@ public struct DiscoverOptions: Hashable, Sendable {
 
     self.searchesLocalNetwork = searchesLocalNetwork
     self.asksInsteonConnect = asksInsteonConnect
+    self.asksInsteonStage = asksInsteonStage
     self.searchesAllAddresses = searchesAllAddresses
     self.identifiesHubs = identifiesHubs
     self.identifyTarget = identifyTarget
@@ -593,8 +612,8 @@ public struct UnlinkOptions: Hashable, Sendable {
 /// What `insteon observe` records, and where it puts the file.
 public struct ObserveOptions: Hashable, Sendable {
 
-  /// The device to observe.
-  public var device: InsteonAddress
+  /// The device to observe, or `nil` to observe a Hub Pro as a whole.
+  public var device: InsteonAddress?
 
   /// The text given with `--note`, or `nil`.
   public var note: String?
@@ -605,10 +624,10 @@ public struct ObserveOptions: Hashable, Sendable {
   /// Creates observe options.
   ///
   /// - Parameters:
-  ///   - device: The device to observe.
+  ///   - device: The device to observe, or `nil` for a Hub Pro as a whole. Defaults to `nil`.
   ///   - note: The text to record with the observation. Defaults to `nil`.
   ///   - outputPath: The file to write. Defaults to `nil`, for standard output.
-  public init(device: InsteonAddress, note: String? = nil, outputPath: String? = nil) {
+  public init(device: InsteonAddress? = nil, note: String? = nil, outputPath: String? = nil) {
 
     self.device = device
     self.note = note

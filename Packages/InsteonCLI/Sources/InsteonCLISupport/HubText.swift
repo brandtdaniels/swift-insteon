@@ -4,6 +4,9 @@ import InsteonCore
 /// asking it for Get IM Info. No message carries the Hub's credentials.
 public enum HubText {
 
+  /// How the Hub Pro is named in the command's output.
+  public static let hubProName = "Hub Pro"
+
   /// For a Hub that didn't answer any request, as when its address changed.
   ///
   /// - Parameters:
@@ -47,9 +50,11 @@ public enum HubText {
   ///   - device: The device the command was for, if it was for one, which a Hub that stopped
   ///     answering is most likely waiting on.
   /// - Returns: The message, or `nil`.
-  public static func failure(_ error: any Error, host: String, port: Int, device: InsteonAddress?) -> String? {
+  ///   - hubHasAnswered: Whether the Hub answered any poll or request in the session. When it
+  ///     never did, a modem that timed out is the Hub not answering. Defaults to `true`.
+  public static func failure(_ error: any Error, host: String, port: Int, device: InsteonAddress?, hubHasAnswered: Bool = true) -> String? {
 
-    switch HubFailure(error) {
+    switch HubFailure(error, hubHasAnswered: hubHasAnswered) {
     case .stoppedAnswering?:
       // The Hub answered earlier in the run, so it's busy rather than gone, most likely
       // with a device that doesn't answer; 'insteon discover' wouldn't help.
@@ -60,6 +65,27 @@ public enum HubText {
       unanswered(host: host, port: port)
     case nil:
       nil
+    }
+
+  }
+
+  /// What `insteon discover` says about the configuration and server versions each Hub Pro it
+  /// lists reported.
+  ///
+  /// - Parameter settings: The settings each Hub Pro listed reported, `nil` for one that
+  ///   reported none.
+  /// - Returns: A note for each Hub Pro that reported settings.
+  public static func hubProNote(settings: [HubProSettings?]) -> [String] {
+
+    settings.compactMap { (reported: HubProSettings?) -> String? in
+
+      reported.map { (reported: HubProSettings) -> String in
+
+        "Hub Pro at \(reported.network.address) reports configuration version \(reported.version.config.version) "
+          + "and server version \(reported.version.server.version)."
+
+      }
+
     }
 
   }
@@ -120,6 +146,8 @@ public enum HubText {
       return nil
     case .skippedNonPrivateAddress:
       return "\(host) isn't a private address, so it wasn't sent the password."
+    case .skippedHubPro:
+      return "\(address) is a Hub Pro, which takes no user name or password, so it wasn't sent the password."
     case .skippedNonHubPort:
       return "\(address) isn't on the Hub's port, \(HubLocation.defaultPort), so it wasn't sent the password. "
         + "'insteon discover --identify \(address)' sends it."

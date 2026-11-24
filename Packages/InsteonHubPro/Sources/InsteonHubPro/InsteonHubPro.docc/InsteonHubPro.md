@@ -41,6 +41,12 @@ port.
 ### Talking to a Hub Pro
 
 - ``HubProClient``
+- ``HubProTransport``
+- ``HubProCommand``
+- ``HubProDescription``
+- ``HubProListedDevice``
+- ``HubProCommandResult``
+- ``HubProControlError``
 - ``HubProError``
 
 ### Settings

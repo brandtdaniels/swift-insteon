@@ -75,13 +75,13 @@ let package = Package(
 
     .target(
       name: "InsteonHubDiscovery",
-      dependencies: ["InsteonHubClient", "InsteonModem", "InsteonNetworking", "InsteonProtocol"],
+      dependencies: ["InsteonHubClient", "InsteonHubPro", "InsteonModem", "InsteonNetworking", "InsteonProtocol"],
       path: "Packages/InsteonHubDiscovery/Sources/InsteonHubDiscovery",
       swiftSettings: memberImportVisibility
     ),
     .testTarget(
       name: "InsteonHubDiscoveryTests",
-      dependencies: ["InsteonHubDiscovery", "InsteonHubClient", "InsteonModem", "InsteonNetworking", "InsteonProtocol"],
+      dependencies: ["InsteonHubDiscovery", "InsteonHubClient", "InsteonHubPro", "InsteonModem", "InsteonNetworking", "InsteonProtocol"],
       path: "Packages/InsteonHubDiscovery/Tests/InsteonHubDiscoveryTests",
       swiftSettings: memberImportVisibility
     ),
@@ -195,6 +195,7 @@ let package = Package(
         "InsteonDeviceCatalog",
         "InsteonHubClient",
         "InsteonHubDiscovery",
+        "InsteonHubPro",
         "InsteonLinking",
         "InsteonLinkingTestSupport",
         "InsteonModem",
@@ -209,12 +210,12 @@ let package = Package(
     // The application service, independent of authentication, transport and presentation.
     .target(
       name: "InsteonService",
-      dependencies: ["InsteonCore", "InsteonHubClient", "InsteonModem"],
+      dependencies: ["InsteonCore", "InsteonDeviceCatalog", "InsteonHubClient", "InsteonHubPro", "InsteonModem", "InsteonNetworking", "InsteonNotifications", "InsteonProtocol", "InsteonScheduling"],
       path: "Packages/InsteonService/Sources/InsteonService"
     ),
     .testTarget(
       name: "InsteonServiceTests",
-      dependencies: ["InsteonService", "InsteonCore", "InsteonHubClient", "InsteonModem", "InsteonProtocol", "InsteonLinkingTestSupport", "InsteonTestSupport"],
+      dependencies: ["InsteonService", "InsteonCore", "InsteonDeviceCatalog", "InsteonHubClient", "InsteonHubPro", "InsteonModem", "InsteonNetworking", "InsteonProtocol", "InsteonScheduling", "InsteonLinkingTestSupport", "InsteonTestSupport"],
       path: "Packages/InsteonService/Tests/InsteonServiceTests"
     ),
     // The `insteon` command. Its command-line parsing is in InsteonCLISupport, so it can be tested.
@@ -236,9 +237,12 @@ let package = Package(
         "InsteonCLISupport",
         "InsteonCore",
         "InsteonDeviceCatalog",
+        "InsteonHubPro",
         "InsteonHubClient",
         "InsteonLinking",
-        "InsteonProtocol"
+        "InsteonNetworking",
+        "InsteonProtocol",
+        "InsteonTestSupport"
       ],
       path: "Packages/InsteonCLI/Tests/InsteonCLISupportTests",
       swiftSettings: memberImportVisibility

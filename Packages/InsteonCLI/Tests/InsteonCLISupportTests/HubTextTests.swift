@@ -3,6 +3,8 @@ import Testing
 import InsteonCLISupport
 import InsteonCore
 import InsteonHubClient
+import InsteonHubPro
+import InsteonModem
 import InsteonProtocol
 
 struct HubTextTests {
@@ -47,6 +49,39 @@ struct HubTextTests {
     )
     #expect(HubText.failure(URLError(.timedOut), host: "hub.example", port: 25105, device: device) == HubText.unanswered(host: "hub.example", port: 25105))
     #expect(HubText.failure(Other(), host: "hub.example", port: 25105, device: device) == nil)
+
+  }
+
+  // A Hub at an unreachable address leaves the modem's first command to time out; the Hub is
+  // what didn't answer.
+  @Test func saysTheHubDidNotAnswerWhenOnlyTheModemTimedOutAndTheHubNeverAnswered() {
+
+    let timedOut = ModemError.timedOut(.getModemInfo)
+
+    #expect(
+      HubText.failure(timedOut, host: "hub.example", port: 25105, device: nil, hubHasAnswered: false)
+        == HubText.unanswered(host: "hub.example", port: 25105)
+    )
+    #expect(HubText.failure(timedOut, host: "hub.example", port: 25105, device: nil, hubHasAnswered: true) == nil)
+
+  }
+
+  // MARK: - A Hub Pro
+
+  private let settings = HubProSettings(
+    time: "t",
+    network: HubProSettings.Network(address: "192.168.1.50"),
+    version: HubProSettings.Versions(
+      config: HubProSettings.SoftwareVersion(version: "5.0.1"),
+      server: HubProSettings.SoftwareVersion(version: "1.0.2")
+    )
+  )
+
+  @Test func saysWhatVersionsEachHubProListedReported() {
+
+    #expect(HubText.hubProNote(settings: [settings]) == ["Hub Pro at 192.168.1.50 reports configuration version 5.0.1 and server version 1.0.2."])
+    #expect(HubText.hubProNote(settings: [nil, nil]).isEmpty)
+    #expect(HubText.hubProNote(settings: []).isEmpty)
 
   }
 
