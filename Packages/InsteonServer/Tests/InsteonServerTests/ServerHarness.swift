@@ -48,7 +48,20 @@ struct RunningServer {
     }
     if body != nil || method == "DELETE" || method == "POST" { request.setValue("1", forHTTPHeaderField: "X-Insteon-Request") }
     for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
-    let (data, response) = try await URLSession.shared.data(for: request)
+    // A session of its own for each request, so no pooled connection to a port that has closed
+    // is reused, and a request that stalls fails and names what it was waiting for.
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.timeoutIntervalForRequest = 20
+    configuration.httpMaximumConnectionsPerHost = 1
+    let session = URLSession(configuration: configuration)
+    defer { session.finishTasksAndInvalidate() }
+    let data: Data
+    let response: URLResponse
+    do {
+      (data, response) = try await session.data(for: request)
+    } catch {
+      throw HarnessRequestError(description: "\(method) \(path) on port \(port) failed: \(error)")
+    }
     let http = response as! HTTPURLResponse
     var received: [String: String] = [:]
     for (name, value) in http.allHeaderFields { received[String(describing: name).lowercased()] = String(describing: value) }
@@ -103,4 +116,9 @@ extension ServingTests {
   func opener(_ scripted: ScriptedHubOpener) -> ServerRunner.ModemOpener {
     { _, _, snapshot, onPollSucceeded, body in try await scripted.withNetwork(snapshot: snapshot, onPollSucceeded: onPollSucceeded, body) }
   }
+}
+
+/// A request a test sent that did not complete, with what it was.
+struct HarnessRequestError: Error, CustomStringConvertible {
+  let description: String
 }
