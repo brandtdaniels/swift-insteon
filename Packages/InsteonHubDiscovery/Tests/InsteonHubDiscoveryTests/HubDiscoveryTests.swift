@@ -53,6 +53,9 @@ actor ScriptedHTTPClient: HTTPClient {
 @Suite(.timeLimit(.minutes(1)))
 struct HubDiscoveryTests {
 
+  /// A probe limit no scripted answer reaches, so a slow machine never times a probe out.
+  static let noTimeout: Duration = .seconds(3600)
+
   let hubChallenge = HTTPResponse(statusCode: 401, headers: ["WWW-Authenticate": "Basic realm=\"Insteon Hub\""])
 
   func subnet(_ address: String, _ prefixLength: Int) throws -> IPv4Subnet {
@@ -74,7 +77,7 @@ struct HubDiscoveryTests {
       }
 
     }
-    let discovery = HubDiscovery(httpClient: UnauthenticatedHTTPClient(transport: client), network: FixedNetwork(fixed: [try subnet("192.168.1.5", 24)]))
+    let discovery = HubDiscovery(httpClient: UnauthenticatedHTTPClient(transport: client), network: FixedNetwork(fixed: [try subnet("192.168.1.5", 24)]), probeTimeout: Self.noTimeout)
 
     let hubs = try await discovery.discover()
 
@@ -113,7 +116,7 @@ struct HubDiscoveryTests {
 
     let hubChallenge = hubChallenge
     let client = ScriptedHTTPClient { $0 == "10.0.0.2" ? hubChallenge : nil }
-    let discovery = HubDiscovery(httpClient: UnauthenticatedHTTPClient(transport: client), network: FixedNetwork(fixed: [try subnet("10.0.0.1", 29)]))
+    let discovery = HubDiscovery(httpClient: UnauthenticatedHTTPClient(transport: client), network: FixedNetwork(fixed: [try subnet("10.0.0.1", 29)]), probeTimeout: Self.noTimeout)
     let found = Found()
 
     _ = try await discovery.discover { await found.append($0) }
@@ -125,7 +128,7 @@ struct HubDiscoveryTests {
   @Test func skipsSubnetsLargerThanTheLimit() async throws {
 
     let client = ScriptedHTTPClient { _ in nil }
-    let discovery = HubDiscovery(httpClient: UnauthenticatedHTTPClient(transport: client), network: FixedNetwork(fixed: [try subnet("10.0.0.1", 16)]))
+    let discovery = HubDiscovery(httpClient: UnauthenticatedHTTPClient(transport: client), network: FixedNetwork(fixed: [try subnet("10.0.0.1", 16)]), probeTimeout: Self.noTimeout)
 
     let hubs = try await discovery.discover()
 
@@ -140,7 +143,7 @@ struct HubDiscoveryTests {
     let client = ScriptedHTTPClient { _ in nil }
     let network = FixedNetwork(fixed: [try subnet("100.64.12.7", 24), try subnet("203.0.113.9", 24)])
 
-    _ = try await HubDiscovery(httpClient: UnauthenticatedHTTPClient(transport: client), network: network).discover()
+    _ = try await HubDiscovery(httpClient: UnauthenticatedHTTPClient(transport: client), network: network, probeTimeout: Self.noTimeout).discover()
 
     #expect(await client.requests.isEmpty)
 
@@ -153,7 +156,7 @@ struct HubDiscoveryTests {
     // The second subnet starts at a lower address than the first.
     let network = FixedNetwork(fixed: [try subnet("10.0.1.50", 24), try subnet("10.0.0.10", 23)])
 
-    let hubs = try await HubDiscovery(httpClient: UnauthenticatedHTTPClient(transport: client), network: network).discover()
+    let hubs = try await HubDiscovery(httpClient: UnauthenticatedHTTPClient(transport: client), network: network, probeTimeout: Self.noTimeout).discover()
 
     #expect(hubs.map(\.endpoint.host) == ["10.0.0.5", "10.0.1.9"])
 
@@ -164,7 +167,7 @@ struct HubDiscoveryTests {
     let client = ScriptedHTTPClient { _ in nil }
     let network = FixedNetwork(fixed: [try subnet("10.0.0.1", 30), try subnet("10.0.0.2", 30)])
 
-    _ = try await HubDiscovery(httpClient: UnauthenticatedHTTPClient(transport: client), network: network).discover()
+    _ = try await HubDiscovery(httpClient: UnauthenticatedHTTPClient(transport: client), network: network, probeTimeout: Self.noTimeout).discover()
 
     #expect(await client.requests.count == 2)
 
@@ -177,6 +180,7 @@ struct HubDiscoveryTests {
     let discovery = HubDiscovery(
       httpClient: UnauthenticatedHTTPClient(transport: client),
       network: FixedNetwork(fixed: [try subnet("10.0.0.1", 28)]),
+      probeTimeout: Self.noTimeout,
       concurrentProbes: 4
     )
 
