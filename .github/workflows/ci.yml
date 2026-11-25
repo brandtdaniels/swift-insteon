@@ -65,7 +65,10 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: $REPO_CHECK allowlist-growth --base "origin/${BASE_REF}"
+        run: |
+          # The container runs as another user than the checkout's owner, and git refuses that.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          $REPO_CHECK allowlist-growth --base "origin/${BASE_REF}"
       - name: Test the checks
         run: swift test --package-path Tools/RepoChecks --skip-build
 
