@@ -101,7 +101,7 @@ public enum TransferApplyText {
     case .writtenOnRetry: "Written on the second try."
     case .alreadyDone: "Already done."
     case .notWritten: "It didn't read back as written."
-    case .unanswered: "It didn't answer, so it isn't known whether it was written. It isn't sent again."
+    case .unanswered: "It wasn't confirmed, such as by no answer, so it isn't known whether it was written. It isn't sent again."
     case .changedSincePlanned: "The record is neither the backup's nor the plan's, so it was left alone."
     case .notReached: "Not reached."
     }

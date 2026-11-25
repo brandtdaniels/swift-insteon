@@ -61,6 +61,12 @@ enum TransferCommand {
       Output.note("The plan has nothing to write.")
     case .dryRun:
       Output.note("Dry run: nothing was written.")
+
+      if (plan.stepCounts[.destructive] ?? 0) > 0, !options.isForced {
+
+        Output.note("A real run would stop: removing the modem's own links takes --force.")
+
+      }
     case .needsForce:
       throw CommandFailure(description: "Removing the modem's own links takes --force. Nothing was written.")
     case .declined:
@@ -70,9 +76,18 @@ enum TransferCommand {
         Output.note(TransferApplyText.line(step, outcome))
       }
 
+      // With --json, standard output holds the plan's JSON alone.
       for line in TransferApplyText.summary(report, plan: plan) {
 
-        Output.line(line)
+        if printsJSON {
+
+          Output.note(line)
+
+        } else {
+
+          Output.line(line)
+
+        }
 
       }
 

@@ -145,7 +145,7 @@ struct TransferApplyTests {
 
     #expect(TransferApplyText.summary(done, plan: plan).first == "Done: every step of the plan was made.")
     let partial = TransferApplyText.summary(failing, plan: plan)
-    #expect(partial.contains { $0.contains("didn't answer") })
+    #expect(partial.contains { $0.contains("wasn't confirmed") })
     #expect(partial.contains { $0.contains(plan.steps[plan.steps.count - 2].target.description) })
 
   }
