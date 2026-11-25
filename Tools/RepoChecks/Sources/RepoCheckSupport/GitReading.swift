@@ -38,20 +38,28 @@ public struct GitProcess: GitReading {
     let scratch = try ScratchDirectory(prefix: "repo-check-git")
     let output = scratch.url(for: "out")
     _ = FileManager.default.createFile(atPath: output.path, contents: nil)
+    let errors = scratch.url(for: "err")
+    _ = FileManager.default.createFile(atPath: errors.path, contents: nil)
     let handle = try FileHandle(forWritingTo: output)
-    defer { try? handle.close() }
+    let errorHandle = try FileHandle(forWritingTo: errors)
+    defer {
+      try? handle.close()
+      try? errorHandle.close()
+    }
 
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     process.arguments = ["git"] + arguments
     process.currentDirectoryURL = directory
     process.standardOutput = handle
-    process.standardError = FileHandle.nullDevice
+    process.standardError = errorHandle
     try process.run()
     process.waitUntilExit()
 
     guard process.terminationStatus == 0 else {
-      throw CheckFailure("git \(arguments.joined(separator: " ")) failed with status \(process.terminationStatus)")
+      let reason = (try? String(contentsOf: errors, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      let detail = reason.isEmpty ? "" : ": \(reason)"
+      throw CheckFailure("git \(arguments.joined(separator: " ")) failed with status \(process.terminationStatus)\(detail)")
     }
     return Array(try Data(contentsOf: output))
   }
