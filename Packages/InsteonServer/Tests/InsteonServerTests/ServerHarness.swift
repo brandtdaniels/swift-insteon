@@ -99,10 +99,13 @@ extension ServingTests {
   }
 
   /// Starts the server, waits until its listener is up, and returns it.
-  func start(_ directory: URL, extra: [String] = ["--hub", "192.168.1.20"], environment extraEnvironment: [String: String]? = nil, hubPro: ServerRunner.HubProAccess = .live, now: @escaping @Sendable () -> Date = { Date() }, openModem: @escaping ServerRunner.ModemOpener) async throws -> RunningServer {
+  func start(_ directory: URL, extra: [String] = ["--hub", "192.168.1.20"], environment extraEnvironment: [String: String]? = nil, hubPro: ServerRunner.HubProAccess = .live, now: @escaping @Sendable () -> Date = { Date() }, openModem makeOpener: @autoclosure @escaping () -> ServerRunner.ModemOpener) async throws -> RunningServer {
     // Another suite can take the port between choosing it and binding it: the run ends before it
     // listens, and a different port is chosen.
     for _ in 0..<5 {
+      // Each run gets its own opener. A run that ends before it listens has used up some of a
+      // scripted opener's attempts, and the run that replaces it must start from the whole script.
+      let openModem = makeOpener()
       let capture = ServerLogCapture()
       let port = try FreePort.unused()
       let retries = ReleasableClock()
