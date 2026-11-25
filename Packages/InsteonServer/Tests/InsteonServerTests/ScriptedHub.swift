@@ -102,7 +102,7 @@ final class HubLink: @unchecked Sendable {
     for waiter in ending { waiter.resume(throwing: error) }
   }
 
-  /// How many attempts are waiting on the connection now.
+  /// How many attempts are waiting on the connection.
   var waiterCount: Int { lock.withLock { waiters.count } }
 
   func waitUntilDropped() async throws {
