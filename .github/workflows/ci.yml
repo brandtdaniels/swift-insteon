@@ -18,120 +18,59 @@ jobs:
   terms:
     name: Terms
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    # The image by digest, so a retagged image can't change what runs. The tag says which it is.
+    container: swift:6.3.3@sha256:1038d54c80063f5cdfabc4560990c30af64b5de8ebf28161deb22ca4ad5db866
+    env:
+      REPO_CHECK: Tools/RepoChecks/.build/debug/repo-check
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           # The whole history, so a pull request's base branch is there to compare with.
           fetch-depth: 0
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: Tools/RepoChecks/.build
+          key: repo-checks-${{ runner.os }}-swift-6.3.3-${{ hashFiles('Tools/RepoChecks/Package.resolved') }}-${{ hashFiles('Tools/RepoChecks/Package.swift') }}-${{ hashFiles('Tools/RepoChecks/Sources/**', 'Tools/RepoChecks/Tests/**') }}
+          restore-keys: repo-checks-${{ runner.os }}-swift-6.3.3-
+      - name: Build the repository checks and their tests
+        run: swift build --package-path Tools/RepoChecks --build-tests -Xswiftc -warnings-as-errors
       - name: Check the docs and comments for ruled-out terms
-        run: python3 Scripts/check-terms.py
+        run: $REPO_CHECK terms
       - name: Check that the workflows pin their actions and images and limit their jobs
-        run: python3 Scripts/check-workflows.py
-      # ubuntu-latest has ShellCheck; install it if an image ever doesn't.
+        run: $REPO_CHECK workflows
+      # The container runs as root, so ShellCheck installs without sudo if the image lacks it.
       - name: Check the shell scripts
         run: |
-          command -v shellcheck > /dev/null || { sudo apt-get update && sudo apt-get install -y shellcheck; }
+          command -v shellcheck > /dev/null || { apt-get update && apt-get install -y shellcheck; }
           shellcheck --version
           shellcheck Scripts/*.sh
       - name: Test how the installer reports the catalog update
         run: Scripts/test-install-insteon.sh
       - name: Check that every async test has a time limit
-        run: python3 Scripts/check-time-limits.py
+        run: $REPO_CHECK time-limits
       - name: Check that the insteon command leaves device behavior to the libraries
-        run: python3 Scripts/check-cli-thin.py
-      # The allow-list only shrinks: a pull request may remove entries but not add them.
-      - name: Check that the allow-list doesn't grow
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          list=Scripts/check-cli-thin-allowlist.txt
-          if ! git cat-file -e "origin/${BASE_REF}:${list}" 2>/dev/null; then
-            echo "The base branch has no allow-list yet, so there's nothing to compare."
-            exit 0
-          fi
-          added=$(git diff --no-color --unified=0 "origin/${BASE_REF}" -- "$list" | grep -E '^\+[^+#]' || true)
-          if [ -n "$added" ]; then
-            echo "These lines were added to $list, which may only lose lines:"
-            echo "$added"
-            echo "Move the code into the libraries instead of allowing it."
-            exit 1
-          fi
-          echo "The allow-list didn't grow."
+        run: $REPO_CHECK cli-thin
       - name: Check the libraries for unstructured tasks, unchecked Sendable types and real clocks
-        run: python3 Scripts/check-concurrency.py
-      # This allow-list only shrinks too. An entry is its path, rule and code; its reason may
-      # be reworded.
-      - name: Check that the concurrency allow-list doesn't grow
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          list=Scripts/check-concurrency-allowlist.txt
-          if ! git cat-file -e "origin/${BASE_REF}:${list}" 2>/dev/null; then
-            echo "The base branch has no allow-list yet, so there's nothing to compare."
-            exit 0
-          fi
-          entries() { grep -v -e '^#' -e '^$' | cut -f1-3 | sort; }
-          added=$(comm -13 <(git show "origin/${BASE_REF}:${list}" | entries) <(entries < "$list"))
-          if [ -n "$added" ]; then
-            echo "These entries were added to $list, which may only lose entries:"
-            echo "$added"
-            echo "Keep the work structured and the clock injected instead of allowing it."
-            exit 1
-          fi
-          echo "The allow-list didn't grow."
+        run: $REPO_CHECK concurrency
       - name: Check that no credential is written into a string
-        run: python3 Scripts/check-credentials.py
-      # This allow-list only shrinks too. An entry is its path and names; its reason may be
-      # reworded.
-      - name: Check that the credentials allow-list doesn't grow
-        if: github.event_name == 'pull_request'
-        env:
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          list=Scripts/check-credentials-allowlist.txt
-          if ! git cat-file -e "origin/${BASE_REF}:${list}" 2>/dev/null; then
-            echo "The base branch has no allow-list yet, so there's nothing to compare."
-            exit 0
-          fi
-          entries() { grep -v -e '^#' -e '^$' | cut -f1-2 | sort; }
-          added=$(comm -13 <(git show "origin/${BASE_REF}:${list}" | entries) <(entries < "$list"))
-          if [ -n "$added" ]; then
-            echo "These entries were added to $list, which may only lose entries:"
-            echo "$added"
-            echo "Leave the credential out of the string instead of allowing it."
-            exit 1
-          fi
-          echo "The allow-list didn't grow."
+        run: $REPO_CHECK credentials
       - name: Check that the core, the command and the in-memory modem name no real device
-        run: python3 Scripts/check-device-neutral.py
-      # This allow-list only shrinks too. An entry is its path and word; its reason may be
-      # reworded.
-      - name: Check that the device-neutral allow-list doesn't grow
+        run: $REPO_CHECK device-neutral
+      - name: Check that InsteonCore's public API matches its list
+        run: $REPO_CHECK public-api
+      # Each allow-list only shrinks: a pull request may remove entries but not add them. An
+      # entry is its key columns; its reason may be reworded.
+      - name: Check that no allow-list grows
         if: github.event_name == 'pull_request'
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          list=Scripts/check-device-neutral-allowlist.txt
-          if ! git cat-file -e "origin/${BASE_REF}:${list}" 2>/dev/null; then
-            echo "The base branch has no allow-list yet, so there's nothing to compare."
-            exit 0
-          fi
-          entries() { grep -v -e '^#' -e '^$' | cut -f1-2 | sort; }
-          added=$(comm -13 <(git show "origin/${BASE_REF}:${list}" | entries) <(entries < "$list"))
-          if [ -n "$added" ]; then
-            echo "These entries were added to $list, which may only lose entries:"
-            echo "$added"
-            echo "Take the name from the catalog, or use an invented one, instead of allowing it."
-            exit 1
-          fi
-          echo "The allow-list didn't grow."
-      - name: Check that InsteonCore's public API matches its list
-        run: python3 Scripts/check-public-api.py
+          # The container runs as another user than the checkout's owner, and git refuses that.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          $REPO_CHECK allowlist-growth --base "origin/${BASE_REF}"
       - name: Test the checks
-        run: python3 -m unittest discover -s Scripts/tests -v
+        run: swift test --package-path Tools/RepoChecks --skip-build
 
   macos:
     name: macOS
