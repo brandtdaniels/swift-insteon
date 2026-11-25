@@ -14,6 +14,8 @@ final class ScriptedTransferWriter: TransferWriting, @unchecked Sendable {
   private var silentDevices: Set<InsteonAddress> = []
   private var lostWrites: [InsteonAddress: Int] = [:]
   private var unconfirmedDevices: Set<InsteonAddress> = []
+  private var drifts: [InsteonAddress: (after: Int, record: BackupRecord, memory: UInt16)] = [:]
+  private var reads: [InsteonAddress: Int] = [:]
   private var isModemSilent: Bool = false
   private(set) var deviceWrites: [InsteonAddress: Int] = [:]
   private(set) var modemAdds: Int = 0
@@ -36,6 +38,14 @@ final class ScriptedTransferWriter: TransferWriting, @unchecked Sendable {
   func failToConfirmWrites(to device: InsteonAddress) {
 
     lock.withLock { _ = unconfirmedDevices.insert(device) }
+
+  }
+
+  /// Makes a slot of the device change on its own once it has been read `reads` times, as another
+  /// program writing to it would.
+  func drift(_ device: InsteonAddress, afterReads count: Int, to record: BackupRecord, at memory: UInt16) {
+
+    lock.withLock { drifts[device] = (count, record, memory) }
 
   }
 
@@ -84,7 +94,19 @@ final class ScriptedTransferWriter: TransferWriting, @unchecked Sendable {
 
       guard !silentDevices.contains(device) else { throw Silent() }
 
-      return slots[device]?[memoryAddress]
+      let held = slots[device]?[memoryAddress]
+
+      reads[device, default: 0] += 1
+
+      if let drift = drifts[device], reads[device, default: 0] > drift.after {
+
+        slots[device, default: [:]][drift.memory] = drift.record
+
+        return memoryAddress == drift.memory ? drift.record : held
+
+      }
+
+      return held
 
     }
 
@@ -262,6 +284,23 @@ struct TransferExecutorTests {
     #expect(writer.deviceWrites[Example.lamp] == nil)
     #expect(writer.slot(0x0FFF, of: Example.lamp) == other)
     #expect(writer.slot(0x0FFF, of: Example.plug) == Self.after())
+
+  }
+
+  @Test func doesNotWriteOverARecordThatChangesAfterItWasChecked() async throws {
+
+    let (plan, writer) = try Self.home()
+    let other: BackupRecord = Example.record(.responder, group: 9, Example.outlet, memory: 0x0FFF)
+
+    // The first read is the plan's check of the database; the change comes before the rewrite reads.
+    writer.drift(Example.lamp, afterReads: 1, to: other, at: 0x0FFF)
+
+    let report = await TransferExecutor(writer: writer, keepGoing: true).run(plan)
+    let rewrite = try #require(report.results.first { $0.step.target == Example.lamp && $0.step.action == .rewriteRecord })
+
+    #expect(rewrite.outcome == .changedSincePlanned)
+    #expect(writer.deviceWrites[Example.lamp] == nil)
+    #expect(writer.slot(0x0FFF, of: Example.lamp) == other)
 
   }
 
