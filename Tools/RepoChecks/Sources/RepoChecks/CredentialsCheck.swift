@@ -86,7 +86,7 @@ public struct CredentialsCheck: RepoCheck {
         "\($0.path)\t\($0.names)\t\(reasons[Entry(path: $0.path, names: $0.names)] ?? "")"
       }
       try AllowListFile.write(header: Self.allowlistHeader, lines: lines, to: allowlist)
-      console.write("Wrote \(found.count) known lines to \(allowlist.path). Give each new one a reason.")
+      console.write("Wrote \(lines.count) known lines to \(allowlist.path). Give each new one a reason.")
       return .passed
     }
 
