@@ -57,9 +57,15 @@ actor RecordingModem: LinkingModem {
   func allLinkRecords(group: AllLinkGroupNumber, device: InsteonAddress) async throws -> [AllLinkRecord] { [] }
   func allLinkRecords() async throws -> [AllLinkRecord] { [] }
   private var listeners: [AsyncStream<ModemReply>.Continuation] = []
+  /// Broadcasts made before anyone listened, handed to the first listener. A real modem's
+  /// messages wait in the connection until they are read, so a test that fires as soon as the
+  /// server is up never loses one to a service that hasn't started listening yet.
+  private var heldBeforeAnyoneListened: [ModemReply] = []
 
   func replies() async -> AsyncStream<ModemReply> {
     let (stream, continuation) = AsyncStream<ModemReply>.makeStream()
+    for reply in heldBeforeAnyoneListened { continuation.yield(reply) }
+    heldBeforeAnyoneListened = []
     listeners.append(continuation)
     return stream
   }
@@ -67,6 +73,10 @@ actor RecordingModem: LinkingModem {
   /// A device broadcasts a command to one of its ALL-Link groups, as a sensor does when it reports.
   func broadcastGroupCommand(from device: InsteonAddress, group: UInt8, command1: UInt8) {
     let message = ReceivedMessage(sender: device, destination: InsteonAddress(0x00, 0x00, group), flags: MessageFlags(messageType: .allLinkBroadcast), command: Command(command1: command1, command2: 0x00))
+    if listeners.isEmpty {
+      heldBeforeAnyoneListened.append(.messageReceived(message))
+      return
+    }
     for listener in listeners { listener.yield(.messageReceived(message)) }
   }
 
