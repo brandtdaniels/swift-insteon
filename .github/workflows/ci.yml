@@ -31,7 +31,7 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: Tools/RepoChecks/.build
-          key: repo-checks-${{ runner.os }}-swift-6.3.3-${{ hashFiles('Tools/RepoChecks/Package.resolved') }}-${{ hashFiles('Tools/RepoChecks/Package.swift') }}
+          key: repo-checks-${{ runner.os }}-swift-6.3.3-${{ hashFiles('Tools/RepoChecks/Package.resolved') }}-${{ hashFiles('Tools/RepoChecks/Package.swift') }}-${{ hashFiles('Tools/RepoChecks/Sources/**', 'Tools/RepoChecks/Tests/**') }}
           restore-keys: repo-checks-${{ runner.os }}-swift-6.3.3-
       - name: Build the repository checks and their tests
         run: swift build --package-path Tools/RepoChecks --build-tests -Xswiftc -warnings-as-errors
