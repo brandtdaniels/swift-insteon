@@ -26,7 +26,8 @@ repo_check() {
 }
 
 curl --fail --silent --show-error --output "$manifest" "$base/manifest.json"
-read -r expected version < <(repo_check catalog-manifest "$manifest")
+fields="$(repo_check catalog-manifest "$manifest")"
+read -r expected version <<< "$fields"
 
 curl --fail --silent --show-error --output "$download" "$base/catalog.json"
 
@@ -41,7 +42,11 @@ if [ "$actual" != "$expected" ]; then
   exit 1
 fi
 
-previous="$(repo_check catalog-manifest "$resources/manifest.json" --field version 2> /dev/null || true)"
+# A copy that isn't there yet has no MAJOR.MINOR to compare with. Any other failure stops the script.
+previous=""
+if [ -f "$resources/manifest.json" ]; then
+  previous="$(repo_check catalog-manifest "$resources/manifest.json" --field version)"
+fi
 
 chmod 644 "$download" "$manifest"
 mv "$download" "$resources/catalog.json"
