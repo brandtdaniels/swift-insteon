@@ -16,6 +16,9 @@ struct RunningServer {
   let capture: ServerLogCapture
   let retries: ReleasableClock
   let reminders: ReleasableClock
+  /// Prints what the server logged if the test is still running after 90 seconds, so a hang that
+  /// can't be reproduced shows where the run stopped. Stopping the server cancels it.
+  var watchdog: Task<Void, Never>? = nil
 
   /// The first log record that satisfies `predicate`, waiting for one to arrive.
   func record(where predicate: @Sendable (ServerLogCapture.Record) -> Bool) async -> ServerLogCapture.Record? {
@@ -30,7 +33,7 @@ struct RunningServer {
     await record { $0.metadata["code"] == "\(code)" }
   }
 
-  func stop() async { task.cancel(); _ = await task.result }
+  func stop() async { watchdog?.cancel(); task.cancel(); _ = await task.result }
 
   func request(_ path: String, method: String = "GET", body: String? = nil, password: String, bearer: String? = nil) async throws -> (status: Int, json: [String: Any]) {
     let result = try await exchange(path, method: method, body: body, headers: [:], password: password, bearer: bearer)
@@ -113,7 +116,13 @@ extension ServingTests {
       var ports = listening.makeAsyncIterator()
       let bound = await ports.next()
       ended.cancel()
-      if let bound { return RunningServer(task: task, port: bound, capture: capture, retries: retries, reminders: reminders) }
+      if let bound {
+        let watchdog = Task {
+          do { try await Task.sleep(for: .seconds(90)) } catch { return }
+          print("WATCHDOG: a test has run for 90 seconds with its server up on port \(bound). The server logged:\n" + capture.records.map(\.rendered).joined(separator: "\n"))
+        }
+        return RunningServer(task: task, port: bound, capture: capture, retries: retries, reminders: reminders, watchdog: watchdog)
+      }
     }
     throw CancellationError()
   }
