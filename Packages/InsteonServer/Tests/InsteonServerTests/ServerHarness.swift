@@ -16,7 +16,7 @@ struct RunningServer {
   let capture: ServerLogCapture
   let retries: ReleasableClock
   let reminders: ReleasableClock
-  /// Prints what the server logged if the test is still running after 90 seconds, so a hang that
+  /// Prints what the server logged if the test is still running after 40 seconds, so a hang that
   /// can't be reproduced shows where the run stopped. Stopping the server cancels it.
   var watchdog: Task<Void, Never>? = nil
 
@@ -118,8 +118,8 @@ extension ServingTests {
       ended.cancel()
       if let bound {
         let watchdog = Task {
-          do { try await Task.sleep(for: .seconds(90)) } catch { return }
-          print("WATCHDOG: a test has run for 90 seconds with its server up on port \(bound). The server logged:\n" + capture.records.map(\.rendered).joined(separator: "\n"))
+          do { try await Task.sleep(for: .seconds(40)) } catch { return }
+          print("WATCHDOG: a test has run for 40 seconds with its server up on port \(bound). The server logged:\n" + capture.records.map(\.rendered).joined(separator: "\n"))
         }
         return RunningServer(task: task, port: bound, capture: capture, retries: retries, reminders: reminders, watchdog: watchdog)
       }
