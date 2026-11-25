@@ -552,6 +552,11 @@ func ModemSession.cancelLinking()
 func ModemSession.info()
 func ModemSession.network(catalog:snapshot:hub:)
 func ModemSession.write(rawCommand:forcing:collectingFor:clock:onWriting:)
+func ModemTransferWriter.addToModem(_:)
+func ModemTransferWriter.deviceRecord(of:at:)
+func ModemTransferWriter.modemRecords()
+func ModemTransferWriter.removeFromModem(_:)
+func ModemTransferWriter.write(_:to:)
 func NetworkSnapshot.merging(changesFrom:to:)
 func NetworkSnapshotStore.loadNetwork()
 func NetworkSnapshotStore.saveNetwork(_:)
@@ -650,6 +655,7 @@ init LinkedDevice(link:device:leg:)
 init ModemDatabaseEntry(record:device:)
 init ModemDeviceOperations(_:)
 init ModemScene(group:)
+init ModemTransferWriter(modem:plan:)
 init NetworkDeviceState(engine:allLinkDatabase:level:lastSeen:)
 init NetworkSnapshot(registry:devices:modemDatabase:hub:)
 init ProductCatalog(json:)
@@ -867,6 +873,7 @@ struct ModemDatabaseEntry
 struct ModemDeviceOperations
 struct ModemScene
 struct ModemSession
+struct ModemTransferWriter
 struct NetworkDeviceState
 struct NetworkSnapshot
 struct ProductCatalog
