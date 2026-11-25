@@ -69,7 +69,7 @@ struct BackupArgumentTests {
   @Test func needsPlanAndAFile() {
 
     #expect(throws: ArgumentError.missingArgument("plan", subcommand: "transfer")) { try Invocation.parse(["transfer"]) }
-    #expect(throws: ArgumentError.unexpectedArgument("apply", subcommand: "transfer")) { try Invocation.parse(["transfer", "apply", "home.json"]) }
+    #expect(throws: ArgumentError.unexpectedArgument("restore", subcommand: "transfer")) { try Invocation.parse(["transfer", "restore", "home.json"]) }
     #expect(throws: ArgumentError.missingArgument("FILE", subcommand: "transfer plan")) { try Invocation.parse(["transfer", "plan"]) }
 
   }
