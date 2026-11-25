@@ -30,6 +30,10 @@ public enum CatalogManifest {
       throw CheckFailure("\(url.path): has no \(field.rawValue)")
     }
 
-    return (value as? String) ?? "\(value)"
+    guard let text = value as? String else {
+      throw CheckFailure("\(url.path): \(field.rawValue) isn't a string")
+    }
+
+    return text
   }
 }

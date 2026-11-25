@@ -31,6 +31,14 @@ struct CatalogManifestTests {
     #expect(throws: CheckFailure.self) { try CatalogManifest.value(of: .version, at: directory.url(for: "missing.json")) }
   }
 
+  @Test("refuses a field that isn't a string")
+  func refusesNonString() throws {
+    let (_, url) = try manifest(#"{"sha256": 12, "version": null}"#)
+
+    #expect(throws: CheckFailure("\(url.path): sha256 isn't a string")) { try CatalogManifest.value(of: .sha256, at: url) }
+    #expect(throws: CheckFailure("\(url.path): version isn't a string")) { try CatalogManifest.value(of: .version, at: url) }
+  }
+
   @Test("refuses a manifest with a trailing comma")
   func refusesTrailingComma() throws {
     let (directory, url) = try manifest(#"{"sha256": "abc", "version": "1",}"#)
