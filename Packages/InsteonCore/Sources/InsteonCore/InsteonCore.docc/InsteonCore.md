@@ -366,6 +366,26 @@ do {
 - ``DeviceOperation``
 - ``DeviceControlError``
 
+### Backing up and moving to another modem
+
+- ``HomeBackup``
+- ``HomeBackupReader``
+- ``HomeBackupCheck``
+- ``HomeBackupError``
+- ``BackupDevice``
+- ``BackupModem``
+- ``BackupRecord``
+- ``BackupDatabase``
+- ``BackupUnreadable``
+- ``BackupUnreadableReason``
+- ``BackupProgress``
+- ``TransferPlanner``
+- ``TransferPlan``
+- ``TransferStep``
+- ``TransferTarget``
+- ``ExistingLinksChoice``
+- ``TransferPlanError``
+
 ### Checking devices
 
 - ``SelfTestReport``

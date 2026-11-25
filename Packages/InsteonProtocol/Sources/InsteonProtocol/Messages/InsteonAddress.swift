@@ -96,3 +96,36 @@ extension InsteonAddress: LosslessStringConvertible {
   }
 
 }
+
+// MARK: - Codable
+
+extension InsteonAddress: Codable {
+
+  /// Reads an address written as text, such as `"1A.2B.3C"`.
+  ///
+  /// - Throws: `DecodingError.dataCorrupted` if the text isn't an address.
+  public init(from decoder: any Decoder) throws {
+
+    let container = try decoder.singleValueContainer()
+    let text = try container.decode(String.self)
+
+    guard let address = InsteonAddress(text) else {
+
+      throw DecodingError.dataCorruptedError(in: container, debugDescription: "The address isn't six hexadecimal digits, such as 1A.2B.3C.")
+
+    }
+
+    self = address
+
+  }
+
+  /// Writes the address as text, such as `"1A.2B.3C"`.
+  public func encode(to encoder: any Encoder) throws {
+
+    var container = encoder.singleValueContainer()
+
+    try container.encode(description)
+
+  }
+
+}

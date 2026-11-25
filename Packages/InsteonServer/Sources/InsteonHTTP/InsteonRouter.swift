@@ -33,6 +33,7 @@ func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authenti
   let clientAPI = ClientAPI(clients: clients, pairing: pairing, routes: routes, streams: streams)
   let routeAPI = RouteAPI(routes: routes)
   let ruleAPI = NotificationRuleAPI(service: service)
+  let backupAPI = BackupAPI(service: service, routes: routes)
   let scheduleAPI = ScheduleAPI(service: service)
   let website = DeviceWebsite(service: service)
 
@@ -60,6 +61,7 @@ func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authenti
     case .listRoutes: { _, _ in try await routeAPI.list() }
     case .putRoute: { request, context in try await routeAPI.put(request, kind: context.parameters.get("kind")) }
     case .deleteRoute: { request, context in try await routeAPI.remove(request, kind: context.parameters.get("kind")) }
+    case .getBackup: { _, _ in try await backupAPI.get() }
     case .browserIndex: { request, _ in try await website.index(request) }
     case .browserControls: { _, _ in Response(status: .ok, headers: [.contentType: "text/javascript; charset=utf-8"], body: .init(byteBuffer: ByteBuffer(string: BrowserControls.source))) }
     case .browserCard: { _, context in try await website.device(address: context.parameters.get("address")) }

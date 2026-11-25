@@ -3,7 +3,7 @@ import InsteonCore
 extension Invocation {
 
   /// The subcommands, in the order the help lists them.
-  public static let subcommandNames = ["discover", "hubs", "info", "links", "link", "unlink", "remove", "observe", "device", "scene", "beep", "modem", "watch", "catalog"]
+  public static let subcommandNames = ["discover", "hubs", "info", "links", "link", "unlink", "remove", "observe", "backup", "transfer", "device", "scene", "beep", "modem", "watch", "catalog"]
 
   /// Other names for subcommands: `group` for `scene`.
   public static let subcommandAliases = ["group": "scene"]
@@ -174,6 +174,10 @@ extension Invocation {
       return try .remove(parseRemove(rest))
     case "observe":
       return try .observe(parseObserve(rest))
+    case "backup":
+      return try parseBackup(rest)
+    case "transfer":
+      return try parseTransfer(rest)
     case "device":
       return try parseDevice(rest)
     case "scene":
@@ -662,6 +666,125 @@ extension Invocation {
     }
 
     return ObserveOptions(device: device, note: note, outputPath: outputPath)
+
+  }
+
+  private static func parseBackup(_ arguments: [String]) throws(ArgumentError) -> Subcommand {
+
+    var path: String?
+    var checks = false
+    var overwrites = false
+
+    for argument in arguments {
+
+      let (name, inlineValue) = split(argument)
+
+      if !argument.hasPrefix("-") {
+
+        guard path == nil else {
+
+          throw unexpected(argument, subcommand: "backup")
+
+        }
+
+        path = argument
+        continue
+
+      }
+
+      switch name {
+      case "--check":
+        try expectNoValue(name, inlineValue)
+        checks = true
+      case "--force":
+        try expectNoValue(name, inlineValue)
+        overwrites = true
+      default:
+        throw unexpected(argument, subcommand: "backup")
+      }
+
+    }
+
+    guard let path else {
+
+      throw ArgumentError.missingArgument("FILE", subcommand: "backup")
+
+    }
+
+    if checks {
+
+      guard !overwrites else {
+
+        throw ArgumentError.conflictingOptions("--check", "--force")
+
+      }
+
+      return .backupCheck(path: path)
+
+    }
+
+    return .backup(BackupOptions(path: path, overwrites: overwrites))
+
+  }
+
+  private static func parseTransfer(_ arguments: [String]) throws(ArgumentError) -> Subcommand {
+
+    guard let action = arguments.first else {
+
+      throw ArgumentError.missingArgument("plan", subcommand: "transfer")
+
+    }
+
+    guard action == "plan" else {
+
+      throw unexpected(action, subcommand: "transfer")
+
+    }
+
+    var path: String?
+    var choice: String?
+
+    for argument in arguments.dropFirst() {
+
+      let (name, inlineValue) = split(argument)
+
+      if !argument.hasPrefix("-") {
+
+        guard path == nil else {
+
+          throw unexpected(argument, subcommand: "transfer")
+
+        }
+
+        path = argument
+        continue
+
+      }
+
+      switch name {
+      case "--merge", "--replace-database":
+        try expectNoValue(name, inlineValue)
+
+        if let choice, choice != name {
+
+          throw ArgumentError.conflictingOptions(choice, name)
+
+        }
+
+        choice = name
+      default:
+        throw unexpected(argument, subcommand: "transfer")
+      }
+
+    }
+
+    guard let path else {
+
+      throw ArgumentError.missingArgument("FILE", subcommand: "transfer plan")
+
+    }
+
+    return .transferPlan(TransferPlanOptions(path: path, existingLinks: choice == "--merge" ? .merge : (choice == nil ? .refuse : .replaceDatabase)))
 
   }
 

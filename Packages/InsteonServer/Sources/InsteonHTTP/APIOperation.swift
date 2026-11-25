@@ -8,6 +8,7 @@ enum APIOperation: String, CaseIterable, Sendable {
   case listClients, createClient, revokeClient, createPairing
   case listNotificationRules, putNotificationRule, deleteNotificationRule
   case listRoutes, putRoute, deleteRoute
+  case getBackup
   case listSchedules, putSchedule, deleteSchedule
   case listTimers, putTimer, deleteTimer
   case browserIndex, browserControls, browserCard, browserCommand
@@ -43,7 +44,7 @@ enum APIOperation: String, CaseIterable, Sendable {
   /// A browser route answers HTML and plain text for a person; the rest answer machines.
   var isAPI: Bool {
     switch self {
-    case .listDevices, .health, .executeCommand, .streamEvents, .openAPI, .listClients, .createClient, .revokeClient, .createPairing, .listNotificationRules, .putNotificationRule, .deleteNotificationRule, .listRoutes, .putRoute, .deleteRoute, .listSchedules, .putSchedule, .deleteSchedule, .listTimers, .putTimer, .deleteTimer: true
+    case .listDevices, .health, .executeCommand, .streamEvents, .openAPI, .listClients, .createClient, .revokeClient, .createPairing, .listNotificationRules, .putNotificationRule, .deleteNotificationRule, .listRoutes, .putRoute, .deleteRoute, .listSchedules, .putSchedule, .deleteSchedule, .listTimers, .putTimer, .deleteTimer, .getBackup: true
     case .browserIndex, .browserControls, .browserCard, .browserCommand: false
     }
   }
@@ -72,6 +73,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .putNotificationRule, .deleteNotificationRule: "/api/v1/notification-rules/{id}"
     case .listRoutes: "/api/v1/routes"
     case .putRoute, .deleteRoute: "/api/v1/routes/{kind}"
+    case .getBackup: "/api/v1/backup"
     case .listSchedules: "/api/v1/schedules"
     case .putSchedule, .deleteSchedule: "/api/v1/schedules/{id}"
     case .listTimers: "/api/v1/timers"
@@ -99,6 +101,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listRoutes: "List the routes transports registered"
     case .putRoute: "Register a transport's route"
     case .deleteRoute: "Remove a transport's route"
+    case .getBackup: "Read a backup of the cached network"
     case .listSchedules: "List the schedules and when each runs next"
     case .putSchedule: "Store a schedule"
     case .deleteSchedule: "Remove a schedule"
@@ -129,6 +132,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listRoutes: "The routes that separate transport processes registered, in the order they were registered. A pairing document lists them after the `lan` route. A ticket is a locator that only its transport reads, never a secret. Needs the `read` scope."
     case .putRoute: "Registers the route, or replaces the ticket of the route with that kind, which keeps its place. Every pairing document issued afterward lists it; a document issued earlier is unchanged and keeps working, because routes are only hints. Needs the `admin` scope."
     case .deleteRoute: "Removes the route from the pairing documents issued afterward. Needs the `admin` scope."
+    case .getBackup: "The same document format `insteon backup` writes: the modem's address and ALL-Link database, each device's ALL-Link database, names and identities, the notification rules, the routes and the schedules (timers are left out). It answers from the cache and sends nothing to hardware, so a device the service holds no copy of is listed with the reason `notCached`. It holds no password, client token or Hub address. Needs the `admin` scope."
     case .listSchedules: "The schedules in the order they were added, each with the time it runs next in the service's time zone. Needs the `read` scope."
     case .putSchedule: "Adds the schedule, or replaces the schedule with that identifier, which keeps nothing of the old schedule's last run. It takes effect at once. A clock time is wall-clock time in the service's time zone, so it follows daylight saving time: a time the clocks skip runs once, when the skipped span ends, and a time that happens twice runs at its first occurrence. A run less than a minute late happens; a later one is skipped, unless `catchUp` is true and it is less than 15 minutes late. Each run publishes a `schedule` event on `/api/v1/events`. Needs the `admin` scope."
     case .deleteSchedule: "Removes the schedule, which stops at once. Needs the `admin` scope."
@@ -193,7 +197,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     switch self {
     case .listDevices, .health, .streamEvents, .openAPI, .listNotificationRules, .listRoutes, .listSchedules, .listTimers: .read
     case .executeCommand: .control
-    case .listClients, .createClient, .revokeClient, .createPairing, .putNotificationRule, .deleteNotificationRule, .putRoute, .deleteRoute, .putSchedule, .deleteSchedule, .putTimer, .deleteTimer: .admin
+    case .listClients, .createClient, .revokeClient, .createPairing, .putNotificationRule, .deleteNotificationRule, .putRoute, .deleteRoute, .putSchedule, .deleteSchedule, .putTimer, .deleteTimer, .getBackup: .admin
     case .browserIndex, .browserControls, .browserCard, .browserCommand: .admin
     }
   }
@@ -222,6 +226,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listRoutes: codes += [.routeRegistrationsNotSaved]
     case .putRoute: codes += [.invalidRouteRegistration, .routeRegistrationLimitReached, .routeRegistrationsNotSaved, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected]
     case .deleteRoute: codes += [.unknownRouteRegistration, .routeRegistrationsNotSaved, .apiMarkerMissing]
+    case .getBackup: codes += [.notificationRulesNotSaved, .routeRegistrationsNotSaved, .schedulesNotSaved]
     case .browserCard:
       codes += [.invalidAddress, .unknownDevice, .busy]
     case .browserCommand:
@@ -254,6 +259,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listRoutes: [Reply(status: 200, description: "The routes.", contentType: "application/json", schema: Schema.ref("RouteList"), headers: [:])]
     case .putRoute: [Reply(status: 200, description: "The stored route.", contentType: "application/json", schema: Schema.ref("RouteStored"), headers: [:])]
     case .deleteRoute: [Reply(status: 204, description: "The route is removed.", contentType: nil, schema: nil, headers: [:])]
+    case .getBackup: [Reply(status: 200, description: "The backup, as `insteon backup` writes it.", contentType: "application/json", schema: Schema.ref("HomeBackup"), headers: [:])]
     case .deleteNotificationRule: [Reply(status: 204, description: "The rule is removed.", contentType: nil, schema: nil, headers: [:])]
     case .browserIndex: [Reply(status: 200, description: "The page.", contentType: "text/html", schema: nil, headers: [:])]
     case .browserControls: [Reply(status: 200, description: "The script.", contentType: "text/javascript", schema: nil, headers: [:])]

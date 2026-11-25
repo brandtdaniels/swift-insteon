@@ -235,6 +235,22 @@ struct OpenAPIContractTests {
     }
   }
 
+  @Test func theBackupSatisfiesItsSchemaWhateverItHolds() async throws {
+    let (_, document) = try await fetch()
+    let properties = (((document["components"] as? [String: Any])?["schemas"] as? [String: Any])?["HomeBackup"] as? [String: Any])?["properties"] as? [String: Any]
+    #expect(properties?["schedules"] != nil)
+    let rule = ServiceNotificationRule(id: "front-door", name: "Front door", trigger: .event("opened", device: address), cooldownSeconds: 30, isEnabled: true, includesDetail: false)
+    let rules = [try JSONDecoder().decode(BackupValue.self, from: JSONEncoder().encode(NotificationRuleRecord(rule)))]
+    let schedule = ServiceSchedule(id: "porch", name: "Porch light", when: Schedule(time: .clock(hour: 18, minute: 30), weekdays: [.monday]), action: ScheduledAction(device: address, kind: .off))
+    let schedules = [try JSONDecoder().decode(BackupValue.self, from: JSONEncoder().encode(ScheduleRecord(schedule)))]
+    let whole = await FakeService().homeBackup().including(notificationRules: rules, routes: [BackupRoute(kind: "relay", ticket: "ticket-1")], schedules: schedules)
+    let bare = HomeBackup(createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .hubPro, modem: BackupModem(address: address, unreadable: BackupUnreadable(reason: .unavailableFromSource)), devices: [BackupDevice(address: address, name: "Lamp", type: "Example", unreadable: BackupUnreadable(reason: .damagedRecords, detail: "1 of 3 records failed their checksum"))])
+    let empty = HomeBackup(createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .service, modem: nil, devices: [])
+    for backup in [whole, bare, empty] {
+      validate(try JSONSerialization.jsonObject(with: backup.encoded()), as: "HomeBackup", in: document)
+    }
+  }
+
   @Test func theClientTypesSatisfyTheirSchemasAndTheRequestSchemaMatchesWhatTheServerAccepts() async throws {
     let (_, document) = try await fetch()
     let record = ClientRecord(id: "0123456789abcdef", name: "Phone", scope: .control, createdAt: Date(timeIntervalSince1970: 1_800_000_000))

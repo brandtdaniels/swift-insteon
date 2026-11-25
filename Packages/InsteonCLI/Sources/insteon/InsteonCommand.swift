@@ -35,6 +35,15 @@ struct InsteonCommand {
 
       }
 
+      if case let .backupCheck(path) = invocation.subcommand {
+
+        // Needs no modem, and reads neither the environment file nor the Hub's settings.
+        try BackupCommand.check(path: path, printsJSON: invocation.printsJSON)
+
+        return ExitStatus.success
+
+      }
+
       try await run(invocation)
 
       return ExitStatus.success
@@ -109,6 +118,21 @@ struct InsteonCommand {
 
         try await ObserveCommand.run(options, modem: modem, hub: hub, names: names)
 
+      }
+    case let .backup(options):
+      // Refused before anything is read, so a file that can't be written costs no reading.
+      try BackupFile.checkWritable(options.path, overwrites: options.overwrites)
+      try await withModemAndHub(invocation) { modem, names, hub in
+        try await BackupCommand.run(options, modem: modem, hub: hub, names: names, printsJSON: printsJSON)
+      }
+    case .backupCheck:
+      // Run by `run(_:)`, which needs no modem.
+      break
+    case let .transferPlan(options):
+      // Read and checked before the modem is opened, so a file that can't be used costs no connection.
+      let backup = try TransferCommand.load(options)
+      try await withModemAndHub(invocation) { modem, names, hub in
+        try await TransferCommand.plan(backup, options: options, modem: modem, hub: hub, names: names, printsJSON: printsJSON)
       }
     case let .device(device, action):
       try await withModemAndHub(invocation) { modem, names, hub in

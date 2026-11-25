@@ -60,6 +60,9 @@ public enum ExitStatus {
   /// `insteon catalog update` found the copy in use is already the published one: `4`.
   public static let catalogCurrent: Int32 = 4
 
+  /// `insteon backup` wrote its file, but devices have no ALL-Link database in it, or
+  /// `insteon backup --check` found the file holds devices with none: `2`.
+  public static let incomplete: Int32 = 2
   /// The person interrupted the command with Control-C: `130`.
   public static let interrupted: Int32 = 130
 
@@ -74,6 +77,8 @@ public enum ExitStatus {
     switch error {
     case is ArgumentError, is ConfigurationError, is DotEnvError, is EnvironmentFileError:
       return usage
+    case is IncompleteResult:
+      return incomplete
     case is CancellationError:
       return interrupted
     default:

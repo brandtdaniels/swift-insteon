@@ -24,6 +24,9 @@ public protocol ServedNetwork: Sendable {
   /// Asks a device for its identity and records it.
   func identifyDevice(_ address: InsteonAddress) async throws
 
+  /// The modem's address and the identity it reported, or `nil` when neither is known. It sends
+  /// nothing.
+  func modemIdentity() async -> (address: InsteonAddress, identity: ReportedIdentity?)?
   /// Makes the reads a connection starts with, so a connection that can't be used fails here.
   func prepare() async throws
 
@@ -41,6 +44,11 @@ extension ServedNetwork {
 
   func reportedLocalTime() async -> String? { nil }
 
+}
+
+extension ServedNetwork {
+  /// A network that doesn't know its modem's address.
+  public func modemIdentity() async -> (address: InsteonAddress, identity: ReportedIdentity?)? { nil }
 }
 
 /// What changes on a network, as the connection delivers it.
@@ -69,6 +77,12 @@ struct ModemServedNetwork: ServedNetwork {
 
   func identifyDevice(_ address: InsteonAddress) async throws { _ = try await network.identify(address) }
 
+  func modemIdentity() async -> (address: InsteonAddress, identity: ReportedIdentity?)? {
+    if let info = await network.knownModemInfo {
+      return (info.address, ReportedIdentity(category: info.category, subcategory: info.subcategory, firmwareVersion: info.firmwareVersion))
+    }
+    return await network.hubLocation?.insteonID.map { ($0, nil) }
+  }
   func prepare() async throws {
     _ = try await network.modemInfo()
     _ = try await network.modemDatabase()
@@ -93,6 +107,9 @@ struct HubProServedNetwork: ServedNetwork {
 
   func identifyDevice(_ address: InsteonAddress) async throws { try await network.identify(address) }
 
+  func modemIdentity() async -> (address: InsteonAddress, identity: ReportedIdentity?)? {
+    await network.listing().first(where: \.isModem).map { ($0.address, nil) }
+  }
   func prepare() async throws {}
 
   func changes() async throws -> NetworkChanges { .polled(network.changes()) }

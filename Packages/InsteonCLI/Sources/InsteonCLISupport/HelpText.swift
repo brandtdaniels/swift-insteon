@@ -22,6 +22,8 @@ public enum HelpText {
     case "unlink": unlink
     case "remove": remove
     case "observe": observe
+    case "backup": backup
+    case "transfer": transfer
     case "device": device
     case "scene", "group": scene
     case "beep": beep
@@ -52,6 +54,10 @@ public enum HelpText {
                           forget it and show its factory reset steps
       observe [ADDRESS]   Record what a device did, or with no ADDRESS what a Hub Pro
                           reports, as a JSON file to share, using only reads
+      backup FILE         Read the modem's network, or a Hub Pro's device list, into a
+                          backup file, using only reads; --check FILE checks a file
+      transfer plan FILE  Plan how a backup's devices move to the connected modem, and
+                          write nothing
       device ADDRESS ...  Control a device, read and change its settings, or read its
                           ALL-Link database
       scene GROUP on|off  Turn the devices in one of the modem's groups on or off
@@ -433,6 +439,62 @@ public enum HelpText {
 
     The JSON goes to standard output, or to the file; a summary of the checks goes to
     standard error.
+    """
+
+  /// The help for `insteon backup`.
+  public static let backup = """
+    Usage: insteon [--hub HOST[:PORT] | --serial PATH] backup FILE [--force] [--json]
+           insteon backup --check FILE [--json]
+
+    Reads the modem's identity and ALL-Link database, then each device the modem or the
+    identity cache knows: its ID Request, its Light Status Request and its ALL-Link database.
+    Every request is a read; nothing is written to the modem or a device. The file is plain
+    JSON, readable only by you, and holds no Hub user name or password, token or address.
+    Progress goes to standard error.
+
+    A device that doesn't answer, rejects the modem or returns damaged records is in the file
+    with the reason, and the command lists it and exits with status 2. Control-C stops the
+    command and writes nothing.
+
+    For a Hub Pro, it records the device list from its read endpoints: each device's address,
+    name, type and identity. A Hub Pro gives out no ALL-Link databases, so each device is
+    marked with that reason.
+
+      --force             Replace FILE when it exists. Without it, an existing file is never
+                          overwritten, and nothing is read.
+      --check FILE        Check a backup without a modem: that it parses, its format and
+                          checksum, what it counts, and the devices that have no database.
+                          Exits with status 0 when the file is whole, 2 when devices have no
+                          database, and 1 when the checksum fails or the file isn't a backup.
+      --json              Print the summary as JSON.
+    """
+
+  /// The help for `insteon transfer`.
+  public static let transfer = """
+    Usage: insteon [--hub HOST[:PORT] | --serial PATH] transfer plan FILE [--merge | --replace-database] [--json]
+
+    Plans how the devices in a backup move to the connected modem, which has another address.
+    Every device holds records that name the old modem as a controller, so each record is
+    rewritten to name the new modem, with the same group and data bytes, and the old modem's
+    matching records are added to the new one. The plan prints every step, grouped per device,
+    each marked readOnly, configuration, link or destructive, with the exact record it would
+    write. It writes nothing, and every request it sends is a read.
+
+    A device is rewritten from afar only when it runs i2 and the backup holds its whole
+    database. The others, such as devices that run i1 or i2CS, or that didn't answer, are
+    listed with the links to restore and the steps by hand, in the order to do them. Links
+    between two devices are left as they are.
+
+    When the connected modem already holds links, the plan refuses unless you choose how:
+
+      --merge             Keep the modem's links and add the backup's.
+      --replace-database  Remove the modem's links first, as destructive steps, then add
+                          the backup's.
+      --json              Print the plan as JSON. The same backup and modem make the same
+                          bytes.
+
+    A Hub Pro can be the connected modem: its address comes from its device list, and its
+    ALL-Link database isn't read, so the plan says it assumes none.
     """
 
   /// The help for `insteon device`.

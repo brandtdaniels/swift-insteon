@@ -15,6 +15,11 @@ enum HubProCommands {
       switch invocation.subcommand {
       case let .observe(options):
         try await observe(options, network: network, names: names)
+      case let .backup(options):
+        try await BackupCommand.run(options, hubPro: network, printsJSON: invocation.printsJSON)
+      case let .transferPlan(options):
+        let backup = try TransferCommand.load(options)
+        try await TransferCommand.plan(backup, options: options, hubPro: network, printsJSON: invocation.printsJSON)
       case .info:
         try await network.open()
         try await info(network: network, names: names, printsJSON: invocation.printsJSON)

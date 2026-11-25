@@ -183,7 +183,8 @@ let package = Package(
         "InsteonLinking",
         "InsteonModem",
         "InsteonNetworking",
-        "InsteonProtocol"
+        "InsteonProtocol",
+        .product(name: "Crypto", package: "swift-crypto")
       ],
       path: "Packages/InsteonCore/Sources/InsteonCore",
       swiftSettings: memberImportVisibility
