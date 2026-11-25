@@ -83,16 +83,43 @@ actor RecordingModem: LinkingModem {
 }
 
 /// A connection that stays up until a test drops it with an error.
-final class HubLink: Sendable {
+///
+/// Any number of attempts can wait on it, one after another or together, and one that leaves, as
+/// a run does that lost its port to another suite, doesn't end the wait of the others.
+final class HubLink: @unchecked Sendable {
   let modem = RecordingModem()
-  private let lifetime: AsyncThrowingStream<Void, any Error>
-  private let continuation: AsyncThrowingStream<Void, any Error>.Continuation
+  private let lock = NSLock()
+  private var dropped: (any Error)?
+  private var waiters: [UUID: CheckedContinuation<Void, any Error>] = [:]
 
-  init() { (lifetime, continuation) = AsyncThrowingStream.makeStream() }
+  func drop(with error: any Error) {
+    let ending: [CheckedContinuation<Void, any Error>] = lock.withLock {
+      guard dropped == nil else { return [] }
+      dropped = error
+      defer { waiters = [:] }
+      return Array(waiters.values)
+    }
+    for waiter in ending { waiter.resume(throwing: error) }
+  }
 
-  func drop(with error: any Error) { continuation.finish(throwing: error) }
-
-  fileprivate func waitUntilDropped() async throws { for try await _ in lifetime {} }
+  func waitUntilDropped() async throws {
+    let id = UUID()
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { (waiter: CheckedContinuation<Void, any Error>) in
+        let error: (any Error)? = lock.withLock {
+          if let dropped { return dropped }
+          // Canceled before it waited: the cancellation handler found no waiter to end.
+          if Task.isCancelled { return CancellationError() }
+          waiters[id] = waiter
+          return nil
+        }
+        if let error { waiter.resume(throwing: error) }
+      }
+    } onCancel: {
+      let waiter = lock.withLock { waiters.removeValue(forKey: id) }
+      waiter?.resume(throwing: CancellationError())
+    }
+  }
 }
 
 /// Opens the connections a test scripts, one per attempt.
