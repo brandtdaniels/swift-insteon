@@ -56,6 +56,7 @@ struct RunningServer {
     // is reused, and a request that stalls fails and names what it was waiting for.
     let configuration = URLSessionConfiguration.ephemeral
     configuration.timeoutIntervalForRequest = 20
+    configuration.timeoutIntervalForResource = 20
     configuration.httpMaximumConnectionsPerHost = 1
     let session = URLSession(configuration: configuration)
     defer { session.finishTasksAndInvalidate() }
@@ -119,7 +120,7 @@ extension ServingTests {
       if let bound {
         let watchdog = Task {
           do { try await Task.sleep(for: .seconds(40)) } catch { return }
-          print("WATCHDOG: a test has run for 40 seconds with its server up on port \(bound). The server logged:\n" + capture.records.map(\.rendered).joined(separator: "\n"))
+          print("WATCHDOG: a server has been up for 40 seconds on port \(bound). If its test has already ended, ignore this. Otherwise the server logged:\n" + capture.records.map(\.rendered).joined(separator: "\n"))
         }
         return RunningServer(task: task, port: bound, capture: capture, retries: retries, reminders: reminders, watchdog: watchdog)
       }
