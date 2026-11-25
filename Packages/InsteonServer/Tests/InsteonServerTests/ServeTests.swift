@@ -23,8 +23,7 @@ struct ServeTests: ServingTests {
   // MARK: Hub away
 
   @Test func theHubBeingAwayAtStartKeepsTheServerUpServingTheSavedListAndLogsTheCause() async throws {
-    let scripted = ScriptedHubOpener([.fail(HubStoppedAnswering(underlyingError: URLError(.timedOut)))])
-    let server = try await start(try scratch(), openModem: opener(scripted))
+    let server = try await start(try scratch(), openModem: opener(ScriptedHubOpener([.fail(HubStoppedAnswering(underlyingError: URLError(.timedOut)))])))
     let record = try #require(await server.code("hub_unreachable"))
     #expect(record.level == .warning)
     #expect(record.message.contains("192.168.1.20:25105"))
@@ -125,8 +124,7 @@ struct ServeTests: ServingTests {
   @Test func eachChangeIsLoggedOnceAndRetriesOfTheSameCauseAreNot() async throws {
     let away = HubStoppedAnswering(underlyingError: URLError(.timedOut))
     let link = HubLink()
-    let scripted = ScriptedHubOpener([.fail(away), .fail(away), .fail(away), .connect(link)])
-    let server = try await start(try scratch(), openModem: opener(scripted))
+    let server = try await start(try scratch(), openModem: opener(ScriptedHubOpener([.fail(away), .fail(away), .fail(away), .connect(link)])))
     _ = await server.code("hub_unreachable")
     server.retries.release()
     server.retries.release()
@@ -144,8 +142,7 @@ struct ServeTests: ServingTests {
 
   @Test func oneOutageThatChangesBetweenUnreachableCausesIsLoggedOnceWithTheFirstCause() async throws {
     let link = HubLink()
-    let scripted = ScriptedHubOpener([.fail(HubStoppedAnswering(underlyingError: URLError(.timedOut))), .fail(ModemError.timedOut(.getModemInfo)), .connect(link)])
-    let server = try await start(try scratch(), openModem: opener(scripted))
+    let server = try await start(try scratch(), openModem: opener(ScriptedHubOpener([.fail(HubStoppedAnswering(underlyingError: URLError(.timedOut))), .fail(ModemError.timedOut(.getModemInfo)), .connect(link)])))
     _ = await server.code("hub_unreachable")
     server.retries.release()
     server.retries.release()
@@ -157,8 +154,7 @@ struct ServeTests: ServingTests {
 
   @Test func aMaterialChangeOfCauseDuringAnOutageIsLoggedAgain() async throws {
     let link = HubLink()
-    let scripted = ScriptedHubOpener([.fail(HubStoppedAnswering(underlyingError: URLError(.timedOut))), .fail(HubError.unexpectedStatus(401)), .connect(link)])
-    let server = try await start(try scratch(), openModem: opener(scripted))
+    let server = try await start(try scratch(), openModem: opener(ScriptedHubOpener([.fail(HubStoppedAnswering(underlyingError: URLError(.timedOut))), .fail(HubError.unexpectedStatus(401)), .connect(link)])))
     _ = await server.code("hub_unreachable")
     server.retries.release()
     server.retries.release()
