@@ -304,6 +304,25 @@ struct TransferExecutorTests {
 
   }
 
+  @Test func refusesToRemoveAModemRecordWhenAnotherOfTheSameGroupAndDeviceCouldGoInstead() async throws {
+
+    let devices: [BackupDevice] = [Example.device(Example.lamp, records: [Self.before(), Example.end(0x0FF7)])]
+    let backup: HomeBackup = Example.backup(devices, modemRecords: [Self.controls(Example.lamp)])
+    let controller: BackupRecord = Example.record(.controller, group: 4, Example.outlet, data: [0x00, 0x00, 0x00])
+    let responder: BackupRecord = Example.record(.responder, group: 4, Example.outlet, data: [0x00, 0x00, 0x00])
+    let plan: TransferPlan = try TransferPlanner.plan(from: backup, to: TransferTarget(address: Self.new, records: [controller, responder]), existingLinks: .replaceDatabase)
+
+    // The modem deletes the first record of a group that names a device, whichever role it has.
+    let writer: ScriptedTransferWriter = ScriptedTransferWriter(modem: [controller, responder], slots: [Example.lamp: [0x0FFF: Self.before()]])
+    let report = await TransferExecutor(writer: writer).run(plan)
+
+    #expect(!report.isComplete)
+    #expect(writer.modemRemoves == 0)
+    #expect(Set(writer.modemRecordsNow) == [controller, responder])
+    #expect(writer.deviceWrites.isEmpty)
+
+  }
+
   // MARK: - Stopping
 
   @Test func stopsAtTheFirstDeviceThatFailsUnlessToldToKeepGoing() async throws {

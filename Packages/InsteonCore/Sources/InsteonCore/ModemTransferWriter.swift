@@ -10,6 +10,9 @@ import InsteonProtocol
 /// modem's records and the devices' records the plan names are touched.
 public struct ModemTransferWriter: TransferWriting {
 
+  /// A record to write into a device's database has no memory address to go to.
+  struct MissingMemoryAddress: Error {}
+
   private let modem: any LinkingModem
   private let engines: [InsteonAddress: BackupEngine]
 
@@ -77,7 +80,7 @@ public struct ModemTransferWriter: TransferWriting {
 
   public func write(_ record: BackupRecord, to device: InsteonAddress) async throws {
 
-    guard let memoryAddress = record.memoryAddress else { return }
+    guard let memoryAddress = record.memoryAddress else { throw MissingMemoryAddress() }
 
     var stored: AllLinkRecord = try await read(device, at: memoryAddress).record
 

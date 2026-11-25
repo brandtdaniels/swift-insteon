@@ -258,13 +258,25 @@ public struct TransferExecutor: Sendable {
       case .removeModemRecord:
         guard let record = step.record else { return .notWritten }
 
+        // The modem deletes the first record of a group that names a device, whatever its role,
+        // so a record is removed only when no other record could be the one deleted.
+        let held: [BackupRecord] = try await writer.modemRecords()
+
+        if held.contains(where: { $0 != record && $0.group == record.group && $0.address == record.address }) && held.contains(record) {
+
+          return .changedSincePlanned
+
+        }
+
         return try await changeModem(contains: false, record) { try await writer.removeFromModem(record) }
       case .readDatabase:
         for rewrite in rewrites {
 
-          let held: BackupRecord? = try await writer.deviceRecord(of: step.target, at: rewrite.record?.memoryAddress ?? 0)
+          guard let record = rewrite.record, let memoryAddress = record.memoryAddress else { return .notWritten }
 
-          guard held == rewrite.replaces || held == rewrite.record else { return .changedSincePlanned }
+          let held: BackupRecord? = try await writer.deviceRecord(of: step.target, at: memoryAddress)
+
+          guard let held, held == rewrite.replaces || held == record else { return .changedSincePlanned }
 
         }
 
@@ -274,9 +286,9 @@ public struct TransferExecutor: Sendable {
       case .readBack:
         for rewrite in rewrites {
 
-          let held: BackupRecord? = try await writer.deviceRecord(of: step.target, at: rewrite.record?.memoryAddress ?? 0)
+          guard let record = rewrite.record, let memoryAddress = record.memoryAddress else { return .notWritten }
 
-          guard held == rewrite.record else { return .notWritten }
+          guard try await writer.deviceRecord(of: step.target, at: memoryAddress) == record else { return .notWritten }
 
         }
 
