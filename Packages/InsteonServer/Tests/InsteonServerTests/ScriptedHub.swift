@@ -83,14 +83,22 @@ actor RecordingModem: LinkingModem {
 }
 
 /// A connection that stays up until a test drops it with an error.
-final class HubLink: Sendable {
+final class HubLink: @unchecked Sendable {
   let modem = RecordingModem()
   private let lifetime: AsyncThrowingStream<Void, any Error>
   private let continuation: AsyncThrowingStream<Void, any Error>.Continuation
+  private let lock = NSLock()
+  private var dropRequested = false
 
   init() { (lifetime, continuation) = AsyncThrowingStream.makeStream() }
 
-  func drop(with error: any Error) { continuation.finish(throwing: error) }
+  func drop(with error: any Error) {
+    lock.withLock { dropRequested = true }
+    continuation.finish(throwing: error)
+  }
+
+  /// Whether a test dropped this connection on purpose.
+  fileprivate var wasDropped: Bool { lock.withLock { dropRequested } }
 
   fileprivate func waitUntilDropped() async throws { for try await _ in lifetime {} }
 }
@@ -114,6 +122,12 @@ actor ScriptedHubOpener: NetworkOpening {
     deviceClock = clock
   }
 
+  /// Says why a scripted connection ended when no test dropped it, so a hang that follows can be
+  /// traced in a log from a machine it can't be reproduced on.
+  private static func explain(_ reason: String, _ link: HubLink) {
+    if !link.wasDropped { print("SCRIPTED HUB: a connection ended that no test dropped: \(reason)") }
+  }
+
   /// Reports one answered poll on the connection that is open, as a Hub's polling does.
   func poll() async { await report?() }
 
@@ -128,11 +142,20 @@ actor ScriptedHubOpener: NetworkOpening {
       throw error
     case let .connect(link):
       let network = DeviceNetwork(modem: link.modem, catalog: catalog, snapshot: snapshot, clock: deviceClock)
-      try await withThrowingTaskGroup(of: Void.self) { group in
-        group.addTask { try await body(network) }
-        group.addTask { try await link.waitUntilDropped() }
+      try await withThrowingTaskGroup(of: String.self) { group in
+        group.addTask {
+          do { try await body(network) } catch {
+            if !(error is CancellationError) { Self.explain("the service's use of the connection threw \(error)", link) }
+            throw error
+          }
+          return Task.isCancelled ? "" : "the service stopped using the connection"
+        }
+        group.addTask {
+          try await link.waitUntilDropped()
+          return Task.isCancelled ? "" : "the link's lifetime stream finished without a drop"
+        }
         defer { group.cancelAll() }
-        _ = try await group.next()
+        if let ended = try await group.next(), !ended.isEmpty { Self.explain(ended, link) }
       }
     }
   }
