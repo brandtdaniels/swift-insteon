@@ -25,6 +25,17 @@ public struct ModemTransferWriter: TransferWriting {
 
   }
 
+  /// Creates a writer for the modem a network is connected to.
+  ///
+  /// - Parameters:
+  ///   - network: The network of the connected new modem.
+  ///   - plan: The plan it carries out, which says what engine each device runs.
+  public init(network: DeviceNetwork, plan: TransferPlan) {
+
+    self.init(modem: network.modem, plan: plan)
+
+  }
+
   public func modemRecords() async throws -> [BackupRecord] {
 
     try await modem.allLinkRecords().filter { $0.flags.contains(.inUse) }.map { BackupRecord(LinkRecord($0)) }

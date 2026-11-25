@@ -82,6 +82,18 @@ public struct TransferStepResult: Hashable, Sendable {
   /// What became of it.
   public var outcome: TransferOutcome
 
+  /// Creates a result.
+  ///
+  /// - Parameters:
+  ///   - step: The step.
+  ///   - outcome: What became of it.
+  public init(step: TransferStep, outcome: TransferOutcome) {
+
+    self.step = step
+    self.outcome = outcome
+
+  }
+
 }
 
 /// What carrying out a ``TransferPlan`` did, step by step, in the plan's order.
@@ -92,6 +104,18 @@ public struct TransferReport: Hashable, Sendable {
 
   /// Each step with its outcome.
   public var results: [TransferStepResult]
+
+  /// Creates a report.
+  ///
+  /// - Parameters:
+  ///   - newModem: The new modem.
+  ///   - results: Each step with its outcome.
+  public init(newModem: InsteonAddress, results: [TransferStepResult]) {
+
+    self.newModem = newModem
+    self.results = results
+
+  }
 
   /// Whether every step is done.
   public var isComplete: Bool {
