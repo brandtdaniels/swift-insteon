@@ -39,7 +39,6 @@ struct ScriptedHubTests {
     #expect(first.command.command1 == 0x11 && second.command.command1 == 0x13)
   }
 
-
   /// Given a connection that an earlier attempt waited on and was canceled while waiting, as a
   /// run that lost its port to another suite is, when a later attempt waits on the same
   /// connection and the test then drops it, then the later attempt sees the drop. A connection
@@ -59,6 +58,9 @@ struct ScriptedHubTests {
         return "\(error)"
       }
     }
+
+    // Wait, by yielding and not by time, until the later attempt is parked on the connection.
+    while link.waiterCount == 0 { await Task.yield() }
 
     link.drop(with: ScriptedHubOpener.StillAway())
 
