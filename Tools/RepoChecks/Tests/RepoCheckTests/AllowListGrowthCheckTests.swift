@@ -8,8 +8,12 @@ import Testing
 private struct StubGit: GitReading {
   var base: [String: String] = [:]
   var diffs: [String: String] = [:]
+  var unresolvable = false
 
-  func fileExists(ref: String, path: String) -> Bool { base[path] != nil }
+  func fileExists(ref: String, path: String) throws -> Bool {
+    if unresolvable { throw CheckFailure("git cat-file failed with status 128") }
+    return base[path] != nil
+  }
   func show(ref: String, path: String) throws -> [UInt8] { Array((base[path] ?? "").utf8) }
   func diff(ref: String, path: String) throws -> [UInt8] { Array((diffs[path] ?? "").utf8) }
 }
@@ -50,6 +54,14 @@ struct AllowListGrowthCheckTests {
         count: 4
       )
     )
+  }
+
+  @Test("fails when git can't answer, instead of treating the base as having no list")
+  func gitCannotAnswer() throws {
+    var fixture = Fixture()
+    fixture.git.unresolvable = true
+
+    #expect(throws: CheckFailure.self) { try fixture.run() }
   }
 
   @Test("passes when no list grew")

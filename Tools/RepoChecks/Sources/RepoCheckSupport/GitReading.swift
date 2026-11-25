@@ -2,8 +2,8 @@ import Foundation
 
 /// What a check reads from git.
 public protocol GitReading {
-  /// Whether the path exists at the ref.
-  func fileExists(ref: String, path: String) -> Bool
+  /// Whether the path exists at the ref. Throws when the ref itself can't be resolved.
+  func fileExists(ref: String, path: String) throws -> Bool
 
   /// The file's bytes at the ref.
   func show(ref: String, path: String) throws -> [UInt8]
@@ -20,8 +20,10 @@ public struct GitProcess: GitReading {
     self.directory = directory
   }
 
-  public func fileExists(ref: String, path: String) -> Bool {
-    (try? run(["cat-file", "-e", "\(ref):\(path)"])) != nil
+  public func fileExists(ref: String, path: String) throws -> Bool {
+    // A ref that doesn't resolve is an error, not an absent file.
+    _ = try run(["rev-parse", "--verify", "--quiet", "\(ref)^{commit}"])
+    return (try? run(["cat-file", "-e", "\(ref):\(path)"])) != nil
   }
 
   public func show(ref: String, path: String) throws -> [UInt8] {

@@ -53,7 +53,7 @@ public struct AllowListGrowthCheck: RepoCheck {
     var failed = false
 
     for list in Self.lists {
-      guard git.fileExists(ref: base, path: list.path) else {
+      guard try git.fileExists(ref: base, path: list.path) else {
         console.write("The base branch has no allow-list yet, so there's nothing to compare.")
         continue
       }
