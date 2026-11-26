@@ -18,7 +18,7 @@ public enum HubProText {
   public static func runsOnAHubPro(_ subcommand: Subcommand) -> Bool {
 
     switch subcommand {
-    case .help, .discover, .hubs, .info, .observe, .backup, .backupCheck, .transferPlan, .catalog, .catalogUpdate:
+    case .help, .discover, .hubs, .info, .observe, .backup, .backupCheck, .transferPlan, .transferVerify, .catalog, .catalogUpdate:
       true
     case let .device(_, action):
       switch action {
@@ -97,7 +97,7 @@ public enum HubProText {
       case .selfTest: "run a self-test of a device"
       case .id, .ping, .on, .onFast, .off, .offFast, .beep, .status: "do that"
       }
-    case .help, .discover, .hubs, .info, .observe, .backup, .backupCheck, .transferPlan, .catalog, .catalogUpdate: "do that"
+    case .help, .discover, .hubs, .info, .observe, .backup, .backupCheck, .transferPlan, .transferVerify, .catalog, .catalogUpdate: "do that"
     }
 
   }

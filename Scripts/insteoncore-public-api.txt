@@ -435,6 +435,7 @@ enum TransferEffect
 enum TransferFinding.Kind
 enum TransferPlanError
 enum TransferPlanner
+enum TransferVerifier
 enum TwoWayLinking
 enum UnidentifiedReason
 func BackupDevice.encode(to:)
@@ -656,7 +657,9 @@ init SelfTestOptions(actuates:)
 init SelfTestReport(device:engine:identity:productName:productKey:expectedProductKey:status:checks:checklist:)
 init SendConsent(effects:allowsUndescribed:)
 init SendFailure?(_:)
+init TransferDeviceCheck(address:name:problem:)
 init TransferTarget(address:records:)
+init TransferVerification(checks:)
 init UnlinkedLink(link:device:)
 init UnreadDatabase(address:device:reason:)
 init WakePrompt(device:info:steps:)
@@ -743,6 +746,8 @@ static func SerialCommandPolicy.refusal(of:forcing:)
 static func TransferPlanner.plan(from:to:existingLinks:)
 static func TransferTarget.read(from:)
 static func TransferTarget.read(hubPro:)
+static func TransferVerifier.isDeviceFailure(_:)
+static func TransferVerifier.verify(_:isDeviceFailure:describing:ping:)
 static let DeviceGroupKind.alarm
 static let DeviceGroupKind.arming
 static let DeviceGroupKind.button
@@ -870,10 +875,12 @@ struct SelfTestGroup
 struct SelfTestOptions
 struct SelfTestReport
 struct SendConsent
+struct TransferDeviceCheck
 struct TransferFinding
 struct TransferPlan
 struct TransferStep
 struct TransferTarget
+struct TransferVerification
 struct UnlinkedLink
 struct UnreadDatabase
 struct WakePrompt
@@ -1312,6 +1319,10 @@ var SelfTestReport.status
 var SendConsent.allowsUndescribed
 var SendConsent.effects
 var SendRefusal.canBeForced
+var TransferDeviceCheck.address
+var TransferDeviceCheck.answered
+var TransferDeviceCheck.name
+var TransferDeviceCheck.problem
 var TransferFinding.kind
 var TransferFinding.record
 var TransferFinding.summary
@@ -1339,6 +1350,8 @@ var TransferStep.summary
 var TransferStep.target
 var TransferTarget.address
 var TransferTarget.records
+var TransferVerification.checks
+var TransferVerification.isComplete
 var UnlinkedLink.device
 var UnlinkedLink.link
 var UnreadDatabase.address
