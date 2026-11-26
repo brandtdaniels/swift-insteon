@@ -459,6 +459,7 @@ func Device.turnOn(outputs:group:)
 func Device.turnOnFast(level:)
 func Device.writeSetting(_:to:button:)
 func DeviceInfo.meaning(of:)
+func DeviceInfo.meaning(ofResponderData:group:)
 func DeviceLinkingCoordinator.apply(_:)
 func DeviceLinkingCoordinator.link(_:as:group:twoWay:setButtonTimeout:usesCatalogLegs:observer:)
 func DeviceLinkingCoordinator.linkBySETButton(as:group:twoWay:timeout:observer:)
@@ -628,7 +629,7 @@ init Instructions(steps:notes:)
 init JSONFileDeviceRegistryStore(fileURL:)
 init LeftoverRecordScan(removedDevice:holders:unread:)
 init LeftoverRecords(address:device:records:)
-init LinkDataField(position:name:label:value:valueName:isPerGroup:documentedValue:)
+init LinkDataField(position:name:label:value:valueName:isPerGroup:documentedValue:verification:)
 init LinkDataMeaning(bytes:)
 init LinkDatabase(delta:records:)
 init LinkMade(address:group:mode:category:subcategory:firmwareVersion:)
@@ -1193,6 +1194,7 @@ var LinkDataField.name
 var LinkDataField.position
 var LinkDataField.value
 var LinkDataField.valueName
+var LinkDataField.verification
 var LinkDataMeaning.bytes
 var LinkDatabase.delta
 var LinkDatabase.hasIntactChecksums

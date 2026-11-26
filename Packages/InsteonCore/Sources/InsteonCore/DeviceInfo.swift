@@ -97,6 +97,32 @@ public struct DeviceInfo: Hashable, Sendable {
 
   }
 
+  /// What the data bytes of a responder record mean for the device, as the catalog gives them,
+  /// such as those a scene's member holds for the scene's group.
+  ///
+  /// - Parameters:
+  ///   - data: The record's Data 1 through Data 3.
+  ///   - group: The record's group, which is its controller's.
+  /// - Returns: What the bytes mean, or `nil` if the catalog doesn't describe them or `data`
+  ///   isn't three bytes.
+  public func meaning(ofResponderData data: [UInt8], group: UInt8) -> LinkDataMeaning? {
+
+    guard data.count == 3 else {
+
+      return nil
+
+    }
+
+    let record: AllLinkRecord = AllLinkRecord(flags: [.inUse], group: AllLinkGroupNumber(rawValue: group), address: InsteonAddress(0x00, 0x00, 0x00), data1: data[0], data2: data[1], data3: data[2])
+
+    return catalogDescription.explain(record, isController: false).map { (explanation: RecordDataExplanation) -> LinkDataMeaning in
+
+      LinkDataMeaning(explanation)
+
+    }
+
+  }
+
   /// What a record's data bytes mean for the device, as the catalog gives them.
   ///
   /// A controller record's bytes are read by the group type of the record's group, and a
@@ -191,6 +217,10 @@ public struct LinkDataField: Hashable, Sendable {
   /// `0xFE`, or `nil` if the byte can take any value.
   public var documentedValue: UInt8?
 
+  /// How sure the catalog is of the byte, as the catalog writes it: `observed` (seen on a
+  /// device), `documented` (an Insteon document gives it), `inferred` or `conflicting`.
+  public var verification: String
+
   /// Creates a byte.
   ///
   /// - Parameters:
@@ -202,6 +232,7 @@ public struct LinkDataField: Hashable, Sendable {
   ///   - isPerGroup: Whether the byte is the responder's own group. Defaults to `false`.
   ///   - documentedValue: The value the catalog gives for the byte when it's fixed. Defaults
   ///     to `nil`.
+  ///   - verification: How sure the catalog is of the byte. Defaults to `documented`.
   public init(
     position: Int,
     name: String,
@@ -209,7 +240,8 @@ public struct LinkDataField: Hashable, Sendable {
     value: UInt8,
     valueName: String? = nil,
     isPerGroup: Bool = false,
-    documentedValue: UInt8? = nil
+    documentedValue: UInt8? = nil,
+    verification: String = "documented"
   ) {
 
     self.position = position
@@ -219,6 +251,7 @@ public struct LinkDataField: Hashable, Sendable {
     self.valueName = valueName
     self.isPerGroup = isPerGroup
     self.documentedValue = documentedValue
+    self.verification = verification
 
   }
 
@@ -232,7 +265,8 @@ public struct LinkDataField: Hashable, Sendable {
       value: byte.value,
       valueName: byte.tableEntry?.label,
       isPerGroup: byte.isPerGroup,
-      documentedValue: byte.documentedValue
+      documentedValue: byte.documentedValue,
+      verification: byte.verification.status.rawValue
     )
 
   }
