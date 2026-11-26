@@ -81,8 +81,9 @@ public actor PairingStore {
     defer { end() }
     let records = try read()
     guard records.contains(where: { $0.serviceID == serviceID }) else { return }
-    try write(records.filter { $0.serviceID != serviceID })
+    // The credential goes first. If that fails the record stays, and removing again finishes the job.
     try await secrets.remove(account: serviceID)
+    try write(records.filter { $0.serviceID != serviceID })
   }
 
   /// Waits for any operation under way to finish. An operation suspends while it waits on the

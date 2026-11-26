@@ -57,6 +57,22 @@ private actor HeldSecretStore: SecretStore {
   }
 }
 
+/// A secret store whose removals fail until told to work.
+private actor FlakySecretStore: SecretStore {
+  struct Down: Error {}
+  private var secrets: [String: String] = [:]
+  private var removing = false
+
+  func save(_ secret: String, account: String) { secrets[account] = secret }
+  func load(account: String) -> String? { secrets[account] }
+  func remove(account: String) throws {
+    if !removing { throw Down() }
+    secrets[account] = nil
+  }
+  func accounts() -> [String] { Array(secrets.keys) }
+  func allowRemoving() { removing = true }
+}
+
 /// Gives every task already started a chance to run to its next suspension.
 private func letStartedTasksRun() async {
   for _ in 0..<100 { await Task.yield() }
@@ -166,6 +182,21 @@ struct PairingStoreTests {
 
     #expect(try await store.load().map(\.serviceID) == ["b"])
     #expect(await secrets.accounts().count == 1)
+  }
+
+  @Test func aRemoveThatFailsOnTheSecretStoreCanBeRetriedToCompletion() async throws {
+    let directory = try scratchDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let secrets = FlakySecretStore()
+    let store = PairingStore(directory: directory, secrets: secrets)
+    try await store.save(pairing(id: "a"))
+
+    await #expect(throws: FlakySecretStore.Down.self) { try await store.remove(serviceID: "a") }
+    await secrets.allowRemoving()
+    try await store.remove(serviceID: "a")
+
+    #expect(await secrets.accounts().isEmpty)
+    #expect(try await store.load().isEmpty)
   }
 
   @Test func removingAPairingThatIsNotThereChangesNothing() async throws {
