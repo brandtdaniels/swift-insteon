@@ -220,7 +220,7 @@ let package = Package(
       dependencies: ["InsteonService", "InsteonCore", "InsteonDeviceCatalog", "InsteonHubClient", "InsteonHubPro", "InsteonModem", "InsteonNetworking", "InsteonProtocol", "InsteonScheduling", "InsteonLinkingTestSupport", "InsteonTestSupport"],
       path: "Packages/InsteonService/Tests/InsteonServiceTests"
     ),
-    // The client connection: one set of calls to a home, over the local network or a remote route.
+    // The client connection: one set of calls to the service, over the local network or a remote route.
     .target(
       name: "InsteonClient",
       dependencies: ["InsteonCore", "InsteonHubDiscovery", "InsteonNetworking", "InsteonProtocol", "InsteonService"],

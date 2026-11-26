@@ -15,8 +15,8 @@ public struct PathFailure: Equatable, Sendable {
 
 }
 
-/// What a ``HomeConnection`` reports when no path gave an answer.
-public enum HomeError: Error, Equatable, Sendable {
+/// What a ``ClientConnection`` reports when no path gave an answer.
+public enum ConnectionError: Error, Equatable, Sendable {
 
   /// Every path was tried and none was reached. Nothing was sent.
   case noPathReached([PathFailure])

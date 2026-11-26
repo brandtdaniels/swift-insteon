@@ -10,8 +10,9 @@ import Musl
 /// Whether a host name is on the local network, where a bearer token may cross plain HTTP.
 ///
 /// A loopback or link-local address, a private range (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16,
-/// fc00::/7), an IPv4-mapped address of one of them, a documentation range, `localhost`, a `.local` name and a single-label name are
-/// local. Everything else is not, so a token meant for a home never crosses the internet unencrypted.
+/// fc00::/7), an IPv4-mapped address of one of them, a documentation range, `localhost` and a `.local` name are
+/// local. A number is read the way the resolver reads it, so `134744072` is 8.8.8.8. A single-label
+/// name is not local, since a search domain can resolve it to a public host. Everything else is not, so a token meant for the service never crosses the internet unencrypted.
 enum LocalAddress {
 
   static func isLocal(host rawHost: String) -> Bool {
@@ -21,11 +22,14 @@ enum LocalAddress {
     if host.hasSuffix(".") { host.removeLast() }
     if host.isEmpty { return false }
     if host.contains(":") { return isLocalIPv6(host) }
-    let parts = host.split(separator: ".", omittingEmptySubsequences: false)
-    if parts.count == 4, let octets = Optional(parts.compactMap { UInt8($0) }), octets.count == 4 {
-      return isLocalIPv4(octets)
+    // The platform resolver reads every form inet_aton accepts (1, 2, 3 or 4 parts, decimal, octal
+    // or hex), so a number such as 134744072 or 0x08080808 is an address. Judge its bytes.
+    var v4 = in_addr()
+    if inet_aton(host, &v4) != 0 {
+      return isLocalIPv4(withUnsafeBytes(of: &v4) { Array($0) })
     }
-    return host == "localhost" || host.hasSuffix(".local") || !host.contains(".")
+    // A single-label name is not local: a search domain can turn it into a public host.
+    return host == "localhost" || host.hasSuffix(".local")
   }
 
   private static func isLocalIPv4(_ o: [UInt8]) -> Bool {
