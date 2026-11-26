@@ -51,7 +51,11 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
   /// The last refusal of a command, for the screen to show once.
   public var notice: String?
 
+  private var busy: Set<InsteonAddress> = []
   private let network: Network
+
+  /// Whether a command for the row's device is out, so another tap on it is ignored.
+  public func isBusy(_ row: DeviceRow) -> Bool { busy.contains(row.id) }
 
   /// Creates a screen over a network.
   public init(network: Network) {
@@ -80,7 +84,9 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
   /// An acknowledgment that carries a status shows that status. Any other answer shows the level the
   /// network lists for the device, read again, because the screen can't tell what the device now holds.
   public func turn(_ row: DeviceRow, on: Bool) async {
-    guard row.canSwitch, rows.contains(where: { $0.id == row.id }) else { return }
+    guard row.canSwitch, rows.contains(where: { $0.id == row.id }), !busy.contains(row.id) else { return }
+    busy.insert(row.id)
+    defer { busy.remove(row.id) }
     notice = nil
     do {
       let receipt = try await network.execute(ServiceCommand(address: row.id, action: on ? .on : .off))

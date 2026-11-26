@@ -157,6 +157,48 @@ struct DevicesScreenTests {
     #expect(Set(texts).count == refusals.count)
   }
 
+  @Test func aSecondTapOnADeviceWhoseCommandIsOutSendsNothing() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    let row = screen.rows[0]
+    await network.holdCommands()
+
+    async let first: Void = screen.turn(row, on: true)
+    await network.waitForHeldCommand()
+    #expect(screen.isBusy(row))
+    await screen.turn(row, on: false)
+    await network.release()
+    await first
+
+    #expect(await network.commands == [ServiceCommand(address: lamp.address, action: .on)])
+    #expect(!screen.isBusy(row))
+  }
+
+  @Test func aDeviceIsNotBusyAfterARefusal() async {
+    let screen = DevicesScreen(network: ScriptedNetwork(devices: [lamp], refusal: ServiceControlError.busy))
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(!screen.isBusy(screen.rows[0]))
+  }
+
+  @Test func aCommandForOneDeviceDoesNotBlockAnother() async {
+    let other = ServiceDevice(address: InsteonAddress("7A.8B.9C")!, productName: "Other", canTurnOnAndOff: true, canDim: false, value: 0, lastAnsweredAt: nil)
+    let network = ScriptedNetwork(devices: [lamp, other])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    let rows = screen.rows
+    await network.holdCommands()
+
+    async let first: Void = screen.turn(rows[0], on: true)
+    await network.waitForHeldCommand()
+    #expect(!screen.isBusy(rows[1]))
+    await network.release()
+    await first
+  }
+
   @Test func aDeviceThatReportedALevelShowsItOnOrOff() async {
     let on = ServiceDevice(address: lamp.address, productName: lamp.productName, canTurnOnAndOff: true, canDim: true, value: 128, lastAnsweredAt: nil)
     let screen = DevicesScreen(network: ScriptedNetwork(devices: [on, lamp]))
