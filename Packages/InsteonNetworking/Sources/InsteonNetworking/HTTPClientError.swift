@@ -40,6 +40,9 @@ public enum HTTPClientError: Error, Hashable, Sendable {
   /// never sends them, so it wasn't sent.
   case credentialsRefused
 
+  /// The client doesn't give a response's body as it arrives, so the request wasn't sent.
+  case streamingUnsupported
+
 }
 
 extension HTTPClientError: CustomStringConvertible, LocalizedError {
@@ -60,6 +63,8 @@ extension HTTPClientError: CustomStringConvertible, LocalizedError {
       "A proxy is set in the environment for this address, in http_proxy, HTTP_PROXY, all_proxy or ALL_PROXY, and requests on the local network aren't sent through one, so the request wasn't sent. Add the exact address to no_proxy to send it directly; an address range there isn't read."
     case .credentialsRefused:
       "A request carried credentials through a client that never sends them, so it wasn't sent."
+    case .streamingUnsupported:
+      "This client doesn't give a response's body as it arrives, so the request wasn't sent."
     }
 
   }
