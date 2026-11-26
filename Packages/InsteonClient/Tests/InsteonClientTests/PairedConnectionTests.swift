@@ -116,4 +116,39 @@ struct PairedConnectionTests {
       #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer " + token)
     }
   }
+
+  @Test func routesThatAreLeftOutAreReportedWithTheirReasonWhenNothingIsReached() async throws {
+    let pairing = try ClientPairing(decoding: document(routes: #"[{"kind":"mystery","ticket":"x"},{"kind":"lan","url":"not a url"},{"kind":"lan"},{"kind":"lan","url":"http://home.example.com:8080"}]"#))
+    let http = FakeHTTPClient { _ in healthy }
+    let home = HomeConnection(pairing: pairing, local: nil, routeOpeners: [], http: http)
+
+    await #expect(throws: HomeError.noPathReached([
+      PathFailure(path: "mystery", reason: "this device has no transport for the mystery route"),
+      PathFailure(path: "lan", reason: "the route has no usable address"),
+      PathFailure(path: "lan", reason: "the route has no usable address"),
+      PathFailure(path: "lan", reason: "the token is never sent over HTTP to a host outside the local network")
+    ])) { _ = try await home.devices() }
+    #expect(await http.requests.isEmpty)
+  }
+
+  @Test func plainHTTPIsAllowedOnlyToTheLocalNetwork() async throws {
+    let local = ["http://127.0.0.1:8080", "http://localhost:8080", "http://insteon.local:8080", "http://insteon:8080", "http://10.1.2.3", "http://192.168.1.5", "http://172.16.0.1", "http://172.31.255.1", "http://169.254.1.1", "http://[::1]:8080", "http://192.0.2.20:8080", "http://[fe80::1]:8080", "http://[fd00::1]:8080"]
+    let remote = ["http://home.example.com", "http://8.8.8.8", "http://172.32.0.1", "http://[2001:4860::1]:8080"]
+    for address in local + remote {
+      let http = FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : oneDevice }
+      let pairing = try ClientPairing(decoding: document(routes: #"[{"kind":"lan","url":"\#(address)"}]"#))
+      let home = HomeConnection(pairing: pairing, routeOpeners: [], http: http)
+
+      let reached = (try? await home.devices()) != nil
+
+      #expect(reached == local.contains(address), "\(address)")
+    }
+  }
+
+  @Test func httpsIsAllowedToAnyHost() async throws {
+    let http = FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : oneDevice }
+    let pairing = try ClientPairing(decoding: document(routes: #"[{"kind":"lan","url":"https://home.example.com"}]"#))
+
+    _ = try await HomeConnection(pairing: pairing, routeOpeners: [], http: http).devices()
+  }
 }

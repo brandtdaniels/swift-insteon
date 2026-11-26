@@ -41,13 +41,49 @@ struct RemoteRoutePath: HomePath {
 
 }
 
+extension ClientPairing {
+
+  /// The paths a pairing yields, and the routes left out with the reason for each.
+  struct RoutePlan {
+    var paths: [any HomePath] = []
+    var skipped: [PathFailure] = []
+  }
+
+  /// Turns the routes into paths, in the document's order, and records each route it can't use.
+  func routePlan(transports: [any RouteOpening], http: any HTTPClient) -> RoutePlan {
+    var plan = RoutePlan()
+    for route in routes {
+      if route.kind == "lan" {
+        guard let text = route.url, let url = URL(string: text), let host = url.host, ["http", "https"].contains(url.scheme?.lowercased()) else {
+          plan.skipped.append(PathFailure(path: "lan", reason: "the route has no usable address"))
+          continue
+        }
+        guard url.scheme?.lowercased() == "https" || LocalAddress.isLocal(host: host) else {
+          plan.skipped.append(PathFailure(path: "lan", reason: "the token is never sent over HTTP to a host outside the local network"))
+          continue
+        }
+        plan.paths.append(ServicePath(name: "lan", baseURL: url, token: credential, http: http))
+      } else if let opener = transports.first(where: { $0.kind == route.kind }) {
+        plan.paths.append(RemoteRoutePath(name: route.kind, opener: opener, ticket: route.ticket, token: credential, http: http))
+      } else {
+        plan.skipped.append(PathFailure(path: route.kind, reason: "this device has no transport for the \(route.kind) route"))
+      }
+    }
+    return plan
+  }
+
+}
+
 extension HomeConnection {
 
   /// Creates a connection from a pairing document.
   ///
   /// The paths are `local`, when there is one, then the document's routes in its order. A `lan`
-  /// route goes straight to its address, and a route of a kind an opener serves goes through it. A
-  /// kind no opener serves is skipped. Every route sends the document's credential.
+  /// route goes straight to its address, and a route of a kind an opener serves goes through it.
+  /// A route that can't be used is left out and named, with its reason, in the error when no path
+  /// is reached: a kind no opener serves, an address that isn't one, or plain HTTP to a host outside
+  /// the local network, since the credential never crosses the internet unencrypted. Every route sends
+  /// the document's credential.
   ///
   /// - Parameters:
   ///   - pairing: The document the service showed.
@@ -55,18 +91,8 @@ extension HomeConnection {
   ///   - routeOpeners: The transports this device has.
   ///   - http: Sends the requests.
   public init(pairing: ClientPairing, local: (any HomePath)? = nil, routeOpeners: [any RouteOpening], http: any HTTPClient) {
-    var paths: [any HomePath] = []
-    if let local { paths.append(local) }
-    for route in pairing.routes {
-      if route.kind == "lan" {
-        if let text = route.url, let url = URL(string: text) {
-          paths.append(ServicePath(name: "lan", baseURL: url, token: pairing.credential, http: http))
-        }
-      } else if let opener = routeOpeners.first(where: { $0.kind == route.kind }) {
-        paths.append(RemoteRoutePath(name: route.kind, opener: opener, ticket: route.ticket, token: pairing.credential, http: http))
-      }
-    }
-    self.init(paths: paths)
+    let plan = pairing.routePlan(transports: routeOpeners, http: http)
+    self.init(paths: (local.map { [$0] } ?? []) + plan.paths, skipped: plan.skipped)
   }
 
 }

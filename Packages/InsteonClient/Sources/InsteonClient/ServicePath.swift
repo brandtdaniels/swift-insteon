@@ -61,6 +61,9 @@ public struct ServicePath: HomePath, CustomStringConvertible, CustomDebugStringC
       let scheme = components.scheme?.lowercased(), scheme == "http" || scheme == "https",
       let host = components.host, !host.isEmpty
     else { throw HomePathError.notReached("the service address isn't an HTTP address") }
+    if scheme == "http", !LocalAddress.isLocal(host: host) {
+      throw HomePathError.notReached("the token is never sent over HTTP to a host outside the local network")
+    }
     components.path = components.path.trimmingSuffix("/") + path
     guard let url = components.url else { throw HomePathError.notReached("the service address isn't an HTTP address") }
     return url

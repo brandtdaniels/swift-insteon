@@ -226,4 +226,12 @@ struct CancelingOpener: RouteOpening {
 
     await #expect(throws: HomePathError.badResponse) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
   }
+
+  @Test func aServicePathItselfRefusesPlainHTTPToAHostOutsideTheLocalNetwork() async {
+    let http = FakeHTTPClient { _ in healthy }
+    let path = ServicePath(name: "lan", baseURL: URL(string: "http://home.example.com")!, token: token, http: http)
+
+    await #expect(throws: HomePathError.notReached("the token is never sent over HTTP to a host outside the local network")) { _ = try await path.open() }
+    #expect(await http.requests.isEmpty)
+  }
 }
