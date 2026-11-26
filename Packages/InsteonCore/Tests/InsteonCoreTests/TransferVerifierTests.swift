@@ -1,4 +1,5 @@
 import Foundation
+import InsteonModem
 import InsteonProtocol
 import Testing
 @testable import InsteonCore
@@ -76,6 +77,24 @@ struct TransferVerifierTests {
 
   }
 
+  @Test func stopsAndPassesOnAFailureThatIsNotTheDevicesOwn() async throws {
+
+    struct ConnectionLost: Error {}
+
+    let asked = Asked()
+
+    await #expect(throws: ConnectionLost.self) {
+      try await TransferVerifier.verify(Self.backup(), isDeviceFailure: { !($0 is ConnectionLost) }) { address in
+        await asked.add(address)
+        throw ConnectionLost()
+      }
+    }
+
+    // One device was asked, and the rest weren't blamed for a connection that was gone.
+    #expect(await asked.addresses.count == 1)
+
+  }
+
   @Test func passesCancellationOnInsteadOfCallingItAnAnswer() async throws {
 
     await #expect(throws: CancellationError.self) {
@@ -105,4 +124,24 @@ private actor Concurrency {
   private(set) var most = 0
   func enter() { current += 1; most = max(most, current) }
   func leave() { current -= 1 }
+}
+
+/// Which errors blame a device and which blame the connection.
+@Suite(.timeLimit(.minutes(1)))
+struct TransferVerifierFailureTests {
+
+  @Test func aDevicesTimeoutOrRejectionIsTheDevicesOwn() {
+
+    #expect(TransferVerifier.isDeviceFailure(ModemError.deviceTimedOut(BackupExample.lamp)))
+    #expect(TransferVerifier.isDeviceFailure(ModemError.deviceRejected(BackupExample.lamp, .notLinked)))
+
+  }
+
+  @Test func aModemOrNetworkFailureIsTheConnectionsNotTheDevices() {
+
+    #expect(!TransferVerifier.isDeviceFailure(ModemError.connectionClosed))
+    #expect(!TransferVerifier.isDeviceFailure(URLError(.cannotConnectToHost)))
+
+  }
+
 }

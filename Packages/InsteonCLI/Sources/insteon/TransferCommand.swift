@@ -43,7 +43,7 @@ enum TransferCommand {
   }
 
   /// Asks each device of the backup to answer through the connected modem.
-  static func verify(_ backup: HomeBackup, modem: ModemSession, hub: HubLocation?, names: ProductNames) async throws {
+  static func verify(_ backup: HomeBackup, modem: ModemSession, hub: HubLocation?, names: ProductNames, printsJSON: Bool) async throws {
 
     Output.note("Asking each device of the backup to answer through this modem. A ping changes nothing.")
 
@@ -53,21 +53,50 @@ enum TransferCommand {
     // what lets it fall back to a Hub Pro, and not every device's.
     _ = try await network.modemInfo()
 
-    try await report(TransferVerifier.verify(backup, describing: Names.message(for:)) { address in try await network.device(address).ping() })
+    try report(await TransferVerifier.verify(backup, describing: Names.message(for:)) { address in try await network.device(address).ping() }, printsJSON: printsJSON)
 
   }
 
   /// The same, through a Hub Pro.
-  static func verify(_ backup: HomeBackup, hubPro network: HubProNetwork) async throws {
+  static func verify(_ backup: HomeBackup, hubPro network: HubProNetwork, printsJSON: Bool) async throws {
 
     Output.note("Asking each device of the backup to answer through this Hub Pro. A ping changes nothing.")
 
     try await network.open()
-    try await report(TransferVerifier.verify(backup, describing: Names.message(for:)) { address in try await network.device(address).ping() })
+    try report(await TransferVerifier.verify(backup, describing: Names.message(for:)) { address in try await network.device(address).ping() }, printsJSON: printsJSON)
 
   }
 
-  private static func report(_ verification: TransferVerification) throws {
+  /// What `--json` prints for `transfer verify`.
+  private struct VerifyJSON: Encodable {
+
+    struct Device: Encodable {
+      let address: String
+      let name: String?
+      let answered: Bool
+      let problem: String?
+    }
+
+    let complete: Bool
+    let devices: [Device]
+
+  }
+
+  private static func report(_ verification: TransferVerification, printsJSON: Bool) throws {
+
+    if printsJSON {
+
+      try Output.json(VerifyJSON(complete: verification.isComplete, devices: verification.checks.map { VerifyJSON.Device(address: $0.address.description, name: $0.name, answered: $0.answered, problem: $0.problem) }))
+
+      if !verification.isComplete {
+
+        throw IncompleteResult(description: "Some devices didn't answer through this modem.")
+
+      }
+
+      return
+
+    }
 
     if !verification.checks.isEmpty {
 

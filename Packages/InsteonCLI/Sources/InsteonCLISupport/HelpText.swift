@@ -58,7 +58,7 @@ public enum HelpText {
                           backup file, using only reads; --check FILE checks a file
       transfer plan FILE  Plan how a backup's devices move to the connected modem, and
                           write nothing
-      transfer verify FILE Ask each device of a backup to answer through the connected
+      transfer verify     Ask each device of a backup to answer through the connected
                           modem
       device ADDRESS ...  Control a device, read and change its settings, or read its
                           ALL-Link database

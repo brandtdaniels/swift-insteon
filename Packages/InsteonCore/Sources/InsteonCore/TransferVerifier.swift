@@ -1,3 +1,5 @@
+import Foundation
+import InsteonModem
 import InsteonProtocol
 
 /// Whether one device of a backup answered through the connected modem.
@@ -68,17 +70,43 @@ public struct TransferVerification: Hashable, Sendable {
 /// ```
 public enum TransferVerifier {
 
+  /// Whether an error is a device's own failure to answer, as a timeout or a rejection is, rather
+  /// than the connection's: a modem that errs another way, or a network request that can't
+  /// connect, says nothing about the devices.
+  ///
+  /// - Parameter error: The error a ping threw.
+  /// - Returns: `true` if the device didn't answer.
+  public static func isDeviceFailure(_ error: any Error) -> Bool {
+
+    if let error = error as? ModemError {
+
+      switch error {
+      case .deviceTimedOut, .deviceRejected:
+        return true
+      default:
+        return false
+      }
+
+    }
+
+    return !(error is URLError)
+
+  }
+
   /// Asks each device of the backup, one at a time and in the backup's order.
   ///
   /// - Parameters:
   ///   - backup: The backup whose devices are asked.
+  ///   - isDeviceFailure: Whether an error is the device's own failure to answer. Any other error,
+  ///     such as a lost connection, ends the run and is thrown, since it says nothing about the
+  ///     devices that weren't asked. Defaults to every error being the device's.
   ///   - describing: Says in a sentence why an error means a device didn't answer. Defaults to
   ///     the error's own text.
   ///   - ping: Asks one device to answer, and throws when it doesn't. It must change nothing.
   /// - Returns: Whether each device answered.
   /// - Throws: `CancellationError` if the task was canceled, which isn't a device that didn't
-  ///   answer.
-  public static func verify(_ backup: HomeBackup, describing: (any Error) -> String = { (error: any Error) -> String in "\(error)" }, ping: (InsteonAddress) async throws -> Void) async throws -> TransferVerification {
+  ///   answer, and any error `isDeviceFailure` says isn't the device's own.
+  public static func verify(_ backup: HomeBackup, isDeviceFailure: (any Error) -> Bool = TransferVerifier.isDeviceFailure, describing: (any Error) -> String = { (error: any Error) -> String in "\(error)" }, ping: (InsteonAddress) async throws -> Void) async throws -> TransferVerification {
 
     var checks: [TransferDeviceCheck] = []
 
@@ -93,6 +121,10 @@ public enum TransferVerifier {
       } catch is CancellationError {
 
         throw CancellationError()
+
+      } catch where !isDeviceFailure(error) {
+
+        throw error
 
       } catch {
 

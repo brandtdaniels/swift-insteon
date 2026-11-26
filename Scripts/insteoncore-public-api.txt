@@ -746,7 +746,8 @@ static func SerialCommandPolicy.refusal(of:forcing:)
 static func TransferPlanner.plan(from:to:existingLinks:)
 static func TransferTarget.read(from:)
 static func TransferTarget.read(hubPro:)
-static func TransferVerifier.verify(_:describing:ping:)
+static func TransferVerifier.isDeviceFailure(_:)
+static func TransferVerifier.verify(_:isDeviceFailure:describing:ping:)
 static let DeviceGroupKind.alarm
 static let DeviceGroupKind.arming
 static let DeviceGroupKind.button
