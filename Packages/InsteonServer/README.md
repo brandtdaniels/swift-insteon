@@ -158,6 +158,7 @@ scope, command all devices known by this service. Per-device permissions aren't 
 | GET | `/api/v1/routes` | List the routes transport plugins registered (`read`; see Writing a plugin) |
 | PUT, DELETE | `/api/v1/routes/{kind}` | Register or remove a transport's route (`admin`) |
 | GET | `/api/v1/backup` | A backup of the cached network, the format `insteon backup` writes (`admin`; see Backups) |
+| GET | `/api/v1/scenes` | The scenes of the home from the cached ALL-Link databases (`read`; see Scenes) |
 | GET | `/devices/1A.2B.3C` | Authenticated card fragment from cached state; no hardware polling |
 
 JSON commands need `Content-Type: application/json` and `X-Insteon-Request: 1`. Example body:
@@ -698,6 +699,14 @@ existing response. A client or plugin written against an earlier `/api/v1` keeps
 ```sh
 curl -s -H "Authorization: Bearer $(cat admin.token)" $BASE/api/v1/backup > home.json
 insteon backup --check home.json
+```
+
+## Scenes
+
+`GET /api/v1/scenes` (`read`) lists the scenes of the home: each group the modem controls (`writable`) and each group a device controls (read only, because the modem can't run or change it), with the devices that respond to it and the three link data bytes each holds. It answers from the ALL-Link databases the service has cached and sends nothing to the Hub or modem. `whole` is false, and the reason is listed, while a device's database is not held (`unreadable`), a record names a device with no database (`unlisted`), the modem's database is not held (`modemUnread`) or a record has no other half (`halfLinks` of a scene, `looseHalfLinks`). A listing that is not whole is never shown as complete.
+
+```sh
+curl -s -H "Authorization: Bearer $(cat read.token)" $BASE/api/v1/scenes
 ```
 
 ## Persistence and lifecycle

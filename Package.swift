@@ -29,6 +29,7 @@ let package = Package(
     .library(name: "InsteonCore", targets: ["InsteonCore"]),
     .library(name: "InsteonService", targets: ["InsteonService"]),
     .library(name: "InsteonDemo", targets: ["InsteonDemo"]),
+    .library(name: "InsteonClient", targets: ["InsteonClient"]),
     .library(name: "InsteonCLISupport", targets: ["InsteonCLISupport"]),
     .executable(name: "insteon", targets: ["insteon"])
   ],
@@ -232,6 +233,19 @@ let package = Package(
       name: "InsteonDemoTests",
       dependencies: ["InsteonDemo", "InsteonCore", "InsteonLinking", "InsteonModem", "InsteonProtocol", "InsteonService"],
       path: "Packages/InsteonDemo/Tests/InsteonDemoTests",
+      swiftSettings: memberImportVisibility
+    ),
+    // The client connection: one set of calls to the service, over the local network or a remote route.
+    .target(
+      name: "InsteonClient",
+      dependencies: ["InsteonCore", "InsteonHubDiscovery", "InsteonNetworking", "InsteonProtocol", "InsteonService"],
+      path: "Packages/InsteonClient/Sources/InsteonClient",
+      swiftSettings: memberImportVisibility
+    ),
+    .testTarget(
+      name: "InsteonClientTests",
+      dependencies: ["InsteonClient", "InsteonCore", "InsteonHubClient", "InsteonHubDiscovery", "InsteonNetworking", "InsteonProtocol", "InsteonService", "InsteonTestSupport"],
+      path: "Packages/InsteonClient/Tests/InsteonClientTests",
       swiftSettings: memberImportVisibility
     ),
     // The `insteon` command. Its command-line parsing is in InsteonCLISupport, so it can be tested.
