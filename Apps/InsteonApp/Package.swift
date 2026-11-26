@@ -20,7 +20,9 @@ let package = Package(
       name: "InsteonAppUI",
       dependencies: [
         .product(name: "InsteonCore", package: "swift-insteon"),
-        .product(name: "InsteonService", package: "swift-insteon")
+        .product(name: "InsteonService", package: "swift-insteon"),
+        .product(name: "InsteonClient", package: "swift-insteon"),
+        .product(name: "InsteonDemo", package: "swift-insteon")
       ]
     ),
     .testTarget(
@@ -28,6 +30,7 @@ let package = Package(
       dependencies: [
         "InsteonAppUI",
         .product(name: "InsteonDemo", package: "swift-insteon"),
+        .product(name: "InsteonClient", package: "swift-insteon"),
         .product(name: "InsteonCore", package: "swift-insteon"),
         .product(name: "InsteonService", package: "swift-insteon")
       ]

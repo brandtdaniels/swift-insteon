@@ -10,6 +10,11 @@ public struct DevicesView<Network: DeviceQuerying & DeviceCommanding>: View {
     _screen = State(initialValue: DevicesScreen(network: network))
   }
 
+  /// Creates the view over a screen that already exists.
+  public init(screen: DevicesScreen<Network>) {
+    _screen = State(initialValue: screen)
+  }
+
   public var body: some View {
     List(screen.rows) { row in
       HStack {
