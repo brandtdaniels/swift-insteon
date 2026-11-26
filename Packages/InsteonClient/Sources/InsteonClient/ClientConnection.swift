@@ -19,6 +19,8 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
   private let skipped: [PathFailure]
   private var open: (index: Int, generation: Int, calls: any ConnectionCalls)?
   private var generations = 0
+  nonisolated let retryDelays: [Duration]
+  nonisolated let clock: any Clock<Duration>
 
   /// The name of the path in use, or `nil` before the first call and after a path is lost.
   public var currentPath: String? { open.map { paths[$0.index].name } }
@@ -28,10 +30,49 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
   /// - Parameters:
   ///   - paths: The paths to try.
   ///   - skipped: Routes that were left out and why, reported when no path is reached.
-  public init(paths: [any ConnectionPath], skipped: [PathFailure] = []) {
+  ///   - retryDelays: How long events wait before each reconnect after a loss, the first for the
+  ///     first loss and each later one for the next failure in a row. The last repeats. An event
+  ///     restores the first.
+  ///   - clock: Times those waits. A test passes one it controls.
+  public init(
+    paths: [any ConnectionPath],
+    skipped: [PathFailure] = [],
+    retryDelays: [Duration] = [.seconds(1), .seconds(2), .seconds(5), .seconds(10), .seconds(30)],
+    clock: any Clock<Duration> = ContinuousClock()
+  ) {
     self.paths = paths
     self.skipped = skipped
+    self.retryDelays = retryDelays.isEmpty ? [.seconds(1)] : retryDelays
+    self.clock = clock
   }
+
+  /// The service's numbered events, resuming after `cursor`, kept across lost paths.
+  ///
+  /// The subscription goes through the path in use. When it is lost, the connection waits, reaches
+  /// a path again through the ordered paths, and resumes after the last cursor the client saw. A
+  /// ``SequencedItem/gap(_:current:)`` means the service can't replay what was missed: refresh what
+  /// is displayed. Reading ends when the reading task is canceled, or by throwing a
+  /// ``ConnectionError`` when every path refuses the credential or its scope is too low.
+  ///
+  /// - Parameter cursor: The last position the client saw, or `nil` to start at the present.
+  public nonisolated func sequencedEvents(after cursor: EventCursor? = nil) -> ConnectionEvents {
+    ConnectionEvents(connection: self, start: cursor)
+  }
+
+  /// The service's events, kept across lost paths, without the numbering. A
+  /// ``ClientEvent/refresh(_:)`` says the client missed events: refresh what is displayed.
+  public nonisolated func events() -> ClientEvents {
+    ClientEvents(base: sequencedEvents(after: nil))
+  }
+
+  /// Subscribes through the path in use, or the first that opens.
+  func subscribe(after cursor: EventCursor?) async throws -> (events: SequencedEvents, generation: Int) {
+    let (events, generation) = try await performTagged(retryable: true) { try await $0.sequencedEvents(after: cursor) }
+    return (events, generation)
+  }
+
+  /// Drops the path a subscription was on, if it is still the one in use.
+  func lost(_ generation: Int) async { await drop(generation) }
 
   public func devices() async throws -> [ServiceDevice] {
     try await perform(retryable: true) { try await $0.devices() }
@@ -67,6 +108,11 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
 
   /// Runs one call on the paths in order, each at most once.
   private func perform<Answer: Sendable>(retryable: Bool, _ operation: (any ConnectionCalls) async throws -> Answer) async throws -> Answer {
+    try await performTagged(retryable: retryable, operation).0
+  }
+
+  /// Runs one call on the paths in order, each at most once, and says which opening answered.
+  private func performTagged<Answer: Sendable>(retryable: Bool, _ operation: (any ConnectionCalls) async throws -> Answer) async throws -> (Answer, Int) {
     var tally = Tally(reasons: skipped)
     var passedOver: Set<Int> = []
     while let (index, generation, calls) = try await reach(passingOver: passedOver, tally: &tally) {
@@ -76,7 +122,7 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
       attempt: while attempts > 0 {
         attempts -= 1
         do {
-          return try await operation(calls)
+          return (try await operation(calls), generation)
         } catch ConnectionPathError.notReached(let reason) {
           await drop(generation)
           tally.reasons.append(PathFailure(path: name, reason: reason))
@@ -86,6 +132,11 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
           await drop(generation)
           tally.refused.append(name)
           tally.reasons.append(PathFailure(path: name, reason: "the credential was refused"))
+          break attempt
+        } catch ConnectionPathError.unsupported {
+          // The path stays open for the calls it does carry.
+          tally.reasons.append(PathFailure(path: name, reason: "the path doesn't carry this call"))
+          tally.unreachable += 1
           break attempt
         } catch ConnectionPathError.forbidden {
           // The credential is good and the path is kept; another path may allow the call.
