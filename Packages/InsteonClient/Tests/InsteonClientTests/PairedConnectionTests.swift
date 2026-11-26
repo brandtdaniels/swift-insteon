@@ -132,8 +132,8 @@ struct PairedConnectionTests {
   }
 
   @Test func plainHTTPIsAllowedOnlyToTheLocalNetwork() async throws {
-    let local = ["http://127.0.0.1:8080", "http://localhost:8080", "http://insteon.local:8080", "http://insteon:8080", "http://10.1.2.3", "http://192.168.1.5", "http://172.16.0.1", "http://172.31.255.1", "http://169.254.1.1", "http://[::1]:8080", "http://192.0.2.20:8080", "http://[fe80::1]:8080", "http://[fd00::1]:8080", "http://[fc00::1]", "http://[febf::1]", "http://[::ffff:192.168.1.5]", "http://[::ffff:127.0.0.1]", "http://[::ffff:c0a8:105]"]
-    let remote = ["http://home.example.com", "http://8.8.8.8", "http://172.32.0.1", "http://[2001:4860::1]:8080", "http://[::fc00:1]", "http://[::fe80:1]", "http://[::ffff:8.8.8.8]", "http://[::ffff:808:808]", "http://[fec0::1]", "http://[::]", "http://[64:ff9b::808:808]"]
+    let local = ["http://127.0.0.1:8080", "http://localhost:8080", "http://insteon.local:8080", "http://0x7f.1", "http://10.1", "http://0xC0A80105", "http://10.1.2.3", "http://192.168.1.5", "http://172.16.0.1", "http://172.31.255.1", "http://169.254.1.1", "http://[::1]:8080", "http://192.0.2.20:8080", "http://[fe80::1]:8080", "http://[fd00::1]:8080", "http://[fc00::1]", "http://[febf::1]", "http://[::ffff:192.168.1.5]", "http://[::ffff:127.0.0.1]", "http://[::ffff:c0a8:105]"]
+    let remote = ["http://insteon:8080", "http://134744072", "http://0x08080808", "http://010.0.0.1", "http://8.8", "http://1.2.3.4.5", "http://home.example.com", "http://8.8.8.8", "http://172.32.0.1", "http://[2001:4860::1]:8080", "http://[::fc00:1]", "http://[::fe80:1]", "http://[::ffff:8.8.8.8]", "http://[::ffff:808:808]", "http://[fec0::1]", "http://[::]", "http://[64:ff9b::808:808]"]
     for address in local + remote {
       let http = FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : oneDevice }
       let pairing = try ClientPairing(decoding: document(routes: #"[{"kind":"lan","url":"\#(address)"}]"#))
