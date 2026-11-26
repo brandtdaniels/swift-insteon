@@ -14,11 +14,21 @@ public protocol ConnectionCalls: DeviceQuerying, DeviceCommanding {
   /// and then didn't use.
   func close() async
 
+  /// Subscribes to the service's numbered events, resuming after `cursor` when it has them.
+  ///
+  /// The default throws ``ConnectionPathError/unsupported``, for a path that carries no events.
+  /// A subscription that is lost later ends by throwing, and the connection resubscribes.
+  func sequencedEvents(after cursor: EventCursor?) async throws -> SequencedEvents
+
 }
 
 extension ConnectionCalls {
 
   public func close() async {}
+
+  public func sequencedEvents(after cursor: EventCursor?) async throws -> SequencedEvents {
+    throw ConnectionPathError.unsupported
+  }
 
 }
 
@@ -61,5 +71,9 @@ public enum ConnectionPathError: Error, Equatable, Sendable {
 
   /// The path was lost after a request may have reached the service.
   case interrupted
+
+  /// The path doesn't carry this kind of call. Nothing was sent, and the path stays open for the
+  /// calls it does carry.
+  case unsupported
 
 }

@@ -169,3 +169,76 @@ actor GatedOpenPath: ConnectionPath {
     release = nil
   }
 }
+
+/// What one subscription of a scripted path's calls does.
+enum EventSubscription: Sendable {
+  /// Delivers the items, then ends as told.
+  case items([SequencedItem], ending: Ending)
+  /// Refuses the subscription.
+  case refuse(ConnectionPathError)
+
+  enum Ending: Sendable {
+    case lost(ConnectionPathError)
+    case slowConsumer
+    case ended
+    case held
+  }
+}
+
+/// Calls that serve numbered events from a script and record the cursor each subscription asked for.
+actor EventCalls: ConnectionCalls {
+  private var script: [EventSubscription]
+  private(set) var requested: [EventCursor?] = []
+
+  init(script: [EventSubscription]) { self.script = script }
+
+  func devices() async throws -> [ServiceDevice] { [device()] }
+
+  func execute(_ command: ServiceCommand) async throws -> CommandReceipt {
+    CommandReceipt(address: command.address, outcome: .acknowledged, status: nil)
+  }
+
+  func sequencedEvents(after cursor: EventCursor?) async throws -> SequencedEvents {
+    requested.append(cursor)
+    let next = script.isEmpty ? EventSubscription.items([], ending: .held) : script.removeFirst()
+    switch next {
+    case let .refuse(error): throw error
+    case let .items(items, ending):
+      return SequencedEvents(AsyncThrowingStream { continuation in
+        for item in items { continuation.yield(item) }
+        switch ending {
+        case let .lost(error): continuation.finish(throwing: error)
+        case .slowConsumer: continuation.finish(throwing: ServiceEventError.slowConsumer)
+        case .ended: continuation.finish()
+        case .held: break
+        }
+      })
+    }
+  }
+}
+
+/// A path whose openings succeed or fail from a script and whose calls serve scripted events.
+actor EventPath: ConnectionPath {
+  nonisolated let name: String
+  let calls: EventCalls
+  private var openings: [ConnectionPathError?]
+  private(set) var openCount = 0
+
+  init(_ name: String, openings: [ConnectionPathError?] = [], subscriptions: [EventSubscription]) {
+    self.name = name
+    self.openings = openings
+    calls = EventCalls(script: subscriptions)
+  }
+
+  func open() async throws -> any ConnectionCalls {
+    openCount += 1
+    if !openings.isEmpty, let failure = openings.removeFirst() { throw failure }
+    return calls
+  }
+}
+
+func cursor(_ sequence: UInt64, run: String = "run1") -> EventCursor { EventCursor(runID: run, sequence: sequence) }
+
+func heard(_ sequence: UInt64, run: String = "run1") -> SequencedItem {
+  .event(.statusChanged(lampAddress), cursor(sequence, run: run))
+}
