@@ -146,7 +146,7 @@ public struct AllLinkGroupReader: Sendable {
   }
 
   /// Pairs each controller record with the responder's record of it.
-  private static func pair(
+  static func pair(
     _ databases: [InsteonAddress: (endpoint: LinkEndpoint, records: [AllLinkRecord])],
     modem: InsteonAddress,
     unreadable: [InsteonAddress]

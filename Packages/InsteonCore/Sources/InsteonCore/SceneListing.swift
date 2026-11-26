@@ -97,10 +97,13 @@ public struct SceneListing: Hashable, Sendable {
   /// Devices some record names that the reading had no list for, so the link is not checked.
   public var unlisted: [InsteonAddress]
 
+  /// Whether the modem's own database was not held, so no scene is listed from it.
+  public var isModemUnread: Bool
+
   /// Whether the reading read every device and found no record without its other half.
   public var isWhole: Bool {
 
-    unreadable.isEmpty && unlisted.isEmpty && looseHalfLinks.isEmpty && scenes.allSatisfy { $0.halfLinks.isEmpty }
+    !isModemUnread && unreadable.isEmpty && unlisted.isEmpty && looseHalfLinks.isEmpty && scenes.allSatisfy { $0.halfLinks.isEmpty }
 
   }
 
@@ -169,6 +172,7 @@ public struct SceneListing: Hashable, Sendable {
     self.looseHalfLinks = reading.halfLinks.filter { (half: AllLinkGroupReading.HalfLink) -> Bool in !ordered.contains { $0.halfLinks.contains(half) } }
     self.unreadable = reading.unreadable
     self.unlisted = reading.unlisted
+    self.isModemUnread = false
 
   }
 
@@ -179,8 +183,10 @@ public struct SceneListing: Hashable, Sendable {
   ///   - looseHalfLinks: Records no scene holds whose other half is missing.
   ///   - unreadable: Devices whose database could not be read.
   ///   - unlisted: Devices the reading had no list for.
-  public init(scenes: [Scene], looseHalfLinks: [AllLinkGroupReading.HalfLink] = [], unreadable: [InsteonAddress] = [], unlisted: [InsteonAddress] = []) {
+  ///   - isModemUnread: Whether the modem's database was not held.
+  public init(scenes: [Scene], looseHalfLinks: [AllLinkGroupReading.HalfLink] = [], unreadable: [InsteonAddress] = [], unlisted: [InsteonAddress] = [], isModemUnread: Bool = false) {
 
+    self.isModemUnread = isModemUnread
     self.scenes = scenes
     self.looseHalfLinks = looseHalfLinks
     self.unreadable = unreadable
