@@ -143,4 +143,95 @@ struct ServicePathTests {
       #expect(!String(reflecting: error).contains(token))
     }
   }
+
+  @Test func aCredentialRefusedOnACallIsUnauthorizedForBothStatuses() async throws {
+    for status in [401, 403] {
+      let c = try await calls(FakeHTTPClient { request in
+        request.url?.path == "/api/v1/health" ? healthy : json(#"{"code":"authenticationFailed"}"#, status: status)
+      })
+      await #expect(throws: HomePathError.unauthorized) { _ = try await c.devices() }
+      await #expect(throws: HomePathError.unauthorized) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+    }
+  }
+
+  @Test func cancellationWhileOpeningIsNotAPathFailure() async {
+    let http = FakeHTTPClient { _ in throw CancellationError() }
+
+    await #expect(throws: CancellationError.self) { _ = try await calls(http) }
+  }
+
+  @Test func cancellationInsideATransportOpenerIsNotAPathFailureEither() async throws {
+    let pairing = try ClientPairing(decoding: Data(#"{"version":1,"serviceId":"s","name":"n","credential":"c","scope":"read","api":"/api/v1","routes":[{"kind":"example-transport","ticket":"t"}]}"#.utf8))
+    let home = HomeConnection(pairing: pairing, routeOpeners: [CancelingOpener()], http: FakeHTTPClient { _ in healthy })
+
+    await #expect(throws: CancellationError.self) { _ = try await home.devices() }
+  }
+
+  @Test func anAnswerThatIsNotARefusalMayHaveBeenSentSoItIsInterrupted() async throws {
+    let c = try await calls(FakeHTTPClient { request in
+      request.url?.path == "/api/v1/health" ? healthy : HTTPResponse(statusCode: 502, body: Data("<html>bad gateway</html>".utf8))
+    })
+
+    await #expect(throws: HomePathError.interrupted) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+    await #expect(throws: HomePathError.interrupted) { _ = try await c.devices() }
+  }
+
+  @Test func aBasePathIsKeptAheadOfTheAPIPath() async throws {
+    for base in ["http://192.0.2.20:8080/home", "http://192.0.2.20:8080/home/"] {
+      let http = FakeHTTPClient { request in request.url?.path.hasSuffix("/health") == true ? healthy : deviceList }
+      let path = ServicePath(name: "lan", baseURL: URL(string: base)!, token: token, http: http)
+
+      _ = try await path.open().devices()
+
+      #expect(await http.lines == ["GET http://192.0.2.20:8080/home/api/v1/health", "GET http://192.0.2.20:8080/home/api/v1/devices"])
+    }
+  }
+
+  @Test func anAddressThatIsNotAnHTTPAddressIsNeverUsed() async {
+    for text in ["ftp://192.0.2.20/", "mailto:someone", "http:///nohost"] {
+      let http = FakeHTTPClient { _ in healthy }
+      let path = ServicePath(name: "lan", baseURL: URL(string: text)!, token: token, http: http)
+
+      await #expect(throws: HomePathError.notReached("the service address isn't an HTTP address")) { _ = try await path.open() }
+      #expect(await http.requests.isEmpty)
+    }
+  }
+
+  @Test func aCauseThisLibraryCannotTypeIsKeptByNameNotInvented() async throws {
+    for cause in ["hubErrorStatus", "somethingTheServiceAddsLater"] {
+      let c = try await calls(FakeHTTPClient { request in
+        request.url?.path == "/api/v1/health" ? healthy : json(#"{"code":"modemUnavailable","sent":false,"cause":"\#(cause)"}"#, status: 503)
+      })
+
+      await #expect(throws: HomeError.modemUnavailable(cause: cause)) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+    }
+  }
+
+  @Test func aListingThatCannotBeReadIsABadResponseAndOneBadEntryFailsTheWholeList() async throws {
+    let bodies = ["not json", #"{"version":1,"devices":[{"address":"1A.2B.3C","productName":null,"canTurnOnAndOff":true,"canDim":true,"value":1,"lastAnsweredAt":null},{"address":"nonsense","productName":null,"canTurnOnAndOff":true,"canDim":true,"value":1,"lastAnsweredAt":null}]}"#]
+    for body in bodies {
+      let c = try await calls(FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : json(body) })
+
+      await #expect(throws: HomePathError.badResponse) { _ = try await c.devices() }
+    }
+  }
+
+  @Test func aReceiptThatCannotBeReadIsABadResponseNotALostPath() async throws {
+    let c = try await calls(FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : json("{}") })
+
+    await #expect(throws: HomePathError.badResponse) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+  }
+
+  @Test func aServicePathItselfRefusesPlainHTTPToAHostOutsideTheLocalNetwork() async {
+    let http = FakeHTTPClient { _ in healthy }
+    let path = ServicePath(name: "lan", baseURL: URL(string: "http://home.example.com")!, token: token, http: http)
+
+    await #expect(throws: HomePathError.notReached("the token is never sent over HTTP to a host outside the local network")) { _ = try await path.open() }
+    #expect(await http.requests.isEmpty)
+  }
+}
+
+struct CancelingOpener: RouteOpening {
+  let kind = "example-transport"
+  func open(ticket: String?) async throws -> URL { throw CancellationError() }
 }

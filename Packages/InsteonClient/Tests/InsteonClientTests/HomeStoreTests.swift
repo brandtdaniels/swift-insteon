@@ -45,7 +45,7 @@ struct HomeStoreTests {
 
     try await store.save(pairing())
 
-    #expect(try await secrets.accounts().count == 1)
+    #expect(await secrets.accounts().count == 1)
     for file in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) {
       let text = String(decoding: try Data(contentsOf: file), as: UTF8.self)
       #expect(!text.contains(token))
@@ -85,7 +85,7 @@ struct HomeStoreTests {
     try await store.remove(serviceID: "a")
 
     #expect(try await store.load().map(\.serviceID) == ["b"])
-    #expect(try await secrets.accounts().count == 1)
+    #expect(await secrets.accounts().count == 1)
   }
 
   @Test func removingAHomeThatIsNotThereChangesNothing() async throws {

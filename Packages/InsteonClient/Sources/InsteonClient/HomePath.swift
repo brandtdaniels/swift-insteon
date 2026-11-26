@@ -31,6 +31,9 @@ public enum HomePathError: Error, Equatable, Sendable {
   /// The home refused the credential, which another route to it would refuse too.
   case unauthorized
 
+  /// The home answered with something this library can't read. The path is still good.
+  case badResponse
+
   /// The path was lost after a request may have reached the home.
   case interrupted
 

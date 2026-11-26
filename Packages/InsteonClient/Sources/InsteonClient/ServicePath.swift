@@ -39,9 +39,12 @@ public struct ServicePath: HomePath, CustomStringConvertible, CustomDebugStringC
   public var debugDescription: String { description }
 
   public func open() async throws -> any HomeCalls {
+    let request = try request("GET", "/api/v1/health")
     let response: HTTPResponse
     do {
-      response = try await http.send(request("GET", "/api/v1/health"))
+      response = try await http.send(request)
+    } catch is CancellationError {
+      throw CancellationError()
     } catch {
       throw HomePathError.notReached("the service didn't answer")
     }
@@ -52,8 +55,22 @@ public struct ServicePath: HomePath, CustomStringConvertible, CustomDebugStringC
     }
   }
 
-  fileprivate func request(_ method: String, _ path: String, body: Data? = nil) -> URLRequest {
-    var request = URLRequest(url: URL(string: path, relativeTo: baseURL)?.absoluteURL ?? baseURL)
+  /// The address of an API path, under the base address's own path.
+  private func address(_ path: String) throws -> URL {
+    guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false),
+      let scheme = components.scheme?.lowercased(), scheme == "http" || scheme == "https",
+      let host = components.host, !host.isEmpty
+    else { throw HomePathError.notReached("the service address isn't an HTTP address") }
+    if scheme == "http", !LocalAddress.isLocal(host: host) {
+      throw HomePathError.notReached("the token is never sent over HTTP to a host outside the local network")
+    }
+    components.path = components.path.trimmingSuffix("/") + path
+    guard let url = components.url else { throw HomePathError.notReached("the service address isn't an HTTP address") }
+    return url
+  }
+
+  fileprivate func request(_ method: String, _ path: String, body: Data? = nil) throws -> URLRequest {
+    var request = URLRequest(url: try address(path))
     request.httpMethod = method
     request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
     if method != "GET" { request.setValue("1", forHTTPHeaderField: "X-Insteon-Request") }
@@ -82,26 +99,27 @@ private struct ServiceCalls: HomeCalls {
   let path: ServicePath
 
   func devices() async throws -> [ServiceDevice] {
-    let response = try await path.send(path.request("GET", "/api/v1/devices"))
+    let response = try await path.send(try path.request("GET", "/api/v1/devices"))
     guard (200..<300).contains(response.statusCode) else { throw try failure(response) }
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
+    // One entry that can't be read fails the whole list: a partial list would look complete.
     do {
       return try decoder.decode(DeviceList.self, from: response.body).devices.map { try $0.device() }
     } catch {
-      throw HomePathError.interrupted
+      throw HomePathError.badResponse
     }
   }
 
   func execute(_ command: ServiceCommand) async throws -> CommandReceipt {
     let body = try JSONSerialization.data(withJSONObject: Self.wire(command), options: [.sortedKeys])
-    let response = try await path.send(path.request("POST", "/api/v1/devices/\(command.address)/commands", body: body))
+    let response = try await path.send(try path.request("POST", "/api/v1/devices/\(command.address)/commands", body: body))
     guard (200..<300).contains(response.statusCode) else { throw try failure(response) }
     do {
       return try JSONDecoder().decode(Receipt.self, from: response.body).receipt()
     } catch {
-      // The command was accepted and its answer can't be read: it may have reached the device.
-      throw HomePathError.interrupted
+      // The command was accepted and its answer can't be read: it may have taken effect.
+      throw HomePathError.badResponse
     }
   }
 
@@ -120,10 +138,10 @@ private struct ServiceCalls: HomeCalls {
   /// The error a refusal stands for.
   private func failure(_ response: HTTPResponse) throws -> any Error {
     let refusal = try? JSONDecoder().decode(Refusal.self, from: response.body)
-    if response.statusCode == 401 { return HomePathError.unauthorized }
-    guard let refusal else {
-      return HomeError.rejected(code: "status\(response.statusCode)", sent: false)
-    }
+    if response.statusCode == 401 || response.statusCode == 403 { return HomePathError.unauthorized }
+    // An answer that isn't the service's own refusal, such as a proxy's error page, says nothing
+    // about whether the request reached a device.
+    guard let refusal else { return HomePathError.interrupted }
     switch refusal.code {
     case "unknownDevice": return ServiceControlError.unknownDevice
     case "invalidLevel": return ServiceControlError.invalidLevel
@@ -131,19 +149,22 @@ private struct ServiceCalls: HomeCalls {
     case "notIdentified": return ServiceControlError.notIdentified
     case "notLinked": return ServiceControlError.notLinked
     case "busy": return ServiceControlError.busy
-    case "modemUnavailable": return ServiceControlError.modemUnavailable(Self.cause(refusal.cause))
+    case "modemUnavailable":
+      if let cause = Self.cause(refusal.cause) { return ServiceControlError.modemUnavailable(cause) }
+      return HomeError.modemUnavailable(cause: refusal.cause)
     default: return HomeError.rejected(code: refusal.code, sent: refusal.sent ?? true)
     }
   }
 
-  private static func cause(_ name: String?) -> ModemUnavailability {
+  /// The cause, when it has a case here that needs nothing the wire doesn't carry.
+  private static func cause(_ name: String?) -> ModemUnavailability? {
     switch name {
     case "connecting": .connecting
     case "hubUnreachable": .hubUnreachable
     case "credentialsRejected": .credentialsRejected
-    case "hubErrorStatus": .hubErrorStatus(0)
     case "modemUnreachable": .modemUnreachable
-    default: .connectionLost
+    case "connectionLost": .connectionLost
+    default: nil
     }
   }
 
@@ -165,7 +186,7 @@ private struct ServiceCalls: HomeCalls {
       let lastAnsweredAt: Date?
 
       func device() throws -> ServiceDevice {
-        guard let address = InsteonAddress(address) else { throw HomePathError.interrupted }
+        guard let address = InsteonAddress(address) else { throw HomePathError.badResponse }
         return ServiceDevice(address: address, productName: productName, canTurnOnAndOff: canTurnOnAndOff, canDim: canDim, value: value, lastAnsweredAt: lastAnsweredAt)
       }
     }
@@ -187,7 +208,7 @@ private struct ServiceCalls: HomeCalls {
     }
 
     func receipt() throws -> CommandReceipt {
-      guard let address = InsteonAddress(address) else { throw HomePathError.interrupted }
+      guard let address = InsteonAddress(address) else { throw HomePathError.badResponse }
       let outcome: CommandReceipt.Outcome = self.outcome == "read" ? .read : .acknowledged
       let persistence: PersistenceOutcome = switch self.persistence {
       case "notAttempted": .notAttempted
@@ -209,4 +230,8 @@ private struct ServiceCalls: HomeCalls {
     }
   }
 
+}
+
+private extension String {
+  func trimmingSuffix(_ suffix: String) -> String { hasSuffix(suffix) ? String(dropLast(suffix.count)) : self }
 }

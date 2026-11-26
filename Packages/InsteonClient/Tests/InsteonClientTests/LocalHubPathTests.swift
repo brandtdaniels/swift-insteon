@@ -19,7 +19,7 @@ struct LocalHubPathTests {
 
     let opening = try await path.open()
 
-    #expect(await opened.hosts == ["192.0.2.31"])
+    #expect(await opened.hosts == ["192.0.2.31"], "the first Hub that opens is used and the rest are left alone")
     #expect(try await opening.devices().count == 1)
     #expect(path.name == "local network")
   }
@@ -50,6 +50,42 @@ struct LocalHubPathTests {
     let path = LocalHubPath(locate: { [hub("192.0.2.31")] }, open: { _ in throw HomePathError.unauthorized })
 
     await #expect(throws: HomePathError.unauthorized) { _ = try await path.open() }
+  }
+
+  @Test func eachHubIsTriedInOrderUntilOneOpens() async throws {
+    let opened = OpenedHosts()
+    let path = LocalHubPath(
+      locate: { [hub("192.0.2.31"), hub("192.0.2.32"), hub("192.0.2.33")] },
+      open: { found in
+        await opened.add(found.endpoint.host)
+        if found.endpoint.host == "192.0.2.33" { return ScriptedCalls(label: "local") }
+        throw Unplugged()
+      }
+    )
+
+    _ = try await path.open()
+
+    #expect(await opened.hosts == ["192.0.2.31", "192.0.2.32", "192.0.2.33"])
+  }
+
+  @Test func whenNoHubOpensTheLastReasonIsGivenAndARefusedCredentialWins() async {
+    let refused = LocalHubPath(
+      locate: { [hub("192.0.2.31"), hub("192.0.2.32")] },
+      open: { found in
+        if found.endpoint.host == "192.0.2.31" { throw HomePathError.unauthorized }
+        throw Unplugged()
+      }
+    )
+    await #expect(throws: HomePathError.unauthorized) { _ = try await refused.open() }
+
+    let none = LocalHubPath(locate: { [hub("192.0.2.31"), hub("192.0.2.32")] }, open: { _ in throw Unplugged() })
+    await #expect(throws: HomePathError.notReached("no Hub on the local network opened")) { _ = try await none.open() }
+  }
+
+  @Test func aLostPathFromAnOpenerCountsAsNotReached() async {
+    let path = LocalHubPath(locate: { [hub("192.0.2.31")] }, open: { _ in throw HomePathError.interrupted })
+
+    await #expect(throws: HomePathError.notReached("no Hub on the local network opened")) { _ = try await path.open() }
   }
 }
 
