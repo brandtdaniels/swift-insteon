@@ -8,7 +8,19 @@ import InsteonService
 /// A call throws ``HomePathError/notReached(_:)`` only when it can prove that no byte of the
 /// request left, so the connection may pass it to another path. A failure after the request may
 /// have been sent is ``HomePathError/interrupted``, however it happened.
-public protocol HomeCalls: DeviceQuerying, DeviceCommanding {}
+public protocol HomeCalls: DeviceQuerying, DeviceCommanding {
+
+  /// Releases what the calls hold, such as a connection. The connection calls it on calls it opened
+  /// and then didn't use.
+  func close() async
+
+}
+
+extension HomeCalls {
+
+  public func close() async {}
+
+}
 
 /// One way to reach a home: a Hub on the local network, the service at a local address, or a
 /// route a transport carries.

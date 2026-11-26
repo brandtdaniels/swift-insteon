@@ -103,7 +103,11 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
       do {
         let calls = try await path.open()
         // A call that was waiting on another opening may have set it already.
-        if let open, open.index != lastFailed { return open }
+        if let open, open.index != lastFailed {
+          // Another call opened a path while this one did; keep that one and release this.
+          await calls.close()
+          return open
+        }
         generations += 1
         open = (index, generations, calls)
         return (index, generations, calls)

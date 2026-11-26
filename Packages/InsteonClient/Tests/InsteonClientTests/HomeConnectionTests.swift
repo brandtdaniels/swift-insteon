@@ -237,6 +237,23 @@ struct HomeConnectionTests {
     #expect(await home.currentPath == nil)
   }
 
+  @Test func whenTwoCallsOpenTheSamePathTheLoserIsClosedAndTheWinnerIsUsed() async throws {
+    let path = GatedOpenPath()
+    let home = HomeConnection(paths: [path])
+
+    let first = Task { try await home.devices() }
+    await path.waitUntilFirstOpeningIsWaiting()
+    _ = try await home.devices()
+    await path.letFirstOpeningGo()
+    _ = try await first.value
+
+    let opened = await path.opened
+    #expect(opened.count == 2)
+    #expect(await opened[0].isClosed, "the opening that lost the race is closed")
+    #expect(await !opened[1].isClosed)
+    #expect(await opened[0].asked.isEmpty, "the loser's calls were never used")
+  }
+
   @Test func whenEveryAttemptRunsOutTheReasonsAreKept() async throws {
     let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.notReached, .notReached]))
     let home = HomeConnection(paths: [local], skipped: [PathFailure(path: "mystery", reason: "no transport")])

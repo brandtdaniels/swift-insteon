@@ -28,6 +28,9 @@ actor ScriptedCalls: HomeCalls {
   let label: String
   private var script: [Script]
   private(set) var asked: [String] = []
+  private(set) var isClosed = false
+
+  func close() async { isClosed = true }
 
   init(label: String, script: [Script] = []) {
     self.label = label
@@ -130,6 +133,38 @@ actor GatedCalls: HomeCalls {
   }
 
   func letGo() {
+    release?.resume()
+    release = nil
+  }
+}
+
+/// A path whose first opening waits until the test lets it go; later openings return at once.
+/// Each opening makes calls of its own.
+actor GatedOpenPath: HomePath {
+  nonisolated let name = "gated"
+  private(set) var opened: [ScriptedCalls] = []
+  private var release: CheckedContinuation<Void, Never>?
+  private var signal: CheckedContinuation<Void, Never>?
+  private var isWaiting = false
+
+  func open() async throws -> any HomeCalls {
+    let calls = ScriptedCalls(label: "opening-\(opened.count + 1)")
+    opened.append(calls)
+    if opened.count == 1 {
+      isWaiting = true
+      signal?.resume()
+      signal = nil
+      await withCheckedContinuation { release = $0 }
+    }
+    return calls
+  }
+
+  func waitUntilFirstOpeningIsWaiting() async {
+    if isWaiting { return }
+    await withCheckedContinuation { signal = $0 }
+  }
+
+  func letFirstOpeningGo() {
     release?.resume()
     release = nil
   }
