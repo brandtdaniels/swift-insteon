@@ -132,14 +132,13 @@ struct PairingStoreTests {
 
   @Test func aSaveThatCannotWriteTheFileLeavesTheOldCredentialInPlace() async throws {
     let directory = try scratchDirectory()
-    defer {
-      try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
-      try? FileManager.default.removeItem(at: directory)
-    }
+    defer { try? FileManager.default.removeItem(at: directory) }
     let secrets = InMemorySecretStore()
-    let store = PairingStore(directory: directory, secrets: secrets)
-    try await store.save(pairing(id: "a", credential: "old-credential"))
-    try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path)
+    try await PairingStore(directory: directory, secrets: secrets).save(pairing(id: "a", credential: "old-credential"))
+    // A plain file where the directory should be: nothing can be written under it, whoever runs the test.
+    let blocked = directory.appendingPathComponent("blocked")
+    try Data("not a directory".utf8).write(to: blocked)
+    let store = PairingStore(directory: blocked, secrets: secrets)
 
     await #expect(throws: PairingStore.Failure.notSaved) { try await store.save(pairing(id: "a", credential: "new-credential")) }
     await #expect(throws: PairingStore.Failure.notSaved) { try await store.save(pairing(id: "b", credential: "other-credential")) }
