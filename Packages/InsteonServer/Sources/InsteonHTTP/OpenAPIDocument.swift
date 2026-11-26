@@ -284,6 +284,33 @@ enum OpenAPIDocument {
         "catchUp": ["type": "boolean", "description": "Whether a run missed while the service was stopped still happens when it is less than 15 minutes late. Off, a missed run is skipped."],
         "nextRun": Schema.nullable(["type": "string", "format": "date-time", "description": "When the schedule runs next. Null for a disabled schedule or one with no run to come."])
       ], required: ["id", "name", "enabled", "when", "action", "catchUp"]),
+      "SceneList": Schema.object([
+        "version": version,
+        "scenes": Schema.array(of: Schema.ref("Scene")),
+        "looseHalfLinks": Schema.array(of: Schema.ref("HalfLink")),
+        "unreadable": Schema.array(of: address),
+        "unlisted": Schema.array(of: address),
+        "modemUnread": Schema.boolean,
+        "whole": Schema.boolean
+      ], required: ["version", "scenes", "looseHalfLinks", "unreadable", "unlisted", "modemUnread", "whole"]),
+      "Scene": Schema.object([
+        "number": Schema.integer(minimum: 0, maximum: 255),
+        "controller": Schema.string(description: "`modem`, or the address of the device that controls the scene."),
+        "writable": Schema.boolean,
+        "members": Schema.array(of: Schema.ref("SceneMember")),
+        "halfLinks": Schema.array(of: Schema.ref("HalfLink"))
+      ], required: ["number", "controller", "writable", "members", "halfLinks"]),
+      "SceneMember": Schema.object([
+        "address": address,
+        "data": Schema.array(of: Schema.integer(minimum: 0, maximum: 255))
+      ], required: ["address", "data"]),
+      "HalfLink": Schema.object([
+        "endpoint": Schema.string(description: "`modem`, or the address of the device whose database holds the record."),
+        "group": Schema.integer(minimum: 0, maximum: 255),
+        "address": address,
+        "role": Schema.string(enum: ["controller", "responder"]),
+        "data": Schema.array(of: Schema.integer(minimum: 0, maximum: 255))
+      ], required: ["endpoint", "group", "address", "role", "data"]),
       "ScheduleList": Schema.object(["version": version, "schedules": Schema.array(of: Schema.ref("Schedule"))], required: ["version", "schedules"]),
       "ScheduleStored": Schema.object(["version": version, "schedule": Schema.ref("Schedule")], required: ["version", "schedule"]),
       "ScheduleRequest": Schema.object([
