@@ -14,6 +14,7 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
 
   func list() async throws -> Response {
     let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
     return Response(status: .ok, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(bytes: try encoder.encode(SceneListDTO(await service.scenes())))))
   }
 }

@@ -124,6 +124,16 @@ struct SceneRoutesTests {
     #expect(await setup.service.commands.isEmpty)
   }
 
+  @Test func writesTheKeysInSortedOrderSoTheSameHomeGivesTheSameBytes() async throws {
+    let setup = try Setup(password: password, service: FakeService(scenes: SceneListing(scenes: [])))
+    let text = String(decoding: try await fetch(setup, authorization: basic).body.readableBytesView, as: UTF8.self)
+    let keys = ["looseHalfLinks", "modemUnread", "scenes", "unlisted", "unreadable", "version", "whole"]
+    let positions = keys.map { text.range(of: "\"\($0)\"")?.lowerBound }
+
+    #expect(!positions.contains { $0 == nil })
+    #expect(positions.compactMap { $0 } == positions.compactMap { $0 }.sorted())
+  }
+
   // MARK: Authentication
 
   @Test func refusesACallWithNoCredential() async throws {
