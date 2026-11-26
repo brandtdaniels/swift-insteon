@@ -1,10 +1,10 @@
 import Foundation
 import InsteonService
 
-/// A home that answers from a list and records each command it is asked to send.
+/// A network that answers from a list and records each command it is asked to send.
 ///
-/// A home built over the in-memory modem replaces it when the library offers one.
-final class ScriptedHome: DeviceQuerying, DeviceCommanding, @unchecked Sendable {
+/// A network built over the in-memory modem replaces it when the library offers one.
+final class ScriptedNetwork: DeviceQuerying, DeviceCommanding, @unchecked Sendable {
   private let listed: [ServiceDevice]
   private let refusal: (any Error)?
   private let listFailure: (any Error)?

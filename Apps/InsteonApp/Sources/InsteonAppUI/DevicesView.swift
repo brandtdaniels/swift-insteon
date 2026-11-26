@@ -2,12 +2,12 @@ import InsteonService
 import SwiftUI
 
 /// The devices screen's view: a list with an on and off switch per device.
-public struct DevicesView<Home: DeviceQuerying & DeviceCommanding>: View {
-  @State private var screen: DevicesScreen<Home>
+public struct DevicesView<Network: DeviceQuerying & DeviceCommanding>: View {
+  @State private var screen: DevicesScreen<Network>
 
-  /// Creates the view over a home.
-  public init(home: Home) {
-    _screen = State(initialValue: DevicesScreen(home: home))
+  /// Creates the view over a network.
+  public init(network: Network) {
+    _screen = State(initialValue: DevicesScreen(network: network))
   }
 
   public var body: some View {
