@@ -239,6 +239,19 @@ struct PairingStoreTests {
     #expect(String(decoding: try Data(contentsOf: file), as: UTF8.self) == "garbage")
   }
 
+  @Test func aFileFromANewerVersionIsReportedAsThatAndLeftAlone() async throws {
+    let directory = try scratchDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = PairingStore(directory: directory, secrets: InMemorySecretStore())
+    let file = pairingsFile(in: directory)
+    let newer = #"{"version":2,"pairings":[],"somethingElse":true}"#
+    try Data(newer.utf8).write(to: file)
+
+    await #expect(throws: PairingStore.Failure.unsupportedVersion) { _ = try await store.load() }
+    await #expect(throws: PairingStore.Failure.unsupportedVersion) { try await store.save(pairing()) }
+    #expect(String(decoding: try Data(contentsOf: file), as: UTF8.self) == newer)
+  }
+
   @Test func theFileIsReadableOnlyByItsOwner() async throws {
     let directory = try scratchDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }

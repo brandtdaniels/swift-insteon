@@ -13,6 +13,9 @@ public actor PairingStore {
     /// The file isn't a list of pairings. It is left as it is.
     case unreadable
 
+    /// The file was written by a later version of the app than this one. It is left as it is.
+    case unsupportedVersion
+
     /// The file couldn't be written.
     case notSaved
 
@@ -98,9 +101,11 @@ public actor PairingStore {
 
   private func read() throws -> [Record] {
     guard FileManager.default.fileExists(atPath: file.path) else { return [] }
-    guard let data = try? Data(contentsOf: file), let list = try? JSONDecoder().decode(List.self, from: data), list.version == 1 else {
+    guard let data = try? Data(contentsOf: file), let header = try? JSONDecoder().decode(Header.self, from: data) else {
       throw Failure.unreadable
     }
+    guard header.version <= 1 else { throw Failure.unsupportedVersion }
+    guard header.version == 1, let list = try? JSONDecoder().decode(List.self, from: data) else { throw Failure.unreadable }
     return list.pairings
   }
 
@@ -136,6 +141,10 @@ public actor PairingStore {
     } catch {
       throw Failure.notSaved
     }
+  }
+
+  private struct Header: Decodable {
+    let version: Int
   }
 
   private struct List: Codable {
