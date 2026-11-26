@@ -73,6 +73,61 @@ struct SceneRoutesTests {
     #expect(member["data"] as? [Int] == [0xFF, 0x1F, 0x01])
   }
 
+  @Test func namesEachMembersDataBytesFromTheCatalogAndSaysHowSureTheCatalogIs() async throws {
+    let listing = SceneListing(scenes: [
+      SceneListing.Scene(number: 3, controller: .modem, members: [SceneListing.Member(address: lamp, data: [0xFF, 0x1F, 0x01])])
+    ])
+    let meaning = LinkDataMeaning(bytes: [
+      LinkDataField(position: 1, name: "onLevel", label: "On-level", value: 0xFF, valueName: "On", verification: "observed"),
+      LinkDataField(position: 2, name: "rampRate", label: "Ramp rate", value: 0x1F, verification: "documented"),
+      LinkDataField(position: 3, name: "group", value: 0x01, isPerGroup: true, verification: "inferred")
+    ])
+    let setup = try Setup(password: password, service: FakeService(scenes: listing, memberMeanings: [lamp: meaning]))
+    let body = try object(try await fetch(setup, authorization: basic))
+    let scene = try #require((body["scenes"] as? [[String: Any]])?.first)
+    let member = try #require((scene["members"] as? [[String: Any]])?.first)
+
+    #expect(member["described"] as? Bool == true)
+    let bytes = try #require(member["bytes"] as? [[String: Any]])
+    #expect(bytes.count == 3)
+    #expect(bytes[0]["name"] as? String == "onLevel")
+    #expect(bytes[0]["label"] as? String == "On-level")
+    #expect(bytes[0]["value"] as? Int == 255)
+    #expect(bytes[0]["valueName"] as? String == "On")
+    #expect(bytes[0]["verification"] as? String == "observed")
+    #expect(bytes[1]["verification"] as? String == "documented")
+    #expect(bytes[2]["verification"] as? String == "inferred")
+    #expect(bytes[2]["perGroup"] as? Bool == true)
+    #expect((body["undescribedMembers"] as? [String])?.isEmpty == true)
+    #expect(member["data"] as? [Int] == [0xFF, 0x1F, 0x01])
+  }
+
+  @Test func listsAMemberTheCatalogDoesNotDescribeAsUndescribedWithItsRawBytes() async throws {
+    let listing = SceneListing(scenes: [
+      SceneListing.Scene(number: 3, controller: .modem, members: [SceneListing.Member(address: lamp, data: [0xFF, 0x1F, 0x01])]),
+      SceneListing.Scene(number: 4, controller: .modem, members: [SceneListing.Member(address: lamp, data: [0x80, 0x1C, 0x00]), SceneListing.Member(address: keypad, data: [0x00, 0x00, 0x00])])
+    ])
+    let setup = try Setup(password: password, service: FakeService(scenes: listing))
+    let body = try object(try await fetch(setup, authorization: basic))
+    let members = try #require((body["scenes"] as? [[String: Any]])?.flatMap { $0["members"] as? [[String: Any]] ?? [] })
+
+    #expect(members.allSatisfy { $0["described"] as? Bool == false })
+    #expect(members.allSatisfy { ($0["bytes"] as? [Any])?.isEmpty == true })
+    #expect(members.first?["data"] as? [Int] == [0xFF, 0x1F, 0x01])
+    #expect(body["undescribedMembers"] as? [String] == ["1A.2B.3C", "4D.5E.6F"])
+  }
+
+  @Test func asksTheServiceWhatEachMembersBytesMeanForTheScenesGroup() async throws {
+    let listing = SceneListing(scenes: [
+      SceneListing.Scene(number: 7, controller: .device(keypad), members: [SceneListing.Member(address: lamp, data: [0x80, 0x1C, 0x00])])
+    ])
+    let setup = try Setup(password: password, service: FakeService(scenes: listing))
+    _ = try await fetch(setup, authorization: basic)
+
+    let asked = await setup.service.askedMeanings
+    #expect(asked == [FakeService.MeaningQuestion(device: lamp, data: [0x80, 0x1C, 0x00], group: 7)])
+  }
+
   @Test func listsASceneADeviceControlsAsReadOnlyNamedByTheDevicesAddress() async throws {
     let listing = SceneListing(scenes: [
       SceneListing.Scene(number: 2, controller: .device(keypad), members: [SceneListing.Member(address: lamp, data: [0x80, 0x1C, 0x00])])
