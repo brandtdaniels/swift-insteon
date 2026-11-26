@@ -2,7 +2,7 @@ import InsteonHubDiscovery
 
 /// A Hub found on the local network, reached directly.
 ///
-/// It looks for a Hub each time it opens, takes the first one found and hands it to `open`, which
+/// It looks for a Hub each time it opens, hands each one found, in order, to `open` until one opens, which
 /// makes the calls that reach it. Searching and opening are supplied, so the path holds no Hub
 /// credential and runs the same on a phone, a Mac or a test.
 public struct LocalHubPath: HomePath {
@@ -33,16 +33,20 @@ public struct LocalHubPath: HomePath {
     } catch {
       throw HomePathError.notReached("the search of the local network failed")
     }
-    guard let hub = hubs.first else { throw HomePathError.notReached("no Hub answered on the local network") }
-    do {
-      return try await openHub(hub)
-    } catch let error as HomePathError {
-      throw error
-    } catch is CancellationError {
-      throw CancellationError()
-    } catch {
-      throw HomePathError.notReached("the Hub didn't open")
+    guard !hubs.isEmpty else { throw HomePathError.notReached("no Hub answered on the local network") }
+    var refused = false
+    for hub in hubs {
+      do {
+        return try await openHub(hub)
+      } catch is CancellationError {
+        throw CancellationError()
+      } catch HomePathError.unauthorized {
+        refused = true
+      } catch {
+        // This Hub didn't open; the next may.
+      }
     }
+    throw refused ? HomePathError.unauthorized : HomePathError.notReached("no Hub on the local network opened")
   }
 
 }
