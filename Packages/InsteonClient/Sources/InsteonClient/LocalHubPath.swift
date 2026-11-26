@@ -34,19 +34,24 @@ public struct LocalHubPath: HomePath {
       throw HomePathError.notReached("the search of the local network failed")
     }
     guard !hubs.isEmpty else { throw HomePathError.notReached("no Hub answered on the local network") }
-    var refused = false
+    // What the path reports when no Hub opens: the most telling failure, not the first.
+    var failure: HomePathError?
+    func note(_ error: HomePathError) {
+      func rank(_ e: HomePathError?) -> Int { switch e { case .unauthorized?: 3; case .forbidden?: 2; case .badResponse?: 1; default: 0 } }
+      if rank(error) > rank(failure) { failure = error }
+    }
     for hub in hubs {
       do {
         return try await openHub(hub)
       } catch is CancellationError {
         throw CancellationError()
-      } catch HomePathError.unauthorized {
-        refused = true
+      } catch let error as HomePathError {
+        note(error)
       } catch {
         // This Hub didn't open; the next may.
       }
     }
-    throw refused ? HomePathError.unauthorized : HomePathError.notReached("no Hub on the local network opened")
+    throw failure ?? HomePathError.notReached("no Hub on the local network opened")
   }
 
 }

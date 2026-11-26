@@ -111,6 +111,8 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
         failures.append(PathFailure(path: path.name, reason: reason))
       } catch HomePathError.forbidden {
         failures.append(PathFailure(path: path.name, reason: "the credential's scope is too low for this path"))
+      } catch HomePathError.badResponse {
+        failures.append(PathFailure(path: path.name, reason: "the path answered with something that isn't the service"))
       } catch HomePathError.unauthorized {
         // A refusal on one path says nothing about another: each uses its own credential.
         refusals.append(path.name)

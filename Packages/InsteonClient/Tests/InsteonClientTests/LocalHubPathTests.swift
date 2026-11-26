@@ -82,6 +82,24 @@ struct LocalHubPathTests {
     await #expect(throws: HomePathError.notReached("no Hub on the local network opened")) { _ = try await none.open() }
   }
 
+  @Test func aScopeTooLowOrABadResponseFromEveryHubIsThePathsOwnFailure() async {
+    let forbidden = LocalHubPath(locate: { [hub("192.0.2.31")] }, open: { _ in throw HomePathError.forbidden })
+    await #expect(throws: HomePathError.forbidden) { _ = try await forbidden.open() }
+    let bad = LocalHubPath(locate: { [hub("192.0.2.31"), hub("192.0.2.32")] }, open: { _ in throw HomePathError.badResponse })
+    await #expect(throws: HomePathError.badResponse) { _ = try await bad.open() }
+  }
+
+  @Test func aRefusedCredentialOutranksAScopeTooLowOutranksABadResponse() async {
+    let path = LocalHubPath(locate: { [hub("192.0.2.31"), hub("192.0.2.32"), hub("192.0.2.33")] }, open: { found in
+      switch found.endpoint.host {
+      case "192.0.2.31": throw HomePathError.badResponse
+      case "192.0.2.32": throw HomePathError.forbidden
+      default: throw HomePathError.unauthorized
+      }
+    })
+    await #expect(throws: HomePathError.unauthorized) { _ = try await path.open() }
+  }
+
   @Test func aLostPathFromAnOpenerCountsAsNotReached() async {
     let path = LocalHubPath(locate: { [hub("192.0.2.31")] }, open: { _ in throw HomePathError.interrupted })
 
