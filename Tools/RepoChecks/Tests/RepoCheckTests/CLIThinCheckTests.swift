@@ -275,6 +275,19 @@ struct CLIThinCheckTests {
     #expect(try fixture.run().output == "The insteon command stays thin: no new lines break the rules (0 known, in allowlist.txt).\n")
   }
 
+  @Test("holds the app's shared sources to the same rules")
+  func holdsAppSources() throws {
+    let directory = try ScratchDirectory()
+    try directory.makeDirectory("Apps/InsteonApp/Sources/InsteonAppUI")
+    try directory.makeDirectory("Scripts")
+    try directory.write("", to: "Scripts/check-cli-thin-allowlist.txt")
+    try directory.write(thick, to: "Apps/InsteonApp/Sources/InsteonAppUI/Screen.swift")
+    let console = RecordingConsole()
+
+    #expect(try CLIThinCheck().run(in: directory.url, console: console) == .failed)
+    #expect(console.output.contains("InsteonAppUI/Screen.swift"), "\(console.output)")
+  }
+
   @Test("passes on this repository")
   func repositoryPasses() throws {
     let root = URL(fileURLWithPath: #filePath)
