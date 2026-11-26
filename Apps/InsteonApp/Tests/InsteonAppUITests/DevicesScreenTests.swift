@@ -62,6 +62,53 @@ struct DevicesScreenTests {
     #expect(screen.rows.isEmpty)
   }
 
+  @Test func anAcknowledgmentWithoutAStatusShowsWhatTheNetworkListsNotAGuess() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    await network.leaveDevicesAt(0x80)
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.rows[0].level == .percent(50))
+  }
+
+  @Test func anAcknowledgmentWithAStatusShowsTheStatus() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    await network.setReply(.acknowledgedWithStatus(DeviceStatus(group: 1, value: 0x40, allLinkDatabaseDelta: 0, reading: .percent(25), isOn: true)))
+    await network.leaveDevicesAt(0xFF)
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.rows[0].level == .percent(25))
+  }
+
+  @Test func aReceiptThatIsNotAnAcknowledgmentShowsWhatTheNetworkListsNotAGuess() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    await network.setReply(.read)
+    await network.leaveDevicesAt(0x80)
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.rows[0].level == .percent(50))
+  }
+
+  @Test func aDeviceTheNetworkCannotListAfterACommandShowsNoLevelAndSaysSo() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    await network.setListFailure(ServiceControlError.busy)
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.rows[0].level == .unknown)
+    #expect(screen.notice != nil)
+  }
+
   @Test func aDeviceThatReportedALevelShowsItOnOrOff() async {
     let on = ServiceDevice(address: lamp.address, productName: lamp.productName, canTurnOnAndOff: true, canDim: true, value: 128, lastAnsweredAt: nil)
     let screen = DevicesScreen(network: ScriptedNetwork(devices: [on, lamp]))

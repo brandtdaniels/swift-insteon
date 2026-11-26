@@ -22,6 +22,7 @@ actor ScriptedNetwork: DeviceQuerying, DeviceCommanding {
   private var refusal: (any Error)?
   private var listFailure: (any Error)?
   private var reply: Reply = .acknowledged
+  private var levelAfterCommand: UInt8?
   private var sent: [ServiceCommand] = []
   private var isHolding = false
   private var held: [CheckedContinuation<Void, Never>] = []
@@ -40,6 +41,9 @@ actor ScriptedNetwork: DeviceQuerying, DeviceCommanding {
   func setDevices(_ devices: [ServiceDevice]) { listed = devices }
   func setListFailure(_ error: (any Error)?) { listFailure = error }
   func setReply(_ reply: Reply) { self.reply = reply }
+
+  /// Makes a command leave the device at this level, as a dimmer that ramps or limits it might.
+  func leaveDevicesAt(_ level: UInt8) { levelAfterCommand = level }
 
   /// Makes each command wait, after it is recorded, until ``release()``.
   func holdCommands() { isHolding = true }
@@ -74,7 +78,7 @@ actor ScriptedNetwork: DeviceQuerying, DeviceCommanding {
     }
     if let index = listed.firstIndex(where: { $0.address == command.address }) {
       let device = listed[index]
-      let level: UInt8 = command.action == .on ? 0xFF : 0x00
+      let level: UInt8 = levelAfterCommand ?? (command.action == .on ? 0xFF : 0x00)
       listed[index] = ServiceDevice(
         address: device.address, productName: device.productName, canTurnOnAndOff: device.canTurnOnAndOff, canDim: device.canDim,
         value: level, lastAnsweredAt: nil)
