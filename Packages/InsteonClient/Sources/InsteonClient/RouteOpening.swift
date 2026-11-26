@@ -49,17 +49,17 @@ extension ClientPairing {
     var skipped: [PathFailure] = []
   }
 
-  /// The paths a connection tries for this home, in the document's order.
+  /// The paths a connection tries for this service, in the document's order.
   ///
   /// A `lan` route goes straight to its address, and a route of a kind a transport serves goes
   /// through it. A route that can't be used is left out, so an app never picks a route itself;
-  /// ``HomeConnection/init(pairing:local:routeOpeners:http:)`` also keeps the reason for each.
+  /// ``ClientConnection/init(pairing:local:routeOpeners:http:)`` also keeps the reason for each.
   /// Every path sends the document's credential.
   ///
   /// - Parameters:
   ///   - transports: The transports this device has.
   ///   - http: Sends the requests.
-  public func homePaths(transports: [any RouteOpening], http: any HTTPClient = URLSessionHTTPClient()) -> [any HomePath] {
+  public func paths(transports: [any RouteOpening], http: any HTTPClient = URLSessionHTTPClient()) -> [any ConnectionPath] {
     routePlan(transports: transports, http: http).paths
   }
 

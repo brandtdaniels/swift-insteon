@@ -33,7 +33,7 @@ and presents the answer.
 
 - ``ClientConnection``
 - ``ClientPairing``
-- ``HomeStore``
+- ``PairingStore``
 - ``SecretStore``
 - ``InMemorySecretStore``
 
