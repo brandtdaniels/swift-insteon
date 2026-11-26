@@ -45,7 +45,7 @@ actor ScriptedNetwork: DeviceQuerying, DeviceCommanding {
   /// Makes a command leave the device at this level, as a dimmer that ramps or limits it might.
   func leaveDevicesAt(_ level: UInt8) { levelAfterCommand = level }
 
-  /// Makes each command wait, after it is recorded, until ``release()``.
+  /// Makes the next command wait, after it is recorded, until ``release()``; later commands go through.
   func holdCommands() { isHolding = true }
 
   /// Returns once a command is waiting.
@@ -54,9 +54,8 @@ actor ScriptedNetwork: DeviceQuerying, DeviceCommanding {
     observed += 1
   }
 
-  /// Lets every waiting command finish, and stops holding.
+  /// Lets the waiting command finish.
   func release() {
-    isHolding = false
     let waiting = held
     held = []
     for continuation in waiting { continuation.resume() }
@@ -71,6 +70,7 @@ actor ScriptedNetwork: DeviceQuerying, DeviceCommanding {
     if let refusal { throw refusal }
     sent.append(command)
     if isHolding {
+      isHolding = false
       announced += 1
       watcher?.resume()
       watcher = nil
