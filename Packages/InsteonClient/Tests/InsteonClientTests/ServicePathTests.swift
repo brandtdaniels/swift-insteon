@@ -211,4 +211,19 @@ struct CancelingOpener: RouteOpening {
       await #expect(throws: HomeError.modemUnavailable(cause: cause)) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
     }
   }
+
+  @Test func aListingThatCannotBeReadIsABadResponseAndOneBadEntryFailsTheWholeList() async throws {
+    let bodies = ["not json", #"{"version":1,"devices":[{"address":"1A.2B.3C","productName":null,"canTurnOnAndOff":true,"canDim":true,"value":1,"lastAnsweredAt":null},{"address":"nonsense","productName":null,"canTurnOnAndOff":true,"canDim":true,"value":1,"lastAnsweredAt":null}]}"#]
+    for body in bodies {
+      let c = try await calls(FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : json(body) })
+
+      await #expect(throws: HomePathError.badResponse) { _ = try await c.devices() }
+    }
+  }
+
+  @Test func aReceiptThatCannotBeReadIsABadResponseNotALostPath() async throws {
+    let c = try await calls(FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : json("{}") })
+
+    await #expect(throws: HomePathError.badResponse) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+  }
 }

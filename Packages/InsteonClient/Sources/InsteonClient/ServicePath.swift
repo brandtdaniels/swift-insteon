@@ -100,10 +100,11 @@ private struct ServiceCalls: HomeCalls {
     guard (200..<300).contains(response.statusCode) else { throw try failure(response) }
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
+    // One entry that can't be read fails the whole list: a partial list would look complete.
     do {
       return try decoder.decode(DeviceList.self, from: response.body).devices.map { try $0.device() }
     } catch {
-      throw HomePathError.interrupted
+      throw HomePathError.badResponse
     }
   }
 
@@ -114,8 +115,8 @@ private struct ServiceCalls: HomeCalls {
     do {
       return try JSONDecoder().decode(Receipt.self, from: response.body).receipt()
     } catch {
-      // The command was accepted and its answer can't be read: it may have reached the device.
-      throw HomePathError.interrupted
+      // The command was accepted and its answer can't be read: it may have taken effect.
+      throw HomePathError.badResponse
     }
   }
 
@@ -182,7 +183,7 @@ private struct ServiceCalls: HomeCalls {
       let lastAnsweredAt: Date?
 
       func device() throws -> ServiceDevice {
-        guard let address = InsteonAddress(address) else { throw HomePathError.interrupted }
+        guard let address = InsteonAddress(address) else { throw HomePathError.badResponse }
         return ServiceDevice(address: address, productName: productName, canTurnOnAndOff: canTurnOnAndOff, canDim: canDim, value: value, lastAnsweredAt: lastAnsweredAt)
       }
     }
@@ -204,7 +205,7 @@ private struct ServiceCalls: HomeCalls {
     }
 
     func receipt() throws -> CommandReceipt {
-      guard let address = InsteonAddress(address) else { throw HomePathError.interrupted }
+      guard let address = InsteonAddress(address) else { throw HomePathError.badResponse }
       let outcome: CommandReceipt.Outcome = self.outcome == "read" ? .read : .acknowledged
       let persistence: PersistenceOutcome = switch self.persistence {
       case "notAttempted": .notAttempted

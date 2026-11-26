@@ -38,7 +38,10 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
         return try await calls.devices()
       } catch {
         let loss = try lose(error, at: index)
-        if case .unauthorized = loss { throw loss }
+        switch loss {
+        case .unauthorized, .badResponse: throw loss
+        default: break
+        }
         lost = loss
         failed = index
       }
@@ -75,6 +78,8 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
     case HomePathError.unauthorized:
       open = nil
       return .unauthorized(path: name)
+    case HomePathError.badResponse:
+      return .badResponse(path: name)
     default:
       throw error
     }

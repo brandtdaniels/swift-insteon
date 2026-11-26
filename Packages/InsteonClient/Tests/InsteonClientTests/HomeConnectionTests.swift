@@ -138,4 +138,14 @@ struct HomeConnectionTests {
     #expect(await local.openCount == 1)
     #expect(await remote.openCount == 1)
   }
+
+  @Test func aBadResponseIsReportedWithoutAskingAgainOrDroppingThePath() async throws {
+    let calls = ScriptedCalls(label: "local", script: [.badResponse])
+    let local = ScriptedPath("local", calls: calls)
+    let home = HomeConnection(paths: [local])
+
+    await #expect(throws: HomeError.badResponse(path: "local")) { try await home.devices() }
+    #expect(await calls.asked == ["devices"])
+    #expect(await home.currentPath == "local")
+  }
 }

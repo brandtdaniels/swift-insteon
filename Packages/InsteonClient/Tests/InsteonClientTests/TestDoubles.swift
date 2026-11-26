@@ -19,6 +19,7 @@ enum Script: Sendable {
   case notReached
   case interrupted
   case unauthorized
+  case badResponse
 }
 
 /// Calls that answer from a script and record what they were asked.
@@ -41,6 +42,7 @@ actor ScriptedCalls: HomeCalls {
     case .notReached: throw HomePathError.notReached("scripted")
     case .interrupted: throw HomePathError.interrupted
     case .unauthorized: throw HomePathError.unauthorized
+    case .badResponse: throw HomePathError.badResponse
     }
   }
 
@@ -51,6 +53,7 @@ actor ScriptedCalls: HomeCalls {
     case .notReached: throw HomePathError.notReached("scripted")
     case .interrupted: throw HomePathError.interrupted
     case .unauthorized: throw HomePathError.unauthorized
+    case .badResponse: throw HomePathError.badResponse
     }
   }
 }
