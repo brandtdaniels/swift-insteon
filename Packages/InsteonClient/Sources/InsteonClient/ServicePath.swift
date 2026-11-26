@@ -39,9 +39,10 @@ public struct ServicePath: HomePath, CustomStringConvertible, CustomDebugStringC
   public var debugDescription: String { description }
 
   public func open() async throws -> any HomeCalls {
+    let request = try request("GET", "/api/v1/health")
     let response: HTTPResponse
     do {
-      response = try await http.send(request("GET", "/api/v1/health"))
+      response = try await http.send(request)
     } catch is CancellationError {
       throw CancellationError()
     } catch {
@@ -54,8 +55,19 @@ public struct ServicePath: HomePath, CustomStringConvertible, CustomDebugStringC
     }
   }
 
-  fileprivate func request(_ method: String, _ path: String, body: Data? = nil) -> URLRequest {
-    var request = URLRequest(url: URL(string: path, relativeTo: baseURL)?.absoluteURL ?? baseURL)
+  /// The address of an API path, under the base address's own path.
+  private func address(_ path: String) throws -> URL {
+    guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false),
+      let scheme = components.scheme?.lowercased(), scheme == "http" || scheme == "https",
+      let host = components.host, !host.isEmpty
+    else { throw HomePathError.notReached("the service address isn't an HTTP address") }
+    components.path = components.path.trimmingSuffix("/") + path
+    guard let url = components.url else { throw HomePathError.notReached("the service address isn't an HTTP address") }
+    return url
+  }
+
+  fileprivate func request(_ method: String, _ path: String, body: Data? = nil) throws -> URLRequest {
+    var request = URLRequest(url: try address(path))
     request.httpMethod = method
     request.setValue("Bearer " + token, forHTTPHeaderField: "Authorization")
     if method != "GET" { request.setValue("1", forHTTPHeaderField: "X-Insteon-Request") }
@@ -84,7 +96,7 @@ private struct ServiceCalls: HomeCalls {
   let path: ServicePath
 
   func devices() async throws -> [ServiceDevice] {
-    let response = try await path.send(path.request("GET", "/api/v1/devices"))
+    let response = try await path.send(try path.request("GET", "/api/v1/devices"))
     guard (200..<300).contains(response.statusCode) else { throw try failure(response) }
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
@@ -97,7 +109,7 @@ private struct ServiceCalls: HomeCalls {
 
   func execute(_ command: ServiceCommand) async throws -> CommandReceipt {
     let body = try JSONSerialization.data(withJSONObject: Self.wire(command), options: [.sortedKeys])
-    let response = try await path.send(path.request("POST", "/api/v1/devices/\(command.address)/commands", body: body))
+    let response = try await path.send(try path.request("POST", "/api/v1/devices/\(command.address)/commands", body: body))
     guard (200..<300).contains(response.statusCode) else { throw try failure(response) }
     do {
       return try JSONDecoder().decode(Receipt.self, from: response.body).receipt()
@@ -211,4 +223,8 @@ private struct ServiceCalls: HomeCalls {
     }
   }
 
+}
+
+private extension String {
+  func trimmingSuffix(_ suffix: String) -> String { hasSuffix(suffix) ? String(dropLast(suffix.count)) : self }
 }

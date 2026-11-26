@@ -180,4 +180,25 @@ struct CancelingOpener: RouteOpening {
     await #expect(throws: HomePathError.interrupted) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
     await #expect(throws: HomePathError.interrupted) { _ = try await c.devices() }
   }
+
+  @Test func aBasePathIsKeptAheadOfTheAPIPath() async throws {
+    for base in ["http://192.0.2.20:8080/home", "http://192.0.2.20:8080/home/"] {
+      let http = FakeHTTPClient { request in request.url?.path.hasSuffix("/health") == true ? healthy : deviceList }
+      let path = ServicePath(name: "lan", baseURL: URL(string: base)!, token: token, http: http)
+
+      _ = try await path.open().devices()
+
+      #expect(await http.lines == ["GET http://192.0.2.20:8080/home/api/v1/health", "GET http://192.0.2.20:8080/home/api/v1/devices"])
+    }
+  }
+
+  @Test func anAddressThatIsNotAnHTTPAddressIsNeverUsed() async {
+    for text in ["ftp://192.0.2.20/", "mailto:someone", "http:///nohost"] {
+      let http = FakeHTTPClient { _ in healthy }
+      let path = ServicePath(name: "lan", baseURL: URL(string: text)!, token: token, http: http)
+
+      await #expect(throws: HomePathError.notReached("the service address isn't an HTTP address")) { _ = try await path.open() }
+      #expect(await http.requests.isEmpty)
+    }
+  }
 }
