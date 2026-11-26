@@ -11,7 +11,7 @@ public struct CLIThinViolation: Equatable {
   public let line: Int
 }
 
-/// Checks that the `insteon` command stays a thin layer over the libraries.
+/// Checks that the `insteon` command and the apps' shared sources stay a thin layer over the libraries.
 ///
 /// The command parses arguments, prompts and prints; what a device is and how to control it
 /// comes from the Insteon device catalog through the libraries. So its sources mustn't compare a
@@ -183,8 +183,20 @@ public struct CLIThinCheck: RepoCheck {
 
   /// The directories read by default.
   static func defaultSources(in root: URL) -> [URL] {
-    ["insteon", "InsteonCLISupport"].map {
+    let command = ["insteon", "InsteonCLISupport"].map {
       root.appendingPathComponent("Packages/InsteonCLI/Sources/\($0)", isDirectory: true)
+    }
+    return command + appSources(in: root)
+  }
+
+  /// The shared sources of each app under `Apps`, which are user interfaces held to the same rules.
+  static func appSources(in root: URL) -> [URL] {
+    let apps = root.appendingPathComponent("Apps", isDirectory: true)
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: apps.path)) ?? []
+    return names.sorted().flatMap { app -> [URL] in
+      let sources = apps.appendingPathComponent("\(app)/Sources", isDirectory: true)
+      let targets = (try? FileManager.default.contentsOfDirectory(atPath: sources.path)) ?? []
+      return targets.sorted().map { sources.appendingPathComponent($0, isDirectory: true) }
     }
   }
 

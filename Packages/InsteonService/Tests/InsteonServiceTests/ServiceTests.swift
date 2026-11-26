@@ -125,6 +125,37 @@ struct ServiceTests {
     #expect(backup.modem?.identity == BackupIdentity(category: 0x03, subcategory: 0x15, firmwareVersion: 0x9E))
   }
 
+  @Test func scenesFromTheCacheSendNothingAndAreNotWholeWhileNoDatabaseIsCached() async throws {
+    let modem = InMemoryModem()
+    let net = network(modem)
+    let service = InsteonService(network: net)
+    let before = await service.scenes()
+    #expect(before.scenes.isEmpty)
+    #expect(before.isModemUnread)
+    #expect(!before.isWhole)
+    _ = try await net.modemInfo()
+    let after = await service.scenes()
+    #expect(after.unreadable == [address])
+    #expect(!after.isWhole)
+    #expect(await modem.linkingSteps.isEmpty)
+    #expect(await modem.modemDatabaseReads == 0)
+    #expect(await modem.writes.isEmpty)
+  }
+
+  @Test func scenesAnswerWhileACommandIsInFlightWithoutTakingTheGate() async throws {
+    let modem = InMemoryModem()
+    let gate = OperationGate()
+    await modem.setBeforeOperation { _ in await gate.pause() }
+    let service = InsteonService(network: network(modem))
+    try await withThrowingTaskGroup(of: CommandReceipt.self) { group in
+      group.addTask { try await service.execute(ServiceCommand(address: address, action: .on)) }
+      await gate.waitUntilPaused()
+      #expect(await service.scenes().isModemUnread)
+      await gate.release()
+      _ = try await group.next()
+    }
+  }
+
   @Test func aBackupAnswersWhileACommandIsInFlightWithoutTakingTheGate() async throws {
     let modem = InMemoryModem()
     let gate = OperationGate()

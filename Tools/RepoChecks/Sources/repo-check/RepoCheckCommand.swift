@@ -9,7 +9,7 @@ struct RepoCheckCommand: ParsableCommand {
     commandName: "repo-check",
     abstract: "Checks the repository against its rules.",
     discussion: "Each check exits with status 0 if it finds nothing and 1 if it finds a problem.",
-    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self, ConcurrencyCommand.self, CredentialsCommand.self, DeviceNeutralCommand.self, TimeLimitsCommand.self, PublicAPICommand.self, AllowListGrowthCommand.self, CatalogManifestCommand.self]
+    subcommands: [WorkflowsCommand.self, TermsCommand.self, CLIThinCommand.self, AppThinCommand.self, ConcurrencyCommand.self, CredentialsCommand.self, DeviceNeutralCommand.self, TimeLimitsCommand.self, PublicAPICommand.self, AllowListGrowthCommand.self, CatalogManifestCommand.self]
   )
 }
 
@@ -92,6 +92,19 @@ struct CLIThinCommand: ParsableCommand {
     check.sources = sources.isEmpty ? nil : sources.map { URL(fileURLWithPath: $0, isDirectory: true) }
     check.allowlist = allowList.allowlist.map { URL(fileURLWithPath: $0) }
     try check.runAsCommand(options)
+  }
+}
+
+struct AppThinCommand: ParsableCommand {
+  static let configuration = CommandConfiguration(
+    commandName: "app-thin",
+    abstract: "Checks that an app's shared sources import only the libraries an interface may use."
+  )
+
+  @OptionGroup var options: RootOptions
+
+  func run() throws {
+    try AppThinCheck().runAsCommand(options)
   }
 }
 
