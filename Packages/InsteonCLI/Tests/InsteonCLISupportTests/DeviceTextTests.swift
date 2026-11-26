@@ -164,7 +164,7 @@ struct DeviceTextTests {
     #expect(LinkDataText.meaning(of: explanation) == "On-level 0xFF (On), Ramp rate 0x1F")
 
     // A byte without a label goes by its name, and the responder's own group says so.
-    let perGroup = LinkDataMeaning(bytes: [LinkDataField(position: 3, name: "button", value: 0x03, isPerGroup: true)])
+    let perGroup = LinkDataMeaning(bytes: [LinkDataField(position: 3, name: "button", value: 0x03, isPerGroup: true, verification: "documented")])
 
     #expect(LinkDataText.meaning(of: perGroup) == "button 0x03 (its group 3)")
 
@@ -182,7 +182,7 @@ struct DeviceTextTests {
     #expect(LinkDataText.meaning(of: explanation) == "On-level 0x00 (Off; the catalog gives 0xFF), Ramp rate 0x1F")
 
     // A byte without a table gives the documented value alone.
-    let untabled = LinkDataMeaning(bytes: [LinkDataField(position: 1, name: "onLevel", label: "On-level", value: 0x00, documentedValue: 0xFE)])
+    let untabled = LinkDataMeaning(bytes: [LinkDataField(position: 1, name: "onLevel", label: "On-level", value: 0x00, documentedValue: 0xFE, verification: "documented")])
 
     #expect(LinkDataText.meaning(of: untabled) == "On-level 0x00 (the catalog gives 0xFE)")
 

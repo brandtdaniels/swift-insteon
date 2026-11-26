@@ -232,7 +232,7 @@ public struct LinkDataField: Hashable, Sendable {
   ///   - isPerGroup: Whether the byte is the responder's own group. Defaults to `false`.
   ///   - documentedValue: The value the catalog gives for the byte when it's fixed. Defaults
   ///     to `nil`.
-  ///   - verification: How sure the catalog is of the byte. Defaults to `documented`.
+  ///   - verification: How sure the catalog is of the byte, as the catalog writes it.
   public init(
     position: Int,
     name: String,
@@ -241,7 +241,7 @@ public struct LinkDataField: Hashable, Sendable {
     valueName: String? = nil,
     isPerGroup: Bool = false,
     documentedValue: UInt8? = nil,
-    verification: String = "documented"
+    verification: String
   ) {
 
     self.position = position
