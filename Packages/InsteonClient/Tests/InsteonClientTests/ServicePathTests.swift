@@ -1,0 +1,146 @@
+import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+import InsteonClient
+import InsteonCore
+import InsteonNetworking
+import InsteonService
+import Testing
+
+private let token = "tok-3f9a0c-invented"
+private let base = URL(string: "http://192.0.2.20:8080")!
+
+private let healthy = json(#"{"version":1,"status":"ready","modem":{"connected":true,"cause":null}}"#)
+private let deviceList = json(#"{"version":1,"devices":[{"address":"1A.2B.3C","productName":"Example Dimmer","canTurnOnAndOff":true,"canDim":true,"value":128,"lastAnsweredAt":"2026-11-25T10:00:00Z"},{"address":"4D.5E.6F","productName":null,"canTurnOnAndOff":false,"canDim":false,"value":null,"lastAnsweredAt":null}],"stale":false,"cause":null}"#)
+
+private func calls(_ http: FakeHTTPClient) async throws -> any HomeCalls {
+  try await ServicePath(name: "lan", baseURL: base, token: token, http: http).open()
+}
+
+@Suite("ServicePath speaks the service's HTTP contract", .timeLimit(.minutes(1)))
+struct ServicePathTests {
+
+  @Test func openingAsksHealthWithTheBearerToken() async throws {
+    let http = FakeHTTPClient { _ in healthy }
+
+    _ = try await calls(http)
+
+    #expect(await http.lines == ["GET http://192.0.2.20:8080/api/v1/health"])
+    #expect(await http.requests.first?.value(forHTTPHeaderField: "Authorization") == "Bearer " + token)
+  }
+
+  @Test func aServiceThatDoesNotAnswerIsNotReached() async {
+    let http = FakeHTTPClient { _ in throw Unplugged() }
+
+    await #expect(throws: HomePathError.notReached("the service didn't answer")) { _ = try await calls(http) }
+  }
+
+  @Test func aServerErrorOnHealthIsNotReached() async {
+    let http = FakeHTTPClient { _ in json("{}", status: 503) }
+
+    await #expect(throws: HomePathError.notReached("the service answered with status 503")) { _ = try await calls(http) }
+  }
+
+  @Test func aRefusedTokenIsUnauthorizedForBothStatuses() async {
+    for status in [401, 403] {
+      let http = FakeHTTPClient { _ in json(#"{"code":"authenticationFailed"}"#, status: status) }
+      await #expect(throws: HomePathError.unauthorized) { _ = try await calls(http) }
+    }
+  }
+
+  @Test func devicesAreDecodedFromTheListing() async throws {
+    let http = FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : deviceList }
+
+    let devices = try await calls(http).devices()
+
+    #expect(devices.count == 2)
+    #expect(devices[0].address == lampAddress)
+    #expect(devices[0].productName == "Example Dimmer")
+    #expect(devices[0].canDim && devices[0].canTurnOnAndOff)
+    #expect(devices[0].value == 128)
+    #expect(devices[0].lastAnsweredAt == ISO8601DateFormatter().date(from: "2026-11-25T10:00:00Z"))
+    #expect(devices[1].productName == nil && devices[1].value == nil && devices[1].lastAnsweredAt == nil)
+  }
+
+  @Test func aLostConnectionDuringAReadIsInterrupted() async throws {
+    let calls = try await calls(FakeHTTPClient { request in
+      if request.url?.path == "/api/v1/health" { return healthy }
+      throw Unplugged()
+    })
+
+    await #expect(throws: HomePathError.interrupted) { _ = try await calls.devices() }
+  }
+
+  @Test func aCommandIsPostedAsJSONWithTheMarkerAndNoRepeatKey() async throws {
+    let http = FakeHTTPClient { request in
+      request.url?.path == "/api/v1/health" ? healthy : json(#"{"version":1,"address":"1A.2B.3C","outcome":"acknowledged","status":null,"persistence":"saved"}"#)
+    }
+
+    let receipt = try await calls(http).execute(ServiceCommand(address: lampAddress, action: .on, levelPercent: 50))
+
+    #expect(receipt == CommandReceipt(address: lampAddress, outcome: .acknowledged, status: nil, persistence: .saved))
+    let request = try #require(await http.requests.last)
+    #expect(request.httpMethod == "POST")
+    #expect(request.url?.path == "/api/v1/devices/1A.2B.3C/commands")
+    #expect(request.value(forHTTPHeaderField: "X-Insteon-Request") == "1")
+    #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+    let body = try #require(request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] })
+    #expect(body["action"] as? String == "on")
+    #expect(body["levelPercent"] as? Int == 50)
+  }
+
+  @Test func aStatusReadComesBackWithItsReading() async throws {
+    let http = FakeHTTPClient { request in
+      request.url?.path == "/api/v1/health" ? healthy : json(#"{"version":1,"address":"1A.2B.3C","outcome":"read","status":{"group":1,"kind":"percent","value":128,"isOn":true,"percent":50,"label":null},"persistence":"notConfigured"}"#)
+    }
+
+    let receipt = try await calls(http).execute(ServiceCommand(address: lampAddress, action: .status))
+
+    #expect(receipt.outcome == .read)
+    #expect(receipt.status?.reading == .percent(50))
+    #expect(receipt.status?.value == 128)
+    #expect(receipt.status?.isOn == true)
+    #expect(receipt.status?.group == 1)
+  }
+
+  @Test func theServicesRefusalsBecomeTheServiceControlErrorsTheyAre() async throws {
+    let table: [(String, ServiceControlError)] = [
+      ("unknownDevice", .unknownDevice), ("invalidLevel", .invalidLevel), ("unsupportedControl", .unsupportedControl),
+      ("notIdentified", .notIdentified), ("notLinked", .notLinked), ("busy", .busy)
+    ]
+    for (code, expected) in table {
+      let c = try await calls(FakeHTTPClient { request in
+        request.url?.path == "/api/v1/health" ? healthy : json(#"{"code":"\#(code)","sent":false}"#, status: 409)
+      })
+      await #expect(throws: expected) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+    }
+  }
+
+  @Test func aModemThatIsAwayKeepsItsCause() async throws {
+    let c = try await calls(FakeHTTPClient { request in
+      request.url?.path == "/api/v1/health" ? healthy : json(#"{"code":"modemUnavailable","sent":false,"cause":"hubUnreachable"}"#, status: 503)
+    })
+
+    await #expect(throws: ServiceControlError.modemUnavailable(.hubUnreachable)) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+  }
+
+  @Test func anyOtherRefusalKeepsItsCodeAndWhetherTheCommandMayHaveBeenSent() async throws {
+    let c = try await calls(FakeHTTPClient { request in
+      request.url?.path == "/api/v1/health" ? healthy : json(#"{"code":"outcomeUnknown","sent":true}"#, status: 502)
+    })
+
+    await #expect(throws: HomeError.rejected(code: "outcomeUnknown", sent: true)) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+  }
+
+  @Test func aTokenNeverAppearsInADescriptionOrAnError() async throws {
+    let path = ServicePath(name: "lan", baseURL: base, token: token, http: FakeHTTPClient { _ in throw Unplugged() })
+
+    #expect(!String(describing: path).contains(token))
+    #expect(!String(reflecting: path).contains(token))
+    do { _ = try await path.open() } catch {
+      #expect(!String(describing: error).contains(token))
+      #expect(!String(reflecting: error).contains(token))
+    }
+  }
+}

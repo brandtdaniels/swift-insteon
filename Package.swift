@@ -28,6 +28,7 @@ let package = Package(
     .library(name: "InsteonNotifications", targets: ["InsteonNotifications"]),
     .library(name: "InsteonCore", targets: ["InsteonCore"]),
     .library(name: "InsteonService", targets: ["InsteonService"]),
+    .library(name: "InsteonClient", targets: ["InsteonClient"]),
     .library(name: "InsteonCLISupport", targets: ["InsteonCLISupport"]),
     .executable(name: "insteon", targets: ["insteon"])
   ],
@@ -218,6 +219,19 @@ let package = Package(
       name: "InsteonServiceTests",
       dependencies: ["InsteonService", "InsteonCore", "InsteonDeviceCatalog", "InsteonHubClient", "InsteonHubPro", "InsteonModem", "InsteonNetworking", "InsteonProtocol", "InsteonScheduling", "InsteonLinkingTestSupport", "InsteonTestSupport"],
       path: "Packages/InsteonService/Tests/InsteonServiceTests"
+    ),
+    // The client connection: one set of calls to a home, over the local network or a remote route.
+    .target(
+      name: "InsteonClient",
+      dependencies: ["InsteonCore", "InsteonHubDiscovery", "InsteonNetworking", "InsteonProtocol", "InsteonService"],
+      path: "Packages/InsteonClient/Sources/InsteonClient",
+      swiftSettings: memberImportVisibility
+    ),
+    .testTarget(
+      name: "InsteonClientTests",
+      dependencies: ["InsteonClient", "InsteonCore", "InsteonHubClient", "InsteonHubDiscovery", "InsteonNetworking", "InsteonProtocol", "InsteonService", "InsteonTestSupport"],
+      path: "Packages/InsteonClient/Tests/InsteonClientTests",
+      swiftSettings: memberImportVisibility
     ),
     // The `insteon` command. Its command-line parsing is in InsteonCLISupport, so it can be tested.
     // Both depend only on InsteonCore, the library every front end uses; CI builds with
