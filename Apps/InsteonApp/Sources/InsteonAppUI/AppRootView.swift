@@ -12,7 +12,7 @@ public struct AppRootView: View {
   public var body: some View {
     NavigationStack {
       if let screen = model.devices {
-        DevicesView(screen: screen)
+        DevicesView(screen: screen).id(model.identity)
       } else {
         VStack(spacing: 16) {
           Text("Run the app on a network")

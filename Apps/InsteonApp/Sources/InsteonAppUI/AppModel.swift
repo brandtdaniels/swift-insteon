@@ -55,6 +55,9 @@ public final class AppModel {
   /// The devices screen over the chosen network, or `nil` until a choice is made.
   public private(set) var devices: DevicesScreen<AppNetwork>?
 
+  /// A value that differs after each choice, for a view to use as its identity so it takes the new screen.
+  public private(set) var identity = 0
+
   /// Creates the model from the process's launch arguments.
   public init(arguments: [String]) {
     if arguments.contains(Self.demoArgument) { choose(.demo) }
@@ -62,6 +65,7 @@ public final class AppModel {
 
   /// Runs the app on a network, replacing any earlier choice.
   public func choose(_ choice: NetworkChoice) {
+    identity += 1
     devices = DevicesScreen(network: AppNetwork(choice))
   }
 }

@@ -76,4 +76,16 @@ struct AppModelTests {
 
     #expect(paired.rows.isEmpty)
   }
+
+  @Test func eachChoiceGivesTheScreenANewIdentity() {
+    let model = AppModel(arguments: [])
+    let none = model.identity
+
+    model.choose(.demo)
+    let first = model.identity
+    model.choose(.paired(ClientConnection(paths: [])))
+
+    #expect(first != none)
+    #expect(model.identity != first)
+  }
 }
