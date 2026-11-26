@@ -14,6 +14,12 @@ private let base = URL(string: "http://192.0.2.20:8080")!
 private let healthy = json(#"{"version":1,"status":"ready","modem":{"connected":true,"cause":null}}"#)
 private let deviceList = json(#"{"version":1,"devices":[{"address":"1A.2B.3C","productName":"Example Dimmer","canTurnOnAndOff":true,"canDim":true,"value":128,"lastAnsweredAt":"2026-11-25T10:00:00Z"},{"address":"4D.5E.6F","productName":null,"canTurnOnAndOff":false,"canDim":false,"value":null,"lastAnsweredAt":null}],"stale":false,"cause":null}"#)
 
+/// What the service answers a refused request with: its full error shape.
+private func refusal(_ code: String, sent: Bool, cause: String? = nil, status: Int) -> HTTPResponse {
+  let cause = cause.map { ",\"cause\":\"\($0)\"" } ?? ""
+  return json(#"{"version":1,"code":"\#(code)","message":"Refused.","sent":\#(sent),"requestId":"r-1"\#(cause)}"#, status: status)
+}
+
 private func calls(_ http: FakeHTTPClient) async throws -> any HomeCalls {
   try await ServicePath(name: "lan", baseURL: base, token: token, http: http).open()
 }
@@ -43,9 +49,9 @@ struct ServicePathTests {
   }
 
   @Test func aRefusedTokenIsUnauthorizedAndAScopeTooLowIsForbidden() async {
-    let refused = FakeHTTPClient { _ in json(#"{"code":"authenticationFailed"}"#, status: 401) }
+    let refused = FakeHTTPClient { _ in refusal("authenticationFailed", sent: false, status: 401) }
     await #expect(throws: HomePathError.unauthorized) { _ = try await calls(refused) }
-    let tooLow = FakeHTTPClient { _ in json(#"{"code":"forbidden"}"#, status: 403) }
+    let tooLow = FakeHTTPClient { _ in refusal("forbidden", sent: false, status: 403) }
     await #expect(throws: HomePathError.forbidden) { _ = try await calls(tooLow) }
   }
 
@@ -120,7 +126,7 @@ struct ServicePathTests {
     ]
     for (code, expected) in table {
       let c = try await calls(FakeHTTPClient { request in
-        request.url?.path == "/api/v1/health" ? healthy : json(#"{"code":"\#(code)","sent":false}"#, status: 409)
+        request.url?.path == "/api/v1/health" ? healthy : refusal(code, sent: false, status: 409)
       })
       await #expect(throws: expected) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
     }
@@ -128,7 +134,7 @@ struct ServicePathTests {
 
   @Test func aModemThatIsAwayKeepsItsCause() async throws {
     let c = try await calls(FakeHTTPClient { request in
-      request.url?.path == "/api/v1/health" ? healthy : json(#"{"code":"modemUnavailable","sent":false,"cause":"hubUnreachable"}"#, status: 503)
+      request.url?.path == "/api/v1/health" ? healthy : refusal("modemUnavailable", sent: false, cause: "hubUnreachable", status: 503)
     })
 
     await #expect(throws: ServiceControlError.modemUnavailable(.hubUnreachable)) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
@@ -136,7 +142,7 @@ struct ServicePathTests {
 
   @Test func anyOtherRefusalKeepsItsCodeAndWhetherTheCommandMayHaveBeenSent() async throws {
     let c = try await calls(FakeHTTPClient { request in
-      request.url?.path == "/api/v1/health" ? healthy : json(#"{"code":"outcomeUnknown","sent":true}"#, status: 502)
+      request.url?.path == "/api/v1/health" ? healthy : refusal("outcomeUnknown", sent: true, status: 502)
     })
 
     await #expect(throws: HomeError.rejected(code: "outcomeUnknown", sent: true)) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
@@ -156,7 +162,7 @@ struct ServicePathTests {
   @Test func aCredentialRefusedOnACallIsUnauthorizedAndAScopeTooLowIsForbidden() async throws {
     for (status, expected) in [(401, HomePathError.unauthorized), (403, HomePathError.forbidden)] {
       let c = try await calls(FakeHTTPClient { request in
-        request.url?.path == "/api/v1/health" ? healthy : json(#"{"code":"authenticationFailed"}"#, status: status)
+        request.url?.path == "/api/v1/health" ? healthy : refusal("authenticationFailed", sent: false, status: status)
       })
       await #expect(throws: expected) { _ = try await c.devices() }
       await #expect(throws: expected) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
@@ -174,6 +180,17 @@ struct ServicePathTests {
     let home = HomeConnection(pairing: pairing, routeOpeners: [CancelingOpener()], http: FakeHTTPClient { _ in healthy })
 
     await #expect(throws: CancellationError.self) { _ = try await home.devices() }
+  }
+
+  @Test func aBodyThatOnlyLooksLikeARefusalIsNotOne() async throws {
+    let lookAlikes = [#"{"code":"busy"}"#, #"{"code":"busy","sent":false}"#, #"{"version":2,"code":"busy","message":"m","sent":false,"requestId":"r"}"#, #"{"version":1,"code":"busy","message":"m","requestId":"r"}"#]
+    for body in lookAlikes {
+      for (status, expected) in [(409, HomePathError.badResponse), (503, HomePathError.interrupted)] {
+        let c = try await calls(FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : json(body, status: status) })
+
+        await #expect(throws: expected, "\(body) \(status)") { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+      }
+    }
   }
 
   @Test func anAnswerThatIsNotARefusalMayHaveBeenSentSoItIsInterrupted() async throws {
@@ -209,7 +226,7 @@ struct ServicePathTests {
   @Test func aCauseThisLibraryCannotTypeIsKeptByNameNotInvented() async throws {
     for cause in ["hubErrorStatus", "somethingTheServiceAddsLater"] {
       let c = try await calls(FakeHTTPClient { request in
-        request.url?.path == "/api/v1/health" ? healthy : json(#"{"code":"modemUnavailable","sent":false,"cause":"\#(cause)"}"#, status: 503)
+        request.url?.path == "/api/v1/health" ? healthy : refusal("modemUnavailable", sent: false, cause: cause, status: 503)
       })
 
       await #expect(throws: HomeError.modemUnavailable(cause: cause)) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }

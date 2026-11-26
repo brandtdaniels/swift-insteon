@@ -171,10 +171,27 @@ private struct ServiceCalls: HomeCalls {
     }
   }
 
+  /// The service's own error body. Anything short of its whole shape is not the service's.
   private struct Refusal: Decodable {
+    let version: Int
     let code: String
+    let message: String
     let sent: Bool?
+    let requestId: String
     let cause: String?
+
+    init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: Keys.self)
+      version = try container.decode(Int.self, forKey: .version)
+      guard version == 1 else { throw HomePathError.badResponse }
+      code = try container.decode(String.self, forKey: .code)
+      message = try container.decode(String.self, forKey: .message)
+      sent = try container.decode(Bool.self, forKey: .sent)
+      requestId = try container.decode(String.self, forKey: .requestId)
+      cause = try container.decodeIfPresent(String.self, forKey: .cause)
+    }
+
+    private enum Keys: String, CodingKey { case version, code, message, sent, requestId, cause }
   }
 
   private struct DeviceList: Decodable {
