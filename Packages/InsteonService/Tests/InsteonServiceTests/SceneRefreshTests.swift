@@ -113,6 +113,8 @@ struct SceneRefreshTests {
 
   @Test func readsNothingAndReleasesTheGateWhenCanceled() async throws {
     let modem = await modemWithOneScene()
+    // The modem goes on answering after the cancellation, so only the service's own check stops the read.
+    await modem.setHonorsCancellation(false)
     let pause = Pause()
     await modem.setBeforeOperation { operation in
       if case .readModemDatabase = operation { await pause.wait() }
@@ -126,6 +128,7 @@ struct SceneRefreshTests {
     #expect(await modem.databaseReads.isEmpty)
 
     await modem.setBeforeOperation(nil)
+    await modem.setHonorsCancellation(true)
     let listing = try await service.refreshScenes()
     #expect(listing.scenes.count == 1)
   }
