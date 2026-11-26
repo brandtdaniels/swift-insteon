@@ -42,11 +42,11 @@ struct ServicePathTests {
     await #expect(throws: HomePathError.notReached("the service answered with status 503")) { _ = try await calls(http) }
   }
 
-  @Test func aRefusedTokenIsUnauthorizedForBothStatuses() async {
-    for status in [401, 403] {
-      let http = FakeHTTPClient { _ in json(#"{"code":"authenticationFailed"}"#, status: status) }
-      await #expect(throws: HomePathError.unauthorized) { _ = try await calls(http) }
-    }
+  @Test func aRefusedTokenIsUnauthorizedAndAScopeTooLowIsForbidden() async {
+    let refused = FakeHTTPClient { _ in json(#"{"code":"authenticationFailed"}"#, status: 401) }
+    await #expect(throws: HomePathError.unauthorized) { _ = try await calls(refused) }
+    let tooLow = FakeHTTPClient { _ in json(#"{"code":"forbidden"}"#, status: 403) }
+    await #expect(throws: HomePathError.forbidden) { _ = try await calls(tooLow) }
   }
 
   @Test func devicesAreDecodedFromTheListing() async throws {
@@ -144,13 +144,13 @@ struct ServicePathTests {
     }
   }
 
-  @Test func aCredentialRefusedOnACallIsUnauthorizedForBothStatuses() async throws {
-    for status in [401, 403] {
+  @Test func aCredentialRefusedOnACallIsUnauthorizedAndAScopeTooLowIsForbidden() async throws {
+    for (status, expected) in [(401, HomePathError.unauthorized), (403, HomePathError.forbidden)] {
       let c = try await calls(FakeHTTPClient { request in
         request.url?.path == "/api/v1/health" ? healthy : json(#"{"code":"authenticationFailed"}"#, status: status)
       })
-      await #expect(throws: HomePathError.unauthorized) { _ = try await c.devices() }
-      await #expect(throws: HomePathError.unauthorized) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+      await #expect(throws: expected) { _ = try await c.devices() }
+      await #expect(throws: expected) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
     }
   }
 

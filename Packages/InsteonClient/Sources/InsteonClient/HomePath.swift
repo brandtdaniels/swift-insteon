@@ -31,6 +31,10 @@ public enum HomePathError: Error, Equatable, Sendable {
   /// The home refused the credential, which another route to it would refuse too.
   case unauthorized
 
+  /// The credential is good but its scope is too low for the call. Pairing again doesn't fix it:
+  /// the home has to issue a credential with a wider scope.
+  case forbidden
+
   /// The home answered with something this library can't read. The path is still good.
   case badResponse
 

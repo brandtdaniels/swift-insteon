@@ -165,4 +165,21 @@ struct HomeConnectionTests {
     #expect(await calls.asked == ["devices"])
     #expect(await home.currentPath == "local")
   }
+
+  @Test func aScopeTooLowIsReportedAndThePathIsKeptAndNothingIsAskedAgain() async throws {
+    let calls = ScriptedCalls(label: "local", script: [.forbidden])
+    let home = HomeConnection(paths: [ScriptedPath("local", calls: calls)])
+
+    await #expect(throws: HomeError.forbidden(path: "local")) { try await home.execute(ServiceCommand(address: lampAddress, action: .on)) }
+    #expect(await calls.asked == ["execute"])
+    #expect(await home.currentPath == "local")
+  }
+
+  @Test func aPathWhoseScopeIsTooLowToOpenIsNamedAndTheSearchGoesOn() async throws {
+    let home = HomeConnection(paths: [ScriptedPath("lan", openings: [.forbidden]), ScriptedPath("remote")])
+
+    _ = try await home.devices()
+
+    #expect(await home.currentPath == "remote")
+  }
 }

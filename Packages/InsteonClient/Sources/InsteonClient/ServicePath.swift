@@ -50,7 +50,8 @@ public struct ServicePath: HomePath, CustomStringConvertible, CustomDebugStringC
     }
     switch response.statusCode {
     case 200..<300: return ServiceCalls(path: self)
-    case 401, 403: throw HomePathError.unauthorized
+    case 401: throw HomePathError.unauthorized
+    case 403: throw HomePathError.forbidden
     default: throw HomePathError.notReached("the service answered with status \(response.statusCode)")
     }
   }
@@ -138,7 +139,8 @@ private struct ServiceCalls: HomeCalls {
   /// The error a refusal stands for.
   private func failure(_ response: HTTPResponse) throws -> any Error {
     let refusal = try? JSONDecoder().decode(Refusal.self, from: response.body)
-    if response.statusCode == 401 || response.statusCode == 403 { return HomePathError.unauthorized }
+    if response.statusCode == 401 { return HomePathError.unauthorized }
+    if response.statusCode == 403 { return HomePathError.forbidden }
     // An answer that isn't the service's own refusal, such as a proxy's error page, says nothing
     // about whether the request reached a device.
     guard let refusal else { return HomePathError.interrupted }

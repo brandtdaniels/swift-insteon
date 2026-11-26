@@ -28,6 +28,10 @@ public enum HomeError: Error, Equatable, Sendable {
   /// device: read the device's status before sending it again.
   case interrupted(path: String)
 
+  /// The credential is good, but its scope is too low for the call on the named path. The path is
+  /// kept. Pairing again doesn't help: ask for a credential with a wider scope.
+  case forbidden(path: String)
+
   /// The named path answered with something this library can't read. The path is kept. A command
   /// the answer was for may have taken effect: read the device's status before sending it again.
   case badResponse(path: String)

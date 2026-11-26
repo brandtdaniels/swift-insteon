@@ -20,6 +20,7 @@ enum Script: Sendable {
   case interrupted
   case unauthorized
   case badResponse
+  case forbidden
 }
 
 /// Calls that answer from a script and record what they were asked.
@@ -43,6 +44,7 @@ actor ScriptedCalls: HomeCalls {
     case .interrupted: throw HomePathError.interrupted
     case .unauthorized: throw HomePathError.unauthorized
     case .badResponse: throw HomePathError.badResponse
+    case .forbidden: throw HomePathError.forbidden
     }
   }
 
@@ -54,6 +56,7 @@ actor ScriptedCalls: HomeCalls {
     case .interrupted: throw HomePathError.interrupted
     case .unauthorized: throw HomePathError.unauthorized
     case .badResponse: throw HomePathError.badResponse
+    case .forbidden: throw HomePathError.forbidden
     }
   }
 }

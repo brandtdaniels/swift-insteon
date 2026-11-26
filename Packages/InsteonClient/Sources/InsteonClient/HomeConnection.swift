@@ -39,7 +39,7 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
       } catch {
         let loss = try lose(error, at: index)
         switch loss {
-        case .unauthorized, .badResponse: throw loss
+        case .unauthorized, .badResponse, .forbidden: throw loss
         default: break
         }
         lost = loss
@@ -80,6 +80,8 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
       return .unauthorized(paths: [name])
     case HomePathError.badResponse:
       return .badResponse(path: name)
+    case HomePathError.forbidden:
+      return .forbidden(path: name)
     default:
       throw error
     }
@@ -103,6 +105,8 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
         return (index, calls)
       } catch HomePathError.notReached(let reason) {
         failures.append(PathFailure(path: path.name, reason: reason))
+      } catch HomePathError.forbidden {
+        failures.append(PathFailure(path: path.name, reason: "the credential's scope is too low for this path"))
       } catch HomePathError.unauthorized {
         // A refusal on one path says nothing about another: each uses its own credential.
         refusals.append(path.name)
