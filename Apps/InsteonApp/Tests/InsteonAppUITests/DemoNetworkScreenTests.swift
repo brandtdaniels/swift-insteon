@@ -6,6 +6,7 @@ import Testing
 
 /// The devices screen over the demo network, which the app runs on when no Hub is at hand.
 @MainActor
+@Suite(.timeLimit(.minutes(1)))
 struct DemoNetworkScreenTests {
 
   @Test func theDemoNetworkListsItsDevices() async {
