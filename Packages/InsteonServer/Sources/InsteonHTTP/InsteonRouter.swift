@@ -64,6 +64,7 @@ func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authenti
     case .deleteRoute: { request, context in try await routeAPI.remove(request, kind: context.parameters.get("kind")) }
     case .getBackup: { _, _ in try await backupAPI.get() }
     case .listScenes: { _, _ in try await sceneAPI.list() }
+    case .refreshScenes: { request, _ in try await sceneAPI.refresh(request) }
     case .browserIndex: { request, _ in try await website.index(request) }
     case .browserControls: { _, _ in Response(status: .ok, headers: [.contentType: "text/javascript; charset=utf-8"], body: .init(byteBuffer: ByteBuffer(string: BrowserControls.source))) }
     case .browserCard: { _, context in try await website.device(address: context.parameters.get("address")) }

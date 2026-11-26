@@ -4,6 +4,7 @@ import HummingbirdTesting
 import HTTPTypes
 import InsteonCore
 import InsteonLinking
+import InsteonModem
 import InsteonProtocol
 import InsteonService
 import Testing
@@ -213,5 +214,130 @@ struct SceneRoutesTests {
     #expect(APIOperation.listScenes.method == .get)
     #expect(APIOperation.listScenes.path == "/api/v1/scenes")
     #expect(APIOperation.listScenes.errorCodes.contains(.authenticationRequired))
+  }
+
+  // MARK: Refreshing
+
+  private func refresh(_ setup: Setup, authorization: String?, marker: Bool = true) async throws -> TestResponse {
+    var fields: HTTPFields = authorization.map { [.authorization: $0] } ?? [:]
+    if marker { fields[HTTPField.Name("X-Insteon-Request")!] = "1" }
+    let headers = fields
+    return try await setup.app.test(.router) { client in
+      try await client.execute(uri: "/api/v1/scenes/refresh", method: .post, headers: headers)
+    }
+  }
+
+  private var oneScene: SceneListing {
+    SceneListing(scenes: [SceneListing.Scene(number: 3, controller: .modem, members: [SceneListing.Member(address: lamp, data: [0xFF, 0x1F, 0x01])])])
+  }
+
+  @Test func letsAControlClientRefreshAndAnswersWithTheListingAGetGives() async throws {
+    let setup = try Setup(password: password, service: FakeService(scenes: oneScene))
+    let response = try await refresh(setup, authorization: try await token(setup, scope: .control))
+    let listed = try await fetch(setup, authorization: try await token(setup, scope: .read))
+
+    #expect(response.status == .ok)
+    #expect(response.headers[.contentType] == "application/json")
+    #expect(Array(response.body.readableBytesView) == Array(listed.body.readableBytesView))
+    #expect(await setup.service.refreshes == 1)
+    let scene = try #require((try object(response)["scenes"] as? [[String: Any]])?.first)
+    #expect(scene["number"] as? Int == 3)
+  }
+
+  @Test func namesEachMembersBytesInTheRefreshedListingAsAGetDoes() async throws {
+    let meaning = LinkDataMeaning(bytes: [LinkDataField(position: 1, name: "onLevel", value: 0xFF, verification: "observed")])
+    let setup = try Setup(password: password, service: FakeService(scenes: oneScene, memberMeanings: [lamp: meaning]))
+    let member = try #require(((try object(try await refresh(setup, authorization: basic))["scenes"] as? [[String: Any]])?.first?["members"] as? [[String: Any]])?.first)
+
+    #expect(member["described"] as? Bool == true)
+    #expect((member["bytes"] as? [[String: Any]])?.first?["name"] as? String == "onLevel")
+  }
+
+  @Test func sendsNoDeviceCommandWhenItRefreshes() async throws {
+    let setup = try Setup(password: password, service: FakeService(scenes: oneScene))
+    _ = try await refresh(setup, authorization: basic)
+
+    #expect(await setup.service.commands.isEmpty)
+  }
+
+  @Test func refusesAReadClientBeforeTheServiceIsAsked() async throws {
+    let setup = try Setup(password: password, service: FakeService(scenes: oneScene))
+    let response = try await refresh(setup, authorization: try await token(setup, scope: .read))
+
+    #expect(response.status == .forbidden)
+    #expect(try object(response)["code"] as? String == "forbidden")
+    #expect(await setup.service.refreshes == 0)
+  }
+
+  @Test func refusesACallWithNoCredentialToRefresh() async throws {
+    let setup = try Setup(password: password, service: FakeService(scenes: oneScene))
+    let response = try await refresh(setup, authorization: nil)
+
+    #expect(response.status == .unauthorized)
+    #expect(await setup.service.refreshes == 0)
+  }
+
+  @Test func refusesARefreshWithoutTheExplicitRequestMarker() async throws {
+    let setup = try Setup(password: password, service: FakeService(scenes: oneScene))
+    let response = try await refresh(setup, authorization: basic, marker: false)
+
+    #expect(response.status == .forbidden)
+    #expect(try object(response)["code"] as? String == "apiMarkerMissing")
+    #expect(await setup.service.refreshes == 0)
+  }
+
+  @Test(arguments: [
+    (ServiceControlError.busy, 409, "busy"),
+    (ServiceControlError.modemUnavailable(.hubUnreachable), 503, "modemUnavailable"),
+    (ServiceControlError.databasesUnavailable, 422, "databasesUnavailable")
+  ])
+  func answersARefusalWithItsTypedErrorAndSaysNothingWasSent(_ failure: ServiceControlError, _ status: Int, _ code: String) async throws {
+    let setup = try Setup(password: password, service: FakeService(scenes: oneScene, refreshFailure: failure))
+    let response = try await refresh(setup, authorization: basic)
+    let body = try object(response)
+
+    #expect(Int(response.status.code) == status)
+    #expect(body["code"] as? String == code)
+    #expect(body["sent"] as? Bool == false)
+    #expect(await setup.service.refreshes == 1)
+  }
+
+  @Test func answersALostConnectionAsAReadThatIsSafeToRepeat() async throws {
+    let setup = try Setup(password: password, service: FakeService(scenes: oneScene, refreshFailure: ModemError.connectionClosed))
+    let response = try await refresh(setup, authorization: basic)
+    let body = try object(response)
+
+    #expect(response.status == .gatewayTimeout)
+    #expect(body["code"] as? String == "deviceNotAnswering")
+    #expect(body["sent"] as? Bool == false)
+  }
+
+  @Test func answersACanceledRefreshAsUnavailableWithNothingSent() async throws {
+    let setup = try Setup(password: password, service: FakeService(scenes: oneScene, refreshFailure: CancellationError()))
+    let body = try object(try await refresh(setup, authorization: basic))
+
+    #expect(body["code"] as? String == "canceled")
+    #expect(body["sent"] as? Bool == false)
+  }
+
+  @Test func saysAHubProDoesNotGiveOutItsDatabases() async throws {
+    let setup = try Setup(password: password, service: FakeService(refreshFailure: ServiceControlError.databasesUnavailable))
+    let message = try #require(try object(try await refresh(setup, authorization: basic))["message"] as? String)
+
+    #expect(message.contains("Hub Pro"))
+    #expect(message.contains("ALL-Link databases"))
+  }
+
+  @Test func declaresTheControlScopeAPostWithNoBodyAndTheSceneListAsItsAnswer() {
+    let operation = APIOperation.refreshScenes
+    #expect(operation.requiredScope == .control)
+    #expect(operation.method == .post)
+    #expect(operation.path == "/api/v1/scenes/refresh")
+    #expect(operation.requestBody == nil)
+    #expect(operation.errorCodes.contains(.forbidden))
+    #expect(operation.errorCodes.contains(.busy))
+    #expect(operation.errorCodes.contains(.modemUnavailable))
+    #expect(operation.errorCodes.contains(.databasesUnavailable))
+    #expect(operation.replies.first?.schema == APIOperation.listScenes.replies.first?.schema)
   }
 }

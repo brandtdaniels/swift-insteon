@@ -9,7 +9,7 @@ enum APIOperation: String, CaseIterable, Sendable {
   case listNotificationRules, putNotificationRule, deleteNotificationRule
   case listRoutes, putRoute, deleteRoute
   case getBackup
-  case listScenes
+  case listScenes, refreshScenes
   case listSchedules, putSchedule, deleteSchedule
   case listTimers, putTimer, deleteTimer
   case browserIndex, browserControls, browserCard, browserCommand
@@ -45,14 +45,14 @@ enum APIOperation: String, CaseIterable, Sendable {
   /// A browser route answers HTML and plain text for a person; the rest answer machines.
   var isAPI: Bool {
     switch self {
-    case .listDevices, .health, .executeCommand, .streamEvents, .openAPI, .listClients, .createClient, .revokeClient, .createPairing, .listNotificationRules, .putNotificationRule, .deleteNotificationRule, .listRoutes, .putRoute, .deleteRoute, .listSchedules, .putSchedule, .deleteSchedule, .listTimers, .putTimer, .deleteTimer, .getBackup, .listScenes: true
+    case .listDevices, .health, .executeCommand, .streamEvents, .openAPI, .listClients, .createClient, .revokeClient, .createPairing, .listNotificationRules, .putNotificationRule, .deleteNotificationRule, .listRoutes, .putRoute, .deleteRoute, .listSchedules, .putSchedule, .deleteSchedule, .listTimers, .putTimer, .deleteTimer, .getBackup, .listScenes, .refreshScenes: true
     case .browserIndex, .browserControls, .browserCard, .browserCommand: false
     }
   }
 
   var method: HTTPRequest.Method {
     switch self {
-    case .executeCommand, .browserCommand, .createClient, .createPairing: .post
+    case .executeCommand, .browserCommand, .createClient, .createPairing, .refreshScenes: .post
     case .revokeClient, .deleteNotificationRule, .deleteRoute, .deleteSchedule, .deleteTimer: .delete
     case .putNotificationRule, .putRoute, .putSchedule, .putTimer: .put
     default: .get
@@ -76,6 +76,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .putRoute, .deleteRoute: "/api/v1/routes/{kind}"
     case .getBackup: "/api/v1/backup"
     case .listScenes: "/api/v1/scenes"
+    case .refreshScenes: "/api/v1/scenes/refresh"
     case .listSchedules: "/api/v1/schedules"
     case .putSchedule, .deleteSchedule: "/api/v1/schedules/{id}"
     case .listTimers: "/api/v1/timers"
@@ -105,6 +106,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .deleteRoute: "Remove a transport's route"
     case .getBackup: "Read a backup of the cached network"
     case .listScenes: "List the scenes of the network"
+    case .refreshScenes: "Read the ALL-Link databases from the hardware and list the scenes"
     case .listSchedules: "List the schedules and when each runs next"
     case .putSchedule: "Store a schedule"
     case .deleteSchedule: "Remove a schedule"
@@ -137,6 +139,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .deleteRoute: "Removes the route from the pairing documents issued afterward. Needs the `admin` scope."
     case .getBackup: "The same document format `insteon backup` writes: the modem's address and ALL-Link database, each device's ALL-Link database, names and identities, the notification rules, the routes and the schedules (timers are left out). It answers from the cache and sends nothing to hardware, so a device the service holds no copy of is listed with the reason `notCached`. It holds no password, client token or Hub address. Needs the `admin` scope."
     case .listScenes: "A scene is a group of the modem or of a device with the devices that respond to it; the modem's are `writable`, a device's are read only. Each member has its three link data bytes. It answers from the ALL-Link databases the service has cached and sends nothing to hardware. `whole` is false while a device's database is not held (`unreadable`), a record names a device with no database (`unlisted`), the modem's database is not held (`modemUnread`) or a record has no other half (`halfLinks`, `looseHalfLinks`). Needs the `read` scope."
+    case .refreshScenes: "Reads the ALL-Link database of the modem and of each device from the hardware, one request at a time, and answers with the scenes as `GET /api/v1/scenes` lists them after the read. It only reads: nothing is written to the modem or to a device. A device that does not answer is listed as `unreadable` and the refresh still succeeds. A read takes the service's one admission gate for as long as it lasts, so another operation is refused as `busy` and nothing is queued. A Hub Pro does not give out its ALL-Link databases, so it answers `databasesUnavailable`. Needs the `control` scope."
     case .listSchedules: "The schedules in the order they were added, each with the time it runs next in the service's time zone. Needs the `read` scope."
     case .putSchedule: "Adds the schedule, or replaces the schedule with that identifier, which keeps nothing of the old schedule's last run. It takes effect at once. A clock time is wall-clock time in the service's time zone, so it follows daylight saving time: a time the clocks skip runs once, when the skipped span ends, and a time that happens twice runs at its first occurrence. A run less than a minute late happens; a later one is skipped, unless `catchUp` is true and it is less than 15 minutes late. Each run publishes a `schedule` event on `/api/v1/events`. Needs the `admin` scope."
     case .deleteSchedule: "Removes the schedule, which stops at once. Needs the `admin` scope."
@@ -169,7 +172,7 @@ enum APIOperation: String, CaseIterable, Sendable {
         Parameter(name: "Last-Event-ID", location: "header", required: false, schema: Schema.string(), description: "The id of the last frame the client saw. A browser's EventSource sends it by itself."),
         Parameter(name: "lastEventId", location: "query", required: false, schema: Schema.string(), description: "The same, for a client that can't set headers. The header wins.")
       ]
-    case .createClient: [Self.markerParameter]
+    case .createClient, .refreshScenes: [Self.markerParameter]
     case .revokeClient, .createPairing: [Self.clientParameter, Self.markerParameter]
     case .putNotificationRule, .deleteNotificationRule: [Self.ruleParameter, Self.markerParameter]
     case .putRoute, .deleteRoute: [Self.routeParameter, Self.markerParameter]
@@ -200,7 +203,7 @@ enum APIOperation: String, CaseIterable, Sendable {
   var requiredScope: ClientScope {
     switch self {
     case .listDevices, .health, .streamEvents, .openAPI, .listNotificationRules, .listRoutes, .listSchedules, .listTimers, .listScenes: .read
-    case .executeCommand: .control
+    case .executeCommand, .refreshScenes: .control
     case .listClients, .createClient, .revokeClient, .createPairing, .putNotificationRule, .deleteNotificationRule, .putRoute, .deleteRoute, .putSchedule, .deleteSchedule, .putTimer, .deleteTimer, .getBackup: .admin
     case .browserIndex, .browserControls, .browserCard, .browserCommand: .admin
     }
@@ -230,6 +233,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listRoutes: codes += [.routeRegistrationsNotSaved]
     case .putRoute: codes += [.invalidRouteRegistration, .routeRegistrationLimitReached, .routeRegistrationsNotSaved, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected]
     case .deleteRoute: codes += [.unknownRouteRegistration, .routeRegistrationsNotSaved, .apiMarkerMissing]
+    case .refreshScenes: codes += [.apiMarkerMissing, .busy, .modemUnavailable, .modemRejected, .databasesUnavailable, .canceled, .deviceNotAnswering]
     case .getBackup: codes += [.notificationRulesNotSaved, .routeRegistrationsNotSaved, .schedulesNotSaved]
     case .browserCard:
       codes += [.invalidAddress, .unknownDevice, .busy]
@@ -264,6 +268,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .putRoute: [Reply(status: 200, description: "The stored route.", contentType: "application/json", schema: Schema.ref("RouteStored"), headers: [:])]
     case .deleteRoute: [Reply(status: 204, description: "The route is removed.", contentType: nil, schema: nil, headers: [:])]
     case .listScenes: [Reply(status: 200, description: "The scenes.", contentType: "application/json", schema: Schema.ref("SceneList"), headers: [:])]
+    case .refreshScenes: [Reply(status: 200, description: "The scenes, read from the hardware.", contentType: "application/json", schema: Schema.ref("SceneList"), headers: [:])]
     case .getBackup: [Reply(status: 200, description: "The backup, as `insteon backup` writes it.", contentType: "application/json", schema: Schema.ref("NetworkBackup"), headers: [:])]
     case .deleteNotificationRule: [Reply(status: 204, description: "The rule is removed.", contentType: nil, schema: nil, headers: [:])]
     case .browserIndex: [Reply(status: 200, description: "The page.", contentType: "text/html", schema: nil, headers: [:])]

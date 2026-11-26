@@ -443,7 +443,7 @@ struct HTTPTests {
     #expect(await service.reads == 1)
   }
 
-  @Test(arguments: [ServiceControlError.busy, .unknownDevice, .invalidLevel, .unsupportedControl, .notIdentified, .notLinked, .modemUnavailable(.hubUnreachable)])
+  @Test(arguments: [ServiceControlError.busy, .unknownDevice, .invalidLevel, .unsupportedControl, .notIdentified, .notLinked, .modemUnavailable(.hubUnreachable), .databasesUnavailable])
   func serviceRefusalsHaveAnHTTPMapping(_ failure: ServiceControlError) async throws {
     let service = FakeService(refusal: failure)
     let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
