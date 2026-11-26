@@ -32,6 +32,7 @@ case BackupValue.integer(_:)
 case BackupValue.null
 case BackupValue.object(String:)
 case BackupValue.string(_:)
+case DatabaseLinkConsentRefusal.consentRequired
 case DatabaseLinkDirection.link
 case DatabaseLinkDirection.unlink
 case DatabaseLinkRefusal.changedSincePlanned(_:)
@@ -373,6 +374,7 @@ enum BackupRecordState
 enum BackupSourceKind
 enum BackupUnreadableReason
 enum BackupValue
+enum DatabaseLinkConsentRefusal
 enum DatabaseLinkDirection
 enum DatabaseLinkRefusal
 enum DatabaseLinkResult.DeviceCheck
@@ -443,6 +445,7 @@ func BackupIdentity.encode(to:)
 func BackupModem.encode(to:)
 func BackupRecord.encode(to:)
 func BackupValue.encode(to:)
+func DatabaseLinkConsent.grants(_:)
 func Device.beep()
 func Device.capabilities()
 func Device.changeInstantly(to:)
@@ -460,6 +463,7 @@ func Device.turnOnFast(level:)
 func Device.writeSetting(_:to:button:)
 func DeviceInfo.meaning(of:)
 func DeviceLinkingCoordinator.apply(_:)
+func DeviceLinkingCoordinator.apply(_:consent:)
 func DeviceLinkingCoordinator.link(_:as:group:twoWay:setButtonTimeout:usesCatalogLegs:observer:)
 func DeviceLinkingCoordinator.linkBySETButton(as:group:twoWay:timeout:observer:)
 func DeviceLinkingCoordinator.linkRelay(_:group:twoWay:setButtonTimeout:observer:)
@@ -571,6 +575,7 @@ init BackupRecord(state:role:group:address:data:memoryAddress:)
 init BackupRoute(kind:ticket:)
 init BackupUnreadable(reason:detail:)
 init BackupValue(from:)
+init DatabaseLinkConsent(writeLinkRecords:readFingerprint:)
 init DatabaseLinkInterrupted(result:cause:)
 init DatabaseLinkResult.StepResult(step:outcome:)
 init DatabaseMismatch(isDevice:memoryAddress:expected:found:)
@@ -789,6 +794,7 @@ struct BackupModem
 struct BackupRecord
 struct BackupRoute
 struct BackupUnreadable
+struct DatabaseLinkConsent
 struct DatabaseLinkInterrupted
 struct DatabaseLinkPlan
 struct DatabaseLinkResult
@@ -943,7 +949,12 @@ var BackupRoute.kind
 var BackupRoute.ticket
 var BackupUnreadable.detail
 var BackupUnreadable.reason
+var DatabaseLinkConsent.readFingerprint
+var DatabaseLinkConsent.writeLinkRecords
+var DatabaseLinkConsentRefusal.description
+var DatabaseLinkConsentRefusal.errorDescription
 var DatabaseLinkPlan.deviceSteps
+var DatabaseLinkPlan.fingerprint
 var DatabaseLinkPlan.isEmpty
 var DatabaseLinkPlan.modemSteps
 var DatabaseLinkPlan.rejectsModemOnceUnlinked
