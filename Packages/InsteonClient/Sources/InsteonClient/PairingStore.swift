@@ -46,7 +46,7 @@ public actor PairingStore {
 
   /// The saved pairings, in the order they were added.
   ///
-  /// A pairing whose credential the secret store no longer holds is left out; it stays saved, and
+  /// A pairing whose credential the secret store doesn't hold is left out; it stays saved, and
   /// pairing again replaces it.
   public func load() async throws -> [ClientPairing] {
     var pairings: [ClientPairing] = []
