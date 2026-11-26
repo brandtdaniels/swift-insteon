@@ -32,8 +32,10 @@ public enum ConnectionError: Error, Equatable, Sendable {
   /// kept. Pairing again doesn't help: ask for a credential with a wider scope.
   case forbidden(path: String)
 
-  /// The named path answered with something this library can't read. The path is dropped, so the next call checks it again. A command
-  /// the answer was for may have taken effect: read the device's status before sending it again.
+  /// The named path answered with something this library can't read, or that isn't the service. The
+  /// path is dropped, so the next call checks it again. A 3xx or 4xx answer from something that isn't
+  /// the service means the service did not accept the request. For an unreadable 2xx answer to a
+  /// command, the command may have taken effect: read the device's status before sending it again.
   case badResponse(path: String)
 
   /// The service's modem is away for a cause this library has no case for, named as the service

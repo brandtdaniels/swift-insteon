@@ -7,6 +7,9 @@ import Glibc
 import Musl
 #endif
 
+/// `localhost` and `.local` names are trusted by name: the pairing document comes from the service's
+/// own owner, and the token goes only where that document says.
+///
 /// Whether a host name is on the local network, where a bearer token may cross plain HTTP.
 ///
 /// A loopback or link-local address, a private range (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16,

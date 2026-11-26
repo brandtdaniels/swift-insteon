@@ -160,8 +160,8 @@ private struct ServiceCalls: ConnectionCalls {
     if response.statusCode == 401 { return ConnectionPathError.unauthorized }
     if response.statusCode == 403 { return ConnectionPathError.forbidden }
     // An answer that isn't the service's own refusal comes from something else. A server error,
-    // such as a proxy's, says nothing about whether the request reached a device. Anything else
-    // is a plain wrong answer, such as a wrong prefix, and nothing was done.
+    // such as a proxy's, says nothing about whether the request reached the service. A 3xx or 4xx,
+    // such as a wrong prefix, means the service did not accept the request: a bad response.
     guard let refusal else { return response.statusCode >= 500 ? ConnectionPathError.interrupted : ConnectionPathError.badResponse }
     switch refusal.code {
     case "unknownDevice": return ServiceControlError.unknownDevice
