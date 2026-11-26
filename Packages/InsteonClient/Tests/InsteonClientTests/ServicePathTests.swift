@@ -166,11 +166,6 @@ struct ServicePathTests {
 
     await #expect(throws: CancellationError.self) { _ = try await home.devices() }
   }
-}
-
-struct CancelingOpener: RouteOpening {
-  let kind = "example-transport"
-  func open(ticket: String?) async throws -> URL { throw CancellationError() }
 
   @Test func anAnswerThatIsNotARefusalMayHaveBeenSentSoItIsInterrupted() async throws {
     let c = try await calls(FakeHTTPClient { request in
@@ -234,4 +229,9 @@ struct CancelingOpener: RouteOpening {
     await #expect(throws: HomePathError.notReached("the token is never sent over HTTP to a host outside the local network")) { _ = try await path.open() }
     #expect(await http.requests.isEmpty)
   }
+}
+
+struct CancelingOpener: RouteOpening {
+  let kind = "example-transport"
+  func open(ticket: String?) async throws -> URL { throw CancellationError() }
 }
