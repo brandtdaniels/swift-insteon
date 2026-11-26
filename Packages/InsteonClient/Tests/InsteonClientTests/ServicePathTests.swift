@@ -70,6 +70,18 @@ struct ServicePathTests {
     #expect(devices[1].productName == nil && devices[1].value == nil && devices[1].lastAnsweredAt == nil)
   }
 
+  @Test func datesAreReadWithAndWithoutFractionalSeconds() async throws {
+    for stamp in ["2026-11-25T10:00:00Z", "2026-11-25T10:00:00.250Z", "2026-11-25T10:00:00+00:00"] {
+      let body = #"{"version":1,"devices":[{"address":"1A.2B.3C","productName":null,"canTurnOnAndOff":true,"canDim":true,"value":1,"lastAnsweredAt":"\#(stamp)"}],"stale":false,"cause":null}"#
+      let c = try await calls(FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : json(body) })
+
+      let devices = try await c.devices()
+
+      let seconds = try #require(devices.first?.lastAnsweredAt).timeIntervalSince1970
+      #expect(abs(seconds - 1_795_600_800 - (stamp.contains(".250") ? 0.25 : 0)) < 0.001, "\(stamp)")
+    }
+  }
+
   @Test func aLostConnectionDuringAReadIsInterrupted() async throws {
     let calls = try await calls(FakeHTTPClient { request in
       if request.url?.path == "/api/v1/health" { return healthy }

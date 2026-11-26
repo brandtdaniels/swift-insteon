@@ -106,7 +106,17 @@ private struct ServiceCalls: ConnectionCalls {
     let response = try await path.send(try path.request("GET", "/api/v1/devices"))
     guard (200..<300).contains(response.statusCode) else { throw try failure(response) }
     let decoder = JSONDecoder()
-    decoder.dateDecodingStrategy = .iso8601
+    // Both forms, with and without fractional seconds, on every platform.
+    decoder.dateDecodingStrategy = .custom { decoder in
+      let text = try decoder.singleValueContainer().decode(String.self)
+      let plain = ISO8601DateFormatter()
+      let fractional = ISO8601DateFormatter()
+      fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+      guard let date = plain.date(from: text) ?? fractional.date(from: text) else {
+        throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "not an ISO 8601 date"))
+      }
+      return date
+    }
     // One entry that can't be read fails the whole list: a partial list would look complete.
     do {
       return try decoder.decode(DeviceList.self, from: response.body).devices.map { try $0.device() }
