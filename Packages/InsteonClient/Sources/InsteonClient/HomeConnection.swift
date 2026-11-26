@@ -31,44 +31,41 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
   }
 
   public func devices() async throws -> [ServiceDevice] {
-    var failed: Int?
-    var lost: HomeError?
-    for _ in 0..<2 {
-      let (index, generation, calls) = try await reach(lastFailed: failed)
-      do {
-        return try await calls.devices()
-      } catch {
-        let loss = try lose(error, at: index, generation: generation)
-        switch loss {
-        case .unauthorized, .badResponse, .forbidden: throw loss
-        default: break
-        }
-        lost = loss
-        failed = index
-      }
-    }
-    throw lost ?? HomeError.noPathReached(skipped)
+    try await perform(retryable: true) { try await $0.devices() }
   }
 
   public func execute(_ command: ServiceCommand) async throws -> CommandReceipt {
+    try await perform(retryable: false) { try await $0.execute(command) }
+  }
+
+  /// Runs one call, and once more on another path when the first attempt didn't get an answer.
+  ///
+  /// A path that can prove nothing was sent (`notReached`) or whose credential has too low a scope
+  /// (`forbidden`) is passed over for both kinds of call, since nothing was done. A path that was
+  /// lost or answered wrongly after the request may have been sent is passed over only for a read,
+  /// which is safe to ask again; a command is reported instead and never repeated.
+  private func perform<Answer: Sendable>(retryable: Bool, _ operation: (any HomeCalls) async throws -> Answer) async throws -> Answer {
     var failed: Int?
     var reasons = skipped
+    var last: HomeError?
     for _ in 0..<2 {
       let (index, generation, calls) = try await reach(lastFailed: failed)
       do {
-        return try await calls.execute(command)
+        return try await operation(calls)
       } catch HomePathError.notReached(let reason) {
-        // Nothing was sent: the next path can take it.
         if open?.generation == generation { open = nil }
         reasons.append(PathFailure(path: paths[index].name, reason: reason))
-        failed = index
       } catch {
-        let lost = try lose(error, at: index, generation: generation)
-        // A command that may have been sent is not asked again.
-        throw lost
+        let loss = try lose(error, at: index, generation: generation)
+        switch loss {
+        case .forbidden: last = loss
+        case .interrupted where retryable, .badResponse where retryable: last = loss
+        default: throw loss
+        }
       }
+      failed = index
     }
-    throw HomeError.noPathReached(reasons)
+    throw last ?? HomeError.noPathReached(reasons)
   }
 
   /// Drops the open path and names what was lost, or rethrows an error that isn't the path's.
@@ -95,7 +92,7 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
 
   /// The path in use, or the first that opens, trying the path that just failed last.
   private func reach(lastFailed: Int?) async throws -> (index: Int, generation: Int, calls: any HomeCalls) {
-    if let open { return open }
+    if let open, open.index != lastFailed { return open }
     var failures = skipped
     var refusals: [String] = []
     var tried = 0
@@ -106,7 +103,7 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
       do {
         let calls = try await path.open()
         // A call that was waiting on another opening may have set it already.
-        if let open { return open }
+        if let open, open.index != lastFailed { return open }
         generations += 1
         open = (index, generations, calls)
         return (index, generations, calls)

@@ -156,23 +156,45 @@ struct HomeConnectionTests {
     #expect(await remote.openCount == 1)
   }
 
-  @Test func aBadResponseIsReportedWithoutAskingAgainAndTheNextCallChecksThePathAgain() async throws {
-    let calls = ScriptedCalls(label: "local", script: [.badResponse])
-    let local = ScriptedPath("local", calls: calls)
-    let home = HomeConnection(paths: [local])
+  @Test func aReadThatGotABadResponseIsAskedOnAnotherPathAndTheBadPathIsDropped() async throws {
+    let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.badResponse]))
+    let remote = ScriptedPath("remote")
+    let home = HomeConnection(paths: [local, remote])
 
-    await #expect(throws: HomeError.badResponse(path: "local")) { try await home.devices() }
-    #expect(await calls.asked == ["devices"])
+    let devices = try await home.devices()
+
+    #expect(devices.first?.value == 2)
+    #expect(await home.currentPath == "remote")
+  }
+
+  @Test func aCommandThatGotABadResponseIsReportedAndNeverAskedAgain() async throws {
+    let calls = ScriptedCalls(label: "local", script: [.badResponse])
+    let remote = ScriptedPath("remote")
+    let home = HomeConnection(paths: [ScriptedPath("local", calls: calls), remote])
+
+    await #expect(throws: HomeError.badResponse(path: "local")) { try await home.execute(ServiceCommand(address: lampAddress, action: .on)) }
+    #expect(await calls.asked == ["execute"])
+    #expect(await remote.openCount == 0)
     #expect(await home.currentPath == nil, "the next call checks the path again")
   }
 
-  @Test func aScopeTooLowIsReportedAndThePathIsKeptAndNothingIsAskedAgain() async throws {
-    let calls = ScriptedCalls(label: "local", script: [.forbidden])
+  @Test func aScopeTooLowOnOnePathStillTriesTheOthersBeforeReportingIt() async throws {
+    let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.forbidden]))
+    let remote = ScriptedPath("remote")
+    let home = HomeConnection(paths: [local, remote])
+
+    let receipt = try await home.execute(ServiceCommand(address: lampAddress, action: .on))
+
+    #expect(receipt.address == lampAddress)
+    #expect(await home.currentPath == "remote")
+  }
+
+  @Test func aScopeTooLowOnEveryPathIsReportedAndNothingIsRepeated() async throws {
+    let calls = ScriptedCalls(label: "local", script: [.forbidden, .forbidden])
     let home = HomeConnection(paths: [ScriptedPath("local", calls: calls)])
 
     await #expect(throws: HomeError.forbidden(path: "local")) { try await home.execute(ServiceCommand(address: lampAddress, action: .on)) }
-    #expect(await calls.asked == ["execute"])
-    #expect(await home.currentPath == "local")
+    #expect(await home.currentPath == "local", "the forbidden path is kept when no other path takes over")
   }
 
   @Test func aPathWhoseScopeIsTooLowToOpenIsNamedAndTheSearchGoesOn() async throws {
@@ -202,6 +224,17 @@ struct HomeConnectionTests {
     #expect(slowResult.first?.value == 2)
     #expect(await home.currentPath == "remote")
     #expect(await remote.openCount == 1, "the late failure of the old path did not drop the healthy one")
+  }
+
+  @Test func aReadThatWasNeverSentIsTreatedLikeACommandThatWasNeverSent() async throws {
+    let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.notReached, .notReached]))
+    let home = HomeConnection(paths: [local])
+
+    await #expect(throws: HomeError.noPathReached([
+      PathFailure(path: "local", reason: "scripted"),
+      PathFailure(path: "local", reason: "scripted")
+    ])) { try await home.devices() }
+    #expect(await home.currentPath == nil)
   }
 
   @Test func whenEveryAttemptRunsOutTheReasonsAreKept() async throws {

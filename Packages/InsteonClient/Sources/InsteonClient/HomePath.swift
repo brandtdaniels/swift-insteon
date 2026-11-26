@@ -4,6 +4,10 @@ import InsteonService
 ///
 /// They are the service's own roles, so code written against `DeviceQuerying` and
 /// `DeviceCommanding` runs on a path, a ``HomeConnection`` or the service itself.
+///
+/// A call throws ``HomePathError/notReached(_:)`` only when it can prove that no byte of the
+/// request left, so the connection may pass it to another path. A failure after the request may
+/// have been sent is ``HomePathError/interrupted``, however it happened.
 public protocol HomeCalls: DeviceQuerying, DeviceCommanding {}
 
 /// One way to reach a home: a Hub on the local network, the service at a local address, or a

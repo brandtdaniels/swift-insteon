@@ -72,6 +72,15 @@ struct ServicePathTests {
     await #expect(throws: HomePathError.interrupted) { _ = try await calls.devices() }
   }
 
+  @Test func aCommandLostAfterItWasSentIsInterruptedNeverNotReached() async throws {
+    let c = try await calls(FakeHTTPClient { request in
+      if request.url?.path == "/api/v1/health" { return healthy }
+      throw Unplugged()
+    })
+
+    await #expect(throws: HomePathError.interrupted) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+  }
+
   @Test func aCommandIsPostedAsJSONWithTheMarkerAndNoRepeatKey() async throws {
     let http = FakeHTTPClient { request in
       request.url?.path == "/api/v1/health" ? healthy : json(#"{"version":1,"address":"1A.2B.3C","outcome":"acknowledged","status":null,"persistence":"saved"}"#)
