@@ -13,10 +13,33 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
   let service: Service
 
   func list() async throws -> Response {
+    let listing = await service.scenes()
+    // One question for each distinct member, so a device that holds several records of the same
+    // bytes is not asked about again.
+    var asked: [MemberQuestion: LinkDataMeaning?] = [:]
+    var meanings: [[LinkDataMeaning?]] = []
+    for scene in listing.scenes {
+      var row: [LinkDataMeaning?] = []
+      for member in scene.members {
+        let question = MemberQuestion(address: member.address, data: member.data, group: scene.number)
+        if asked[question] == nil {
+          asked[question] = .some(await service.meaning(ofMemberData: member.data, of: member.address, group: scene.number))
+        }
+        row.append(asked[question] ?? nil)
+      }
+      meanings.append(row)
+    }
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
-    return Response(status: .ok, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(bytes: try encoder.encode(SceneListDTO(await service.scenes())))))
+    return Response(status: .ok, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(bytes: try encoder.encode(SceneListDTO(listing, meanings: meanings)))))
   }
+}
+
+/// What the service is asked about one member: the same question has the same answer.
+private struct MemberQuestion: Hashable {
+  let address: InsteonAddress
+  let data: [UInt8]
+  let group: UInt8
 }
 
 /// A listing as it goes on the wire. A scene's `controller` is `modem` or a device's address.
@@ -27,11 +50,20 @@ struct SceneListDTO: Encodable {
   let unreadable: [String]
   let unlisted: [String]
   let modemUnread: Bool
+  /// The members the catalog doesn't describe, once each, so a client can say what it can't explain.
+  let undescribedMembers: [String]
   /// Whether every database was read and every record has its other half.
   let whole: Bool
 
-  init(_ listing: SceneListing) {
-    scenes = listing.scenes.map(SceneDTO.init)
+  /// - Parameter meanings: What each member's bytes mean, in the order of `listing.scenes` and each
+  ///   scene's `members`; `nil` for a member the catalog doesn't describe.
+  init(_ listing: SceneListing, meanings: [[LinkDataMeaning?]]) {
+    scenes = zip(listing.scenes, meanings).map { SceneDTO($0, meanings: $1) }
+    var undescribed: Set<InsteonAddress> = []
+    for (scene, row) in zip(listing.scenes, meanings) {
+      for (member, meaning) in zip(scene.members, row) where meaning == nil { undescribed.insert(member.address) }
+    }
+    undescribedMembers = undescribed.sorted { $0.bytes.lexicographicallyPrecedes($1.bytes) }.map(\.description)
     looseHalfLinks = listing.looseHalfLinks.map(HalfLinkDTO.init)
     unreadable = listing.unreadable.map(\.description)
     unlisted = listing.unlisted.map(\.description)
@@ -47,11 +79,11 @@ struct SceneDTO: Encodable {
   let members: [SceneMemberDTO]
   let halfLinks: [HalfLinkDTO]
 
-  init(_ scene: SceneListing.Scene) {
+  init(_ scene: SceneListing.Scene, meanings: [LinkDataMeaning?]) {
     number = Int(scene.number)
     controller = SceneWire.name(scene.controller)
     writable = scene.isWritable
-    members = scene.members.map(SceneMemberDTO.init)
+    members = zip(scene.members, meanings).map { SceneMemberDTO($0, meaning: $1) }
     halfLinks = scene.halfLinks.map(HalfLinkDTO.init)
   }
 }
@@ -59,10 +91,36 @@ struct SceneDTO: Encodable {
 struct SceneMemberDTO: Encodable {
   let address: String
   let data: [Int]
+  /// Whether the catalog says what the bytes mean for this device.
+  let described: Bool
+  let bytes: [LinkDataByteDTO]
 
-  init(_ member: SceneListing.Member) {
+  init(_ member: SceneListing.Member, meaning: LinkDataMeaning?) {
     address = member.address.description
     data = member.data.map(Int.init)
+    described = meaning != nil
+    bytes = meaning?.bytes.map(LinkDataByteDTO.init) ?? []
+  }
+}
+
+struct LinkDataByteDTO: Encodable {
+  let position: Int
+  let name: String
+  let label: String?
+  let value: Int
+  let valueName: String?
+  let perGroup: Bool
+  /// How sure the catalog is: `observed`, `documented`, `inferred` or `conflicting`.
+  let verification: String
+
+  init(_ field: LinkDataField) {
+    position = field.position
+    name = field.name
+    label = field.label
+    value = Int(field.value)
+    valueName = field.valueName
+    perGroup = field.isPerGroup
+    verification = field.verification
   }
 }
 

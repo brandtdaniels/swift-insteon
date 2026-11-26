@@ -155,6 +155,12 @@ public actor InsteonService: InsteonServiceAPI {
     SceneListing(await homeBackup())
   }
 
+  /// What a scene member's link data bytes mean, from the catalog and the identity the service
+  /// has recorded for the device, without asking hardware.
+  public func meaning(ofMemberData data: [UInt8], of device: InsteonAddress, group: UInt8) async -> LinkDataMeaning? {
+    await network.registeredDevice(device)?.info.meaning(ofResponderData: data, group: group)
+  }
+
   /// Executes an operation through InsteonCore and preserves its result if persistence fails.
   /// While the modem isn't connected it throws ``ServiceControlError/modemUnavailable(_:)``
   /// before sending anything. A device that isn't identified or isn't linked to the modem throws

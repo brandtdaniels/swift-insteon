@@ -291,8 +291,9 @@ enum OpenAPIDocument {
         "unreadable": Schema.array(of: address),
         "unlisted": Schema.array(of: address),
         "modemUnread": Schema.boolean,
+        "undescribedMembers": Schema.array(of: address),
         "whole": Schema.boolean
-      ], required: ["version", "scenes", "looseHalfLinks", "unreadable", "unlisted", "modemUnread", "whole"]),
+      ], required: ["version", "scenes", "looseHalfLinks", "unreadable", "unlisted", "modemUnread", "undescribedMembers", "whole"]),
       "Scene": Schema.object([
         "number": Schema.integer(minimum: 0, maximum: 255),
         "controller": Schema.string(description: "`modem`, or the address of the device that controls the scene."),
@@ -302,8 +303,19 @@ enum OpenAPIDocument {
       ], required: ["number", "controller", "writable", "members", "halfLinks"]),
       "SceneMember": Schema.object([
         "address": address,
-        "data": Schema.array(of: Schema.integer(minimum: 0, maximum: 255))
-      ], required: ["address", "data"]),
+        "data": Schema.array(of: Schema.integer(minimum: 0, maximum: 255)),
+        "described": Schema.boolean,
+        "bytes": Schema.array(of: Schema.ref("LinkDataByte"))
+      ], required: ["address", "data", "described", "bytes"]),
+      "LinkDataByte": Schema.object([
+        "position": Schema.integer(minimum: 1, maximum: 3),
+        "name": Schema.string(),
+        "label": Schema.nullable(Schema.string()),
+        "value": Schema.integer(minimum: 0, maximum: 255),
+        "valueName": Schema.nullable(Schema.string()),
+        "perGroup": Schema.boolean,
+        "verification": Schema.string(description: "How sure the Insteon device catalog is of the byte: `observed`, `documented`, `inferred` or `conflicting`.")
+      ], required: ["position", "name", "value", "perGroup", "verification"]),
       "HalfLink": Schema.object([
         "endpoint": Schema.string(description: "`modem`, or the address of the device whose database holds the record."),
         "group": Schema.integer(minimum: 0, maximum: 255),

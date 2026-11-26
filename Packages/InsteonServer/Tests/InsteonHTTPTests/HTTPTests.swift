@@ -521,6 +521,14 @@ actor FakeService: InsteonServiceAPI {
   /// The scenes the service reports, and how many times it was asked.
   let scenes: SceneListing
   private(set) var sceneReads = 0
+  /// What the catalog says each member's bytes mean, and what the service was asked.
+  let memberMeanings: [InsteonAddress: LinkDataMeaning]
+  struct MeaningQuestion: Hashable, Sendable {
+    let device: InsteonAddress
+    let data: [UInt8]
+    let group: UInt8
+  }
+  private(set) var askedMeanings: [MeaningQuestion] = []
   /// The schedules and timers the service holds, and the refusal every schedule or timer call answers with.
   private(set) var storedSchedules: [ServiceSchedule] = []
   private(set) var storedTimers: [ServiceTimer] = []
@@ -530,8 +538,9 @@ actor FakeService: InsteonServiceAPI {
   private var openSources: [AsyncStream<ServiceEvent>.Continuation] = []
   var reported = ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000))
   let address = InsteonAddress(0x1A, 0x2B, 0x3C)
-  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false, scriptedItems: [SequencedItem] = [], ruleFailure: NotificationRuleError? = nil, scenes: SceneListing = SceneListing(scenes: [])) {
+  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false, scriptedItems: [SequencedItem] = [], ruleFailure: NotificationRuleError? = nil, scenes: SceneListing = SceneListing(scenes: []), memberMeanings: [InsteonAddress: LinkDataMeaning] = [:]) {
     self.scenes = scenes
+    self.memberMeanings = memberMeanings
     self.ruleFailure = ruleFailure
     self.endlessEvents = endlessEvents
     self.scriptedItems = scriptedItems
@@ -559,6 +568,10 @@ actor FakeService: InsteonServiceAPI {
   func scenes() async -> SceneListing {
     sceneReads += 1
     return scenes
+  }
+  func meaning(ofMemberData data: [UInt8], of device: InsteonAddress, group: UInt8) async -> LinkDataMeaning? {
+    askedMeanings.append(MeaningQuestion(device: device, data: data, group: group))
+    return memberMeanings[device]
   }
   /// What the service says its backup holds, and how many times it was asked.
   private(set) var backups = 0

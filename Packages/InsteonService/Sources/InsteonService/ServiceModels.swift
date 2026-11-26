@@ -154,6 +154,17 @@ public protocol SceneProviding: Sendable {
   /// to hardware and doesn't take the admission gate, so a device with no cached copy is reported
   /// as unreadable and the listing is not whole.
   func scenes() async -> SceneListing
+
+  /// What the data bytes a scene's member holds mean, as the Insteon device catalog gives them for
+  /// the device's identity. It sends nothing to hardware.
+  ///
+  /// - Parameters:
+  ///   - data: The member's three link data bytes.
+  ///   - device: The member's address.
+  ///   - group: The scene's group number.
+  /// - Returns: The meaning, or `nil` when the device's identity isn't known or the catalog
+  ///   doesn't describe the bytes.
+  func meaning(ofMemberData data: [UInt8], of device: InsteonAddress, group: UInt8) async -> LinkDataMeaning?
 }
 
 /// The cohesive API consumed by an adapter that needs queries, commands, events and health.
