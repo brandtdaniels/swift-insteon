@@ -288,12 +288,16 @@ enum OpenAPIDocument {
         "version": version,
         "scenes": Schema.array(of: Schema.ref("Scene")),
         "looseHalfLinks": Schema.array(of: Schema.ref("HalfLink")),
-        "unreadable": Schema.array(of: address),
+        "unreadable": Schema.array(of: Schema.ref("UnreadableDevice")),
         "unlisted": Schema.array(of: address),
         "modemUnread": Schema.boolean,
         "undescribedMembers": Schema.array(of: address),
         "whole": Schema.boolean
       ], required: ["version", "scenes", "looseHalfLinks", "unreadable", "unlisted", "modemUnread", "undescribedMembers", "whole"]),
+      "UnreadableDevice": Schema.object([
+        "address": address,
+        "reason": Schema.string(enum: ["noAnswer", "rejectedModem", "damagedRecords", "notCached", "unavailableFromSource", "modemStoppedEchoing", "hubStoppedAnswering", "failed", "incomplete"], description: "Why the device's ALL-Link database was not read. `notCached` is a device no refresh has tried.")
+      ], required: ["address", "reason"], description: "A device whose ALL-Link database the service does not hold."),
       "Scene": Schema.object([
         "number": Schema.integer(minimum: 0, maximum: 255),
         "controller": Schema.string(description: "`modem`, or the address of the device that controls the scene."),

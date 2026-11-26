@@ -7,6 +7,7 @@ import InsteonLinking
 import InsteonModem
 import InsteonProtocol
 import InsteonService
+import Logging
 import Testing
 @testable import InsteonHTTP
 
@@ -61,7 +62,7 @@ struct SceneRoutesTests {
     let body = try object(response)
     #expect(body["version"] as? Int == 1)
     #expect(body["whole"] as? Bool == true)
-    #expect((body["unreadable"] as? [String])?.isEmpty == true)
+    #expect((body["unreadable"] as? [[String: String]])?.isEmpty == true)
     #expect((body["unlisted"] as? [String])?.isEmpty == true)
 
     let scene = try #require((body["scenes"] as? [[String: Any]])?.first)
@@ -154,13 +155,14 @@ struct SceneRoutesTests {
     let listing = SceneListing(
       scenes: [SceneListing.Scene(number: 4, controller: .modem, halfLinks: [halfLink])],
       unreadable: [keypad],
+      unreadableReasons: [keypad: .rejectedModem],
       unlisted: [InsteonAddress(0x0A, 0x0B, 0x0C)]
     )
     let setup = try Setup(password: password, service: FakeService(scenes: listing))
     let body = try object(try await fetch(setup, authorization: basic))
 
     #expect(body["whole"] as? Bool == false)
-    #expect(body["unreadable"] as? [String] == ["4D.5E.6F"])
+    #expect(body["unreadable"] as? [[String: String]] == [["address": "4D.5E.6F", "reason": "rejectedModem"]])
     #expect(body["unlisted"] as? [String] == ["0A.0B.0C"])
 
     let scene = try #require((body["scenes"] as? [[String: Any]])?.first)
@@ -318,6 +320,53 @@ struct SceneRoutesTests {
 
     #expect(body["code"] as? String == "canceled")
     #expect(body["sent"] as? Bool == false)
+  }
+
+  @Test func saysWhyEachDeviceIsUnreadableInTheRefreshedListingAndTheListingAfterIt() async throws {
+    let listing = SceneListing(
+      scenes: [],
+      unreadable: [lamp, keypad],
+      unreadableReasons: [lamp: .noAnswer, keypad: .modemStoppedEchoing]
+    )
+    let setup = try Setup(password: password, service: FakeService(scenes: listing))
+    let expected = [["address": "1A.2B.3C", "reason": "noAnswer"], ["address": "4D.5E.6F", "reason": "modemStoppedEchoing"]]
+
+    #expect(try object(try await refresh(setup, authorization: basic))["unreadable"] as? [[String: String]] == expected)
+    #expect(try object(try await fetch(setup, authorization: basic))["unreadable"] as? [[String: String]] == expected)
+  }
+
+  @Test func saysNotCachedForAnUnreadableDeviceTheListingHasNoReasonFor() async throws {
+    let setup = try Setup(password: password, service: FakeService(scenes: SceneListing(scenes: [], unreadable: [keypad])))
+
+    #expect(try object(try await fetch(setup, authorization: basic))["unreadable"] as? [[String: String]] == [["address": "4D.5E.6F", "reason": "notCached"]])
+  }
+
+  @Test func logsOneLineForEachDeviceARefreshLeftUnreadWithItsReason() async throws {
+    let capture = LogCapture()
+    let listing = SceneListing(scenes: [], unreadable: [lamp, keypad], unreadableReasons: [lamp: .noAnswer, keypad: .rejectedModem])
+    let service = FakeService(scenes: listing)
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password), logger: capture.logger).buildResponder())
+    try await app.test(.router) { client in
+      try await client.execute(uri: "/api/v1/scenes/refresh", method: .post, headers: [.authorization: basic, HTTPField.Name("X-Insteon-Request")!: "1"]) { response in
+        #expect(response.status == .ok)
+      }
+    }
+
+    let lines = capture.records.filter { $0.message == "scene refresh left a device unread" }
+    #expect(lines.count == 2)
+    #expect(lines.map { "\($0.metadata["address"] ?? "") \($0.metadata["reason"] ?? "")" } == ["1A.2B.3C noAnswer", "4D.5E.6F rejectedModem"])
+    #expect(lines.allSatisfy { $0.level == .warning })
+  }
+
+  @Test func logsNothingForAReadOfTheCache() async throws {
+    let capture = LogCapture()
+    let service = FakeService(scenes: SceneListing(scenes: [], unreadable: [keypad]))
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password), logger: capture.logger).buildResponder())
+    try await app.test(.router) { client in
+      _ = try await client.execute(uri: "/api/v1/scenes", method: .get, headers: [.authorization: basic])
+    }
+
+    #expect(capture.records.allSatisfy { $0.message == "request" })
   }
 
   @Test func saysAHubProDoesNotGiveOutItsDatabases() async throws {
