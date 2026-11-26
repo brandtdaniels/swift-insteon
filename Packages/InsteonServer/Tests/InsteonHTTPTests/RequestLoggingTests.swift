@@ -179,6 +179,7 @@ private actor ScriptedService: InsteonServiceAPI {
   func putNotificationRule(_ rule: ServiceNotificationRule) async throws {}
   func removeNotificationRule(id: String) async throws {}
   func scenes() async -> SceneListing { SceneListing(scenes: []) }
+  func refreshScenes() async throws -> SceneListing { SceneListing(scenes: []) }
   func meaning(ofMemberData data: [UInt8], of device: InsteonAddress, group: UInt8) async -> LinkDataMeaning? { nil }
   func networkBackup() async -> NetworkBackup { NetworkBackup(createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .service, modem: nil, devices: []) }
   func schedules() async throws -> [ScheduleEntry] { [] }

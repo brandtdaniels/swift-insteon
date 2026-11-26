@@ -1,5 +1,6 @@
 import InsteonCore
 import InsteonDeviceCatalog
+import InsteonModem
 import InsteonProtocol
 
 /// The network of one connection, as the service reaches it: what it knows, how its devices are
@@ -33,6 +34,15 @@ public protocol ServedNetwork: Sendable {
   /// Subscribes to what changes on the network. The sequence ends with the error that ends the
   /// connection, if one does.
   func changes() async throws -> NetworkChanges
+
+  /// Reads the ALL-Link databases of the modem and of each device the network knows, and keeps
+  /// them in what ``snapshot()`` returns. It only reads. A device that doesn't answer stays
+  /// unread and doesn't fail the refresh.
+  ///
+  /// - Throws: ``ServiceControlError/databasesUnavailable`` for a network that doesn't give out
+  ///   its databases, `CancellationError` when canceled, and the modem's error when the
+  ///   connection is lost.
+  func refreshDatabases() async throws
 
   /// The local time the Hub reported when the connection opened, as it wrote it, or `nil` for a
   /// connection that doesn't report one. Reading it changes nothing on the Hub.
@@ -90,6 +100,39 @@ struct ModemServedNetwork: ServedNetwork {
 
   func changes() async throws -> NetworkChanges { .heard(await network.monitor.changes()) }
 
+  func refreshDatabases() async throws {
+    let info = try await network.modemInfo()
+    let entries = try await network.modemDatabase()
+    // The devices a cached backup lists: the ones the registry and the device states know, and the
+    // ones the modem's records name, except the modem.
+    let snapshot = await network.snapshot()
+    var addresses = Set(snapshot.registry.identities.keys).union(snapshot.devices.keys)
+    for entry in entries where entry.record.isInUse { addresses.insert(entry.record.address) }
+    addresses.remove(info.address)
+    for address in addresses.sorted(by: { $0.bytes.lexicographicallyPrecedes($1.bytes) }) {
+      try Task.checkCancellation()
+      try await readDatabase(of: address)
+    }
+  }
+
+  /// Reads one device's database, again once if it arrives damaged. A device that doesn't answer
+  /// or turns the modem away is left unread.
+  private func readDatabase(of address: InsteonAddress) async throws {
+    do {
+      var database = try await network.allLinkDatabase(of: address)
+      if !database.hasIntactChecksums {
+        // A damaged reading isn't kept, so asking again reads the device again.
+        database = try await network.allLinkDatabase(of: address)
+      }
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch ModemError.connectionClosed {
+      throw ModemError.connectionClosed
+    } catch ModemError.deviceTimedOut, ModemError.timedOut, ModemError.deviceRejected {
+      return
+    }
+  }
+
 }
 
 /// A Hub Pro's network, served.
@@ -113,6 +156,8 @@ struct HubProServedNetwork: ServedNetwork {
   func prepare() async throws {}
 
   func changes() async throws -> NetworkChanges { .polled(network.changes()) }
+
+  func refreshDatabases() async throws { throw ServiceControlError.databasesUnavailable }
 
   func reportedLocalTime() async -> String? { await network.reportedTime }
 

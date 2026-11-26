@@ -155,6 +155,21 @@ public protocol SceneProviding: Sendable {
   /// as unreadable and the listing is not whole.
   func scenes() async -> SceneListing
 
+  /// Reads the ALL-Link databases of the modem and of each device from the hardware, one request
+  /// at a time, and lists the scenes from what was read. It only reads: nothing is written to the
+  /// modem or to a device. A device that doesn't answer is listed as unreadable, and the listing
+  /// is then not whole.
+  ///
+  /// It takes the admission gate for the whole read, and the checkpoint it saves holds what was
+  /// read.
+  ///
+  /// - Throws: ``ServiceControlError/busy`` while another operation holds the gate,
+  ///   ``ServiceControlError/modemUnavailable(_:)`` while the modem isn't connected (nothing is
+  ///   sent), ``ServiceControlError/databasesUnavailable`` for a network that doesn't give out its
+  ///   databases, `CancellationError` when canceled, and the modem's error when the connection is
+  ///   lost.
+  func refreshScenes() async throws -> SceneListing
+
   /// What the data bytes a scene's member holds mean, as the Insteon device catalog gives them for
   /// the device's identity. It sends nothing to hardware.
   ///
@@ -189,6 +204,9 @@ public enum ServiceControlError: Error, Equatable {
   /// The modem isn't connected, so nothing was sent. The service keeps reconnecting, and a
   /// later command can succeed.
   case modemUnavailable(ModemUnavailability)
+  /// The network doesn't give out its ALL-Link databases, as a Hub Pro doesn't, so there is
+  /// nothing to read. Nothing was sent.
+  case databasesUnavailable
 }
 
 /// A service runtime failure, independent of its host.
