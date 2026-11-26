@@ -206,6 +206,29 @@ struct SceneRefreshTests {
     #expect(await service.health().lastHardwareExchange != nil)
   }
 
+  @Test func listsADeviceAsUnreadableWhenItsDatabaseIsDamagedOnBothReads() async throws {
+    let modem = await modemWithOneScene()
+    await modem.setDamaged(true, record: 0x0FFF, of: lamp)
+    let service = InsteonService(network: network(modem, knowing: [lamp]))
+
+    let listing = try await service.refreshScenes()
+
+    #expect(listing.unreadable == [lamp])
+    #expect(!listing.isWhole)
+    #expect(await modem.databaseReads[lamp] == 2)
+  }
+
+  @Test func dropsAnEarlierCopyWhenTheDeviceChangedAndNowReadsDamagedTwice() async throws {
+    let modem = await modemWithOneScene()
+    let service = InsteonService(network: network(modem, knowing: [lamp]))
+    #expect(try await service.refreshScenes().unreadable.isEmpty)
+
+    await modem.changeDatabase(of: lamp)
+    await modem.setDamaged(true, record: 0x0FFF, of: lamp)
+    let listing = try await service.refreshScenes()
+
+    #expect(listing.unreadable == [lamp])
+  }
 }
 
 private actor RecordingStore: NetworkSnapshotStore {
