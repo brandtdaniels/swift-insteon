@@ -49,6 +49,8 @@ struct NetworkBackupTextTests {
     (.notCached, "has no ALL-Link database the service cached"),
     (.unavailableFromSource, "has no ALL-Link database to read from this source"),
     (.failed, "couldn't be read"),
+    (.modemStoppedEchoing, "was never asked, because the modem didn't confirm sending the request"),
+    (.hubStoppedAnswering, "was never reached, because the Hub stopped answering"),
     (.incomplete, "has a partial ALL-Link database")
   ]) func explainsEachReason(reason: BackupUnreadableReason, text: String) {
 

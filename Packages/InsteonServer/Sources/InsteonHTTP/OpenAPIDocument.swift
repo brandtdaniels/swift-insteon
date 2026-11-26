@@ -255,7 +255,7 @@ enum OpenAPIDocument {
         "memory": Schema.string(pattern: "^0x[0-9A-F]{4}$", description: "Where the record is in a device's database. A record of the modem's has none.")
       ], required: ["state", "role", "group", "address", "data"]),
       "BackupUnreadable": Schema.object([
-        "reason": Schema.string(enum: ["noAnswer", "rejectedModem", "damagedRecords", "notCached", "unavailableFromSource", "failed", "incomplete"], description: "Why there is no ALL-Link database."),
+        "reason": Schema.string(enum: ["noAnswer", "rejectedModem", "damagedRecords", "notCached", "unavailableFromSource", "modemStoppedEchoing", "hubStoppedAnswering", "failed", "incomplete"], description: "Why there is no ALL-Link database."),
         "detail": Schema.string(description: "A short note that holds no address or credential.")
       ], required: ["reason"]),
       "ScheduleAction": Schema.object([

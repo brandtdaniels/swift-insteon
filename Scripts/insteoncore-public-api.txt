@@ -21,7 +21,9 @@ case BackupSourceKind.modem
 case BackupSourceKind.service
 case BackupUnreadableReason.damagedRecords
 case BackupUnreadableReason.failed
+case BackupUnreadableReason.hubStoppedAnswering
 case BackupUnreadableReason.incomplete
+case BackupUnreadableReason.modemStoppedEchoing
 case BackupUnreadableReason.noAnswer
 case BackupUnreadableReason.notCached
 case BackupUnreadableReason.rejectedModem
@@ -557,6 +559,7 @@ func ProductCatalog.productName(category:subcategory:firmwareVersion:)
 func ProductCatalogStore.cachedJSON()
 func ProductCatalogStore.cachedVersion()
 func ProductCatalogStore.save(json:version:)
+func SceneListing.unreadableReason(of:)
 func SelfTestReport.check(_:)
 func TransferPlan.json()
 init BackupDatabase(delta:records:)
@@ -657,7 +660,7 @@ init RemoteUnlinkingError(device:info:underlying:)
 init RemovedLinks(address:device:links:)
 init SETButtonPrompt(direction:group:timeout:device:info:steps:modemRole:deviceGroup:)
 init SceneListing(_:)
-init SceneListing(scenes:looseHalfLinks:unreadable:unlisted:isModemUnread:)
+init SceneListing(scenes:looseHalfLinks:unreadable:unreadableReasons:unlisted:isModemUnread:)
 init SceneListing.Member(address:data:)
 init SceneListing.Scene(number:controller:members:halfLinks:)
 init SceneResult(acknowledged:unacknowledged:isComplete:)
@@ -1326,6 +1329,7 @@ var SceneListing.looseHalfLinks
 var SceneListing.scenes
 var SceneListing.unlisted
 var SceneListing.unreadable
+var SceneListing.unreadableReasons
 var SceneResult.acknowledged
 var SceneResult.isComplete
 var SceneResult.unacknowledged

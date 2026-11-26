@@ -94,8 +94,23 @@ public struct SceneListing: Hashable, Sendable {
   /// Devices whose ALL-Link database could not be read, so any scene they belong to may be missing them.
   public var unreadable: [InsteonAddress]
 
+  /// Why each device in ``unreadable`` could not be read, where the reading knows. A device with no
+  /// entry has no copy of its database and no recorded attempt; ``unreadableReason(of:)`` says
+  /// ``BackupUnreadableReason/notCached`` for it.
+  public var unreadableReasons: [InsteonAddress: BackupUnreadableReason]
+
   /// Devices some record names that the reading had no list for, so the link is not checked.
   public var unlisted: [InsteonAddress]
+
+  /// Why a device's database could not be read.
+  ///
+  /// - Parameter address: A device in ``unreadable``.
+  /// - Returns: The recorded reason, or ``BackupUnreadableReason/notCached`` when none is recorded.
+  public func unreadableReason(of address: InsteonAddress) -> BackupUnreadableReason {
+
+    unreadableReasons[address] ?? .notCached
+
+  }
 
   /// Whether the modem's own database was not held, so no scene is listed from it.
   public var isModemUnread: Bool
@@ -171,6 +186,7 @@ public struct SceneListing: Hashable, Sendable {
     self.scenes = ordered
     self.looseHalfLinks = reading.halfLinks.filter { (half: AllLinkGroupReading.HalfLink) -> Bool in !ordered.contains { $0.halfLinks.contains(half) } }
     self.unreadable = reading.unreadable
+    self.unreadableReasons = [:]
     self.unlisted = reading.unlisted
     self.isModemUnread = false
 
@@ -182,14 +198,16 @@ public struct SceneListing: Hashable, Sendable {
   ///   - scenes: The scenes.
   ///   - looseHalfLinks: Records no scene holds whose other half is missing.
   ///   - unreadable: Devices whose database could not be read.
+  ///   - unreadableReasons: Why, for each device that has a recorded reason.
   ///   - unlisted: Devices the reading had no list for.
   ///   - isModemUnread: Whether the modem's database was not held.
-  public init(scenes: [Scene], looseHalfLinks: [AllLinkGroupReading.HalfLink] = [], unreadable: [InsteonAddress] = [], unlisted: [InsteonAddress] = [], isModemUnread: Bool = false) {
+  public init(scenes: [Scene], looseHalfLinks: [AllLinkGroupReading.HalfLink] = [], unreadable: [InsteonAddress] = [], unreadableReasons: [InsteonAddress: BackupUnreadableReason] = [:], unlisted: [InsteonAddress] = [], isModemUnread: Bool = false) {
 
     self.isModemUnread = isModemUnread
     self.scenes = scenes
     self.looseHalfLinks = looseHalfLinks
     self.unreadable = unreadable
+    self.unreadableReasons = unreadableReasons
     self.unlisted = unlisted
 
   }

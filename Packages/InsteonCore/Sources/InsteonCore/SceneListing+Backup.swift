@@ -16,7 +16,9 @@ extension SceneListing {
 
     guard let modem = backup.modem, let modemRecords = modem.allLinkDatabase else {
 
-      self.init(scenes: [], unreadable: backup.devices.filter { $0.allLinkDatabase == nil }.map(\.address).sorted(by: Self.addressOrder), isModemUnread: true)
+      let missing: [BackupDevice] = backup.devices.filter { $0.allLinkDatabase == nil }
+
+      self.init(scenes: [], unreadable: missing.map(\.address).sorted(by: Self.addressOrder), unreadableReasons: Self.reasons(of: missing), isModemUnread: true)
 
       return
 
@@ -24,6 +26,7 @@ extension SceneListing {
 
     var databases: [InsteonAddress: [AllLinkRecord]] = [:]
     var unreadable: [InsteonAddress] = []
+    var missing: [BackupDevice] = []
 
     for device in backup.devices {
 
@@ -34,12 +37,28 @@ extension SceneListing {
       } else {
 
         unreadable.append(device.address)
+        missing.append(device)
 
       }
 
     }
 
     self.init(AllLinkGroupReading(modem: modem.address, modemRecords: modemRecords.map(Self.record), devices: databases, unreadable: unreadable))
+    self.unreadableReasons = Self.reasons(of: missing)
+
+  }
+
+  private static func reasons(of devices: [BackupDevice]) -> [InsteonAddress: BackupUnreadableReason] {
+
+    var reasons: [InsteonAddress: BackupUnreadableReason] = [:]
+
+    for device in devices {
+
+      if let unreadable = device.unreadable { reasons[device.address] = unreadable.reason }
+
+    }
+
+    return reasons
 
   }
 

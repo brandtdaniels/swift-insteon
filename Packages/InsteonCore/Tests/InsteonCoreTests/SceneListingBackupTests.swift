@@ -86,6 +86,38 @@ struct SceneListingBackupTests {
 
   }
 
+  @Test func carriesTheReasonEachUnreadableDeviceHas() {
+
+    let held = backup(
+      modem: [record(.controller, group: 3, lamp), record(.controller, group: 3, keypad)],
+      devices: [
+        BackupDevice(address: lamp, unreadable: BackupUnreadable(reason: .noAnswer)),
+        BackupDevice(address: keypad, unreadable: BackupUnreadable(reason: .modemStoppedEchoing))
+      ]
+    )
+    let listing = SceneListing(held)
+
+    #expect(listing.unreadableReasons == [lamp: .noAnswer, keypad: .modemStoppedEchoing])
+    #expect(listing.unreadableReason(of: lamp) == .noAnswer)
+
+  }
+
+  @Test func saysNotCachedForAnUnreadableDeviceWithNoRecordedReason() {
+
+    let listing = SceneListing(scenes: [], unreadable: [lamp])
+
+    #expect(listing.unreadableReason(of: lamp) == .notCached)
+
+  }
+
+  @Test func carriesTheReasonsWhenTheModemIsUnread() {
+
+    let held = backup(modem: nil, devices: [BackupDevice(address: lamp, unreadable: BackupUnreadable(reason: .rejectedModem))])
+
+    #expect(SceneListing(held).unreadableReason(of: lamp) == .rejectedModem)
+
+  }
+
   @Test func reportsAModemWithNoCachedDatabaseAsUnreadableAndListsNoScenes() {
 
     let held = backup(modem: nil, devices: [device(lamp, [record(.responder, group: 3, modem)])])
