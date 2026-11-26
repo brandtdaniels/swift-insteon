@@ -22,6 +22,48 @@ private func scratchDirectory() throws -> URL {
 private let healthy = json(#"{"version":1,"status":"ready","modem":{"connected":true,"cause":null}}"#)
 private let oneDevice = json(#"{"version":1,"devices":[{"address":"1A.2B.3C","productName":"Example Dimmer","canTurnOnAndOff":true,"canDim":true,"value":1,"lastAnsweredAt":null}],"stale":false,"cause":null}"#)
 
+/// A secret store whose saves wait until the test releases them, so an interleaving is exact.
+private actor HeldSecretStore: SecretStore {
+  private var secrets: [String: String] = [:]
+  private var released = false
+  private var waiting: [CheckedContinuation<Void, Never>] = []
+  private var entered = 0
+  private var enteredWaiter: CheckedContinuation<Void, Never>?
+
+  func save(_ secret: String, account: String) async throws {
+    entered += 1
+    enteredWaiter?.resume()
+    enteredWaiter = nil
+    if !released { await withCheckedContinuation { waiting.append($0) } }
+    secrets[account] = secret
+  }
+
+  func load(account: String) -> String? { secrets[account] }
+
+  func remove(account: String) { secrets[account] = nil }
+
+  func accounts() -> [String] { Array(secrets.keys) }
+
+  /// Returns once a save has reached the store.
+  func untilASaveHasEntered() async {
+    if entered == 0 { await withCheckedContinuation { enteredWaiter = $0 } }
+  }
+
+  /// Lets every held save, and every later one, finish.
+  func release() {
+    released = true
+    for continuation in waiting { continuation.resume() }
+    waiting = []
+  }
+}
+
+/// Gives every task already started a chance to run to its next suspension.
+private func letStartedTasksRun() async {
+  for _ in 0..<100 { await Task.yield() }
+}
+
+private func pairingsFile(in directory: URL) -> URL { directory.appendingPathComponent("pairings.json") }
+
 @Suite("PairingStore keeps pairings, with the credential in a secret store", .timeLimit(.minutes(1)))
 struct PairingStoreTests {
 
@@ -53,6 +95,23 @@ struct PairingStoreTests {
       let text = String(decoding: try Data(contentsOf: file), as: UTF8.self)
       #expect(!text.contains(token))
     }
+  }
+
+  @Test func twoSavesAtOnceForDifferentServicesKeepBoth() async throws {
+    let directory = try scratchDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let secrets = HeldSecretStore()
+    let store = PairingStore(directory: directory, secrets: secrets)
+
+    let first = Task { try await store.save(pairing(id: "a")) }
+    await secrets.untilASaveHasEntered()
+    let second = Task { try await store.save(pairing(id: "b")) }
+    await letStartedTasksRun()
+    await secrets.release()
+    try await first.value
+    try await second.value
+
+    #expect(Set(try await store.load().map(\.serviceID)) == ["a", "b"])
   }
 
   @Test func savingAgainForTheSameServiceReplacesIt() async throws {
@@ -123,7 +182,7 @@ struct PairingStoreTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     let store = PairingStore(directory: directory, secrets: InMemorySecretStore())
     try await store.save(pairing())
-    let file = try #require(try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).first)
+    let file = pairingsFile(in: directory)
     try Data("garbage".utf8).write(to: file)
 
     await #expect(throws: PairingStore.Failure.unreadable) { _ = try await store.load() }
@@ -136,7 +195,7 @@ struct PairingStoreTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     try await PairingStore(directory: directory, secrets: InMemorySecretStore()).save(pairing())
 
-    let file = try #require(try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).first)
+    let file = pairingsFile(in: directory)
     let permissions = try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? Int
     #expect(permissions == 0o600)
   }

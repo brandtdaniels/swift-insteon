@@ -20,6 +20,8 @@ public actor PairingStore {
 
   private let file: URL
   private let secrets: any SecretStore
+  private var busy = false
+  private var waiting: [CheckedContinuation<Void, Never>] = []
 
   /// Creates a store.
   ///
@@ -33,6 +35,8 @@ public actor PairingStore {
 
   /// Saves a pairing, replacing the one for the same service.
   public func save(_ pairing: ClientPairing) async throws {
+    await begin()
+    defer { end() }
     var records = try read()
     try await secrets.save(pairing.credential, account: pairing.serviceID)
     let record = Record(pairing)
@@ -49,6 +53,8 @@ public actor PairingStore {
   /// A pairing whose credential the secret store doesn't hold is left out; it stays saved, and
   /// pairing again replaces it.
   public func load() async throws -> [ClientPairing] {
+    await begin()
+    defer { end() }
     var pairings: [ClientPairing] = []
     for record in try read() {
       if let credential = try await secrets.load(account: record.serviceID) {
@@ -60,10 +66,22 @@ public actor PairingStore {
 
   /// Forgets a pairing and its credential. A pairing that isn't saved is left alone.
   public func remove(serviceID: String) async throws {
+    await begin()
+    defer { end() }
     let records = try read()
     guard records.contains(where: { $0.serviceID == serviceID }) else { return }
     try write(records.filter { $0.serviceID != serviceID })
     try await secrets.remove(account: serviceID)
+  }
+
+  /// Waits for any operation under way to finish. An operation suspends while it waits on the
+  /// secret store, and another must not read or write the file in the meantime.
+  private func begin() async {
+    if busy { await withCheckedContinuation { waiting.append($0) } } else { busy = true }
+  }
+
+  private func end() {
+    if waiting.isEmpty { busy = false } else { waiting.removeFirst().resume() }
   }
 
   private func read() throws -> [Record] {
