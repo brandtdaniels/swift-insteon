@@ -104,7 +104,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .putRoute: "Register a transport's route"
     case .deleteRoute: "Remove a transport's route"
     case .getBackup: "Read a backup of the cached network"
-    case .listScenes: "List the scenes of the home"
+    case .listScenes: "List the scenes of the network"
     case .listSchedules: "List the schedules and when each runs next"
     case .putSchedule: "Store a schedule"
     case .deleteSchedule: "Remove a schedule"
@@ -264,7 +264,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .putRoute: [Reply(status: 200, description: "The stored route.", contentType: "application/json", schema: Schema.ref("RouteStored"), headers: [:])]
     case .deleteRoute: [Reply(status: 204, description: "The route is removed.", contentType: nil, schema: nil, headers: [:])]
     case .listScenes: [Reply(status: 200, description: "The scenes.", contentType: "application/json", schema: Schema.ref("SceneList"), headers: [:])]
-    case .getBackup: [Reply(status: 200, description: "The backup, as `insteon backup` writes it.", contentType: "application/json", schema: Schema.ref("HomeBackup"), headers: [:])]
+    case .getBackup: [Reply(status: 200, description: "The backup, as `insteon backup` writes it.", contentType: "application/json", schema: Schema.ref("NetworkBackup"), headers: [:])]
     case .deleteNotificationRule: [Reply(status: 204, description: "The rule is removed.", contentType: nil, schema: nil, headers: [:])]
     case .browserIndex: [Reply(status: 200, description: "The page.", contentType: "text/html", schema: nil, headers: [:])]
     case .browserControls: [Reply(status: 200, description: "The script.", contentType: "text/javascript", schema: nil, headers: [:])]

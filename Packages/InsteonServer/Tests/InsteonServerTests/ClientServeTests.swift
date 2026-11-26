@@ -53,8 +53,8 @@ struct ClientServeTests: ServingTests {
     await server.stop()
   }
 
-  @Test func theAdvertisedAddressAndHomeNameAreInTheDocumentTheServerReturns() async throws {
-    let server = try await start(try scratch(), extra: ["--hub", "192.168.1.20", "--advertise-url", "http://insteon.example:9000", "--home-name", "Beach house"], openModem: away())
+  @Test func theAdvertisedAddressAndNetworkNameAreInTheDocumentTheServerReturns() async throws {
+    let server = try await start(try scratch(), extra: ["--hub", "192.168.1.20", "--advertise-url", "http://insteon.example:9000", "--network-name", "Beach house"], openModem: away())
     let created = try await server.request("/api/v1/clients", method: "POST", body: #"{"name":"Phone","scope":"control"}"#, password: gatewayPassword)
     let pairing = try #require(created.json["pairing"] as? [String: Any])
     #expect(pairing["name"] as? String == "Beach house")

@@ -28,7 +28,7 @@ public enum ServerRunner {
                    made at a device is seen at the next poll.
   --advertise-url URL  Where clients reach this server, such as http://insteon.local:8080,
                    for the pairing document (default: http://LISTEN:PORT).
-  --home-name NAME  The home's name in a pairing document (default: Home).
+  --network-name NAME  The network's name in a pairing document (default: Network).
   --latitude DEGREES, --longitude DEGREES  The home's place, given together, for schedules at
                    sunrise or sunset. The server remembers it with its schedules.
   --time-zone NAME  The home's IANA time zone, such as America/Los_Angeles, which a clock time
@@ -230,7 +230,7 @@ public enum ServerRunner {
 
   /// The pairing document's home name and its local network route: the advertised address, or the one the server listens on.
   static func pairingConfiguration(for options: ServerOptions) -> PairingConfiguration {
-    PairingConfiguration(homeName: options.homeName, routes: [PairingRoute(kind: "lan", url: options.advertiseURL ?? "http://" + options.listen + ":" + String(options.port))])
+    PairingConfiguration(networkName: options.networkName, routes: [PairingRoute(kind: "lan", url: options.advertiseURL ?? "http://" + options.listen + ":" + String(options.port))])
   }
 
   /// Serves HTTP while the service keeps its modem connected. The listener opens first and serves

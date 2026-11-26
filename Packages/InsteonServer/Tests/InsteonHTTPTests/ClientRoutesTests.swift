@@ -21,7 +21,7 @@ struct ClientRoutesTests {
     init(password: String) throws {
       let persistence = RecordingPersistence()
       let clients = ClientStore(persistence: persistence)
-      let configuration = PairingConfiguration(homeName: "Home", routes: ClientRoutesTests.routes)
+      let configuration = PairingConfiguration(networkName: "Network", routes: ClientRoutesTests.routes)
       self.persistence = persistence
       self.clients = clients
       app = Application(responder: makeInsteonRouter(service: FakeService(), authentication: try HTTPAuthentication(password: password), clients: clients, pairing: configuration).buildResponder())
@@ -57,7 +57,7 @@ struct ClientRoutesTests {
       let pairing = try #require(json["pairing"] as? [String: Any])
       #expect(pairing["version"] as? Int == 1)
       #expect(pairing["serviceId"] as? String == (try await setup.clients.serviceID()))
-      #expect(pairing["name"] as? String == "Home")
+      #expect(pairing["name"] as? String == "Network")
       #expect(pairing["scope"] as? String == "control")
       #expect(pairing["api"] as? String == "/api/v1")
       let routes = try #require(pairing["routes"] as? [[String: Any]])

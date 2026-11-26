@@ -28,7 +28,7 @@ struct TransferPlanTextTests {
       allLinkDatabase: BackupDatabase(delta: 0x07, records: [record(.responder, group: 1, old, memory: 0x0FFF), record(.responder, group: 0, InsteonAddress(0, 0, 0), state: .end, memory: 0x0FF7)])
     )
     let plug = BackupDevice(address: Self.plug, engine: .i1, allLinkDatabase: BackupDatabase(delta: 0x01, records: [record(.responder, group: 1, old, memory: 0x0FFF), record(.responder, group: 0, InsteonAddress(0, 0, 0), state: .end, memory: 0x0FF7)]))
-    let backup = HomeBackup(createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .modem, modem: BackupModem(address: old, allLinkDatabase: [record(.controller, group: 1, Self.lamp), record(.controller, group: 1, Self.plug)]), devices: [lamp, plug])
+    let backup = NetworkBackup(createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .modem, modem: BackupModem(address: old, allLinkDatabase: [record(.controller, group: 1, Self.lamp), record(.controller, group: 1, Self.plug)]), devices: [lamp, plug])
 
     return try TransferPlanner.plan(from: backup, to: TransferTarget(address: new, records: target), existingLinks: choice)
 

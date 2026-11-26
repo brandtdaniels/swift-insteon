@@ -150,10 +150,6 @@ case ExistingLinksHandling.replaceDatabase
 case ExistingLinksHandling.unread
 case ExpectedProductKey.key(_:)
 case ExpectedProductKey.notReported
-case HomeBackupError.checksumMismatch
-case HomeBackupError.notABackup(_:)
-case HomeBackupError.notJSON
-case HomeBackupError.unsupportedFormat(_:)
 case HubFailure.stoppedAnswering
 case HubFailure.unanswered
 case HubIdentification.declined
@@ -237,6 +233,10 @@ case ModemRecordDeletionReason.modemLinksUnreadable(_:)
 case ModemRecordDeletionReason.noAnswer
 case ModemRecordDeletionReason.remoteLinkingUnsupported
 case ModemRecordDeletionReason.remoteUnlinkingFailed(_:)
+case NetworkBackupError.checksumMismatch
+case NetworkBackupError.notABackup(_:)
+case NetworkBackupError.notJSON
+case NetworkBackupError.unsupportedFormat(_:)
 case ProductCatalogError.bundledCopyMissing
 case ProductCatalogError.bundledCopyUnreadable
 case ProductCatalogError.weakensGuards(_:)
@@ -395,8 +395,6 @@ enum DeviceStatus.Reading
 enum ExistingLinksChoice
 enum ExistingLinksHandling
 enum ExpectedProductKey
-enum HomeBackupError
-enum HomeBackupReader
 enum HubFailure
 enum HubIdentification
 enum HubLinkingJoin
@@ -411,6 +409,8 @@ enum ManualTransferReason
 enum ModemLinksPurpose
 enum ModemNotice
 enum ModemRecordDeletionReason
+enum NetworkBackupError
+enum NetworkBackupReader
 enum ProductCatalogError
 enum ProductCatalogStoreError
 enum ProductCatalogUpdate
@@ -500,8 +500,6 @@ func DeviceRegistry.setCatalog(_:)
 func DeviceRegistryStore.load()
 func DeviceRegistryStore.save(_:)
 func DeviceSettingsReading.raw(for:button:)
-func HomeBackup.encoded()
-func HomeBackup.including(notificationRules:routes:schedules:)
 func HubCandidate.record(_:)
 func HubLocation.isSameEndpoint(as:)
 func HubProDevice.beep()
@@ -550,6 +548,8 @@ func ModemSession.cancelLinking()
 func ModemSession.info()
 func ModemSession.network(catalog:snapshot:hub:)
 func ModemSession.write(rawCommand:forcing:collectingFor:clock:onWriting:)
+func NetworkBackup.encoded()
+func NetworkBackup.including(notificationRules:routes:schedules:)
 func NetworkSnapshot.merging(changesFrom:to:)
 func NetworkSnapshotStore.loadNetwork()
 func NetworkSnapshotStore.saveNetwork(_:)
@@ -617,9 +617,6 @@ init DeviceUnlinkingResult(link:remainingLinks:)
 init DirectMessage(to:command1:command2:data:hasChecksum:)
 init FactoryResetSteps(address:info:procedure:erases:)
 init ForgottenDevice(address:device:)
-init HomeBackup(createdAt:source:modem:devices:notificationRules:routes:schedules:)
-init HomeBackup(parsing:)
-init HomeBackupCheck(backup:checksumMatches:)
 init HubAddressRefused(host:)
 init HubFailure?(_:hubHasAnswered:)
 init HubLinkingLeg(device:index:count:modemRole:modemGroup:deviceGroup:remoteEnterLinkingMode:allGroupsWhen:)
@@ -643,6 +640,9 @@ init LinkedDevice(link:device:leg:)
 init ModemDatabaseEntry(record:device:)
 init ModemDeviceOperations(_:)
 init ModemScene(group:)
+init NetworkBackup(createdAt:source:modem:devices:notificationRules:routes:schedules:)
+init NetworkBackup(parsing:)
+init NetworkBackupCheck(backup:checksumMatches:)
 init NetworkDeviceState(engine:allLinkDatabase:level:lastSeen:)
 init NetworkSnapshot(registry:devices:modemDatabase:hub:)
 init ProductCatalog(json:)
@@ -696,21 +696,21 @@ let DeviceNetwork.registry
 let DirectMessage.command1
 let DirectMessage.command2
 let DirectMessage.device
-let HomeBackup.checksum
-let HomeBackup.createdAt
-let HomeBackup.devices
-let HomeBackup.format
-let HomeBackup.modem
-let HomeBackup.notificationRules
-let HomeBackup.routes
-let HomeBackup.schedules
-let HomeBackup.source
 let HubAddressRefused.host
 let HubProDevice.address
 let HubProNetwork.registry
 let JSONFileDeviceRegistryStore.fileURL
 let ModemDeviceOperations.device
 let ModemSession.hub
+let NetworkBackup.checksum
+let NetworkBackup.createdAt
+let NetworkBackup.devices
+let NetworkBackup.format
+let NetworkBackup.modem
+let NetworkBackup.notificationRules
+let NetworkBackup.routes
+let NetworkBackup.schedules
+let NetworkBackup.source
 let ReceivedFrame.frame
 let ReceivedFrame.summary
 private(set) var DeviceRegistry.catalog
@@ -722,10 +722,6 @@ static func DeviceMonitor.replyKind(_:)
 static func DeviceNetwork.offline(catalog:snapshot:hub:)
 static func DeviceSettingChange.OtherSettings.compared(_:unread:)
 static func DeviceSettingChange.OtherSettings.notReread(_:)
-static func HomeBackup.check(_:)
-static func HomeBackupReader.backup(from:modem:catalog:createdAt:)
-static func HomeBackupReader.read(hubPro:createdAt:)
-static func HomeBackupReader.read(network:createdAt:progress:)
 static func HubLinkingLeg.canSucceedOnRetry(after:)
 static func HubSearch.merge(_:into:)
 static func InsteonErrorDescription.didntConfirmSending(to:)
@@ -739,6 +735,10 @@ static func JSONFileDeviceRegistryStore.snapshot(json:)
 static func ModemScene.cleanupTimeout(responderCount:)
 static func ModemSession.withHub(host:port:user:password:catalog:onPollSucceeded:_:)
 static func ModemSession.withSerialPort(path:catalog:_:)
+static func NetworkBackup.check(_:)
+static func NetworkBackupReader.backup(from:modem:catalog:createdAt:)
+static func NetworkBackupReader.read(hubPro:createdAt:)
+static func NetworkBackupReader.read(network:createdAt:progress:)
 static func ProductCatalog.bundledCatalogURL()
 static func ProductCatalog.bundledVersion()
 static func ProductCatalog.load(contentsOf:)
@@ -779,13 +779,13 @@ static let DeviceSettingChange.OtherSettings.ReadFailure.canceled
 static let DeviceSettingChange.OtherSettings.ReadFailure.connectionClosed
 static let DeviceSettingChange.OtherSettings.ReadFailure.failed
 static let DeviceSettingChange.OtherSettings.ReadFailure.notAnswered
-static let HomeBackup.currentFormat
 static let HubLocation.defaultPort
 static let HubProNetwork.defaultListRefreshPolls
 static let HubProNetwork.defaultPollInterval
 static let HubProNetwork.minimumPollInterval
 static let InsteonErrorDescription.hubStoppedAnsweringInline
 static let JSONFileDeviceRegistryStore.formatVersion
+static let NetworkBackup.currentFormat
 static let ProductCatalog.updateLocation
 static var ProductCatalog.bundleName
 struct BackupDatabase
@@ -840,9 +840,6 @@ struct DeviceUnlinkingResult
 struct DirectMessage
 struct FactoryResetSteps
 struct ForgottenDevice
-struct HomeBackup
-struct HomeBackupCheck
-struct HomeBackupCheck.UnreadableDevice
 struct HubAddressRefused
 struct HubCandidate
 struct HubLinkingLeg
@@ -867,6 +864,9 @@ struct ModemDatabaseEntry
 struct ModemDeviceOperations
 struct ModemScene
 struct ModemSession
+struct NetworkBackup
+struct NetworkBackupCheck
+struct NetworkBackupCheck.UnreadableDevice
 struct NetworkDeviceState
 struct NetworkSnapshot
 struct ProductCatalog
@@ -1143,16 +1143,6 @@ var FactoryResetSteps.info
 var FactoryResetSteps.procedure
 var ForgottenDevice.address
 var ForgottenDevice.device
-var HomeBackupCheck.UnreadableDevice.address
-var HomeBackupCheck.UnreadableDevice.unreadable
-var HomeBackupCheck.backup
-var HomeBackupCheck.checksumMatches
-var HomeBackupCheck.isComplete
-var HomeBackupCheck.modemRecordCount
-var HomeBackupCheck.readableDeviceCount
-var HomeBackupCheck.unreadableDevices
-var HomeBackupError.description
-var HomeBackupError.errorDescription
 var HubAddressRefused.description
 var HubCandidate.category
 var HubCandidate.firmware
@@ -1240,6 +1230,16 @@ var ModemDatabaseEntry.device
 var ModemDatabaseEntry.record
 var ModemDeviceOperations.address
 var ModemScene.group
+var NetworkBackupCheck.UnreadableDevice.address
+var NetworkBackupCheck.UnreadableDevice.unreadable
+var NetworkBackupCheck.backup
+var NetworkBackupCheck.checksumMatches
+var NetworkBackupCheck.isComplete
+var NetworkBackupCheck.modemRecordCount
+var NetworkBackupCheck.readableDeviceCount
+var NetworkBackupCheck.unreadableDevices
+var NetworkBackupError.description
+var NetworkBackupError.errorDescription
 var NetworkDeviceState.allLinkDatabase
 var NetworkDeviceState.engine
 var NetworkDeviceState.isEmpty

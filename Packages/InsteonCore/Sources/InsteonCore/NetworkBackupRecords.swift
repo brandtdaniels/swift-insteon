@@ -2,7 +2,7 @@ import Foundation
 import InsteonLinking
 import InsteonProtocol
 
-/// The state of an ALL-Link database record in a ``HomeBackup``.
+/// The state of an ALL-Link database record in a ``NetworkBackup``.
 public enum BackupRecordState: String, Codable, Hashable, Sendable {
   /// The record holds a link.
   case inUse
@@ -20,7 +20,7 @@ public enum BackupRecordRole: String, Codable, Hashable, Sendable {
   case responder
 }
 
-/// One record of an ALL-Link database, as a ``HomeBackup`` keeps it.
+/// One record of an ALL-Link database, as a ``NetworkBackup`` keeps it.
 ///
 /// In the file a record reads as `{"address": "1A.2B.3C", "data": "FF 1F 01", "group": 1,
 /// "memory": "0x0FF7", "role": "responder", "state": "inUse"}`. The `memory` key is the record's
@@ -152,7 +152,7 @@ public struct BackupRecord: Codable, Hashable, Sendable {
 
 }
 
-/// Why a device or the modem has no ALL-Link database in a ``HomeBackup``.
+/// Why a device or the modem has no ALL-Link database in a ``NetworkBackup``.
 public enum BackupUnreadableReason: String, Codable, Hashable, Sendable {
   /// The device didn't answer.
   case noAnswer
@@ -321,7 +321,7 @@ public struct BackupIdentity: Codable, Hashable, Sendable {
 
 }
 
-/// A device a ``HomeBackup`` holds: who it is, and its ALL-Link database or why there isn't one.
+/// A device a ``NetworkBackup`` holds: who it is, and its ALL-Link database or why there isn't one.
 public struct BackupDevice: Codable, Hashable, Sendable {
 
   /// The device's address.
@@ -435,7 +435,7 @@ public struct BackupDevice: Codable, Hashable, Sendable {
 
 }
 
-/// The modem a ``HomeBackup`` was taken from: its address, identity and ALL-Link database.
+/// The modem a ``NetworkBackup`` was taken from: its address, identity and ALL-Link database.
 public struct BackupModem: Codable, Hashable, Sendable {
 
   /// The modem's address, which every device's records of its links to the modem name.

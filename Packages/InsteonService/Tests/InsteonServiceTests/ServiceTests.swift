@@ -105,7 +105,7 @@ struct ServiceTests {
   @Test func aBackupFromTheCacheSendsNothingAndNamesTheDevicesItHasNoDatabaseFor() async throws {
     let modem = InMemoryModem()
     let service = InsteonService(network: network(modem))
-    let backup = await service.homeBackup()
+    let backup = await service.networkBackup()
     #expect(backup.source == .service)
     #expect(backup.devices.map(\.address) == [address])
     #expect(backup.devices.first?.unreadable?.reason == .notCached)
@@ -118,9 +118,9 @@ struct ServiceTests {
     let modem = InMemoryModem()
     let net = network(modem)
     let service = InsteonService(network: net)
-    #expect(await service.homeBackup().modem == nil)
+    #expect(await service.networkBackup().modem == nil)
     _ = try await net.modemInfo()
-    let backup = await service.homeBackup()
+    let backup = await service.networkBackup()
     #expect(backup.modem?.address == InsteonAddress(0x11, 0x22, 0x33))
     #expect(backup.modem?.identity == BackupIdentity(category: 0x03, subcategory: 0x15, firmwareVersion: 0x9E))
   }
@@ -164,7 +164,7 @@ struct ServiceTests {
     try await withThrowingTaskGroup(of: CommandReceipt.self) { group in
       group.addTask { try await service.execute(ServiceCommand(address: address, action: .on)) }
       await gate.waitUntilPaused()
-      let backup = await service.homeBackup()
+      let backup = await service.networkBackup()
       #expect(backup.devices.map(\.address) == [address])
       await gate.release()
       let receipt = try await group.next()

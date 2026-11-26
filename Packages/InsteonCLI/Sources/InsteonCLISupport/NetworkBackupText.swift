@@ -3,7 +3,7 @@ import InsteonCore
 import InsteonProtocol
 
 /// What `insteon backup` and `insteon backup --check` print.
-public enum HomeBackupText {
+public enum NetworkBackupText {
 
   /// The line of progress for a step of reading, for standard error, or `nil` for a step that
   /// needs no line of its own.
@@ -95,9 +95,9 @@ public enum HomeBackupText {
   ///   - check: What the file holds.
   ///   - path: The file.
   /// - Returns: The report.
-  public static func report(_ check: HomeBackupCheck, path: String) -> Report {
+  public static func report(_ check: NetworkBackupCheck, path: String) -> Report {
 
-    let backup: HomeBackup = check.backup
+    let backup: NetworkBackup = check.backup
     let names: [InsteonAddress: String] = Dictionary(backup.devices.compactMap { (device: BackupDevice) -> (InsteonAddress, String)? in device.name.map { (device.address, $0) } }, uniquingKeysWith: { first, _ in first })
 
     return Report(
@@ -111,7 +111,7 @@ public enum HomeBackupText {
       modemLinks: check.modemRecordCount,
       devices: backup.devices.count,
       readableDevices: check.readableDeviceCount,
-      unreadable: check.unreadableDevices.map { (device: HomeBackupCheck.UnreadableDevice) -> Report.Unreadable in
+      unreadable: check.unreadableDevices.map { (device: NetworkBackupCheck.UnreadableDevice) -> Report.Unreadable in
         Report.Unreadable(address: "\(device.address)", name: names[device.address], reason: device.unreadable.reason.rawValue, detail: device.unreadable.detail)
       },
       notificationRules: backup.notificationRules?.count,

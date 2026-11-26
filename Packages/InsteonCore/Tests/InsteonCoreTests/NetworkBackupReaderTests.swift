@@ -23,7 +23,7 @@ final class ProgressLog: @unchecked Sendable {
 
 /// Reading a modem and its devices into a backup, with every request a read.
 @Suite(.timeLimit(.minutes(1)))
-struct HomeBackupReaderTests {
+struct NetworkBackupReaderTests {
 
   static let lamp = BackupExample.lamp
   static let plug = BackupExample.plug
@@ -78,7 +78,7 @@ struct HomeBackupReaderTests {
   @Test func readsTheModemsIdentityAndDatabase() async throws {
 
     let modem = await Self.fixture()
-    let backup: HomeBackup = try await HomeBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
+    let backup: NetworkBackup = try await NetworkBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
 
     #expect(backup.source == .modem)
     #expect(backup.modem?.address == BackupExample.oldModem)
@@ -93,7 +93,7 @@ struct HomeBackupReaderTests {
   @Test func readsEachDevicesDatabaseWithItsEndAndEngine() async throws {
 
     let modem = await Self.fixture()
-    let backup: HomeBackup = try await HomeBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
+    let backup: NetworkBackup = try await NetworkBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
     let lamp = try #require(backup.devices.first { $0.address == Self.lamp })
     let database = try #require(lamp.allLinkDatabase)
 
@@ -112,7 +112,7 @@ struct HomeBackupReaderTests {
 
     await modem.setIdentity(SetButtonPressed(sender: Self.lamp, role: .responder, category: 0x01, subcategory: 0x02, firmwareVersion: 0x41))
 
-    let backup: HomeBackup = try await HomeBackupReader.read(network: network(modem, known: []), createdAt: BackupExample.createdAt)
+    let backup: NetworkBackup = try await NetworkBackupReader.read(network: network(modem, known: []), createdAt: BackupExample.createdAt)
 
     #expect(backup.devices.map(\.address) == [Self.lamp])
     #expect(backup.devices.first?.identity == BackupIdentity(category: 0x01, subcategory: 0x02, firmwareVersion: 0x41))
@@ -124,7 +124,7 @@ struct HomeBackupReaderTests {
 
     let modem = await Self.fixture()
     let net: DeviceNetwork = network(modem, known: [Self.lamp, Self.plug, BackupExample.oldModem])
-    let backup: HomeBackup = try await HomeBackupReader.read(network: net, createdAt: BackupExample.createdAt)
+    let backup: NetworkBackup = try await NetworkBackupReader.read(network: net, createdAt: BackupExample.createdAt)
 
     #expect(!backup.devices.map(\.address).contains(BackupExample.oldModem))
 
@@ -135,7 +135,7 @@ struct HomeBackupReaderTests {
     let modem = await Self.fixture()
     let log = ProgressLog()
 
-    _ = try await HomeBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt) { log.add($0) }
+    _ = try await NetworkBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt) { log.add($0) }
 
     #expect(log.all == [.readingModem, .readingDevice(Self.lamp, position: 1, total: 2), .readingDevice(Self.plug, position: 2, total: 2)])
 
@@ -150,7 +150,7 @@ struct HomeBackupReaderTests {
     await modem.setUnanswering(Self.plug)
 
     let log = ProgressLog()
-    let backup: HomeBackup = try await HomeBackupReader.read(network: network(modem, known: [Self.lamp, Self.plug, Self.sensor]), createdAt: BackupExample.createdAt) { log.add($0) }
+    let backup: NetworkBackup = try await NetworkBackupReader.read(network: network(modem, known: [Self.lamp, Self.plug, Self.sensor]), createdAt: BackupExample.createdAt) { log.add($0) }
     let byAddress: [InsteonAddress: BackupDevice] = Dictionary(uniqueKeysWithValues: backup.devices.map { ($0.address, $0) })
 
     #expect(byAddress[Self.plug]?.unreadable?.reason == .noAnswer)
@@ -167,7 +167,7 @@ struct HomeBackupReaderTests {
 
     await modem.setUnlinked(Self.plug)
 
-    let backup: HomeBackup = try await HomeBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
+    let backup: NetworkBackup = try await NetworkBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
 
     #expect(backup.devices.first { $0.address == Self.plug }?.unreadable?.reason == .rejectedModem)
 
@@ -179,7 +179,7 @@ struct HomeBackupReaderTests {
 
     await modem.setDamaged(true, record: 0x0FFF, of: Self.plug)
 
-    let backup: HomeBackup = try await HomeBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
+    let backup: NetworkBackup = try await NetworkBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
     let plug = try #require(backup.devices.first { $0.address == Self.plug })
 
     #expect(plug.unreadable?.reason == .damagedRecords)
@@ -203,7 +203,7 @@ struct HomeBackupReaderTests {
 
     }
 
-    let backup: HomeBackup = try await HomeBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
+    let backup: NetworkBackup = try await NetworkBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
 
     #expect(backup.devices.first { $0.address == Self.plug }?.allLinkDatabase != nil)
 
@@ -225,7 +225,7 @@ struct HomeBackupReaderTests {
 
     await #expect(throws: ModemError.connectionClosed) {
 
-      _ = try await HomeBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
+      _ = try await NetworkBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
 
     }
 
@@ -253,7 +253,7 @@ struct HomeBackupReaderTests {
 
     await #expect(throws: ModemError.connectionClosed) {
 
-      _ = try await HomeBackupReader.read(network: network(modem, known: []), createdAt: BackupExample.createdAt)
+      _ = try await NetworkBackupReader.read(network: network(modem, known: []), createdAt: BackupExample.createdAt)
 
     }
 
@@ -279,7 +279,7 @@ struct HomeBackupReaderTests {
 
     await #expect(throws: CancellationError.self) {
 
-      _ = try await HomeBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
+      _ = try await NetworkBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
 
     }
 
@@ -288,11 +288,11 @@ struct HomeBackupReaderTests {
   @Test func readsNoDeviceAfterBeingCanceled() async throws {
 
     let modem = await Self.fixture()
-    let task = Task { () async throws -> HomeBackup in
+    let task = Task { () async throws -> NetworkBackup in
 
       withUnsafeCurrentTask { $0?.cancel() }
 
-      return try await HomeBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
+      return try await NetworkBackupReader.read(network: network(modem), createdAt: BackupExample.createdAt)
 
     }
 
@@ -326,7 +326,7 @@ struct HomeBackupReaderTests {
     let recording = RecordingModem(modem)
     let net: DeviceNetwork = network(recording, known: [Self.lamp, Self.plug, Self.sensor])
 
-    _ = try await HomeBackupReader.read(network: net, createdAt: BackupExample.createdAt)
+    _ = try await NetworkBackupReader.read(network: net, createdAt: BackupExample.createdAt)
 
     #expect(writes.all == [])
     #expect(await modem.writes.isEmpty)
@@ -353,7 +353,7 @@ struct HomeBackupReaderTests {
 
     let http = HubProNetworkTests.unit()
     let network = HubProNetwork(transport: HubProTransport(host: HubProUnit.host, httpClient: http), catalog: ControlExample.catalog, clock: TestClock(), now: { Date(timeIntervalSince1970: 1_000) })
-    let backup: HomeBackup = try await HomeBackupReader.read(hubPro: network, createdAt: BackupExample.createdAt)
+    let backup: NetworkBackup = try await NetworkBackupReader.read(hubPro: network, createdAt: BackupExample.createdAt)
 
     #expect(backup.source == .hubPro)
     #expect(backup.modem?.address == InsteonAddress(0xAA, 0xBB, 0xCC))
@@ -371,7 +371,7 @@ struct HomeBackupReaderTests {
     let http = HubProNetworkTests.unit()
     let network = HubProNetwork(transport: HubProTransport(host: HubProUnit.host, httpClient: http), catalog: ControlExample.catalog, clock: TestClock(), now: { Date(timeIntervalSince1970: 1_000) })
 
-    _ = try await HomeBackupReader.read(hubPro: network, createdAt: BackupExample.createdAt)
+    _ = try await NetworkBackupReader.read(hubPro: network, createdAt: BackupExample.createdAt)
 
     for request in await http.sent {
 
@@ -399,7 +399,7 @@ struct HomeBackupReaderTests {
       ])
     )
 
-    let backup: HomeBackup = await HomeBackupReader.backup(from: snapshot, modem: (BackupExample.oldModem, ReportedIdentity(category: 0x03, subcategory: 0x15, firmwareVersion: 0x9E)), catalog: nil, createdAt: BackupExample.createdAt)
+    let backup: NetworkBackup = await NetworkBackupReader.backup(from: snapshot, modem: (BackupExample.oldModem, ReportedIdentity(category: 0x03, subcategory: 0x15, firmwareVersion: 0x9E)), catalog: nil, createdAt: BackupExample.createdAt)
     let byAddress: [InsteonAddress: BackupDevice] = Dictionary(uniqueKeysWithValues: backup.devices.map { ($0.address, $0) })
 
     #expect(backup.source == .service)
@@ -414,7 +414,7 @@ struct HomeBackupReaderTests {
 
   @Test func marksTheModemsDatabaseNotCachedWhenTheSnapshotHoldsNone() async throws {
 
-    let backup: HomeBackup = await HomeBackupReader.backup(from: NetworkSnapshot(), modem: (BackupExample.oldModem, nil), catalog: nil, createdAt: BackupExample.createdAt)
+    let backup: NetworkBackup = await NetworkBackupReader.backup(from: NetworkSnapshot(), modem: (BackupExample.oldModem, nil), catalog: nil, createdAt: BackupExample.createdAt)
 
     #expect(backup.modem?.unreadable?.reason == .notCached)
     #expect(backup.modem?.allLinkDatabase == nil)
@@ -423,7 +423,7 @@ struct HomeBackupReaderTests {
 
   @Test func holdsNoModemWhenItsAddressIsNotKnown() async throws {
 
-    let backup: HomeBackup = await HomeBackupReader.backup(from: NetworkSnapshot(), modem: nil, catalog: nil, createdAt: BackupExample.createdAt)
+    let backup: NetworkBackup = await NetworkBackupReader.backup(from: NetworkSnapshot(), modem: nil, catalog: nil, createdAt: BackupExample.createdAt)
 
     #expect(backup.modem == nil)
 
@@ -448,7 +448,7 @@ struct HomeBackupReaderTests {
 
     snapshot.registry.identities[BackupExample.lamp] = ReportedIdentity(category: 0x01, subcategory: 0x02, firmwareVersion: 0x41)
 
-    let backup: HomeBackup = await HomeBackupReader.backup(from: snapshot, modem: (BackupExample.oldModem, nil), catalog: nil, createdAt: BackupExample.createdAt)
+    let backup: NetworkBackup = await NetworkBackupReader.backup(from: snapshot, modem: (BackupExample.oldModem, nil), catalog: nil, createdAt: BackupExample.createdAt)
     let text: String = String(decoding: try backup.encoded(), as: UTF8.self).lowercased()
 
     for forbidden in ["password", "token", "secret", "hub.example.invalid", "25105", "authorization"] {

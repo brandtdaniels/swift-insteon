@@ -4,18 +4,18 @@ import InsteonLinking
 import InsteonProtocol
 @testable import InsteonCore
 
-/// The scenes of a home as a backup holds it: the cached ALL-Link databases, with no read from hardware.
+/// The scenes of a network as a backup holds it: the cached ALL-Link databases, with no read from hardware.
 struct SceneListingBackupTests {
 
   let modem = InsteonAddress(0x11, 0x22, 0x33)
   let lamp = InsteonAddress(0x1A, 0x2B, 0x3C)
   let keypad = InsteonAddress(0x4D, 0x5E, 0x6F)
 
-  private func backup(modem records: [BackupRecord]?, devices: [BackupDevice]) -> HomeBackup {
+  private func backup(modem records: [BackupRecord]?, devices: [BackupDevice]) -> NetworkBackup {
 
     let held: BackupModem = records.map { BackupModem(address: modem, allLinkDatabase: $0) } ?? BackupModem(address: modem, unreadable: BackupUnreadable(reason: .notCached))
 
-    return HomeBackup(createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .service, modem: held, devices: devices)
+    return NetworkBackup(createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .service, modem: held, devices: devices)
 
   }
 
@@ -119,7 +119,7 @@ struct SceneListingBackupTests {
 
   @Test func aBackupWithNoModemListsNothingAndIsNotWhole() {
 
-    let held = HomeBackup(createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .service, modem: nil, devices: [])
+    let held = NetworkBackup(createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .service, modem: nil, devices: [])
 
     #expect(SceneListing(held).scenes.isEmpty)
     #expect(SceneListing(held).isModemUnread)
