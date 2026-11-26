@@ -7,14 +7,12 @@ import Glibc
 import Musl
 #endif
 
-/// `localhost` and `.local` names are trusted by name: the pairing document comes from the service's
-/// own owner, and the token goes only where that document says.
-///
 /// Whether a host name is on the local network, where a bearer token may cross plain HTTP.
 ///
 /// A loopback or link-local address, a private range (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16,
 /// fc00::/7), an IPv4-mapped address of one of them, a documentation range, `localhost` and a `.local` name are
-/// local. A number is read the way the resolver reads it, so `134744072` is 8.8.8.8. A single-label
+/// local, trusted by name: the pairing document comes from the service's own owner, and the token
+/// goes only where that document says. A number is read the way the resolver reads it, so `134744072` is 8.8.8.8. A single-label
 /// name is not local, since a search domain can resolve it to a public host. Everything else is not, so a token meant for the service never crosses the internet unencrypted.
 enum LocalAddress {
 
