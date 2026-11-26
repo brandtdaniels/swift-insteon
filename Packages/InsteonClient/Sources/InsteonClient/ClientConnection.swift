@@ -94,6 +94,8 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
     var reasons: [PathFailure]
     var refused: [String] = []
     var unreachable = 0
+    var unsupported: [String] = []
+    var pathCount = 0
     var forbidden: ConnectionError?
     var lost: ConnectionError?
 
@@ -102,6 +104,7 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
       if let lost { return lost }
       if let forbidden { return forbidden }
       if !refused.isEmpty, unreachable == 0 { return .unauthorized(paths: refused) }
+      if !unsupported.isEmpty, unsupported.count == pathCount { return .unsupported(paths: unsupported) }
       return .noPathReached(reasons)
     }
   }
@@ -114,6 +117,7 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
   /// Runs one call on the paths in order, each at most once, and says which opening answered.
   private func performTagged<Answer: Sendable>(retryable: Bool, _ operation: (any ConnectionCalls) async throws -> Answer) async throws -> (Answer, Int) {
     var tally = Tally(reasons: skipped)
+    tally.pathCount = paths.count
     var passedOver: Set<Int> = []
     while let (index, generation, calls) = try await reach(passingOver: passedOver, tally: &tally) {
       passedOver.insert(index)
@@ -136,6 +140,7 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
         } catch ConnectionPathError.unsupported {
           // The path stays open for the calls it does carry.
           tally.reasons.append(PathFailure(path: name, reason: "the path doesn't carry this call"))
+          tally.unsupported.append(name)
           tally.unreachable += 1
           break attempt
         } catch ConnectionPathError.forbidden {

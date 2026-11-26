@@ -45,7 +45,7 @@ public struct ConnectionEvents: AsyncSequence, Sendable {
     /// Returns the next item, reconnecting as needed.
     ///
     /// - Throws: ``ConnectionError`` when the credential is refused on every path or its scope is
-    ///   too low.
+    ///   too low, or no path carries events.
     public mutating func next() async throws -> SequencedItem? {
       while !Task.isCancelled {
         if live == nil {
@@ -56,7 +56,7 @@ public struct ConnectionEvents: AsyncSequence, Sendable {
             return nil
           } catch let error as ConnectionError {
             switch error {
-            case .unauthorized, .forbidden: throw error
+            case .unauthorized, .forbidden, .unsupported: throw error
             default: guard await backOff() else { return nil }
             }
             continue

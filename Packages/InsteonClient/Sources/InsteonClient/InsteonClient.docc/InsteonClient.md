@@ -24,6 +24,21 @@ A read that loses its path is asked again on a path found afresh. A command that
 device is never sent again: the connection says it was interrupted, and the caller reads the device's
 status before deciding.
 
+Events come from ``ClientConnection/events()`` and ``ClientConnection/sequencedEvents(after:)``. They
+follow the service's server-sent events through a ``ServicePath``, and when the path is lost the
+connection waits, reaches a path again and resumes after the last cursor it saw. A
+``ClientEvent/refresh(_:)`` says the service can't replay what was missed, so the client reads
+everything it shows afresh.
+
+```swift
+for try await event in connection.events() {
+  switch event {
+  case .event(let event): show(event)
+  case .refresh: try await reload()
+  }
+}
+```
+
 The connection holds no user interface and no device knowledge. Each interface parses input, calls it
 and presents the answer.
 
@@ -44,6 +59,12 @@ and presents the answer.
 - ``LocalHubPath``
 - ``ServicePath``
 - ``RouteOpening``
+
+### Events
+
+- ``ConnectionEvents``
+- ``ClientEvents``
+- ``ClientEvent``
 
 ### Failures
 

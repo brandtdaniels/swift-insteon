@@ -17,7 +17,7 @@ public struct ServicePath: ConnectionPath, CustomStringConvertible, CustomDebugS
   public let name: String
   private let baseURL: URL
   private let token: String
-  private let http: any HTTPClient
+  fileprivate let http: any HTTPClient
 
   /// Creates a path.
   ///
@@ -135,6 +135,33 @@ private struct ServiceCalls: ConnectionCalls {
       // The command was accepted and its answer can't be read: it may have taken effect.
       throw ConnectionPathError.badResponse
     }
+  }
+
+  func sequencedEvents(after cursor: EventCursor?) async throws -> SequencedEvents {
+    var request = try path.request("GET", "/api/v1/events")
+    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+    if let cursor, !cursor.runID.isEmpty { request.setValue(cursor.token, forHTTPHeaderField: "Last-Event-ID") }
+    let response: HTTPStreamResponse
+    do {
+      response = try await path.http.stream(request)
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch HTTPClientError.streamingUnsupported {
+      throw ConnectionPathError.unsupported
+    } catch {
+      throw ConnectionPathError.interrupted
+    }
+    switch response.statusCode {
+    case 200..<300: break
+    case 401: throw ConnectionPathError.unauthorized
+    case 403: throw ConnectionPathError.forbidden
+    // A server error, such as a proxy's, or a service with all its streams in use, may pass.
+    case 429, 500...: throw ConnectionPathError.interrupted
+    default: throw ConnectionPathError.badResponse
+    }
+    // The reader pulls from the bytes in the task that reads the items, so nothing runs unobserved.
+    let reader = EventStreamReader(chunks: response.body)
+    return SequencedEvents(AsyncThrowingStream { try await reader.next() })
   }
 
   /// The address as the service's path names it: two uppercase hexadecimal digits a byte, dotted.
