@@ -91,31 +91,47 @@ enum ServiceEventFrame {
 
   /// The item a frame stands for, or `nil` for a frame that sets nothing.
   ///
-  /// A frame with an `id` and no data, and a frame of a kind or version this library can't
-  /// represent, set the reader's place and are items of their own, so the cursor moves past them.
-  ///
-  /// - Throws: ``ConnectionPathError/badResponse`` for an id that isn't a cursor or data that isn't
-  ///   the service's JSON.
-  static func item(for frame: EventFrame) throws -> SequencedItem? {
-    var cursor: EventCursor?
-    if let id = frame.id, !id.isEmpty {
-      guard let parsed = EventCursor(token: id) else { throw ConnectionPathError.badResponse }
-      cursor = parsed
-    }
+  /// A frame with an `id` and no data, and a frame this library can't read or represent (a version
+  /// other than 1, no kind, a kind it has no case for, data that isn't the service's JSON), set the
+  /// reader's place and are items of their own, so the cursor moves past them and a reconnect
+  /// doesn't replay them. A frame with neither a readable id nor a readable place is skipped.
+  static func item(for frame: EventFrame) -> SequencedItem? {
+    let cursor = frame.id.flatMap { $0.isEmpty ? nil : EventCursor(token: $0) }
     guard let text = frame.data else { return cursor.map { .position($0) } }
-    let wire: Wire
-    do {
-      wire = try JSONDecoder().decode(Wire.self, from: Data(text.utf8))
-    } catch {
-      throw ConnectionPathError.badResponse
-    }
-    guard wire.version == 1 else { return cursor.map { .position($0) } }
-    guard let place = cursor ?? wire.cursor else { throw ConnectionPathError.badResponse }
+    let data = Data(text.utf8)
+    // The version decides whether the rest is read at all.
+    guard let head = try? JSONDecoder().decode(Head.self, from: data), head.version == 1, head.kind != nil,
+      let wire = try? JSONDecoder().decode(Wire.self, from: data), let place = cursor ?? wire.cursor
+    else { return cursor.map { .position($0) } ?? (try? JSONDecoder().decode(Head.self, from: data)).flatMap(\.cursor).map { .position($0) } }
     if wire.kind == "gap" {
       return .gap(wire.reason.flatMap(EventGapReason.init(rawValue:)) ?? .otherRun, current: wire.cursor ?? place)
     }
-    guard let event = try wire.event() else { return .position(place) }
+    // An event this library has no case for, or can't read, still moves the cursor.
+    guard let event = try? wire.event() else { return .position(place) }
     return .event(event, place)
+  }
+
+  /// The fields that say how to read the rest. Anything else may differ between versions.
+  private struct Head: Decodable {
+    let version: Int?
+    let kind: String?
+    let runId: String?
+    let sequence: UInt64?
+
+    init(from decoder: any Decoder) throws {
+      let container = try decoder.container(keyedBy: Keys.self)
+      version = try? container.decode(Int.self, forKey: .version)
+      kind = try? container.decode(String.self, forKey: .kind)
+      runId = try? container.decode(String.self, forKey: .runId)
+      sequence = try? container.decode(UInt64.self, forKey: .sequence)
+    }
+
+    var cursor: EventCursor? {
+      guard let runId, let sequence else { return nil }
+      return EventCursor(runID: runId, sequence: sequence)
+    }
+
+    private enum Keys: String, CodingKey { case version, kind, runId, sequence }
   }
 
   /// The JSON of one `data` line.
@@ -231,12 +247,12 @@ enum ServiceEventFrame {
       }
     }
 
+    private static let plainDate = Date.ISO8601FormatStyle()
+    private static let fractionalDate = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+
     /// An ISO 8601 date, with or without fractional seconds.
     private static func date(_ text: String) -> Date? {
-      let plain = ISO8601DateFormatter()
-      let fractional = ISO8601DateFormatter()
-      fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-      return plain.date(from: text) ?? fractional.date(from: text)
+      (try? Date(text, strategy: plainDate)) ?? (try? Date(text, strategy: fractionalDate))
     }
   }
 
@@ -245,28 +261,27 @@ enum ServiceEventFrame {
 /// Reads the numbered items of one event stream from its bytes, one at a time.
 actor EventStreamReader {
 
-  private let chunks: AsyncThrowingStream<Data, any Error>
+  // One reader reads one stream a call at a time, so nothing else touches the iterator; the actor
+  // can't hold it as isolated state because reading it is a mutating call that suspends.
+  nonisolated(unsafe) private var chunks: AsyncThrowingStream<Data, any Error>.Iterator
   private var parser = ServerSentEventParser()
   private var ready: [SequencedItem] = []
 
   init(chunks: AsyncThrowingStream<Data, any Error>) {
-    self.chunks = chunks
+    self.chunks = chunks.makeAsyncIterator()
   }
 
   /// The next item, or `nil` when the service closes the stream or the reading is canceled.
   ///
-  /// - Throws: ``ConnectionPathError/interrupted`` when the connection fails, or
-  ///   ``ConnectionPathError/badResponse`` for a frame that isn't the service's.
+  /// One iterator reads the stream from start to end: dropping an iterator would cancel it.
+  ///
+  /// - Throws: ``ConnectionPathError/interrupted`` when the connection fails.
   func next() async throws -> SequencedItem? {
     while true {
       if !ready.isEmpty { return ready.removeFirst() }
-      var chunk: Data?
+      let chunk: Data?
       do {
-        // Each read takes the next chunk the stream holds; the stream is read by one reader.
-        for try await next in chunks {
-          chunk = next
-          break
-        }
+        chunk = try await chunks.next()
       } catch is CancellationError {
         throw CancellationError()
       } catch {
@@ -274,7 +289,7 @@ actor EventStreamReader {
       }
       guard let chunk else { return nil }
       for frame in parser.feed(chunk) {
-        if let item = try ServiceEventFrame.item(for: frame) { ready.append(item) }
+        if let item = ServiceEventFrame.item(for: frame) { ready.append(item) }
       }
     }
   }

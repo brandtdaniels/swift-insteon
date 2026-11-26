@@ -52,6 +52,16 @@ struct URLSessionStreamingTests {
     await #expect(throws: (any Error).self) { try await client.stream(URLRequest(url: Self.address)) }
   }
 
+  @Test func aResponseThatIsNotHTTPThrowsAndStopsTheRequest() async throws {
+    let (stops, stopped) = AsyncStream<Void>.makeStream()
+    ChunkedURLProtocol.onStop = { stopped.yield() }
+    ChunkedURLProtocol.script = .init(statusCode: nil, headers: [:], chunks: [], failure: nil, nonHTTP: true, finishes: false)
+    defer { ChunkedURLProtocol.onStop = nil }
+
+    await #expect(throws: HTTPClientError.nonHTTPResponse) { try await client.stream(URLRequest(url: Self.address)) }
+    for await _ in stops { break }
+  }
+
   @Test func aClientThatDoesNotStreamSaysSo() async throws {
     struct Plain: HTTPClient {
       func send(_ request: URLRequest) async throws -> HTTPResponse { HTTPResponse(statusCode: 200) }
@@ -68,10 +78,13 @@ final class ChunkedURLProtocol: URLProtocol {
     let headers: [String: String]
     let chunks: [Data]
     let failure: URLError?
+    var nonHTTP = false
+    var finishes = true
   }
 
   // The suite runs serially, so this is never accessed concurrently.
   nonisolated(unsafe) static var script: Script?
+  nonisolated(unsafe) static var onStop: (@Sendable () -> Void)?
 
   override class func canInit(with request: URLRequest) -> Bool { true }
 
@@ -79,6 +92,10 @@ final class ChunkedURLProtocol: URLProtocol {
 
   override func startLoading() {
     guard let script = Self.script else { return }
+    if script.nonHTTP, let url = request.url {
+      client?.urlProtocol(self, didReceive: URLResponse(url: url, mimeType: nil, expectedContentLength: 0, textEncodingName: nil), cacheStoragePolicy: .notAllowed)
+    }
+    guard script.finishes else { return }
     if let statusCode = script.statusCode, let url = request.url,
       let response = HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: "HTTP/1.1", headerFields: script.headers) {
       client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
@@ -91,5 +108,5 @@ final class ChunkedURLProtocol: URLProtocol {
     }
   }
 
-  override func stopLoading() {}
+  override func stopLoading() { Self.onStop?() }
 }

@@ -198,22 +198,80 @@ struct ServiceEventStreamTests {
     #expect(try await read(2, from: events) == [Self.lamp])
   }
 
-  @Test func dataThatIsNotJSONIsABadResponse() async throws {
+  // Given a stream whose chunks arrive one after another, when a client reads, then one reader
+  // reads them all and the stream is not canceled until the end.
+  @Test func oneReaderReadsChunksThatArriveAcrossSeparateAwaits() async throws {
     let feed = Feed()
     let calls = try await path(StreamingHTTPClient(openings: [.stream(status: 200, feed.body)])).open()
-    let events = try await calls.sequencedEvents(after: nil)
-    feed.send("id: run1-1\ndata: not json\n\n")
+    var iterator = try await calls.sequencedEvents(after: nil).makeAsyncIterator()
 
-    await #expect(throws: ConnectionPathError.badResponse) { _ = try await read(1, from: events) }
+    feed.send(status(1))
+    #expect(try await iterator.next() == Self.lamp)
+    feed.send(": keepalive\n\n" + status(2))
+    #expect(try await iterator.next() == .event(.statusChanged(lampAddress), EventCursor(runID: "run1", sequence: 2)))
+    feed.send("id: run1-3\n")
+    feed.send("data: {\"version\":1,\"runId\":\"run1\",\"sequence\":3,\"kind\":\"reconnected\"}\n\n")
+    #expect(try await iterator.next() == .event(.modemReconnected, EventCursor(runID: "run1", sequence: 3)))
+
+    #expect(feed.record.wasCanceled == false)
+    feed.end()
+    #expect(try await iterator.next() == nil)
+    #expect(feed.record.wasCanceled == false)
   }
 
-  @Test func anIdThatIsNotACursorIsABadResponse() async throws {
+  // Given one frame that can't be read among valid ones in one chunk, then the valid frames are
+  // delivered and the bad frame only moves the cursor.
+  @Test func aFrameThatCannotBeReadIsAPositionAndItsNeighborsAreDelivered() async throws {
     let feed = Feed()
     let calls = try await path(StreamingHTTPClient(openings: [.stream(status: 200, feed.body)])).open()
     let events = try await calls.sequencedEvents(after: nil)
-    feed.send("id: nonsense\ndata: {\"version\":1,\"kind\":\"reconnected\"}\n\n")
+    feed.send(status(1) + "id: run1-2\ndata: not json\n\n" + status(3))
 
-    await #expect(throws: ConnectionPathError.badResponse) { _ = try await read(1, from: events) }
+    let items = try await read(3, from: events)
+
+    #expect(items == [Self.lamp, .position(EventCursor(runID: "run1", sequence: 2)), .event(.statusChanged(lampAddress), EventCursor(runID: "run1", sequence: 3))])
+  }
+
+  @Test func aFrameWithAnIdThatIsNotACursorIsSkipped() async throws {
+    let feed = Feed()
+    let calls = try await path(StreamingHTTPClient(openings: [.stream(status: 200, feed.body)])).open()
+    let events = try await calls.sequencedEvents(after: nil)
+    feed.send("id: nonsense\ndata: {\"version\":1,\"kind\":\"reconnected\"}\n\n" + status(2))
+
+    #expect(try await read(1, from: events) == [.event(.statusChanged(lampAddress), EventCursor(runID: "run1", sequence: 2))])
+  }
+
+  // Given a version, or a missing version or kind, then the frame is a position, whatever else it holds.
+  @Test(arguments: [
+    #"{"version":2,"runId":"run1","sequence":"not a number","kind":"statusChanged"}"#,
+    #"{"version":2,"runId":"run1","sequence":4,"kind":"statusChanged","address":"1A.2B.3C"}"#,
+    #"{"runId":"run1","sequence":4,"kind":"statusChanged","address":"1A.2B.3C"}"#,
+    #"{"version":1,"runId":"run1","sequence":4,"address":"1A.2B.3C"}"#,
+    #"{"version":"one","runId":"run1","sequence":4,"kind":"statusChanged"}"#,
+    #"{"version":1,"runId":"run1","sequence":4,"kind":"statusChanged","address":"not an address"}"#
+  ])
+  func aFrameThatIsNotVersionOneOrLacksAKindIsAPosition(json: String) async throws {
+    let feed = Feed()
+    let calls = try await path(StreamingHTTPClient(openings: [.stream(status: 200, feed.body)])).open()
+    let events = try await calls.sequencedEvents(after: nil)
+    feed.send("id: run1-4\ndata: \(json)\n\n")
+
+    #expect(try await read(1, from: events) == [.position(EventCursor(runID: "run1", sequence: 4))])
+  }
+
+  // Given a successful answer that isn't an event stream, then it is a bad response.
+  @Test func aSuccessThatIsNotAnEventStreamIsABadResponse() async throws {
+    let http = StreamingHTTPClient(openings: [.typed(status: 200, contentType: "application/json", Feed().body)])
+    let calls = try await path(http).open()
+
+    await #expect(throws: ConnectionPathError.badResponse) { _ = try await calls.sequencedEvents(after: nil) }
+  }
+
+  @Test func theContentTypeMayCarryParametersInAnyCase() async throws {
+    let http = StreamingHTTPClient(openings: [.typed(status: 200, contentType: "Text/Event-Stream; charset=utf-8", Feed().body)])
+    let calls = try await path(http).open()
+
+    _ = try await calls.sequencedEvents(after: nil)
   }
 
   // Given an HTTP client that can't stream and no other path, when a client subscribes, then it is

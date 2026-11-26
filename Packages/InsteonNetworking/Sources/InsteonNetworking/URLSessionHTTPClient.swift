@@ -386,12 +386,25 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
 
       task.resume()
 
-      for try await arrived in heads {
+      do {
 
-        return HTTPStreamResponse(statusCode: arrived.statusCode, headers: arrived.headers, body: chunks)
+        for try await arrived in heads {
+
+          return HTTPStreamResponse(statusCode: arrived.statusCode, headers: arrived.headers, body: chunks)
+
+        }
+
+      } catch {
+
+        task.cancel()
+        streamSession.invalidateAndCancel()
+        throw error
 
       }
 
+      // The answer wasn't HTTP: stop the request, so nothing keeps the connection open.
+      task.cancel()
+      streamSession.invalidateAndCancel()
       throw HTTPClientError.nonHTTPResponse
 
     } onCancel: {
@@ -443,7 +456,7 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
       }
 
       head.finish()
-      completionHandler(.allow)
+      completionHandler(response is HTTPURLResponse ? .allow : .cancel)
 
     }
 

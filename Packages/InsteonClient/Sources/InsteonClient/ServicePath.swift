@@ -159,6 +159,8 @@ private struct ServiceCalls: ConnectionCalls {
     case 429, 500...: throw ConnectionPathError.interrupted
     default: throw ConnectionPathError.badResponse
     }
+    // Something that answers 2xx but isn't an event stream, such as a proxy's page, isn't the service.
+    guard response.headers["content-type"]?.lowercased().hasPrefix("text/event-stream") == true else { throw ConnectionPathError.badResponse }
     // The reader pulls from the bytes in the task that reads the items, so nothing runs unobserved.
     let reader = EventStreamReader(chunks: response.body)
     return SequencedEvents(AsyncThrowingStream { try await reader.next() })
