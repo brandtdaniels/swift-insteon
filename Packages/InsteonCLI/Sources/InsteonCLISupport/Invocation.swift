@@ -122,6 +122,8 @@ public enum Subcommand: Hashable, Sendable {
   case backupCheck(path: String)
   /// Plans how a backup's devices move to the connected modem, and writes nothing.
   case transferPlan(TransferPlanOptions)
+  /// Ask each device of a backup to answer through the connected modem.
+  case transferVerify(path: String)
   /// Carry out a transfer plan.
   case transferApply(TransferApplyOptions)
   /// Sends a device a command, or reads its ALL-Link database.

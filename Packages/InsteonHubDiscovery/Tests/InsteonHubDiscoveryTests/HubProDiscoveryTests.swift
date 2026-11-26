@@ -96,7 +96,8 @@ struct HubProDiscoveryTests {
     return HubDiscovery(
       httpClient: UnauthenticatedHTTPClient(transport: network),
       network: FixedNetwork(fixed: [subnet]),
-      hubProPorts: hubProPorts
+      hubProPorts: hubProPorts,
+      probeTimeout: HubDiscoveryTests.noTimeout
     )
 
   }

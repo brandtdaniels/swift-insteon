@@ -60,6 +60,8 @@ public enum HelpText {
                           write nothing
       transfer apply FILE Carry out that plan on the connected modem, reading before every
                           write
+      transfer verify     Ask each device of a backup to answer through the connected
+                          modem
       device ADDRESS ...  Control a device, read and change its settings, or read its
                           ALL-Link database
       scene GROUP on|off  Turn the devices in one of the modem's groups on or off
@@ -475,6 +477,7 @@ public enum HelpText {
   public static let transfer = """
     Usage: insteon [--hub HOST[:PORT] | --serial PATH] transfer plan FILE [--merge | --replace-database] [--json]
            insteon [--hub HOST[:PORT] | --serial PATH] transfer apply FILE [--merge | --replace-database] [--keep-going] [--dry-run] [--yes] [--force]
+           insteon [--hub HOST[:PORT] | --serial PATH] transfer verify FILE
 
     Plans how the devices in a backup move to the connected modem, which has another address.
     Every device holds records that name the old modem as a controller, so each record is
@@ -512,6 +515,10 @@ public enum HelpText {
       --force       Needed with --replace-database, which removes the modem's own links.
 
     A Hub Pro can't be the modem a transfer is applied to.
+
+    transfer verify FILE asks each device of the backup, one at a time, to answer through the
+    connected modem, and says which did. Each is sent a ping, which changes nothing, so it is
+    safe on a Hub Pro too. It exits with status 2 when a device doesn't answer.
     """
 
   /// The help for `insteon device`.

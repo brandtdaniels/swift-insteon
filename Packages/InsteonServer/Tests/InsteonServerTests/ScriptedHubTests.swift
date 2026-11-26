@@ -39,4 +39,41 @@ struct ScriptedHubTests {
     #expect(first.command.command1 == 0x11 && second.command.command1 == 0x13)
   }
 
+  /// Given a connection that an earlier attempt waited on and was canceled while waiting, as a
+  /// run that lost its port to another suite is, when a later attempt waits on the same
+  /// connection and the test then drops it, then the later attempt sees the drop. A connection
+  /// that ended for everyone when one waiter left would end the later attempt at once.
+  @Test func aConnectionStaysUpForALaterAttemptAfterAnEarlierOneWasCanceled() async throws {
+    let link = HubLink()
+    let earlier = Task { try await link.waitUntilDropped() }
+
+    earlier.cancel()
+    _ = await earlier.result
+
+    let later = Task { () -> String in
+      do {
+        try await link.waitUntilDropped()
+        return "returned"
+      } catch {
+        return "\(error)"
+      }
+    }
+
+    // Wait, by yielding and not by time, until the later attempt is parked on the connection.
+    while link.waiterCount == 0 { await Task.yield() }
+
+    link.drop(with: ScriptedHubOpener.StillAway())
+
+    #expect(await later.value == "\(ScriptedHubOpener.StillAway())")
+  }
+
+  /// Given a connection dropped before anyone waits, when an attempt waits, then it sees the drop.
+  @Test func aConnectionDroppedBeforeAnyoneWaitsEndsTheNextWaiter() async throws {
+    let link = HubLink()
+
+    link.drop(with: ScriptedHubOpener.StillAway())
+
+    await #expect(throws: ScriptedHubOpener.StillAway.self) { try await link.waitUntilDropped() }
+  }
+
 }

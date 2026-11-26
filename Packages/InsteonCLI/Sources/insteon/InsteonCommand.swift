@@ -139,6 +139,12 @@ struct InsteonCommand {
       try await withModemAndHub(invocation) { modem, names, hub in
         try await TransferCommand.apply(backup, options: options, modem: modem, hub: hub, names: names, printsJSON: printsJSON)
       }
+    case let .transferVerify(path):
+      // Read and checked before the modem is opened, so a file that can't be used costs no connection.
+      let backup = try TransferCommand.load(TransferPlanOptions(path: path))
+      try await withModemAndHub(invocation) { modem, names, hub in
+        try await TransferCommand.verify(backup, modem: modem, hub: hub, names: names, printsJSON: printsJSON)
+      }
     case let .device(device, action):
       try await withModemAndHub(invocation) { modem, names, hub in
 

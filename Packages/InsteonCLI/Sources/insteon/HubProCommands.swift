@@ -20,6 +20,9 @@ enum HubProCommands {
       case let .transferPlan(options):
         let backup = try TransferCommand.load(options)
         try await TransferCommand.plan(backup, options: options, hubPro: network, printsJSON: invocation.printsJSON)
+      case let .transferVerify(path):
+        let backup = try TransferCommand.load(TransferPlanOptions(path: path))
+        try await TransferCommand.verify(backup, hubPro: network, printsJSON: invocation.printsJSON)
       case .info:
         try await network.open()
         try await info(network: network, names: names, printsJSON: invocation.printsJSON)
