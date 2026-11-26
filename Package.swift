@@ -28,6 +28,7 @@ let package = Package(
     .library(name: "InsteonNotifications", targets: ["InsteonNotifications"]),
     .library(name: "InsteonCore", targets: ["InsteonCore"]),
     .library(name: "InsteonService", targets: ["InsteonService"]),
+    .library(name: "InsteonDemo", targets: ["InsteonDemo"]),
     .library(name: "InsteonCLISupport", targets: ["InsteonCLISupport"]),
     .executable(name: "insteon", targets: ["insteon"])
   ],
@@ -218,6 +219,20 @@ let package = Package(
       name: "InsteonServiceTests",
       dependencies: ["InsteonService", "InsteonCore", "InsteonDeviceCatalog", "InsteonHubClient", "InsteonHubPro", "InsteonModem", "InsteonNetworking", "InsteonProtocol", "InsteonScheduling", "InsteonLinkingTestSupport", "InsteonTestSupport"],
       path: "Packages/InsteonService/Tests/InsteonServiceTests"
+    ),
+    // A made-up network of a few devices and scenes, for an app to run on with no Hub. It holds
+    // its own small in-memory modem and does not link the test doubles.
+    .target(
+      name: "InsteonDemo",
+      dependencies: ["InsteonCore", "InsteonDeviceCatalog", "InsteonLinking", "InsteonModem", "InsteonProtocol", "InsteonService"],
+      path: "Packages/InsteonDemo/Sources/InsteonDemo",
+      swiftSettings: memberImportVisibility
+    ),
+    .testTarget(
+      name: "InsteonDemoTests",
+      dependencies: ["InsteonDemo", "InsteonCore", "InsteonLinking", "InsteonModem", "InsteonProtocol", "InsteonService"],
+      path: "Packages/InsteonDemo/Tests/InsteonDemoTests",
+      swiftSettings: memberImportVisibility
     ),
     // The `insteon` command. Its command-line parsing is in InsteonCLISupport, so it can be tested.
     // Both depend only on InsteonCore, the library every front end uses; CI builds with

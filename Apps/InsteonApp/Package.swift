@@ -26,6 +26,7 @@ let package = Package(
       name: "InsteonAppUITests",
       dependencies: [
         "InsteonAppUI",
+        .product(name: "InsteonDemo", package: "swift-insteon"),
         .product(name: "InsteonCore", package: "swift-insteon"),
         .product(name: "InsteonService", package: "swift-insteon")
       ]
