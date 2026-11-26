@@ -41,6 +41,11 @@ public struct ClientPairing: Sendable, Equatable, CustomStringConvertible, Custo
     /// as `credential` or `routes[0].kind`.
     case missing(String)
 
+    /// A field has a value the document's format doesn't allow, such as a version that isn't the
+    /// integer 1, a scope other than `read`, `control` or `admin`, an empty credential or an empty
+    /// route kind. It names the field.
+    case invalid(String)
+
     /// The document lists no routes, so nothing says how to reach the service.
     case noRoutes
 
@@ -65,7 +70,12 @@ public struct ClientPairing: Sendable, Equatable, CustomStringConvertible, Custo
   /// - Throws: ``Failure`` when the bytes aren't a version 1 document.
   public init(decoding data: Data) throws {
     guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { throw Failure.unreadable }
-    guard let version = object["version"] as? Int else { throw Failure.missing("version") }
+    guard let number = object["version"] as? NSNumber else { throw Failure.missing("version") }
+    // JSON true and 1.0 read as the number 1; only the integer 1 is version 1.
+    guard (try? JSONDecoder().decode(Version.self, from: data)) != nil, !["d", "f"].contains(String(cString: number.objCType)) else {
+      throw Failure.invalid("version")
+    }
+    let version = number.intValue
     guard version == 1 else { throw Failure.unsupportedVersion(version) }
     func text(_ key: String) throws -> String {
       guard let value = object[key] as? String else { throw Failure.missing(key) }
@@ -75,10 +85,13 @@ public struct ClientPairing: Sendable, Equatable, CustomStringConvertible, Custo
     name = try text("name")
     credential = try text("credential")
     scope = try text("scope")
+    guard ["read", "control", "admin"].contains(scope) else { throw Failure.invalid("scope") }
+    guard !credential.isEmpty else { throw Failure.invalid("credential") }
     guard let listed = object["routes"] as? [[String: Any]] else { throw Failure.missing("routes") }
     guard !listed.isEmpty else { throw Failure.noRoutes }
     routes = try listed.enumerated().map { index, route in
       guard let kind = route["kind"] as? String else { throw Failure.missing("routes[\(index)].kind") }
+      guard !kind.isEmpty else { throw Failure.invalid("routes[\(index)].kind") }
       return Route(kind: kind, url: route["url"] as? String, ticket: route["ticket"] as? String)
     }
   }
@@ -95,5 +108,10 @@ public struct ClientPairing: Sendable, Equatable, CustomStringConvertible, Custo
   public var description: String { "ClientPairing(\(name), routes: \(routes.map(\.kind)))" }
 
   public var debugDescription: String { description }
+
+  /// A version that decodes only from a JSON integer, never from `true`.
+  private struct Version: Decodable {
+    let version: Int
+  }
 
 }

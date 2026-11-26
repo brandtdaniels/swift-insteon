@@ -79,7 +79,7 @@ struct LocalHubPathTests {
     await #expect(throws: ConnectionPathError.unauthorized) { _ = try await refused.open() }
 
     let none = LocalHubPath(locate: { [hub("192.0.2.31"), hub("192.0.2.32")] }, open: { _ in throw Unplugged() })
-    await #expect(throws: ConnectionPathError.notReached("no Hub on the local network opened")) { _ = try await none.open() }
+    await #expect(throws: ConnectionPathError.notReached("no Hub on the local network opened: Unplugged(); Unplugged()")) { _ = try await none.open() }
   }
 
   @Test func aScopeTooLowOrABadResponseFromEveryHubIsThePathsOwnFailure() async {
@@ -100,10 +100,19 @@ struct LocalHubPathTests {
     await #expect(throws: ConnectionPathError.unauthorized) { _ = try await path.open() }
   }
 
+  @Test func theReasonKeepsWhatEachHubFailedWith() async {
+    let path = LocalHubPath(locate: { [hub("192.0.2.31"), hub("192.0.2.32")] }, open: { found in
+      if found.endpoint.host == "192.0.2.31" { throw Unplugged() }
+      throw ConnectionPathError.notReached("it was asleep")
+    })
+
+    await #expect(throws: ConnectionPathError.notReached("no Hub on the local network opened: Unplugged(); it was asleep")) { _ = try await path.open() }
+  }
+
   @Test func aLostPathFromAnOpenerCountsAsNotReached() async {
     let path = LocalHubPath(locate: { [hub("192.0.2.31")] }, open: { _ in throw ConnectionPathError.interrupted })
 
-    await #expect(throws: ConnectionPathError.notReached("no Hub on the local network opened")) { _ = try await path.open() }
+    await #expect(throws: ConnectionPathError.notReached("no Hub on the local network opened: interrupted")) { _ = try await path.open() }
   }
 }
 

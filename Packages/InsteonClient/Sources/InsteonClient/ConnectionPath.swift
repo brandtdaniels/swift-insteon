@@ -44,14 +44,19 @@ public enum ConnectionPathError: Error, Equatable, Sendable {
   /// address or credential.
   case notReached(String)
 
-  /// The service refused the credential, which another route to it would refuse too.
+  /// The service refused the credential on this path. Each path carries its own credential, so
+  /// another path may accept its own.
   case unauthorized
 
   /// The credential is good but its scope is too low for the call. Pairing again doesn't fix it:
   /// the service has to issue a credential with a wider scope.
   case forbidden
 
-  /// The service answered with something this library can't read, or something that isn't the service. The connection drops the path, so the next call checks it again.
+  /// The path answered with something this library can't read, or with something that isn't the
+  /// service. A 3xx or 4xx answer that isn't the service's own refusal means the service did not
+  /// accept the request, so nothing was done. An unreadable 2xx answer is different: the service
+  /// accepted the request and may have acted on it. The connection drops the path, so the next call
+  /// checks it again.
   case badResponse
 
   /// The path was lost after a request may have reached the service.

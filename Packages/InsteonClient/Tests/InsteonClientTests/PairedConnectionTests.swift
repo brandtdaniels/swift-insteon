@@ -59,6 +59,20 @@ struct PairedConnectionTests {
     }
   }
 
+  @Test func aValueThatIsNotWhatTheFieldAllowsIsNamed() {
+    func document(version: String = "1", scope: String = #""read""#, credential: String = #""c""#, kind: String = #""lan""#) -> Data {
+      Data(#"{"version":\#(version),"serviceId":"s","name":"n","credential":\#(credential),"scope":\#(scope),"api":"/api/v1","routes":[{"kind":\#(kind),"url":"http://192.0.2.20"}]}"#.utf8)
+    }
+    #expect(throws: ClientPairing.Failure.invalid("version")) { try ClientPairing(decoding: document(version: "true")) }
+    #expect(throws: ClientPairing.Failure.invalid("version")) { try ClientPairing(decoding: document(version: "1.0")) }
+    #expect(throws: ClientPairing.Failure.invalid("scope")) { try ClientPairing(decoding: document(scope: #""root""#)) }
+    #expect(throws: ClientPairing.Failure.invalid("credential")) { try ClientPairing(decoding: document(credential: #""""#)) }
+    #expect(throws: ClientPairing.Failure.invalid("routes[0].kind")) { try ClientPairing(decoding: document(kind: #""""#)) }
+    for scope in ["read", "control", "admin"] {
+      #expect(throws: Never.self) { try ClientPairing(decoding: document(scope: "\"\(scope)\"")) }
+    }
+  }
+
   @Test func aDocumentWithNoRoutesSaysSo() {
     let data = Data(#"{"version":1,"serviceId":"s","name":"n","credential":"c","scope":"read","api":"/api/v1","routes":[]}"#.utf8)
 
