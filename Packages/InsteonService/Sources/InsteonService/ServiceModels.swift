@@ -148,9 +148,17 @@ public protocol HomeBackupProviding: Sendable {
   func homeBackup() async -> HomeBackup
 }
 
+/// The scenes role of an Insteon service.
+public protocol SceneProviding: Sendable {
+  /// The scenes of the home, listed from the ALL-Link databases the service holds. It sends nothing
+  /// to hardware and doesn't take the admission gate, so a device with no cached copy is reported
+  /// as unreadable and the listing is not whole.
+  func scenes() async -> SceneListing
+}
+
 /// The cohesive API consumed by an adapter that needs queries, commands, events and health.
 /// A single instance supplies all four roles, preventing mismatched device networks.
-public protocol InsteonServiceAPI: DeviceQuerying, DeviceCommanding, DeviceEventSource, HealthReporting, NotificationRuleManaging, ScheduleManaging, HomeBackupProviding {}
+public protocol InsteonServiceAPI: DeviceQuerying, DeviceCommanding, DeviceEventSource, HealthReporting, NotificationRuleManaging, ScheduleManaging, HomeBackupProviding, SceneProviding {}
 
 /// A refused operation, independent of HTTP status codes or display wording.
 public enum ServiceControlError: Error, Equatable {

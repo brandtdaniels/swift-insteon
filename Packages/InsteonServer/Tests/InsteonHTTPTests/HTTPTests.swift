@@ -518,6 +518,9 @@ actor FakeService: InsteonServiceAPI {
   /// The notification rules the service holds, and the refusal every rule call answers with.
   private(set) var rules: [ServiceNotificationRule] = []
   let ruleFailure: NotificationRuleError?
+  /// The scenes the service reports, and how many times it was asked.
+  let scenes: SceneListing
+  private(set) var sceneReads = 0
   /// The schedules and timers the service holds, and the refusal every schedule or timer call answers with.
   private(set) var storedSchedules: [ServiceSchedule] = []
   private(set) var storedTimers: [ServiceTimer] = []
@@ -527,7 +530,8 @@ actor FakeService: InsteonServiceAPI {
   private var openSources: [AsyncStream<ServiceEvent>.Continuation] = []
   var reported = ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000))
   let address = InsteonAddress(0x1A, 0x2B, 0x3C)
-  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false, scriptedItems: [SequencedItem] = [], ruleFailure: NotificationRuleError? = nil) {
+  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false, scriptedItems: [SequencedItem] = [], ruleFailure: NotificationRuleError? = nil, scenes: SceneListing = SceneListing(scenes: [])) {
+    self.scenes = scenes
     self.ruleFailure = ruleFailure
     self.endlessEvents = endlessEvents
     self.scriptedItems = scriptedItems
@@ -551,6 +555,10 @@ actor FakeService: InsteonServiceAPI {
     if let ruleFailure { throw ruleFailure }
     guard rules.contains(where: { $0.id == id }) else { throw NotificationRuleError.unknownRule }
     rules.removeAll { $0.id == id }
+  }
+  func scenes() async -> SceneListing {
+    sceneReads += 1
+    return scenes
   }
   /// What the service says its backup holds, and how many times it was asked.
   private(set) var backups = 0
