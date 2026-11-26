@@ -57,25 +57,39 @@ struct ClientConnectionTests {
     #expect(await local.openCount == 1)
   }
 
-  @Test func aReadThatLosesItsPathIsAskedAgainOnTheNextPath() async throws {
+  @Test func aReadThatLosesItsPathIsAskedAgainOnTheSamePathBeforeItIsDropped() async throws {
     let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.interrupted]))
     let remote = ScriptedPath("remote")
     let connection = ClientConnection(paths: [local, remote])
 
     let devices = try await connection.devices()
 
-    #expect(devices.first?.value == 2, "the path that just failed is tried last, so the remote path answers")
+    #expect(devices.first?.value == 1, "a blip on a healthy path does not drop it")
     #expect(await local.openCount == 1)
-    #expect(await remote.openCount == 1)
+    #expect(await remote.openCount == 0)
+    #expect(await connection.currentPath == "local")
+  }
+
+  @Test func aReadThatLosesItsPathTwiceMovesToTheNextPathAndClosesTheLostOne() async throws {
+    let lostCalls = ScriptedCalls(label: "local", script: [.interrupted, .interrupted])
+    let local = ScriptedPath("local", calls: lostCalls)
+    let remote = ScriptedPath("remote")
+    let connection = ClientConnection(paths: [local, remote])
+
+    let devices = try await connection.devices()
+
+    #expect(devices.first?.value == 2)
+    #expect(await local.openCount == 1)
+    #expect(await lostCalls.isClosed)
     #expect(await connection.currentPath == "remote")
   }
 
-  @Test func aReadThatLosesEveryPathFailsAfterOneRetry() async throws {
+  @Test func aReadThatLosesEveryPathFailsAfterOneRetryOnEach() async throws {
     let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.interrupted, .interrupted, .interrupted]))
     let connection = ClientConnection(paths: [local])
 
     await #expect(throws: ConnectionError.interrupted(path: "local")) { try await connection.devices() }
-    #expect(await local.openCount == 2)
+    #expect(await local.openCount == 1)
     #expect(await connection.currentPath == nil)
   }
 
@@ -146,9 +160,9 @@ struct ClientConnectionTests {
     #expect(await connection.currentPath == nil)
   }
 
-  @Test func aPathThatJustFailedIsTriedLastNotFirst() async throws {
-    let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.interrupted]))
-    let remote = ScriptedPath("remote", calls: ScriptedCalls(label: "remote", script: [.interrupted]))
+  @Test func everyPathIsTriedOncePerCallAndTheLastLossIsReported() async throws {
+    let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.interrupted, .interrupted]))
+    let remote = ScriptedPath("remote", calls: ScriptedCalls(label: "remote", script: [.interrupted, .interrupted]))
     let connection = ClientConnection(paths: [local, remote])
 
     await #expect(throws: ConnectionError.interrupted(path: "remote")) { try await connection.devices() }
@@ -190,10 +204,11 @@ struct ClientConnectionTests {
   }
 
   @Test func aScopeTooLowOnEveryPathIsReportedAndNothingIsRepeated() async throws {
-    let calls = ScriptedCalls(label: "local", script: [.forbidden, .forbidden])
+    let calls = ScriptedCalls(label: "local", script: [.forbidden])
     let connection = ClientConnection(paths: [ScriptedPath("local", calls: calls)])
 
     await #expect(throws: ConnectionError.forbidden(path: "local")) { try await connection.execute(ServiceCommand(address: lampAddress, action: .on)) }
+    #expect(await calls.asked == ["execute"])
     #expect(await connection.currentPath == "local", "the forbidden path is kept when no other path takes over")
   }
 
@@ -227,13 +242,10 @@ struct ClientConnectionTests {
   }
 
   @Test func aReadThatWasNeverSentIsTreatedLikeACommandThatWasNeverSent() async throws {
-    let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.notReached, .notReached]))
+    let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.notReached]))
     let connection = ClientConnection(paths: [local])
 
-    await #expect(throws: ConnectionError.noPathReached([
-      PathFailure(path: "local", reason: "scripted"),
-      PathFailure(path: "local", reason: "scripted")
-    ])) { try await connection.devices() }
+    await #expect(throws: ConnectionError.noPathReached([PathFailure(path: "local", reason: "scripted")])) { try await connection.devices() }
     #expect(await connection.currentPath == nil)
   }
 
@@ -255,12 +267,11 @@ struct ClientConnectionTests {
   }
 
   @Test func whenEveryAttemptRunsOutTheReasonsAreKept() async throws {
-    let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.notReached, .notReached]))
+    let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.notReached]))
     let connection = ClientConnection(paths: [local], skipped: [PathFailure(path: "mystery", reason: "no transport")])
 
     await #expect(throws: ConnectionError.noPathReached([
       PathFailure(path: "mystery", reason: "no transport"),
-      PathFailure(path: "local", reason: "scripted"),
       PathFailure(path: "local", reason: "scripted")
     ])) { try await connection.execute(ServiceCommand(address: lampAddress, action: .on)) }
   }
@@ -284,6 +295,73 @@ struct ClientConnectionTests {
 
     await #expect(throws: CancellationError.self) { _ = try await connection.devices() }
   }
+  @Test func aScopeTooLowOnOnePathClosesItsCallsWhenAnotherPathTakesOver() async throws {
+    let forbiddenCalls = ScriptedCalls(label: "local", script: [.forbidden])
+    let connection = ClientConnection(paths: [ScriptedPath("local", calls: forbiddenCalls), ScriptedPath("remote")])
+
+    _ = try await connection.execute(ServiceCommand(address: lampAddress, action: .on))
+
+    #expect(await forbiddenCalls.isClosed)
+  }
+
+  @Test func closingTheConnectionClosesTheOpenCalls() async throws {
+    let calls = ScriptedCalls(label: "local")
+    let connection = ClientConnection(paths: [ScriptedPath("local", calls: calls)])
+    _ = try await connection.devices()
+
+    await connection.close()
+
+    #expect(await calls.isClosed)
+    #expect(await connection.currentPath == nil)
+  }
+
+  @Test func aCredentialRefusedOnTheOpenPathTriesTheOtherPathsAndClosesTheRefusedOne() async throws {
+    let refused = ScriptedCalls(label: "local", script: [.unauthorized])
+    let connection = ClientConnection(paths: [ScriptedPath("local", calls: refused), ScriptedPath("remote")])
+
+    let devices = try await connection.devices()
+
+    #expect(devices.first?.value == 2)
+    #expect(await refused.isClosed)
+  }
+
+  @Test func whenEveryOpenPathRefusesTheCredentialOnACallTheErrorNamesThemAll() async throws {
+    let connection = ClientConnection(paths: [
+      ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.unauthorized])),
+      ScriptedPath("remote", calls: ScriptedCalls(label: "remote", script: [.unauthorized]))
+    ])
+
+    await #expect(throws: ConnectionError.unauthorized(paths: ["local", "remote"])) { try await connection.devices() }
+  }
+
+  @Test func aCommandThatWasNeverSentWalksEveryRemainingPath() async throws {
+    let paths = ["a", "b", "c"].map { ScriptedPath($0, calls: ScriptedCalls(label: $0, script: $0 == "c" ? [] : [.notReached])) }
+    let connection = ClientConnection(paths: paths)
+
+    let receipt = try await connection.execute(ServiceCommand(address: lampAddress, action: .on))
+
+    #expect(receipt.address == lampAddress)
+    #expect(await connection.currentPath == "c")
+  }
+
+  @Test func aScopeTooLowIsReportedEvenWhenTheOtherPathsCannotBeReached() async throws {
+    let connection = ClientConnection(paths: [
+      ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.forbidden])),
+      ScriptedPath("remote", openings: [.notReached("no route")])
+    ])
+
+    await #expect(throws: ConnectionError.forbidden(path: "local")) { try await connection.execute(ServiceCommand(address: lampAddress, action: .on)) }
+  }
+
+  @Test func aScopeTooLowIsReportedEvenWhenAnotherPathRefusesTheCredential() async throws {
+    let connection = ClientConnection(paths: [
+      ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.forbidden])),
+      ScriptedPath("remote", openings: [.unauthorized])
+    ])
+
+    await #expect(throws: ConnectionError.forbidden(path: "local")) { try await connection.devices() }
+  }
+
 }
 
 struct BrokenPath: ConnectionPath {
