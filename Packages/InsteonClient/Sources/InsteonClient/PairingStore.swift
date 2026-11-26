@@ -111,8 +111,27 @@ public actor PairingStore {
       }
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-      try encoder.encode(List(version: 1, pairings: records)).write(to: file, options: .atomic)
-      try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+      let data = try encoder.encode(List(version: 1, pairings: records))
+      // The file is created already restricted to its owner, then moved over the old one, so no
+      // moment exists when another user could read the tickets in it.
+      let temporary = directory.appendingPathComponent(".pairings-" + UUID().uuidString)
+      var attributes: [FileAttributeKey: Any] = [.posixPermissions: 0o600]
+      #if os(iOS) || os(tvOS) || os(watchOS)
+        attributes[.protectionKey] = FileProtectionType.completeUntilFirstUserAuthentication
+      #endif
+      guard FileManager.default.createFile(atPath: temporary.path, contents: data, attributes: attributes) else {
+        throw Failure.notSaved
+      }
+      do {
+        if FileManager.default.fileExists(atPath: file.path) {
+          _ = try FileManager.default.replaceItemAt(file, withItemAt: temporary)
+        } else {
+          try FileManager.default.moveItem(at: temporary, to: file)
+        }
+      } catch {
+        try? FileManager.default.removeItem(at: temporary)
+        throw error
+      }
     } catch {
       throw Failure.notSaved
     }

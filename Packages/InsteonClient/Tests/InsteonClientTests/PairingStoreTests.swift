@@ -218,6 +218,21 @@ struct PairingStoreTests {
     #expect(permissions == 0o600)
   }
 
+  @Test func theFileIsNeverMoreOpenThanItsOwnerEvenWithAnOpenUmask() async throws {
+    let directory = try scratchDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let before = umask(0)
+    defer { umask(before) }
+
+    let store = PairingStore(directory: directory, secrets: InMemorySecretStore())
+    try await store.save(pairing())
+    try await store.save(pairing(name: "Renamed"))
+
+    let permissions = try FileManager.default.attributesOfItem(atPath: pairingsFile(in: directory).path)[.posixPermissions] as? Int
+    #expect(permissions == 0o600)
+    #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path) == ["pairings.json"])
+  }
+
   /// The first acceptance test: a pairing saved, loaded and turned into paths answers a call
   /// through a ClientConnection against a scripted service.
   @Test func aSavedPairingReachesTheServiceThroughAConnection() async throws {
