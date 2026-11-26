@@ -64,6 +64,37 @@ struct AppThinCheckTests {
     #expect(result.status == .passed)
   }
 
+  @Test("reads the keyword forms, a submodule path and a trailing semicolon", arguments: [
+    "import struct InsteonProtocol.Address", "import class InsteonModem.Modem", "import enum InsteonLinking.Kind",
+    "import func InsteonHubClient.open", "import typealias InsteonProtocol.Alias", "import protocol InsteonLinking.LinkingModem",
+    "import var InsteonProtocol.constant", "import InsteonProtocol.Messages", "import InsteonProtocol;", "import  InsteonProtocol  ;",
+    "@preconcurrency import InsteonProtocol", "@_exported public import InsteonProtocol"
+  ])
+  func importForms(line: String) throws {
+    let result = try run(["Apps/InsteonApp/Sources/InsteonAppUI/Screen.swift": line + "\n"])
+
+    #expect(result.status == .failed, "\(line)")
+    #expect(result.output.contains("imports Insteon"), "\(line)")
+  }
+
+  @Test("reads the keyword forms of an allowed module as allowed")
+  func allowedKeywordForms() throws {
+    let result = try run(["Apps/InsteonApp/Sources/InsteonAppUI/Screen.swift": "import struct InsteonCore.InsteonAddress;\nimport SwiftUI.Foo\n"])
+
+    #expect(result.status == .passed, "\(result.output)")
+  }
+
+  @Test("reads a file directly under Sources and one in a deeper directory")
+  func everySwiftFileUnderSources() throws {
+    let result = try run([
+      "Apps/InsteonApp/Sources/Top.swift": "import InsteonProtocol\n",
+      "Apps/InsteonApp/Sources/A/B/C/Deep.swift": "import InsteonModem\n"
+    ])
+
+    #expect(result.output.contains("Apps/InsteonApp/Sources/Top.swift:1: imports InsteonProtocol"))
+    #expect(result.output.contains("Apps/InsteonApp/Sources/A/B/C/Deep.swift:1: imports InsteonModem"))
+  }
+
   @Test("passes with no apps")
   func noApps() throws {
     #expect(try run([:]).status == .passed)
