@@ -42,11 +42,11 @@ struct ServicePathTests {
     await #expect(throws: HomePathError.notReached("the service answered with status 503")) { _ = try await calls(http) }
   }
 
-  @Test func aRefusedTokenIsUnauthorizedForBothStatuses() async {
-    for status in [401, 403] {
-      let http = FakeHTTPClient { _ in json(#"{"code":"authenticationFailed"}"#, status: status) }
-      await #expect(throws: HomePathError.unauthorized) { _ = try await calls(http) }
-    }
+  @Test func aRefusedTokenIsUnauthorizedAndAScopeTooLowIsForbidden() async {
+    let refused = FakeHTTPClient { _ in json(#"{"code":"authenticationFailed"}"#, status: 401) }
+    await #expect(throws: HomePathError.unauthorized) { _ = try await calls(refused) }
+    let tooLow = FakeHTTPClient { _ in json(#"{"code":"forbidden"}"#, status: 403) }
+    await #expect(throws: HomePathError.forbidden) { _ = try await calls(tooLow) }
   }
 
   @Test func devicesAreDecodedFromTheListing() async throws {
@@ -144,13 +144,13 @@ struct ServicePathTests {
     }
   }
 
-  @Test func aCredentialRefusedOnACallIsUnauthorizedForBothStatuses() async throws {
-    for status in [401, 403] {
+  @Test func aCredentialRefusedOnACallIsUnauthorizedAndAScopeTooLowIsForbidden() async throws {
+    for (status, expected) in [(401, HomePathError.unauthorized), (403, HomePathError.forbidden)] {
       let c = try await calls(FakeHTTPClient { request in
         request.url?.path == "/api/v1/health" ? healthy : json(#"{"code":"authenticationFailed"}"#, status: status)
       })
-      await #expect(throws: HomePathError.unauthorized) { _ = try await c.devices() }
-      await #expect(throws: HomePathError.unauthorized) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+      await #expect(throws: expected) { _ = try await c.devices() }
+      await #expect(throws: expected) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
     }
   }
 
@@ -228,6 +228,34 @@ struct ServicePathTests {
 
     await #expect(throws: HomePathError.notReached("the token is never sent over HTTP to a host outside the local network")) { _ = try await path.open() }
     #expect(await http.requests.isEmpty)
+  }
+
+  @Test func aNon5xxAnswerThatIsNotARefusalIsABadResponseFromSomethingThatIsNotTheService() async throws {
+    for status in [400, 404, 302] {
+      let c = try await calls(FakeHTTPClient { request in
+        request.url?.path == "/api/v1/health" ? healthy : HTTPResponse(statusCode: status, body: Data("<html>no</html>".utf8))
+      })
+
+      await #expect(throws: HomePathError.badResponse) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+      await #expect(throws: HomePathError.badResponse) { _ = try await c.devices() }
+    }
+  }
+
+  @Test func aReceiptThatBreaksTheContractIsABadResponse() async throws {
+    let status = #"{"group":1,"kind":"percent","value":128,"isOn":true,"percent":50,"label":null}"#
+    let bodies = [
+      #"{"version":1,"address":"1A.2B.3C","outcome":"acknowledged","status":null,"persistence":"someday"}"#,
+      #"{"version":1,"address":"1A.2B.3C","outcome":"maybe","status":null,"persistence":"saved"}"#,
+      #"{"version":1,"address":"1A.2B.3C","outcome":"read","status":{"group":1,"kind":"percent","value":128,"isOn":true,"percent":null,"label":null},"persistence":"saved"}"#,
+      #"{"version":1,"address":"1A.2B.3C","outcome":"read","status":{"group":1,"kind":"named","value":128,"isOn":true,"percent":null,"label":null},"persistence":"saved"}"#,
+      #"{"version":1,"address":"1A.2B.3C","outcome":"read","status":{"group":1,"kind":"mystery","value":128,"isOn":true,"percent":null,"label":null},"persistence":"saved"}"#,
+      #"{"version":1,"address":"1A.2B.3C","outcome":"acknowledged","status":\#(status),"persistence":"saved"}"#
+    ]
+    for body in bodies {
+      let c = try await calls(FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : json(body) })
+
+      await #expect(throws: HomePathError.badResponse, "\(body)") { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+    }
   }
 }
 

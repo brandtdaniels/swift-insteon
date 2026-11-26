@@ -50,7 +50,8 @@ public struct ServicePath: HomePath, CustomStringConvertible, CustomDebugStringC
     }
     switch response.statusCode {
     case 200..<300: return ServiceCalls(path: self)
-    case 401, 403: throw HomePathError.unauthorized
+    case 401: throw HomePathError.unauthorized
+    case 403: throw HomePathError.forbidden
     default: throw HomePathError.notReached("the service answered with status \(response.statusCode)")
     }
   }
@@ -138,10 +139,12 @@ private struct ServiceCalls: HomeCalls {
   /// The error a refusal stands for.
   private func failure(_ response: HTTPResponse) throws -> any Error {
     let refusal = try? JSONDecoder().decode(Refusal.self, from: response.body)
-    if response.statusCode == 401 || response.statusCode == 403 { return HomePathError.unauthorized }
-    // An answer that isn't the service's own refusal, such as a proxy's error page, says nothing
-    // about whether the request reached a device.
-    guard let refusal else { return HomePathError.interrupted }
+    if response.statusCode == 401 { return HomePathError.unauthorized }
+    if response.statusCode == 403 { return HomePathError.forbidden }
+    // An answer that isn't the service's own refusal comes from something else. A server error,
+    // such as a proxy's, says nothing about whether the request reached a device. Anything else
+    // is a plain wrong answer, such as a wrong prefix, and nothing was done.
+    guard let refusal else { return response.statusCode >= 500 ? HomePathError.interrupted : HomePathError.badResponse }
     switch refusal.code {
     case "unknownDevice": return ServiceControlError.unknownDevice
     case "invalidLevel": return ServiceControlError.invalidLevel
@@ -207,24 +210,41 @@ private struct ServiceCalls: HomeCalls {
       let label: String?
     }
 
+    /// The receipt, or a bad response for anything the service's contract doesn't allow.
     func receipt() throws -> CommandReceipt {
       guard let address = InsteonAddress(address) else { throw HomePathError.badResponse }
-      let outcome: CommandReceipt.Outcome = self.outcome == "read" ? .read : .acknowledged
-      let persistence: PersistenceOutcome = switch self.persistence {
-      case "notAttempted": .notAttempted
-      case "saved": .saved
-      case "failed": .failed
-      default: .notConfigured
+      let outcome: CommandReceipt.Outcome
+      switch self.outcome {
+      case "read": outcome = .read
+      case "acknowledged": outcome = .acknowledged
+      default: throw HomePathError.badResponse
       }
-      return CommandReceipt(address: address, outcome: outcome, status: status.map(Self.deviceStatus), persistence: persistence)
+      let persistence: PersistenceOutcome
+      switch self.persistence {
+      case "notConfigured": persistence = .notConfigured
+      case "notAttempted": persistence = .notAttempted
+      case "saved": persistence = .saved
+      case "failed": persistence = .failed
+      default: throw HomePathError.badResponse
+      }
+      // A status accompanies a read, and only a read.
+      if status != nil, outcome != .read { throw HomePathError.badResponse }
+      return CommandReceipt(address: address, outcome: outcome, status: try status.map(Self.deviceStatus), persistence: persistence)
     }
 
-    private static func deviceStatus(_ status: Status) -> DeviceStatus {
-      let reading: DeviceStatus.Reading = switch status.kind {
-      case "percent": status.percent.map { .percent($0) } ?? .raw
-      case "onOff": .onOff(status.isOn)
-      case "named": status.label.map { .named($0) } ?? .raw
-      default: .raw
+    /// The service's status carries no ALL-Link database delta, so the delta is 0 here.
+    private static func deviceStatus(_ status: Status) throws -> DeviceStatus {
+      let reading: DeviceStatus.Reading
+      switch status.kind {
+      case "percent":
+        guard let percent = status.percent else { throw HomePathError.badResponse }
+        reading = .percent(percent)
+      case "onOff": reading = .onOff(status.isOn)
+      case "named":
+        guard let label = status.label else { throw HomePathError.badResponse }
+        reading = .named(label)
+      case "raw": reading = .raw
+      default: throw HomePathError.badResponse
       }
       return DeviceStatus(group: status.group, value: status.value, allLinkDatabaseDelta: 0, reading: reading, isOn: status.isOn)
     }

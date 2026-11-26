@@ -102,12 +102,29 @@ struct HomeConnectionTests {
     #expect(await remote.calls.asked == ["execute"])
   }
 
-  @Test func aPathThatRefusesTheCredentialStopsTheSearchInsteadOfTryingTheNext() async throws {
+  @Test func aPathThatRefusesTheCredentialDoesNotStopTheSearchForAnotherPath() async throws {
     let remote = ScriptedPath("remote")
     let home = HomeConnection(paths: [ScriptedPath("lan", openings: [.unauthorized]), remote])
 
-    await #expect(throws: HomeError.unauthorized(path: "lan")) { try await home.devices() }
-    #expect(await remote.openCount == 0)
+    let devices = try await home.devices()
+
+    #expect(devices.first?.value == 2)
+    #expect(await home.currentPath == "remote")
+  }
+
+  @Test func whenEveryPathRefusedTheCredentialTheErrorNamesEachOne() async throws {
+    let home = HomeConnection(paths: [ScriptedPath("lan", openings: [.unauthorized]), ScriptedPath("remote", openings: [.unauthorized])])
+
+    await #expect(throws: HomeError.unauthorized(paths: ["lan", "remote"])) { try await home.devices() }
+  }
+
+  @Test func aRefusalAmongPathsThatWereNotReachedIsNamedInTheReasons() async throws {
+    let home = HomeConnection(paths: [ScriptedPath("lan", openings: [.unauthorized]), ScriptedPath("remote", openings: [.notReached("no route")])])
+
+    await #expect(throws: HomeError.noPathReached([
+      PathFailure(path: "lan", reason: "the credential was refused"),
+      PathFailure(path: "remote", reason: "no route")
+    ])) { try await home.devices() }
   }
 
   @Test func theCallsAreTheServiceRolesSoAnyCodeThatUsesTheServiceUsesTheConnection() async throws {
@@ -121,9 +138,9 @@ struct HomeConnectionTests {
     let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.unauthorized, .unauthorized]))
     let home = HomeConnection(paths: [local])
 
-    await #expect(throws: HomeError.unauthorized(path: "local")) { try await home.devices() }
+    await #expect(throws: HomeError.unauthorized(paths: ["local"])) { try await home.devices() }
     #expect(await home.currentPath == nil)
-    await #expect(throws: HomeError.unauthorized(path: "local")) {
+    await #expect(throws: HomeError.unauthorized(paths: ["local"])) {
       try await home.execute(ServiceCommand(address: lampAddress, action: .on))
     }
     #expect(await home.currentPath == nil)
@@ -139,13 +156,92 @@ struct HomeConnectionTests {
     #expect(await remote.openCount == 1)
   }
 
-  @Test func aBadResponseIsReportedWithoutAskingAgainOrDroppingThePath() async throws {
+  @Test func aBadResponseIsReportedWithoutAskingAgainAndTheNextCallChecksThePathAgain() async throws {
     let calls = ScriptedCalls(label: "local", script: [.badResponse])
     let local = ScriptedPath("local", calls: calls)
     let home = HomeConnection(paths: [local])
 
     await #expect(throws: HomeError.badResponse(path: "local")) { try await home.devices() }
     #expect(await calls.asked == ["devices"])
+    #expect(await home.currentPath == nil, "the next call checks the path again")
+  }
+
+  @Test func aScopeTooLowIsReportedAndThePathIsKeptAndNothingIsAskedAgain() async throws {
+    let calls = ScriptedCalls(label: "local", script: [.forbidden])
+    let home = HomeConnection(paths: [ScriptedPath("local", calls: calls)])
+
+    await #expect(throws: HomeError.forbidden(path: "local")) { try await home.execute(ServiceCommand(address: lampAddress, action: .on)) }
+    #expect(await calls.asked == ["execute"])
     #expect(await home.currentPath == "local")
   }
+
+  @Test func aPathWhoseScopeIsTooLowToOpenIsNamedAndTheSearchGoesOn() async throws {
+    let home = HomeConnection(paths: [ScriptedPath("lan", openings: [.forbidden]), ScriptedPath("remote")])
+
+    _ = try await home.devices()
+
+    #expect(await home.currentPath == "remote")
+  }
+
+  @Test func aStaleFailureDoesNotDropANewerHealthyPath() async throws {
+    let gated = GatedCalls()
+    let local = ScriptedPath("local", calls: nil, gated: gated)
+    let remote = ScriptedPath("remote")
+    let home = HomeConnection(paths: [local, remote])
+
+    let slow = Task { try await home.devices() }
+    await gated.waitUntilHeld()
+    // A second read fails on the same path, drops it and finds the remote one.
+    let fast = try await home.devices()
+    #expect(fast.first?.value == 2)
+    #expect(await home.currentPath == "remote")
+
+    await gated.letGo()
+    let slowResult = try await slow.value
+
+    #expect(slowResult.first?.value == 2)
+    #expect(await home.currentPath == "remote")
+    #expect(await remote.openCount == 1, "the late failure of the old path did not drop the healthy one")
+  }
+
+  @Test func whenEveryAttemptRunsOutTheReasonsAreKept() async throws {
+    let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.notReached, .notReached]))
+    let home = HomeConnection(paths: [local], skipped: [PathFailure(path: "mystery", reason: "no transport")])
+
+    await #expect(throws: HomeError.noPathReached([
+      PathFailure(path: "mystery", reason: "no transport"),
+      PathFailure(path: "local", reason: "scripted"),
+      PathFailure(path: "local", reason: "scripted")
+    ])) { try await home.execute(ServiceCommand(address: lampAddress, action: .on)) }
+  }
+
+  @Test func anyOtherErrorFromOpeningAPathIsThatPathsFailureAndTheSearchGoesOn() async throws {
+    let home = HomeConnection(paths: [BrokenPath(), ScriptedPath("remote")])
+
+    _ = try await home.devices()
+
+    #expect(await home.currentPath == "remote")
+  }
+
+  @Test func whenOnlyBrokenPathsRemainTheirFailureIsNamed() async throws {
+    let home = HomeConnection(paths: [BrokenPath()])
+
+    await #expect(throws: HomeError.noPathReached([PathFailure(path: "broken", reason: "the path failed to open")])) { try await home.devices() }
+  }
+
+  @Test func cancellationWhileOpeningStillPropagates() async throws {
+    let home = HomeConnection(paths: [CancelingPath(), ScriptedPath("remote")])
+
+    await #expect(throws: CancellationError.self) { _ = try await home.devices() }
+  }
+}
+
+struct BrokenPath: HomePath {
+  let name = "broken"
+  func open() async throws -> any HomeCalls { throw Unplugged() }
+}
+
+struct CancelingPath: HomePath {
+  let name = "canceling"
+  func open() async throws -> any HomeCalls { throw CancellationError() }
 }
