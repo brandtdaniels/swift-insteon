@@ -37,6 +37,13 @@ public struct ClientPairing: Sendable, Equatable, CustomStringConvertible, Custo
     /// The document is of a version this library doesn't read.
     case unsupportedVersion(Int)
 
+    /// A field the document needs is missing or isn't of the right kind. It names the field, such
+    /// as `credential` or `routes[0].kind`.
+    case missing(String)
+
+    /// The document lists no routes, so nothing says how to reach the service.
+    case noRoutes
+
   }
 
   /// Names the service, the same for every client that pairs with it.
@@ -57,38 +64,28 @@ public struct ClientPairing: Sendable, Equatable, CustomStringConvertible, Custo
   ///
   /// - Throws: ``Failure`` when the bytes aren't a version 1 document.
   public init(decoding data: Data) throws {
-    let wire: Wire
-    do {
-      wire = try JSONDecoder().decode(Wire.self, from: data)
-    } catch {
-      throw Failure.unreadable
+    guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { throw Failure.unreadable }
+    guard let version = object["version"] as? Int else { throw Failure.missing("version") }
+    guard version == 1 else { throw Failure.unsupportedVersion(version) }
+    func text(_ key: String) throws -> String {
+      guard let value = object[key] as? String else { throw Failure.missing(key) }
+      return value
     }
-    guard wire.version == 1 else { throw Failure.unsupportedVersion(wire.version) }
-    serviceID = wire.serviceId
-    name = wire.name
-    scope = wire.scope
-    credential = wire.credential
-    routes = wire.routes.map { Route(kind: $0.kind, url: $0.url, ticket: $0.ticket) }
+    serviceID = try text("serviceId")
+    name = try text("name")
+    credential = try text("credential")
+    scope = try text("scope")
+    guard let listed = object["routes"] as? [[String: Any]] else { throw Failure.missing("routes") }
+    guard !listed.isEmpty else { throw Failure.noRoutes }
+    routes = try listed.enumerated().map { index, route in
+      guard let kind = route["kind"] as? String else { throw Failure.missing("routes[\(index)].kind") }
+      return Route(kind: kind, url: route["url"] as? String, ticket: route["ticket"] as? String)
+    }
   }
 
   /// Names the home and its routes, never the credential.
   public var description: String { "ClientPairing(\(name), routes: \(routes.map(\.kind)))" }
 
   public var debugDescription: String { description }
-
-  private struct Wire: Decodable {
-    let version: Int
-    let serviceId: String
-    let name: String
-    let credential: String
-    let scope: String
-    let routes: [WireRoute]
-  }
-
-  private struct WireRoute: Decodable {
-    let kind: String
-    let url: String?
-    let ticket: String?
-  }
 
 }

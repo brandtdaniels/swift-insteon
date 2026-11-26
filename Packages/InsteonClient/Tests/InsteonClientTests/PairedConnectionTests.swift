@@ -48,8 +48,37 @@ struct PairedConnectionTests {
     #expect(throws: ClientPairing.Failure.unreadable) { try ClientPairing(decoding: Data("not json".utf8)) }
   }
 
+  @Test func eachMissingFieldIsNamed() {
+    let full: [String: Any] = ["version": 1, "serviceId": "s", "name": "n", "credential": "c", "scope": "read", "api": "/api/v1", "routes": [["kind": "lan", "url": "http://192.0.2.20"]]]
+    for field in ["serviceId", "name", "credential", "scope", "routes", "version"] {
+      var document = full
+      document[field] = nil
+      let data = try! JSONSerialization.data(withJSONObject: document)
+
+      #expect(throws: ClientPairing.Failure.missing(field), "\(field)") { try ClientPairing(decoding: data) }
+    }
+  }
+
+  @Test func aDocumentWithNoRoutesSaysSo() {
+    let data = Data(#"{"version":1,"serviceId":"s","name":"n","credential":"c","scope":"read","api":"/api/v1","routes":[]}"#.utf8)
+
+    #expect(throws: ClientPairing.Failure.noRoutes) { try ClientPairing(decoding: data) }
+  }
+
+  @Test func aRouteWithoutAKindIsNamed() {
+    let data = Data(#"{"version":1,"serviceId":"s","name":"n","credential":"c","scope":"read","api":"/api/v1","routes":[{"url":"http://192.0.2.20"}]}"#.utf8)
+
+    #expect(throws: ClientPairing.Failure.missing("routes[0].kind")) { try ClientPairing(decoding: data) }
+  }
+
+  @Test func aFieldOfTheWrongTypeIsNamedAsMissing() {
+    let data = Data(#"{"version":1,"serviceId":7,"name":"n","credential":"c","scope":"read","api":"/api/v1","routes":[{"kind":"lan"}]}"#.utf8)
+
+    #expect(throws: ClientPairing.Failure.missing("serviceId")) { try ClientPairing(decoding: data) }
+  }
+
   @Test func aPairingDescriptionHidesTheCredential() throws {
-    let pairing = try ClientPairing(decoding: document(routes: "[]"))
+    let pairing = try ClientPairing(decoding: document(routes: #"[{"kind":"lan","url":"http://192.0.2.20:8080"}]"#))
 
     #expect(!String(describing: pairing).contains(token))
     #expect(!String(reflecting: pairing).contains(token))
