@@ -20,8 +20,11 @@ public struct DevicesView<Network: DeviceQuerying & DeviceCommanding>: View {
         Spacer()
         Text(Self.text(for: row.level)).foregroundStyle(.secondary)
         if row.canSwitch {
+          // Two plain buttons in one list row both fire on a tap anywhere in the row on iOS, so each is borderless.
           Button("On") { Task { await screen.turn(row, on: true) } }
+            .buttonStyle(.borderless).disabled(screen.isBusy(row))
           Button("Off") { Task { await screen.turn(row, on: false) } }
+            .buttonStyle(.borderless).disabled(screen.isBusy(row))
         }
       }
     }
