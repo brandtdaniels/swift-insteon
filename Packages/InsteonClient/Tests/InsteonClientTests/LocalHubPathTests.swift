@@ -27,13 +27,13 @@ struct LocalHubPathTests {
   @Test func noHubFoundIsNotReached() async {
     let path = LocalHubPath(locate: { [] }, open: { _ in ScriptedCalls(label: "local") })
 
-    await #expect(throws: HomePathError.notReached("no Hub answered on the local network")) { _ = try await path.open() }
+    await #expect(throws: ConnectionPathError.notReached("no Hub answered on the local network")) { _ = try await path.open() }
   }
 
   @Test func aSearchThatFailsIsNotReached() async {
     let path = LocalHubPath(locate: { throw Unplugged() }, open: { _ in ScriptedCalls(label: "local") })
 
-    do { _ = try await path.open(); Issue.record("opened") } catch let error as HomePathError {
+    do { _ = try await path.open(); Issue.record("opened") } catch let error as ConnectionPathError {
       guard case .notReached = error else { Issue.record("expected notReached, got \(error)"); return }
     } catch { Issue.record("unexpected \(error)") }
   }
@@ -41,15 +41,15 @@ struct LocalHubPathTests {
   @Test func aHubThatCannotBeOpenedIsNotReached() async {
     let path = LocalHubPath(locate: { [hub("192.0.2.31")] }, open: { _ in throw Unplugged() })
 
-    do { _ = try await path.open(); Issue.record("opened") } catch let error as HomePathError {
+    do { _ = try await path.open(); Issue.record("opened") } catch let error as ConnectionPathError {
       guard case .notReached = error else { Issue.record("expected notReached, got \(error)"); return }
     } catch { Issue.record("unexpected \(error)") }
   }
 
   @Test func aPathErrorFromTheOpenerPassesThrough() async {
-    let path = LocalHubPath(locate: { [hub("192.0.2.31")] }, open: { _ in throw HomePathError.unauthorized })
+    let path = LocalHubPath(locate: { [hub("192.0.2.31")] }, open: { _ in throw ConnectionPathError.unauthorized })
 
-    await #expect(throws: HomePathError.unauthorized) { _ = try await path.open() }
+    await #expect(throws: ConnectionPathError.unauthorized) { _ = try await path.open() }
   }
 
   @Test func eachHubIsTriedInOrderUntilOneOpens() async throws {
@@ -72,38 +72,38 @@ struct LocalHubPathTests {
     let refused = LocalHubPath(
       locate: { [hub("192.0.2.31"), hub("192.0.2.32")] },
       open: { found in
-        if found.endpoint.host == "192.0.2.31" { throw HomePathError.unauthorized }
+        if found.endpoint.host == "192.0.2.31" { throw ConnectionPathError.unauthorized }
         throw Unplugged()
       }
     )
-    await #expect(throws: HomePathError.unauthorized) { _ = try await refused.open() }
+    await #expect(throws: ConnectionPathError.unauthorized) { _ = try await refused.open() }
 
     let none = LocalHubPath(locate: { [hub("192.0.2.31"), hub("192.0.2.32")] }, open: { _ in throw Unplugged() })
-    await #expect(throws: HomePathError.notReached("no Hub on the local network opened")) { _ = try await none.open() }
+    await #expect(throws: ConnectionPathError.notReached("no Hub on the local network opened")) { _ = try await none.open() }
   }
 
   @Test func aScopeTooLowOrABadResponseFromEveryHubIsThePathsOwnFailure() async {
-    let forbidden = LocalHubPath(locate: { [hub("192.0.2.31")] }, open: { _ in throw HomePathError.forbidden })
-    await #expect(throws: HomePathError.forbidden) { _ = try await forbidden.open() }
-    let bad = LocalHubPath(locate: { [hub("192.0.2.31"), hub("192.0.2.32")] }, open: { _ in throw HomePathError.badResponse })
-    await #expect(throws: HomePathError.badResponse) { _ = try await bad.open() }
+    let forbidden = LocalHubPath(locate: { [hub("192.0.2.31")] }, open: { _ in throw ConnectionPathError.forbidden })
+    await #expect(throws: ConnectionPathError.forbidden) { _ = try await forbidden.open() }
+    let bad = LocalHubPath(locate: { [hub("192.0.2.31"), hub("192.0.2.32")] }, open: { _ in throw ConnectionPathError.badResponse })
+    await #expect(throws: ConnectionPathError.badResponse) { _ = try await bad.open() }
   }
 
   @Test func aRefusedCredentialOutranksAScopeTooLowOutranksABadResponse() async {
     let path = LocalHubPath(locate: { [hub("192.0.2.31"), hub("192.0.2.32"), hub("192.0.2.33")] }, open: { found in
       switch found.endpoint.host {
-      case "192.0.2.31": throw HomePathError.badResponse
-      case "192.0.2.32": throw HomePathError.forbidden
-      default: throw HomePathError.unauthorized
+      case "192.0.2.31": throw ConnectionPathError.badResponse
+      case "192.0.2.32": throw ConnectionPathError.forbidden
+      default: throw ConnectionPathError.unauthorized
       }
     })
-    await #expect(throws: HomePathError.unauthorized) { _ = try await path.open() }
+    await #expect(throws: ConnectionPathError.unauthorized) { _ = try await path.open() }
   }
 
   @Test func aLostPathFromAnOpenerCountsAsNotReached() async {
-    let path = LocalHubPath(locate: { [hub("192.0.2.31")] }, open: { _ in throw HomePathError.interrupted })
+    let path = LocalHubPath(locate: { [hub("192.0.2.31")] }, open: { _ in throw ConnectionPathError.interrupted })
 
-    await #expect(throws: HomePathError.notReached("no Hub on the local network opened")) { _ = try await path.open() }
+    await #expect(throws: ConnectionPathError.notReached("no Hub on the local network opened")) { _ = try await path.open() }
   }
 }
 

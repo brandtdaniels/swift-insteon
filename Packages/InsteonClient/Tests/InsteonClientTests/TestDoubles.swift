@@ -24,7 +24,7 @@ enum Script: Sendable {
 }
 
 /// Calls that answer from a script and record what they were asked.
-actor ScriptedCalls: HomeCalls {
+actor ScriptedCalls: ConnectionCalls {
   let label: String
   private var script: [Script]
   private(set) var asked: [String] = []
@@ -43,11 +43,11 @@ actor ScriptedCalls: HomeCalls {
     asked.append("devices")
     switch next() {
     case .answer: return [device(value: label == "local" ? 1 : 2)]
-    case .notReached: throw HomePathError.notReached("scripted")
-    case .interrupted: throw HomePathError.interrupted
-    case .unauthorized: throw HomePathError.unauthorized
-    case .badResponse: throw HomePathError.badResponse
-    case .forbidden: throw HomePathError.forbidden
+    case .notReached: throw ConnectionPathError.notReached("scripted")
+    case .interrupted: throw ConnectionPathError.interrupted
+    case .unauthorized: throw ConnectionPathError.unauthorized
+    case .badResponse: throw ConnectionPathError.badResponse
+    case .forbidden: throw ConnectionPathError.forbidden
     }
   }
 
@@ -55,24 +55,24 @@ actor ScriptedCalls: HomeCalls {
     asked.append("execute")
     switch next() {
     case .answer: return CommandReceipt(address: command.address, outcome: .acknowledged, status: nil)
-    case .notReached: throw HomePathError.notReached("scripted")
-    case .interrupted: throw HomePathError.interrupted
-    case .unauthorized: throw HomePathError.unauthorized
-    case .badResponse: throw HomePathError.badResponse
-    case .forbidden: throw HomePathError.forbidden
+    case .notReached: throw ConnectionPathError.notReached("scripted")
+    case .interrupted: throw ConnectionPathError.interrupted
+    case .unauthorized: throw ConnectionPathError.unauthorized
+    case .badResponse: throw ConnectionPathError.badResponse
+    case .forbidden: throw ConnectionPathError.forbidden
     }
   }
 }
 
 /// A path whose openings succeed or fail from a script, and that counts them.
-actor ScriptedPath: HomePath {
+actor ScriptedPath: ConnectionPath {
   nonisolated let name: String
   let calls: ScriptedCalls
-  private let served: any HomeCalls
-  private var openings: [HomePathError?]
+  private let served: any ConnectionCalls
+  private var openings: [ConnectionPathError?]
   private(set) var openCount = 0
 
-  init(_ name: String, openings: [HomePathError?] = [], calls: ScriptedCalls? = nil, gated: GatedCalls? = nil) {
+  init(_ name: String, openings: [ConnectionPathError?] = [], calls: ScriptedCalls? = nil, gated: GatedCalls? = nil) {
     self.name = name
     self.openings = openings
     let scripted = calls ?? ScriptedCalls(label: name)
@@ -80,7 +80,7 @@ actor ScriptedPath: HomePath {
     self.served = gated ?? scripted
   }
 
-  func open() async throws -> any HomeCalls {
+  func open() async throws -> any ConnectionCalls {
     openCount += 1
     if !openings.isEmpty, let failure = openings.removeFirst() { throw failure }
     return served
@@ -107,7 +107,7 @@ func json(_ text: String, status: Int = 200) -> HTTPResponse { HTTPResponse(stat
 struct Unplugged: Error {}
 
 /// Calls whose first read waits until the test lets it go, then fails; every later read fails at once.
-actor GatedCalls: HomeCalls {
+actor GatedCalls: ConnectionCalls {
   private var reads = 0
   private var release: CheckedContinuation<Void, Never>?
   private var heldSignal: CheckedContinuation<Void, Never>?
@@ -121,10 +121,10 @@ actor GatedCalls: HomeCalls {
       heldSignal = nil
       await withCheckedContinuation { release = $0 }
     }
-    throw HomePathError.interrupted
+    throw ConnectionPathError.interrupted
   }
 
-  func execute(_ command: ServiceCommand) async throws -> CommandReceipt { throw HomePathError.interrupted }
+  func execute(_ command: ServiceCommand) async throws -> CommandReceipt { throw ConnectionPathError.interrupted }
 
   /// Returns once the first read is waiting.
   func waitUntilHeld() async {
@@ -140,14 +140,14 @@ actor GatedCalls: HomeCalls {
 
 /// A path whose first opening waits until the test lets it go; later openings return at once.
 /// Each opening makes calls of its own.
-actor GatedOpenPath: HomePath {
+actor GatedOpenPath: ConnectionPath {
   nonisolated let name = "gated"
   private(set) var opened: [ScriptedCalls] = []
   private var release: CheckedContinuation<Void, Never>?
   private var signal: CheckedContinuation<Void, Never>?
   private var isWaiting = false
 
-  func open() async throws -> any HomeCalls {
+  func open() async throws -> any ConnectionCalls {
     let calls = ScriptedCalls(label: "opening-\(opened.count + 1)")
     opened.append(calls)
     if opened.count == 1 {

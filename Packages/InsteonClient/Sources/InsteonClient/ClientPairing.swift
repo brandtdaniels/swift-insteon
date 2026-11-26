@@ -49,7 +49,7 @@ public struct ClientPairing: Sendable, Equatable, CustomStringConvertible, Custo
   /// Names the service, the same for every client that pairs with it.
   public let serviceID: String
 
-  /// The home's name, for a client to show.
+  /// The service's name, for a client to show.
   public let name: String
 
   /// What the credential may do: `read`, `control` or `admin`.
@@ -83,7 +83,7 @@ public struct ClientPairing: Sendable, Equatable, CustomStringConvertible, Custo
     }
   }
 
-  /// Names the home and its routes, never the credential.
+  /// Names the service and its routes, never the credential.
   public var description: String { "ClientPairing(\(name), routes: \(routes.map(\.kind)))" }
 
   public var debugDescription: String { description }

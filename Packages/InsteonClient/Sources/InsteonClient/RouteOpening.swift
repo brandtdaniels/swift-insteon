@@ -3,7 +3,7 @@ import InsteonNetworking
 
 /// Turns a transport's route into an address on this device.
 ///
-/// A transport plugin carries requests to the home and listens on a local address, such as
+/// A transport plugin carries requests to the service and listens on a local address, such as
 /// `http://127.0.0.1:9100`. The opener starts or reuses that listener for one route's ticket and
 /// returns the address. This library speaks the same service contract to it as to a local address.
 public protocol RouteOpening: Sendable {
@@ -11,7 +11,7 @@ public protocol RouteOpening: Sendable {
   /// The route kind this opener serves, as the pairing document names it.
   var kind: String { get }
 
-  /// Opens a route and returns the local address that reaches the home through it.
+  /// Opens a route and returns the local address that reaches the service through it.
   ///
   /// - Parameter ticket: What the document's route carries for this transport.
   func open(ticket: String?) async throws -> URL
@@ -19,7 +19,7 @@ public protocol RouteOpening: Sendable {
 }
 
 /// A route that a transport carries, reached through the address its opener returns.
-struct RemoteRoutePath: HomePath {
+struct RemoteRoutePath: ConnectionPath {
 
   let name: String
   let opener: any RouteOpening
@@ -27,14 +27,14 @@ struct RemoteRoutePath: HomePath {
   let token: String
   let http: any HTTPClient
 
-  func open() async throws -> any HomeCalls {
+  func open() async throws -> any ConnectionCalls {
     let address: URL
     do {
       address = try await opener.open(ticket: ticket)
     } catch is CancellationError {
       throw CancellationError()
     } catch {
-      throw HomePathError.notReached("the \(name) route didn't open")
+      throw ConnectionPathError.notReached("the \(name) route didn't open")
     }
     return try await ServicePath(name: name, baseURL: address, token: token, http: http).open()
   }
@@ -45,7 +45,7 @@ extension ClientPairing {
 
   /// The paths a pairing yields, and the routes left out with the reason for each.
   struct RoutePlan {
-    var paths: [any HomePath] = []
+    var paths: [any ConnectionPath] = []
     var skipped: [PathFailure] = []
   }
 
@@ -74,7 +74,7 @@ extension ClientPairing {
 
 }
 
-extension HomeConnection {
+extension ClientConnection {
 
   /// Creates a connection from a pairing document.
   ///
@@ -90,7 +90,7 @@ extension HomeConnection {
   ///   - local: The path to try before any route, such as a ``LocalHubPath``.
   ///   - routeOpeners: The transports this device has.
   ///   - http: Sends the requests.
-  public init(pairing: ClientPairing, local: (any HomePath)? = nil, routeOpeners: [any RouteOpening], http: any HTTPClient) {
+  public init(pairing: ClientPairing, local: (any ConnectionPath)? = nil, routeOpeners: [any RouteOpening], http: any HTTPClient) {
     let plan = pairing.routePlan(transports: routeOpeners, http: http)
     self.init(paths: (local.map { [$0] } ?? []) + plan.paths, skipped: plan.skipped)
   }

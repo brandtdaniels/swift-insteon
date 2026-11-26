@@ -10,7 +10,7 @@ import Testing
 private let token = "tok-7c21-invented"
 
 private func document(routes: String) -> Data {
-  Data(#"{"version":1,"serviceId":"svc-1","name":"Example Home","credential":"\#(token)","scope":"control","api":"/api/v1","routes":\#(routes),"futureField":true}"#.utf8)
+  Data(#"{"version":1,"serviceId":"svc-1","name":"Example Network","credential":"\#(token)","scope":"control","api":"/api/v1","routes":\#(routes),"futureField":true}"#.utf8)
 }
 
 private let healthy = json(#"{"version":1,"status":"ready","modem":{"connected":true,"cause":null}}"#)
@@ -32,7 +32,7 @@ struct PairedConnectionTests {
   @Test func theDocumentIsReadAndUnknownFieldsAreIgnored() throws {
     let pairing = try ClientPairing(decoding: document(routes: #"[{"kind":"lan","url":"http://192.0.2.20:8080"}]"#))
 
-    #expect(pairing.name == "Example Home")
+    #expect(pairing.name == "Example Network")
     #expect(pairing.serviceID == "svc-1")
     #expect(pairing.scope == "control")
     #expect(pairing.routes == [ClientPairing.Route(kind: "lan", url: "http://192.0.2.20:8080", ticket: nil)])
@@ -94,18 +94,18 @@ struct PairedConnectionTests {
       }
     }
     let local = ScriptedPath("local", openings: [.notReached("no Hub answered")])
-    let home = HomeConnection(
+    let connection = ClientConnection(
       pairing: pairing,
       local: local,
       routeOpeners: [ForwardingOpener(kind: "example-transport", forwardTo: URL(string: "http://127.0.0.1:9100")!)],
       http: http
     )
 
-    let devices = try await home.devices()
+    let devices = try await connection.devices()
 
     #expect(devices.count == 1)
     #expect(await local.openCount == 1)
-    #expect(await home.currentPath == "example-transport")
+    #expect(await connection.currentPath == "example-transport")
     let lines = await http.lines
     #expect(lines == [
       "GET http://192.0.2.20:8080/api/v1/health",
@@ -117,29 +117,29 @@ struct PairedConnectionTests {
   @Test func aRouteKindNoOpenerKnowsIsSkipped() async throws {
     let pairing = try ClientPairing(decoding: document(routes: #"[{"kind":"mystery","ticket":"x"},{"kind":"lan","url":"http://192.0.2.20:8080"}]"#))
     let http = FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : oneDevice }
-    let home = HomeConnection(pairing: pairing, local: nil, routeOpeners: [], http: http)
+    let connection = ClientConnection(pairing: pairing, local: nil, routeOpeners: [], http: http)
 
-    _ = try await home.devices()
+    _ = try await connection.devices()
 
-    #expect(await home.currentPath == "lan")
+    #expect(await connection.currentPath == "lan")
   }
 
   @Test func aTransportThatCannotOpenIsNotReachedAndTheNextRouteIsTried() async throws {
     let pairing = try ClientPairing(decoding: document(routes: #"[{"kind":"example-transport","ticket":"t1"},{"kind":"lan","url":"http://192.0.2.20:8080"}]"#))
     let http = FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : oneDevice }
-    let home = HomeConnection(pairing: pairing, local: nil, routeOpeners: [ForwardingOpener(kind: "example-transport", forwardTo: nil)], http: http)
+    let connection = ClientConnection(pairing: pairing, local: nil, routeOpeners: [ForwardingOpener(kind: "example-transport", forwardTo: nil)], http: http)
 
-    _ = try await home.devices()
+    _ = try await connection.devices()
 
-    #expect(await home.currentPath == "lan")
+    #expect(await connection.currentPath == "lan")
   }
 
   @Test func theSameTokenGoesToEveryRoute() async throws {
     let pairing = try ClientPairing(decoding: document(routes: #"[{"kind":"example-transport","ticket":"t1"}]"#))
     let http = FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : oneDevice }
-    let home = HomeConnection(pairing: pairing, local: nil, routeOpeners: [ForwardingOpener(kind: "example-transport", forwardTo: URL(string: "http://127.0.0.1:9100")!)], http: http)
+    let connection = ClientConnection(pairing: pairing, local: nil, routeOpeners: [ForwardingOpener(kind: "example-transport", forwardTo: URL(string: "http://127.0.0.1:9100")!)], http: http)
 
-    _ = try await home.devices()
+    _ = try await connection.devices()
 
     for request in await http.requests {
       #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer " + token)
@@ -147,28 +147,28 @@ struct PairedConnectionTests {
   }
 
   @Test func routesThatAreLeftOutAreReportedWithTheirReasonWhenNothingIsReached() async throws {
-    let pairing = try ClientPairing(decoding: document(routes: #"[{"kind":"mystery","ticket":"x"},{"kind":"lan","url":"not a url"},{"kind":"lan"},{"kind":"lan","url":"http://home.example.com:8080"}]"#))
+    let pairing = try ClientPairing(decoding: document(routes: #"[{"kind":"mystery","ticket":"x"},{"kind":"lan","url":"not a url"},{"kind":"lan"},{"kind":"lan","url":"http://service.example.com:8080"}]"#))
     let http = FakeHTTPClient { _ in healthy }
-    let home = HomeConnection(pairing: pairing, local: nil, routeOpeners: [], http: http)
+    let connection = ClientConnection(pairing: pairing, local: nil, routeOpeners: [], http: http)
 
-    await #expect(throws: HomeError.noPathReached([
+    await #expect(throws: ConnectionError.noPathReached([
       PathFailure(path: "mystery", reason: "this device has no transport for the mystery route"),
       PathFailure(path: "lan", reason: "the route has no usable address"),
       PathFailure(path: "lan", reason: "the route has no usable address"),
       PathFailure(path: "lan", reason: "the token is never sent over HTTP to a host outside the local network")
-    ])) { _ = try await home.devices() }
+    ])) { _ = try await connection.devices() }
     #expect(await http.requests.isEmpty)
   }
 
   @Test func plainHTTPIsAllowedOnlyToTheLocalNetwork() async throws {
     let local = ["http://127.0.0.1:8080", "http://localhost:8080", "http://insteon.local:8080", "http://0x7f.1", "http://10.1", "http://0xC0A80105", "http://10.1.2.3", "http://192.168.1.5", "http://172.16.0.1", "http://172.31.255.1", "http://169.254.1.1", "http://[::1]:8080", "http://192.0.2.20:8080", "http://[fe80::1]:8080", "http://[fd00::1]:8080", "http://[fc00::1]", "http://[febf::1]", "http://[::ffff:192.168.1.5]", "http://[::ffff:127.0.0.1]", "http://[::ffff:c0a8:105]"]
-    let remote = ["http://insteon:8080", "http://134744072", "http://0x08080808", "http://010.0.0.1", "http://8.8", "http://1.2.3.4.5", "http://home.example.com", "http://8.8.8.8", "http://172.32.0.1", "http://[2001:4860::1]:8080", "http://[::fc00:1]", "http://[::fe80:1]", "http://[::ffff:8.8.8.8]", "http://[::ffff:808:808]", "http://[fec0::1]", "http://[::]", "http://[64:ff9b::808:808]"]
+    let remote = ["http://insteon:8080", "http://134744072", "http://0x08080808", "http://010.0.0.1", "http://8.8", "http://1.2.3.4.5", "http://service.example.com", "http://8.8.8.8", "http://172.32.0.1", "http://[2001:4860::1]:8080", "http://[::fc00:1]", "http://[::fe80:1]", "http://[::ffff:8.8.8.8]", "http://[::ffff:808:808]", "http://[fec0::1]", "http://[::]", "http://[64:ff9b::808:808]"]
     for address in local + remote {
       let http = FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : oneDevice }
       let pairing = try ClientPairing(decoding: document(routes: #"[{"kind":"lan","url":"\#(address)"}]"#))
-      let home = HomeConnection(pairing: pairing, routeOpeners: [], http: http)
+      let connection = ClientConnection(pairing: pairing, routeOpeners: [], http: http)
 
-      let reached = (try? await home.devices()) != nil
+      let reached = (try? await connection.devices()) != nil
 
       #expect(reached == local.contains(address), "\(address)")
     }
@@ -176,8 +176,8 @@ struct PairedConnectionTests {
 
   @Test func httpsIsAllowedToAnyHost() async throws {
     let http = FakeHTTPClient { request in request.url?.path == "/api/v1/health" ? healthy : oneDevice }
-    let pairing = try ClientPairing(decoding: document(routes: #"[{"kind":"lan","url":"https://home.example.com"}]"#))
+    let pairing = try ClientPairing(decoding: document(routes: #"[{"kind":"lan","url":"https://service.example.com"}]"#))
 
-    _ = try await HomeConnection(pairing: pairing, routeOpeners: [], http: http).devices()
+    _ = try await ClientConnection(pairing: pairing, routeOpeners: [], http: http).devices()
   }
 }

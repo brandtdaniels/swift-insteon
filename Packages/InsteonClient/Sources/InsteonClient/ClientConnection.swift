@@ -1,20 +1,20 @@
 import InsteonService
 
-/// One connection to a home, over whichever of its paths answers first.
+/// One connection to a service, over whichever of its paths answers first.
 ///
 /// It tries its paths in order, keeps the one that opens, and gives the same calls whichever it
-/// is, so a person at home and a person away use it the same way.
+/// is, so a person on the local network and a person away use it the same way.
 ///
 /// A read that loses its path is asked again once, on the paths tried afresh with the one that
 /// just failed last. A command that may have been sent is never asked again: it throws
-/// ``HomeError/interrupted(path:)``, the path is dropped, and the next call opens one afresh. A
+/// ``ConnectionError/interrupted(path:)``, the path is dropped, and the next call opens one afresh. A
 /// command that was never sent, because its path couldn't be reached, moves on to the next path.
-/// A refused credential throws ``HomeError/unauthorized(paths:)`` and drops the path.
-public actor HomeConnection: DeviceQuerying, DeviceCommanding {
+/// A refused credential throws ``ConnectionError/unauthorized(paths:)`` and drops the path.
+public actor ClientConnection: DeviceQuerying, DeviceCommanding {
 
-  private let paths: [any HomePath]
+  private let paths: [any ConnectionPath]
   private let skipped: [PathFailure]
-  private var open: (index: Int, generation: Int, calls: any HomeCalls)?
+  private var open: (index: Int, generation: Int, calls: any ConnectionCalls)?
   private var generations = 0
 
   /// The name of the path in use, or `nil` before the first call and after a path is lost.
@@ -25,7 +25,7 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
   /// - Parameters:
   ///   - paths: The paths to try.
   ///   - skipped: Routes that were left out and why, reported when no path is reached.
-  public init(paths: [any HomePath], skipped: [PathFailure] = []) {
+  public init(paths: [any ConnectionPath], skipped: [PathFailure] = []) {
     self.paths = paths
     self.skipped = skipped
   }
@@ -44,15 +44,15 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
   /// (`forbidden`) is passed over for both kinds of call, since nothing was done. A path that was
   /// lost or answered wrongly after the request may have been sent is passed over only for a read,
   /// which is safe to ask again; a command is reported instead and never repeated.
-  private func perform<Answer: Sendable>(retryable: Bool, _ operation: (any HomeCalls) async throws -> Answer) async throws -> Answer {
+  private func perform<Answer: Sendable>(retryable: Bool, _ operation: (any ConnectionCalls) async throws -> Answer) async throws -> Answer {
     var failed: Int?
     var reasons = skipped
-    var last: HomeError?
+    var last: ConnectionError?
     for _ in 0..<2 {
       let (index, generation, calls) = try await reach(lastFailed: failed)
       do {
         return try await operation(calls)
-      } catch HomePathError.notReached(let reason) {
+      } catch ConnectionPathError.notReached(let reason) {
         if open?.generation == generation { open = nil }
         reasons.append(PathFailure(path: paths[index].name, reason: reason))
       } catch {
@@ -65,25 +65,25 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
       }
       failed = index
     }
-    throw last ?? HomeError.noPathReached(reasons)
+    throw last ?? ConnectionError.noPathReached(reasons)
   }
 
   /// Drops the open path and names what was lost, or rethrows an error that isn't the path's.
-  private func lose(_ error: any Error, at index: Int, generation: Int) throws -> HomeError {
+  private func lose(_ error: any Error, at index: Int, generation: Int) throws -> ConnectionError {
     let name = paths[index].name
     // Only the path this call used may be dropped: another call may have replaced it since.
     func drop() { if open?.generation == generation { open = nil } }
     switch error {
-    case HomePathError.interrupted, HomePathError.notReached:
+    case ConnectionPathError.interrupted, ConnectionPathError.notReached:
       drop()
       return .interrupted(path: name)
-    case HomePathError.unauthorized:
+    case ConnectionPathError.unauthorized:
       drop()
       return .unauthorized(paths: [name])
-    case HomePathError.badResponse:
+    case ConnectionPathError.badResponse:
       drop()
       return .badResponse(path: name)
-    case HomePathError.forbidden:
+    case ConnectionPathError.forbidden:
       return .forbidden(path: name)
     default:
       throw error
@@ -91,7 +91,7 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
   }
 
   /// The path in use, or the first that opens, trying the path that just failed last.
-  private func reach(lastFailed: Int?) async throws -> (index: Int, generation: Int, calls: any HomeCalls) {
+  private func reach(lastFailed: Int?) async throws -> (index: Int, generation: Int, calls: any ConnectionCalls) {
     if let open, open.index != lastFailed { return open }
     var failures = skipped
     var refusals: [String] = []
@@ -111,13 +111,13 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
         generations += 1
         open = (index, generations, calls)
         return (index, generations, calls)
-      } catch HomePathError.notReached(let reason) {
+      } catch ConnectionPathError.notReached(let reason) {
         failures.append(PathFailure(path: path.name, reason: reason))
-      } catch HomePathError.forbidden {
+      } catch ConnectionPathError.forbidden {
         failures.append(PathFailure(path: path.name, reason: "the credential's scope is too low for this path"))
-      } catch HomePathError.badResponse {
+      } catch ConnectionPathError.badResponse {
         failures.append(PathFailure(path: path.name, reason: "the path answered with something that isn't the service"))
-      } catch HomePathError.unauthorized {
+      } catch ConnectionPathError.unauthorized {
         // A refusal on one path says nothing about another: each uses its own credential.
         refusals.append(path.name)
         failures.append(PathFailure(path: path.name, reason: "the credential was refused"))
@@ -128,8 +128,8 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
         failures.append(PathFailure(path: path.name, reason: "the path failed to open"))
       }
     }
-    if tried > 0, refusals.count == tried { throw HomeError.unauthorized(paths: refusals) }
-    throw HomeError.noPathReached(failures)
+    if tried > 0, refusals.count == tried { throw ConnectionError.unauthorized(paths: refusals) }
+    throw ConnectionError.noPathReached(failures)
   }
 
 }
