@@ -72,11 +72,12 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
 
   /// Sends a device an on or off command, and shows it on or off once the network acknowledges.
   public func turn(_ row: DeviceRow, on: Bool) async {
-    guard row.canSwitch, let index = rows.firstIndex(where: { $0.id == row.id }) else { return }
+    guard row.canSwitch, rows.contains(where: { $0.id == row.id }) else { return }
     notice = nil
     do {
       _ = try await network.execute(ServiceCommand(address: row.id, action: on ? .on : .off))
-      rows[index].level = on ? .percent(100) : .off
+      // A load can reorder or drop rows during the await, so the row is found again by its device.
+      if let index = rows.firstIndex(where: { $0.id == row.id }) { rows[index].level = on ? .percent(100) : .off }
     } catch {
       notice = Self.message(for: error)
     }

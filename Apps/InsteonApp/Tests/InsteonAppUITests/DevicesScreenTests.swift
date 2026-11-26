@@ -26,9 +26,44 @@ struct DevicesScreenTests {
     #expect(screen.rows.map(\.canSwitch) == [true, false])
   }
 
+  @Test func aLoadDuringACommandDoesNotMoveTheCommandsResultToAnotherDevice() async {
+    let other = ServiceDevice(address: InsteonAddress("7A.8B.9C")!, productName: "Other", canTurnOnAndOff: true, canDim: false, value: 0, lastAnsweredAt: nil)
+    let network = ScriptedNetwork(devices: [lamp, other])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    let lampRow = screen.rows[0]
+    await network.holdCommands()
+
+    async let turned: Void = screen.turn(lampRow, on: true)
+    await network.waitForHeldCommand()
+    await network.setDevices([other, lamp])
+    await screen.load()
+    await network.release()
+    await turned
+
+    #expect(screen.rows.map(\.title) == ["Other", "Lamp Module"])
+    #expect(screen.rows.map(\.level) == [.off, .percent(100)])
+  }
+
+  @Test func aLoadThatDropsTheDeviceDuringACommandDoesNotCrash() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    let lampRow = screen.rows[0]
+    await network.holdCommands()
+
+    async let turned: Void = screen.turn(lampRow, on: true)
+    await network.waitForHeldCommand()
+    await network.setDevices([])
+    await screen.load()
+    await network.release()
+    await turned
+
+    #expect(screen.rows.isEmpty)
+  }
+
   @Test func aDeviceThatReportedALevelShowsItOnOrOff() async {
-    var on = lamp
-    on = ServiceDevice(address: lamp.address, productName: lamp.productName, canTurnOnAndOff: true, canDim: true, value: 128, lastAnsweredAt: nil)
+    let on = ServiceDevice(address: lamp.address, productName: lamp.productName, canTurnOnAndOff: true, canDim: true, value: 128, lastAnsweredAt: nil)
     let screen = DevicesScreen(network: ScriptedNetwork(devices: [on, lamp]))
 
     await screen.load()
@@ -53,7 +88,7 @@ struct DevicesScreenTests {
 
     await screen.turn(screen.rows[0], on: true)
 
-    #expect(network.commands == [ServiceCommand(address: lamp.address, action: .on)])
+    #expect(await network.commands == [ServiceCommand(address: lamp.address, action: .on)])
     #expect(screen.rows[0].level == .percent(100))
     #expect(screen.notice == nil)
   }
@@ -65,7 +100,7 @@ struct DevicesScreenTests {
 
     await screen.turn(screen.rows[0], on: false)
 
-    #expect(network.commands == [ServiceCommand(address: lamp.address, action: .off)])
+    #expect(await network.commands == [ServiceCommand(address: lamp.address, action: .off)])
     #expect(screen.rows[0].level == .off)
   }
 
@@ -87,7 +122,7 @@ struct DevicesScreenTests {
 
     await screen.turn(screen.rows[0], on: true)
 
-    #expect(network.commands.isEmpty)
+    #expect(await network.commands.isEmpty)
   }
 
   @Test func aNetworkThatCannotBeReadShowsTheFailureAndNoRows() async {
