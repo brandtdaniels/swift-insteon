@@ -51,6 +51,8 @@ jobs:
         run: $REPO_CHECK time-limits
       - name: Check that the insteon command leaves device behavior to the libraries
         run: $REPO_CHECK cli-thin
+      - name: Check that the apps import only the libraries an interface may use
+        run: $REPO_CHECK app-thin
       - name: Check the libraries for unstructured tasks, unchecked Sendable types and real clocks
         run: $REPO_CHECK concurrency
       - name: Check that no credential is written into a string
@@ -115,6 +117,17 @@ jobs:
       # dependencies; the macOS and Linux builds make it.
       - name: Build
         run: xcodebuild build -scheme swift-insteon-Package -destination 'generic/platform=iOS Simulator'
+      # The app's shared screens build for the Mac and the iPhone from one source, and their
+      # tests run on the Mac.
+      - name: Build the app for iOS
+        run: xcodebuild build -scheme InsteonApp -destination 'generic/platform=iOS Simulator'
+        working-directory: Apps/InsteonApp
+      - name: Build the app for macOS
+        run: xcodebuild build -scheme InsteonApp -destination 'platform=macOS'
+        working-directory: Apps/InsteonApp
+      - name: Test the app
+        run: swift test
+        working-directory: Apps/InsteonApp
 
   linux:
     name: Linux
