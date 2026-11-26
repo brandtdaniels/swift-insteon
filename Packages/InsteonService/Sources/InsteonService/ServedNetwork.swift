@@ -115,8 +115,10 @@ struct ModemServedNetwork: ServedNetwork {
     }
   }
 
-  /// Reads one device's database, again once if it arrives damaged. A device that doesn't answer
-  /// or turns the modem away is left unread.
+  /// Reads one device's database, again once if it arrives damaged. A device that doesn't answer,
+  /// turns the modem away or whose request the modem refuses is left unread, and so is one whose
+  /// database arrives damaged twice (the cache keeps no damaged copy). Only cancellation and a
+  /// lost connection end the refresh.
   private func readDatabase(of address: InsteonAddress) async throws {
     do {
       var database = try await network.allLinkDatabase(of: address)
@@ -128,11 +130,10 @@ struct ModemServedNetwork: ServedNetwork {
       throw CancellationError()
     } catch ModemError.connectionClosed {
       throw ModemError.connectionClosed
-    } catch ModemError.deviceTimedOut, ModemError.timedOut, ModemError.deviceRejected {
+    } catch is ModemError {
       return
     }
   }
-
 }
 
 /// A Hub Pro's network, served.

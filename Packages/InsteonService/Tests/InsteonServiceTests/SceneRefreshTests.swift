@@ -144,6 +144,33 @@ struct SceneRefreshTests {
     await modem.setBeforeOperation(nil)
     #expect(try await service.refreshScenes().scenes.count == 1)
   }
+
+  /// A modem whose scene 3 has the lamp and the keypad as members, each with its responder record.
+  private func modemWithTwoMembers() async -> InMemoryModem {
+    let modem = await modemWithOneScene()
+    await modem.setModemRecords([
+      AllLinkRecord(flags: [.inUse, .controller], group: 3, address: lamp, data1: 0, data2: 0, data3: 0),
+      AllLinkRecord(flags: [.inUse, .controller], group: 3, address: keypad, data1: 0, data2: 0, data3: 0)
+    ])
+    await modem.setDatabase([0x0FFF: AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 3, address: modemAddress, data1: 0x80, data2: 0x1C, data3: 0x00)], of: keypad)
+    return modem
+  }
+
+  @Test func leavesADeviceUnreadableWhenTheModemRefusesItsRequestAndGoesOnToTheNext() async throws {
+    let modem = await modemWithTwoMembers()
+    let lamp = lamp
+    await modem.setBeforeOperation { operation in
+      if case let .standardRequest(message) = operation, message.destination == lamp { throw ModemError.rejected(.getModemInfo) }
+    }
+    let service = InsteonService(network: network(modem, knowing: [lamp, keypad]))
+
+    let listing = try await service.refreshScenes()
+
+    #expect(listing.unreadable == [lamp])
+    #expect(listing.scenes.first?.members.map(\.address) == [keypad])
+    #expect(await modem.databaseReads[keypad] == 1)
+  }
+
 }
 
 private actor RecordingStore: NetworkSnapshotStore {
