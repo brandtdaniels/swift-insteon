@@ -36,6 +36,7 @@ public struct LocalHubPath: ConnectionPath {
     guard !hubs.isEmpty else { throw ConnectionPathError.notReached("no Hub answered on the local network") }
     // What the path reports when no Hub opens: the most telling failure, not the first.
     var failure: ConnectionPathError?
+    var reasons: [String] = []
     func note(_ error: ConnectionPathError) {
       func rank(_ e: ConnectionPathError?) -> Int { switch e { case .unauthorized?: 3; case .forbidden?: 2; case .badResponse?: 1; default: 0 } }
       if rank(error) > rank(failure) { failure = error }
@@ -47,11 +48,21 @@ public struct LocalHubPath: ConnectionPath {
         throw CancellationError()
       } catch let error as ConnectionPathError {
         note(error)
+        reasons.append(Self.reason(error))
       } catch {
-        // This Hub didn't open; the next may.
+        // This Hub didn't open; the next may. Its failure is kept for the path's reason.
+        reasons.append(String(describing: error))
       }
     }
-    throw failure ?? ConnectionPathError.notReached("no Hub on the local network opened")
+    throw failure ?? ConnectionPathError.notReached(("no Hub on the local network opened" + (reasons.isEmpty ? "" : ": " + reasons.joined(separator: "; "))))
+  }
+
+  /// A path error as a phrase for the reason. It holds no address or credential.
+  private static func reason(_ error: ConnectionPathError) -> String {
+    switch error {
+    case let .notReached(reason): reason
+    default: String(describing: error)
+    }
   }
 
 }
