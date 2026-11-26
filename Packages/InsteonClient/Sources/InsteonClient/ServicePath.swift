@@ -123,9 +123,9 @@ private struct ServiceCalls: HomeCalls {
   private func failure(_ response: HTTPResponse) throws -> any Error {
     let refusal = try? JSONDecoder().decode(Refusal.self, from: response.body)
     if response.statusCode == 401 || response.statusCode == 403 { return HomePathError.unauthorized }
-    guard let refusal else {
-      return HomeError.rejected(code: "status\(response.statusCode)", sent: false)
-    }
+    // An answer that isn't the service's own refusal, such as a proxy's error page, says nothing
+    // about whether the request reached a device.
+    guard let refusal else { return HomePathError.interrupted }
     switch refusal.code {
     case "unknownDevice": return ServiceControlError.unknownDevice
     case "invalidLevel": return ServiceControlError.invalidLevel

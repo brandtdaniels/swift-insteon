@@ -171,4 +171,13 @@ struct ServicePathTests {
 struct CancelingOpener: RouteOpening {
   let kind = "example-transport"
   func open(ticket: String?) async throws -> URL { throw CancellationError() }
+
+  @Test func anAnswerThatIsNotARefusalMayHaveBeenSentSoItIsInterrupted() async throws {
+    let c = try await calls(FakeHTTPClient { request in
+      request.url?.path == "/api/v1/health" ? healthy : HTTPResponse(statusCode: 502, body: Data("<html>bad gateway</html>".utf8))
+    })
+
+    await #expect(throws: HomePathError.interrupted) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+    await #expect(throws: HomePathError.interrupted) { _ = try await c.devices() }
+  }
 }
