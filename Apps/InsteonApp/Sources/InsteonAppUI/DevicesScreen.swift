@@ -133,7 +133,8 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
     case .notLinked?: return "That device isn't linked to the modem."
     case .notIdentified?: return "That device hasn't said what it is yet."
     case .unsupportedControl?: return "That device has no on and off control."
-    case .invalidLevel?, .unknownDevice?: return "The service doesn't know that device."
+    case .invalidLevel?: return "That level isn't one the device can take."
+    case .unknownDevice?: return "The service doesn't know that device."
     case nil: return "The service couldn't be reached."
     }
   }

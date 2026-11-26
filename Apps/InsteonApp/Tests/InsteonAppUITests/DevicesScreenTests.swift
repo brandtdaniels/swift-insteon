@@ -143,6 +143,20 @@ struct DevicesScreenTests {
     #expect(screen.rows[0].level == shown)
   }
 
+  @Test func eachRefusalHasItsOwnText() async {
+    var texts: [String] = []
+    let refusals: [ServiceControlError] = [.busy, .modemUnavailable(.connecting), .notLinked, .notIdentified, .unsupportedControl, .invalidLevel, .unknownDevice]
+    for refusal in refusals {
+      let screen = DevicesScreen(network: ScriptedNetwork(devices: [lamp], refusal: refusal))
+      await screen.load()
+      await screen.turn(screen.rows[0], on: true)
+      texts.append(screen.notice ?? "")
+    }
+
+    #expect(!texts.contains(""))
+    #expect(Set(texts).count == refusals.count)
+  }
+
   @Test func aDeviceThatReportedALevelShowsItOnOrOff() async {
     let on = ServiceDevice(address: lamp.address, productName: lamp.productName, canTurnOnAndOff: true, canDim: true, value: 128, lastAnsweredAt: nil)
     let screen = DevicesScreen(network: ScriptedNetwork(devices: [on, lamp]))
