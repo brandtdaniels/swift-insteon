@@ -153,4 +153,22 @@ struct ServicePathTests {
       await #expect(throws: HomePathError.unauthorized) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
     }
   }
+
+  @Test func cancellationWhileOpeningIsNotAPathFailure() async {
+    let http = FakeHTTPClient { _ in throw CancellationError() }
+
+    await #expect(throws: CancellationError.self) { _ = try await calls(http) }
+  }
+
+  @Test func cancellationInsideATransportOpenerIsNotAPathFailureEither() async throws {
+    let pairing = try ClientPairing(decoding: Data(#"{"version":1,"serviceId":"s","name":"n","credential":"c","scope":"read","api":"/api/v1","routes":[{"kind":"example-transport","ticket":"t"}]}"#.utf8))
+    let home = HomeConnection(pairing: pairing, routeOpeners: [CancelingOpener()], http: FakeHTTPClient { _ in healthy })
+
+    await #expect(throws: CancellationError.self) { _ = try await home.devices() }
+  }
+}
+
+struct CancelingOpener: RouteOpening {
+  let kind = "example-transport"
+  func open(ticket: String?) async throws -> URL { throw CancellationError() }
 }

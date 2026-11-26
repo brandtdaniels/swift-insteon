@@ -42,6 +42,8 @@ public struct ServicePath: HomePath, CustomStringConvertible, CustomDebugStringC
     let response: HTTPResponse
     do {
       response = try await http.send(request("GET", "/api/v1/health"))
+    } catch is CancellationError {
+      throw CancellationError()
     } catch {
       throw HomePathError.notReached("the service didn't answer")
     }
