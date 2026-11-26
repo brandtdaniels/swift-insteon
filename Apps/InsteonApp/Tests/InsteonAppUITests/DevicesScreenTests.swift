@@ -7,6 +7,7 @@ import Testing
 
 /// The first screen's acceptance tests, through the calls the screen makes and without a view.
 @MainActor
+@Suite(.timeLimit(.minutes(1)))
 struct DevicesScreenTests {
 
   private let lamp = ServiceDevice(
