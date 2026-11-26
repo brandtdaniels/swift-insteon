@@ -29,7 +29,26 @@ public struct DevicesView<Network: DeviceQuerying & DeviceCommanding>: View {
       }
     }
     .overlay {
-      if case let .failed(message) = screen.state { Text(message).foregroundStyle(.secondary) }
+      if screen.isLoading && screen.rows.isEmpty {
+        ProgressView()
+      } else if screen.isEmpty {
+        Text("No devices").foregroundStyle(.secondary)
+      } else if screen.rows.isEmpty, let failure = screen.failure {
+        VStack(spacing: 12) {
+          Text(failure).foregroundStyle(.secondary)
+          Button("Try again") { Task { await screen.load() } }
+        }
+      }
+    }
+    .safeAreaInset(edge: .top) {
+      if !screen.rows.isEmpty, let failure = screen.failure {
+        HStack {
+          Text(failure).font(.footnote)
+          Spacer()
+          Button("Try again") { Task { await screen.load() } }
+        }
+        .padding(.horizontal)
+      }
     }
     .alert("Couldn't send", isPresented: Binding(get: { screen.notice != nil }, set: { if !$0 { screen.notice = nil } })) {
       Button("OK") { screen.notice = nil }

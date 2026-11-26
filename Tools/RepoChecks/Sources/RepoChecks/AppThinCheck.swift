@@ -32,7 +32,7 @@ public struct AppThinCheck: RepoCheck {
     var found: [String] = []
 
     for entry in try SourceFiles.entries(under: apps) where entry.components.last!.hasSuffix(".swift") {
-      guard entry.components.count > 3, entry.components[1] == "Sources" else { continue }
+      guard entry.components.count >= 3, entry.components[1] == "Sources" else { continue }
       let path = "Apps/" + entry.relativePath
       for line in SwiftCodeScanner.lines(in: try TextFile.read(entry.url(under: apps))) {
         guard let module = Self.importedModule(in: line.code) else { continue }
@@ -45,13 +45,20 @@ public struct AppThinCheck: RepoCheck {
     return found
   }
 
-  /// The module a line imports, if it is an import.
+  /// The kinds of declaration an import can name: `import struct Module.Name`.
+  private static let importKinds: Set<String> = ["typealias", "struct", "class", "enum", "protocol", "var", "let", "func", "actor"]
+
+  /// The module a line imports, if it is an import: the name before the first dot, after any
+  /// attributes, access modifiers and kind keyword, and before a trailing semicolon.
   static func importedModule(in code: String) -> String? {
-    var words = code.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+    var words = code.split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == ";" }).map(String.init)
     while let first = words.first, first.hasPrefix("@") || ["public", "internal", "package", "private", "fileprivate"].contains(first) {
       words.removeFirst()
     }
-    guard words.first == "import", words.count >= 2 else { return nil }
-    return String(words[1].split(separator: ".")[0])
+    guard words.first == "import" else { return nil }
+    words.removeFirst()
+    if let first = words.first, importKinds.contains(first) { words.removeFirst() }
+    guard let path = words.first, let module = path.split(separator: ".").first else { return nil }
+    return String(module)
   }
 }
