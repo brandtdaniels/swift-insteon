@@ -16,21 +16,21 @@ import InsteonService
 public enum DemoNetwork {
 
   /// A made-up ALL-Link group and the devices that respond to it.
-  public struct Scene: Sendable, Equatable {
+  struct Scene: Sendable, Equatable {
 
     /// The ALL-Link group.
-    public let group: AllLinkGroupNumber
+    let group: AllLinkGroupNumber
 
     /// The devices that respond to the group.
-    public let members: [InsteonAddress]
+    let members: [InsteonAddress]
 
   }
 
   /// A made-up device.
-  public struct Device: Sendable, Equatable {
+  struct Device: Sendable, Equatable {
 
     /// The device's address.
-    public let address: InsteonAddress
+    let address: InsteonAddress
 
     /// What the device reports about itself.
     let identity: ReportedIdentity
@@ -50,14 +50,14 @@ public enum DemoNetwork {
   public static let outlet = InsteonAddress(0x7E, 0x00, 0x12)
 
   /// The demo devices, in the order the service lists them.
-  public static let devices: [Device] = [
+  static let devices: [Device] = [
     Device(address: lamp, identity: DemoCatalog.dimmerIdentity),
     Device(address: ceiling, identity: DemoCatalog.dimmerIdentity),
     Device(address: outlet, identity: DemoCatalog.relayIdentity)
   ]
 
   /// The demo scenes.
-  public static let scenes: [Scene] = [
+  static let scenes: [Scene] = [
     Scene(group: 20, members: [lamp, ceiling]),
     Scene(group: 21, members: [lamp, outlet])
   ]

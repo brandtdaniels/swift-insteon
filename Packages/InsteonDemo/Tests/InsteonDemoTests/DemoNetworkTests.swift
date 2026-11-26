@@ -31,5 +31,6 @@ struct DemoNetworkTests {
 
     #expect(receipt.outcome == .read)
     #expect(receipt.status != nil)
+    #expect((0x7F...0x80).contains(try await service.devices().first { $0.address == DemoNetwork.lamp }?.value ?? 0))
   }
 }
