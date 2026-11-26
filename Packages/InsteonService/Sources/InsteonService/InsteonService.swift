@@ -144,15 +144,15 @@ public actor InsteonService: InsteonServiceAPI {
 
   /// A backup of what the service has cached, without asking hardware and without taking the
   /// admission gate, whether or not the modem is connected.
-  public func homeBackup() async -> HomeBackup {
+  public func networkBackup() async -> NetworkBackup {
     let network = network
-    return await HomeBackupReader.backup(from: await network.snapshot(), modem: await network.modemIdentity(), catalog: await network.catalog(), createdAt: now())
+    return await NetworkBackupReader.backup(from: await network.snapshot(), modem: await network.modemIdentity(), catalog: await network.catalog(), createdAt: now())
   }
 
-  /// The scenes of the home, from the ALL-Link databases the service has cached, without asking
+  /// The scenes of the network, from the ALL-Link databases the service has cached, without asking
   /// hardware and without taking the admission gate, whether or not the modem is connected.
   public func scenes() async -> SceneListing {
-    SceneListing(await homeBackup())
+    SceneListing(await networkBackup())
   }
 
   /// What a scene member's link data bytes mean, from the catalog and the identity the service

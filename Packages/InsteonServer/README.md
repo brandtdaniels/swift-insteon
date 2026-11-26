@@ -158,7 +158,7 @@ scope, command all devices known by this service. Per-device permissions aren't 
 | GET | `/api/v1/routes` | List the routes transport plugins registered (`read`; see Writing a plugin) |
 | PUT, DELETE | `/api/v1/routes/{kind}` | Register or remove a transport's route (`admin`) |
 | GET | `/api/v1/backup` | A backup of the cached network, the format `insteon backup` writes (`admin`; see Backups) |
-| GET | `/api/v1/scenes` | The scenes of the home from the cached ALL-Link databases (`read`; see Scenes) |
+| GET | `/api/v1/scenes` | The scenes of the network from the cached ALL-Link databases (`read`; see Scenes) |
 | GET | `/devices/1A.2B.3C` | Authenticated card fragment from cached state; no hardware polling |
 
 JSON commands need `Content-Type: application/json` and `X-Insteon-Request: 1`. Example body:
@@ -249,7 +249,7 @@ service. A QR code, a link or a file can carry it, and a client reads it the sam
 {
   "version": 1,
   "serviceId": "3f2a0c5d9e8b4a71b6d0c2e4f8a91357",
-  "name": "Home",
+  "name": "Network",
   "credential": "<the client's token, shown once>",
   "scope": "control",
   "api": "/api/v1",
@@ -703,7 +703,7 @@ insteon backup --check home.json
 
 ## Scenes
 
-`GET /api/v1/scenes` (`read`) lists the scenes of the home: each group the modem controls (`writable`) and each group a device controls (read only, because the modem can't run or change it), with the devices that respond to it and the three link data bytes each holds. It answers from the ALL-Link databases the service has cached and sends nothing to the Hub or modem. `whole` is false, and the reason is listed, while a device's database is not held (`unreadable`), a record names a device with no database (`unlisted`), the modem's database is not held (`modemUnread`) or a record has no other half (`halfLinks` of a scene, `looseHalfLinks`). A listing that is not whole is never shown as complete.
+`GET /api/v1/scenes` (`read`) lists the scenes of the network: each group the modem controls (`writable`) and each group a device controls (read only, because the modem can't run or change it), with the devices that respond to it and the three link data bytes each holds. It answers from the ALL-Link databases the service has cached and sends nothing to the Hub or modem. `whole` is false, and the reason is listed, while a device's database is not held (`unreadable`), a record names a device with no database (`unlisted`), the modem's database is not held (`modemUnread`) or a record has no other half (`halfLinks` of a scene, `looseHalfLinks`). A listing that is not whole is never shown as complete.
 
 Each member also carries what its three data bytes mean, as the Insteon device catalog gives them for the identity the service has recorded for that device: `bytes` lists each byte's `name`, `label`, `value`, the `valueName` where the catalog names the value, and `verification`, how sure the catalog is (`observed`, `documented`, `inferred` or `conflicting`). A member the catalog doesn't describe has `described: false` and no `bytes`; its raw `data` is always there. `undescribedMembers` lists the devices with at least one such member. `described: false` also holds while a device's identity has not been read yet or no catalog is loaded, so it can change once the service identifies the device.
 

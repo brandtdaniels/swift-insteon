@@ -18,7 +18,7 @@ public enum PairCommand {
   --listen IPV4        The address the server listens on, for the document's local route.
   --port PORT          The server's port (default: 8080).
   --advertise-url URL  Where clients reach the server, instead of http://LISTEN:PORT.
-  --home-name NAME     The home's name in the document (default: Home).
+  --network-name NAME     The network's name in the document (default: Network).
   --state PATH         The state file; the client file sits beside it.
 
   The document lists the routes that transports registered with the server, after the local one.
@@ -28,7 +28,7 @@ public enum PairCommand {
   /// What a person is told after the document: it can't be shown again.
   public static let notice = "The credential above is shown once. Revoke the client with DELETE /api/v1/clients/{id} if it is lost."
 
-  private static let passedOn: Set<String> = ["--listen", "--port", "--advertise-url", "--home-name", "--state"]
+  private static let passedOn: Set<String> = ["--listen", "--port", "--advertise-url", "--network-name", "--state"]
 
   /// Creates the client and returns the text to print: the document, then its QR code.
   ///

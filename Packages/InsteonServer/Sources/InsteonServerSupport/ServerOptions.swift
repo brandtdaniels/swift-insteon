@@ -18,8 +18,8 @@ public struct ServerOptions: Sendable {
   /// Where a client reaches this server on the local network, such as `http://insteon.local:8080`,
   /// or nil to use the listen address and port.
   public let advertiseURL: String?
-  /// The home's name in a pairing document.
-  public let homeName: String
+  /// The network's name in a pairing document.
+  public let networkName: String
   /// How often a Hub Pro is asked for its devices' levels, in seconds: from 2, and 5 by default.
   public let pollIntervalSeconds: Int
   /// The home's latitude in degrees, positive north, or nil. Given with ``longitude``.
@@ -34,7 +34,7 @@ public struct ServerOptions: Sendable {
   /// Hub resolution and file permissions are checked by the CLI's existing helpers.
   public init(arguments: [String], environment: [String: String]) throws {
     var options: [String: String] = [:]
-    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--home-name", "--poll-interval", "--latitude", "--longitude", "--time-zone"]
+    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--network-name", "--poll-interval", "--latitude", "--longitude", "--time-zone"]
     var index = 0
     while index < arguments.count {
       let name = arguments[index]
@@ -58,9 +58,9 @@ public struct ServerOptions: Sendable {
     self.statePath = options["--state"] ?? ((stateHome ?? home.map { $0 + "/.local/state" } ?? FileManager.default.homeDirectoryForCurrentUser.path + "/.local/state") + "/insteon/gateway.json")
     guard statePath.hasPrefix("/") else { throw ServerOptionError.invalidStatePath }
     advertiseURL = try options["--advertise-url"].map { try Self.normalized(advertisedURL: $0) }
-    let homeName = options["--home-name"] ?? "Home"
-    guard (1...64).contains(homeName.count), !homeName.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { throw ServerOptionError.invalidHomeName }
-    self.homeName = homeName
+    let networkName = options["--network-name"] ?? "Network"
+    guard (1...64).contains(networkName.count), !networkName.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { throw ServerOptionError.invalidNetworkName }
+    self.networkName = networkName
     guard let pollInterval = Int(options["--poll-interval"] ?? "5"), (2...3600).contains(pollInterval) else { throw ServerOptionError.invalidPollInterval }
     self.pollIntervalSeconds = pollInterval
     switch (options["--latitude"], options["--longitude"]) {
@@ -109,8 +109,8 @@ public enum ServerOptionError: Error, CustomStringConvertible {
   case invalidStatePath
   /// The advertised address isn't an http or https address without credentials, path or query.
   case invalidAdvertiseURL
-  /// The home's name is empty, over 64 characters or has control characters.
-  case invalidHomeName
+  /// The network's name is empty, over 64 characters or has control characters.
+  case invalidNetworkName
   /// `--poll-interval` isn't a whole number of seconds from 2 through 3600.
   case invalidPollInterval
   /// `--latitude` and `--longitude` are given together, as numbers within the Earth's range.

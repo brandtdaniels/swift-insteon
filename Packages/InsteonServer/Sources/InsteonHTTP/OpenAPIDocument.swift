@@ -211,7 +211,7 @@ enum OpenAPIDocument {
         "enabled": Schema.boolean,
         "includeDetail": Schema.boolean
       ], required: ["name", "trigger"], description: "A rule without its identifier. Defaults: `cooldownSeconds` 0, `enabled` true, `includeDetail` false."),
-      "HomeBackup": Schema.object([
+      "NetworkBackup": Schema.object([
         "format": ["type": "integer", "const": 1, "description": "The file's format number. It rises when a reader of an older number could misread the file; a key a reader doesn't know is ignored."],
         "createdAt": ["type": "string", "format": "date-time", "description": "When the backup was taken, to the second, in UTC."],
         "source": Schema.string(enum: ["modem", "hubPro", "service"], description: "What the backup was taken from. The service's backup is `service`."),
@@ -385,7 +385,7 @@ enum OpenAPIDocument {
         "properties": [
           "version": version,
           "serviceId": Schema.string(description: "Names the service, the same for every client that pairs with it."),
-          "name": Schema.string(description: "The home's name, for a client to show."),
+          "name": Schema.string(description: "The network's name, for a client to show."),
           "credential": Schema.string(description: "The client's token. Send it as `Authorization: Bearer <credential>`. It is shown once."),
           "scope": Schema.ref("ClientScope"),
           "api": Schema.string(description: "The path every API route sits under."),

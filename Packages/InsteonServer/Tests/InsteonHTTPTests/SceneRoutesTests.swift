@@ -9,7 +9,7 @@ import InsteonService
 import Testing
 @testable import InsteonHTTP
 
-/// `GET /api/v1/scenes`: the scenes of the home from the service's cache, for any reader.
+/// `GET /api/v1/scenes`: the scenes of the network from the service's cache, for any reader.
 @Suite(.timeLimit(.minutes(1)))
 struct SceneRoutesTests {
   let password = String(repeating: "p", count: 40)

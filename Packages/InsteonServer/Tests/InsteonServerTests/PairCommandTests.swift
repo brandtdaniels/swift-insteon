@@ -22,7 +22,7 @@ struct PairCommandTests {
     let document = try document(output)
     #expect(document["version"] as? Int == 1)
     #expect(document["scope"] as? String == "control")
-    #expect(document["name"] as? String == "Home")
+    #expect(document["name"] as? String == "Network")
     #expect(document["api"] as? String == "/api/v1")
     let routes = try #require(document["routes"] as? [[String: Any]])
     #expect(routes.count == 1)
@@ -47,9 +47,9 @@ struct PairCommandTests {
     #expect(try await store.clients().count == 2)
   }
 
-  @Test func theScopeTheHomeNameAndTheAdvertisedAddressAreOptions() async throws {
+  @Test func theScopeTheNetworkNameAndTheAdvertisedAddressAreOptions() async throws {
     let (path, environment) = try state()
-    let output = try await PairCommand.run(arguments: ["--name", "Tablet", "--scope", "read", "--home-name", "Beach house", "--advertise-url", "https://insteon.example.net:8443/", "--state", path], environment: environment, showsQRCode: false)
+    let output = try await PairCommand.run(arguments: ["--name", "Tablet", "--scope", "read", "--network-name", "Beach house", "--advertise-url", "https://insteon.example.net:8443/", "--state", path], environment: environment, showsQRCode: false)
     let document = try document(output)
     #expect(document["scope"] as? String == "read")
     #expect(document["name"] as? String == "Beach house")

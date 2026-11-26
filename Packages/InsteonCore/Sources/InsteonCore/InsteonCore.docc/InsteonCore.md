@@ -368,10 +368,10 @@ do {
 
 ### Backing up and moving to another modem
 
-- ``HomeBackup``
-- ``HomeBackupReader``
-- ``HomeBackupCheck``
-- ``HomeBackupError``
+- ``NetworkBackup``
+- ``NetworkBackupReader``
+- ``NetworkBackupCheck``
+- ``NetworkBackupError``
 - ``BackupDevice``
 - ``BackupModem``
 - ``BackupRecord``

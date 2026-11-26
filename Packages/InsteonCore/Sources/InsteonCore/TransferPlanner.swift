@@ -34,7 +34,7 @@ public enum TransferPlanner {
   ///     ``ExistingLinksChoice/refuse``.
   /// - Returns: The plan.
   /// - Throws: ``TransferPlanError``.
-  public static func plan(from backup: HomeBackup, to target: TransferTarget, existingLinks: ExistingLinksChoice = .refuse) throws -> TransferPlan {
+  public static func plan(from backup: NetworkBackup, to target: TransferTarget, existingLinks: ExistingLinksChoice = .refuse) throws -> TransferPlan {
 
     let old: InsteonAddress? = backup.modem?.address
 
@@ -354,7 +354,7 @@ public enum TransferPlanner {
 
   // MARK: - Text and order
 
-  private static func warnings(for handling: ExistingLinksHandling, count: Int, backup: HomeBackup, hasOldDatabase: Bool) -> [String] {
+  private static func warnings(for handling: ExistingLinksHandling, count: Int, backup: NetworkBackup, hasOldDatabase: Bool) -> [String] {
 
     var warnings: [String] = []
 

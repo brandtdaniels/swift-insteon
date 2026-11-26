@@ -106,7 +106,7 @@ public enum TransferVerifier {
   /// - Returns: Whether each device answered.
   /// - Throws: `CancellationError` if the task was canceled, which isn't a device that didn't
   ///   answer, and any error `isDeviceFailure` says isn't the device's own.
-  public static func verify(_ backup: HomeBackup, isDeviceFailure: (any Error) -> Bool = TransferVerifier.isDeviceFailure, describing: (any Error) -> String = { (error: any Error) -> String in "\(error)" }, ping: (InsteonAddress) async throws -> Void) async throws -> TransferVerification {
+  public static func verify(_ backup: NetworkBackup, isDeviceFailure: (any Error) -> Bool = TransferVerifier.isDeviceFailure, describing: (any Error) -> String = { (error: any Error) -> String in "\(error)" }, ping: (InsteonAddress) async throws -> Void) async throws -> TransferVerification {
 
     var checks: [TransferDeviceCheck] = []
 

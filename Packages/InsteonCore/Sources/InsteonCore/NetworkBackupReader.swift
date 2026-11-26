@@ -15,7 +15,7 @@ public enum BackupProgress: Hashable, Sendable {
   case deviceUnreadable(InsteonAddress, BackupUnreadable)
 }
 
-/// Reads a modem's network, or a Hub Pro's device list, into a ``HomeBackup``.
+/// Reads a modem's network, or a Hub Pro's device list, into a ``NetworkBackup``.
 ///
 /// Every request a reader sends is a read: the modem's information and ALL-Link database, each
 /// device's ID Request and Light Status Request, and the ALL-Link database it reports. It never
@@ -26,11 +26,11 @@ public enum BackupProgress: Hashable, Sendable {
 /// `CancellationError`, and nothing is returned.
 ///
 /// ```swift
-/// let backup = try await HomeBackupReader.read(network: network, createdAt: Date()) { progress in
+/// let backup = try await NetworkBackupReader.read(network: network, createdAt: Date()) { progress in
 ///   print(progress)
 /// }
 /// ```
-public enum HomeBackupReader {
+public enum NetworkBackupReader {
 
   /// Reads the modem's database and the database of each device it knows.
   ///
@@ -48,7 +48,7 @@ public enum HomeBackupReader {
     network: DeviceNetwork,
     createdAt: Date,
     progress: @Sendable (BackupProgress) -> Void = { _ in }
-  ) async throws -> HomeBackup {
+  ) async throws -> NetworkBackup {
 
     progress(.readingModem)
 
@@ -87,7 +87,7 @@ public enum HomeBackupReader {
 
     }
 
-    return HomeBackup(createdAt: createdAt, source: .modem, modem: modem, devices: devices)
+    return NetworkBackup(createdAt: createdAt, source: .modem, modem: modem, devices: devices)
 
   }
 
@@ -100,7 +100,7 @@ public enum HomeBackupReader {
   ///   - createdAt: When the backup is taken.
   /// - Returns: The backup.
   /// - Throws: What reading the Hub Pro's list throws, and `CancellationError`.
-  public static func read(hubPro network: HubProNetwork, createdAt: Date) async throws -> HomeBackup {
+  public static func read(hubPro network: HubProNetwork, createdAt: Date) async throws -> NetworkBackup {
 
     try await network.open()
     try Task.checkCancellation()
@@ -128,7 +128,7 @@ public enum HomeBackupReader {
 
     }
 
-    return HomeBackup(createdAt: createdAt, source: .hubPro, modem: modem, devices: devices)
+    return NetworkBackup(createdAt: createdAt, source: .hubPro, modem: modem, devices: devices)
 
   }
 
@@ -143,7 +143,7 @@ public enum HomeBackupReader {
   ///   - catalog: The catalog that names the devices' products, or `nil`.
   ///   - createdAt: When the backup is taken.
   /// - Returns: The backup, from a service as its source.
-  public static func backup(from snapshot: NetworkSnapshot, modem: (address: InsteonAddress, identity: ReportedIdentity?)?, catalog: DeviceCatalog?, createdAt: Date) async -> HomeBackup {
+  public static func backup(from snapshot: NetworkSnapshot, modem: (address: InsteonAddress, identity: ReportedIdentity?)?, catalog: DeviceCatalog?, createdAt: Date) async -> NetworkBackup {
 
     let registry: DeviceRegistry = DeviceRegistry(catalog: catalog, snapshot: snapshot.registry)
     let records: [BackupRecord]? = snapshot.modemDatabase.map { (records: [AllLinkRecord]) -> [BackupRecord] in records.map { BackupRecord(LinkRecord($0)) } }
@@ -197,7 +197,7 @@ public enum HomeBackupReader {
 
     }
 
-    return HomeBackup(createdAt: createdAt, source: .service, modem: backupModem, devices: devices)
+    return NetworkBackup(createdAt: createdAt, source: .service, modem: backupModem, devices: devices)
 
   }
 

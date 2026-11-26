@@ -39,17 +39,17 @@ extension ServerTests {
     #expect(throws: ServerOptionError.invalidPollInterval) { try ServerOptions(arguments: ["--poll-interval", value], environment: [:]) }
   }
 
-  @Test func theAdvertisedAddressAndHomeNameAreOptionsWithDefaults() throws {
+  @Test func theAdvertisedAddressAndNetworkNameAreOptionsWithDefaults() throws {
     let defaults = try ServerOptions(arguments: [], environment: [:])
     #expect(defaults.advertiseURL == nil)
-    #expect(defaults.homeName == "Home")
-    let chosen = try ServerOptions(arguments: ["--advertise-url", "https://insteon.example.net:8443/", "--home-name", "Beach house"], environment: [:])
+    #expect(defaults.networkName == "Network")
+    let chosen = try ServerOptions(arguments: ["--advertise-url", "https://insteon.example.net:8443/", "--network-name", "Beach house"], environment: [:])
     #expect(chosen.advertiseURL == "https://insteon.example.net:8443")
-    #expect(chosen.homeName == "Beach house")
+    #expect(chosen.networkName == "Beach house")
   }
 
-  @Test(arguments: [["--advertise-url", "insteon.local"], ["--advertise-url", "ftp://insteon.local"], ["--advertise-url", "http://u:p@insteon.local"], ["--advertise-url", "http://insteon.local/x"], ["--advertise-url", "http://insteon.local?x=1"], ["--advertise-url", "http://"], ["--home-name", String(repeating: "h", count: 65)], ["--home-name", "bad\u{7}name"]])
-  func anUnusableAdvertisedAddressOrHomeNameIsRefused(_ arguments: [String]) {
+  @Test(arguments: [["--advertise-url", "insteon.local"], ["--advertise-url", "ftp://insteon.local"], ["--advertise-url", "http://u:p@insteon.local"], ["--advertise-url", "http://insteon.local/x"], ["--advertise-url", "http://insteon.local?x=1"], ["--advertise-url", "http://"], ["--network-name", String(repeating: "h", count: 65)], ["--network-name", "bad\u{7}name"]])
+  func anUnusableAdvertisedAddressOrNetworkNameIsRefused(_ arguments: [String]) {
     #expect(throws: ServerOptionError.self) { try ServerOptions(arguments: arguments, environment: [:]) }
   }
 }

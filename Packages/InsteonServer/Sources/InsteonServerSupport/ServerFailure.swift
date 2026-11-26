@@ -40,7 +40,7 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case routesFileUnusable = "routes_file_unusable"
     case clientLimitReached = "client_limit_reached"
     case advertiseURLInvalid = "advertise_url_invalid"
-    case homeNameInvalid = "home_name_invalid"
+    case networkNameInvalid = "network_name_invalid"
     case pollIntervalInvalid = "poll_interval_invalid"
     case locationInvalid = "location_invalid"
     case timeZoneInvalid = "time_zone_invalid"
@@ -153,7 +153,7 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case .invalidPollInterval: ServerFailure(.pollIntervalInvalid, "--poll-interval must be a whole number of seconds from 2 through 3600.", configurationStatus)
     case .invalidLocation: ServerFailure(.locationInvalid, "--latitude and --longitude are given together: latitude from -90 through 90 and longitude from -180 through 180, in degrees.", configurationStatus)
     case .invalidTimeZone: ServerFailure(.timeZoneInvalid, "--time-zone must be an IANA time zone's name, such as America/Los_Angeles.", configurationStatus)
-    case .invalidHomeName: ServerFailure(.homeNameInvalid, "--home-name must be 1 through 64 characters without control characters.", configurationStatus)
+    case .invalidNetworkName: ServerFailure(.networkNameInvalid, "--network-name must be 1 through 64 characters without control characters.", configurationStatus)
     }
   }
 

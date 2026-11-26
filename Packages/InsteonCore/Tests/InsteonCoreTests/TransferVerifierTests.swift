@@ -14,7 +14,7 @@ struct TransferVerifierTests {
     var description: String { "no answer" }
   }
 
-  static func backup() -> HomeBackup {
+  static func backup() -> NetworkBackup {
 
     Example.backup([
       Example.device(Example.lamp, name: "Porch"),

@@ -140,17 +140,17 @@ extension DeviceEvent {
 }
 
 /// The backup role of an Insteon service.
-public protocol HomeBackupProviding: Sendable {
+public protocol NetworkBackupProviding: Sendable {
   /// A backup of what the service has cached: the modem's address and ALL-Link database, each
   /// device's ALL-Link database where the service holds a copy, and the devices' identities.
   /// It sends nothing to hardware and doesn't take the admission gate. A device with no cached
   /// copy is in the backup as not cached.
-  func homeBackup() async -> HomeBackup
+  func networkBackup() async -> NetworkBackup
 }
 
 /// The scenes role of an Insteon service.
 public protocol SceneProviding: Sendable {
-  /// The scenes of the home, listed from the ALL-Link databases the service holds. It sends nothing
+  /// The scenes of the network, listed from the ALL-Link databases the service holds. It sends nothing
   /// to hardware and doesn't take the admission gate, so a device with no cached copy is reported
   /// as unreadable and the listing is not whole.
   func scenes() async -> SceneListing
@@ -169,7 +169,7 @@ public protocol SceneProviding: Sendable {
 
 /// The cohesive API consumed by an adapter that needs queries, commands, events and health.
 /// A single instance supplies all four roles, preventing mismatched device networks.
-public protocol InsteonServiceAPI: DeviceQuerying, DeviceCommanding, DeviceEventSource, HealthReporting, NotificationRuleManaging, ScheduleManaging, HomeBackupProviding, SceneProviding {}
+public protocol InsteonServiceAPI: DeviceQuerying, DeviceCommanding, DeviceEventSource, HealthReporting, NotificationRuleManaging, ScheduleManaging, NetworkBackupProviding, SceneProviding {}
 
 /// A refused operation, independent of HTTP status codes or display wording.
 public enum ServiceControlError: Error, Equatable {

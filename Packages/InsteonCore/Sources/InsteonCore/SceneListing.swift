@@ -1,7 +1,7 @@
 import InsteonLinking
 import InsteonProtocol
 
-/// The scenes of a home as a client sees them: each ALL-Link group some controller has members
+/// The scenes of a network as a client sees them: each ALL-Link group some controller has members
 /// for, listed from a reading of the modem's and the devices' ALL-Link databases.
 ///
 /// A scene is a group the modem controls. A group a device controls, such as a button of a remote,

@@ -23,7 +23,7 @@ struct RouteRoutesTests {
       self.clients = clients
       self.routes = routes
       self.persistence = persistence
-      let pairing = PairingConfiguration(homeName: "Home", routes: [PairingRoute(kind: "lan", url: "http://insteon.local:8080")])
+      let pairing = PairingConfiguration(networkName: "Network", routes: [PairingRoute(kind: "lan", url: "http://insteon.local:8080")])
       app = Application(responder: makeInsteonRouter(service: FakeService(), authentication: try HTTPAuthentication(password: password), clients: clients, pairing: pairing, routes: routes).buildResponder())
     }
   }

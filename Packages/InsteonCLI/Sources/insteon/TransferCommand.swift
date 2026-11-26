@@ -7,14 +7,14 @@ import InsteonCore
 enum TransferCommand {
 
   /// Reads the backup, checking its checksum, before any modem is connected.
-  static func load(_ options: TransferPlanOptions) throws -> HomeBackup {
+  static func load(_ options: TransferPlanOptions) throws -> NetworkBackup {
 
-    try HomeBackup(parsing: BackupFile.read(options.path))
+    try NetworkBackup(parsing: BackupFile.read(options.path))
 
   }
 
   /// Plans for the modem a session is connected to.
-  static func plan(_ backup: HomeBackup, options: TransferPlanOptions, modem: ModemSession, hub: HubLocation?, names: ProductNames, printsJSON: Bool) async throws {
+  static func plan(_ backup: NetworkBackup, options: TransferPlanOptions, modem: ModemSession, hub: HubLocation?, names: ProductNames, printsJSON: Bool) async throws {
 
     Output.note("Reading the new modem's address and ALL-Link database. Nothing is written.")
 
@@ -28,7 +28,7 @@ enum TransferCommand {
   }
 
   /// Plans for a Hub Pro, whose modem address comes from its device list.
-  static func plan(_ backup: HomeBackup, options: TransferPlanOptions, hubPro network: HubProNetwork, printsJSON: Bool) async throws {
+  static func plan(_ backup: NetworkBackup, options: TransferPlanOptions, hubPro network: HubProNetwork, printsJSON: Bool) async throws {
 
     Output.note("Reading the Hub Pro's device list for its modem's address. Nothing is written.")
 
@@ -43,7 +43,7 @@ enum TransferCommand {
   }
 
   /// Asks each device of the backup to answer through the connected modem.
-  static func verify(_ backup: HomeBackup, modem: ModemSession, hub: HubLocation?, names: ProductNames, printsJSON: Bool) async throws {
+  static func verify(_ backup: NetworkBackup, modem: ModemSession, hub: HubLocation?, names: ProductNames, printsJSON: Bool) async throws {
 
     Output.note("Asking each device of the backup to answer through this modem. A ping changes nothing.")
 
@@ -58,7 +58,7 @@ enum TransferCommand {
   }
 
   /// The same, through a Hub Pro.
-  static func verify(_ backup: HomeBackup, hubPro network: HubProNetwork, printsJSON: Bool) async throws {
+  static func verify(_ backup: NetworkBackup, hubPro network: HubProNetwork, printsJSON: Bool) async throws {
 
     Output.note("Asking each device of the backup to answer through this Hub Pro. A ping changes nothing.")
 
@@ -114,7 +114,7 @@ enum TransferCommand {
 
   }
 
-  private static func print(_ backup: HomeBackup, target: TransferTarget, options: TransferPlanOptions, printsJSON: Bool) throws {
+  private static func print(_ backup: NetworkBackup, target: TransferTarget, options: TransferPlanOptions, printsJSON: Bool) throws {
 
     let plan: TransferPlan = try TransferPlanner.plan(from: backup, to: target, existingLinks: options.existingLinks)
 
