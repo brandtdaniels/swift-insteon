@@ -141,9 +141,10 @@ private struct ServiceCalls: HomeCalls {
     let refusal = try? JSONDecoder().decode(Refusal.self, from: response.body)
     if response.statusCode == 401 { return HomePathError.unauthorized }
     if response.statusCode == 403 { return HomePathError.forbidden }
-    // An answer that isn't the service's own refusal, such as a proxy's error page, says nothing
-    // about whether the request reached a device.
-    guard let refusal else { return HomePathError.interrupted }
+    // An answer that isn't the service's own refusal comes from something else. A server error,
+    // such as a proxy's, says nothing about whether the request reached a device. Anything else
+    // is a plain wrong answer, such as a wrong prefix, and nothing was done.
+    guard let refusal else { return response.statusCode >= 500 ? HomePathError.interrupted : HomePathError.badResponse }
     switch refusal.code {
     case "unknownDevice": return ServiceControlError.unknownDevice
     case "invalidLevel": return ServiceControlError.invalidLevel

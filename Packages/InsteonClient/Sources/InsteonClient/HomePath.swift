@@ -35,7 +35,7 @@ public enum HomePathError: Error, Equatable, Sendable {
   /// the home has to issue a credential with a wider scope.
   case forbidden
 
-  /// The home answered with something this library can't read. The path is still good.
+  /// The home answered with something this library can't read, or something that isn't the service. The connection drops the path, so the next call checks it again.
   case badResponse
 
   /// The path was lost after a request may have reached the home.

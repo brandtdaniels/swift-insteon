@@ -230,6 +230,17 @@ struct ServicePathTests {
     #expect(await http.requests.isEmpty)
   }
 
+  @Test func aNon5xxAnswerThatIsNotARefusalIsABadResponseFromSomethingThatIsNotTheService() async throws {
+    for status in [400, 404, 302] {
+      let c = try await calls(FakeHTTPClient { request in
+        request.url?.path == "/api/v1/health" ? healthy : HTTPResponse(statusCode: status, body: Data("<html>no</html>".utf8))
+      })
+
+      await #expect(throws: HomePathError.badResponse) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+      await #expect(throws: HomePathError.badResponse) { _ = try await c.devices() }
+    }
+  }
+
   @Test func aReceiptThatBreaksTheContractIsABadResponse() async throws {
     let status = #"{"group":1,"kind":"percent","value":128,"isOn":true,"percent":50,"label":null}"#
     let bodies = [

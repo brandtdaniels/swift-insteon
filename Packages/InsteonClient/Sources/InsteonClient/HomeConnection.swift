@@ -84,6 +84,7 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
       drop()
       return .unauthorized(paths: [name])
     case HomePathError.badResponse:
+      drop()
       return .badResponse(path: name)
     case HomePathError.forbidden:
       return .forbidden(path: name)
