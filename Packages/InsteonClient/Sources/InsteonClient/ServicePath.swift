@@ -117,7 +117,7 @@ private struct ServiceCalls: HomeCalls {
 
   func execute(_ command: ServiceCommand) async throws -> CommandReceipt {
     let body = try JSONSerialization.data(withJSONObject: Self.wire(command), options: [.sortedKeys])
-    let response = try await path.send(try path.request("POST", "/api/v1/devices/\(command.address)/commands", body: body))
+    let response = try await path.send(try path.request("POST", "/api/v1/devices/\(Self.dotted(command.address))/commands", body: body))
     guard (200..<300).contains(response.statusCode) else { throw try failure(response) }
     do {
       return try JSONDecoder().decode(Receipt.self, from: response.body).receipt()
@@ -125,6 +125,11 @@ private struct ServiceCalls: HomeCalls {
       // The command was accepted and its answer can't be read: it may have taken effect.
       throw HomePathError.badResponse
     }
+  }
+
+  /// The address as the service's path names it: two uppercase hexadecimal digits a byte, dotted.
+  private static func dotted(_ address: InsteonAddress) -> String {
+    [address.high, address.middle, address.low].map { String(format: "%02X", $0) }.joined(separator: ".")
   }
 
   private static func wire(_ command: ServiceCommand) -> [String: Any] {

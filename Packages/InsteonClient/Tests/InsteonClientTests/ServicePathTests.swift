@@ -5,6 +5,7 @@ import FoundationNetworking
 import InsteonClient
 import InsteonCore
 import InsteonNetworking
+import InsteonProtocol
 import InsteonService
 import Testing
 
@@ -103,6 +104,16 @@ struct ServicePathTests {
     let body = try #require(request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] })
     #expect(body["action"] as? String == "on")
     #expect(body["levelPercent"] as? Int == 50)
+  }
+
+  @Test func theAddressInTheCommandPathIsTwoUppercaseHexDigitsPerByteWithDots() async throws {
+    let http = FakeHTTPClient { request in
+      request.url?.path == "/api/v1/health" ? healthy : json(#"{"version":1,"address":"01.0A.FF","outcome":"acknowledged","status":null,"persistence":"saved"}"#)
+    }
+
+    _ = try await calls(http).execute(ServiceCommand(address: InsteonAddress(0x01, 0x0A, 0xFF), action: .off))
+
+    #expect(await http.requests.last?.url?.path == "/api/v1/devices/01.0A.FF/commands")
   }
 
   @Test func aStatusReadComesBackWithItsReading() async throws {
