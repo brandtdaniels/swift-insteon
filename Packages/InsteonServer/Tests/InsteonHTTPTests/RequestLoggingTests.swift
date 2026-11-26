@@ -180,7 +180,7 @@ private actor ScriptedService: InsteonServiceAPI {
   func removeNotificationRule(id: String) async throws {}
   func scenes() async -> SceneListing { SceneListing(scenes: []) }
   func meaning(ofMemberData data: [UInt8], of device: InsteonAddress, group: UInt8) async -> LinkDataMeaning? { nil }
-  func homeBackup() async -> HomeBackup { HomeBackup(createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .service, modem: nil, devices: []) }
+  func networkBackup() async -> NetworkBackup { NetworkBackup(createdAt: Date(timeIntervalSince1970: 1_800_000_000), source: .service, modem: nil, devices: []) }
   func schedules() async throws -> [ScheduleEntry] { [] }
   func putSchedule(_ schedule: ServiceSchedule) async throws -> ScheduleEntry { ScheduleEntry(schedule: schedule, nextRun: nil) }
   func removeSchedule(id: String) async throws {}

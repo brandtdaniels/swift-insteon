@@ -22,7 +22,7 @@ struct TransferPlannerTests {
 
   }
 
-  static func plan(_ backup: HomeBackup, _ records: [BackupRecord]? = [], _ choice: ExistingLinksChoice = .refuse) throws -> TransferPlan {
+  static func plan(_ backup: NetworkBackup, _ records: [BackupRecord]? = [], _ choice: ExistingLinksChoice = .refuse) throws -> TransferPlan {
 
     try TransferPlanner.plan(from: backup, to: target(records), existingLinks: choice)
 
@@ -219,7 +219,7 @@ struct TransferPlannerTests {
 
   @Test func relinksEveryDeviceByHandWhenTheBackupHoldsNoModemDatabase() throws {
 
-    let backup: HomeBackup = HomeBackup(createdAt: Example.createdAt, source: .hubPro, modem: BackupModem(address: Self.old, unreadable: BackupUnreadable(reason: .unavailableFromSource)), devices: [Self.linked(Example.lamp), Example.unreadable(Example.plug)])
+    let backup: NetworkBackup = NetworkBackup(createdAt: Example.createdAt, source: .hubPro, modem: BackupModem(address: Self.old, unreadable: BackupUnreadable(reason: .unavailableFromSource)), devices: [Self.linked(Example.lamp), Example.unreadable(Example.plug)])
     let plan = try Self.plan(backup)
 
     #expect(plan.manual.map(\.reason) == [.noModemDatabase, .noModemDatabase])
@@ -230,7 +230,7 @@ struct TransferPlannerTests {
 
   @Test func relinksEveryDeviceByHandWhenTheBackupNamesNoModem() throws {
 
-    let backup: HomeBackup = HomeBackup(createdAt: Example.createdAt, source: .modem, modem: nil, devices: [Self.linked(Example.lamp)])
+    let backup: NetworkBackup = NetworkBackup(createdAt: Example.createdAt, source: .modem, modem: nil, devices: [Self.linked(Example.lamp)])
     let plan = try Self.plan(backup)
 
     #expect(plan.oldModem == nil)
@@ -286,7 +286,7 @@ struct TransferPlannerTests {
   @Test func neverTargetsAnAddressThatIsNeitherTheNewModemNorADeviceInTheBackup() throws {
 
     let stranger: InsteonAddress = InsteonAddress(0xAB, 0xCD, 0xEF)
-    let backup: HomeBackup = Example.backup([Self.linked(Example.lamp), Self.linked(Example.plug, engine: .i1), Example.unreadable(Example.sensor)], modemRecords: [Example.record(.controller, group: 1, stranger), Example.record(.controller, group: 1, Example.lamp)])
+    let backup: NetworkBackup = Example.backup([Self.linked(Example.lamp), Self.linked(Example.plug, engine: .i1), Example.unreadable(Example.sensor)], modemRecords: [Example.record(.controller, group: 1, stranger), Example.record(.controller, group: 1, Example.lamp)])
     let plan = try Self.plan(backup)
     let allowed: Set<InsteonAddress> = Set(backup.devices.map(\.address)).union([Self.new])
 
@@ -443,7 +443,7 @@ struct TransferPlannerTests {
 
   @Test func makesTheSamePlanBytesForTheSameInputs() throws {
 
-    let backup: HomeBackup = Example.backup([Self.linked(Example.lamp), Self.linked(Example.plug, engine: .i1), Example.unreadable(Example.sensor)])
+    let backup: NetworkBackup = Example.backup([Self.linked(Example.lamp), Self.linked(Example.plug, engine: .i1), Example.unreadable(Example.sensor)])
 
     #expect(try Self.plan(backup).json() == (try Self.plan(backup).json()))
 
@@ -453,8 +453,8 @@ struct TransferPlannerTests {
 
     let lampRecords: [BackupRecord] = [Example.record(.responder, group: 2, Self.old, memory: 0x0FEF), Example.record(.responder, group: 1, Self.old, memory: 0x0FFF), Example.end(0x0FE7)]
     let modem: [BackupRecord] = [Example.record(.controller, group: 1, Example.lamp), Example.record(.controller, group: 2, Example.lamp), Example.record(.controller, group: 1, Example.plug)]
-    let one: HomeBackup = Example.backup([Example.device(Example.lamp, records: lampRecords), Self.linked(Example.plug)], modemRecords: modem)
-    let other: HomeBackup = Example.backup([Self.linked(Example.plug), Example.device(Example.lamp, records: lampRecords)], modemRecords: modem.reversed())
+    let one: NetworkBackup = Example.backup([Example.device(Example.lamp, records: lampRecords), Self.linked(Example.plug)], modemRecords: modem)
+    let other: NetworkBackup = Example.backup([Self.linked(Example.plug), Example.device(Example.lamp, records: lampRecords)], modemRecords: modem.reversed())
 
     var first: TransferPlan = try Self.plan(one)
     let second: TransferPlan = try Self.plan(other)
@@ -470,8 +470,8 @@ struct TransferPlannerTests {
 
   @Test func holdsNoTimeSoARunLaterMakesTheSameBytes() throws {
 
-    let early: HomeBackup = HomeBackup(createdAt: Date(timeIntervalSince1970: 1), source: .modem, modem: BackupModem(address: Self.old, allLinkDatabase: []), devices: [])
-    let late: HomeBackup = HomeBackup(createdAt: Date(timeIntervalSince1970: 2), source: .modem, modem: BackupModem(address: Self.old, allLinkDatabase: []), devices: [])
+    let early: NetworkBackup = NetworkBackup(createdAt: Date(timeIntervalSince1970: 1), source: .modem, modem: BackupModem(address: Self.old, allLinkDatabase: []), devices: [])
+    let late: NetworkBackup = NetworkBackup(createdAt: Date(timeIntervalSince1970: 2), source: .modem, modem: BackupModem(address: Self.old, allLinkDatabase: []), devices: [])
     let text: String = String(decoding: try Self.plan(early).json(), as: UTF8.self)
 
     #expect(!text.contains("1970"))
@@ -482,7 +482,7 @@ struct TransferPlannerTests {
 
   @Test func holdsNoDashCharactersInItsText() throws {
 
-    let backup: HomeBackup = Example.backup([Self.linked(Example.lamp), Self.linked(Example.plug, engine: .i1)])
+    let backup: NetworkBackup = Example.backup([Self.linked(Example.lamp), Self.linked(Example.plug, engine: .i1)])
     let text: String = String(decoding: try Self.plan(backup, [Example.record(.controller, group: 1, Example.outlet)], .replaceDatabase).json(), as: UTF8.self)
 
     #expect(!text.contains("\u{2014}"))

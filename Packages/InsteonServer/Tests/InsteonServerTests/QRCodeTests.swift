@@ -100,7 +100,7 @@ extension QRCodeTests {
   }
 
   @Test func aSystemReaderDecodesAPairingDocument() throws {
-    let document = #"{"api":"/api/v1","credential":"0123456789abcdef.AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-AbCdE","name":"Home","routes":[{"kind":"lan","url":"http://192.168.1.50:8080"}],"scope":"control","serviceId":"00112233445566778899aabbccddeeff","version":1}"#
+    let document = #"{"api":"/api/v1","credential":"0123456789abcdef.AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-AbCdE","name":"Network","routes":[{"kind":"lan","url":"http://192.168.1.50:8080"}],"scope":"control","serviceId":"00112233445566778899aabbccddeeff","version":1}"#
     #expect(try decoded(document) == document)
   }
 }

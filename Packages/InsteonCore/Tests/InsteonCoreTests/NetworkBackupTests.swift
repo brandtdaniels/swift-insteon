@@ -6,9 +6,9 @@ import Testing
 /// The backup file: what it holds, that it reads back as it was written, and that a change to it
 /// is caught.
 @Suite(.timeLimit(.minutes(1)))
-struct HomeBackupTests {
+struct NetworkBackupTests {
 
-  static let sample: HomeBackup = HomeBackup(
+  static let sample: NetworkBackup = NetworkBackup(
     createdAt: BackupExample.createdAt,
     source: .modem,
     modem: BackupModem(
@@ -28,7 +28,7 @@ struct HomeBackupTests {
   @Test func readsBackWhatItWrote() throws {
 
     let data: Data = try Self.sample.encoded()
-    let restored: HomeBackup = try HomeBackup(parsing: data)
+    let restored: NetworkBackup = try NetworkBackup(parsing: data)
 
     #expect(restored == Self.sample)
 
@@ -77,7 +77,7 @@ struct HomeBackupTests {
 
   @Test func recordsWhyADeviceHasNoDatabase() throws {
 
-    let restored: HomeBackup = try HomeBackup(parsing: Self.sample.encoded())
+    let restored: NetworkBackup = try NetworkBackup(parsing: Self.sample.encoded())
 
     #expect(restored.devices.first?.unreadable?.reason == .noAnswer)
     #expect(restored.devices.first?.allLinkDatabase == nil)
@@ -88,8 +88,8 @@ struct HomeBackupTests {
 
     let rule: BackupValue = .object(["id": .string("front-door"), "includeDetail": .bool(true), "cooldownSeconds": .integer(60)])
     let route = BackupRoute(kind: "relay", ticket: "ticket-1")
-    let backup: HomeBackup = Self.sample.including(notificationRules: [rule], routes: [route], schedules: [])
-    let restored: HomeBackup = try HomeBackup(parsing: backup.encoded())
+    let backup: NetworkBackup = Self.sample.including(notificationRules: [rule], routes: [route], schedules: [])
+    let restored: NetworkBackup = try NetworkBackup(parsing: backup.encoded())
 
     #expect(restored.notificationRules == [rule])
     #expect(restored.routes == [route])
@@ -100,9 +100,9 @@ struct HomeBackupTests {
   @Test func keepsTheServicesSchedulesAndCoversThemWithTheChecksum() throws {
 
     let schedule: BackupValue = .object(["id": .string("porch"), "enabled": .bool(true)])
-    let without: HomeBackup = Self.sample.including(notificationRules: [], routes: [], schedules: [])
-    let backup: HomeBackup = Self.sample.including(notificationRules: [], routes: [], schedules: [schedule])
-    let restored: HomeBackup = try HomeBackup(parsing: backup.encoded())
+    let without: NetworkBackup = Self.sample.including(notificationRules: [], routes: [], schedules: [])
+    let backup: NetworkBackup = Self.sample.including(notificationRules: [], routes: [], schedules: [schedule])
+    let restored: NetworkBackup = try NetworkBackup(parsing: backup.encoded())
 
     #expect(Self.sample.schedules == nil)
     #expect(restored.schedules == [schedule])
@@ -114,10 +114,10 @@ struct HomeBackupTests {
   @Test func refusesAFileWhoseSchedulesChangedAfterItWasWritten() throws {
 
     let schedule: BackupValue = .object(["id": .string("porch")])
-    let backup: HomeBackup = Self.sample.including(notificationRules: [], routes: [], schedules: [schedule])
+    let backup: NetworkBackup = Self.sample.including(notificationRules: [], routes: [], schedules: [schedule])
     let text: String = String(decoding: try backup.encoded(), as: UTF8.self).replacingOccurrences(of: "\"porch\"", with: "\"garage\"")
 
-    #expect(throws: HomeBackupError.checksumMismatch) { try HomeBackup(parsing: Data(text.utf8)) }
+    #expect(throws: NetworkBackupError.checksumMismatch) { try NetworkBackup(parsing: Data(text.utf8)) }
 
   }
 
@@ -135,9 +135,9 @@ struct HomeBackupTests {
     let text: String = String(decoding: try Self.sample.encoded(), as: UTF8.self)
     let changed: Data = Data(text.replacingOccurrences(of: "\"01 02 03\"", with: "\"01 02 04\"").utf8)
 
-    #expect(throws: HomeBackupError.checksumMismatch) { try HomeBackup(parsing: changed) }
+    #expect(throws: NetworkBackupError.checksumMismatch) { try NetworkBackup(parsing: changed) }
 
-    let check: HomeBackupCheck = try HomeBackup.check(changed)
+    let check: NetworkBackupCheck = try NetworkBackup.check(changed)
 
     #expect(!check.checksumMatches)
     #expect(!check.isComplete)
@@ -149,7 +149,7 @@ struct HomeBackupTests {
     let text: String = String(decoding: try Self.sample.encoded(), as: UTF8.self)
     let lines: [String] = text.components(separatedBy: "\n").filter { !$0.contains("\"checksum\"") }
 
-    #expect(throws: HomeBackupError.notABackup("The file has no \"checksum\".")) { try HomeBackup(parsing: Data(lines.joined(separator: "\n").utf8)) }
+    #expect(throws: NetworkBackupError.notABackup("The file has no \"checksum\".")) { try NetworkBackup(parsing: Data(lines.joined(separator: "\n").utf8)) }
 
   }
 
@@ -160,19 +160,19 @@ struct HomeBackupTests {
     let text: String = String(decoding: try Self.sample.encoded(), as: UTF8.self)
     let sealed = try #require(Self.reseal(text))
 
-    let restored: HomeBackup = try HomeBackup(parsing: sealed)
+    let restored: NetworkBackup = try NetworkBackup(parsing: sealed)
 
     #expect(restored.devices == Self.sample.devices)
 
     let tampered: Data = Data(String(decoding: sealed, as: UTF8.self).replacingOccurrences(of: "\"dusk\"", with: "\"dawn\"").utf8)
 
-    #expect(throws: HomeBackupError.checksumMismatch) { try HomeBackup(parsing: tampered) }
+    #expect(throws: NetworkBackupError.checksumMismatch) { try NetworkBackup(parsing: tampered) }
 
   }
 
   @Test func countsWhatTheFileHolds() throws {
 
-    let check: HomeBackupCheck = try HomeBackup.check(Self.sample.encoded())
+    let check: NetworkBackupCheck = try NetworkBackup.check(Self.sample.encoded())
 
     #expect(check.checksumMatches)
     #expect(check.backup.devices.count == 3)
@@ -186,8 +186,8 @@ struct HomeBackupTests {
 
   @Test func callsAFileWholeWhenEveryDatabaseWasRead() throws {
 
-    let whole: HomeBackup = BackupExample.backup([BackupExample.device(BackupExample.lamp)])
-    let check: HomeBackupCheck = try HomeBackup.check(whole.encoded())
+    let whole: NetworkBackup = BackupExample.backup([BackupExample.device(BackupExample.lamp)])
+    let check: NetworkBackupCheck = try NetworkBackup.check(whole.encoded())
 
     #expect(check.isComplete)
 
@@ -196,7 +196,7 @@ struct HomeBackupTests {
   @Test func listsADeviceWhoseDatabaseLacksItsEndAsIncomplete() throws {
 
     let partial: BackupDevice = BackupExample.device(BackupExample.lamp, records: [BackupExample.record(.responder, group: 1, BackupExample.oldModem, memory: 0x0FFF)])
-    let check: HomeBackupCheck = try HomeBackup.check(BackupExample.backup([partial]).encoded())
+    let check: NetworkBackupCheck = try NetworkBackup.check(BackupExample.backup([partial]).encoded())
 
     #expect(check.unreadableDevices.map(\.unreadable.reason) == [.incomplete])
     #expect(!check.isComplete)
@@ -207,19 +207,19 @@ struct HomeBackupTests {
 
   @Test func refusesATextThatIsNotJSON() {
 
-    #expect(throws: HomeBackupError.notJSON) { try HomeBackup(parsing: Data("not json".utf8)) }
+    #expect(throws: NetworkBackupError.notJSON) { try NetworkBackup(parsing: Data("not json".utf8)) }
 
   }
 
   @Test func refusesJSONThatIsNotAnObject() {
 
-    #expect(throws: HomeBackupError.self) { try HomeBackup(parsing: Data("[1, 2]".utf8)) }
+    #expect(throws: NetworkBackupError.self) { try NetworkBackup(parsing: Data("[1, 2]".utf8)) }
 
   }
 
   @Test func refusesAFileWithNoFormat() {
 
-    #expect(throws: HomeBackupError.self) { try HomeBackup(parsing: Data("{}".utf8)) }
+    #expect(throws: NetworkBackupError.self) { try NetworkBackup(parsing: Data("{}".utf8)) }
 
   }
 
@@ -227,7 +227,7 @@ struct HomeBackupTests {
 
     let text: String = String(decoding: try Self.sample.encoded(), as: UTF8.self).replacingOccurrences(of: "\"format\" : 1", with: "\"format\" : 2")
 
-    #expect(throws: HomeBackupError.unsupportedFormat(2)) { try HomeBackup(parsing: Data(text.utf8)) }
+    #expect(throws: NetworkBackupError.unsupportedFormat(2)) { try NetworkBackup(parsing: Data(text.utf8)) }
 
   }
 
@@ -235,7 +235,7 @@ struct HomeBackupTests {
 
     let text: String = String(decoding: try Self.sample.encoded(), as: UTF8.self).replacingOccurrences(of: "\"01 02 03\"", with: "\"01 02\"")
 
-    #expect(throws: HomeBackupError.self) { try HomeBackup(parsing: Data(text.utf8)) }
+    #expect(throws: NetworkBackupError.self) { try NetworkBackup(parsing: Data(text.utf8)) }
 
   }
 
@@ -244,7 +244,7 @@ struct HomeBackupTests {
     let text: String = String(decoding: try Self.sample.encoded(), as: UTF8.self)
     let both: String = text.replacingOccurrences(of: "\"unreadable\" : {", with: "\"allLinkDatabase\" : {\"delta\": 1, \"records\": []}, \"unreadable\" : {")
 
-    #expect(throws: HomeBackupError.self) { try HomeBackup.check(Data(both.utf8)) }
+    #expect(throws: NetworkBackupError.self) { try NetworkBackup.check(Data(both.utf8)) }
 
   }
 
@@ -252,7 +252,7 @@ struct HomeBackupTests {
 
     let text: String = String(decoding: try Self.sample.encoded(), as: UTF8.self).replacingOccurrences(of: "\"1A.2B.3C\"", with: "\"1A.2B\"")
 
-    #expect(throws: HomeBackupError.self) { try HomeBackup.check(Data(text.utf8)) }
+    #expect(throws: NetworkBackupError.self) { try NetworkBackup.check(Data(text.utf8)) }
 
   }
 
@@ -268,7 +268,7 @@ struct HomeBackupTests {
     object["checksum"] = nil
     object["schedules"] = ["dusk"]
 
-    guard let checksum = try? HomeBackup.checksum(ofCanonical: object) else {
+    guard let checksum = try? NetworkBackup.checksum(ofCanonical: object) else {
 
       return nil
 

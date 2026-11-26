@@ -14,7 +14,7 @@ import InsteonService
 /// backup with the same error code instead of leaving it out. Schedules are written as the
 /// schedules file writes them, without the time each runs next, which isn't configuration. Timers
 /// are left out: a timer is a countdown.
-struct BackupAPI<Service: HomeBackupProviding & NotificationRuleManaging & ScheduleManaging>: Sendable {
+struct BackupAPI<Service: NetworkBackupProviding & NotificationRuleManaging & ScheduleManaging>: Sendable {
   let service: Service
   let routes: any RouteStoring
 
@@ -22,7 +22,7 @@ struct BackupAPI<Service: HomeBackupProviding & NotificationRuleManaging & Sched
     let rules = try await service.notificationRules().map(NotificationRuleRecord.init)
     let registered = try await routes.routes()
     let schedules = try await service.schedules().map { ScheduleRecord($0.schedule) }
-    let backup = await service.homeBackup().including(
+    let backup = await service.networkBackup().including(
       notificationRules: try rules.map { try JSONDecoder().decode(BackupValue.self, from: JSONEncoder().encode($0)) },
       routes: registered.map { BackupRoute(kind: $0.kind, ticket: $0.ticket) },
       schedules: try schedules.map { try JSONDecoder().decode(BackupValue.self, from: JSONEncoder().encode($0)) }

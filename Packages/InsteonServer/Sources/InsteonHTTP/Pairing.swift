@@ -29,7 +29,7 @@ public struct PairingDocument: Codable, Sendable, Equatable {
   public let version: Int
   /// Names the service, the same for every client that pairs with it.
   public let serviceId: String
-  /// The home's name, for a client to show.
+  /// The network's name, for a client to show.
   public let name: String
   /// The client's token, which the service shows once.
   public let credential: String
@@ -48,16 +48,16 @@ public struct PairingDocument: Codable, Sendable, Equatable {
   }
 }
 
-/// The home's name and the routes a pairing document lists.
+/// The network's name and the routes a pairing document lists.
 public struct PairingConfiguration: Sendable, Equatable {
-  /// The home's name, for a client to show.
-  public var homeName: String
+  /// The network's name, for a client to show.
+  public var networkName: String
   /// How to reach the service, most preferred first.
   public var routes: [PairingRoute]
 
   /// Creates a configuration.
-  public init(homeName: String = "Home", routes: [PairingRoute] = []) {
-    self.homeName = homeName
+  public init(networkName: String = "Network", routes: [PairingRoute] = []) {
+    self.networkName = networkName
     self.routes = routes
   }
 
@@ -65,6 +65,6 @@ public struct PairingConfiguration: Sendable, Equatable {
   ///
   /// It lists this configuration's routes, then `registered`, the routes transports registered, in registration order.
   public func document(for issued: IssuedClient, serviceID: String, registered: [RegisteredRoute] = []) -> PairingDocument {
-    PairingDocument(version: 1, serviceId: serviceID, name: homeName, credential: issued.token, scope: issued.client.scope, api: "/api/v1", routes: routes + registered.map(\.pairingRoute))
+    PairingDocument(version: 1, serviceId: serviceID, name: networkName, credential: issued.token, scope: issued.client.scope, api: "/api/v1", routes: routes + registered.map(\.pairingRoute))
   }
 }

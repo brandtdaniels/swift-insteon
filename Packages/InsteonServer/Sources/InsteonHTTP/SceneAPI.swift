@@ -6,7 +6,7 @@ import InsteonLinking
 import InsteonProtocol
 import InsteonService
 
-/// Listing the scenes of the home. It needs the `read` scope, which the authentication middleware
+/// Listing the scenes of the network. It needs the `read` scope, which the authentication middleware
 /// has already enforced. The service answers from the ALL-Link databases it has cached and sends
 /// nothing to hardware.
 struct SceneAPI<Service: SceneProviding>: Sendable {

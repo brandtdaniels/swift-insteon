@@ -54,11 +54,11 @@ enum BackupExample {
 
   /// A backup of the old modem with the devices, whose database is `modemRecords`: by default
   /// the old modem controls group 1 of each device.
-  static func backup(_ devices: [BackupDevice], modemRecords: [BackupRecord]? = nil, source: BackupSourceKind = .modem) -> HomeBackup {
+  static func backup(_ devices: [BackupDevice], modemRecords: [BackupRecord]? = nil, source: BackupSourceKind = .modem) -> NetworkBackup {
 
     let records: [BackupRecord] = modemRecords ?? devices.map { (device: BackupDevice) -> BackupRecord in record(.controller, group: 1, device.address) }
 
-    return HomeBackup(createdAt: createdAt, source: source, modem: BackupModem(address: oldModem, allLinkDatabase: records), devices: devices)
+    return NetworkBackup(createdAt: createdAt, source: source, modem: BackupModem(address: oldModem, allLinkDatabase: records), devices: devices)
 
   }
 

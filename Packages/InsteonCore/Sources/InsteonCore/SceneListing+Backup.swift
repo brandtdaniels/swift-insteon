@@ -12,7 +12,7 @@ extension SceneListing {
   /// or a device's link to it.
   ///
   /// - Parameter backup: The backup.
-  public init(_ backup: HomeBackup) {
+  public init(_ backup: NetworkBackup) {
 
     guard let modem = backup.modem, let modemRecords = modem.allLinkDatabase else {
 

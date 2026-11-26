@@ -3,8 +3,8 @@ import InsteonCLISupport
 import InsteonCore
 
 /// `insteon backup`: reads the modem's network, or a Hub Pro's device list, into a file. Every
-/// request it sends is a read. The decisions are in InsteonCore's `HomeBackupReader` and
-/// InsteonCLISupport's `HomeBackupText` and `BackupFile`; this connects and prints.
+/// request it sends is a read. The decisions are in InsteonCore's `NetworkBackupReader` and
+/// InsteonCLISupport's `NetworkBackupText` and `BackupFile`; this connects and prints.
 enum BackupCommand {
 
   /// Reads a modem's network and writes the backup.
@@ -12,9 +12,9 @@ enum BackupCommand {
 
     try await IdentityStore.withNetwork(modem: modem, hub: hub, names: names) { (cached: CachedNetwork) async throws -> Void in
 
-      let backup: HomeBackup = try await HomeBackupReader.read(network: cached.network, createdAt: Date()) { (progress: BackupProgress) -> Void in
+      let backup: NetworkBackup = try await NetworkBackupReader.read(network: cached.network, createdAt: Date()) { (progress: BackupProgress) -> Void in
 
-        if let line = HomeBackupText.line(for: progress) {
+        if let line = NetworkBackupText.line(for: progress) {
 
           Output.note(line)
 
@@ -33,7 +33,7 @@ enum BackupCommand {
 
     Output.note("Reading the Hub Pro's device list...")
 
-    let backup: HomeBackup = try await HomeBackupReader.read(hubPro: network, createdAt: Date())
+    let backup: NetworkBackup = try await NetworkBackupReader.read(hubPro: network, createdAt: Date())
 
     try finish(backup, options, printsJSON: printsJSON)
 
@@ -42,10 +42,10 @@ enum BackupCommand {
   /// Checks a backup file, which needs no modem.
   static func check(path: String, printsJSON: Bool) throws {
 
-    let check: HomeBackupCheck = try HomeBackup.check(BackupFile.read(path))
-    let report: HomeBackupText.Report = HomeBackupText.report(check, path: path)
+    let check: NetworkBackupCheck = try NetworkBackup.check(BackupFile.read(path))
+    let report: NetworkBackupText.Report = NetworkBackupText.report(check, path: path)
 
-    try print(report, lines: HomeBackupText.checked(report), printsJSON: printsJSON)
+    try print(report, lines: NetworkBackupText.checked(report), printsJSON: printsJSON)
 
     guard check.checksumMatches else {
 
@@ -63,7 +63,7 @@ enum BackupCommand {
 
   // MARK: - Writing
 
-  private static func finish(_ backup: HomeBackup, _ options: BackupOptions, printsJSON: Bool) throws {
+  private static func finish(_ backup: NetworkBackup, _ options: BackupOptions, printsJSON: Bool) throws {
 
     // Control-C after the reading stops here, so a canceled run writes nothing.
     try Task.checkCancellation()
@@ -72,10 +72,10 @@ enum BackupCommand {
 
     try BackupFile.write(data, to: options.path, overwrites: options.overwrites)
 
-    let check: HomeBackupCheck = try HomeBackup.check(data)
-    let report: HomeBackupText.Report = HomeBackupText.report(check, path: options.path)
+    let check: NetworkBackupCheck = try NetworkBackup.check(data)
+    let report: NetworkBackupText.Report = NetworkBackupText.report(check, path: options.path)
 
-    try print(report, lines: HomeBackupText.written(report), printsJSON: printsJSON)
+    try print(report, lines: NetworkBackupText.written(report), printsJSON: printsJSON)
 
     guard check.isComplete else {
 
@@ -85,7 +85,7 @@ enum BackupCommand {
 
   }
 
-  private static func print(_ report: HomeBackupText.Report, lines: [String], printsJSON: Bool) throws {
+  private static func print(_ report: NetworkBackupText.Report, lines: [String], printsJSON: Bool) throws {
 
     if printsJSON {
 

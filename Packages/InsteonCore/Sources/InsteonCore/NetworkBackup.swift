@@ -2,7 +2,7 @@ import Crypto
 import Foundation
 import InsteonProtocol
 
-/// What a ``HomeBackup`` was taken from.
+/// What a ``NetworkBackup`` was taken from.
 public enum BackupSourceKind: String, Codable, Hashable, Sendable {
   /// A modem or a Hub, read through its serial commands: the modem's ALL-Link database and each
   /// device's.
@@ -22,10 +22,10 @@ public enum BackupSourceKind: String, Codable, Hashable, Sendable {
 /// or the contents of an environment file. It holds addresses and what devices reported.
 ///
 /// ```swift
-/// let backup = try await HomeBackupReader.read(network: network, createdAt: Date())
+/// let backup = try await NetworkBackupReader.read(network: network, createdAt: Date())
 /// try backup.encoded().write(to: url)
 ///
-/// let restored = try HomeBackup(parsing: Data(contentsOf: url))
+/// let restored = try NetworkBackup(parsing: Data(contentsOf: url))
 /// print(restored.devices.count, "devices")
 /// ```
 ///
@@ -34,7 +34,7 @@ public enum BackupSourceKind: String, Codable, Hashable, Sendable {
 /// service's schedules, is an optional key and doesn't change the number. The `checksum` is the
 /// SHA-256 of the file's JSON with the checksum left out, written with sorted keys and no
 /// spacing, so a change to any part of the file shows.
-public struct HomeBackup: Codable, Hashable, Sendable {
+public struct NetworkBackup: Codable, Hashable, Sendable {
 
   /// The format this package writes and reads.
   public static let currentFormat: Int = 1
@@ -98,7 +98,7 @@ public struct HomeBackup: Codable, Hashable, Sendable {
     self.notificationRules = notificationRules
     self.routes = routes
     self.schedules = schedules
-    self.checksum = Self.checksum(of: HomeBackupBody(format: format, createdAt: self.createdAt, source: source, modem: modem, devices: self.devices, notificationRules: notificationRules, routes: routes, schedules: schedules))
+    self.checksum = Self.checksum(of: NetworkBackupBody(format: format, createdAt: self.createdAt, source: source, modem: modem, devices: self.devices, notificationRules: notificationRules, routes: routes, schedules: schedules))
 
   }
 
@@ -110,9 +110,9 @@ public struct HomeBackup: Codable, Hashable, Sendable {
   ///   - routes: The routes.
   ///   - schedules: The schedules, each as the schedules file writes it.
   /// - Returns: The backup.
-  public func including(notificationRules: [BackupValue], routes: [BackupRoute], schedules: [BackupValue]) -> HomeBackup {
+  public func including(notificationRules: [BackupValue], routes: [BackupRoute], schedules: [BackupValue]) -> NetworkBackup {
 
-    HomeBackup(createdAt: createdAt, source: source, modem: modem, devices: devices, notificationRules: notificationRules, routes: routes, schedules: schedules)
+    NetworkBackup(createdAt: createdAt, source: source, modem: modem, devices: devices, notificationRules: notificationRules, routes: routes, schedules: schedules)
 
   }
 
@@ -131,15 +131,15 @@ public struct HomeBackup: Codable, Hashable, Sendable {
   /// Reads a backup from a file's contents and checks it.
   ///
   /// - Parameter data: The file's contents.
-  /// - Throws: ``HomeBackupError`` if the file isn't JSON, is of a format this package doesn't
+  /// - Throws: ``NetworkBackupError`` if the file isn't JSON, is of a format this package doesn't
   ///   read, isn't a backup, or doesn't match its checksum.
   public init(parsing data: Data) throws {
 
-    let inspected: HomeBackupInspection = try Self.inspect(data)
+    let inspected: NetworkBackupInspection = try Self.inspect(data)
 
     guard inspected.checksumMatches else {
 
-      throw HomeBackupError.checksumMismatch
+      throw NetworkBackupError.checksumMismatch
 
     }
 
@@ -152,19 +152,19 @@ public struct HomeBackup: Codable, Hashable, Sendable {
   ///
   /// - Parameter data: The file's contents.
   /// - Returns: What the file holds.
-  /// - Throws: ``HomeBackupError`` if the file isn't JSON, is of a format this package doesn't
+  /// - Throws: ``NetworkBackupError`` if the file isn't JSON, is of a format this package doesn't
   ///   read, or isn't a backup.
-  public static func check(_ data: Data) throws -> HomeBackupCheck {
+  public static func check(_ data: Data) throws -> NetworkBackupCheck {
 
-    let inspected: HomeBackupInspection = try inspect(data)
+    let inspected: NetworkBackupInspection = try inspect(data)
 
-    return HomeBackupCheck(backup: inspected.backup, checksumMatches: inspected.checksumMatches)
+    return NetworkBackupCheck(backup: inspected.backup, checksumMatches: inspected.checksumMatches)
 
   }
 
   // MARK: - Reading
 
-  private static func inspect(_ data: Data) throws -> HomeBackupInspection {
+  private static func inspect(_ data: Data) throws -> NetworkBackupInspection {
 
     let object: Any
 
@@ -174,25 +174,25 @@ public struct HomeBackup: Codable, Hashable, Sendable {
 
     } catch {
 
-      throw HomeBackupError.notJSON
+      throw NetworkBackupError.notJSON
 
     }
 
     guard var fields = object as? [String: Any] else {
 
-      throw HomeBackupError.notABackup("The file's JSON isn't an object.")
+      throw NetworkBackupError.notABackup("The file's JSON isn't an object.")
 
     }
 
     guard let format = fields["format"] as? Int else {
 
-      throw HomeBackupError.notABackup("The file has no format number.")
+      throw NetworkBackupError.notABackup("The file has no format number.")
 
     }
 
     guard format >= 1, format <= currentFormat else {
 
-      throw HomeBackupError.unsupportedFormat(format)
+      throw NetworkBackupError.unsupportedFormat(format)
 
     }
 
@@ -200,21 +200,21 @@ public struct HomeBackup: Codable, Hashable, Sendable {
 
     fields["checksum"] = nil
 
-    let backup: HomeBackup
+    let backup: NetworkBackup
 
     do {
 
-      backup = try decoder().decode(HomeBackup.self, from: data)
+      backup = try decoder().decode(NetworkBackup.self, from: data)
 
     } catch let error as DecodingError {
 
-      throw HomeBackupError.notABackup(describe(error))
+      throw NetworkBackupError.notABackup(describe(error))
 
     }
 
     let actual: String? = try? checksum(ofCanonical: fields)
 
-    return HomeBackupInspection(backup: backup, checksumMatches: declared != nil && declared == actual)
+    return NetworkBackupInspection(backup: backup, checksumMatches: declared != nil && declared == actual)
 
   }
 
@@ -233,7 +233,7 @@ public struct HomeBackup: Codable, Hashable, Sendable {
 
   // MARK: - Checksum
 
-  private static func checksum(of body: HomeBackupBody) -> String {
+  private static func checksum(of body: NetworkBackupBody) -> String {
 
     let encoder: JSONEncoder = encoder(formatting: [])
 
@@ -320,7 +320,7 @@ public struct HomeBackup: Codable, Hashable, Sendable {
 }
 
 /// The keys of a backup that its checksum covers.
-private struct HomeBackupBody: Encodable {
+private struct NetworkBackupBody: Encodable {
 
   let format: Int
   let createdAt: Date
@@ -333,15 +333,15 @@ private struct HomeBackupBody: Encodable {
 
 }
 
-private struct HomeBackupInspection {
+private struct NetworkBackupInspection {
 
-  let backup: HomeBackup
+  let backup: NetworkBackup
   let checksumMatches: Bool
 
 }
 
 /// Why a file isn't a backup this package can use.
-public enum HomeBackupError: Error, Hashable, Sendable {
+public enum NetworkBackupError: Error, Hashable, Sendable {
   /// The file isn't JSON.
   case notJSON
   /// The file is JSON that isn't a backup, with what's wrong.
@@ -353,7 +353,7 @@ public enum HomeBackupError: Error, Hashable, Sendable {
   case checksumMismatch
 }
 
-extension HomeBackupError: CustomStringConvertible, LocalizedError {
+extension NetworkBackupError: CustomStringConvertible, LocalizedError {
 
   /// A one-line explanation.
   public var description: String {
@@ -364,7 +364,7 @@ extension HomeBackupError: CustomStringConvertible, LocalizedError {
     case let .notABackup(reason):
       "The file isn't a backup: \(reason)"
     case let .unsupportedFormat(format):
-      "The backup's format is \(format), and this version reads formats 1 through \(HomeBackup.currentFormat). Update insteon to read it."
+      "The backup's format is \(format), and this version reads formats 1 through \(NetworkBackup.currentFormat). Update insteon to read it."
     case .checksumMismatch:
       "The backup's checksum doesn't match its contents, so it was changed or damaged after it was written. Nothing was used from it."
     }
@@ -380,8 +380,8 @@ extension HomeBackupError: CustomStringConvertible, LocalizedError {
 
 }
 
-/// What a backup file holds, from ``HomeBackup/check(_:)``.
-public struct HomeBackupCheck: Hashable, Sendable {
+/// What a backup file holds, from ``NetworkBackup/check(_:)``.
+public struct NetworkBackupCheck: Hashable, Sendable {
 
   /// A device whose ALL-Link database the backup doesn't hold, with why.
   public struct UnreadableDevice: Hashable, Sendable {
@@ -395,7 +395,7 @@ public struct HomeBackupCheck: Hashable, Sendable {
   }
 
   /// The backup the file holds.
-  public var backup: HomeBackup
+  public var backup: NetworkBackup
 
   /// Whether the file's checksum matches its contents.
   public var checksumMatches: Bool
@@ -405,7 +405,7 @@ public struct HomeBackupCheck: Hashable, Sendable {
   /// - Parameters:
   ///   - backup: The backup.
   ///   - checksumMatches: Whether the file's checksum matches its contents.
-  public init(backup: HomeBackup, checksumMatches: Bool) {
+  public init(backup: NetworkBackup, checksumMatches: Bool) {
 
     self.backup = backup
     self.checksumMatches = checksumMatches
