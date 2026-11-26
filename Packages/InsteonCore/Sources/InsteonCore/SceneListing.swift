@@ -48,14 +48,18 @@ public struct SceneListing: Hashable, Sendable {
     /// Who controls the group.
     public var controller: LinkEndpoint
 
-    /// The devices that respond to it, with each one's data bytes.
+    /// The devices that respond to it, with each one's data bytes. The modem itself, when it
+    /// responds to a group a device controls, is not listed, and a device with two records for the
+    /// group is listed twice with each record's bytes.
     public var members: [Member]
 
     /// The records whose other half is missing, so the link is not whole.
     public var halfLinks: [AllLinkGroupReading.HalfLink]
 
     /// Whether the modem can change and run the scene: the modem controls it, and it is a group
-    /// from 1 through 254. Group 0 is the group linking uses by default, and 255 is reserved.
+    /// from 1 through 254. Group 0 is the group `insteon link` uses by default, and 255 is
+    /// `AllLinkGroupNumber.all`, which addresses every group, so neither is a scene the modem
+    /// is asked to change or run.
     public var isWritable: Bool {
 
       controller == .modem && (1...254).contains(number)
@@ -139,14 +143,30 @@ public struct SceneListing: Hashable, Sendable {
 
       scenes[index].halfLinks = reading.halfLinks.filter { (half: AllLinkGroupReading.HalfLink) -> Bool in
 
-        half.record.group.rawValue == scene.number && (!half.record.flags.contains(.controller) || half.endpoint == scene.controller)
+        guard half.record.group.rawValue == scene.number else { return false }
+
+        // A controller record belongs to the group of the endpoint that holds it. A responder
+        // record belongs to the group of the controller it names: a device that some scene lists
+        // as controlling, or otherwise the modem, whose address the reading doesn't carry.
+        if half.record.flags.contains(.controller) {
+
+          return half.endpoint == scene.controller
+
+        }
+
+        let names: LinkEndpoint = .device(half.record.address)
+        let isListedDevice: Bool = scenes.contains { $0.controller == names && $0.number == scene.number }
+
+        return isListedDevice ? scene.controller == names : scene.controller == .modem
 
       }
 
     }
 
-    self.scenes = scenes.sorted(by: Self.ordered)
-    self.looseHalfLinks = reading.halfLinks.filter { (half: AllLinkGroupReading.HalfLink) -> Bool in !scenes.contains { $0.halfLinks.contains(half) } }
+    let ordered: [Scene] = scenes.sorted(by: Self.ordered)
+
+    self.scenes = ordered
+    self.looseHalfLinks = reading.halfLinks.filter { (half: AllLinkGroupReading.HalfLink) -> Bool in !ordered.contains { $0.halfLinks.contains(half) } }
     self.unreadable = reading.unreadable
     self.unlisted = reading.unlisted
 

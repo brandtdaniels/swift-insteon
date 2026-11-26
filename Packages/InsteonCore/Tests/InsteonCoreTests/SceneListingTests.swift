@@ -99,6 +99,44 @@ struct SceneListingTests {
 
   }
 
+  @Test func putsAResponderHalfLinkInTheSceneOfTheControllerItNamesAndNoOther() {
+
+    // A plug responds to group 5 of the remote, which holds no matching record.
+    let toRemote = AllLinkGroupReading.HalfLink(endpoint: .device(Self.plug), record: Self.record([.inUse, .usedBefore], group: 5, Self.remote))
+    let reading = AllLinkGroupReading(
+      groups: [
+        AllLinkGroup(controller: .modem, number: Self.group(5), responders: [AllLinkGroup.Responder(.device(Self.lamp))]),
+        AllLinkGroup(controller: .device(Self.remote), number: Self.group(5), responders: [AllLinkGroup.Responder(.device(Self.lamp))])
+      ],
+      halfLinks: [toRemote], unreadable: [], unlisted: []
+    )
+    let scenes = SceneListing(reading).scenes
+
+    #expect(scenes[0].controller == .modem)
+    #expect(scenes[0].halfLinks.isEmpty)
+    #expect(scenes[1].controller == .device(Self.remote))
+    #expect(scenes[1].halfLinks == [toRemote])
+
+  }
+
+  @Test func putsAResponderHalfLinkNamingAnUnlistedControllerInTheModemsSceneOfThatNumber() {
+
+    // The record names an address no group lists as a controller, which is the modem's.
+    let toModem = AllLinkGroupReading.HalfLink(endpoint: .device(Self.plug), record: Self.record([.inUse, .usedBefore], group: 5, InsteonAddress(0x11, 0x22, 0x33)))
+    let reading = AllLinkGroupReading(
+      groups: [
+        AllLinkGroup(controller: .modem, number: Self.group(5), responders: [AllLinkGroup.Responder(.device(Self.lamp))]),
+        AllLinkGroup(controller: .device(Self.remote), number: Self.group(5), responders: [AllLinkGroup.Responder(.device(Self.lamp))])
+      ],
+      halfLinks: [toModem], unreadable: [], unlisted: []
+    )
+    let scenes = SceneListing(reading).scenes
+
+    #expect(scenes[0].halfLinks == [toModem])
+    #expect(scenes[1].halfLinks.isEmpty)
+
+  }
+
   @Test func reportsTheDevicesItCouldNotReadOrDidNotKnowSoASceneIsNeverShownAsWhole() {
 
     let reading = AllLinkGroupReading(groups: [], halfLinks: [], unreadable: [Self.plug], unlisted: [Self.remote])
