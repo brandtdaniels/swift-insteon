@@ -130,6 +130,19 @@ struct DevicesScreenTests {
     #expect(screen.state == .idle)
   }
 
+  @Test(arguments: [
+    (UInt8(0), DeviceRow.Level.off), (1, .percent(1)), (2, .percent(1)), (3, .percent(1)), (4, .percent(2)),
+    (127, .percent(50)), (128, .percent(50)), (254, .percent(100)), (255, .percent(100))
+  ])
+  func aRawLevelShowsAsOffOnlyWhenItIsZeroAndAtLeastOnePercentOtherwise(raw: UInt8, shown: DeviceRow.Level) async {
+    let device = ServiceDevice(address: lamp.address, productName: nil, canTurnOnAndOff: true, canDim: true, value: raw, lastAnsweredAt: nil)
+    let screen = DevicesScreen(network: ScriptedNetwork(devices: [device]))
+
+    await screen.load()
+
+    #expect(screen.rows[0].level == shown)
+  }
+
   @Test func aDeviceThatReportedALevelShowsItOnOrOff() async {
     let on = ServiceDevice(address: lamp.address, productName: lamp.productName, canTurnOnAndOff: true, canDim: true, value: 128, lastAnsweredAt: nil)
     let screen = DevicesScreen(network: ScriptedNetwork(devices: [on, lamp]))

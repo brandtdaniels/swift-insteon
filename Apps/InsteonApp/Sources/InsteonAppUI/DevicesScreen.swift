@@ -114,7 +114,8 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
     switch value {
     case nil: .unknown
     case 0?: .off
-    case let value?: .percent(Int((Double(value) * 100 / 255).rounded()))
+    // Only 0 is off, so a level that rounds to 0% still shows as on, at the least a percent can say.
+    case let value?: .percent(max(1, Int((Double(value) * 100 / 255).rounded())))
     }
   }
 
