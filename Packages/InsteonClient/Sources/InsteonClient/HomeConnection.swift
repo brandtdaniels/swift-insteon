@@ -52,13 +52,15 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
 
   public func execute(_ command: ServiceCommand) async throws -> CommandReceipt {
     var failed: Int?
+    var reasons = skipped
     for _ in 0..<2 {
       let (index, generation, calls) = try await reach(lastFailed: failed)
       do {
         return try await calls.execute(command)
-      } catch HomePathError.notReached {
+      } catch HomePathError.notReached(let reason) {
         // Nothing was sent: the next path can take it.
         if open?.generation == generation { open = nil }
+        reasons.append(PathFailure(path: paths[index].name, reason: reason))
         failed = index
       } catch {
         let lost = try lose(error, at: index, generation: generation)
@@ -66,7 +68,7 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
         throw lost
       }
     }
-    throw HomeError.noPathReached(skipped)
+    throw HomeError.noPathReached(reasons)
   }
 
   /// Drops the open path and names what was lost, or rethrows an error that isn't the path's.

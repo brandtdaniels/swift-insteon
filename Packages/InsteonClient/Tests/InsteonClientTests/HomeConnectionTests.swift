@@ -203,4 +203,15 @@ struct HomeConnectionTests {
     #expect(await home.currentPath == "remote")
     #expect(await remote.openCount == 1, "the late failure of the old path did not drop the healthy one")
   }
+
+  @Test func whenEveryAttemptRunsOutTheReasonsAreKept() async throws {
+    let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.notReached, .notReached]))
+    let home = HomeConnection(paths: [local], skipped: [PathFailure(path: "mystery", reason: "no transport")])
+
+    await #expect(throws: HomeError.noPathReached([
+      PathFailure(path: "mystery", reason: "no transport"),
+      PathFailure(path: "local", reason: "scripted"),
+      PathFailure(path: "local", reason: "scripted")
+    ])) { try await home.execute(ServiceCommand(address: lampAddress, action: .on)) }
+  }
 }
