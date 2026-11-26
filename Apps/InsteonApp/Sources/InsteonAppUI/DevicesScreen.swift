@@ -82,7 +82,7 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
   /// Sends a device an on or off command, then shows the level the device reported.
   ///
   /// An acknowledgment that carries a status shows that status. Any other answer shows the level the
-  /// network lists for the device, read again, because the screen can't tell what the device now holds.
+  /// network lists for the device, read again, because the screen can't tell what level the device holds.
   public func turn(_ row: DeviceRow, on: Bool) async {
     guard row.canSwitch, rows.contains(where: { $0.id == row.id }), !busy.contains(row.id) else { return }
     busy.insert(row.id)
