@@ -49,6 +49,20 @@ extension ClientPairing {
     var skipped: [PathFailure] = []
   }
 
+  /// The paths a connection tries for this service, in the document's order.
+  ///
+  /// A `lan` route goes straight to its address, and a route of a kind a transport serves goes
+  /// through it. A route that can't be used is left out, so an app never picks a route itself;
+  /// ``ClientConnection/init(pairing:local:routeOpeners:http:)`` also keeps the reason for each.
+  /// Every path sends the document's credential.
+  ///
+  /// - Parameters:
+  ///   - transports: The transports this device has.
+  ///   - http: Sends the requests.
+  public func paths(transports: [any RouteOpening], http: any HTTPClient = URLSessionHTTPClient()) -> [any ConnectionPath] {
+    routePlan(transports: transports, http: http).paths
+  }
+
   /// Turns the routes into paths, in the document's order, and records each route it can't use.
   func routePlan(transports: [any RouteOpening], http: any HTTPClient) -> RoutePlan {
     var plan = RoutePlan()
