@@ -201,4 +201,14 @@ struct CancelingOpener: RouteOpening {
       #expect(await http.requests.isEmpty)
     }
   }
+
+  @Test func aCauseThisLibraryCannotTypeIsKeptByNameNotInvented() async throws {
+    for cause in ["hubErrorStatus", "somethingTheServiceAddsLater"] {
+      let c = try await calls(FakeHTTPClient { request in
+        request.url?.path == "/api/v1/health" ? healthy : json(#"{"code":"modemUnavailable","sent":false,"cause":"\#(cause)"}"#, status: 503)
+      })
+
+      await #expect(throws: HomeError.modemUnavailable(cause: cause)) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+    }
+  }
 }

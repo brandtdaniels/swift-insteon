@@ -28,6 +28,11 @@ public enum HomeError: Error, Equatable, Sendable {
   /// device: read the device's status before sending it again.
   case interrupted(path: String)
 
+  /// The service's modem is away for a cause this library has no case for, named as the service
+  /// names it, or `nil` when it names none. The service's wire answer carries no status for a Hub
+  /// that answered with an error, so that cause is reported by name too. Nothing was sent.
+  case modemUnavailable(cause: String?)
+
   /// The service refused a request with a code this library has no case for.
   case rejected(code: String, sent: Bool)
 

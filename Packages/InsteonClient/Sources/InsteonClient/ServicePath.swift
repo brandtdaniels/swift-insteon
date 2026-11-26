@@ -145,19 +145,22 @@ private struct ServiceCalls: HomeCalls {
     case "notIdentified": return ServiceControlError.notIdentified
     case "notLinked": return ServiceControlError.notLinked
     case "busy": return ServiceControlError.busy
-    case "modemUnavailable": return ServiceControlError.modemUnavailable(Self.cause(refusal.cause))
+    case "modemUnavailable":
+      if let cause = Self.cause(refusal.cause) { return ServiceControlError.modemUnavailable(cause) }
+      return HomeError.modemUnavailable(cause: refusal.cause)
     default: return HomeError.rejected(code: refusal.code, sent: refusal.sent ?? true)
     }
   }
 
-  private static func cause(_ name: String?) -> ModemUnavailability {
+  /// The cause, when it has a case here that needs nothing the wire doesn't carry.
+  private static func cause(_ name: String?) -> ModemUnavailability? {
     switch name {
     case "connecting": .connecting
     case "hubUnreachable": .hubUnreachable
     case "credentialsRejected": .credentialsRejected
-    case "hubErrorStatus": .hubErrorStatus(0)
     case "modemUnreachable": .modemUnreachable
-    default: .connectionLost
+    case "connectionLost": .connectionLost
+    default: nil
     }
   }
 
