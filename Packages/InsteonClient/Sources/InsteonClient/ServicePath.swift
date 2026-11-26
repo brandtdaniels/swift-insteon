@@ -209,24 +209,41 @@ private struct ServiceCalls: HomeCalls {
       let label: String?
     }
 
+    /// The receipt, or a bad response for anything the service's contract doesn't allow.
     func receipt() throws -> CommandReceipt {
       guard let address = InsteonAddress(address) else { throw HomePathError.badResponse }
-      let outcome: CommandReceipt.Outcome = self.outcome == "read" ? .read : .acknowledged
-      let persistence: PersistenceOutcome = switch self.persistence {
-      case "notAttempted": .notAttempted
-      case "saved": .saved
-      case "failed": .failed
-      default: .notConfigured
+      let outcome: CommandReceipt.Outcome
+      switch self.outcome {
+      case "read": outcome = .read
+      case "acknowledged": outcome = .acknowledged
+      default: throw HomePathError.badResponse
       }
-      return CommandReceipt(address: address, outcome: outcome, status: status.map(Self.deviceStatus), persistence: persistence)
+      let persistence: PersistenceOutcome
+      switch self.persistence {
+      case "notConfigured": persistence = .notConfigured
+      case "notAttempted": persistence = .notAttempted
+      case "saved": persistence = .saved
+      case "failed": persistence = .failed
+      default: throw HomePathError.badResponse
+      }
+      // A status accompanies a read, and only a read.
+      if status != nil, outcome != .read { throw HomePathError.badResponse }
+      return CommandReceipt(address: address, outcome: outcome, status: try status.map(Self.deviceStatus), persistence: persistence)
     }
 
-    private static func deviceStatus(_ status: Status) -> DeviceStatus {
-      let reading: DeviceStatus.Reading = switch status.kind {
-      case "percent": status.percent.map { .percent($0) } ?? .raw
-      case "onOff": .onOff(status.isOn)
-      case "named": status.label.map { .named($0) } ?? .raw
-      default: .raw
+    /// The service's status carries no ALL-Link database delta, so the delta is 0 here.
+    private static func deviceStatus(_ status: Status) throws -> DeviceStatus {
+      let reading: DeviceStatus.Reading
+      switch status.kind {
+      case "percent":
+        guard let percent = status.percent else { throw HomePathError.badResponse }
+        reading = .percent(percent)
+      case "onOff": reading = .onOff(status.isOn)
+      case "named":
+        guard let label = status.label else { throw HomePathError.badResponse }
+        reading = .named(label)
+      case "raw": reading = .raw
+      default: throw HomePathError.badResponse
       }
       return DeviceStatus(group: status.group, value: status.value, allLinkDatabaseDelta: 0, reading: reading, isOn: status.isOn)
     }
