@@ -735,6 +735,26 @@ extension Invocation {
 
     }
 
+    if action == "verify" {
+
+      let rest: [String] = Array(arguments.dropFirst())
+
+      guard let path = rest.first else {
+
+        throw ArgumentError.missingArgument("FILE", subcommand: "transfer verify")
+
+      }
+
+      guard rest.count == 1, !path.hasPrefix("-") else {
+
+        throw unexpected(rest.count > 1 ? rest[1] : path, subcommand: "transfer")
+
+      }
+
+      return .transferVerify(path: path)
+
+    }
+
     guard action == "plan" else {
 
       throw unexpected(action, subcommand: "transfer")

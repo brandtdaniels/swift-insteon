@@ -66,6 +66,16 @@ struct TransferVerifierTests {
 
   }
 
+  @Test func describesAFailureAsTheCallerSays() async throws {
+
+    let result = try await TransferVerifier.verify(Self.backup(), describing: { _ in "The device didn't answer." }) { address in
+      if address == Example.plug { throw NoAnswer() }
+    }
+
+    #expect(result.checks.first { $0.address == Example.plug }?.problem == "The device didn't answer.")
+
+  }
+
   @Test func passesCancellationOnInsteadOfCallingItAnAnswer() async throws {
 
     await #expect(throws: CancellationError.self) {

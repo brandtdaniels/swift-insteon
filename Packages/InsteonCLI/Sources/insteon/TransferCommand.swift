@@ -42,6 +42,49 @@ enum TransferCommand {
 
   }
 
+  /// Asks each device of the backup to answer through the connected modem.
+  static func verify(_ backup: HomeBackup, modem: ModemSession, hub: HubLocation?, names: ProductNames) async throws {
+
+    Output.note("Asking each device of the backup to answer through this modem. A ping changes nothing.")
+
+    let network: DeviceNetwork = modem.network(catalog: names.catalog, snapshot: NetworkSnapshot(), hub: hub)
+
+    // Reaching the modem first, so a connection that fails is the command's failure, which is
+    // what lets it fall back to a Hub Pro, and not every device's.
+    _ = try await network.modemInfo()
+
+    try await report(TransferVerifier.verify(backup, describing: Names.message(for:)) { address in try await network.device(address).ping() })
+
+  }
+
+  /// The same, through a Hub Pro.
+  static func verify(_ backup: HomeBackup, hubPro network: HubProNetwork) async throws {
+
+    Output.note("Asking each device of the backup to answer through this Hub Pro. A ping changes nothing.")
+
+    try await network.open()
+    try await report(TransferVerifier.verify(backup, describing: Names.message(for:)) { address in try await network.device(address).ping() })
+
+  }
+
+  private static func report(_ verification: TransferVerification) throws {
+
+    if !verification.checks.isEmpty {
+
+      Output.table(TransferVerifyText.rows(verification))
+
+    }
+
+    Output.line(TransferVerifyText.summary(verification))
+
+    if !verification.isComplete {
+
+      throw IncompleteResult(description: "Some devices didn't answer through this modem.")
+
+    }
+
+  }
+
   private static func print(_ backup: HomeBackup, target: TransferTarget, options: TransferPlanOptions, printsJSON: Bool) throws {
 
     let plan: TransferPlan = try TransferPlanner.plan(from: backup, to: target, existingLinks: options.existingLinks)

@@ -72,11 +72,13 @@ public enum TransferVerifier {
   ///
   /// - Parameters:
   ///   - backup: The backup whose devices are asked.
+  ///   - describing: Says in a sentence why an error means a device didn't answer. Defaults to
+  ///     the error's own text.
   ///   - ping: Asks one device to answer, and throws when it doesn't. It must change nothing.
   /// - Returns: Whether each device answered.
   /// - Throws: `CancellationError` if the task was canceled, which isn't a device that didn't
   ///   answer.
-  public static func verify(_ backup: HomeBackup, ping: (InsteonAddress) async throws -> Void) async throws -> TransferVerification {
+  public static func verify(_ backup: HomeBackup, describing: (any Error) -> String = { (error: any Error) -> String in "\(error)" }, ping: (InsteonAddress) async throws -> Void) async throws -> TransferVerification {
 
     var checks: [TransferDeviceCheck] = []
 
@@ -94,7 +96,7 @@ public enum TransferVerifier {
 
       } catch {
 
-        checks.append(TransferDeviceCheck(address: device.address, name: device.name, problem: "\(error)"))
+        checks.append(TransferDeviceCheck(address: device.address, name: device.name, problem: describing(error)))
 
       }
 
