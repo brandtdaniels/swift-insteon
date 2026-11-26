@@ -128,15 +128,10 @@ public actor PairingStore {
       guard FileManager.default.createFile(atPath: temporary.path, contents: data, attributes: attributes) else {
         throw Failure.notSaved
       }
-      do {
-        if FileManager.default.fileExists(atPath: file.path) {
-          _ = try FileManager.default.replaceItemAt(file, withItemAt: temporary)
-        } else {
-          try FileManager.default.moveItem(at: temporary, to: file)
-        }
-      } catch {
+      // rename replaces an existing file in one step on every host; FileManager's replace does not on Linux.
+      guard rename(temporary.path, file.path) == 0 else {
         try? FileManager.default.removeItem(at: temporary)
-        throw error
+        throw Failure.notSaved
       }
     } catch {
       throw Failure.notSaved
