@@ -162,13 +162,21 @@ public actor InsteonService: InsteonServiceAPI {
   /// It takes the admission gate the way ``execute(_:)`` does and holds it for the whole read, so
   /// another operation is refused as ``ServiceControlError/busy`` and nothing is queued. While
   /// the modem isn't connected it throws ``ServiceControlError/modemUnavailable(_:)`` before
-  /// sending anything. A device that doesn't answer is listed as unreadable.
+  /// sending anything. A device that doesn't answer is listed as unreadable. A refresh that fails
+  /// partway saves a checkpoint of what it read, then throws the original error.
   public func refreshScenes() async throws -> SceneListing {
     guard !busy else { throw ServiceControlError.busy }
     busy = true
     defer { busy = false }
     if case let .unavailable(cause) = connection { throw ServiceControlError.modemUnavailable(cause) }
-    try await network.refreshDatabases()
+    do {
+      try await network.refreshDatabases()
+    } catch {
+      // What was read before the failure is already in the cache, so it is saved too.
+      lastExchange = now()
+      _ = await persist()
+      throw error
+    }
     lastExchange = now()
     _ = await persist()
     return SceneListing(await networkBackup())

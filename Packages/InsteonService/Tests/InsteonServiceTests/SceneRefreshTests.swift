@@ -171,6 +171,41 @@ struct SceneRefreshTests {
     #expect(await modem.databaseReads[keypad] == 1)
   }
 
+  @Test func savesWhatItReadWhenTheConnectionIsLostPartway() async throws {
+    let modem = await modemWithTwoMembers()
+    let keypad = keypad
+    await modem.setBeforeOperation { operation in
+      if case let .standardRequest(message) = operation, message.destination == keypad { throw ModemError.connectionClosed }
+    }
+    let store = RecordingStore()
+    let service = InsteonService(network: network(modem, knowing: [lamp, keypad]), persistence: NetworkSnapshotPersistence(store: store))
+
+    await #expect(throws: ModemError.connectionClosed) { try await service.refreshScenes() }
+
+    let saved = try #require(await store.saved)
+    #expect(saved.modemDatabase?.count == 2)
+    #expect(saved.devices[lamp]?.allLinkDatabase != nil)
+    #expect(await service.health().lastHardwareExchange != nil)
+  }
+
+  @Test func savesWhatItReadWhenCanceledPartway() async throws {
+    let modem = await modemWithTwoMembers()
+    await modem.setHonorsCancellation(false)
+    let lamp = lamp
+    await modem.setBeforeOperation { operation in
+      if case let .standardRequest(message) = operation, message.destination == lamp { withUnsafeCurrentTask { $0?.cancel() } }
+    }
+    let store = RecordingStore()
+    let service = InsteonService(network: network(modem, knowing: [lamp, keypad]), persistence: NetworkSnapshotPersistence(store: store))
+
+    await #expect(throws: CancellationError.self) { try await service.refreshScenes() }
+
+    let saved = try #require(await store.saved)
+    #expect(saved.devices[lamp]?.allLinkDatabase != nil)
+    #expect(saved.devices[keypad]?.allLinkDatabase == nil)
+    #expect(await service.health().lastHardwareExchange != nil)
+  }
+
 }
 
 private actor RecordingStore: NetworkSnapshotStore {
