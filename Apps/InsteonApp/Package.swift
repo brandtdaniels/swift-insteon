@@ -7,7 +7,8 @@ import PackageDescription
 // `repo-check app-thin` holds the imports to the libraries below and the frameworks that host an interface.
 let package = Package(
   name: "InsteonApp",
-  platforms: [.macOS(.v14), .iOS(.v17), .tvOS(.v17), .visionOS(.v1)],
+  // tvOS and visionOS join when a change builds them in CI.
+  platforms: [.macOS(.v14), .iOS(.v17)],
   products: [
     .library(name: "InsteonAppUI", targets: ["InsteonAppUI"])
   ],
