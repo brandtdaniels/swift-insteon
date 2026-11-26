@@ -149,6 +149,12 @@ public actor InsteonService: InsteonServiceAPI {
     return await HomeBackupReader.backup(from: await network.snapshot(), modem: await network.modemIdentity(), catalog: await network.catalog(), createdAt: now())
   }
 
+  /// The scenes of the home, from the ALL-Link databases the service has cached, without asking
+  /// hardware and without taking the admission gate, whether or not the modem is connected.
+  public func scenes() async -> SceneListing {
+    SceneListing(await homeBackup())
+  }
+
   /// Executes an operation through InsteonCore and preserves its result if persistence fails.
   /// While the modem isn't connected it throws ``ServiceControlError/modemUnavailable(_:)``
   /// before sending anything. A device that isn't identified or isn't linked to the modem throws
