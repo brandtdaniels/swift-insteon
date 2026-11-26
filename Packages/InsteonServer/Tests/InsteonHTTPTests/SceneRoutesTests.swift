@@ -128,6 +128,15 @@ struct SceneRoutesTests {
     #expect(asked == [FakeService.MeaningQuestion(device: lamp, data: [0x80, 0x1C, 0x00], group: 7)])
   }
 
+  @Test func asksOnceForMembersWithTheSameDeviceBytesAndGroup() async throws {
+    let twice = SceneListing.Member(address: lamp, data: [0x80, 0x1C, 0x00])
+    let listing = SceneListing(scenes: [SceneListing.Scene(number: 5, controller: .modem, members: [twice, twice])])
+    let setup = try Setup(password: password, service: FakeService(scenes: listing))
+    _ = try await fetch(setup, authorization: basic)
+
+    #expect(await setup.service.askedMeanings.count == 1)
+  }
+
   @Test func listsASceneADeviceControlsAsReadOnlyNamedByTheDevicesAddress() async throws {
     let listing = SceneListing(scenes: [
       SceneListing.Scene(number: 2, controller: .device(keypad), members: [SceneListing.Member(address: lamp, data: [0x80, 0x1C, 0x00])])

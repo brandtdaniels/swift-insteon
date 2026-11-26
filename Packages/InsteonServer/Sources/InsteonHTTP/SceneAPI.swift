@@ -14,16 +14,32 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
 
   func list() async throws -> Response {
     let listing = await service.scenes()
-    var meanings: [SceneKey: LinkDataMeaning] = [:]
+    // One question for each distinct member, so a device that holds several records of the same
+    // bytes is not asked about again.
+    var asked: [MemberQuestion: LinkDataMeaning?] = [:]
+    var meanings: [[LinkDataMeaning?]] = []
     for scene in listing.scenes {
-      for (index, member) in scene.members.enumerated() {
-        meanings[SceneKey(scene: scene, member: index)] = await service.meaning(ofMemberData: member.data, of: member.address, group: scene.number)
+      var row: [LinkDataMeaning?] = []
+      for member in scene.members {
+        let question = MemberQuestion(address: member.address, data: member.data, group: scene.number)
+        if asked[question] == nil {
+          asked[question] = .some(await service.meaning(ofMemberData: member.data, of: member.address, group: scene.number))
+        }
+        row.append(asked[question] ?? nil)
       }
+      meanings.append(row)
     }
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys]
     return Response(status: .ok, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(bytes: try encoder.encode(SceneListDTO(listing, meanings: meanings)))))
   }
+}
+
+/// What the service is asked about one member: the same question has the same answer.
+private struct MemberQuestion: Hashable {
+  let address: InsteonAddress
+  let data: [UInt8]
+  let group: UInt8
 }
 
 /// A listing as it goes on the wire. A scene's `controller` is `modem` or a device's address.
@@ -39,11 +55,15 @@ struct SceneListDTO: Encodable {
   /// Whether every database was read and every record has its other half.
   let whole: Bool
 
-  init(_ listing: SceneListing, meanings: [SceneKey: LinkDataMeaning]) {
-    scenes = listing.scenes.map { scene in SceneDTO(scene, meanings: meanings) }
-    undescribedMembers = Array(Set(listing.scenes.flatMap { scene in
-      scene.members.enumerated().filter { meanings[SceneKey(scene: scene, member: $0.offset)] == nil }.map { $0.element.address }
-    })).sorted { $0.bytes.lexicographicallyPrecedes($1.bytes) }.map(\.description)
+  /// - Parameter meanings: What each member's bytes mean, in the order of `listing.scenes` and each
+  ///   scene's `members`; `nil` for a member the catalog doesn't describe.
+  init(_ listing: SceneListing, meanings: [[LinkDataMeaning?]]) {
+    scenes = zip(listing.scenes, meanings).map { SceneDTO($0, meanings: $1) }
+    var undescribed: Set<InsteonAddress> = []
+    for (scene, row) in zip(listing.scenes, meanings) {
+      for (member, meaning) in zip(scene.members, row) where meaning == nil { undescribed.insert(member.address) }
+    }
+    undescribedMembers = undescribed.sorted { $0.bytes.lexicographicallyPrecedes($1.bytes) }.map(\.description)
     looseHalfLinks = listing.looseHalfLinks.map(HalfLinkDTO.init)
     unreadable = listing.unreadable.map(\.description)
     unlisted = listing.unlisted.map(\.description)
@@ -59,11 +79,11 @@ struct SceneDTO: Encodable {
   let members: [SceneMemberDTO]
   let halfLinks: [HalfLinkDTO]
 
-  init(_ scene: SceneListing.Scene, meanings: [SceneKey: LinkDataMeaning]) {
+  init(_ scene: SceneListing.Scene, meanings: [LinkDataMeaning?]) {
     number = Int(scene.number)
     controller = SceneWire.name(scene.controller)
     writable = scene.isWritable
-    members = scene.members.enumerated().map { SceneMemberDTO($0.element, meaning: meanings[SceneKey(scene: scene, member: $0.offset)]) }
+    members = zip(scene.members, meanings).map { SceneMemberDTO($0, meaning: $1) }
     halfLinks = scene.halfLinks.map(HalfLinkDTO.init)
   }
 }
@@ -101,19 +121,6 @@ struct LinkDataByteDTO: Encodable {
     valueName = field.valueName
     perGroup = field.isPerGroup
     verification = field.verification
-  }
-}
-
-/// Which member of which scene a meaning is for: scenes are told apart by controller and number.
-struct SceneKey: Hashable, Sendable {
-  let controller: String
-  let number: UInt8
-  let member: Int
-
-  init(scene: SceneListing.Scene, member: Int) {
-    controller = SceneWire.name(scene.controller)
-    number = scene.number
-    self.member = member
   }
 }
 
