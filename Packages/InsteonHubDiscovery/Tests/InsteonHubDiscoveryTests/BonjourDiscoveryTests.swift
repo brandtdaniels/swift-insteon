@@ -90,7 +90,8 @@ struct BonjourDiscoveryTests {
       network: FixedNetwork(fixed: [subnet]),
       hubProPorts: [80],
       hubProModels: models,
-      bonjour: bonjour
+      bonjour: bonjour,
+      probeTimeout: HubDiscoveryTests.noTimeout
     )
 
   }
