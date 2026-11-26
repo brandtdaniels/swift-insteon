@@ -182,4 +182,25 @@ struct HomeConnectionTests {
 
     #expect(await home.currentPath == "remote")
   }
+
+  @Test func aStaleFailureDoesNotDropANewerHealthyPath() async throws {
+    let gated = GatedCalls()
+    let local = ScriptedPath("local", calls: nil, gated: gated)
+    let remote = ScriptedPath("remote")
+    let home = HomeConnection(paths: [local, remote])
+
+    let slow = Task { try await home.devices() }
+    await gated.waitUntilHeld()
+    // A second read fails on the same path, drops it and finds the remote one.
+    let fast = try await home.devices()
+    #expect(fast.first?.value == 2)
+    #expect(await home.currentPath == "remote")
+
+    await gated.letGo()
+    let slowResult = try await slow.value
+
+    #expect(slowResult.first?.value == 2)
+    #expect(await home.currentPath == "remote")
+    #expect(await remote.openCount == 1, "the late failure of the old path did not drop the healthy one")
+  }
 }

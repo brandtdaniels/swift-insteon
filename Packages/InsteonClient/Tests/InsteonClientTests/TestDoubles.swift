@@ -65,19 +65,22 @@ actor ScriptedCalls: HomeCalls {
 actor ScriptedPath: HomePath {
   nonisolated let name: String
   let calls: ScriptedCalls
+  private let served: any HomeCalls
   private var openings: [HomePathError?]
   private(set) var openCount = 0
 
-  init(_ name: String, openings: [HomePathError?] = [], calls: ScriptedCalls? = nil) {
+  init(_ name: String, openings: [HomePathError?] = [], calls: ScriptedCalls? = nil, gated: GatedCalls? = nil) {
     self.name = name
     self.openings = openings
-    self.calls = calls ?? ScriptedCalls(label: name)
+    let scripted = calls ?? ScriptedCalls(label: name)
+    self.calls = scripted
+    self.served = gated ?? scripted
   }
 
   func open() async throws -> any HomeCalls {
     openCount += 1
     if !openings.isEmpty, let failure = openings.removeFirst() { throw failure }
-    return calls
+    return served
   }
 }
 
@@ -99,3 +102,35 @@ actor FakeHTTPClient: HTTPClient {
 func json(_ text: String, status: Int = 200) -> HTTPResponse { HTTPResponse(statusCode: status, body: Data(text.utf8)) }
 
 struct Unplugged: Error {}
+
+/// Calls whose first read waits until the test lets it go, then fails; every later read fails at once.
+actor GatedCalls: HomeCalls {
+  private var reads = 0
+  private var release: CheckedContinuation<Void, Never>?
+  private var heldSignal: CheckedContinuation<Void, Never>?
+  private var isHeld = false
+
+  func devices() async throws -> [ServiceDevice] {
+    reads += 1
+    if reads == 1 {
+      isHeld = true
+      heldSignal?.resume()
+      heldSignal = nil
+      await withCheckedContinuation { release = $0 }
+    }
+    throw HomePathError.interrupted
+  }
+
+  func execute(_ command: ServiceCommand) async throws -> CommandReceipt { throw HomePathError.interrupted }
+
+  /// Returns once the first read is waiting.
+  func waitUntilHeld() async {
+    if isHeld { return }
+    await withCheckedContinuation { heldSignal = $0 }
+  }
+
+  func letGo() {
+    release?.resume()
+    release = nil
+  }
+}
