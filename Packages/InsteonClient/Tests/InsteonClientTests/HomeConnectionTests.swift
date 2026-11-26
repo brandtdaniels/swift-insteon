@@ -64,9 +64,10 @@ struct HomeConnectionTests {
 
     let devices = try await home.devices()
 
-    #expect(devices.first?.value == 1, "the local path is tried first again and answers the second time")
-    #expect(await local.openCount == 2)
-    #expect(await remote.openCount == 0)
+    #expect(devices.first?.value == 2, "the path that just failed is tried last, so the remote path answers")
+    #expect(await local.openCount == 1)
+    #expect(await remote.openCount == 1)
+    #expect(await home.currentPath == "remote")
   }
 
   @Test func aReadThatLosesEveryPathFailsAfterOneRetry() async throws {
@@ -126,5 +127,15 @@ struct HomeConnectionTests {
       try await home.execute(ServiceCommand(address: lampAddress, action: .on))
     }
     #expect(await home.currentPath == nil)
+  }
+
+  @Test func aPathThatJustFailedIsTriedLastNotFirst() async throws {
+    let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.interrupted]))
+    let remote = ScriptedPath("remote", calls: ScriptedCalls(label: "remote", script: [.interrupted]))
+    let home = HomeConnection(paths: [local, remote])
+
+    await #expect(throws: HomeError.interrupted(path: "remote")) { try await home.devices() }
+    #expect(await local.openCount == 1)
+    #expect(await remote.openCount == 1)
   }
 }
