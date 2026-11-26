@@ -1,5 +1,6 @@
 import InsteonCore
 import InsteonDeviceCatalog
+import InsteonHubClient
 import InsteonModem
 import InsteonProtocol
 
@@ -116,9 +117,10 @@ struct ModemServedNetwork: ServedNetwork {
   }
 
   /// Reads one device's database, again once if it arrives damaged. A device that doesn't answer,
-  /// turns the modem away or whose request the modem refuses is left unread, and so is one whose
-  /// database arrives damaged twice (the cache keeps no damaged copy). Only cancellation and a
-  /// lost connection end the refresh.
+  /// turns the modem away, whose request the modem refuses or doesn't echo, or whose database
+  /// arrives damaged twice (the cache keeps no damaged copy) is left unread. Only cancellation
+  /// and a lost connection end the refresh. Each device is asked once, so a device that doesn't
+  /// answer costs the modem's own time out once.
   private func readDatabase(of address: InsteonAddress) async throws {
     do {
       var database = try await network.allLinkDatabase(of: address)
@@ -131,6 +133,12 @@ struct ModemServedNetwork: ServedNetwork {
     } catch ModemError.connectionClosed {
       throw ModemError.connectionClosed
     } catch is ModemError {
+      return
+    } catch is ModemStoppedEchoing {
+      // The modem is reachable but still busy with a device that doesn't answer.
+      return
+    } catch is HubStoppedAnswering {
+      // The same, as the Hub reports it: it answered before and then stopped on this device.
       return
     }
   }

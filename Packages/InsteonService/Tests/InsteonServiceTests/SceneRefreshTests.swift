@@ -1,6 +1,7 @@
 import Foundation
 import InsteonCore
 import InsteonLinkingTestSupport
+import InsteonHubClient
 import InsteonModem
 import InsteonProtocol
 import Testing
@@ -161,6 +162,29 @@ struct SceneRefreshTests {
     let lamp = lamp
     await modem.setBeforeOperation { operation in
       if case let .standardRequest(message) = operation, message.destination == lamp { throw ModemError.rejected(.getModemInfo) }
+    }
+    let service = InsteonService(network: network(modem, knowing: [lamp, keypad]))
+
+    let listing = try await service.refreshScenes()
+
+    #expect(listing.unreadable == [lamp])
+    #expect(listing.scenes.first?.members.map(\.address) == [keypad])
+    #expect(await modem.databaseReads[keypad] == 1)
+  }
+
+  /// What the modem and the Hub throw when a device doesn't answer while they are still reachable.
+  static let unansweredErrors: [any Error] = [
+    ModemStoppedEchoing(device: InsteonAddress(0x1A, 0x2B, 0x3C), command: .sendMessage),
+    HubStoppedAnswering(underlyingError: URLError(.timedOut))
+  ]
+
+  @Test(arguments: SceneRefreshTests.unansweredErrors.indices)
+  func leavesADeviceUnreadableWhenTheModemStopsEchoingToItAndReadsTheRest(_ index: Int) async throws {
+    let modem = await modemWithTwoMembers()
+    let lamp = lamp
+    let failure = Self.unansweredErrors[index]
+    await modem.setBeforeOperation { operation in
+      if case let .standardRequest(message) = operation, message.destination == lamp { throw failure }
     }
     let service = InsteonService(network: network(modem, knowing: [lamp, keypad]))
 
