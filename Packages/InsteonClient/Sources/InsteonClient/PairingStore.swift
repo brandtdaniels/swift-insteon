@@ -38,6 +38,7 @@ public actor PairingStore {
     await begin()
     defer { end() }
     var records = try read()
+    let previous = try await secrets.load(account: pairing.serviceID)
     try await secrets.save(pairing.credential, account: pairing.serviceID)
     let record = Record(pairing)
     if let index = records.firstIndex(where: { $0.serviceID == record.serviceID }) {
@@ -45,7 +46,17 @@ public actor PairingStore {
     } else {
       records.append(record)
     }
-    try write(records)
+    do {
+      try write(records)
+    } catch {
+      // Put the credential back as it was, so the saved record still matches it.
+      if let previous {
+        try? await secrets.save(previous, account: pairing.serviceID)
+      } else {
+        try? await secrets.remove(account: pairing.serviceID)
+      }
+      throw error
+    }
   }
 
   /// The saved pairings, in the order they were added.

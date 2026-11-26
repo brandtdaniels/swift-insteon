@@ -114,6 +114,24 @@ struct PairingStoreTests {
     #expect(Set(try await store.load().map(\.serviceID)) == ["a", "b"])
   }
 
+  @Test func aSaveThatCannotWriteTheFileLeavesTheOldCredentialInPlace() async throws {
+    let directory = try scratchDirectory()
+    defer {
+      try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+      try? FileManager.default.removeItem(at: directory)
+    }
+    let secrets = InMemorySecretStore()
+    let store = PairingStore(directory: directory, secrets: secrets)
+    try await store.save(pairing(id: "a", credential: "old-credential"))
+    try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path)
+
+    await #expect(throws: PairingStore.Failure.notSaved) { try await store.save(pairing(id: "a", credential: "new-credential")) }
+    await #expect(throws: PairingStore.Failure.notSaved) { try await store.save(pairing(id: "b", credential: "other-credential")) }
+
+    #expect(await secrets.load(account: "a") == "old-credential")
+    #expect(await secrets.load(account: "b") == nil)
+  }
+
   @Test func savingAgainForTheSameServiceReplacesIt() async throws {
     let directory = try scratchDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
