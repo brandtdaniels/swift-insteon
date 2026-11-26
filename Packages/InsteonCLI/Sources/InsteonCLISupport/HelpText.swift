@@ -58,6 +58,8 @@ public enum HelpText {
                           backup file, using only reads; --check FILE checks a file
       transfer plan FILE  Plan how a backup's devices move to the connected modem, and
                           write nothing
+      transfer apply FILE Carry out that plan on the connected modem, reading before every
+                          write
       transfer verify     Ask each device of a backup to answer through the connected
                           modem
       device ADDRESS ...  Control a device, read and change its settings, or read its
@@ -474,6 +476,7 @@ public enum HelpText {
   /// The help for `insteon transfer`.
   public static let transfer = """
     Usage: insteon [--hub HOST[:PORT] | --serial PATH] transfer plan FILE [--merge | --replace-database] [--json]
+           insteon [--hub HOST[:PORT] | --serial PATH] transfer apply FILE [--merge | --replace-database] [--keep-going] [--dry-run] [--yes] [--force]
            insteon [--hub HOST[:PORT] | --serial PATH] transfer verify FILE
 
     Plans how the devices in a backup move to the connected modem, which has another address.
@@ -498,6 +501,20 @@ public enum HelpText {
 
     A Hub Pro can be the connected modem: its address comes from its device list, and its
     ALL-Link database isn't read, so the plan says it assumes none.
+
+    transfer apply FILE makes the same plan, shows it, and carries it out on the connected
+    modem: it adds the old modem's records to it, then rewrites each device's records and reads
+    each back. Every step reads before it writes, so running it again after an interruption
+    writes only what is left. A record that reads as neither the backup's nor the plan's is
+    left alone, and a write that wasn't confirmed is never sent again. It asks once for each
+    kind of step, link and destructive, unless --yes is given.
+
+      --keep-going  Go on to the next device after one fails, rather than stopping.
+      --dry-run     Show the plan and write nothing.
+      --yes, -y     Ask nothing.
+      --force       Needed with --replace-database, which removes the modem's own links.
+
+    A Hub Pro can't be the modem a transfer is applied to.
 
     transfer verify FILE asks each device of the backup, one at a time, to answer through the
     connected modem, and says which did. Each is sent a ping, which changes nothing, so it is

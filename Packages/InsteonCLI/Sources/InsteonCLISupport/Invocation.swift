@@ -124,6 +124,8 @@ public enum Subcommand: Hashable, Sendable {
   case transferPlan(TransferPlanOptions)
   /// Ask each device of a backup to answer through the connected modem.
   case transferVerify(path: String)
+  /// Carry out a transfer plan.
+  case transferApply(TransferApplyOptions)
   /// Sends a device a command, or reads its ALL-Link database.
   case device(InsteonAddress, DeviceAction)
 
@@ -184,6 +186,69 @@ public struct TransferPlanOptions: Hashable, Sendable {
     self.path = path
     self.existingLinks = existingLinks
   }
+}
+
+/// How `insteon transfer apply` carries out a plan.
+public struct TransferApplyOptions: Hashable, Sendable {
+
+  /// The backup file and what to do about links the modem already holds.
+  public var plan: TransferPlanOptions
+
+  /// Whether `--keep-going` was given, so a failed device doesn't stop the devices after it.
+  public var keepsGoing: Bool
+
+  /// Whether `--yes` was given, so nothing is asked.
+  public var assumesYes: Bool
+
+  /// Whether `--dry-run` was given, so the plan is shown and nothing is written.
+  public var isDryRun: Bool
+
+  /// Whether `--force` was given, which removing the modem's own links needs.
+  public var isForced: Bool
+
+  /// Creates options.
+  ///
+  /// - Parameters:
+  ///   - plan: The backup file and the choice about existing links.
+  ///   - keepsGoing: Whether to go on after a failed device. Defaults to `false`.
+  ///   - assumesYes: Whether to ask nothing. Defaults to `false`.
+  ///   - isDryRun: Whether to write nothing. Defaults to `false`.
+  ///   - isForced: Whether `--force` was given. Defaults to `false`.
+  public init(plan: TransferPlanOptions, keepsGoing: Bool = false, assumesYes: Bool = false, isDryRun: Bool = false, isForced: Bool = false) {
+
+    self.plan = plan
+    self.keepsGoing = keepsGoing
+    self.assumesYes = assumesYes
+    self.isDryRun = isDryRun
+    self.isForced = isForced
+
+  }
+
+  /// Whether the command asks before it writes: unless `--yes` or `--dry-run` is given, it asks
+  /// at a terminal, and refuses to go on without one.
+  ///
+  /// - Parameter readsFromTerminal: Whether standard input is a terminal.
+  /// - Returns: `true` to ask first, or `false` to go on without asking.
+  /// - Throws: ``ArgumentError/confirmationNeeded(subcommand:)`` when standard input isn't a
+  ///   terminal and neither `--yes` nor `--dry-run` is given.
+  public func asksForConfirmation(readsFromTerminal: Bool) throws(ArgumentError) -> Bool {
+
+    if isDryRun || assumesYes {
+
+      return false
+
+    }
+
+    guard readsFromTerminal else {
+
+      throw ArgumentError.confirmationNeeded(subcommand: "transfer apply")
+
+    }
+
+    return true
+
+  }
+
 }
 
 /// A serial command for `insteon modem send` to write as given.

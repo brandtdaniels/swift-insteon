@@ -27,7 +27,7 @@ public enum HubProText {
       case .instant, .settings, .set, .send, .links, .selfTest:
         false
       }
-    case .links, .link, .cancelLinking, .unlink, .remove, .watch, .beep, .scene, .modemSend:
+    case .links, .link, .cancelLinking, .unlink, .remove, .watch, .beep, .scene, .modemSend, .transferApply:
       false
     }
 
@@ -97,6 +97,7 @@ public enum HubProText {
       case .selfTest: "run a self-test of a device"
       case .id, .ping, .on, .onFast, .off, .offFast, .beep, .status: "do that"
       }
+    case .transferApply: "carry out a transfer, which writes ALL-Link records"
     case .help, .discover, .hubs, .info, .observe, .backup, .backupCheck, .transferPlan, .transferVerify, .catalog, .catalogUpdate: "do that"
     }
 

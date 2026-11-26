@@ -755,14 +755,16 @@ extension Invocation {
 
     }
 
-    guard action == "plan" else {
+    guard action == "plan" || action == "apply" else {
 
       throw unexpected(action, subcommand: "transfer")
 
     }
 
+    let isApply: Bool = action == "apply"
     var path: String?
     var choice: String?
+    var applies: TransferApplyOptions = TransferApplyOptions(plan: TransferPlanOptions(path: ""))
 
     for argument in arguments.dropFirst() {
 
@@ -792,6 +794,21 @@ extension Invocation {
         }
 
         choice = name
+      case "--keep-going", "--yes", "-y", "--dry-run", "--force":
+        guard isApply else {
+
+          throw unexpected(argument, subcommand: "transfer")
+
+        }
+
+        try expectNoValue(name, inlineValue)
+
+        switch name {
+        case "--keep-going": applies.keepsGoing = true
+        case "--yes", "-y": applies.assumesYes = true
+        case "--dry-run": applies.isDryRun = true
+        default: applies.isForced = true
+        }
       default:
         throw unexpected(argument, subcommand: "transfer")
       }
@@ -800,11 +817,21 @@ extension Invocation {
 
     guard let path else {
 
-      throw ArgumentError.missingArgument("FILE", subcommand: "transfer plan")
+      throw ArgumentError.missingArgument("FILE", subcommand: "transfer \(action)")
 
     }
 
-    return .transferPlan(TransferPlanOptions(path: path, existingLinks: choice == "--merge" ? .merge : (choice == nil ? .refuse : .replaceDatabase)))
+    let plan: TransferPlanOptions = TransferPlanOptions(path: path, existingLinks: choice == "--merge" ? .merge : (choice == nil ? .refuse : .replaceDatabase))
+
+    guard isApply else {
+
+      return .transferPlan(plan)
+
+    }
+
+    applies.plan = plan
+
+    return .transferApply(applies)
 
   }
 
