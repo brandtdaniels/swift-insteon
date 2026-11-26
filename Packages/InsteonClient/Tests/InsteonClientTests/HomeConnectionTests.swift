@@ -102,12 +102,29 @@ struct HomeConnectionTests {
     #expect(await remote.calls.asked == ["execute"])
   }
 
-  @Test func aPathThatRefusesTheCredentialStopsTheSearchInsteadOfTryingTheNext() async throws {
+  @Test func aPathThatRefusesTheCredentialDoesNotStopTheSearchForAnotherPath() async throws {
     let remote = ScriptedPath("remote")
     let home = HomeConnection(paths: [ScriptedPath("lan", openings: [.unauthorized]), remote])
 
-    await #expect(throws: HomeError.unauthorized(path: "lan")) { try await home.devices() }
-    #expect(await remote.openCount == 0)
+    let devices = try await home.devices()
+
+    #expect(devices.first?.value == 2)
+    #expect(await home.currentPath == "remote")
+  }
+
+  @Test func whenEveryPathRefusedTheCredentialTheErrorNamesEachOne() async throws {
+    let home = HomeConnection(paths: [ScriptedPath("lan", openings: [.unauthorized]), ScriptedPath("remote", openings: [.unauthorized])])
+
+    await #expect(throws: HomeError.unauthorized(paths: ["lan", "remote"])) { try await home.devices() }
+  }
+
+  @Test func aRefusalAmongPathsThatWereNotReachedIsNamedInTheReasons() async throws {
+    let home = HomeConnection(paths: [ScriptedPath("lan", openings: [.unauthorized]), ScriptedPath("remote", openings: [.notReached("no route")])])
+
+    await #expect(throws: HomeError.noPathReached([
+      PathFailure(path: "lan", reason: "the credential was refused"),
+      PathFailure(path: "remote", reason: "no route")
+    ])) { try await home.devices() }
   }
 
   @Test func theCallsAreTheServiceRolesSoAnyCodeThatUsesTheServiceUsesTheConnection() async throws {
@@ -121,9 +138,9 @@ struct HomeConnectionTests {
     let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.unauthorized, .unauthorized]))
     let home = HomeConnection(paths: [local])
 
-    await #expect(throws: HomeError.unauthorized(path: "local")) { try await home.devices() }
+    await #expect(throws: HomeError.unauthorized(paths: ["local"])) { try await home.devices() }
     #expect(await home.currentPath == nil)
-    await #expect(throws: HomeError.unauthorized(path: "local")) {
+    await #expect(throws: HomeError.unauthorized(paths: ["local"])) {
       try await home.execute(ServiceCommand(address: lampAddress, action: .on))
     }
     #expect(await home.currentPath == nil)

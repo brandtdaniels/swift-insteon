@@ -9,7 +9,7 @@ import InsteonService
 /// just failed last. A command that may have been sent is never asked again: it throws
 /// ``HomeError/interrupted(path:)``, the path is dropped, and the next call opens one afresh. A
 /// command that was never sent, because its path couldn't be reached, moves on to the next path.
-/// A refused credential throws ``HomeError/unauthorized(path:)`` and drops the path.
+/// A refused credential throws ``HomeError/unauthorized(paths:)`` and drops the path.
 public actor HomeConnection: DeviceQuerying, DeviceCommanding {
 
   private let paths: [any HomePath]
@@ -77,7 +77,7 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
       return .interrupted(path: name)
     case HomePathError.unauthorized:
       open = nil
-      return .unauthorized(path: name)
+      return .unauthorized(paths: [name])
     case HomePathError.badResponse:
       return .badResponse(path: name)
     default:
@@ -89,9 +89,12 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
   private func reach(lastFailed: Int?) async throws -> (index: Int, calls: any HomeCalls) {
     if let open { return open }
     var failures = skipped
+    var refusals: [String] = []
+    var tried = 0
     let order = paths.indices.filter { $0 != lastFailed } + (lastFailed.map { [$0] } ?? [])
     for index in order {
       let path = paths[index]
+      tried += 1
       do {
         let calls = try await path.open()
         // A call that was waiting on another opening may have set it already.
@@ -101,9 +104,12 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
       } catch HomePathError.notReached(let reason) {
         failures.append(PathFailure(path: path.name, reason: reason))
       } catch HomePathError.unauthorized {
-        throw HomeError.unauthorized(path: path.name)
+        // A refusal on one path says nothing about another: each uses its own credential.
+        refusals.append(path.name)
+        failures.append(PathFailure(path: path.name, reason: "the credential was refused"))
       }
     }
+    if tried > 0, refusals.count == tried { throw HomeError.unauthorized(paths: refusals) }
     throw HomeError.noPathReached(failures)
   }
 

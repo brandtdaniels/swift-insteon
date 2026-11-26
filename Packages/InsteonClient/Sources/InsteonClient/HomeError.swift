@@ -21,8 +21,8 @@ public enum HomeError: Error, Equatable, Sendable {
   /// Every path was tried and none was reached. Nothing was sent.
   case noPathReached([PathFailure])
 
-  /// The home refused this device's credential on the named path. Pair again.
-  case unauthorized(path: String)
+  /// Every path that was tried refused this device's credential. The paths are named. Pair again.
+  case unauthorized(paths: [String])
 
   /// The named path was lost while a request was in flight. A command may have reached its
   /// device: read the device's status before sending it again.
