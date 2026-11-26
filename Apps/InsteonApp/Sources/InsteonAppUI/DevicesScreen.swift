@@ -59,11 +59,16 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
   }
 
   /// Asks the network for its devices.
+  ///
+  /// A load that is cancelled, such as when the view goes away, leaves the rows and the state as they were.
   public func load() async {
+    let before = state
     state = .loading
     do {
       rows = try await network.devices().map(Self.row)
       state = .loaded
+    } catch is CancellationError {
+      state = before
     } catch {
       rows = []
       state = .failed(Self.message(for: error))

@@ -109,6 +109,27 @@ struct DevicesScreenTests {
     #expect(screen.notice != nil)
   }
 
+  @Test func aCancelledLoadLeavesTheRowsAndTheStateAlone() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    await network.setListFailure(CancellationError())
+
+    await screen.load()
+
+    #expect(screen.rows.count == 1)
+    #expect(screen.state == .loaded)
+  }
+
+  @Test func aCancelledFirstLoadLeavesTheScreenWhereItWas() async {
+    let network = ScriptedNetwork(devices: [lamp], listFailure: CancellationError())
+    let screen = DevicesScreen(network: network)
+
+    await screen.load()
+
+    #expect(screen.state == .idle)
+  }
+
   @Test func aDeviceThatReportedALevelShowsItOnOrOff() async {
     let on = ServiceDevice(address: lamp.address, productName: lamp.productName, canTurnOnAndOff: true, canDim: true, value: 128, lastAnsweredAt: nil)
     let screen = DevicesScreen(network: ScriptedNetwork(devices: [on, lamp]))
