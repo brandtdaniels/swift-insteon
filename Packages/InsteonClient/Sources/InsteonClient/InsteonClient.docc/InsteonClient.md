@@ -33,6 +33,9 @@ and presents the answer.
 
 - ``HomeConnection``
 - ``ClientPairing``
+- ``HomeStore``
+- ``SecretStore``
+- ``InMemorySecretStore``
 
 ### Paths
 

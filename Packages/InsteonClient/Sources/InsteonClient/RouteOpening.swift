@@ -41,13 +41,39 @@ struct RemoteRoutePath: HomePath {
 
 }
 
+extension ClientPairing {
+
+  /// The paths a connection tries for this home, in the document's order.
+  ///
+  /// A `lan` route goes straight to its address, and a route of a kind a transport serves goes
+  /// through it. A kind no transport serves is skipped, so an app never picks a route itself.
+  /// Every path sends the document's credential.
+  ///
+  /// - Parameters:
+  ///   - transports: The transports this device has.
+  ///   - http: Sends the requests.
+  public func homePaths(transports: [any RouteOpening], http: any HTTPClient = URLSessionHTTPClient()) -> [any HomePath] {
+    var paths: [any HomePath] = []
+    for route in routes {
+      if route.kind == "lan" {
+        if let text = route.url, let url = URL(string: text) {
+          paths.append(ServicePath(name: "lan", baseURL: url, token: credential, http: http))
+        }
+      } else if let opener = transports.first(where: { $0.kind == route.kind }) {
+        paths.append(RemoteRoutePath(name: route.kind, opener: opener, ticket: route.ticket, token: credential, http: http))
+      }
+    }
+    return paths
+  }
+
+}
+
 extension HomeConnection {
 
   /// Creates a connection from a pairing document.
   ///
-  /// The paths are `local`, when there is one, then the document's routes in its order. A `lan`
-  /// route goes straight to its address, and a route of a kind an opener serves goes through it. A
-  /// kind no opener serves is skipped. Every route sends the document's credential.
+  /// The paths are `local`, when there is one, then the document's routes in its order, as
+  /// ``ClientPairing/homePaths(transports:http:)`` gives them.
   ///
   /// - Parameters:
   ///   - pairing: The document the service showed.
@@ -55,18 +81,7 @@ extension HomeConnection {
   ///   - routeOpeners: The transports this device has.
   ///   - http: Sends the requests.
   public init(pairing: ClientPairing, local: (any HomePath)? = nil, routeOpeners: [any RouteOpening], http: any HTTPClient) {
-    var paths: [any HomePath] = []
-    if let local { paths.append(local) }
-    for route in pairing.routes {
-      if route.kind == "lan" {
-        if let text = route.url, let url = URL(string: text) {
-          paths.append(ServicePath(name: "lan", baseURL: url, token: pairing.credential, http: http))
-        }
-      } else if let opener = routeOpeners.first(where: { $0.kind == route.kind }) {
-        paths.append(RemoteRoutePath(name: route.kind, opener: opener, ticket: route.ticket, token: pairing.credential, http: http))
-      }
-    }
-    self.init(paths: paths)
+    self.init(paths: (local.map { [$0] } ?? []) + pairing.homePaths(transports: routeOpeners, http: http))
   }
 
 }

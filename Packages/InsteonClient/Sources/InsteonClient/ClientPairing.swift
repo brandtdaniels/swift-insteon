@@ -71,6 +71,14 @@ public struct ClientPairing: Sendable, Equatable, CustomStringConvertible, Custo
     routes = wire.routes.map { Route(kind: $0.kind, url: $0.url, ticket: $0.ticket) }
   }
 
+  init(serviceID: String, name: String, scope: String, routes: [Route], credential: String) {
+    self.serviceID = serviceID
+    self.name = name
+    self.scope = scope
+    self.routes = routes
+    self.credential = credential
+  }
+
   /// Names the home and its routes, never the credential.
   public var description: String { "ClientPairing(\(name), routes: \(routes.map(\.kind)))" }
 
