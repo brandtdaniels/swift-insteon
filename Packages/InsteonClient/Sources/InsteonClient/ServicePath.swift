@@ -65,7 +65,10 @@ public struct ServicePath: HomePath, CustomStringConvertible, CustomDebugStringC
     if scheme == "http", !LocalAddress.isLocal(host: host) {
       throw HomePathError.notReached("the token is never sent over HTTP to a host outside the local network")
     }
-    components.path = components.path.trimmingSuffix("/") + path
+    components.query = nil
+    components.fragment = nil
+    let base = components.path.split(separator: "/", omittingEmptySubsequences: true).joined(separator: "/")
+    components.path = (base.isEmpty ? "" : "/" + base) + path
     guard let url = components.url else { throw HomePathError.notReached("the service address isn't an HTTP address") }
     return url
   }
@@ -267,8 +270,4 @@ private struct ServiceCalls: HomeCalls {
     }
   }
 
-}
-
-private extension String {
-  func trimmingSuffix(_ suffix: String) -> String { hasSuffix(suffix) ? String(dropLast(suffix.count)) : self }
 }

@@ -213,6 +213,15 @@ struct ServicePathTests {
     }
   }
 
+  @Test func aQueryAFragmentAndRepeatedSlashesOnTheBaseAreLeftOff() async throws {
+    let http = FakeHTTPClient { _ in healthy }
+    let path = ServicePath(name: "lan", baseURL: URL(string: "http://192.0.2.20:8080//home//sub/?token=x#frag")!, token: token, http: http)
+
+    _ = try await path.open()
+
+    #expect(await http.lines == ["GET http://192.0.2.20:8080/home/sub/api/v1/health"])
+  }
+
   @Test func anAddressThatIsNotAnHTTPAddressIsNeverUsed() async {
     for text in ["ftp://192.0.2.20/", "mailto:someone", "http:///nohost"] {
       let http = FakeHTTPClient { _ in healthy }
