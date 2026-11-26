@@ -1,0 +1,434 @@
+import Foundation
+import InsteonCore
+import InsteonService
+import Testing
+
+@testable import InsteonAppUI
+
+/// The first screen's acceptance tests, through the calls the screen makes and without a view.
+@MainActor
+@Suite(.timeLimit(.minutes(1)))
+struct DevicesScreenTests {
+
+  private let lamp = ServiceDevice(
+    address: InsteonAddress("1A.2B.3C")!, productName: "Lamp Module", canTurnOnAndOff: true, canDim: true, value: 0, lastAnsweredAt: nil)
+  private let sensor = ServiceDevice(
+    address: InsteonAddress("4D.5E.6F")!, productName: nil, canTurnOnAndOff: false, canDim: false, value: nil, lastAnsweredAt: nil)
+
+  @Test func loadingListsTheDevicesTheNetworkKnows() async {
+    let network = ScriptedNetwork(devices: [lamp, sensor])
+    let screen = DevicesScreen(network: network)
+
+    await screen.load()
+
+    #expect(screen.state == .loaded)
+    #expect(screen.rows.map(\.title) == ["Lamp Module", "Unidentified device"])
+    #expect(screen.rows.map(\.subtitle) == ["1A.2B.3C", "4D.5E.6F"])
+    #expect(screen.rows.map(\.canSwitch) == [true, false])
+  }
+
+  @Test func aLoadDuringACommandDoesNotMoveTheCommandsResultToAnotherDevice() async {
+    let other = ServiceDevice(address: InsteonAddress("7A.8B.9C")!, productName: "Other", canTurnOnAndOff: true, canDim: false, value: 0, lastAnsweredAt: nil)
+    let network = ScriptedNetwork(devices: [lamp, other])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    let lampRow = screen.rows[0]
+    await network.holdCommands()
+
+    async let turned: Void = screen.turn(lampRow, on: true)
+    await network.waitForHeldCommand()
+    await network.setDevices([other, lamp])
+    await screen.load()
+    await network.release()
+    await turned
+
+    #expect(screen.rows.map(\.title) == ["Other", "Lamp Module"])
+    #expect(screen.rows.map(\.level) == [.off, .percent(100)])
+  }
+
+  @Test func aLoadThatDropsTheDeviceDuringACommandDoesNotCrash() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    let lampRow = screen.rows[0]
+    await network.holdCommands()
+
+    async let turned: Void = screen.turn(lampRow, on: true)
+    await network.waitForHeldCommand()
+    await network.setDevices([])
+    await screen.load()
+    await network.release()
+    await turned
+
+    #expect(screen.rows.isEmpty)
+  }
+
+  @Test func anAcknowledgmentWithoutAStatusShowsWhatTheNetworkListsNotAGuess() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    await network.leaveDevicesAt(0x80)
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.rows[0].level == .percent(50))
+  }
+
+  @Test func anAcknowledgmentWithAStatusShowsTheStatus() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    await network.setReply(.acknowledgedWithStatus(DeviceStatus(group: 1, value: 0x40, allLinkDatabaseDelta: 0, reading: .percent(25), isOn: true)))
+    await network.leaveDevicesAt(0xFF)
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.rows[0].level == .percent(25))
+  }
+
+  @Test func aReceiptThatIsNotAnAcknowledgmentShowsWhatTheNetworkListsNotAGuess() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    await network.setReply(.read)
+    await network.leaveDevicesAt(0x80)
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.rows[0].level == .percent(50))
+  }
+
+  @Test func aDeviceTheNetworkCannotListAfterACommandShowsNoLevelAndSaysSo() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    await network.setListFailure(ServiceControlError.busy)
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.rows[0].level == .unknown)
+    #expect(screen.notice != nil)
+  }
+
+  @Test func aCancelledLoadLeavesTheRowsAndTheStateAlone() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    await network.setListFailure(CancellationError())
+
+    await screen.load()
+
+    #expect(screen.rows.count == 1)
+    #expect(screen.state == .loaded)
+  }
+
+  @Test func aCancelledFirstLoadLeavesTheScreenWhereItWas() async {
+    let network = ScriptedNetwork(devices: [lamp], listFailure: CancellationError())
+    let screen = DevicesScreen(network: network)
+
+    await screen.load()
+
+    #expect(screen.state == .idle)
+  }
+
+  @Test(arguments: [
+    (UInt8(0), DeviceRow.Level.off), (1, .percent(1)), (2, .percent(1)), (3, .percent(1)), (4, .percent(2)),
+    (127, .percent(50)), (128, .percent(50)), (254, .percent(100)), (255, .percent(100))
+  ])
+  func aRawLevelShowsAsOffOnlyWhenItIsZeroAndAtLeastOnePercentOtherwise(raw: UInt8, shown: DeviceRow.Level) async {
+    let device = ServiceDevice(address: lamp.address, productName: nil, canTurnOnAndOff: true, canDim: true, value: raw, lastAnsweredAt: nil)
+    let screen = DevicesScreen(network: ScriptedNetwork(devices: [device]))
+
+    await screen.load()
+
+    #expect(screen.rows[0].level == shown)
+  }
+
+  @Test func eachRefusalHasItsOwnText() async {
+    var texts: [String] = []
+    let refusals: [ServiceControlError] = [.busy, .modemUnavailable(.connecting), .notLinked, .notIdentified, .unsupportedControl, .invalidLevel, .unknownDevice]
+    for refusal in refusals {
+      let screen = DevicesScreen(network: ScriptedNetwork(devices: [lamp], refusal: refusal))
+      await screen.load()
+      await screen.turn(screen.rows[0], on: true)
+      texts.append(screen.notice ?? "")
+    }
+
+    #expect(!texts.contains(""))
+    #expect(Set(texts).count == refusals.count)
+  }
+
+  @Test func aSecondTapOnADeviceWhoseCommandIsOutSendsNothing() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    let row = screen.rows[0]
+    await network.holdCommands()
+
+    async let first: Void = screen.turn(row, on: true)
+    await network.waitForHeldCommand()
+    #expect(screen.isBusy(row))
+    await screen.turn(row, on: false)
+    await network.release()
+    await first
+
+    #expect(await network.commands == [ServiceCommand(address: lamp.address, action: .on)])
+    #expect(!screen.isBusy(row))
+  }
+
+  @Test func aDeviceIsNotBusyAfterARefusal() async {
+    let screen = DevicesScreen(network: ScriptedNetwork(devices: [lamp], refusal: ServiceControlError.busy))
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(!screen.isBusy(screen.rows[0]))
+  }
+
+  @Test func aCommandForOneDeviceDoesNotBlockAnother() async {
+    let other = ServiceDevice(address: InsteonAddress("7A.8B.9C")!, productName: "Other", canTurnOnAndOff: true, canDim: false, value: 0, lastAnsweredAt: nil)
+    let network = ScriptedNetwork(devices: [lamp, other])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    let rows = screen.rows
+    await network.holdCommands()
+
+    async let first: Void = screen.turn(rows[0], on: true)
+    await network.waitForHeldCommand()
+    #expect(!screen.isBusy(rows[1]))
+    await network.release()
+    await first
+  }
+
+  // MARK: Loads that overlap, fail or are cancelled
+
+  @Test func anOlderSlowLoadDoesNotOverwriteANewerOne() async {
+    let other = ServiceDevice(address: InsteonAddress("7A.8B.9C")!, productName: "Other", canTurnOnAndOff: true, canDim: false, value: 0, lastAnsweredAt: nil)
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await network.holdNextList()
+
+    async let older: Void = screen.load()
+    await network.waitForHeldList()
+    await network.setDevices([other])
+    await screen.load()
+    await network.releaseList()
+    await older
+
+    #expect(screen.rows.map(\.title) == ["Other"])
+    #expect(screen.state == .loaded)
+  }
+
+  @Test func aCancelledSecondLoadDoesNotLeaveTheScreenLoading() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await network.holdNextList()
+
+    async let first: Void = screen.load()
+    await network.waitForHeldList()
+    await network.setListFailure(CancellationError())
+    await screen.load()
+    #expect(screen.state == .loading)
+    await network.releaseList()
+    await first
+
+    #expect(screen.state == .loaded)
+    #expect(screen.rows.count == 1)
+  }
+
+  @Test func aCancelledLoadWhileAnotherIsOutDoesNotRestoreAStaleState() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await network.holdNextList()
+
+    async let first: Void = screen.load()
+    await network.waitForHeldList()
+    await network.setListFailure(CancellationError())
+    await screen.load()
+    await network.setListFailure(nil)
+    await network.releaseList()
+    await first
+
+    #expect(screen.state != .loading)
+  }
+
+  @Test func aFailedLoadKeepsThePreviousRowsAndShowsTheFailureWithThem() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    await network.setListFailure(ServiceControlError.busy)
+
+    await screen.load()
+
+    #expect(screen.rows.count == 1)
+    #expect(screen.failure != nil)
+  }
+
+  @Test func aFirstLoadThatFailsHasNoRowsAndShowsTheFailure() async {
+    let screen = DevicesScreen(network: ScriptedNetwork(devices: [lamp], listFailure: ServiceControlError.busy))
+
+    await screen.load()
+
+    #expect(screen.rows.isEmpty)
+    #expect(screen.failure != nil)
+    #expect(!screen.isEmpty)
+  }
+
+  @Test func aLoadThatSucceedsAfterAFailureClearsTheFailure() async {
+    let network = ScriptedNetwork(devices: [lamp], listFailure: ServiceControlError.busy)
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    await network.setListFailure(nil)
+
+    await screen.load()
+
+    #expect(screen.failure == nil)
+    #expect(screen.rows.count == 1)
+  }
+
+  // MARK: What the view shows
+
+  @Test func theScreenIsLoadingWhileALoadIsOut() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    #expect(!screen.isLoading)
+    await network.holdNextList()
+
+    async let load: Void = screen.load()
+    await network.waitForHeldList()
+    #expect(screen.isLoading)
+    await network.releaseList()
+    await load
+
+    #expect(!screen.isLoading)
+  }
+
+  @Test func aLoadThatFindsNoDevicesIsEmptyNotLoading() async {
+    let screen = DevicesScreen(network: ScriptedNetwork(devices: []))
+    #expect(!screen.isEmpty)
+
+    await screen.load()
+
+    #expect(screen.isEmpty)
+    #expect(!screen.isLoading)
+    #expect(screen.failure == nil)
+  }
+
+  // MARK: Commands that are cancelled, and the row the gate reads
+
+  @Test func aCancelledCommandLeavesTheRowAndSaysNothing() async {
+    let network = ScriptedNetwork(devices: [lamp], refusal: CancellationError())
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.notice == nil)
+    #expect(screen.rows[0].level == .off)
+    #expect(!screen.isBusy(screen.rows[0]))
+  }
+
+  @Test func aCancelledReadAfterACommandLeavesTheRowAndSaysNothing() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    await network.setListFailure(CancellationError())
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.notice == nil)
+    #expect(screen.rows[0].level == .off)
+  }
+
+  @Test func theGateReadsTheCurrentRowNotTheCallersCopy() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    let current = screen.rows[0]
+    let stale = DeviceRow(id: current.id, title: current.title, subtitle: current.subtitle, canSwitch: false, canDim: current.canDim, level: current.level)
+
+    await screen.turn(stale, on: true)
+    #expect(await network.commands.count == 1)
+
+    let nonSwitching = ServiceDevice(address: lamp.address, productName: nil, canTurnOnAndOff: false, canDim: false, value: nil, lastAnsweredAt: nil)
+    await network.setDevices([nonSwitching])
+    let copy = screen.rows[0]
+    await screen.load()
+    await screen.turn(copy, on: true)
+
+    #expect(await network.commands.count == 1)
+  }
+
+  @Test func aDeviceThatReportedALevelShowsItOnOrOff() async {
+    let on = ServiceDevice(address: lamp.address, productName: lamp.productName, canTurnOnAndOff: true, canDim: true, value: 128, lastAnsweredAt: nil)
+    let screen = DevicesScreen(network: ScriptedNetwork(devices: [on, lamp]))
+
+    await screen.load()
+
+    #expect(screen.rows[0].level == .percent(50))
+    #expect(screen.rows[1].level == .off)
+  }
+
+  @Test func aDeviceThatNeverReportedALevelShowsNone() async {
+    let never = ServiceDevice(address: lamp.address, productName: nil, canTurnOnAndOff: true, canDim: false, value: nil, lastAnsweredAt: nil)
+    let screen = DevicesScreen(network: ScriptedNetwork(devices: [never]))
+
+    await screen.load()
+
+    #expect(screen.rows[0].level == .unknown)
+  }
+
+  @Test func turningADeviceOnSendsOneOnCommandAndShowsItOn() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(await network.commands == [ServiceCommand(address: lamp.address, action: .on)])
+    #expect(screen.rows[0].level == .percent(100))
+    #expect(screen.notice == nil)
+  }
+
+  @Test func turningADeviceOffSendsOneOffCommandAndShowsItOff() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: false)
+
+    #expect(await network.commands == [ServiceCommand(address: lamp.address, action: .off)])
+    #expect(screen.rows[0].level == .off)
+  }
+
+  @Test func aRefusedCommandLeavesTheRowAndSaysWhy() async {
+    let network = ScriptedNetwork(devices: [lamp], refusal: ServiceControlError.modemUnavailable(.connecting))
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.rows[0].level == .off)
+    #expect(screen.notice != nil)
+  }
+
+  @Test func aDeviceThatCannotSwitchSendsNothing() async {
+    let network = ScriptedNetwork(devices: [sensor])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(await network.commands.isEmpty)
+  }
+
+  @Test func aNetworkThatCannotBeReadShowsTheFailureAndNoRows() async {
+    let screen = DevicesScreen(network: ScriptedNetwork(devices: [], listFailure: ServiceControlError.busy))
+
+    await screen.load()
+
+    guard case .failed(let message) = screen.state else { Issue.record("expected a failure"); return }
+    #expect(!message.isEmpty)
+    #expect(screen.rows.isEmpty)
+  }
+}
