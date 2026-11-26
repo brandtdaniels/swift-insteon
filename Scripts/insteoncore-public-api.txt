@@ -651,7 +651,7 @@ init RemoteUnlinkingError(device:info:underlying:)
 init RemovedLinks(address:device:links:)
 init SETButtonPrompt(direction:group:timeout:device:info:steps:modemRole:deviceGroup:)
 init SceneListing(_:)
-init SceneListing(scenes:unreadable:unlisted:)
+init SceneListing(scenes:looseHalfLinks:unreadable:unlisted:)
 init SceneListing.Member(address:data:)
 init SceneListing.Scene(number:controller:members:halfLinks:)
 init SceneResult(acknowledged:unacknowledged:isComplete:)
@@ -1308,6 +1308,7 @@ var SceneListing.Scene.isWritable
 var SceneListing.Scene.members
 var SceneListing.Scene.number
 var SceneListing.isWhole
+var SceneListing.looseHalfLinks
 var SceneListing.scenes
 var SceneListing.unlisted
 var SceneListing.unreadable

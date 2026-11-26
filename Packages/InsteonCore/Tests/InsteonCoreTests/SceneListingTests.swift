@@ -88,6 +88,17 @@ struct SceneListingTests {
 
   }
 
+  @Test func keepsAResponderRecordWithNoSceneOfItsNumberSoTheListingIsNotWhole() {
+
+    let half = AllLinkGroupReading.HalfLink(endpoint: .device(Self.plug), record: Self.record([.inUse, .usedBefore], group: 12, Self.lamp))
+    let listing = SceneListing(AllLinkGroupReading(groups: [], halfLinks: [half], unreadable: [], unlisted: []))
+
+    #expect(listing.scenes.isEmpty)
+    #expect(listing.looseHalfLinks == [half])
+    #expect(!listing.isWhole)
+
+  }
+
   @Test func reportsTheDevicesItCouldNotReadOrDidNotKnowSoASceneIsNeverShownAsWhole() {
 
     let reading = AllLinkGroupReading(groups: [], halfLinks: [], unreadable: [Self.plug], unlisted: [Self.remote])

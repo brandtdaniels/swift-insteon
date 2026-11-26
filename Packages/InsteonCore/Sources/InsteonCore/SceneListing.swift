@@ -83,6 +83,10 @@ public struct SceneListing: Hashable, Sendable {
   /// The scenes: the modem's in order of number, then each device's in address and number order.
   public var scenes: [Scene]
 
+  /// Records whose other half is missing and that no scene of their group number holds, such as a
+  /// device's responder record for a group nothing lists.
+  public var looseHalfLinks: [AllLinkGroupReading.HalfLink]
+
   /// Devices whose ALL-Link database could not be read, so any scene they belong to may be missing them.
   public var unreadable: [InsteonAddress]
 
@@ -92,7 +96,7 @@ public struct SceneListing: Hashable, Sendable {
   /// Whether the reading read every device and found no record without its other half.
   public var isWhole: Bool {
 
-    unreadable.isEmpty && unlisted.isEmpty && scenes.allSatisfy { $0.halfLinks.isEmpty }
+    unreadable.isEmpty && unlisted.isEmpty && looseHalfLinks.isEmpty && scenes.allSatisfy { $0.halfLinks.isEmpty }
 
   }
 
@@ -142,6 +146,7 @@ public struct SceneListing: Hashable, Sendable {
     }
 
     self.scenes = scenes.sorted(by: Self.ordered)
+    self.looseHalfLinks = reading.halfLinks.filter { (half: AllLinkGroupReading.HalfLink) -> Bool in !scenes.contains { $0.halfLinks.contains(half) } }
     self.unreadable = reading.unreadable
     self.unlisted = reading.unlisted
 
@@ -151,11 +156,13 @@ public struct SceneListing: Hashable, Sendable {
   ///
   /// - Parameters:
   ///   - scenes: The scenes.
+  ///   - looseHalfLinks: Records no scene holds whose other half is missing.
   ///   - unreadable: Devices whose database could not be read.
   ///   - unlisted: Devices the reading had no list for.
-  public init(scenes: [Scene], unreadable: [InsteonAddress] = [], unlisted: [InsteonAddress] = []) {
+  public init(scenes: [Scene], looseHalfLinks: [AllLinkGroupReading.HalfLink] = [], unreadable: [InsteonAddress] = [], unlisted: [InsteonAddress] = []) {
 
     self.scenes = scenes
+    self.looseHalfLinks = looseHalfLinks
     self.unreadable = unreadable
     self.unlisted = unlisted
 
