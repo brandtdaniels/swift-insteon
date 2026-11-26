@@ -44,15 +44,30 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
     case failed(String)
   }
 
-  /// The loading state.
+  /// Where the screen's loading stands: loading while any load is out, otherwise how the last load ended.
   public private(set) var state: State = .idle
-  /// The devices, in the order the network lists them.
+  /// The devices, in the order the network lists them. A failed load leaves the previous rows.
   public private(set) var rows: [DeviceRow] = []
   /// The last refusal of a command, for the screen to show once.
   public var notice: String?
 
+  /// Whether a load is out, for the view to show a loading indicator.
+  public var isLoading: Bool { state == .loading }
+
+  /// Whether the last load succeeded and the network lists no devices.
+  public var isEmpty: Bool { state == .loaded && rows.isEmpty }
+
+  /// What the last load failed with, to show beside any rows kept from before, until a load succeeds.
+  public var failure: String? {
+    if case let .failed(message) = settled { message } else { nil }
+  }
+
   private var busy: Set<InsteonAddress> = []
   private let network: Network
+  private var started = 0
+  private var applied = 0
+  private var inFlight = 0
+  private var settled: State = .idle
 
   /// Whether a command for the row's device is out, so another tap on it is ignored.
   public func isBusy(_ row: DeviceRow) -> Bool { busy.contains(row.id) }
@@ -64,18 +79,30 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
 
   /// Asks the network for its devices.
   ///
-  /// A load that is cancelled, such as when the view goes away, leaves the rows and the state as they were.
+  /// Loads can overlap. A result applies only if no later load has applied one, so a slow older load
+  /// never replaces a newer load's rows. A cancelled load changes nothing, and the screen leaves the
+  /// loading state once no load is out. A failed load keeps the rows that were shown.
   public func load() async {
-    let before = state
+    started += 1
+    let mine = started
+    inFlight += 1
     state = .loading
+    defer {
+      inFlight -= 1
+      if inFlight == 0 { state = settled }
+    }
     do {
-      rows = try await network.devices().map(Self.row)
-      state = .loaded
+      let devices = try await network.devices()
+      guard mine > applied else { return }
+      applied = mine
+      rows = devices.map(Self.row)
+      settled = .loaded
     } catch is CancellationError {
-      state = before
+      return
     } catch {
-      rows = []
-      state = .failed(Self.message(for: error))
+      guard mine > applied else { return }
+      applied = mine
+      settled = .failed(Self.message(for: error))
     }
   }
 
@@ -84,7 +111,8 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
   /// An acknowledgment that carries a status shows that status. Any other answer shows the level the
   /// network lists for the device, read again, because the screen can't tell what level the device holds.
   public func turn(_ row: DeviceRow, on: Bool) async {
-    guard row.canSwitch, rows.contains(where: { $0.id == row.id }), !busy.contains(row.id) else { return }
+    // The gate reads the current row, not the caller's copy, which a load can have outdated.
+    guard let current = rows.first(where: { $0.id == row.id }), current.canSwitch, !busy.contains(row.id) else { return }
     busy.insert(row.id)
     defer { busy.remove(row.id) }
     notice = nil
@@ -95,6 +123,8 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
       } else {
         await refresh(row.id)
       }
+    } catch is CancellationError {
+      return
     } catch {
       notice = Self.message(for: error)
     }
@@ -105,6 +135,8 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
     do {
       guard let device = try await network.devices().first(where: { $0.address == id }) else { return show(.unknown, for: id) }
       show(Self.row(device).level, for: id)
+    } catch is CancellationError {
+      return
     } catch {
       show(.unknown, for: id)
       notice = "The level couldn't be read after the command."

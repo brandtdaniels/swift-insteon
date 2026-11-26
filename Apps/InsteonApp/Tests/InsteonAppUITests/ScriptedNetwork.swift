@@ -26,6 +26,11 @@ actor ScriptedNetwork: DeviceQuerying, DeviceCommanding {
   private var sent: [ServiceCommand] = []
   private var isHolding = false
   private var held: [CheckedContinuation<Void, Never>] = []
+  private var holdsNextList = false
+  private var heldLists: [CheckedContinuation<Void, Never>] = []
+  private var listAnnounced = 0
+  private var listObserved = 0
+  private var listWatcher: CheckedContinuation<Void, Never>?
   private var announced = 0
   private var observed = 0
   private var watcher: CheckedContinuation<Void, Never>?
@@ -48,6 +53,22 @@ actor ScriptedNetwork: DeviceQuerying, DeviceCommanding {
   /// Makes the next command wait, after it is recorded, until ``release()``; later commands go through.
   func holdCommands() { isHolding = true }
 
+  /// Makes the next read of the list wait, after it has read the list, until ``releaseList()``.
+  func holdNextList() { holdsNextList = true }
+
+  /// Returns once a read of the list is waiting.
+  func waitForHeldList() async {
+    if listAnnounced == listObserved { await withCheckedContinuation { listWatcher = $0 } }
+    listObserved += 1
+  }
+
+  /// Lets the waiting read of the list finish with the list it read.
+  func releaseList() {
+    let waiting = heldLists
+    heldLists = []
+    for continuation in waiting { continuation.resume() }
+  }
+
   /// Returns once a command is waiting.
   func waitForHeldCommand() async {
     if announced == observed { await withCheckedContinuation { watcher = $0 } }
@@ -63,7 +84,15 @@ actor ScriptedNetwork: DeviceQuerying, DeviceCommanding {
 
   func devices() async throws -> [ServiceDevice] {
     if let listFailure { throw listFailure }
-    return listed
+    let read = listed
+    if holdsNextList {
+      holdsNextList = false
+      listAnnounced += 1
+      listWatcher?.resume()
+      listWatcher = nil
+      await withCheckedContinuation { heldLists.append($0) }
+    }
+    return read
   }
 
   func execute(_ command: ServiceCommand) async throws -> CommandReceipt {
