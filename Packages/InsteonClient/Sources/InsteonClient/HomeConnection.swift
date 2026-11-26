@@ -33,6 +33,9 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
       } catch HomePathError.notReached {
         open = nil
         lastLost = .interrupted(path: name)
+      } catch HomePathError.unauthorized {
+        open = nil
+        throw HomeError.unauthorized(path: name)
       }
     }
     throw lastLost ?? HomeError.noPathReached([])
@@ -49,6 +52,9 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
       } catch HomePathError.notReached {
         // Nothing was sent: the next path can take it.
         open = nil
+      } catch HomePathError.unauthorized {
+        open = nil
+        throw HomeError.unauthorized(path: name)
       }
     }
     throw HomeError.noPathReached([])

@@ -120,7 +120,7 @@ private struct ServiceCalls: HomeCalls {
   /// The error a refusal stands for.
   private func failure(_ response: HTTPResponse) throws -> any Error {
     let refusal = try? JSONDecoder().decode(Refusal.self, from: response.body)
-    if response.statusCode == 401 { return HomePathError.unauthorized }
+    if response.statusCode == 401 || response.statusCode == 403 { return HomePathError.unauthorized }
     guard let refusal else {
       return HomeError.rejected(code: "status\(response.statusCode)", sent: false)
     }

@@ -143,4 +143,14 @@ struct ServicePathTests {
       #expect(!String(reflecting: error).contains(token))
     }
   }
+
+  @Test func aCredentialRefusedOnACallIsUnauthorizedForBothStatuses() async throws {
+    for status in [401, 403] {
+      let c = try await calls(FakeHTTPClient { request in
+        request.url?.path == "/api/v1/health" ? healthy : json(#"{"code":"authenticationFailed"}"#, status: status)
+      })
+      await #expect(throws: HomePathError.unauthorized) { _ = try await c.devices() }
+      await #expect(throws: HomePathError.unauthorized) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+    }
+  }
 }

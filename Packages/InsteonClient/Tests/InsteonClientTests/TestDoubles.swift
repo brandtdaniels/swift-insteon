@@ -18,6 +18,7 @@ enum Script: Sendable {
   case answer
   case notReached
   case interrupted
+  case unauthorized
 }
 
 /// Calls that answer from a script and record what they were asked.
@@ -39,6 +40,7 @@ actor ScriptedCalls: HomeCalls {
     case .answer: return [device(value: label == "local" ? 1 : 2)]
     case .notReached: throw HomePathError.notReached("scripted")
     case .interrupted: throw HomePathError.interrupted
+    case .unauthorized: throw HomePathError.unauthorized
     }
   }
 
@@ -48,6 +50,7 @@ actor ScriptedCalls: HomeCalls {
     case .answer: return CommandReceipt(address: command.address, outcome: .acknowledged, status: nil)
     case .notReached: throw HomePathError.notReached("scripted")
     case .interrupted: throw HomePathError.interrupted
+    case .unauthorized: throw HomePathError.unauthorized
     }
   }
 }

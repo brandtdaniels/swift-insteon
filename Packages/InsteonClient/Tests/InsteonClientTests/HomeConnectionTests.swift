@@ -115,4 +115,16 @@ struct HomeConnectionTests {
 
     #expect(try await list(home) == 1)
   }
+
+  @Test func aCredentialRefusedOnAnOpenPathIsReportedAndThePathIsDropped() async throws {
+    let local = ScriptedPath("local", calls: ScriptedCalls(label: "local", script: [.unauthorized, .unauthorized]))
+    let home = HomeConnection(paths: [local])
+
+    await #expect(throws: HomeError.unauthorized(path: "local")) { try await home.devices() }
+    #expect(await home.currentPath == nil)
+    await #expect(throws: HomeError.unauthorized(path: "local")) {
+      try await home.execute(ServiceCommand(address: lampAddress, action: .on))
+    }
+    #expect(await home.currentPath == nil)
+  }
 }
