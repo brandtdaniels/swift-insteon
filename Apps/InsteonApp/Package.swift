@@ -4,7 +4,7 @@ import PackageDescription
 
 // The shared screens and view models of the Insteon app for iPhone, iPad and Mac. They call
 // libraries and present the results; they hold no protocol, scene or connection logic.
-// `repo-check app-thin` holds the imports to the list below.
+// `repo-check app-thin` holds the imports to the libraries below and the frameworks that host an interface.
 let package = Package(
   name: "InsteonApp",
   platforms: [.macOS(.v14), .iOS(.v17), .tvOS(.v17), .visionOS(.v1)],

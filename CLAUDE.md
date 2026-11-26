@@ -31,8 +31,8 @@ Read [CONVENTIONS.md](CONVENTIONS.md) first. It sets the names, spelling and sty
 ## Before pushing
 
 - `swift build -Xswiftc -warnings-as-errors` and `swift test` in the packages you touched.
-- In `Tools/RepoChecks`: `swift build -Xswiftc -warnings-as-errors` and `swift test`, then each check as `swift run --package-path Tools/RepoChecks repo-check NAME`: `terms`, `workflows`, `time-limits`, `cli-thin`, `concurrency`, `credentials`, `device-neutral` and `public-api`.
-- In `Apps/InsteonApp`: `swift test`, and `xcodebuild build -scheme InsteonApp` for `-destination 'platform=macOS'` and `'generic/platform=iOS Simulator'`. The app is thin like the command: `repo-check cli-thin` reads its sources too.
+- In `Tools/RepoChecks`: `swift build -Xswiftc -warnings-as-errors` and `swift test`, then each check as `swift run --package-path Tools/RepoChecks repo-check NAME`: `terms`, `workflows`, `time-limits`, `cli-thin`, `app-thin`, `concurrency`, `credentials`, `device-neutral` and `public-api`.
+- In `Apps/InsteonApp`: `swift test`, and `xcodebuild build -scheme InsteonApp` for `-destination 'platform=macOS'` and `'generic/platform=iOS Simulator'`. The app is thin like the command: `repo-check cli-thin` and `repo-check app-thin` read its sources.
 - `repo-check public-api --update` when InsteonCore's public API changes.
 - An allow-list file only shrinks; CI fails a pull request that adds a line.
 - No em dash or en dash anywhere, in code, comments, docs, commit messages or pull request text.

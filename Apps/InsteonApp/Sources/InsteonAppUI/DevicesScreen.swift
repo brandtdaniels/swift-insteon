@@ -51,7 +51,11 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
   /// The last refusal of a command, for the screen to show once.
   public var notice: String?
 
+  private var busy: Set<InsteonAddress> = []
   private let network: Network
+
+  /// Whether a command for the row's device is out, so another tap on it is ignored.
+  public func isBusy(_ row: DeviceRow) -> Bool { busy.contains(row.id) }
 
   /// Creates a screen over a network.
   public init(network: Network) {
@@ -59,39 +63,72 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
   }
 
   /// Asks the network for its devices.
+  ///
+  /// A load that is cancelled, such as when the view goes away, leaves the rows and the state as they were.
   public func load() async {
+    let before = state
     state = .loading
     do {
       rows = try await network.devices().map(Self.row)
       state = .loaded
+    } catch is CancellationError {
+      state = before
     } catch {
       rows = []
       state = .failed(Self.message(for: error))
     }
   }
 
-  /// Sends a device an on or off command, and shows it on or off once the network acknowledges.
+  /// Sends a device an on or off command, then shows the level the device reported.
+  ///
+  /// An acknowledgment that carries a status shows that status. Any other answer shows the level the
+  /// network lists for the device, read again, because the screen can't tell what level the device holds.
   public func turn(_ row: DeviceRow, on: Bool) async {
-    guard row.canSwitch, let index = rows.firstIndex(where: { $0.id == row.id }) else { return }
+    guard row.canSwitch, rows.contains(where: { $0.id == row.id }), !busy.contains(row.id) else { return }
+    busy.insert(row.id)
+    defer { busy.remove(row.id) }
     notice = nil
     do {
-      _ = try await network.execute(ServiceCommand(address: row.id, action: on ? .on : .off))
-      rows[index].level = on ? .percent(100) : .off
+      let receipt = try await network.execute(ServiceCommand(address: row.id, action: on ? .on : .off))
+      if receipt.outcome == .acknowledged, let status = receipt.status {
+        show(Self.level(of: status.value), for: row.id)
+      } else {
+        await refresh(row.id)
+      }
     } catch {
       notice = Self.message(for: error)
     }
   }
 
+  /// Reads the network's list again and updates one device's level, leaving the other rows as they are.
+  private func refresh(_ id: InsteonAddress) async {
+    do {
+      guard let device = try await network.devices().first(where: { $0.address == id }) else { return show(.unknown, for: id) }
+      show(Self.row(device).level, for: id)
+    } catch {
+      show(.unknown, for: id)
+      notice = "The level couldn't be read after the command."
+    }
+  }
+
+  /// A load can reorder or drop rows while a command is out, so a row is found by its device each time.
+  private func show(_ level: DeviceRow.Level, for id: InsteonAddress) {
+    if let index = rows.firstIndex(where: { $0.id == id }) { rows[index].level = level }
+  }
+
+  private static func level(of value: UInt8?) -> DeviceRow.Level {
+    switch value {
+    case nil: .unknown
+    case 0?: .off
+    // Only 0 is off, so a level that rounds to 0% still shows as on, at the least a percent can say.
+    case let value?: .percent(max(1, Int((Double(value) * 100 / 255).rounded())))
+    }
+  }
+
   private static func row(_ device: ServiceDevice) -> DeviceRow {
-    let level: DeviceRow.Level =
-      switch device.value {
-      case nil: .unknown
-      case 0?: .off
-      case let value?: .percent(Int((Double(value) * 100 / 255).rounded()))
-      }
-    return DeviceRow(
+    DeviceRow(
       id: device.address, title: device.productName ?? "Unidentified device", subtitle: device.address.description,
-      canSwitch: device.canTurnOnAndOff, canDim: device.canDim, level: level)
+      canSwitch: device.canTurnOnAndOff, canDim: device.canDim, level: level(of: device.value))
   }
 
   private static func message(for error: any Error) -> String {
@@ -102,7 +139,8 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
     case .notLinked?: return "That device isn't linked to the modem."
     case .notIdentified?: return "That device hasn't said what it is yet."
     case .unsupportedControl?: return "That device has no on and off control."
-    case .invalidLevel?, .unknownDevice?: return "The service doesn't know that device."
+    case .invalidLevel?: return "That level isn't one the device can take."
+    case .unknownDevice?: return "The service doesn't know that device."
     case nil: return "The service couldn't be reached."
     }
   }

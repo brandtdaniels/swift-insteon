@@ -7,6 +7,7 @@ import Testing
 
 /// The first screen's acceptance tests, through the calls the screen makes and without a view.
 @MainActor
+@Suite(.timeLimit(.minutes(1)))
 struct DevicesScreenTests {
 
   private let lamp = ServiceDevice(
@@ -26,9 +27,181 @@ struct DevicesScreenTests {
     #expect(screen.rows.map(\.canSwitch) == [true, false])
   }
 
+  @Test func aLoadDuringACommandDoesNotMoveTheCommandsResultToAnotherDevice() async {
+    let other = ServiceDevice(address: InsteonAddress("7A.8B.9C")!, productName: "Other", canTurnOnAndOff: true, canDim: false, value: 0, lastAnsweredAt: nil)
+    let network = ScriptedNetwork(devices: [lamp, other])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    let lampRow = screen.rows[0]
+    await network.holdCommands()
+
+    async let turned: Void = screen.turn(lampRow, on: true)
+    await network.waitForHeldCommand()
+    await network.setDevices([other, lamp])
+    await screen.load()
+    await network.release()
+    await turned
+
+    #expect(screen.rows.map(\.title) == ["Other", "Lamp Module"])
+    #expect(screen.rows.map(\.level) == [.off, .percent(100)])
+  }
+
+  @Test func aLoadThatDropsTheDeviceDuringACommandDoesNotCrash() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    let lampRow = screen.rows[0]
+    await network.holdCommands()
+
+    async let turned: Void = screen.turn(lampRow, on: true)
+    await network.waitForHeldCommand()
+    await network.setDevices([])
+    await screen.load()
+    await network.release()
+    await turned
+
+    #expect(screen.rows.isEmpty)
+  }
+
+  @Test func anAcknowledgmentWithoutAStatusShowsWhatTheNetworkListsNotAGuess() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    await network.leaveDevicesAt(0x80)
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.rows[0].level == .percent(50))
+  }
+
+  @Test func anAcknowledgmentWithAStatusShowsTheStatus() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    await network.setReply(.acknowledgedWithStatus(DeviceStatus(group: 1, value: 0x40, allLinkDatabaseDelta: 0, reading: .percent(25), isOn: true)))
+    await network.leaveDevicesAt(0xFF)
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.rows[0].level == .percent(25))
+  }
+
+  @Test func aReceiptThatIsNotAnAcknowledgmentShowsWhatTheNetworkListsNotAGuess() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    await network.setReply(.read)
+    await network.leaveDevicesAt(0x80)
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.rows[0].level == .percent(50))
+  }
+
+  @Test func aDeviceTheNetworkCannotListAfterACommandShowsNoLevelAndSaysSo() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    await network.setListFailure(ServiceControlError.busy)
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(screen.rows[0].level == .unknown)
+    #expect(screen.notice != nil)
+  }
+
+  @Test func aCancelledLoadLeavesTheRowsAndTheStateAlone() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    await network.setListFailure(CancellationError())
+
+    await screen.load()
+
+    #expect(screen.rows.count == 1)
+    #expect(screen.state == .loaded)
+  }
+
+  @Test func aCancelledFirstLoadLeavesTheScreenWhereItWas() async {
+    let network = ScriptedNetwork(devices: [lamp], listFailure: CancellationError())
+    let screen = DevicesScreen(network: network)
+
+    await screen.load()
+
+    #expect(screen.state == .idle)
+  }
+
+  @Test(arguments: [
+    (UInt8(0), DeviceRow.Level.off), (1, .percent(1)), (2, .percent(1)), (3, .percent(1)), (4, .percent(2)),
+    (127, .percent(50)), (128, .percent(50)), (254, .percent(100)), (255, .percent(100))
+  ])
+  func aRawLevelShowsAsOffOnlyWhenItIsZeroAndAtLeastOnePercentOtherwise(raw: UInt8, shown: DeviceRow.Level) async {
+    let device = ServiceDevice(address: lamp.address, productName: nil, canTurnOnAndOff: true, canDim: true, value: raw, lastAnsweredAt: nil)
+    let screen = DevicesScreen(network: ScriptedNetwork(devices: [device]))
+
+    await screen.load()
+
+    #expect(screen.rows[0].level == shown)
+  }
+
+  @Test func eachRefusalHasItsOwnText() async {
+    var texts: [String] = []
+    let refusals: [ServiceControlError] = [.busy, .modemUnavailable(.connecting), .notLinked, .notIdentified, .unsupportedControl, .invalidLevel, .unknownDevice]
+    for refusal in refusals {
+      let screen = DevicesScreen(network: ScriptedNetwork(devices: [lamp], refusal: refusal))
+      await screen.load()
+      await screen.turn(screen.rows[0], on: true)
+      texts.append(screen.notice ?? "")
+    }
+
+    #expect(!texts.contains(""))
+    #expect(Set(texts).count == refusals.count)
+  }
+
+  @Test func aSecondTapOnADeviceWhoseCommandIsOutSendsNothing() async {
+    let network = ScriptedNetwork(devices: [lamp])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    let row = screen.rows[0]
+    await network.holdCommands()
+
+    async let first: Void = screen.turn(row, on: true)
+    await network.waitForHeldCommand()
+    #expect(screen.isBusy(row))
+    await screen.turn(row, on: false)
+    await network.release()
+    await first
+
+    #expect(await network.commands == [ServiceCommand(address: lamp.address, action: .on)])
+    #expect(!screen.isBusy(row))
+  }
+
+  @Test func aDeviceIsNotBusyAfterARefusal() async {
+    let screen = DevicesScreen(network: ScriptedNetwork(devices: [lamp], refusal: ServiceControlError.busy))
+    await screen.load()
+
+    await screen.turn(screen.rows[0], on: true)
+
+    #expect(!screen.isBusy(screen.rows[0]))
+  }
+
+  @Test func aCommandForOneDeviceDoesNotBlockAnother() async {
+    let other = ServiceDevice(address: InsteonAddress("7A.8B.9C")!, productName: "Other", canTurnOnAndOff: true, canDim: false, value: 0, lastAnsweredAt: nil)
+    let network = ScriptedNetwork(devices: [lamp, other])
+    let screen = DevicesScreen(network: network)
+    await screen.load()
+    let rows = screen.rows
+    await network.holdCommands()
+
+    async let first: Void = screen.turn(rows[0], on: true)
+    await network.waitForHeldCommand()
+    #expect(!screen.isBusy(rows[1]))
+    await network.release()
+    await first
+  }
+
   @Test func aDeviceThatReportedALevelShowsItOnOrOff() async {
-    var on = lamp
-    on = ServiceDevice(address: lamp.address, productName: lamp.productName, canTurnOnAndOff: true, canDim: true, value: 128, lastAnsweredAt: nil)
+    let on = ServiceDevice(address: lamp.address, productName: lamp.productName, canTurnOnAndOff: true, canDim: true, value: 128, lastAnsweredAt: nil)
     let screen = DevicesScreen(network: ScriptedNetwork(devices: [on, lamp]))
 
     await screen.load()
@@ -53,7 +226,7 @@ struct DevicesScreenTests {
 
     await screen.turn(screen.rows[0], on: true)
 
-    #expect(network.commands == [ServiceCommand(address: lamp.address, action: .on)])
+    #expect(await network.commands == [ServiceCommand(address: lamp.address, action: .on)])
     #expect(screen.rows[0].level == .percent(100))
     #expect(screen.notice == nil)
   }
@@ -65,7 +238,7 @@ struct DevicesScreenTests {
 
     await screen.turn(screen.rows[0], on: false)
 
-    #expect(network.commands == [ServiceCommand(address: lamp.address, action: .off)])
+    #expect(await network.commands == [ServiceCommand(address: lamp.address, action: .off)])
     #expect(screen.rows[0].level == .off)
   }
 
@@ -87,7 +260,7 @@ struct DevicesScreenTests {
 
     await screen.turn(screen.rows[0], on: true)
 
-    #expect(network.commands.isEmpty)
+    #expect(await network.commands.isEmpty)
   }
 
   @Test func aNetworkThatCannotBeReadShowsTheFailureAndNoRows() async {
