@@ -214,4 +214,34 @@ struct HomeConnectionTests {
       PathFailure(path: "local", reason: "scripted")
     ])) { try await home.execute(ServiceCommand(address: lampAddress, action: .on)) }
   }
+
+  @Test func anyOtherErrorFromOpeningAPathIsThatPathsFailureAndTheSearchGoesOn() async throws {
+    let home = HomeConnection(paths: [BrokenPath(), ScriptedPath("remote")])
+
+    _ = try await home.devices()
+
+    #expect(await home.currentPath == "remote")
+  }
+
+  @Test func whenOnlyBrokenPathsRemainTheirFailureIsNamed() async throws {
+    let home = HomeConnection(paths: [BrokenPath()])
+
+    await #expect(throws: HomeError.noPathReached([PathFailure(path: "broken", reason: "the path failed to open")])) { try await home.devices() }
+  }
+
+  @Test func cancellationWhileOpeningStillPropagates() async throws {
+    let home = HomeConnection(paths: [CancelingPath(), ScriptedPath("remote")])
+
+    await #expect(throws: CancellationError.self) { _ = try await home.devices() }
+  }
+}
+
+struct BrokenPath: HomePath {
+  let name = "broken"
+  func open() async throws -> any HomeCalls { throw Unplugged() }
+}
+
+struct CancelingPath: HomePath {
+  let name = "canceling"
+  func open() async throws -> any HomeCalls { throw CancellationError() }
 }

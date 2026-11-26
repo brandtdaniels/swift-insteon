@@ -117,6 +117,11 @@ public actor HomeConnection: DeviceQuerying, DeviceCommanding {
         // A refusal on one path says nothing about another: each uses its own credential.
         refusals.append(path.name)
         failures.append(PathFailure(path: path.name, reason: "the credential was refused"))
+      } catch is CancellationError {
+        throw CancellationError()
+      } catch {
+        // A path of another kind may fail in any way; it is that path's failure, not the search's.
+        failures.append(PathFailure(path: path.name, reason: "the path failed to open"))
       }
     }
     if tried > 0, refusals.count == tried { throw HomeError.unauthorized(paths: refusals) }
