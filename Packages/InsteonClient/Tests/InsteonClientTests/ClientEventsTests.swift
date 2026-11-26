@@ -189,4 +189,102 @@ struct ClientEventsTests {
 
     #expect(events == [.event(.statusChanged(lampAddress)), .refresh(.tooOld), .event(.statusChanged(lampAddress))])
   }
+
+  // Given a first subscription lost before any item, when the connection resubscribes with no
+  // cursor, then the client is told events may have been missed.
+  @Test func aSubscriptionLostBeforeAnyItemTellsTheClientToRefresh() async throws {
+    let path = EventPath("local", subscriptions: [
+      .items([], ending: .lost(.interrupted)),
+      .items([.position(cursor(5)), heard(6)], ending: .held)
+    ])
+    let clock = TestClock()
+    let connection = ClientConnection(paths: [path], clock: clock)
+
+    async let items = take(2, from: connection.sequencedEvents(after: nil))
+    await release([.seconds(1)], on: clock)
+
+    #expect(try await items == [.gap(.tooOld, current: cursor(5)), heard(6)])
+    #expect(await path.calls.requested == [nil, nil])
+  }
+
+  @Test func theSameLossGivesAPlainClientARefreshNotice() async throws {
+    let path = EventPath("local", subscriptions: [
+      .items([], ending: .lost(.interrupted)),
+      .items([.position(cursor(5)), heard(6)], ending: .held)
+    ])
+    let clock = TestClock()
+    let connection = ClientConnection(paths: [path], clock: clock)
+
+    async let events = take(2, from: connection.events())
+    await release([.seconds(1)], on: clock)
+
+    #expect(try await events == [.refresh(.tooOld), .event(.statusChanged(lampAddress))])
+  }
+
+  // Given a service that closes subscriptions cleanly, when that happens repeatedly, then each
+  // wait is the first delay and the path is kept.
+  @Test func aCleanEndIsNotAFailureAndKeepsTheFirstDelay() async throws {
+    let path = EventPath("local", subscriptions: [
+      .items([heard(1)], ending: .ended),
+      .items([], ending: .ended),
+      .items([], ending: .ended),
+      .items([heard(2)], ending: .held)
+    ])
+    let clock = TestClock()
+    let connection = ClientConnection(paths: [path], retryDelays: [.seconds(1), .seconds(2), .seconds(4)], clock: clock)
+
+    async let items = take(2, from: connection.sequencedEvents(after: nil))
+    await release([.seconds(1), .seconds(1), .seconds(1)], on: clock)
+
+    #expect(try await items == [heard(1), heard(2)])
+    #expect(await path.openCount == 1)
+  }
+
+  // Given no path carries events, when a client reads, then it is told, once, with no waiting.
+  @Test func eventsOnPathsThatCarryNoneEndWithUnsupported() async throws {
+    let connection = ClientConnection(paths: [ScriptedPath("local"), ScriptedPath("remote")], clock: TestClock())
+
+    await #expect(throws: ConnectionError.unsupported(paths: ["local", "remote"])) {
+      _ = try await take(1, from: connection.events())
+    }
+  }
+
+  // Given one path that carries no events and another that refuses the credential, then the error
+  // is the refusal: a path passed over for events isn't an unreachable one.
+  @Test func aPathPassedOverForEventsDoesNotHideARefusedCredential() async throws {
+    let connection = ClientConnection(paths: [ScriptedPath("a"), EventPath("b", subscriptions: [.refuse(.unauthorized)])], clock: TestClock())
+
+    await #expect(throws: ConnectionError.unauthorized(paths: ["b"])) {
+      _ = try await take(1, from: connection.events())
+    }
+  }
+
+  // Given delays that are zero or negative, then reconnecting still waits a floor of a millisecond.
+  @Test func delaysThatAreZeroOrNegativeAreRaisedToAFloor() async throws {
+    let path = EventPath("local", subscriptions: [
+      .items([heard(1)], ending: .lost(.interrupted)),
+      .items([heard(2)], ending: .held)
+    ])
+    let clock = TestClock()
+    let connection = ClientConnection(paths: [path], retryDelays: [.zero, .seconds(-5)], clock: clock)
+
+    async let items = take(2, from: connection.sequencedEvents(after: nil))
+    await release([.milliseconds(1)], on: clock)
+
+    #expect(try await items == [heard(1), heard(2)])
+  }
+
+  // Given a credential refused mid-stream, then reading ends with that error and the path is kept.
+  @Test(arguments: [
+    (ConnectionPathError.unauthorized, ConnectionError.unauthorized(paths: ["local"])),
+    (ConnectionPathError.forbidden, ConnectionError.forbidden(path: "local"))
+  ])
+  func aCredentialRefusedMidStreamEndsReadingAndKeepsThePath(lost: ConnectionPathError, expected: ConnectionError) async throws {
+    let path = EventPath("local", subscriptions: [.items([heard(1)], ending: .lost(lost))])
+    let connection = ClientConnection(paths: [path], clock: TestClock())
+
+    await #expect(throws: expected) { _ = try await take(2, from: connection.sequencedEvents(after: nil)) }
+    #expect(await connection.currentPath == "local")
+    #expect(await path.openCount == 1)
+  }
 }

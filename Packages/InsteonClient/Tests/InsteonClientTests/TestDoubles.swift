@@ -180,6 +180,7 @@ enum EventSubscription: Sendable {
   enum Ending: Sendable {
     case lost(ConnectionPathError)
     case slowConsumer
+    case ended
     case held
   }
 }
@@ -208,6 +209,7 @@ actor EventCalls: ConnectionCalls {
         switch ending {
         case let .lost(error): continuation.finish(throwing: error)
         case .slowConsumer: continuation.finish(throwing: ServiceEventError.slowConsumer)
+        case .ended: continuation.finish()
         case .held: break
         }
       })
