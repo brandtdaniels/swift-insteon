@@ -50,7 +50,7 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
   ///
   /// The subscription goes through the path in use. When it is lost, the connection waits, reaches
   /// a path again through the ordered paths, and resumes after the last cursor the client saw. A
-  /// ``SequencedItem/gap(_:current:)`` means the service can't replay what was missed: refresh what
+  /// `SequencedItem.gap` means the service can't replay what was missed: refresh what
   /// is displayed. Reading ends when the reading task is canceled, or by throwing a
   /// ``ConnectionError`` when every path refuses the credential or its scope is too low.
   ///
