@@ -42,7 +42,8 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
   ) {
     self.paths = paths
     self.skipped = skipped
-    self.retryDelays = retryDelays.isEmpty ? [.seconds(1)] : retryDelays
+    // A delay of zero or less would reconnect in a tight loop: wait at least a millisecond.
+    self.retryDelays = retryDelays.isEmpty ? [.seconds(1)] : retryDelays.map { Swift.max($0, .milliseconds(1)) }
     self.clock = clock
   }
 
@@ -66,9 +67,9 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
   }
 
   /// Subscribes through the path in use, or the first that opens.
-  func subscribe(after cursor: EventCursor?) async throws -> (events: SequencedEvents, generation: Int) {
-    let (events, generation) = try await performTagged(retryable: true) { try await $0.sequencedEvents(after: cursor) }
-    return (events, generation)
+  func subscribe(after cursor: EventCursor?) async throws -> (events: SequencedEvents, generation: Int, path: String) {
+    let (events, generation, path) = try await performTagged(retryable: true) { try await $0.sequencedEvents(after: cursor) }
+    return (events, generation, path)
   }
 
   /// Drops the path a subscription was on, if it is still the one in use.
@@ -114,8 +115,9 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
     try await performTagged(retryable: retryable, operation).0
   }
 
-  /// Runs one call on the paths in order, each at most once, and says which opening answered.
-  private func performTagged<Answer: Sendable>(retryable: Bool, _ operation: (any ConnectionCalls) async throws -> Answer) async throws -> (Answer, Int) {
+  /// Runs one call on the paths in order, each at most once, and says which opening answered and
+  /// the name of its path.
+  private func performTagged<Answer: Sendable>(retryable: Bool, _ operation: (any ConnectionCalls) async throws -> Answer) async throws -> (Answer, Int, String) {
     var tally = Tally(reasons: skipped)
     tally.pathCount = paths.count
     var passedOver: Set<Int> = []
@@ -126,7 +128,7 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
       attempt: while attempts > 0 {
         attempts -= 1
         do {
-          return (try await operation(calls), generation)
+          return (try await operation(calls), generation, name)
         } catch ConnectionPathError.notReached(let reason) {
           await drop(generation)
           tally.reasons.append(PathFailure(path: name, reason: reason))
@@ -138,10 +140,9 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
           tally.reasons.append(PathFailure(path: name, reason: "the credential was refused"))
           break attempt
         } catch ConnectionPathError.unsupported {
-          // The path stays open for the calls it does carry.
+          // The path stays open for the calls it does carry, and isn't one that failed to answer.
           tally.reasons.append(PathFailure(path: name, reason: "the path doesn't carry this call"))
           tally.unsupported.append(name)
-          tally.unreachable += 1
           break attempt
         } catch ConnectionPathError.forbidden {
           // The credential is good and the path is kept; another path may allow the call.
