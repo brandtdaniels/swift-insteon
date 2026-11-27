@@ -303,6 +303,12 @@ struct ServicePathSceneTests {
     await #expect(throws: ServiceControlError.modemUnavailable(.connecting)) { _ = try await c.refreshScenes() }
   }
 
+  @Test func aReusedIdempotencyKeyIsTypedAndNothingWasSent() async throws {
+    let (c, _) = try await calls(refusal("idempotencyKeyReused", sent: false, status: 422))
+
+    await #expect(throws: ConnectionError.idempotencyKeyReused) { _ = try await c.runScene(3, action: .on, idempotencyKey: "run-1") }
+  }
+
   @Test func anUnknownOutcomeSaysWhetherTheCommandWasSent() async throws {
     for sent in [true, false] {
       let (c, _) = try await calls(refusal("outcomeUnknown", sent: sent, status: 502))

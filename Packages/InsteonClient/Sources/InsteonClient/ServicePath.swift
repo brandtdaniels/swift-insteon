@@ -236,6 +236,7 @@ private struct ServiceCalls: ConnectionCalls {
     case "sceneEmpty": return ServiceControlError.sceneEmpty
     case "databasesUnavailable": return ServiceControlError.databasesUnavailable
     case "invalidScene": return ConnectionError.invalidScene
+    case "idempotencyKeyReused": return ConnectionError.idempotencyKeyReused
     case "outcomeUnknown": return ConnectionError.outcomeUnknown(sent: refusal.sent ?? true)
     case "modemUnavailable":
       if let cause = Self.cause(refusal.cause) { return ServiceControlError.modemUnavailable(cause) }
