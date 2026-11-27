@@ -896,6 +896,32 @@ struct RequestTests {
 
   }
 
+  // A frame the modem layer can't name is neither cleanup traffic nor device traffic, so it doesn't
+  // start the quiet period again; only the cleanup frames do.
+  @Test func anUnrecognizedFrameDoesNotStartTheQuietPeriodAgain() async throws {
+
+    let unknown: [UInt8] = [0x02, 0x5C, 0xA1, 0xA2, 0xA3, 0xB1, 0xB2, 0xB3, 0x23, 0x13, 0x05]
+    let connection = ScriptedConnection { written, _ in written + [0x06] }
+    let modem = makeModem(connection)
+    let wait = AllLinkCleanupWait(echo: .seconds(5), quietPeriod: .seconds(10), cap: .seconds(40))
+
+    try await run(modem) {
+
+      async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF), wait: wait)
+      await clock.waitForSleeper(until: .seconds(10))
+      clock.advance(by: .seconds(8))
+      connection.incoming.yield(unknown)
+      // Had the frame started the quiet period again, the wait would end at 18 seconds, not 10.
+      clock.advance(by: .seconds(2))
+
+      let result = try await report
+
+      #expect(result == AllLinkCleanupReport(acknowledged: [], unacknowledged: [], isComplete: false))
+
+    }
+
+  }
+
   @Test func trafficExtendsTheWaitOnlyUpToTheCap() async throws {
 
     let lamp = device

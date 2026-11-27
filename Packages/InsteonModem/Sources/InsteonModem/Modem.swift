@@ -540,6 +540,9 @@ public actor Modem: SerialCommandSender {
 
             return collected
           default:
+            // Anything else, an unrecognized frame (`ModemReply.unrecognized`) included, is neither
+            // cleanup traffic nor device traffic: it doesn't start the quiet period again, since
+            // nothing says it belongs to this command's cleanups.
             break
           }
         }
