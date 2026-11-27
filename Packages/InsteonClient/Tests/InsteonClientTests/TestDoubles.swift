@@ -242,3 +242,69 @@ func cursor(_ sequence: UInt64, run: String = "run1") -> EventCursor { EventCurs
 func heard(_ sequence: UInt64, run: String = "run1") -> SequencedItem {
   .event(.statusChanged(lampAddress), cursor(sequence, run: run))
 }
+
+/// An HTTP client that answers requests from a closure and opens event streams from a script.
+actor StreamingHTTPClient: HTTPClient {
+  /// What the next stream request gets.
+  enum Opening: Sendable {
+    case stream(status: Int, AsyncThrowingStream<Data, any Error>)
+    case typed(status: Int, contentType: String, AsyncThrowingStream<Data, any Error>)
+    case failure
+  }
+
+  private(set) var requests: [URLRequest] = []
+  private var openings: [Opening]
+  private let respond: @Sendable (URLRequest) throws -> HTTPResponse
+
+  init(openings: [Opening], respond: @escaping @Sendable (URLRequest) throws -> HTTPResponse = { _ in
+    json(#"{"version":1,"status":"ready","modem":{"connected":true,"cause":null}}"#)
+  }) {
+    self.openings = openings
+    self.respond = respond
+  }
+
+  func send(_ request: URLRequest) async throws -> HTTPResponse {
+    requests.append(request)
+    return try respond(request)
+  }
+
+  func stream(_ request: URLRequest) async throws -> HTTPStreamResponse {
+    requests.append(request)
+    guard !openings.isEmpty else { throw Unplugged() }
+    switch openings.removeFirst() {
+    case let .stream(status, body): return HTTPStreamResponse(statusCode: status, headers: ["Content-Type": "text/event-stream"], body: body)
+    case let .typed(status, contentType, body): return HTTPStreamResponse(statusCode: status, headers: ["Content-Type": contentType], body: body)
+    case .failure: throw Unplugged()
+    }
+  }
+
+  var streamRequests: [URLRequest] { requests.filter { $0.url?.path == "/api/v1/events" } }
+}
+
+/// Whether a stream was canceled by its reader, set from a termination handler.
+final class CancellationRecord: @unchecked Sendable {
+  private let lock = NSLock()
+  private var canceled = false
+  var wasCanceled: Bool { lock.withLock { canceled } }
+  func record(_ termination: AsyncThrowingStream<Data, any Error>.Continuation.Termination) {
+    if case .cancelled = termination { lock.withLock { canceled = true } }
+  }
+}
+
+/// A body a test feeds bytes to.
+struct Feed {
+  let body: AsyncThrowingStream<Data, any Error>
+  let record = CancellationRecord()
+  private let continuation: AsyncThrowingStream<Data, any Error>.Continuation
+
+  init() {
+    (body, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
+    let record = record
+    continuation.onTermination = { record.record($0) }
+  }
+
+  func send(_ text: String) { continuation.yield(Data(text.utf8)) }
+  func send(bytes: [UInt8]) { continuation.yield(Data(bytes)) }
+  func end() { continuation.finish() }
+  func fail() { continuation.finish(throwing: Unplugged()) }
+}

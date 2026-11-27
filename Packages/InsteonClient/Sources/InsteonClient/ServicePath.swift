@@ -17,7 +17,7 @@ public struct ServicePath: ConnectionPath, CustomStringConvertible, CustomDebugS
   public let name: String
   private let baseURL: URL
   private let token: String
-  private let http: any HTTPClient
+  fileprivate let http: any HTTPClient
 
   /// Creates a path.
   ///
@@ -130,11 +130,40 @@ private struct ServiceCalls: ConnectionCalls {
     let response = try await path.send(try path.request("POST", "/api/v1/devices/\(Self.dotted(command.address))/commands", body: body))
     guard (200..<300).contains(response.statusCode) else { throw try failure(response) }
     do {
-      return try JSONDecoder().decode(Receipt.self, from: response.body).receipt()
+      return try JSONDecoder().decode(WireReceipt.self, from: response.body).receipt()
     } catch {
       // The command was accepted and its answer can't be read: it may have taken effect.
       throw ConnectionPathError.badResponse
     }
+  }
+
+  func sequencedEvents(after cursor: EventCursor?) async throws -> SequencedEvents {
+    var request = try path.request("GET", "/api/v1/events")
+    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+    if let cursor, !cursor.runID.isEmpty { request.setValue(cursor.token, forHTTPHeaderField: "Last-Event-ID") }
+    let response: HTTPStreamResponse
+    do {
+      response = try await path.http.stream(request)
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch HTTPClientError.streamingUnsupported {
+      throw ConnectionPathError.unsupported
+    } catch {
+      throw ConnectionPathError.interrupted
+    }
+    switch response.statusCode {
+    case 200..<300: break
+    case 401: throw ConnectionPathError.unauthorized
+    case 403: throw ConnectionPathError.forbidden
+    // A server error, such as a proxy's, or a service with all its streams in use, may pass.
+    case 429, 500...: throw ConnectionPathError.interrupted
+    default: throw ConnectionPathError.badResponse
+    }
+    // Something that answers 2xx but isn't an event stream, such as a proxy's page, isn't the service.
+    guard response.headers["content-type"]?.lowercased().hasPrefix("text/event-stream") == true else { throw ConnectionPathError.badResponse }
+    // The reader pulls from the bytes in the task that reads the items, so nothing runs unobserved.
+    let reader = EventStreamReader(chunks: response.body)
+    return SequencedEvents(AsyncThrowingStream { try await reader.next() })
   }
 
   /// The address as the service's path names it: two uppercase hexadecimal digits a byte, dotted.
@@ -227,61 +256,6 @@ private struct ServiceCalls: ConnectionCalls {
         guard let address = InsteonAddress(address) else { throw ConnectionPathError.badResponse }
         return ServiceDevice(address: address, productName: productName, canTurnOnAndOff: canTurnOnAndOff, canDim: canDim, value: value, lastAnsweredAt: lastAnsweredAt)
       }
-    }
-  }
-
-  private struct Receipt: Decodable {
-    let address: String
-    let outcome: String
-    let status: Status?
-    let persistence: String
-
-    struct Status: Decodable {
-      let group: Int?
-      let kind: String
-      let value: UInt8
-      let isOn: Bool
-      let percent: Int?
-      let label: String?
-    }
-
-    /// The receipt, or a bad response for anything the service's contract doesn't allow.
-    func receipt() throws -> CommandReceipt {
-      guard let address = InsteonAddress(address) else { throw ConnectionPathError.badResponse }
-      let outcome: CommandReceipt.Outcome
-      switch self.outcome {
-      case "read": outcome = .read
-      case "acknowledged": outcome = .acknowledged
-      default: throw ConnectionPathError.badResponse
-      }
-      let persistence: PersistenceOutcome
-      switch self.persistence {
-      case "notConfigured": persistence = .notConfigured
-      case "notAttempted": persistence = .notAttempted
-      case "saved": persistence = .saved
-      case "failed": persistence = .failed
-      default: throw ConnectionPathError.badResponse
-      }
-      // A status accompanies a read, and only a read.
-      if status != nil, outcome != .read { throw ConnectionPathError.badResponse }
-      return CommandReceipt(address: address, outcome: outcome, status: try status.map(Self.deviceStatus), persistence: persistence)
-    }
-
-    /// The service's status carries no ALL-Link database delta, so the delta is 0 here.
-    private static func deviceStatus(_ status: Status) throws -> DeviceStatus {
-      let reading: DeviceStatus.Reading
-      switch status.kind {
-      case "percent":
-        guard let percent = status.percent else { throw ConnectionPathError.badResponse }
-        reading = .percent(percent)
-      case "onOff": reading = .onOff(status.isOn)
-      case "named":
-        guard let label = status.label else { throw ConnectionPathError.badResponse }
-        reading = .named(label)
-      case "raw": reading = .raw
-      default: throw ConnectionPathError.badResponse
-      }
-      return DeviceStatus(group: status.group, value: status.value, allLinkDatabaseDelta: 0, reading: reading, isOn: status.isOn)
     }
   }
 
