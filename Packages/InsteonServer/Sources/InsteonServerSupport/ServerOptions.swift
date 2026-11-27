@@ -1,5 +1,6 @@
 import Foundation
 import InsteonScheduling
+import Logging
 
 /// The listener, hardware and files selected before a server opens a connection.
 public struct ServerOptions: Sendable {
@@ -29,12 +30,15 @@ public struct ServerOptions: Sendable {
   /// The home's IANA time zone, such as `America/Los_Angeles`, or nil for the one the server remembers
   /// or the computer's. The host's time zone database decides whether the server can use it.
   public let timeZone: String?
+  /// How much the server logs: `--log-level`, else `INSTEON_LOG_LEVEL` in the process's environment,
+  /// else `info`. The environment file is read later and doesn't set it.
+  public let logLevel: Logger.Level
 
   /// Parses pairs of options, rejecting duplicates, public listeners and wildcard binds.
   /// Hub resolution and file permissions are checked by the CLI's existing helpers.
   public init(arguments: [String], environment: [String: String]) throws {
     var options: [String: String] = [:]
-    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--network-name", "--poll-interval", "--latitude", "--longitude", "--time-zone"]
+    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--network-name", "--poll-interval", "--latitude", "--longitude", "--time-zone", "--log-level"]
     var index = 0
     while index < arguments.count {
       let name = arguments[index]
@@ -79,6 +83,15 @@ public struct ServerOptions: Sendable {
       guard (1...64).contains(timeZone.count), timeZone.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "/_+-".contains($0)) }) else { throw ServerOptionError.invalidTimeZone }
     }
     self.timeZone = timeZone
+    // A bad variable is refused even when the option is good, so a typo never goes unnoticed.
+    let fromEnvironment = try environment["INSTEON_LOG_LEVEL"].map { try Self.level($0) }
+    let fromOption = try options["--log-level"].map { try Self.level($0) }
+    self.logLevel = fromOption ?? fromEnvironment ?? .info
+  }
+
+  private static func level(_ text: String) throws -> Logger.Level {
+    guard let level = Logger.Level(rawValue: text.lowercased()) else { throw ServerOptionError.invalidLogLevel }
+    return level
   }
 
   /// The address without a trailing slash, or an error if it isn't a plain http or https address.
@@ -117,6 +130,8 @@ public enum ServerOptionError: Error, CustomStringConvertible {
   case invalidLocation
   /// `--time-zone` isn't an IANA time zone's name of 1 through 64 letters, digits and `/_+-`.
   case invalidTimeZone
+  /// `--log-level` or `INSTEON_LOG_LEVEL` isn't trace, debug, info, notice, warning, error or critical.
+  case invalidLogLevel
   /// A `pair` command needs a client name of 1 through 64 characters and a scope of read, control or admin.
   case invalidClient
 
