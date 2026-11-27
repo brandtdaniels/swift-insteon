@@ -39,20 +39,16 @@ public enum SceneMembershipPlanner {
     modemLinkData: ModemLinkData?
   ) -> SceneMembershipPlan {
 
-    var plan: Planning = Planning(change: change)
-
     guard let modem = backup.modem, let modemRecords = modem.allLinkDatabase else {
 
-      plan.refusals.append(SceneMembershipFinding(code: .databaseNotCached, device: nil, detail: "The modem's ALL-Link database isn't cached. Refresh the scenes to read it."))
+      let refusal = SceneMembershipFinding(code: .databaseNotCached, device: nil, detail: "The modem's ALL-Link database isn't cached. Refresh the scenes to read it.")
 
-      return plan.result
+      return SceneMembershipPlan(scene: change.scene, steps: [], warnings: [], refusals: [refusal], devices: [], readLines: [])
 
     }
 
-    plan.modem = modem.address
-    plan.readLines = modemRecords.filter(\.isInUse).map { (record: BackupRecord) -> String in "modemRecord \(Self.line(record))" }
-
-    plan.modemRecords = modemRecords
+    let held: [InsteonAddress: BackupDevice] = Dictionary(backup.devices.map { (device: BackupDevice) -> (InsteonAddress, BackupDevice) in (device.address, device) }, uniquingKeysWith: { (first: BackupDevice, _: BackupDevice) -> BackupDevice in first })
+    var plan: Planning = Planning(change: change, modem: modem.address, modemRecords: modemRecords, held: held)
 
     // A device named in both lists, or twice for the same group, is refused whole: which of the entries
     // is meant isn't clear, so none of them is planned.
@@ -96,7 +92,7 @@ public enum SceneMembershipPlanner {
 
       }
 
-      plan.add(addition, backup: backup, registered: devices[addition.device], modemLinkData: modemLinkData)
+      plan.add(addition, registered: devices[addition.device], modemLinkData: modemLinkData)
 
     }
 
@@ -129,7 +125,7 @@ public enum SceneMembershipPlanner {
 
       }
 
-      plan.remove(device, groups: groups.contains(nil) ? nil : groups.compactMap { $0 }, backup: backup, registered: devices[device])
+      plan.remove(device, groups: groups.contains(nil) ? nil : groups.compactMap { $0 }, registered: devices[device])
 
     }
 
@@ -164,7 +160,7 @@ public enum SceneMembershipPlanner {
 private struct Planning {
 
   let change: SceneMembershipChange
-  var modem: InsteonAddress = InsteonAddress(0, 0, 0)
+  let modem: InsteonAddress
   var steps: [SceneMembershipStep] = []
   var warnings: [SceneMembershipFinding] = []
   var refusals: [SceneMembershipFinding] = []
@@ -172,7 +168,10 @@ private struct Planning {
   var readLines: [String] = []
 
   /// The modem's records, with the controller records the plan adds.
-  var modemRecords: [BackupRecord] = []
+  private var modemRecords: [BackupRecord]
+
+  /// The cached devices, by address.
+  private let held: [InsteonAddress: BackupDevice]
 
   /// The records of each device the plan could write to, with the records the plan adds, so a second
   /// record for a device takes the next slot.
@@ -181,9 +180,13 @@ private struct Planning {
   /// The devices already refused as unable to take a write.
   private var unable: Set<InsteonAddress> = []
 
-  init(change: SceneMembershipChange) {
+  init(change: SceneMembershipChange, modem: InsteonAddress, modemRecords: [BackupRecord], held: [InsteonAddress: BackupDevice]) {
 
     self.change = change
+    self.modem = modem
+    self.modemRecords = modemRecords
+    self.held = held
+    readLines = modemRecords.filter(\.isInUse).map { (record: BackupRecord) -> String in "modemRecord \(SceneMembershipPlanner.line(record))" }
 
   }
 
@@ -207,11 +210,31 @@ private struct Planning {
 
   }
 
+  // MARK: What a scene holds
+
+  /// The modem's controller records of the device in the scene: its half of a link.
+  private func modemLinks(of address: InsteonAddress) -> [BackupRecord] {
+
+    modemRecords.filter { (record: BackupRecord) -> Bool in
+      record.isInUse && record.role == .controller && record.group == change.scene && record.address == address
+    }
+
+  }
+
+  /// The device's responder records of the scene: its half of a link, one for each of its groups that answers.
+  private func deviceLinks(in eligible: Eligible) -> [BackupRecord] {
+
+    eligible.records.filter { (record: BackupRecord) -> Bool in
+      record.isInUse && record.role == .responder && record.group == change.scene && record.address == modem
+    }
+
+  }
+
   // MARK: Eligibility
 
   /// Checks that the device's cached database was read whole and that its engine takes a remote
   /// write, and records the device's facts.
-  private mutating func eligibility(of address: InsteonAddress, backup: NetworkBackup, registered: RegisteredDevice?, needsIdentity: Bool = false) -> Eligible? {
+  private mutating func eligibility(of address: InsteonAddress, registered: RegisteredDevice?, needsIdentity: Bool = false) -> Eligible? {
 
     if let held = working[address] {
 
@@ -225,7 +248,7 @@ private struct Planning {
 
     }
 
-    let held: BackupDevice? = backup.devices.first { (device: BackupDevice) -> Bool in device.address == address }
+    let held: BackupDevice? = self.held[address]
     let engine: InsteonEngine? = (held?.engine).map(Self.engine) ?? registered?.info.engine
     var fact = SceneMembershipDevice(address: address, product: registered?.info.displayName, engine: engine, acceptsRemoteWrite: false)
 
@@ -352,11 +375,11 @@ private struct Planning {
 
   // MARK: Adding
 
-  mutating func add(_ addition: SceneMembershipChange.Addition, backup: NetworkBackup, registered: RegisteredDevice?, modemLinkData: ModemLinkData?) {
+  mutating func add(_ addition: SceneMembershipChange.Addition, registered: RegisteredDevice?, modemLinkData: ModemLinkData?) {
 
     let address: InsteonAddress = addition.device
 
-    guard let eligible = eligibility(of: address, backup: backup, registered: registered, needsIdentity: true), let registered else {
+    guard let eligible = eligibility(of: address, registered: registered, needsIdentity: true), let registered else {
 
       return
 
@@ -383,13 +406,8 @@ private struct Planning {
       return
     }
 
-    let modemHalf: BackupRecord? = modemRecords.first { (record: BackupRecord) -> Bool in
-      record.isInUse && record.role == .controller && record.group == change.scene && record.address == address
-    }
-    // The device's records of the scene: one for each of its groups that answers it.
-    let sceneRecords: [BackupRecord] = eligible.records.filter { (record: BackupRecord) -> Bool in
-      record.isInUse && record.role == .responder && record.group == change.scene && record.address == modem
-    }
+    let modemHalf: BackupRecord? = modemLinks(of: address).first
+    let sceneRecords: [BackupRecord] = deviceLinks(in: eligible)
     let deviceHalf: BackupRecord? = sceneRecords.first { (record: BackupRecord) -> Bool in
       Self.isRecord(record, ofGroup: deviceGroup, at: groupPosition)
     }
@@ -419,7 +437,7 @@ private struct Planning {
 
     if modemHalf == nil {
 
-      let modemData: [UInt8] = DeviceLinkingCoordinator.modemData(modemLinkData, isController: true, reported: registered.identity)
+      let modemData: [UInt8] = DeviceLinkingCoordinator.modemData(modemLinkData, isController: true, identity: registered.identity)
 
       steps.append(SceneMembershipStep(kind: .addModemRecord, endpoint: .modem, record: LinkRecord(isController: true, isInUse: true, group: group, address: address, data: modemData)))
       modemRecords.append(BackupRecord(state: .inUse, role: .controller, group: change.scene, address: address, data: modemData))
@@ -656,9 +674,9 @@ private struct Planning {
 
   // MARK: Removing
 
-  mutating func remove(_ address: InsteonAddress, groups: [UInt8]?, backup: NetworkBackup, registered: RegisteredDevice?) {
+  mutating func remove(_ address: InsteonAddress, groups: [UInt8]?, registered: RegisteredDevice?) {
 
-    guard let eligible = eligibility(of: address, backup: backup, registered: registered) else {
+    guard let eligible = eligibility(of: address, registered: registered) else {
 
       return
 
@@ -670,10 +688,7 @@ private struct Planning {
 
     }
 
-    // The device's records of the scene: one for each of its groups that answers it.
-    let sceneRecords: [BackupRecord] = eligible.records.filter { (record: BackupRecord) -> Bool in
-      record.isInUse && record.role == .responder && record.group == change.scene && record.address == modem
-    }
+    let sceneRecords: [BackupRecord] = deviceLinks(in: eligible)
     var doomed: [BackupRecord] = sceneRecords
 
     if let groups {
@@ -714,9 +729,7 @@ private struct Planning {
 
     }
 
-    let modemHalves: [BackupRecord] = modemRecords.filter { (record: BackupRecord) -> Bool in
-      record.isInUse && record.role == .controller && record.group == change.scene && record.address == address
-    }
+    let modemHalves: [BackupRecord] = modemLinks(of: address)
     let staying: [BackupRecord] = sceneRecords.filter { (record: BackupRecord) -> Bool in !doomed.contains(record) }
     // The modem's record goes when no group of the device stays in the scene, and then first, so the
     // device keeps its record of the modem until its last write.

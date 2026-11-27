@@ -365,7 +365,7 @@ extension DeviceLinkingCoordinator {
 
       if record.isModems {
 
-        let data: [UInt8] = modemData(reading.modemLinkData, isController: record.isController, identity: reading.identification.identity)
+        let data: [UInt8] = modemData(reading.modemLinkData, isController: record.isController, identity: reading.identification.identity.map(ReportedIdentity.init))
         let written = AllLinkRecord(
           flags: .linked(isController: record.isController),
           group: record.group,
@@ -451,15 +451,7 @@ extension DeviceLinkingCoordinator {
   /// The data bytes of a record the modem keeps for the device, from the catalog's profile of
   /// the modem: a fixed value, or a byte of the identity the device reported. A byte the
   /// catalog doesn't give, or one of an identity the device didn't report, is `0x00`.
-  static func modemData(_ linkData: ModemLinkData?, isController: Bool, identity: SetButtonPressed?) -> [UInt8] {
-
-    modemData(linkData, isController: isController, reported: identity.map(ReportedIdentity.init))
-
-  }
-
-  /// The data bytes of a record the modem keeps for a device whose identity is known, as
-  /// ``modemData(_:isController:identity:)`` gives them for the identity the modem reported.
-  static func modemData(_ linkData: ModemLinkData?, isController: Bool, reported: ReportedIdentity?) -> [UInt8] {
+  static func modemData(_ linkData: ModemLinkData?, isController: Bool, identity: ReportedIdentity?) -> [UInt8] {
 
     var data: [UInt8] = [0x00, 0x00, 0x00]
     let bytes: [ModemLinkDataByte] = (isController ? linkData?.controller : linkData?.responder) ?? []
@@ -470,15 +462,15 @@ extension DeviceLinkingCoordinator {
 
         data[byte.position - 1] = value
 
-      } else if let reported, byte.identity == .category {
+      } else if let identity, byte.identity == .category {
 
-        data[byte.position - 1] = reported.category.rawValue
+        data[byte.position - 1] = identity.category.rawValue
 
-      } else if let reported, byte.identity == .subcategory {
+      } else if let identity, byte.identity == .subcategory {
 
-        data[byte.position - 1] = reported.subcategory.rawValue
+        data[byte.position - 1] = identity.subcategory.rawValue
 
-      } else if let reported, byte.identity == .firmware, let firmware = reported.firmwareVersion {
+      } else if let identity, byte.identity == .firmware, let firmware = identity.firmwareVersion {
 
         data[byte.position - 1] = firmware.rawValue
 
