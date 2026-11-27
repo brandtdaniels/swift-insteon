@@ -169,3 +169,142 @@ actor GatedOpenPath: ConnectionPath {
     release = nil
   }
 }
+
+/// What one subscription of a scripted path's calls does.
+enum EventSubscription: Sendable {
+  /// Delivers the items, then ends as told.
+  case items([SequencedItem], ending: Ending)
+  /// Refuses the subscription.
+  case refuse(ConnectionPathError)
+
+  enum Ending: Sendable {
+    case lost(ConnectionPathError)
+    case slowConsumer
+    case ended
+    case held
+  }
+}
+
+/// Calls that serve numbered events from a script and record the cursor each subscription asked for.
+actor EventCalls: ConnectionCalls {
+  private var script: [EventSubscription]
+  private(set) var requested: [EventCursor?] = []
+
+  init(script: [EventSubscription]) { self.script = script }
+
+  func devices() async throws -> [ServiceDevice] { [device()] }
+
+  func execute(_ command: ServiceCommand) async throws -> CommandReceipt {
+    CommandReceipt(address: command.address, outcome: .acknowledged, status: nil)
+  }
+
+  func sequencedEvents(after cursor: EventCursor?) async throws -> SequencedEvents {
+    requested.append(cursor)
+    let next = script.isEmpty ? EventSubscription.items([], ending: .held) : script.removeFirst()
+    switch next {
+    case let .refuse(error): throw error
+    case let .items(items, ending):
+      return SequencedEvents(AsyncThrowingStream { continuation in
+        for item in items { continuation.yield(item) }
+        switch ending {
+        case let .lost(error): continuation.finish(throwing: error)
+        case .slowConsumer: continuation.finish(throwing: ServiceEventError.slowConsumer)
+        case .ended: continuation.finish()
+        case .held: break
+        }
+      })
+    }
+  }
+}
+
+/// A path whose openings succeed or fail from a script and whose calls serve scripted events.
+actor EventPath: ConnectionPath {
+  nonisolated let name: String
+  let calls: EventCalls
+  private var openings: [ConnectionPathError?]
+  private(set) var openCount = 0
+
+  init(_ name: String, openings: [ConnectionPathError?] = [], subscriptions: [EventSubscription]) {
+    self.name = name
+    self.openings = openings
+    calls = EventCalls(script: subscriptions)
+  }
+
+  func open() async throws -> any ConnectionCalls {
+    openCount += 1
+    if !openings.isEmpty, let failure = openings.removeFirst() { throw failure }
+    return calls
+  }
+}
+
+func cursor(_ sequence: UInt64, run: String = "run1") -> EventCursor { EventCursor(runID: run, sequence: sequence) }
+
+func heard(_ sequence: UInt64, run: String = "run1") -> SequencedItem {
+  .event(.statusChanged(lampAddress), cursor(sequence, run: run))
+}
+
+/// An HTTP client that answers requests from a closure and opens event streams from a script.
+actor StreamingHTTPClient: HTTPClient {
+  /// What the next stream request gets.
+  enum Opening: Sendable {
+    case stream(status: Int, AsyncThrowingStream<Data, any Error>)
+    case typed(status: Int, contentType: String, AsyncThrowingStream<Data, any Error>)
+    case failure
+  }
+
+  private(set) var requests: [URLRequest] = []
+  private var openings: [Opening]
+  private let respond: @Sendable (URLRequest) throws -> HTTPResponse
+
+  init(openings: [Opening], respond: @escaping @Sendable (URLRequest) throws -> HTTPResponse = { _ in
+    json(#"{"version":1,"status":"ready","modem":{"connected":true,"cause":null}}"#)
+  }) {
+    self.openings = openings
+    self.respond = respond
+  }
+
+  func send(_ request: URLRequest) async throws -> HTTPResponse {
+    requests.append(request)
+    return try respond(request)
+  }
+
+  func stream(_ request: URLRequest) async throws -> HTTPStreamResponse {
+    requests.append(request)
+    guard !openings.isEmpty else { throw Unplugged() }
+    switch openings.removeFirst() {
+    case let .stream(status, body): return HTTPStreamResponse(statusCode: status, headers: ["Content-Type": "text/event-stream"], body: body)
+    case let .typed(status, contentType, body): return HTTPStreamResponse(statusCode: status, headers: ["Content-Type": contentType], body: body)
+    case .failure: throw Unplugged()
+    }
+  }
+
+  var streamRequests: [URLRequest] { requests.filter { $0.url?.path == "/api/v1/events" } }
+}
+
+/// Whether a stream was canceled by its reader, set from a termination handler.
+final class CancellationRecord: @unchecked Sendable {
+  private let lock = NSLock()
+  private var canceled = false
+  var wasCanceled: Bool { lock.withLock { canceled } }
+  func record(_ termination: AsyncThrowingStream<Data, any Error>.Continuation.Termination) {
+    if case .cancelled = termination { lock.withLock { canceled = true } }
+  }
+}
+
+/// A body a test feeds bytes to.
+struct Feed {
+  let body: AsyncThrowingStream<Data, any Error>
+  let record = CancellationRecord()
+  private let continuation: AsyncThrowingStream<Data, any Error>.Continuation
+
+  init() {
+    (body, continuation) = AsyncThrowingStream<Data, any Error>.makeStream()
+    let record = record
+    continuation.onTermination = { record.record($0) }
+  }
+
+  func send(_ text: String) { continuation.yield(Data(text.utf8)) }
+  func send(bytes: [UInt8]) { continuation.yield(Data(bytes)) }
+  func end() { continuation.finish() }
+  func fail() { continuation.finish(throwing: Unplugged()) }
+}
