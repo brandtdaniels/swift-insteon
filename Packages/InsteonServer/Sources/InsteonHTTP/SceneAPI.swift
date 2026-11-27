@@ -5,12 +5,14 @@ import InsteonCore
 import InsteonLinking
 import InsteonProtocol
 import InsteonService
+import Logging
 
 /// Listing the scenes of the network. It needs the `read` scope, which the authentication middleware
 /// has already enforced. The service answers from the ALL-Link databases it has cached and sends
 /// nothing to hardware.
 struct SceneAPI<Service: SceneProviding>: Sendable {
   let service: Service
+  let logger: Logger
 
   func list() async throws -> Response {
     try await answer(await service.scenes())
@@ -27,6 +29,10 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
     } catch {
       // A refresh only reads, so a failure is classified as a read: safe to repeat, nothing sent.
       throw CommandFailure(action: .status, underlying: error)
+    }
+    // One line for each device left unread, with the address a person needs to find it.
+    for address in listing.unreadable {
+      logger.warning("scene refresh left a device unread", metadata: ["address": "\(address)", "reason": "\(listing.unreadableReason(of: address).rawValue)"])
     }
     return try await answer(listing)
   }
@@ -65,7 +71,8 @@ struct SceneListDTO: Encodable {
   let version = 1
   let scenes: [SceneDTO]
   let looseHalfLinks: [HalfLinkDTO]
-  let unreadable: [String]
+  /// Each device whose database was not read, with why.
+  let unreadable: [UnreadableDTO]
   let unlisted: [String]
   let modemUnread: Bool
   /// The members the catalog doesn't describe, once each, so a client can say what it can't explain.
@@ -83,11 +90,16 @@ struct SceneListDTO: Encodable {
     }
     undescribedMembers = undescribed.sorted { $0.bytes.lexicographicallyPrecedes($1.bytes) }.map(\.description)
     looseHalfLinks = listing.looseHalfLinks.map(HalfLinkDTO.init)
-    unreadable = listing.unreadable.map(\.description)
+    unreadable = listing.unreadable.map { UnreadableDTO(address: $0.description, reason: listing.unreadableReason(of: $0).rawValue) }
     unlisted = listing.unlisted.map(\.description)
     modemUnread = listing.isModemUnread
     whole = listing.isWhole
   }
+}
+
+struct UnreadableDTO: Encodable {
+  let address: String
+  let reason: String
 }
 
 struct SceneDTO: Encodable {

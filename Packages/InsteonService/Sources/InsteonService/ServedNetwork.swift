@@ -40,10 +40,12 @@ public protocol ServedNetwork: Sendable {
   /// them in what ``snapshot()`` returns. It only reads. A device that doesn't answer stays
   /// unread and doesn't fail the refresh.
   ///
+  /// - Returns: Why each device left unread was left unread.
+  ///
   /// - Throws: ``ServiceControlError/databasesUnavailable`` for a network that doesn't give out
   ///   its databases, `CancellationError` when canceled, and the modem's error when the
   ///   connection is lost.
-  func refreshDatabases() async throws
+  func refreshDatabases() async throws -> [InsteonAddress: BackupUnreadableReason]
 
   /// The local time the Hub reported when the connection opened, as it wrote it, or `nil` for a
   /// connection that doesn't report one. Reading it changes nothing on the Hub.
@@ -101,7 +103,7 @@ struct ModemServedNetwork: ServedNetwork {
 
   func changes() async throws -> NetworkChanges { .heard(await network.monitor.changes()) }
 
-  func refreshDatabases() async throws {
+  func refreshDatabases() async throws -> [InsteonAddress: BackupUnreadableReason] {
     let info = try await network.modemInfo()
     let entries = try await network.modemDatabase()
     // The devices a cached backup lists: the ones the registry and the device states know, and the
@@ -110,10 +112,12 @@ struct ModemServedNetwork: ServedNetwork {
     var addresses = Set(snapshot.registry.identities.keys).union(snapshot.devices.keys)
     for entry in entries where entry.record.isInUse { addresses.insert(entry.record.address) }
     addresses.remove(info.address)
+    var unread: [InsteonAddress: BackupUnreadableReason] = [:]
     for address in addresses.sorted(by: { $0.bytes.lexicographicallyPrecedes($1.bytes) }) {
       try Task.checkCancellation()
-      try await readDatabase(of: address)
+      unread[address] = try await readDatabase(of: address)
     }
+    return unread
   }
 
   /// Reads one device's database, again once if it arrives damaged. A device that doesn't answer,
@@ -121,25 +125,32 @@ struct ModemServedNetwork: ServedNetwork {
   /// arrives damaged twice (the cache keeps no damaged copy) is left unread. Only cancellation
   /// and a lost connection end the refresh. Each device is asked once, so a device that doesn't
   /// answer costs the modem's own time out once.
-  private func readDatabase(of address: InsteonAddress) async throws {
+  ///
+  /// - Returns: Why the device was left unread, or `nil` when it was read.
+  private func readDatabase(of address: InsteonAddress) async throws -> BackupUnreadableReason? {
     do {
       var database = try await network.allLinkDatabase(of: address)
       if !database.hasIntactChecksums {
         // A damaged reading isn't kept, so asking again reads the device again.
         database = try await network.allLinkDatabase(of: address)
       }
+      return database.hasIntactChecksums ? nil : .damagedRecords
     } catch is CancellationError {
       throw CancellationError()
     } catch ModemError.connectionClosed {
       throw ModemError.connectionClosed
+    } catch ModemError.deviceTimedOut, ModemError.timedOut {
+      return .noAnswer
+    } catch ModemError.deviceRejected {
+      return .rejectedModem
     } catch is ModemError {
-      return
+      return .failed
     } catch is ModemStoppedEchoing {
       // The modem is reachable but still busy with a device that doesn't answer.
-      return
+      return .modemStoppedEchoing
     } catch is HubStoppedAnswering {
       // The same, as the Hub reports it: it answered before and then stopped on this device.
-      return
+      return .hubStoppedAnswering
     }
   }
 }
@@ -166,7 +177,7 @@ struct HubProServedNetwork: ServedNetwork {
 
   func changes() async throws -> NetworkChanges { .polled(network.changes()) }
 
-  func refreshDatabases() async throws { throw ServiceControlError.databasesUnavailable }
+  func refreshDatabases() async throws -> [InsteonAddress: BackupUnreadableReason] { throw ServiceControlError.databasesUnavailable }
 
   func reportedLocalTime() async -> String? { await network.reportedTime }
 

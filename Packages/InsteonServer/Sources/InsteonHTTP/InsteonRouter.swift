@@ -35,7 +35,7 @@ func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authenti
   let ruleAPI = NotificationRuleAPI(service: service)
   let backupAPI = BackupAPI(service: service, routes: routes)
   let scheduleAPI = ScheduleAPI(service: service)
-  let sceneAPI = SceneAPI(service: service)
+  let sceneAPI = SceneAPI(service: service, logger: logger)
   let website = DeviceWebsite(service: service)
 
   // The one place a route is registered. The switch is exhaustive, so an operation without a handler doesn't compile.

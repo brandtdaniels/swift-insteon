@@ -195,6 +195,61 @@ struct SceneRefreshTests {
     #expect(await modem.databaseReads[keypad] == 1)
   }
 
+  @Test func saysWhyEachUnreadableDeviceWasLeftUnreadInTheListingAndTheOneAfterIt() async throws {
+    let modem = await modemWithTwoMembers()
+    let lamp = lamp
+    await modem.setBeforeOperation { operation in
+      if case let .standardRequest(message) = operation, message.destination == lamp { throw ModemStoppedEchoing(device: lamp, command: .sendMessage) }
+    }
+    await modem.setUnlinked(keypad)
+    let service = InsteonService(network: network(modem, knowing: [lamp, keypad]))
+
+    let listing = try await service.refreshScenes()
+
+    #expect(listing.unreadableReasons == [lamp: .modemStoppedEchoing, keypad: .rejectedModem])
+    #expect(await service.scenes() == listing)
+  }
+
+  @Test(arguments: [
+    (ModemError.deviceTimedOut(InsteonAddress(0x1A, 0x2B, 0x3C)) as any Error, BackupUnreadableReason.noAnswer),
+    (ModemError.timedOut(.sendMessage), .noAnswer),
+    (ModemError.rejected(.sendMessage), .failed),
+    (HubStoppedAnswering(underlyingError: URLError(.timedOut)), .hubStoppedAnswering)
+  ] as [(any Error, BackupUnreadableReason)])
+  func namesTheReasonForEachKindOfFailure(_ failure: any Error, _ reason: BackupUnreadableReason) async throws {
+    let modem = await modemWithOneScene()
+    let lamp = lamp
+    await modem.setBeforeOperation { operation in
+      if case let .standardRequest(message) = operation, message.destination == lamp { throw failure }
+    }
+    let service = InsteonService(network: network(modem, knowing: [lamp]))
+
+    #expect(try await service.refreshScenes().unreadableReasons == [lamp: reason])
+  }
+
+  @Test func clearsTheReasonOfADeviceThatAnswersOnALaterRefresh() async throws {
+    let modem = await modemWithOneScene()
+    let lamp = lamp
+    await modem.setBeforeOperation { operation in
+      if case let .standardRequest(message) = operation, message.destination == lamp { throw ModemError.deviceTimedOut(lamp) }
+    }
+    let service = InsteonService(network: network(modem, knowing: [lamp]))
+    #expect(try await service.refreshScenes().unreadableReasons == [lamp: .noAnswer])
+
+    await modem.setBeforeOperation(nil)
+    let listing = try await service.refreshScenes()
+
+    #expect(listing.unreadable.isEmpty)
+    #expect(listing.unreadableReasons.isEmpty)
+  }
+
+  @Test func saysNotCachedForADeviceNoRefreshHasTried() async throws {
+    let modem = await modemWithOneScene()
+    let service = InsteonService(network: network(modem, knowing: [lamp]))
+
+    #expect(await service.scenes().unreadableReason(of: lamp) == .notCached)
+  }
+
   @Test func savesWhatItReadWhenTheConnectionIsLostPartway() async throws {
     let modem = await modemWithTwoMembers()
     let keypad = keypad
@@ -238,6 +293,7 @@ struct SceneRefreshTests {
     let listing = try await service.refreshScenes()
 
     #expect(listing.unreadable == [lamp])
+    #expect(listing.unreadableReason(of: lamp) == .damagedRecords)
     #expect(!listing.isWhole)
     #expect(await modem.databaseReads[lamp] == 2)
   }

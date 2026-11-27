@@ -160,10 +160,16 @@ public enum BackupUnreadableReason: String, Codable, Hashable, Sendable {
   case rejectedModem
   /// Records failed their checksum on each of two readings, so what they hold can't be trusted.
   case damagedRecords
-  /// The service had no copy of the database, and sends nothing to hardware to make one.
+  /// The service holds no copy of the database: none was read, or the source sends nothing to make one.
   case notCached
   /// The source doesn't give out ALL-Link databases, as a Hub Pro doesn't.
   case unavailableFromSource
+  /// The modem didn't confirm sending the request, so the device was never asked and the modem is
+  /// still busy with it.
+  case modemStoppedEchoing
+  /// The Hub stopped answering while it was reachable before, as it does for a device on a marginal
+  /// powerline signal.
+  case hubStoppedAnswering
   /// The reading failed for another reason.
   case failed
   /// The database ended without the record that marks its end, so part of it is missing.

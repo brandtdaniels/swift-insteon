@@ -255,7 +255,7 @@ enum OpenAPIDocument {
         "memory": Schema.string(pattern: "^0x[0-9A-F]{4}$", description: "Where the record is in a device's database. A record of the modem's has none.")
       ], required: ["state", "role", "group", "address", "data"]),
       "BackupUnreadable": Schema.object([
-        "reason": Schema.string(enum: ["noAnswer", "rejectedModem", "damagedRecords", "notCached", "unavailableFromSource", "failed", "incomplete"], description: "Why there is no ALL-Link database."),
+        "reason": Schema.string(enum: ["noAnswer", "rejectedModem", "damagedRecords", "notCached", "unavailableFromSource", "modemStoppedEchoing", "hubStoppedAnswering", "failed", "incomplete"], description: "Why there is no ALL-Link database."),
         "detail": Schema.string(description: "A short note that holds no address or credential.")
       ], required: ["reason"]),
       "ScheduleAction": Schema.object([
@@ -288,12 +288,16 @@ enum OpenAPIDocument {
         "version": version,
         "scenes": Schema.array(of: Schema.ref("Scene")),
         "looseHalfLinks": Schema.array(of: Schema.ref("HalfLink")),
-        "unreadable": Schema.array(of: address),
+        "unreadable": Schema.array(of: Schema.ref("UnreadableDevice")),
         "unlisted": Schema.array(of: address),
         "modemUnread": Schema.boolean,
         "undescribedMembers": Schema.array(of: address),
         "whole": Schema.boolean
       ], required: ["version", "scenes", "looseHalfLinks", "unreadable", "unlisted", "modemUnread", "undescribedMembers", "whole"]),
+      "UnreadableDevice": Schema.object([
+        "address": address,
+        "reason": Schema.string(enum: ["noAnswer", "rejectedModem", "damagedRecords", "notCached", "unavailableFromSource", "modemStoppedEchoing", "hubStoppedAnswering", "failed", "incomplete"], description: "Why the device's ALL-Link database was not read. `notCached` is a device no refresh has tried.")
+      ], required: ["address", "reason"], description: "A device whose ALL-Link database the service does not hold."),
       "Scene": Schema.object([
         "number": Schema.integer(minimum: 0, maximum: 255),
         "controller": Schema.string(description: "`modem`, or the address of the device that controls the scene."),

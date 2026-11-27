@@ -45,6 +45,9 @@ public actor InsteonService: InsteonServiceAPI {
   private let scheduling: ScheduleConfiguration
   private var scheduler: Scheduler?
   private var hubClock: (reported: String, readAt: Date)?
+  /// Why the last refresh left each device unread. It lives in memory: the saved snapshot keeps
+  /// no reason, so a restart reports ``BackupUnreadableReason/notCached`` until the next refresh.
+  private var unreadReasons: [InsteonAddress: BackupUnreadableReason] = [:]
 
   /// How many of the newest events the service keeps for a client to resume from. Memory is
   /// bounded by this count; nothing is kept on disk, and a restart forgets every event.
@@ -152,7 +155,17 @@ public actor InsteonService: InsteonServiceAPI {
   /// The scenes of the network, from the ALL-Link databases the service has cached, without asking
   /// hardware and without taking the admission gate, whether or not the modem is connected.
   public func scenes() async -> SceneListing {
-    SceneListing(await networkBackup())
+    await listing()
+  }
+
+  /// The listing of the cached databases, with the reason the last refresh left each unreadable
+  /// device unread in place of "not cached".
+  private func listing() async -> SceneListing {
+    var listing = SceneListing(await networkBackup())
+    for address in listing.unreadable where listing.unreadableReasons[address] == .notCached {
+      if let reason = unreadReasons[address] { listing.unreadableReasons[address] = reason }
+    }
+    return listing
   }
 
   /// Reads the ALL-Link databases of the modem and of each device from the hardware, saves a
@@ -170,7 +183,7 @@ public actor InsteonService: InsteonServiceAPI {
     defer { busy = false }
     if case let .unavailable(cause) = connection { throw ServiceControlError.modemUnavailable(cause) }
     do {
-      try await network.refreshDatabases()
+      unreadReasons = try await network.refreshDatabases()
     } catch {
       // What was read before the failure is already in the cache, so it is saved too.
       lastExchange = now()
@@ -179,7 +192,7 @@ public actor InsteonService: InsteonServiceAPI {
     }
     lastExchange = now()
     _ = await persist()
-    return SceneListing(await networkBackup())
+    return await listing()
   }
 
   /// What a scene member's link data bytes mean, from the catalog and the identity the service

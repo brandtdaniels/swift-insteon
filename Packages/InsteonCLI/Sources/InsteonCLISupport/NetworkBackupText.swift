@@ -35,6 +35,8 @@ public enum NetworkBackupText {
     case .damagedRecords: "returned records that failed their checksum on two readings"
     case .notCached: "has no ALL-Link database the service cached"
     case .unavailableFromSource: "has no ALL-Link database to read from this source"
+    case .modemStoppedEchoing: "was never asked, because the modem didn't confirm sending the request"
+    case .hubStoppedAnswering: "was never reached, because the Hub stopped answering"
     case .failed: "couldn't be read"
     case .incomplete: "has a partial ALL-Link database"
     }
