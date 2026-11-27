@@ -61,8 +61,11 @@ enum ScenePlanExample {
         BackupDevice(address: stale, unreadable: BackupUnreadable(reason: .notCached))
       ]
     )
-    let registry = DeviceRegistry(catalog: catalog, snapshot: DeviceRegistrySnapshot(identities: [lamp: identity]))
-    let devices: [InsteonAddress: RegisteredDevice] = await registry.device(lamp).map { [lamp: $0] } ?? [:]
+    let registry = DeviceRegistry(catalog: catalog, snapshot: DeviceRegistrySnapshot(identities: [lamp: identity, stale: identity]))
+    var devices: [InsteonAddress: RegisteredDevice] = [:]
+    for address in [lamp, stale] {
+      if let device = await registry.device(address) { devices[address] = device }
+    }
     return SceneMembershipPlanner.plan(change, from: backup, devices: devices, modemLinkData: nil)
   }
 

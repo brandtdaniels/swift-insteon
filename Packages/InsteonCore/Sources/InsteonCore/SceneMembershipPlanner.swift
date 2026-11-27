@@ -211,7 +211,7 @@ private struct Planning {
 
   /// Checks that the device's cached database was read whole and that its engine takes a remote
   /// write, and records the device's facts.
-  private mutating func eligibility(of address: InsteonAddress, backup: NetworkBackup, registered: RegisteredDevice?) -> Eligible? {
+  private mutating func eligibility(of address: InsteonAddress, backup: NetworkBackup, registered: RegisteredDevice?, needsIdentity: Bool = false) -> Eligible? {
 
     if let held = working[address] {
 
@@ -236,6 +236,23 @@ private struct Planning {
       refusals.append(SceneMembershipFinding(code: code, device: address, detail: detail))
 
       return nil
+
+    }
+
+    // What the catalog says about the device comes first: without it the engine isn't judged.
+    if needsIdentity {
+
+      guard let registered else {
+
+        return refuse(.notIdentified, "The service has no identity recorded for the device, so the catalog can't say what its record holds.")
+
+      }
+
+      guard registered.info.isInCatalog else {
+
+        return refuse(.notInCatalog, "The catalog doesn't describe the identity the device reported.")
+
+      }
 
     }
 
@@ -339,7 +356,7 @@ private struct Planning {
 
     let address: InsteonAddress = addition.device
 
-    guard let eligible = eligibility(of: address, backup: backup, registered: registered) else {
+    guard let eligible = eligibility(of: address, backup: backup, registered: registered, needsIdentity: true), let registered else {
 
       return
 
@@ -348,22 +365,6 @@ private struct Planning {
     func refuse(_ code: SceneMembershipFinding.Code, _ detail: String? = nil) {
 
       refusals.append(SceneMembershipFinding(code: code, device: address, detail: detail))
-
-    }
-
-    guard let registered else {
-
-      refuse(.notIdentified, "The service has no identity recorded for the device, so the catalog can't say what its record holds.")
-
-      return
-
-    }
-
-    guard registered.info.isInCatalog else {
-
-      refuse(.notInCatalog, "The catalog doesn't describe the identity the device reported.")
-
-      return
 
     }
 

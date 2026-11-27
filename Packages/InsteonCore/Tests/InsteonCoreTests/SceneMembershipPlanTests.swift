@@ -476,6 +476,17 @@ struct SceneMembershipPlanTests {
 
   }
 
+  @Test(arguments: [BackupEngine.i1, .i2])
+  func refusesADeviceWithNoIdentityAsNotIdentifiedBeforeJudgingItsEngine(_ engine: BackupEngine) async throws {
+
+    let backup = backup(modemRecords: [], [device(lamp, nil, engine: engine, records: slots([]))])
+    let plan = SceneMembershipPlanner.plan(change([add(lamp)]), from: backup, devices: [:], modemLinkData: Self.modemData)
+
+    #expect(plan.refusals.map(\.code) == [.notIdentified])
+    #expect(plan.devices.map(\.address) == [lamp])
+
+  }
+
   @Test func refusesADeviceTheCatalogDoesNotDescribe() async throws {
 
     let plan = await plan(change([add(lamp)]), identities: [lamp: Self.strangerIdentity])
