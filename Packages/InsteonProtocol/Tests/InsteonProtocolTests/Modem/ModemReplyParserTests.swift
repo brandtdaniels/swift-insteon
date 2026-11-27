@@ -311,6 +311,100 @@ struct ModemReplyParserTests {
 
   }
 
+  // The bench Hub 2 sends the ALL-Link Cleanup Failure Report as `02 56 <group> <address>`, one byte
+  // shorter than the `02 56 <reserved> <group> <address>` the parser was written for.
+  @Test func readsACleanupFailureOfSixBytesAndTheStatusReportAfterIt() {
+
+    var parser = ModemReplyParser()
+
+    let replies = parser.parse(bytes("0256" + "05" + "C1C2C3" + "025806"))
+
+    #expect(replies == [
+      .allLinkCleanupFailed(group: 0x05, address: InsteonAddress(0xC1, 0xC2, 0xC3)),
+      .allLinkCleanupStatus(isComplete: true)
+    ])
+
+  }
+
+  @Test func readsACleanupFailureOfSixBytesSplitAtEveryByte() {
+
+    let stream = bytes("0256" + "05" + "C1C2C3" + "025806")
+
+    for split in 1..<stream.count {
+
+      var parser = ModemReplyParser()
+
+      let replies = parser.parse(stream.prefix(split)) + parser.parse(stream.dropFirst(split))
+
+      #expect(replies == [
+        .allLinkCleanupFailed(group: 0x05, address: InsteonAddress(0xC1, 0xC2, 0xC3)),
+        .allLinkCleanupStatus(isComplete: true)
+      ], "split after \(split) bytes")
+
+    }
+
+  }
+
+  @Test func readsACleanupFailureOfSixBytesBeforeAMessageFromADevice() {
+
+    var parser = ModemReplyParser()
+
+    let replies = parser.parse(bytes("0256" + "05" + "C1C2C3" + "0250" + "D1D2D3" + "E1E2E3" + "6013" + "05"))
+
+    #expect(replies.count == 2)
+    #expect(replies.first == .allLinkCleanupFailed(group: 0x05, address: InsteonAddress(0xC1, 0xC2, 0xC3)))
+
+  }
+
+  // An address can end in the start byte; the frame after it starts with another one.
+  @Test func readsACleanupFailureOfSevenBytesWhoseAddressEndsInAStartByte() {
+
+    var parser = ModemReplyParser()
+
+    let replies = parser.parse(bytes("0256" + "01" + "05" + "C1C202" + "025806"))
+
+    #expect(replies == [
+      .allLinkCleanupFailed(group: 0x05, address: InsteonAddress(0xC1, 0xC2, 0x02)),
+      .allLinkCleanupStatus(isComplete: true)
+    ])
+
+  }
+
+  // Until the byte after it arrives, a start byte after six bytes could end either layout.
+  @Test func waitsForTheByteAfterATrailingStartByteToTellTheCleanupFailureLayouts() {
+
+    var parser = ModemReplyParser()
+
+    #expect(parser.parse(bytes("0256" + "05" + "C1C2C3" + "02")).isEmpty)
+    #expect(parser.parse(bytes("5806")) == [
+      .allLinkCleanupFailed(group: 0x05, address: InsteonAddress(0xC1, 0xC2, 0xC3)),
+      .allLinkCleanupStatus(isComplete: true)
+    ])
+
+    var sevenByte = ModemReplyParser()
+
+    #expect(sevenByte.parse(bytes("0256" + "01" + "05" + "C1C202")).isEmpty)
+    #expect(sevenByte.parse(bytes("02")) == [
+      .allLinkCleanupFailed(group: 0x05, address: InsteonAddress(0xC1, 0xC2, 0x02))
+    ])
+    #expect(sevenByte.parse(bytes("5806")) == [.allLinkCleanupStatus(isComplete: true)])
+
+  }
+
+  // `02 5C` is in one Hub trace only; its length of 11, like a standard message's, is inferred.
+  @Test func readsAFrameOfAnUnknownNumberWhoseLengthWasInferred() {
+
+    var parser = ModemReplyParser()
+
+    let replies = parser.parse(bytes("025C" + "A1A2A3" + "B1B2B3" + "2313" + "05" + "025806"))
+
+    #expect(replies == [
+      .unrecognized(number: 0x5C, body: bytes("A1A2A3" + "B1B2B3" + "2313" + "05")),
+      .allLinkCleanupStatus(isComplete: true)
+    ])
+
+  }
+
   @Test func skipsNoiseAndUnrecognizedNumbers() {
 
     var parser = ModemReplyParser()

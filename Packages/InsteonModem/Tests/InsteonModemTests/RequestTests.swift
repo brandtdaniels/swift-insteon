@@ -775,6 +775,53 @@ struct RequestTests {
 
   }
 
+  // A Hub's buffer was seen to hold a frame the parser doesn't know (`02 5C`, its layout inferred
+  // from one bench trace as a standard message) between the echo and the cleanup reports.
+  @Test func hearsCleanupReportsBehindAFrameItDoesNotKnow() async throws {
+
+    let echo: [UInt8] = [0x02, 0x61, 0x05, 0x13, 0x00, 0x06]
+    let unknown: [UInt8] = [0x02, 0x5C, 0xA1, 0xA2, 0xA3, 0xB1, 0xB2, 0xB3, 0x23, 0x13, 0x05]
+    let failure: [UInt8] = [0x02, 0x56, 0x05, 0xC1, 0xC2, 0xC3]
+    let status: [UInt8] = [0x02, 0x58, 0x06]
+    let standard: [UInt8] = [0x02, 0x50, 0xD1, 0xD2, 0xD3, 0xE1, 0xE2, 0xE3, 0x60, 0x13, 0x05]
+    let connection = ScriptedConnection { _, _ in echo + unknown + failure + status + standard }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let report = try await modem.sendAllLinkCommand(group: 0x05, command: Command(command1: 0x13, command2: 0x00))
+
+      #expect(report.unacknowledged == [InsteonAddress(0xC1, 0xC2, 0xC3)])
+      #expect(report.isComplete)
+      #expect(report.statusReportAfter != nil)
+      #expect(report.failureReportedAfter != nil)
+
+    }
+
+  }
+
+  // The bench Hub 2 sends the failure report as `02 56 <group> <address>`, with no reserved byte, so
+  // a parser reading seven bytes took the start byte of the status report that follows.
+  @Test func hearsACleanupFailureOfSixBytesAndTheStatusReportAfterIt() async throws {
+
+    let echo: [UInt8] = [0x02, 0x61, 0x05, 0x13, 0x00, 0x06]
+    let failure: [UInt8] = [0x02, 0x56, 0x05, 0xC1, 0xC2, 0xC3]
+    let status: [UInt8] = [0x02, 0x58, 0x06]
+    let connection = ScriptedConnection { _, _ in echo + failure + status }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let report = try await modem.sendAllLinkCommand(group: 0x05, command: Command(command1: 0x13, command2: 0x00))
+
+      #expect(report.unacknowledged == [InsteonAddress(0xC1, 0xC2, 0xC3)])
+      #expect(report.isComplete)
+      #expect(report.statusReportAfter != nil)
+
+    }
+
+  }
+
   // The modem accepted the command, so it was sent; only the report of the cleanups is missing.
   @Test func givesUpAfterAQuietPeriodWithNoCleanupTrafficAndAnswersWhatItHeard() async throws {
 

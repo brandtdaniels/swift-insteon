@@ -119,6 +119,7 @@ public struct DeviceMonitor: Sendable {
     case .modemInfo: "Get IM Info reply"
     case .modemConfiguration: "configuration"
     case let .echo(echo): "echo of \(echo.number.name)\(echo.isAccepted ? "" : ", NAK")"
+    case .unrecognized: "unrecognized frame"
     case .negativeAcknowledgment: "NAK"
     }
 

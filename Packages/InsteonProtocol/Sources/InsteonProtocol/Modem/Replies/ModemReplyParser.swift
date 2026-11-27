@@ -141,10 +141,13 @@ private enum ModemFraming: Framing {
     case 0x53: return .complete(10)
     case 0x54: return .complete(3)
     case 0x55: return .complete(2)
-    case 0x56: return .complete(7)
+    case 0x56: return cleanupFailureLength(of: bytes)
     case 0x57: return .complete(10)
     case 0x58: return .complete(3)
     case 0x59: return .complete(12)
+    // Seen once in a Hub's buffer, as long as a standard message. Unverified: no cited document
+    // lists it.
+    case 0x5C: return .complete(11)
     case 0x5A, 0x5B: return .complete(13)
     default:
       guard let number = SerialCommandNumber(rawValue: bytes[1]) else {
@@ -155,6 +158,38 @@ private enum ModemFraming: Framing {
 
       return replyLength(to: number, in: bytes)
     }
+
+  }
+
+  /// The length of an ALL-Link Cleanup Failure Report: 7 bytes, `02 56 <reserved> <group> <address>`,
+  /// the layout the parser was written for, or 6 bytes, `02 56 <group> <address>`, as the bench
+  /// Hub 2 sends it (a hardware observation; unverified against a document).
+  ///
+  /// The two can't be told apart by their start, so the frame is read as 7 bytes unless the
+  /// 7th byte starts the next frame, a start byte followed by a number a modem sends. An address
+  /// that ends in a start byte doesn't, since the frame after it starts with another start byte.
+  /// A 7th byte that is a start byte waits for the byte after it.
+  private static func cleanupFailureLength(of bytes: [UInt8]) -> FrameLength {
+
+    guard bytes.count >= 7 else {
+
+      return .needMoreBytes
+
+    }
+
+    guard bytes[6] == ControlByte.startOfText else {
+
+      return .complete(7)
+
+    }
+
+    guard bytes.count >= 8 else {
+
+      return .needMoreBytes
+
+    }
+
+    return .complete(startsFrame(bytes[7]) ? 6 : 7)
 
   }
 
@@ -245,6 +280,8 @@ private enum ModemFraming: Framing {
       return .buttonEvent(ModemButtonEvent(rawValue: body[0]))
     case 0x55:
       return .userReset
+    case 0x56 where frame.count == 6:
+      return .allLinkCleanupFailed(group: AllLinkGroupNumber(rawValue: body[0]), address: address(body, at: 1))
     case 0x56:
       return .allLinkCleanupFailed(group: AllLinkGroupNumber(rawValue: body[1]), address: address(body, at: 2))
     case 0x57:
@@ -257,6 +294,8 @@ private enum ModemFraming: Framing {
       return .diagnosticRecord(ModemDiagnosticRecord(body))
     case 0x5B:
       return .deviceRecordFound(address: UInt16(highByte: body[0], lowByte: body[1]), record: AllLinkRecord(body, at: 2))
+    case 0x5C:
+      return .unrecognized(number: frame[1], body: body)
     case 0x7E where body.count == 7 && body.last == ControlByte.acknowledgment:
       return .radioStatus(ModemRadioStatus(
         frequencyCode: body[0],
