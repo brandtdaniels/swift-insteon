@@ -525,7 +525,7 @@ private struct Planning {
     var written: LinkRecord = record
     written.memoryAddress = end
     steps.append(SceneMembershipStep(kind: .addDeviceRecord, endpoint: .device(address), record: written))
-    // The end's slot now holds the record and the slot below it is the end.
+    // The end's slot holds the record after the write, and the slot below it is the end.
     let updated: [BackupRecord] = records.dropLast() + [
       writtenRecord(data, at: end),
       BackupRecord(state: .end, role: .responder, group: 0, address: InsteonAddress(0, 0, 0), data: [0, 0, 0], memoryAddress: newEnd)
