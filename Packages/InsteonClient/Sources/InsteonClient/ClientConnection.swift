@@ -1,3 +1,4 @@
+import Foundation
 import InsteonService
 
 /// One connection to a service, over whichever of its paths answers first.
@@ -81,6 +82,38 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
 
   public func execute(_ command: ServiceCommand) async throws -> CommandReceipt {
     try await perform(retryable: false) { try await $0.execute(command) }
+  }
+
+  /// The scenes the service lists from the ALL-Link databases it holds. Nothing is sent to hardware,
+  /// so a device with no copy is listed as unreadable. Read again on a lost path like any read.
+  public func scenes() async throws -> SceneList {
+    try await perform(retryable: true) { try await $0.scenes() }
+  }
+
+  /// Asks the service to read the ALL-Link databases of the modem and each device from the hardware,
+  /// and answers the list it then holds. The read can take a long time and holds the service's one
+  /// admission gate, so a refresh that may have reached the service is never asked again: it throws
+  /// ``ConnectionError/interrupted(path:)``, and the caller lists the scenes to see what was read.
+  public func refreshScenes() async throws -> SceneList {
+    try await perform(retryable: false) { try await $0.refreshScenes() }
+  }
+
+  /// Runs a scene the modem controls, sending its group one Light On at full level or one Light Off.
+  ///
+  /// A run that may have been sent is never asked again by the connection. The call carries an
+  /// idempotency key, one per call unless the caller passes its own, so the service answers a repeat
+  /// of the same key with the recorded answer and sends nothing. A caller that lost the answer asks
+  /// again with the same key: ``ConnectionError/interrupted(path:)`` and
+  /// ``ConnectionError/outcomeUnknown(sent:)`` mean the lights may have changed.
+  ///
+  /// - Parameters:
+  ///   - number: The scene's ALL-Link group number, from 1 through 254.
+  ///   - action: What to tell the scene.
+  ///   - idempotencyKey: One token of 1 through 128 characters from A-Z, a-z, 0-9 and `.`, `_`, `~`,
+  ///     `:`, `-`, or `nil` to make one for this call.
+  public func runScene(_ number: Int, action: SceneAction, idempotencyKey: String? = nil) async throws -> SceneRunReceipt {
+    let key = idempotencyKey ?? UUID().uuidString
+    return try await perform(retryable: false) { try await $0.runScene(number, action: action, idempotencyKey: key) }
   }
 
   /// Closes the calls of the open path. The next call opens a path afresh.

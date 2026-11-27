@@ -28,6 +28,8 @@ actor ScriptedCalls: ConnectionCalls {
   let label: String
   private var script: [Script]
   private(set) var asked: [String] = []
+  /// The key each scene run carried, in order.
+  private(set) var sceneKeys: [String] = []
   private(set) var isClosed = false
 
   func close() async { isClosed = true }
@@ -55,6 +57,41 @@ actor ScriptedCalls: ConnectionCalls {
     asked.append("execute")
     switch next() {
     case .answer: return CommandReceipt(address: command.address, outcome: .acknowledged, status: nil)
+    case .notReached: throw ConnectionPathError.notReached("scripted")
+    case .interrupted: throw ConnectionPathError.interrupted
+    case .unauthorized: throw ConnectionPathError.unauthorized
+    case .badResponse: throw ConnectionPathError.badResponse
+    case .forbidden: throw ConnectionPathError.forbidden
+    }
+  }
+
+  /// A list with one scene numbered 1 for the local path and 2 for any other.
+  private var sceneList: SceneList {
+    SceneList(scenes: [SceneList.Scene(number: label == "local" ? 1 : 2, source: .modem, isWritable: true, members: [], halfLinks: [])], looseHalfLinks: [], unreadable: [], unlisted: [], isModemUnread: false, undescribedMembers: [], isWhole: true)
+  }
+
+  func scenes() async throws -> SceneList {
+    asked.append("scenes")
+    try failIfScripted()
+    return sceneList
+  }
+
+  func refreshScenes() async throws -> SceneList {
+    asked.append("refreshScenes")
+    try failIfScripted()
+    return sceneList
+  }
+
+  func runScene(_ number: Int, action: SceneAction, idempotencyKey: String) async throws -> SceneRunReceipt {
+    asked.append("runScene")
+    sceneKeys.append(idempotencyKey)
+    try failIfScripted()
+    return SceneRunReceipt(scene: number, action: action, acknowledged: [], unacknowledged: [], isComplete: true, responderCount: 0, persistence: .notConfigured)
+  }
+
+  private func failIfScripted() throws {
+    switch next() {
+    case .answer: return
     case .notReached: throw ConnectionPathError.notReached("scripted")
     case .interrupted: throw ConnectionPathError.interrupted
     case .unauthorized: throw ConnectionPathError.unauthorized

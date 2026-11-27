@@ -137,6 +137,38 @@ private struct ServiceCalls: ConnectionCalls {
     }
   }
 
+  func scenes() async throws -> SceneList {
+    try readList(try await path.send(try path.request("GET", "/api/v1/scenes")))
+  }
+
+  func refreshScenes() async throws -> SceneList {
+    try readList(try await path.send(try path.request("POST", "/api/v1/scenes/refresh")))
+  }
+
+  func runScene(_ number: Int, action: SceneAction, idempotencyKey: String) async throws -> SceneRunReceipt {
+    let body = Data((action == .on ? #"{"action":"on"}"# : #"{"action":"off"}"#).utf8)
+    var request = try path.request("POST", "/api/v1/scenes/\(number)/commands", body: body)
+    request.setValue(idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+    let response = try await path.send(request)
+    guard (200..<300).contains(response.statusCode) else { throw try failure(response) }
+    do {
+      return try JSONDecoder().decode(WireSceneReceipt.self, from: response.body).receipt()
+    } catch {
+      // The run was accepted and its answer can't be read: it may have taken effect.
+      throw ConnectionPathError.badResponse
+    }
+  }
+
+  /// A listing's answer, or the refusal it stands for.
+  private func readList(_ response: HTTPResponse) throws -> SceneList {
+    guard (200..<300).contains(response.statusCode) else { throw try failure(response) }
+    do {
+      return try JSONDecoder().decode(WireSceneList.self, from: response.body).list()
+    } catch {
+      throw ConnectionPathError.badResponse
+    }
+  }
+
   func sequencedEvents(after cursor: EventCursor?) async throws -> SequencedEvents {
     var request = try path.request("GET", "/api/v1/events")
     request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
@@ -199,6 +231,11 @@ private struct ServiceCalls: ConnectionCalls {
     case "notIdentified": return ServiceControlError.notIdentified
     case "notLinked": return ServiceControlError.notLinked
     case "busy": return ServiceControlError.busy
+    case "unknownScene": return ServiceControlError.unknownScene
+    case "sceneEmpty": return ServiceControlError.sceneEmpty
+    case "databasesUnavailable": return ServiceControlError.databasesUnavailable
+    case "invalidScene": return ConnectionError.invalidScene
+    case "outcomeUnknown": return ConnectionError.outcomeUnknown(sent: refusal.sent ?? true)
     case "modemUnavailable":
       if let cause = Self.cause(refusal.cause) { return ServiceControlError.modemUnavailable(cause) }
       return ConnectionError.modemUnavailable(cause: refusal.cause)

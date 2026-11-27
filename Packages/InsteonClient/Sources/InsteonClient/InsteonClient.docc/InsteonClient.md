@@ -39,6 +39,20 @@ for try await event in connection.events() {
 }
 ```
 
+Scenes come from ``ClientConnection/scenes()``, which lists them from the ALL-Link databases the
+service holds, and ``ClientConnection/refreshScenes()``, which has the service read them from the
+hardware. A ``SceneList`` is whole only when every database was read and every record has its other
+half, and says which devices it could not read and why. ``ClientConnection/runScene(_:action:idempotencyKey:)``
+sends a scene's group Light On or Light Off once. The call carries an idempotency key, so a caller
+that lost the answer asks again with the same key and the service sends nothing twice.
+
+```swift
+let list = try await connection.refreshScenes()
+if let scene = list.scenes.first(where: \.isWritable) {
+  let receipt = try await connection.runScene(scene.number, action: .on)
+}
+```
+
 The connection holds no user interface and no device knowledge. Each interface parses input, calls it
 and presents the answer.
 
@@ -59,6 +73,12 @@ and presents the answer.
 - ``LocalHubPath``
 - ``ServicePath``
 - ``RouteOpening``
+
+### Scenes
+
+- ``SceneList``
+- ``SceneAction``
+- ``SceneRunReceipt``
 
 ### Events
 
