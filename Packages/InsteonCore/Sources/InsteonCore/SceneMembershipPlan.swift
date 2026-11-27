@@ -374,7 +374,16 @@ public struct SceneMembershipPlan: Hashable, Sendable {
 
     for step in steps {
 
-      stepLines.append("step \(step.kind.rawValue) \(Self.name(step.endpoint)) \(step.record.memoryAddress.map { String(format: "%04X", $0) } ?? "modem") \(step.record.isController) \(step.record.isInUse) \(step.record.group.rawValue) \(Self.hex(step.record.address.bytes)) \(Self.hex(step.record.data))")
+      let record: LinkRecord = step.record
+      let slot: String = record.memoryAddress.map { String(format: "%04X", $0) } ?? "none"
+      let fields: [String] = [
+        "step", step.kind.rawValue, Self.name(step.endpoint), slot,
+        "controller=\(record.isController)", "inUse=\(record.isInUse)", "group=\(record.group.rawValue)",
+        "address=\(Self.hex(record.address.bytes))", "data=\(Self.hex(record.data))",
+        "intact=\(record.hasIntactChecksum)", "end=\(record.isEndOfDatabase)",
+        "risks=\(step.risks.map(\.rawValue).joined(separator: ","))"
+      ]
+      stepLines.append(fields.joined(separator: " "))
 
     }
 

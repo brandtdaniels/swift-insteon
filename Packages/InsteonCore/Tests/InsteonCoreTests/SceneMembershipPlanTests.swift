@@ -843,6 +843,54 @@ struct SceneMembershipPlanTests {
 
   }
 
+  @Test func changesTheFingerprintWhenAnyFieldOfAStepChanges() throws {
+
+    let record = LinkRecord(isController: false, isInUse: true, group: 3, address: modem, data: [0xFF, 0x1F, 0x01], memoryAddress: 0x0FF7)
+    let base = SceneMembershipStep(kind: .addDeviceRecord, endpoint: .device(lamp), record: record)
+
+    func fingerprint(_ step: SceneMembershipStep) -> String {
+
+      SceneMembershipPlan(scene: 3, steps: [step], warnings: [], refusals: [], devices: [], readLines: []).fingerprint
+
+    }
+
+    func changed(_ change: (inout SceneMembershipStep) -> Void) -> String {
+
+      var step = base
+      change(&step)
+
+      return fingerprint(step)
+
+    }
+
+    let variants: [String: String] = [
+      "kind": changed { $0.kind = .updateDeviceRecord },
+      "endpoint": changed { $0.endpoint = .device(fan) },
+      "modem endpoint": changed { $0.endpoint = .modem },
+      "isController": changed { $0.record.isController = true },
+      "isInUse": changed { $0.record.isInUse = false },
+      "group": changed { $0.record.group = 4 },
+      "address": changed { $0.record.address = fan },
+      "data": changed { $0.record.data = [0xFF, 0x1F, 0x02] },
+      "memoryAddress": changed { $0.record.memoryAddress = 0x0FEF },
+      "no memoryAddress": changed { $0.record.memoryAddress = nil },
+      "hasIntactChecksum": changed { $0.record.hasIntactChecksum = false },
+      "isEndOfDatabase": changed { $0.record.isEndOfDatabase = true },
+      "risks": changed { $0.risks = [.movesEndOfDatabase] }
+    ]
+
+    #expect(variants.count == 13)
+
+    for (field, other) in variants {
+
+      #expect(other != fingerprint(base), "\(field) is left out of the fingerprint")
+
+    }
+
+    #expect(Set(variants.values).count == variants.count)
+
+  }
+
   @Test func sendsNothingBecauseItReadsOnlyWhatItIsGiven() async throws {
 
     // The planner takes values, so there is nothing to send to: the same inputs give the same plan.
