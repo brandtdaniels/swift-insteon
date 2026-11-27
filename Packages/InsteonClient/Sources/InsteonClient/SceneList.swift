@@ -14,6 +14,8 @@ public struct SceneList: Equatable, Sendable {
     case modem
     /// A device starts the scene, as a keypad button does. It is listed and watched, not run.
     case device(InsteonAddress)
+    /// A kind of source the service names that this library has no case for, kept as the service wrote it.
+    case other(String)
   }
 
   /// How sure the Insteon device catalog is of what a data byte means.

@@ -63,14 +63,16 @@ struct WireSceneList: Decodable {
     return address
   }
 
-  fileprivate static func source(_ text: String) throws -> SceneList.Source {
-    text == "modem" ? .modem : .device(try address(text))
+  fileprivate static func source(_ text: String) -> SceneList.Source {
+    // A source this library has no case for is kept by name, so one new kind doesn't fail the whole list.
+    if text == "modem" { return .modem }
+    return InsteonAddress(text).map { .device($0) } ?? .other(text)
   }
 }
 
 extension WireSceneList.Scene {
   fileprivate func scene() throws -> SceneList.Scene {
-    SceneList.Scene(number: number, source: try WireSceneList.source(controller), isWritable: writable, members: try members.map { try $0.member() }, halfLinks: try halfLinks.map { try $0.halfLink() })
+    SceneList.Scene(number: number, source: WireSceneList.source(controller), isWritable: writable, members: try members.map { try $0.member() }, halfLinks: try halfLinks.map { try $0.halfLink() })
   }
 }
 
@@ -92,7 +94,7 @@ extension WireSceneList.HalfLink {
     case "responder": role = .responder
     default: throw ConnectionPathError.badResponse
     }
-    return SceneList.HalfLink(endpoint: try WireSceneList.source(endpoint), group: group, address: try WireSceneList.address(address), role: role, data: data)
+    return SceneList.HalfLink(endpoint: WireSceneList.source(endpoint), group: group, address: try WireSceneList.address(address), role: role, data: data)
   }
 }
 
