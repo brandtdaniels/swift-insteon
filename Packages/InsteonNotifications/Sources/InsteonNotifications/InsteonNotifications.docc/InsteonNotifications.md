@@ -8,7 +8,7 @@ A ``NotificationRule`` says what someone wants to hear about: a device reporting
 device profile names, such as a leak sensor turning wet or a door opening; a device sending a
 group command, such as a switch turned on from its paddle; or a sensor going quiet. A
 ``NotificationRuleSet`` checks the events a `DeviceEventInterpreter` reads, and the devices a
-`HeartbeatMonitor` finds silent, against a home's rules, and returns the
+`HeartbeatMonitor` finds silent, against a network's rules, and returns the
 ``DeviceNotification``s to deliver.
 
 ```swift

@@ -78,7 +78,7 @@ public actor InsteonService: InsteonServiceAPI {
   ///   - throughHub: Whether the modem is reached through a Hub. A modem that doesn't answer is then
   ///     reported as ``ModemUnavailability/hubUnreachable``, because the Hub is what to check.
   ///   - notificationRules: Where the notification rules are kept, if anywhere. Without it they last as long as the service.
-  ///   - scheduling: The home's time zone and location and where schedules and timers are kept. Schedules and timers run on `clock` and `now`.
+  ///   - scheduling: The network's time zone and location and where schedules and timers are kept. Schedules and timers run on `clock` and `now`.
   public init(
     network: DeviceNetwork,
     opener: any ServedNetworkOpening,
@@ -387,7 +387,7 @@ public actor InsteonService: InsteonServiceAPI {
     try await schedulerInstance().schedules()
   }
 
-  /// Validates a schedule against the cached devices and the home's place, stores it, and works out its next
+  /// Validates a schedule against the cached devices and the network's place, stores it, and works out its next
   /// run, so it takes effect without a restart. A schedule with the identifier of an existing one replaces it
   /// and keeps nothing of its last run.
   ///

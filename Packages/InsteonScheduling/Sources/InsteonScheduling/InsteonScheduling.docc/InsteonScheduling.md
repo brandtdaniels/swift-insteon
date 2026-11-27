@@ -1,6 +1,6 @@
 # ``InsteonScheduling``
 
-Work out when schedules run, in a home's time zone, through daylight saving changes.
+Work out when schedules run, in a network's time zone, through daylight saving changes.
 
 ## Overview
 
@@ -9,7 +9,7 @@ own, so a schedule today belongs to an app that stays running at home. ``Schedul
 works out when each ``Schedule`` next runs: at a clock time or relative to sunrise or sunset,
 on some days of the week.
 
-Times are worked out in the home's time zone with the system calendar, so daylight saving is
+Times are worked out in the network's time zone with the system calendar, so daylight saving is
 handled by the time zone's own rules: a schedule for 6:30 p.m. runs at 6:30 p.m. local time
 all year. On the days the clocks change, a time the clocks skip runs as long after the change
 as it was meant to be after the hour, and a time that happens twice runs the first time.

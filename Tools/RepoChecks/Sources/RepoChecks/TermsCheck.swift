@@ -25,7 +25,7 @@ public struct TermsCheck: RepoCheck {
     (#"\bclean-up"#, "cleanup"),
     // A user's set of devices, names, scenes and schedules is a network; a house is only a place.
     (#"\b[Hh]ome (?:backup|name)\b"#, "network backup, network name"),
-    (#"\b[Hh]ome's (?:scenes?|devices?|modem|Hub|network|backup|schedules?)\b"#, "the network's scenes, devices, modem and so on"),
+    (#"\b[Hh]ome's (?!two power|wiring|split-phase|local time)\w+"#, "the network's scenes, devices, time zone and so on"),
     (#"\b[Ss]et button\b"#, "SET button"),
     (
       #"(?<!Insteon )(?<!Modem )(?<!Hub )\b[Dd]eveloper'?s? [Gg]uides?\b|\b[Tt]he guide\b"#,

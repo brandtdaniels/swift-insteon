@@ -13,7 +13,7 @@ public enum BackupSourceKind: String, Codable, Hashable, Sendable {
   case service
 }
 
-/// A home's Insteon network in one JSON file a person can read: the modem's identity and
+/// An Insteon network in one JSON file a person can read: the modem's identity and
 /// ALL-Link database, each device's ALL-Link database where it could be read and the reason where
 /// it couldn't, the devices' names and types, and, when a service wrote it, the service's
 /// notification rules, routes and schedules.

@@ -23,7 +23,7 @@ public protocol SunTimes: Sendable {
 
 }
 
-/// Works out when schedules next run, in a home's time zone.
+/// Works out when schedules next run, in a network's time zone.
 ///
 /// Times are worked out day by day in the calendar's time zone, so a schedule set for 6:30
 /// p.m. runs at 6:30 p.m. local time on either side of a daylight saving change, rather than an
@@ -43,7 +43,7 @@ public protocol SunTimes: Sendable {
 /// ```
 public struct ScheduleCalendar: Sendable {
 
-  /// The calendar, with the home's time zone.
+  /// The calendar, with the network's time zone.
   public let calendar: Calendar
 
   /// Where sunrise and sunset come from, if any schedules use them.
@@ -52,7 +52,7 @@ public struct ScheduleCalendar: Sendable {
   /// Creates a schedule calendar.
   ///
   /// - Parameters:
-  ///   - calendar: The calendar, with the home's time zone.
+  ///   - calendar: The calendar, with the network's time zone.
   ///   - sunTimes: Where sunrise and sunset come from. Defaults to `nil`, for schedules that
   ///     use only clock times.
   public init(calendar: Calendar, sunTimes: (any SunTimes)? = nil) {
