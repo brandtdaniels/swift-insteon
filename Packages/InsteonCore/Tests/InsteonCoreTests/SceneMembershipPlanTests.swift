@@ -727,6 +727,21 @@ struct SceneMembershipPlanTests {
 
   }
 
+  @Test func plansNothingForADeviceWithNoIdentityNamedInBothListsWhateverComesFirst() async throws {
+
+    let plan = await plan(
+      change([add(lamp)], remove: [lamp]),
+      modemRecords: [record(.controller, group: 3, lamp)],
+      lampRecords: slots([record(.responder, group: 3, modem), record(.responder, group: 9, modem)]),
+      identities: [:]
+    )
+
+    // The removal of a device is planned without its identity, but its addition never is.
+    #expect(plan.refusals.map(\.code) == [.addedAndRemoved])
+    #expect(plan.steps.isEmpty)
+
+  }
+
   @Test func refusesTheSameDeviceAndGroupNamedTwiceAndPlansNothingForIt() async throws {
 
     let plan = await plan(change([add(lamp), add(lamp, onLevel: 0x10)]))

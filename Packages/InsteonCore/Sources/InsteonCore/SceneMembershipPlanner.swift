@@ -236,12 +236,6 @@ private struct Planning {
   /// write, and records the device's facts.
   private mutating func eligibility(of address: InsteonAddress, registered: RegisteredDevice?, needsIdentity: Bool = false) -> Eligible? {
 
-    if let held = working[address] {
-
-      return held
-
-    }
-
     guard !unable.contains(address) else {
 
       return nil
@@ -255,6 +249,8 @@ private struct Planning {
     func refuse(_ code: SceneMembershipFinding.Code, _ detail: String? = nil) -> Eligible? {
 
       unable.insert(address)
+      working[address] = nil
+      devices.removeAll { (known: SceneMembershipDevice) -> Bool in known.address == address }
       devices.append(fact)
       refusals.append(SceneMembershipFinding(code: code, device: address, detail: detail))
 
@@ -276,6 +272,13 @@ private struct Planning {
         return refuse(.notInCatalog, "The catalog doesn't describe the identity the device reported.")
 
       }
+
+    }
+
+    // A device already checked is not checked again, but what an addition needs is asked on every use.
+    if let checked = working[address] {
+
+      return checked
 
     }
 
