@@ -203,8 +203,9 @@ struct SceneRunTests {
   // A failure has no result to count the modem's controller records from, so the receipt counts the listing's members, each device once.
   @Test func aFailureThatMayHaveSentCountsTheListingsMembersEachDeviceOnce() async throws {
     let modem = await modemWithScenes()
-    // The lamp holds two responder records for the group, so the listing names it twice.
-    await modem.setDatabase([0x0FFF: responder(group: 3), 0x0FF7: responder(group: 3)], of: lamp)
+    // The lamp holds two responder records for the group with different data, so the listing names it twice.
+    let other = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 3, address: modemAddress, data1: 0x80, data2: 0x1C, data3: 0x01)
+    await modem.setDatabase([0x0FFF: responder(group: 3), 0x0FF7: other], of: lamp)
     let service = service(modem)
     let listing = try await service.refreshScenes()
     #expect(listing.scenes.first { $0.number == 3 }?.members.count == 3)
