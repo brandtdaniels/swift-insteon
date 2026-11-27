@@ -144,3 +144,28 @@ struct DeviceNetworkSceneTests {
   }
 
 }
+
+/// Two results are equal when they say the same about the members, however long the modem took.
+struct SceneResultEqualityTests {
+
+  private func result(status: Duration?, failure: Duration?, responders: Int = 2) -> SceneResult {
+
+    SceneResult(acknowledged: [Example.lamp], unacknowledged: [Example.plug], isComplete: true, statusReportAfter: status, failureReportedAfter: failure, responderCount: responders)
+
+  }
+
+  @Test func resultsWithTheSameMembersAndDifferentTimingsAreEqual() {
+
+    #expect(result(status: .seconds(3), failure: .seconds(1)) == result(status: .seconds(25), failure: nil))
+    #expect(result(status: .seconds(3), failure: .seconds(1)).hashValue == result(status: nil, failure: nil).hashValue)
+
+  }
+
+  @Test func resultsThatDifferInTheirMembersOrTheirCountAreNotEqual() {
+
+    #expect(result(status: nil, failure: nil) != result(status: nil, failure: nil, responders: 3))
+    #expect(result(status: nil, failure: nil) != SceneResult(acknowledged: [], unacknowledged: [Example.plug], isComplete: true, responderCount: 2))
+
+  }
+
+}

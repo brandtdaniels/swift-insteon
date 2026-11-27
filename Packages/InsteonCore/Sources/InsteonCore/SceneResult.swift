@@ -34,6 +34,25 @@ public struct SceneResult: Hashable, Sendable {
   /// result didn't come from a network, which knows its modem's records.
   public var responderCount: Int
 
+  /// Two results are equal when they say the same about the responders: ``statusReportAfter`` and
+  /// ``failureReportedAfter`` say how long the modem took, not what happened, so they aren't compared,
+  /// as for the modem's own report.
+  public static func == (left: Self, right: Self) -> Bool {
+
+    left.acknowledged == right.acknowledged && left.unacknowledged == right.unacknowledged
+      && left.isComplete == right.isComplete && left.responderCount == right.responderCount
+
+  }
+
+  public func hash(into hasher: inout Hasher) {
+
+    hasher.combine(acknowledged)
+    hasher.combine(unacknowledged)
+    hasher.combine(isComplete)
+    hasher.combine(responderCount)
+
+  }
+
   /// Creates a scene result.
   ///
   /// - Parameters:
