@@ -256,6 +256,7 @@ public actor InsteonService: InsteonServiceAPI {
 
   public func planSceneMembership(_ change: SceneMembershipChange) async throws -> SceneMembershipPlanReceipt {
     let network = network
+    guard network.servesDatabases else { throw ServiceControlError.databasesUnavailable }
     let backup = await networkBackup()
     // A group a device controls is read only. A number nothing controls is a scene to create.
     let scenes = SceneListing(backup).scenes.filter { $0.number == change.scene }

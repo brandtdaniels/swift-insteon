@@ -54,6 +54,10 @@ public protocol ServedNetwork: Sendable {
   ///   it rejects the command or stops answering.
   func runScene(group: AllLinkGroupNumber, turningOn: Bool, wait: AllLinkCleanupWait) async throws -> SceneResult
 
+  /// Whether the network gives out its ALL-Link databases: a modem's does, a Hub Pro's doesn't. It
+  /// sends nothing.
+  var servesDatabases: Bool { get }
+
   /// The local time the Hub reported when the connection opened, as it wrote it, or `nil` for a
   /// connection that doesn't report one. Reading it changes nothing on the Hub.
   func reportedLocalTime() async -> String?
@@ -86,6 +90,8 @@ public enum NetworkChanges: Sendable {
 struct ModemServedNetwork: ServedNetwork {
 
   let network: DeviceNetwork
+
+  var servesDatabases: Bool { true }
 
   func snapshot() async -> NetworkSnapshot { await network.snapshot() }
 
@@ -168,6 +174,8 @@ struct ModemServedNetwork: ServedNetwork {
 
 /// A Hub Pro's network, served.
 struct HubProServedNetwork: ServedNetwork {
+
+  var servesDatabases: Bool { false }
 
   let network: HubProNetwork
 

@@ -299,8 +299,10 @@ public protocol SceneProviding: Sendable {
   ///
   /// - Parameter change: What to add and remove.
   /// - Returns: The plan and when it expires.
-  /// - Throws: ``ServiceControlError/unknownScene`` when the listing holds a scene of that number that
-  ///   a device controls and none the modem controls. A number nothing controls is a scene to create.
+  /// - Throws: ``ServiceControlError/databasesUnavailable`` for a network that doesn't give out its
+  ///   databases, as a Hub Pro's doesn't, ``ServiceControlError/unknownScene`` when the listing holds a
+  ///   scene of that number that a device controls and none the modem controls. A number nothing
+  ///   controls is a scene to create.
   func planSceneMembership(_ change: SceneMembershipChange) async throws -> SceneMembershipPlanReceipt
 
   /// What the data bytes a scene's member holds mean, as the Insteon device catalog gives them for
