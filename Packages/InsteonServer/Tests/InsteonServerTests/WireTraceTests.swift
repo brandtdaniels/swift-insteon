@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import InsteonHubClient
 import InsteonModem
 import InsteonNetworking
@@ -105,7 +108,7 @@ struct WireTraceTests {
 
     #expect(Set(tags).count > 1)
 
-    var first = AddressMasker(), second = AddressMasker()
+    let first = AddressMasker(), second = AddressMasker()
     #expect(first.salt != second.salt)
 
   }
