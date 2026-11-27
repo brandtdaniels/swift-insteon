@@ -76,9 +76,9 @@ public struct ServiceTuning: Sendable, Codable, Equatable {
   ///   than the cap is refused as the quiet period.
   public func validated() throws -> ServiceTuning {
 
-    guard scenes.echoWait > .zero, scenes.echoWait <= Self.longestEchoWait else { throw ServiceTuningError.invalid(field: "scenes.echoWaitMs") }
-    guard scenes.cleanupCap > .zero, scenes.cleanupCap <= Self.longestWait else { throw ServiceTuningError.invalid(field: "scenes.cleanupCapMs") }
-    guard scenes.cleanupQuietPeriod >= Self.minimumCleanupQuietPeriod, scenes.cleanupQuietPeriod <= scenes.cleanupCap else { throw ServiceTuningError.invalid(field: "scenes.cleanupQuietMs") }
+    guard scenes.echoWait > .zero, scenes.echoWait <= Self.longestEchoWait else { throw ServiceTuningError.invalid(field: .scenesEchoWait) }
+    guard scenes.cleanupCap > .zero, scenes.cleanupCap <= Self.longestWait else { throw ServiceTuningError.invalid(field: .scenesCleanupCap) }
+    guard scenes.cleanupQuietPeriod >= Self.minimumCleanupQuietPeriod, scenes.cleanupQuietPeriod <= scenes.cleanupCap else { throw ServiceTuningError.invalid(field: .scenesCleanupQuiet) }
 
     return self
 
@@ -91,9 +91,9 @@ public struct ServiceTuning: Sendable, Codable, Equatable {
   public func entries(sources: [String: TuningSource]) -> [TuningEntry] {
 
     [
-      TuningEntry(name: "scenes.echoWaitMs", milliseconds: Self.milliseconds(scenes.echoWait), source: sources["scenes.echoWaitMs"] ?? .default),
-      TuningEntry(name: "scenes.cleanupQuietMs", milliseconds: Self.milliseconds(scenes.cleanupQuietPeriod), source: sources["scenes.cleanupQuietMs"] ?? .default),
-      TuningEntry(name: "scenes.cleanupCapMs", milliseconds: Self.milliseconds(scenes.cleanupCap), source: sources["scenes.cleanupCapMs"] ?? .default)
+      TuningEntry(name: ServiceTuningError.Field.scenesEchoWait.name, milliseconds: Self.milliseconds(scenes.echoWait), source: sources[ServiceTuningError.Field.scenesEchoWait.name] ?? .default),
+      TuningEntry(name: ServiceTuningError.Field.scenesCleanupQuiet.name, milliseconds: Self.milliseconds(scenes.cleanupQuietPeriod), source: sources[ServiceTuningError.Field.scenesCleanupQuiet.name] ?? .default),
+      TuningEntry(name: ServiceTuningError.Field.scenesCleanupCap.name, milliseconds: Self.milliseconds(scenes.cleanupCap), source: sources[ServiceTuningError.Field.scenesCleanupCap.name] ?? .default)
     ]
 
   }
@@ -146,7 +146,24 @@ public struct TuningEntry: Sendable, Codable, Equatable {
 /// A tuning value the service refuses.
 public enum ServiceTuningError: Error, Equatable {
 
-  /// The named value is out of range.
-  case invalid(field: String)
+  /// A tuning value, named as health and the server's options name it.
+  public enum Field: String, Sendable, Equatable, CaseIterable {
+
+    /// ``ServiceTuning/Scenes/echoWait``.
+    case scenesEchoWait = "scenes.echoWaitMs"
+
+    /// ``ServiceTuning/Scenes/cleanupQuietPeriod``.
+    case scenesCleanupQuiet = "scenes.cleanupQuietMs"
+
+    /// ``ServiceTuning/Scenes/cleanupCap``.
+    case scenesCleanupCap = "scenes.cleanupCapMs"
+
+    /// The name health lists the value under.
+    public var name: String { rawValue }
+
+  }
+
+  /// The value is out of range.
+  case invalid(field: Field)
 
 }

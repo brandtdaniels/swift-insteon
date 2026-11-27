@@ -25,16 +25,16 @@ struct ServiceTuningTests {
   }
 
   @Test(arguments: [
-    (Duration.zero, Duration.seconds(15), Duration.seconds(60), "scenes.echoWaitMs"),
-    (.seconds(-1), .seconds(15), .seconds(60), "scenes.echoWaitMs"),
-    (.seconds(61), .seconds(15), .seconds(60), "scenes.echoWaitMs"),
-    (.seconds(5), .zero, .seconds(60), "scenes.cleanupQuietMs"),
-    (.seconds(5), .milliseconds(2_149), .seconds(60), "scenes.cleanupQuietMs"),
-    (.seconds(5), .seconds(61), .seconds(60), "scenes.cleanupQuietMs"),
-    (.seconds(5), .seconds(15), .zero, "scenes.cleanupCapMs"),
-    (.seconds(5), .seconds(15), .seconds(301), "scenes.cleanupCapMs")
+    (Duration.zero, Duration.seconds(15), Duration.seconds(60), ServiceTuningError.Field.scenesEchoWait),
+    (.seconds(-1), .seconds(15), .seconds(60), ServiceTuningError.Field.scenesEchoWait),
+    (.seconds(61), .seconds(15), .seconds(60), ServiceTuningError.Field.scenesEchoWait),
+    (.seconds(5), .zero, .seconds(60), ServiceTuningError.Field.scenesCleanupQuiet),
+    (.seconds(5), .milliseconds(2_149), .seconds(60), ServiceTuningError.Field.scenesCleanupQuiet),
+    (.seconds(5), .seconds(61), .seconds(60), ServiceTuningError.Field.scenesCleanupQuiet),
+    (.seconds(5), .seconds(15), .zero, ServiceTuningError.Field.scenesCleanupCap),
+    (.seconds(5), .seconds(15), .seconds(301), ServiceTuningError.Field.scenesCleanupCap)
   ])
-  func refusesAValueOutOfRangeAndNamesTheField(_ echo: Duration, _ quiet: Duration, _ cap: Duration, _ field: String) {
+  func refusesAValueOutOfRangeAndNamesTheField(_ echo: Duration, _ quiet: Duration, _ cap: Duration, _ field: ServiceTuningError.Field) {
     let tuning = ServiceTuning(scenes: .init(echoWait: echo, cleanupQuietPeriod: quiet, cleanupCap: cap))
     #expect(throws: ServiceTuningError.invalid(field: field)) { try tuning.validated() }
   }
@@ -44,6 +44,12 @@ struct ServiceTuningTests {
     #expect(ServiceTuning.minimumCleanupQuietPeriod == .milliseconds(2_150))
     let tuning = ServiceTuning(scenes: .init(echoWait: .seconds(1), cleanupQuietPeriod: .milliseconds(2_150), cleanupCap: .seconds(300)))
     #expect(try tuning.validated() == tuning)
+  }
+
+  @Test func eachFieldHasTheNameHealthAndTheFlagsUse() {
+    #expect(ServiceTuningError.Field.scenesEchoWait.name == "scenes.echoWaitMs")
+    #expect(ServiceTuningError.Field.scenesCleanupQuiet.name == "scenes.cleanupQuietMs")
+    #expect(ServiceTuningError.Field.scenesCleanupCap.name == "scenes.cleanupCapMs")
   }
 
   @Test func listsEveryValueWithItsSourceDefaultingToDefault() {

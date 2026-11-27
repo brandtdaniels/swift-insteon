@@ -99,20 +99,21 @@ public struct ServerOptions: Sendable {
     func milliseconds(_ flag: String, _ variable: String, _ name: String, _ error: ServerOptionError) throws -> Duration? {
       let flagValue = options[flag], variableValue = environment[variable]
       guard let text = flagValue ?? variableValue else { return nil }
-      guard let value = Int(text), (1...300_000).contains(value) else { throw error }
+      // Only the unit is parsed here; ServiceTuning.validated() is the one place that knows the ranges.
+      guard let value = Int(text) else { throw error }
       sources[name] = flagValue != nil ? .flag : .environment
       return .milliseconds(value)
     }
-    if let value = try milliseconds("--scene-echo-wait-ms", "INSTEON_SCENE_ECHO_WAIT_MS", "scenes.echoWaitMs", .invalidSceneEchoWait) { scenes.echoWait = value }
-    if let value = try milliseconds("--scene-cleanup-quiet-ms", "INSTEON_SCENE_CLEANUP_QUIET_MS", "scenes.cleanupQuietMs", .invalidSceneCleanupQuiet) { scenes.cleanupQuietPeriod = value }
-    if let value = try milliseconds("--scene-cleanup-cap-ms", "INSTEON_SCENE_CLEANUP_CAP_MS", "scenes.cleanupCapMs", .invalidSceneCleanupCap) { scenes.cleanupCap = value }
+    if let value = try milliseconds("--scene-echo-wait-ms", "INSTEON_SCENE_ECHO_WAIT_MS", ServiceTuningError.Field.scenesEchoWait.name, .invalidSceneEchoWait) { scenes.echoWait = value }
+    if let value = try milliseconds("--scene-cleanup-quiet-ms", "INSTEON_SCENE_CLEANUP_QUIET_MS", ServiceTuningError.Field.scenesCleanupQuiet.name, .invalidSceneCleanupQuiet) { scenes.cleanupQuietPeriod = value }
+    if let value = try milliseconds("--scene-cleanup-cap-ms", "INSTEON_SCENE_CLEANUP_CAP_MS", ServiceTuningError.Field.scenesCleanupCap.name, .invalidSceneCleanupCap) { scenes.cleanupCap = value }
     do {
       tuning = try ServiceTuning(scenes: scenes).validated()
     } catch ServiceTuningError.invalid(let field) {
       switch field {
-      case "scenes.echoWaitMs": throw ServerOptionError.invalidSceneEchoWait
-      case "scenes.cleanupCapMs": throw ServerOptionError.invalidSceneCleanupCap
-      default: throw ServerOptionError.invalidSceneCleanupQuiet
+      case .scenesEchoWait: throw ServerOptionError.invalidSceneEchoWait
+      case .scenesCleanupQuiet: throw ServerOptionError.invalidSceneCleanupQuiet
+      case .scenesCleanupCap: throw ServerOptionError.invalidSceneCleanupCap
       }
     }
     tuningSources = sources
