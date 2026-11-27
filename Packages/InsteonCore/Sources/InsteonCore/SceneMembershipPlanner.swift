@@ -425,7 +425,11 @@ private struct Planning {
       modemRecords.append(BackupRecord(state: .inUse, role: .controller, group: change.scene, address: address, data: modemData))
       addedHalf = true
 
-      if !sceneRecords.isEmpty {
+      if let deviceHalf, deviceHalf.data != data {
+
+        warnings.append(SceneMembershipFinding(code: .halfLinkCompleted, device: address, detail: "The device's record was in place with another on-level or ramp rate, and the modem's was missing. The modem's record is added; the device's is not rewritten until that has been tried on hardware."))
+
+      } else if !sceneRecords.isEmpty {
 
         warnings.append(SceneMembershipFinding(code: .halfLinkCompleted, device: address, detail: "The device's record was in place and the modem's was missing."))
 

@@ -297,6 +297,23 @@ struct SceneMembershipPlanTests {
 
   }
 
+  @Test func saysWhatIsTrueWhenAChangedLevelComesWithAMissingModemRecord() async throws {
+
+    let plan = await plan(
+      change([add(lamp, onLevel: 0x80)]),
+      lampRecords: slots([record(.responder, group: 3, modem, data: [0xFF, 0x1F, 0x01])])
+    )
+    let warning = try #require(plan.warnings.first)
+
+    #expect(plan.steps.map(\.kind) == [.updateDeviceRecord, .addModemRecord])
+    #expect(plan.refusals.map(\.code) == [.notYetSupported])
+    #expect(plan.warnings.map(\.code) == [.halfLinkCompleted])
+    // The device's record is not completed by the plan: it holds other bytes, and the rewrite is refused.
+    #expect(warning.detail?.contains("on-level or ramp rate") == true)
+    #expect(warning.detail?.contains("modem's record is added") == true)
+
+  }
+
   @Test func addsOnlyTheMissingHalfOfALinkAndSaysSo() async throws {
 
     let plan = await plan(
