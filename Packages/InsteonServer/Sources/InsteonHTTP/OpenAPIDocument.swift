@@ -1,4 +1,5 @@
 import Foundation
+import InsteonCore
 import InsteonService
 
 /// The OpenAPI 3.1 description of the server, built from ``APIOperation``, ``APIErrorCode`` and the
@@ -109,6 +110,58 @@ enum OpenAPIDocument {
       "SceneCommand": Schema.object([
         "action": Schema.string(enum: HTTPSceneAction.allCases.map(\.rawValue))
       ], required: ["action"]),
+      "SceneMembershipRequest": Schema.object([
+        "add": Schema.array(of: Schema.object([
+          "device": address,
+          "onLevel": Schema.integer(minimum: 0, maximum: 255, description: "What the member's record holds for the on-level. Left out, the record holds full on (255). A device whose record has no on-level byte refuses it."),
+          "rampRate": Schema.integer(minimum: 0, maximum: 255, description: "What the member's record holds for the ramp rate. Left out, the record holds 0.5 s (28). A device whose record has no ramp rate byte refuses it.")
+        ], required: ["device"])),
+        "remove": Schema.array(of: address)
+      ], required: [], description: "At least one device in all, at most 32 in each list, and none named twice."),
+      "SceneMembershipPlan": Schema.object([
+        "version": version,
+        "scene": Schema.integer(minimum: 1, maximum: 254),
+        "planId": Schema.string(pattern: "^sha256:[0-9a-f]{64}$", description: "A hash of the scene and the steps. The service keeps a plan it could apply in memory by this id until `expiresAt`."),
+        "expiresAt": ["type": "string", "format": "date-time", "description": "Five minutes after the plan was made."],
+        "isApplicable": ["type": "boolean", "description": "Whether the plan has steps and no refusal."],
+        "isEmpty": ["type": "boolean", "description": "Whether the plan writes nothing."],
+        "steps": Schema.array(of: Schema.ref("SceneMembershipStep")),
+        "devices": Schema.array(of: Schema.ref("SceneMembershipDevice")),
+        "warnings": Schema.array(of: Schema.ref("SceneMembershipFinding")),
+        "refusals": Schema.array(of: Schema.ref("SceneMembershipFinding")),
+        "consent": Schema.nullable(Schema.ref("SceneMembershipConsent"))
+      ], required: ["version", "scene", "planId", "expiresAt", "isApplicable", "isEmpty", "steps", "devices", "warnings", "refusals", "consent"], description: "What adding and removing a scene's members would write, made from the cached databases and the catalog. Nothing was written or sent."),
+      "SceneMembershipStep": Schema.object([
+        "order": Schema.integer(minimum: 1),
+        "kind": Schema.string(enum: SceneMembershipStep.Kind.allCases.map(\.rawValue), description: "What the step writes. A device's record is added to a free slot, or to the end's with the end marked one slot below first; the modem's record is added or deleted; a record in use is changed in place only by `updateDeviceRecord`."),
+        "target": Schema.string(description: "`modem`, or the address of the device whose database the step writes."),
+        "effect": Schema.string(enum: ["write", "delete"]),
+        "record": Schema.ref("SceneMembershipRecord"),
+        "updateInPlace": ["type": "boolean", "description": "Whether the step rewrites a record in use. The plan refuses such a step as `notYetSupported`."],
+        "risks": Schema.array(of: Schema.string(enum: SceneMembershipStep.Risk.allCases.map(\.rawValue), description: "What can go wrong with the step beyond a write that does not read back."))
+      ], required: ["order", "kind", "target", "effect", "record", "updateInPlace", "risks"]),
+      "SceneMembershipRecord": Schema.object([
+        "role": Schema.string(enum: ["controller", "responder"]),
+        "group": Schema.integer(minimum: 0, maximum: 255),
+        "address": address,
+        "data": Schema.array(of: Schema.integer(minimum: 0, maximum: 255)),
+        "memoryAddress": Schema.nullable(Schema.string(pattern: "^0x[0-9A-F]{4}$", description: "Where the record is in a device's database. Null for the modem's."))
+      ], required: ["role", "group", "address", "data", "memoryAddress"], description: "The record as the step leaves it: for a responder record of a member, `data` is the on-level, the ramp rate and the member's own group as the catalog gives them. A deleted record is not in use."),
+      "SceneMembershipDevice": Schema.object([
+        "address": address,
+        "product": Schema.nullable(Schema.string()),
+        "engine": Schema.nullable(Schema.string(enum: ["i1", "i2", "i2cs"])),
+        "acceptsRemoteWrite": ["type": "boolean", "description": "Whether the device's engine takes a remote write of its ALL-Link database, it does not reject the modem, and its cached database was read whole."]
+      ], required: ["address", "product", "engine", "acceptsRemoteWrite"]),
+      "SceneMembershipFinding": Schema.object([
+        "code": Schema.string(enum: SceneMembershipFinding.Code.allCases.map(\.rawValue)),
+        "device": Schema.nullable(address),
+        "detail": Schema.nullable(Schema.string())
+      ], required: ["code", "device", "detail"], description: "A warning, or a reason the plan can't be applied. A null `device` is the modem."),
+      "SceneMembershipConsent": Schema.object([
+        "writeLinkRecords": ["type": "boolean", "const": true],
+        "readFingerprint": Schema.string(pattern: "^sha256:[0-9a-f]{64}$", description: "Names the steps and the records they were made from.")
+      ], required: ["writeLinkRecords", "readFingerprint"], description: "What applying the plan will need: the consent that applying a database link plan takes."),
       "SceneReceipt": Schema.object([
         "version": version,
         "scene": Schema.integer(minimum: 1, maximum: 254),

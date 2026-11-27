@@ -160,6 +160,7 @@ scope, command all devices known by this service. Per-device permissions aren't 
 | GET | `/api/v1/backup` | A backup of the cached network, the format `insteon backup` writes (`admin`; see Backups) |
 | GET | `/api/v1/scenes` | The scenes of the network from the cached ALL-Link databases (`read`; see Scenes) |
 | POST | `/api/v1/scenes/{number}/commands` | Turn a scene the modem controls on or off (`control`; see Scenes) |
+| POST | `/api/v1/scenes/{number}/membership/plan` | Plan adding and removing a scene's members from the cache; writes and sends nothing (`control`; see Scenes) |
 | POST | `/api/v1/scenes/refresh` | Read the ALL-Link databases from the hardware, then list the scenes (`control`; see Scenes) |
 | GET | `/devices/1A.2B.3C` | Authenticated card fragment from cached state; no hardware polling |
 
@@ -729,6 +730,24 @@ A number that is not a group from 1 through 254 is `invalidScene` (400). A numbe
 curl -s -X POST -H "Authorization: Bearer $(cat control.token)" -H "X-Insteon-Request: 1" -H "Content-Type: application/json" -d '{"action":"off"}' $BASE/api/v1/scenes/3/commands
 ```
 
+### Planning a scene's members
+
+`POST /api/v1/scenes/{number}/membership/plan` (`control`, with `X-Insteon-Request: 1` and `Content-Type: application/json`) answers what adding and removing members of a scene would write. It writes nothing and sends nothing: the service plans from the ALL-Link databases it has cached and the Insteon device catalog, so it never takes the admission gate and works while the modem is away. Applying a plan is not part of this route.
+
+The body is `{"add": [{"device": "1A.2B.3C", "onLevel": 255, "rampRate": 31}], "remove": ["4D.5E.6F"]}`. Either list can be left out, at least one device is needed, and each list takes at most 32. A device is named once in all. `onLevel` and `rampRate` are bytes from 0 through 255 and can be left out: the record then holds full on (255) and 0.5 s (28). Unknown fields are refused as `invalidMembership` (400), and an address that is not an Insteon address is `invalidAddress`. The scene is a group from 1 through 254 (`invalidScene`, 400, for any other number). A number no controller uses is a scene to create, so its first member can be planned; a group a device controls is `unknownScene` (404).
+
+The answer is a plan:
+
+- `planId` is a SHA-256 over the scene and the steps. `expiresAt` is five minutes after the plan was made, on the service's clock. The service keeps a plan that can be applied in memory by its `planId` until then, and a restart forgets it.
+- `steps` lists each write in the order it would be made: `order`, `kind`, `target` (`modem` or the device's address), `effect` (`write` or `delete`), and the `record` with its `role`, `group`, `address`, the three `data` bytes and the `memoryAddress` in a device's database (null for the modem's). For a member's responder record, `data` is the on-level, the ramp rate and the member's own group, as the catalog gives them for the device's group. An addition is the member's record, then the modem's, and a removal is the modem's record, then the member's, so an i2CS device keeps its record of the modem until its last write. A device with no free slot gets `markEndOfDatabase` first, which moves the end of its database down one slot.
+- `devices` says for each device named whether it takes a remote write (`acceptsRemoteWrite`), with its `engine` and `product`. An i1 device doesn't, an i2 device does only when the catalog confirms it runs i2, and an i2CS device rejects a modem it isn't linked to, which the plan reads from its cached database holding no record of the modem. A step's `risks` name what else can go wrong: `movesEndOfDatabase`, and `rejectsModemOnceUnlinked` for the write that removes an i2CS device's last record of the modem, which can't be read back.
+- `warnings` and `refusals` are lists of `{code, device, detail}`. A device that is a member with the same record gets no step and the warning `alreadyMember`; one that isn't a member of a scene it is removed from gets `notAMember`; one with only half of its link in place gets the missing half and `halfLinkCompleted`. A refusal means the plan can't be applied as it is: `databaseNotCached` (the service holds no copy, so refresh the scenes; a null `device` is the modem's), `notIdentified`, `notInCatalog`, `unsupportedEngine`, `rejectsModem`, `damagedRecords`, `noEndOfDatabase`, `databaseFull`, `groupCannotRespond`, `undescribedLinkData`, `unknownLinkDataByte`, `valueNotTaken`, `valueOutOfRange`, and `notYetSupported`. A member whose record would change in place (another on-level or ramp rate) is listed as an `updateDeviceRecord` step with `updateInPlace: true` and refused as `notYetSupported`, because writing over a record in use has not been tried on hardware; until it is, configuring a member is a removal and an addition.
+- `isApplicable` is true when the plan has steps and no refusal, and `consent` is then `{"writeLinkRecords": true, "readFingerprint": "sha256:..."}`, the consent that applying a database link plan takes. The fingerprint names the steps and the records they were made from. A plan that can't be applied has a null `consent`.
+
+```sh
+curl -s -X POST -H "Authorization: Bearer $(cat control.token)" -H "X-Insteon-Request: 1" -H "Content-Type: application/json" -d '{"add":[{"device":"1A.2B.3C","onLevel":255,"rampRate":31}],"remove":["4D.5E.6F"]}' $BASE/api/v1/scenes/4/membership/plan
+```
+
 ### Advanced settings
 
 These tune how long a scene run waits. The standard values are unverified, so a bench run on a Hub 2 can show whether they fit; each setting is a flag, with an environment variable of the same name in capitals with the `INSTEON_` prefix, and the flag wins over the variable, which wins over the standard value. The variable can be in the process's environment or in the environment file (the process's winning), like the Hub's settings; the log level's variable is the exception, since logging starts before the file is read. A value out of range stops the server at start with its own code and exit status 78 (`scene_echo_wait_invalid`, `scene_cleanup_quiet_invalid`, `scene_cleanup_cap_invalid`); the message names the flag and the variable, never the value.
@@ -861,6 +880,7 @@ same status for the same failure.
 | `invalidIdempotencyKey` | 400 | false | The `Idempotency-Key` header is malformed. |
 | `unknownDevice` | 404 | false | The service doesn't know the device. |
 | `invalidScene` | 400 | false | The scene number is not a group from 1 through 254. |
+| `invalidMembership` | 400 | false | A membership change needs `add` and `remove` lists of at most 32 distinct devices, at least one in all, with an `onLevel` and `rampRate` of 0 through 255, and no other field. |
 | `unknownScene` | 404 | false | The service holds no scene of that number that the modem controls. |
 | `sceneEmpty` | 422 | false | The scene has no members, so nothing was sent. |
 | `routeNotFound` | 404 | false | No such route. |
