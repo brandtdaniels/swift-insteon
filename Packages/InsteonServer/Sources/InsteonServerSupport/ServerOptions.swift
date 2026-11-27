@@ -23,11 +23,11 @@ public struct ServerOptions: Sendable {
   public let networkName: String
   /// How often a Hub Pro is asked for its devices' levels, in seconds: from 2, and 5 by default.
   public let pollIntervalSeconds: Int
-  /// The home's latitude in degrees, positive north, or nil. Given with ``longitude``.
+  /// The network's latitude in degrees, positive north, or nil. Given with ``longitude``.
   public let latitude: Double?
-  /// The home's longitude in degrees, positive east, or nil. Given with ``latitude``.
+  /// The network's longitude in degrees, positive east, or nil. Given with ``latitude``.
   public let longitude: Double?
-  /// The home's IANA time zone, such as `America/Los_Angeles`, or nil for the one the server remembers
+  /// The network's IANA time zone, such as `America/Los_Angeles`, or nil for the one the server remembers
   /// or the computer's. The host's time zone database decides whether the server can use it.
   public let timeZone: String?
   /// The tuning the service runs with: each value from its flag, else its `INSTEON_` environment

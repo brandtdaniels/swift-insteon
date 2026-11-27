@@ -493,7 +493,7 @@ time zone database doesn't have is not guessed at: clock times are refused with 
 
 ### Daylight saving time
 
-A clock time is wall-clock time in the home's time zone, converted each day with the host's time zone database, so a
+A clock time is wall-clock time in the network's time zone, converted each day with the host's time zone database, so a
 schedule follows daylight saving changes with no edit:
 
 - A time that doesn't exist on the night the clocks spring forward (02:30 when 02:00 becomes 03:00) runs once, when the
@@ -748,7 +748,7 @@ The service writes its own network snapshot at
 `--state /absolute/path/gateway.json` for another file. It is separate from the CLI's cache
 and contains no credentials. Use a dedicated state file for each configured modem or Hub.
 The file is saved after successful operations and during startup and graceful shutdown;
-passive events aren't stored as history. The schedules, the timers and the home's time zone and location are kept in
+passive events aren't stored as history. The schedules, the timers and the network's time zone and location are kept in
 `gateway-schedules.json` beside it (mode 600, written atomically); a file the server can't read stops it before it
 listens and is left as it is.
 

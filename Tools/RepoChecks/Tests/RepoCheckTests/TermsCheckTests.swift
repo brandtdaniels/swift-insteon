@@ -26,6 +26,13 @@ struct TermsRulesTests {
     #expect(ruledOut("the clean-up") == ["clean-up"])
     #expect(ruledOut("press the Set button") == ["Set button"])
     #expect(ruledOut("as the guide says") == ["the guide"])
+    #expect(ruledOut("a home backup") == ["home backup"])
+    #expect(ruledOut("the home name") == ["home name"])
+    #expect(ruledOut("the home's scenes") == ["home's scenes"])
+    #expect(ruledOut("the home's modem") == ["home's modem"])
+    #expect(ruledOut("in the home's time zone") == ["home's time"])
+    #expect(ruledOut("the home's place") == ["home's place"])
+    #expect(ruledOut("a home's rules") == ["home's rules"])
   }
 
   // test_accepts_the_forms_to_use
@@ -34,7 +41,8 @@ struct TermsRulesTests {
     for text in [
       "Insteon devices, i2CS, an acknowledgment, the powerline, its on-level",
       "the Hub 2242, the PowerLinc Modem 2413U, an ALL-Link group, the ALL-Link database",
-      "ALL-Link cleanup, the SET button, the Insteon Developer's Guide (2009)"
+      "ALL-Link cleanup, the SET button, the Insteon Developer's Guide (2009)",
+      "the network backup, the network name, the network's scenes, the network's time zone, the home's two power phases, the home's wiring, a home directory"
     ] {
       #expect(ruledOut(text) == [], "\(text)")
     }

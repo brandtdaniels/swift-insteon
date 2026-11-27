@@ -3,7 +3,7 @@ import InsteonHTTP
 import InsteonScheduling
 import InsteonService
 
-/// Keeps the schedules, the timers and the home's place in a JSON file readable only by the current user.
+/// Keeps the schedules, the timers and the network's place in a JSON file readable only by the current user.
 ///
 /// The file sits beside the state file, because the state file's format is the device network's. It holds
 /// each schedule and timer, the time every timer has left, the last moment the service looked for runs, and

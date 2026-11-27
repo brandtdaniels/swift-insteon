@@ -436,7 +436,7 @@ public actor InsteonService: InsteonServiceAPI {
     try await schedulerInstance().schedules()
   }
 
-  /// Validates a schedule against the cached devices and the home's place, stores it, and works out its next
+  /// Validates a schedule against the cached devices and the network's place, stores it, and works out its next
   /// run, so it takes effect without a restart. A schedule with the identifier of an existing one replaces it
   /// and keeps nothing of its last run.
   ///
