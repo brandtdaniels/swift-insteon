@@ -104,7 +104,7 @@ public struct ModemReplyParser: ReplyParser, Hashable, Sendable {
 }
 
 /// The frames of the Insteon modem (IM) serial protocol.
-private enum ModemFraming: Framing {
+enum ModemFraming: Framing {
 
   static let negativeAcknowledgment: ModemReply = .negativeAcknowledgment
 
@@ -269,7 +269,23 @@ private enum ModemFraming: Framing {
 
   static func decode(_ frame: [UInt8]) -> ModemReply {
 
+    // The reader decodes only frames of the length `frameLength` gave, but a length that doesn't
+    // fit its number is reported rather than trapping on a missing byte.
+    guard frame.count >= 2 else {
+
+      return .unrecognized(number: frame.last ?? 0, body: [])
+
+    }
+
     let body = Array(frame.dropFirst(2))
+
+    let isOfItsLength: Bool = frame[1] == 0x56 ? frame.count == 6 || frame.count == 7 : reportLengths[frame[1]].map { $0 == frame.count } ?? true
+
+    guard isOfItsLength else {
+
+      return .unrecognized(number: frame[1], body: body)
+
+    }
 
     switch frame[1] {
     case 0x50, 0x51:
