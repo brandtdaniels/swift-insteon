@@ -360,16 +360,30 @@ private struct Planning {
   }
 
   /// Whether a record of the device's is for the device's group `group`: its own-group data byte
-  /// says so, or the catalog gives the record none, so the device has the one group.
+  /// says so, or the catalog gives the record none, so the device has the one group. A record too short
+  /// to hold the byte is for no group; ``isShort(_:at:)`` finds it first.
   private static func isRecord(_ record: BackupRecord, ofGroup group: UInt8, at position: Int?) -> Bool {
 
-    guard let position, record.data.count >= position else {
+    guard let position else {
 
       return true
 
     }
 
-    return record.data[position - 1] == group
+    return record.data.count >= position && record.data[position - 1] == group
+
+  }
+
+  /// Whether a record is too short to hold the data byte at `position`.
+  private static func isShort(_ record: BackupRecord, at position: Int?) -> Bool {
+
+    guard let position else {
+
+      return false
+
+    }
+
+    return record.data.count < position
 
   }
 
@@ -408,6 +422,14 @@ private struct Planning {
 
     let modemHalf: BackupRecord? = modemLinks(of: address).first
     let sceneRecords: [BackupRecord] = deviceLinks(in: eligible)
+    if sceneRecords.contains(where: { (record: BackupRecord) -> Bool in Self.isShort(record, at: groupPosition) }) {
+
+      refuse(.unexpectedDatabaseLayout, "A cached record of the device in the scene is too short to say which group it is for. Refresh the scenes to read it again.")
+
+      return
+
+    }
+
     let deviceHalf: BackupRecord? = sceneRecords.first { (record: BackupRecord) -> Bool in
       Self.isRecord(record, ofGroup: deviceGroup, at: groupPosition)
     }
@@ -718,6 +740,14 @@ private struct Planning {
         guard let position = description.groupType(forGroup: named.number)?.linkData.responder.first(where: \.isPerGroup)?.position else {
 
           refuse(.undescribedLinkData, "The catalog doesn't say which data byte of the device's responder record holds its own group.")
+
+          return
+
+        }
+
+        if sceneRecords.contains(where: { (record: BackupRecord) -> Bool in Self.isShort(record, at: position) }) {
+
+          refuse(.unexpectedDatabaseLayout, "A cached record of the device in the scene is too short to say which group it is for. Refresh the scenes to read it again.")
 
           return
 

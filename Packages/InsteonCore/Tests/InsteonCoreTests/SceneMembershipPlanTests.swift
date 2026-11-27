@@ -620,6 +620,20 @@ struct SceneMembershipPlanTests {
 
   }
 
+  @Test func refusesARecordOfTheSceneTooShortToSayWhichGroupItIsForOnAddAndRemove() async throws {
+
+    let held: [BackupRecord] = slots([record(.responder, group: 3, modem, data: [0xFF]), record(.responder, group: 9, modem)])
+    let modemRecords: [BackupRecord] = [record(.controller, group: 3, lamp)]
+    let add = await keypadPlan(change([add(lamp, group: 2)]), modemRecords: modemRecords, keypadRecords: held)
+    let remove = await keypadPlan(change(removeGroups: [.init(device: lamp, group: 2)]), modemRecords: modemRecords, keypadRecords: held)
+
+    #expect(add.refusals.map(\.code) == [.unexpectedDatabaseLayout])
+    #expect(add.steps.isEmpty)
+    #expect(remove.refusals.map(\.code) == [.unexpectedDatabaseLayout])
+    #expect(remove.steps.isEmpty)
+
+  }
+
   @Test func refusesToRemoveARecordWhoseSlotTheCacheDoesNotGive() async throws {
 
     let plan = await plan(
