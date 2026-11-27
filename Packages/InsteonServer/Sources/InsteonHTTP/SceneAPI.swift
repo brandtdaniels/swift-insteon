@@ -440,7 +440,13 @@ struct SceneMembershipPlanDTO: Encodable {
     init(_ device: SceneMembershipDevice) {
       address = device.address.description
       product = device.product
-      engine = device.engine.map { "\($0)" }
+      engine = device.engine.map { (engine: InsteonEngine) -> String in
+        switch engine {
+        case .i1: "i1"
+        case .i2: "i2"
+        case .i2cs: "i2cs"
+        }
+      }
       acceptsRemoteWrite = device.acceptsRemoteWrite
     }
 
