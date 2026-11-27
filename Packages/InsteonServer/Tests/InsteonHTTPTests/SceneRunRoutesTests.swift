@@ -148,7 +148,7 @@ struct SceneRunRoutesTests {
     #expect(await setup.service.sceneCommands.isEmpty)
   }
 
-  @Test(arguments: ["0", "255", "256", "-1", "abc", "1.5", "03x"])
+  @Test(arguments: ["0", "255", "256", "-1", "abc", "1.5", "03x", "005", "+5", "00", "0254", "03", "1234", "٣"])
   func refusesANumberThatIsNotAGroupFrom1Through254(_ number: String) async throws {
     let setup = try Setup(password: password, service: service)
     let response = try await run(setup, number: number, authorization: basic)

@@ -27,7 +27,7 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
   func run(_ request: Request, number: String?) async throws -> Response {
     guard HTTPBody.mediaType(request) == "application/json" else { throw HTTPInputError.unsupportedMedia }
     try HTTPBody.requireMarker(request)
-    guard let number, let group = UInt8(number), (1...254).contains(group) else { throw SceneInputError.invalidScene }
+    guard let number, Self.isCanonicalDecimal(number), let group = UInt8(number), (1...254).contains(group) else { throw SceneInputError.invalidScene }
     let command = SceneCommand(number: group, action: try SceneCommandBody(try await HTTPBody.read(request)).action)
     let key = try IdempotencyKey(header: request.headers[values: .idempotencyKey])
     guard let key else { return try Self.response(await perform(command)) }
@@ -35,6 +35,11 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
     var response = try Self.response(outcome, replayed: replayed)
     if replayed { response.headers[.idempotentReplay] = "true" }
     return response
+  }
+
+  /// One to three ASCII digits with no sign and no leading zero, so each scene has one path.
+  private static func isCanonicalDecimal(_ text: String) -> Bool {
+    (1...3).contains(text.utf8.count) && text.utf8.allSatisfy { (0x30...0x39).contains($0) } && text.utf8.first != 0x30
   }
 
   private func perform(_ command: SceneCommand) async -> IdempotentOutcome {
