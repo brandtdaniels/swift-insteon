@@ -24,6 +24,7 @@ struct SceneMembershipPlanTests {
   private static let olderIdentity = ReportedIdentity(category: 0x01, subcategory: 0x04, firmwareVersion: 0x45)
   private static let unconfirmedIdentity = ReportedIdentity(category: 0x01, subcategory: 0x05, firmwareVersion: 0x45)
   private static let limitedIdentity = ReportedIdentity(category: 0x01, subcategory: 0x06, firmwareVersion: 0x45)
+  private static let twoGroupIdentity = ReportedIdentity(category: 0x01, subcategory: 0x07, firmwareVersion: 0x45)
   private static let strangerIdentity = ReportedIdentity(category: 0x09, subcategory: 0x09, firmwareVersion: 0x45)
 
   private static let commands = CommandSet(
@@ -84,6 +85,18 @@ struct SceneMembershipPlanTests {
       profile("9604", plainIdentity, type: "plainLoad", engines: [DeviceEngine(engine: .i2cs, category: plainIdentity.category, subcategory: plainIdentity.subcategory)]),
       profile("9605", olderIdentity, type: "load", engines: [DeviceEngine(engine: .i2, category: olderIdentity.category, subcategory: olderIdentity.subcategory)]),
       profile("9606", unconfirmedIdentity, type: "load"),
+      DeviceProfile(
+        model: "9608",
+        name: "Example 9608",
+        identities: [DeviceIdentity(category: twoGroupIdentity.category, subcategory: twoGroupIdentity.subcategory)],
+        engines: [DeviceEngine(engine: .i2cs, category: twoGroupIdentity.category, subcategory: twoGroupIdentity.subcategory)],
+        commandSets: [CommandSetEntry(commandSet: "exampleScene", category: twoGroupIdentity.category, subcategory: twoGroupIdentity.subcategory)],
+        groups: [
+          DeviceProfile.Group(number: 1, name: "Button 1", role: .responder, type: "load"),
+          DeviceProfile.Group(number: 2, name: "Button 2", role: .responder, type: "load"),
+          DeviceProfile.Group(number: 3, name: "Button 3", role: .controller, type: "load")
+        ]
+      ),
       profile("9607", limitedIdentity, type: "limitedLoad", engines: [DeviceEngine(engine: .i2cs, category: limitedIdentity.category, subcategory: limitedIdentity.subcategory)])
     ],
     commandSets: [commands]
@@ -177,9 +190,9 @@ struct SceneMembershipPlanTests {
 
   }
 
-  private func add(_ address: InsteonAddress, onLevel: UInt8? = 0xFF, rampRate: UInt8? = 0x1F) -> SceneMembershipChange.Addition {
+  private func add(_ address: InsteonAddress, onLevel: UInt8? = 0xFF, rampRate: UInt8? = 0x1F, group: UInt8? = nil) -> SceneMembershipChange.Addition {
 
-    SceneMembershipChange.Addition(device: address, onLevel: onLevel, rampRate: rampRate)
+    SceneMembershipChange.Addition(device: address, onLevel: onLevel, rampRate: rampRate, group: group)
 
   }
 
@@ -510,6 +523,32 @@ struct SceneMembershipPlanTests {
 
     #expect(plan.steps.map(\.kind) == [.addDeviceRecord, .addModemRecord])
     #expect(plan.steps.first?.record.data == [0xFF, 0x1F, 0x01])
+
+  }
+
+  @Test func refusesAGroupTheCatalogDoesNotGiveTheDevice() async throws {
+
+    let plan = await plan(change([add(lamp, group: 7)]))
+
+    #expect(plan.refusals.map(\.code) == [.unknownGroup])
+    #expect(plan.refusals.first?.device == lamp)
+    #expect(plan.steps.isEmpty)
+
+  }
+
+  @Test func plansTheGroupAskedForWhenTheCatalogGivesItAndItsOwnGroupIsTheDefault() async throws {
+
+    let backup = backup(modemRecords: [], [device(lamp, Self.twoGroupIdentity, records: slots([record(.responder, group: 9, modem)]))])
+    let identities: [InsteonAddress: ReportedIdentity] = [lamp: Self.twoGroupIdentity]
+    let second = SceneMembershipPlanner.plan(change([add(lamp, group: 2)]), from: backup, devices: await registered(identities), modemLinkData: Self.modemData)
+    let main = SceneMembershipPlanner.plan(change([add(lamp)]), from: backup, devices: await registered(identities), modemLinkData: Self.modemData)
+    let controlling = SceneMembershipPlanner.plan(change([add(lamp, group: 3)]), from: backup, devices: await registered(identities), modemLinkData: Self.modemData)
+
+    // The third data byte holds the member's own group.
+    #expect(second.steps.first?.record.data == [0xFF, 0x1F, 0x02])
+    #expect(main.steps.first?.record.data == [0xFF, 0x1F, 0x01])
+    // A group the catalog gives only a controller role can't respond.
+    #expect(controlling.refusals.map(\.code) == [.groupCannotRespond])
 
   }
 

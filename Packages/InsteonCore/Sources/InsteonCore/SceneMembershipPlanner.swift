@@ -370,7 +370,25 @@ private struct Planning {
 
     let description: DeviceDescription = registered.deviceDescription
 
-    guard let main = description.mainGroup, let type = description.groupType(forGroup: main.number), !type.linkData.responder.isEmpty else {
+    let chosen: DeviceProfile.Group?
+
+    if let asked = addition.group {
+
+      chosen = description.profile?.groups.first { (group: DeviceProfile.Group) -> Bool in group.number.rawValue == asked }
+
+      guard chosen != nil else {
+
+        return refuse(.unknownGroup, "The catalog gives the device no group \(asked).")
+
+      }
+
+    } else {
+
+      chosen = description.mainGroup
+
+    }
+
+    guard let main = chosen, let type = description.groupType(forGroup: main.number), !type.linkData.responder.isEmpty else {
 
       return refuse(.undescribedLinkData, "The catalog doesn't say what the data bytes of the device's responder record hold.")
 

@@ -30,17 +30,24 @@ public struct SceneMembershipChange: Hashable, Sendable {
     /// What the device's responder record holds for the ramp rate, or `nil` for `0x1C` (0.5 s).
     public var rampRate: UInt8?
 
+    /// The device's own group that answers the scene, such as one button of a keypad, or `nil` for
+    /// the device's main group. The catalog must give the device the group.
+    public var group: UInt8?
+
     /// Creates an addition.
     ///
     /// - Parameters:
     ///   - device: The device.
     ///   - onLevel: The on-level, or `nil` for full on.
     ///   - rampRate: The ramp rate, or `nil` for 0.5 s.
-    public init(device: InsteonAddress, onLevel: UInt8?, rampRate: UInt8?) {
+    ///   - group: The device's own group that answers the scene, or `nil` for its main group.
+    ///     Defaults to `nil`.
+    public init(device: InsteonAddress, onLevel: UInt8?, rampRate: UInt8?, group: UInt8? = nil) {
 
       self.device = device
       self.onLevel = onLevel
       self.rampRate = rampRate
+      self.group = group
 
     }
 
@@ -198,6 +205,9 @@ public struct SceneMembershipFinding: Hashable, Sendable {
 
     /// The device's database has no room for the record.
     case databaseFull
+
+    /// The catalog doesn't give the device the group asked for.
+    case unknownGroup
 
     /// The device's group the scene would use doesn't respond to a controller's commands.
     case groupCannotRespond
