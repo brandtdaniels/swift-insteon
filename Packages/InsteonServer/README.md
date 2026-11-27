@@ -1013,6 +1013,21 @@ INSTEON_LOG_LEVEL=debug insteon-server --hub 192.168.1.20
 
 The debug lines are the scene run's, `scene run finished` and `scene run failed`. They carry the scene number, the action, the seconds the run took, whether the cleanups completed, how many members acknowledged them and, for a failure, its code. Debug lines carry no device addresses, no credentials and nothing a client sent. This holds unless a later change says otherwise in its pull request and here.
 
+### Tracing
+
+At `--log-level trace`, and only then, the server logs the raw traffic to its modem, one line each, to standard error. For a Hub, a line for every request it sends (the path and, for a command, its bytes) and for every read of the Hub's buffer: the bytes new since the previous read, the buffer's end position, whether the cursor treated the buffer as `advanced`, `wrapped`, `cleared` (all zeros), `refilled` (cleared, then written again) or `unchanged`, and `gap=` the time since the previous read. For a serial modem, every frame written and every chunk read. Each line starts with the time since the previous line. Above the trace level nothing is built, so a server that isn't tracing does no work for it.
+
+```
++0.000s hub request /3 02 62 @A1 0F 11 FF
++0.512s hub read end=11 cursor=advanced gap=0.512s 02 62 @A1 0F 11 FF 06
+```
+
+Insteon addresses are masked: each 3-byte address in a frame the trace recognizes shows as a short tag such as `@A1`. The same address has the same tag for one run of the server, a different address another tag, and a new run uses a new salt, so a tag means nothing outside its trace. Masking is best effort: bytes outside a recognized frame show as they are. The trace never holds the Hub's user name or password or the `Authorization` header.
+
+`--trace-addresses`, or `INSTEON_TRACE_ADDRESSES=1` in the process's environment, turns masking off; the option wins. An unmasked trace names your devices, so treat it as sensitive and don't post it.
+
+To send a trace, run with `--log-level trace`, do one thing (such as run a scene), copy the lines around it from standard error, and paste them in the report as they are, masked.
+
 The server is a prototype for local and private VPN testing. Tests cover a real local HTTP
 listener and an in-memory modem. macOS and physical hardware validation are still required
 before relying on it unattended.

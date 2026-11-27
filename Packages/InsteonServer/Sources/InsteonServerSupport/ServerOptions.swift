@@ -33,15 +33,26 @@ public struct ServerOptions: Sendable {
   /// How much the server logs: `--log-level`, else `INSTEON_LOG_LEVEL` in the process's environment,
   /// else `info`. The environment file is read later and doesn't set it.
   public let logLevel: Logger.Level
+  /// Whether a wire trace shows Insteon addresses as they are, from `--trace-addresses`, else
+  /// `INSTEON_TRACE_ADDRESSES=1` in the process's environment, else false: addresses are masked.
+  /// The option wins over the variable. A trace is written only at the `trace` log level.
+  public let traceAddresses: Bool
 
   /// Parses pairs of options, rejecting duplicates, public listeners and wildcard binds.
   /// Hub resolution and file permissions are checked by the CLI's existing helpers.
   public init(arguments: [String], environment: [String: String]) throws {
     var options: [String: String] = [:]
     let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--network-name", "--poll-interval", "--latitude", "--longitude", "--time-zone", "--log-level"]
+    let flags: Set<String> = ["--trace-addresses"]
+    var givenFlags: Set<String> = []
     var index = 0
     while index < arguments.count {
       let name = arguments[index]
+      if flags.contains(name) {
+        guard givenFlags.insert(name).inserted else { throw ServerOptionError.invalidArguments }
+        index += 1
+        continue
+      }
       guard names.contains(name), options[name] == nil, index + 1 < arguments.count else { throw ServerOptionError.invalidArguments }
       let value = arguments[index + 1]
       guard !value.isEmpty, !value.hasPrefix("--") else { throw ServerOptionError.invalidArguments }
@@ -87,6 +98,11 @@ public struct ServerOptions: Sendable {
     let fromEnvironment = try environment["INSTEON_LOG_LEVEL"].map { try Self.level($0) }
     let fromOption = try options["--log-level"].map { try Self.level($0) }
     self.logLevel = fromOption ?? fromEnvironment ?? .info
+    switch environment["INSTEON_TRACE_ADDRESSES"] {
+    case nil, "0": self.traceAddresses = givenFlags.contains("--trace-addresses")
+    case "1": self.traceAddresses = true
+    default: throw ServerOptionError.invalidTraceAddresses
+    }
   }
 
   private static func level(_ text: String) throws -> Logger.Level {
@@ -132,6 +148,8 @@ public enum ServerOptionError: Error, CustomStringConvertible {
   case invalidTimeZone
   /// `--log-level` or `INSTEON_LOG_LEVEL` isn't trace, debug, info, notice, warning, error or critical.
   case invalidLogLevel
+  /// `INSTEON_TRACE_ADDRESSES` isn't `0` or `1`.
+  case invalidTraceAddresses
   /// A `pair` command needs a client name of 1 through 64 characters and a scope of read, control or admin.
   case invalidClient
 

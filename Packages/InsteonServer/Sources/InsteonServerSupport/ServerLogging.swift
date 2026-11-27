@@ -1,3 +1,4 @@
+import InsteonModem
 import Logging
 
 /// How the server's log handler is made.
@@ -23,5 +24,26 @@ public enum ServerLogging {
   public static func level(arguments: [String], environment: [String: String]) -> Logger.Level {
     let option = arguments.firstIndex(of: "--log-level").flatMap { $0 + 1 < arguments.count ? arguments[$0 + 1] : nil }
     return (option ?? environment["INSTEON_LOG_LEVEL"]).flatMap { Logger.Level(rawValue: $0.lowercased()) } ?? .info
+  }
+
+  /// `tracer` when `level` is `trace`, else nil, so a server above the trace level hands no
+  /// tracer to the Hub or the serial port and they do no work for one.
+  ///
+  /// - Parameters:
+  ///   - tracer: The tracer to use at the trace level.
+  ///   - level: The server's log level.
+  public static func gate(_ tracer: some WireTrace, level: Logger.Level) -> (any WireTrace)? {
+    level <= .trace ? tracer : nil
+  }
+
+  /// The tracer that logs the wire's traffic at the trace level, or nil at any other level.
+  ///
+  /// - Parameters:
+  ///   - level: The server's log level, from ``ServerOptions/logLevel``.
+  ///   - logger: Where each line is logged, at trace level.
+  ///   - maskAddresses: Whether Insteon addresses are shown as short tags, which is the default
+  ///     unless ``ServerOptions/traceAddresses``.
+  public static func wireTrace(level: Logger.Level, logger: Logger, maskAddresses: Bool) -> (any WireTrace)? {
+    level <= .trace ? WireTraceLogger(logger: logger, maskAddresses: maskAddresses) : nil
   }
 }

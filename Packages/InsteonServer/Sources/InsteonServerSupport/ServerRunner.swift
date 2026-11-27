@@ -39,6 +39,10 @@ public enum ServerRunner {
                    Without the option, INSTEON_LOG_LEVEL in the process's environment is
                    used; the option wins. The environment file does not set it. A bad
                    value of either is refused. Debug lines carry no device addresses.
+  --trace-addresses  At --log-level trace, show Insteon addresses in the wire trace as they
+                   are instead of as short tags such as @A1. Or set INSTEON_TRACE_ADDRESSES=1;
+                   the option wins. An address is sensitive: don't paste an unmasked trace.
+                   The trace never holds the Hub's user name or password.
   --help           Show this help without connecting.
 
   Settings are read from the same protected per-user environment file as insteon.
@@ -75,20 +79,25 @@ public enum ServerRunner {
   ) async throws -> Void
 
   /// Opens the Hub or serial port the endpoint names.
-  public static let openModem: ModemOpener = { endpoint, catalog, snapshot, onPollSucceeded, body in
+  public static let openModem: ModemOpener = opener(tracer: nil)
+
+  /// An opener of the Hub or serial port the endpoint names, which traces its wire traffic to `tracer`.
+  static func opener(tracer: (any WireTrace)?) -> ModemOpener {
+    { endpoint, catalog, snapshot, onPollSucceeded, body in
     switch endpoint {
     case let .hub(location, credentials):
-      try await ModemSession.withHub(host: location.host, port: location.port, user: credentials.user, password: credentials.password, catalog: catalog, onPollSucceeded: onPollSucceeded) { session in
+      try await ModemSession.withHub(host: location.host, port: location.port, user: credentials.user, password: credentials.password, catalog: catalog, onPollSucceeded: onPollSucceeded, tracer: tracer) { session in
         try await body(session.network(catalog: catalog, snapshot: snapshot, hub: session.hub))
       }
     case let .serial(path):
       #if os(macOS) || os(Linux)
-      try await ModemSession.withSerialPort(path: path, catalog: catalog) { session in
+      try await ModemSession.withSerialPort(path: path, catalog: catalog, tracer: tracer) { session in
         try await body(session.network(catalog: catalog, snapshot: snapshot, hub: session.hub))
       }
       #else
       throw ConfigurationError.serialUnavailable
       #endif
+    }
     }
   }
 
@@ -106,7 +115,7 @@ public enum ServerRunner {
   ///   - logger: Receives progress notes, warnings and one record per HTTP request.
   ///   - openModem: Opens the modem. Defaults to ``openModem``.
   /// - Throws: A ``ServerFailure`` source error: describe it with ``ServerFailure/init(_:)``.
-  public static func run(arguments: [String], environment: [String: String], logger: Logger = Logger(label: "insteon-server"), openModem: @escaping ModemOpener = ServerRunner.openModem) async throws {
+  public static func run(arguments: [String], environment: [String: String], logger: Logger = Logger(label: "insteon-server"), openModem: ModemOpener? = nil) async throws {
     try await run(arguments: arguments, environment: environment, logger: logger, openModem: openModem, timing: Timing(), hubPro: .live)
   }
 
@@ -162,8 +171,10 @@ public enum ServerRunner {
     }
   }
 
-  static func run(arguments: [String], environment: [String: String], logger: Logger, openModem: @escaping ModemOpener, timing: Timing, hubPro: HubProAccess) async throws {
+  static func run(arguments: [String], environment: [String: String], logger: Logger, openModem: ModemOpener?, timing: Timing, hubPro: HubProAccess) async throws {
     let options = try ServerOptions(arguments: arguments, environment: environment)
+    // Only a run at the trace level traces, so every other run does no work for it.
+    let openModem = openModem ?? opener(tracer: ServerLogging.wireTrace(level: options.logLevel, logger: logger, maskAddresses: !options.traceAddresses))
     let environment = try EnvironmentFile.load(explicitPath: options.envFilePath, environment: environment, warn: { logger.warning("\($0)") })
     let target = try ModemTarget.resolve(hub: options.hub, serialPath: options.serialPath, environment: environment)
     guard let password = environment["INSTEON_GATEWAY_PASSWORD"] else { throw ServerRunError.missingPassword }
