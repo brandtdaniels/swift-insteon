@@ -38,6 +38,10 @@ public enum ConnectionError: Error, Equatable, Sendable {
   /// command, the command may have taken effect: read the device's status before sending it again.
   case badResponse(path: String)
 
+  /// None of the connection's paths carries this call, such as events over a Hub on the local
+  /// network. Nothing was sent, and trying again won't help.
+  case unsupported(paths: [String])
+
   /// The service's modem is away for a cause this library has no case for, named as the service
   /// names it, or `nil` when it names none. The service's wire answer carries no status for a Hub
   /// that answered with an error, so that cause is reported by name too. Nothing was sent.

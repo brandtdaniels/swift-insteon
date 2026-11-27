@@ -346,6 +346,142 @@ public final class URLSessionHTTPClient: HTTPClient, @unchecked Sendable {
 
   }
 
+  /// Sends a request and hands the body over as it arrives.
+  ///
+  /// The request is sent on a session of its own with the client's configuration, whose time
+  /// limit for the whole request is lifted: the body may stay open for as long as the server
+  /// keeps it. A redirect is never followed, so a request's credentials go only to the address
+  /// it named; the redirect's own status is the response.
+  ///
+  /// - Parameter request: The request to send.
+  /// - Returns: The response's status and headers, and its body as chunks.
+  /// - Throws: The session's error if no response arrived, ``HTTPClientError/nonHTTPResponse``
+  ///   if it wasn't HTTP, or ``HTTPClientError/proxyConfigured`` if a client for the local
+  ///   network would send the request through a proxy.
+  public func stream(_ request: URLRequest) async throws -> HTTPStreamResponse {
+
+    #if canImport(FoundationNetworking)
+    if let proxyEnvironment, proxyEnvironment.proxies(request.url) {
+
+      throw HTTPClientError.proxyConfigured
+
+    }
+    #endif
+
+    let (chunks, body) = AsyncThrowingStream<Data, any Error>.makeStream()
+    let (heads, head) = AsyncThrowingStream<StreamHead, any Error>.makeStream()
+    let configuration: URLSessionConfiguration = session.configuration
+    configuration.timeoutIntervalForResource = 60 * 60 * 24
+    let streamSession = URLSession(configuration: configuration, delegate: StreamDelegate(head: head, body: body), delegateQueue: nil)
+    let task = streamSession.dataTask(with: request)
+
+    body.onTermination = { _ in
+
+      task.cancel()
+      streamSession.finishTasksAndInvalidate()
+
+    }
+
+    return try await withTaskCancellationHandler {
+
+      task.resume()
+
+      do {
+
+        for try await arrived in heads {
+
+          return HTTPStreamResponse(statusCode: arrived.statusCode, headers: arrived.headers, body: chunks)
+
+        }
+
+      } catch {
+
+        task.cancel()
+        streamSession.invalidateAndCancel()
+        throw error
+
+      }
+
+      // The answer wasn't HTTP: stop the request, so nothing keeps the connection open.
+      task.cancel()
+      streamSession.invalidateAndCancel()
+      throw HTTPClientError.nonHTTPResponse
+
+    } onCancel: {
+
+      task.cancel()
+
+    }
+
+  }
+
+  /// A response's status and headers.
+  private struct StreamHead: Sendable {
+
+    let statusCode: Int
+
+    let headers: [String: String]
+
+  }
+
+  /// Passes a response's head and its bytes on, and refuses redirects. It holds no state of its
+  /// own: each callback only yields to a stream.
+  private final class StreamDelegate: NSObject, URLSessionDataDelegate, Sendable {
+
+    let head: AsyncThrowingStream<StreamHead, any Error>.Continuation
+
+    let body: AsyncThrowingStream<Data, any Error>.Continuation
+
+    init(head: AsyncThrowingStream<StreamHead, any Error>.Continuation, body: AsyncThrowingStream<Data, any Error>.Continuation) {
+
+      self.head = head
+      self.body = body
+
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse, completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void) {
+
+      if let http = response as? HTTPURLResponse {
+
+        var headers: [String: String] = [:]
+
+        for case let (name as String, value as String) in http.allHeaderFields {
+
+          headers[name] = value
+
+        }
+
+        head.yield(StreamHead(statusCode: http.statusCode, headers: headers))
+
+      }
+
+      head.finish()
+      completionHandler(response is HTTPURLResponse ? .allow : .cancel)
+
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+
+      // The redirect's own answer is the response; its target is never asked.
+      completionHandler(nil)
+
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+
+      body.yield(data)
+
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+
+      head.finish(throwing: error)
+      body.finish(throwing: error)
+
+    }
+
+  }
+
   /// Whether a request carries credentials, and so mustn't follow a redirect.
   ///
   /// - Parameters:

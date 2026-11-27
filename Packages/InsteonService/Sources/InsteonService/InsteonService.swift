@@ -214,6 +214,33 @@ public actor InsteonService: InsteonServiceAPI {
     return receipt
   }
 
+  /// Reads the ALL-Link databases of the modem and of each device from the hardware, saves a
+  /// checkpoint, and lists the scenes from what was read. Nothing is written to the modem or to a
+  /// device.
+  ///
+  /// It takes the admission gate the way ``execute(_:)`` does and holds it for the whole read, so
+  /// another operation is refused as ``ServiceControlError/busy`` and nothing is queued. While
+  /// the modem isn't connected it throws ``ServiceControlError/modemUnavailable(_:)`` before
+  /// sending anything. A device that doesn't answer is listed as unreadable. A refresh that fails
+  /// partway saves a checkpoint of what it read, then throws the original error.
+  public func refreshScenes() async throws -> SceneListing {
+    guard !busy else { throw ServiceControlError.busy }
+    busy = true
+    defer { busy = false }
+    if case let .unavailable(cause) = connection { throw ServiceControlError.modemUnavailable(cause) }
+    do {
+      try await network.refreshDatabases()
+    } catch {
+      // What was read before the failure is already in the cache, so it is saved too.
+      lastExchange = now()
+      _ = await persist()
+      throw error
+    }
+    lastExchange = now()
+    _ = await persist()
+    return SceneListing(await networkBackup())
+  }
+
   /// What a scene member's link data bytes mean, from the catalog and the identity the service
   /// has recorded for the device, without asking hardware.
   public func meaning(ofMemberData data: [UInt8], of device: InsteonAddress, group: UInt8) async -> LinkDataMeaning? {
