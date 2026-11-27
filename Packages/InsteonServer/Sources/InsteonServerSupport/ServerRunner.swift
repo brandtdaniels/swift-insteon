@@ -45,6 +45,19 @@ public enum ServerRunner {
                    The trace never holds the Hub's user name or password.
   --help           Show this help without connecting.
 
+  Advanced settings. Each has an environment variable, read from
+  the environment file or the process's environment (the process's wins); the flag wins over both.
+  --scene-echo-wait-ms MS  How long a scene run waits for the modem to accept the group
+                   command (default: 5000; 1 through 60000). INSTEON_SCENE_ECHO_WAIT_MS.
+  --scene-cleanup-quiet-ms MS  How long a scene run waits for more cleanup traffic before it
+                   gives up on the modem's report (default: 15000; from 2150, the first
+                   cleanup's time in the Insteon Developer's Guide, up to the cap).
+                   INSTEON_SCENE_CLEANUP_QUIET_MS. Without it, a shorter cap shortens it to the cap.
+  --scene-cleanup-cap-ms MS  The longest a scene run waits for the report however much
+                   traffic comes (default: 60000; from 2150 up to 300000). INSTEON_SCENE_CLEANUP_CAP_MS.
+  The defaults for these are unverified. GET /api/v1/health lists every value in use and
+  whether it is the default, a flag or an environment variable.
+
   Settings are read from the same protected per-user environment file as insteon.
   A Hub uses INSTEON_HUB_HOST, INSTEON_HUB_PORT, INSTEON_HUB_USERNAME and
   INSTEON_HUB_PASSWORD. A Hub Pro has no user name or password: with none set, a host
@@ -171,11 +184,22 @@ public enum ServerRunner {
     }
   }
 
+  /// The options, read twice: once from the process's environment to find `--env-file`, then
+  /// again from the process's environment with the file's variables added, so a setting such as
+  /// the scene waits can come from the file too. The log level is the exception: logging starts
+  /// before the file is read, so it comes from the process's environment alone.
+  ///
+  /// - Returns: The options, and the environment with the file's variables added.
+  static func resolvedOptions(arguments: [String], environment: [String: String], warn: (String) -> Void) throws -> (options: ServerOptions, environment: [String: String]) {
+    let first = try ServerOptions(arguments: arguments, environment: environment)
+    let merged = try EnvironmentFile.load(explicitPath: first.envFilePath, environment: environment, warn: warn)
+    return (try ServerOptions(arguments: arguments, environment: merged), merged)
+  }
+
   static func run(arguments: [String], environment: [String: String], logger: Logger, openModem: ModemOpener?, timing: Timing, hubPro: HubProAccess) async throws {
-    let options = try ServerOptions(arguments: arguments, environment: environment)
+    let (options, environment) = try resolvedOptions(arguments: arguments, environment: environment, warn: { logger.warning("\($0)") })
     // Only a run at the trace level traces, so every other run does no work for it.
     let openModem = openModem ?? opener(tracer: ServerLogging.wireTrace(level: options.logLevel, logger: logger, maskAddresses: !options.traceAddresses))
-    let environment = try EnvironmentFile.load(explicitPath: options.envFilePath, environment: environment, warn: { logger.warning("\($0)") })
     let target = try ModemTarget.resolve(hub: options.hub, serialPath: options.serialPath, environment: environment)
     guard let password = environment["INSTEON_GATEWAY_PASSWORD"] else { throw ServerRunError.missingPassword }
     // Validate server authentication before opening any hardware connection.
@@ -267,7 +291,7 @@ public enum ServerRunner {
     logger: Logger,
     timing: Timing
   ) async throws {
-    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter, throughHub: hub != nil, notificationRules: notificationRules, scheduling: scheduling)
+    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter, throughHub: hub != nil, notificationRules: notificationRules, scheduling: scheduling, tuning: options.tuning, tuningSources: options.tuningSources)
     let router = makeInsteonRouter(service: service, authentication: authentication, clients: clients, pairing: pairing, routes: routes, logger: logger, now: timing.now)
     let app = Application(
       responder: router.buildResponder(),

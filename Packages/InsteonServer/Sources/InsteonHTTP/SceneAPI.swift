@@ -53,7 +53,7 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
       // How long a run took, so a Hub's delay is visible without a wire log. No address is logged.
       logger.debug("scene run finished", metadata: [
         "scene": "\(command.number)", "action": "\(command.action == .on ? "on" : "off")", "seconds": "\(now().timeIntervalSince(start))",
-        "isComplete": "\(receipt.isComplete)", "acknowledged": "\(receipt.acknowledged.count)", "unacknowledged": "\(receipt.unacknowledged.count)"
+        "isComplete": "\(receipt.isComplete)", "statusReportSeconds": "\(Self.text(receipt.statusReportAfter))", "failureReportSeconds": "\(Self.text(receipt.failureReportedAfter))", "acknowledged": "\(receipt.acknowledged.count)", "unacknowledged": "\(receipt.unacknowledged.count)"
       ])
       return .response(.ok, try encoder.encode(SceneReceiptDTO(receipt)))
     } catch {
@@ -62,6 +62,12 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
       logger.debug("scene run failed", metadata: ["scene": "\(command.number)", "code": "\(failure.code.rawValue)", "seconds": "\(now().timeIntervalSince(start))"])
       return .failure(failure)
     }
+  }
+
+  /// Seconds as a decimal, or `none` when the modem sent no such report.
+  private static func text(_ duration: Duration?) -> String {
+    guard let duration else { return "none" }
+    return "\(Double(duration.components.seconds) + Double(duration.components.attoseconds) / 1e18)"
   }
 
   /// Names a run by what it asks for, not by how the request spelled it.

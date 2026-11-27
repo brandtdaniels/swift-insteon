@@ -131,9 +131,9 @@ public actor RecordingModem: LinkingModem {
   }
 
   /// The base modem's cleanup report, unrecorded.
-  public func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, timeout: Duration) async throws -> AllLinkCleanupReport {
+  public func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, wait: AllLinkCleanupWait) async throws -> AllLinkCleanupReport {
 
-    try await base.sendAllLinkCommand(group: group, command: command, timeout: timeout)
+    try await base.sendAllLinkCommand(group: group, command: command, wait: wait)
 
   }
 

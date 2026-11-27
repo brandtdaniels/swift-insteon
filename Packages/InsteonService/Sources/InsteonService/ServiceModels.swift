@@ -187,9 +187,17 @@ public struct SceneReceipt: Equatable, Sendable {
   public let responderCount: Int
   /// The independent outcome of saving the learned network state.
   public let persistence: PersistenceOutcome
+  /// How long after the modem accepted the command its cleanup status report came, or `nil` if it
+  /// didn't come in time. For the log: it isn't on the wire.
+  public let statusReportAfter: Duration?
+  /// How long after the modem accepted the command the first cleanup failure report came, or `nil`.
+  /// For the log: it isn't on the wire.
+  public let failureReportedAfter: Duration?
 
   /// Creates a receipt.
-  public init(scene: UInt8, action: SceneCommand.Action, acknowledged: [InsteonAddress], unacknowledged: [InsteonAddress], isComplete: Bool, responderCount: Int, persistence: PersistenceOutcome = .notConfigured) {
+  public init(scene: UInt8, action: SceneCommand.Action, acknowledged: [InsteonAddress], unacknowledged: [InsteonAddress], isComplete: Bool, responderCount: Int, persistence: PersistenceOutcome = .notConfigured, statusReportAfter: Duration? = nil, failureReportedAfter: Duration? = nil) {
+    self.statusReportAfter = statusReportAfter
+    self.failureReportedAfter = failureReportedAfter
     self.scene = scene
     self.action = action
     self.acknowledged = acknowledged

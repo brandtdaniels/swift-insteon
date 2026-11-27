@@ -34,9 +34,12 @@ public struct ServiceHealth: Equatable, Sendable {
   public let checkedAt: Date
   /// What else is worth knowing, such as a time zone the host doesn't have. It doesn't change readiness.
   public let notes: [ServiceHealthNote]
+  /// Every tuning value in use, with where it came from. Empty for a report made without a service.
+  public let tuning: [TuningEntry]
 
   /// Creates a report.
-  public init(readiness: Readiness, modem: ModemConnectionState, lastHardwareExchange: Date?, lastPoll: Date? = nil, deviceInformationUpdated: Date?, persistence: PersistenceOutcome, checkedAt: Date, notes: [ServiceHealthNote] = []) {
+  public init(readiness: Readiness, modem: ModemConnectionState, lastHardwareExchange: Date?, lastPoll: Date? = nil, deviceInformationUpdated: Date?, persistence: PersistenceOutcome, checkedAt: Date, notes: [ServiceHealthNote] = [], tuning: [TuningEntry] = []) {
+    self.tuning = tuning
     self.readiness = readiness
     self.modem = modem
     self.lastHardwareExchange = lastHardwareExchange

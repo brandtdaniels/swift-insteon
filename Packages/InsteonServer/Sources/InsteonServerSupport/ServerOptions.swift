@@ -1,5 +1,6 @@
 import Foundation
 import InsteonScheduling
+import InsteonService
 import Logging
 
 /// The listener, hardware and files selected before a server opens a connection.
@@ -37,12 +38,17 @@ public struct ServerOptions: Sendable {
   /// `INSTEON_TRACE_ADDRESSES=1` in the process's environment, else false: addresses are masked.
   /// The option wins over the variable. A trace is written only at the `trace` log level.
   public let traceAddresses: Bool
+  /// The tuning the service runs with: each value from its flag, else its `INSTEON_` environment
+  /// variable, else the standard value. Checked with ``ServiceTuning/validated()``.
+  public let tuning: ServiceTuning
+  /// Where each tuning value that isn't the standard one came from, by name such as `scenes.echoWaitMs`.
+  public let tuningSources: [String: TuningSource]
 
   /// Parses pairs of options, rejecting duplicates, public listeners and wildcard binds.
   /// Hub resolution and file permissions are checked by the CLI's existing helpers.
   public init(arguments: [String], environment: [String: String]) throws {
     var options: [String: String] = [:]
-    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--network-name", "--poll-interval", "--latitude", "--longitude", "--time-zone", "--log-level"]
+    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--network-name", "--poll-interval", "--latitude", "--longitude", "--time-zone", "--log-level", "--scene-echo-wait-ms", "--scene-cleanup-quiet-ms", "--scene-cleanup-cap-ms"]
     let flags: Set<String> = ["--trace-addresses"]
     var givenFlags: Set<String> = []
     var index = 0
@@ -103,6 +109,32 @@ public struct ServerOptions: Sendable {
     case "1": self.traceAddresses = true
     default: throw ServerOptionError.invalidTraceAddresses
     }
+    var scenes = ServiceTuning.Scenes.standard
+    var sources: [String: TuningSource] = [:]
+    // A flag beats its environment variable, which beats the standard value.
+    func milliseconds(_ flag: String, _ variable: String, _ name: String, _ error: ServerOptionError) throws -> Duration? {
+      let flagValue = options[flag], variableValue = environment[variable]
+      guard let text = flagValue ?? variableValue else { return nil }
+      // Only the unit is parsed here; ServiceTuning.validated() is the one place that knows the ranges.
+      guard let value = Int(text) else { throw error }
+      sources[name] = flagValue != nil ? .flag : .environment
+      return .milliseconds(value)
+    }
+    if let value = try milliseconds("--scene-echo-wait-ms", "INSTEON_SCENE_ECHO_WAIT_MS", ServiceTuningError.Field.scenesEchoWait.name, .invalidSceneEchoWait) { scenes.echoWait = value }
+    if let value = try milliseconds("--scene-cleanup-quiet-ms", "INSTEON_SCENE_CLEANUP_QUIET_MS", ServiceTuningError.Field.scenesCleanupQuiet.name, .invalidSceneCleanupQuiet) { scenes.cleanupQuietPeriod = value }
+    if let value = try milliseconds("--scene-cleanup-cap-ms", "INSTEON_SCENE_CLEANUP_CAP_MS", ServiceTuningError.Field.scenesCleanupCap.name, .invalidSceneCleanupCap) { scenes.cleanupCap = value }
+    // A quiet period nobody set follows a cap shorter than its standard value, so setting only a short cap works.
+    if sources[ServiceTuningError.Field.scenesCleanupQuiet.name] == nil { scenes.cleanupQuietPeriod = min(scenes.cleanupQuietPeriod, scenes.cleanupCap) }
+    do {
+      tuning = try ServiceTuning(scenes: scenes).validated()
+    } catch ServiceTuningError.invalid(let field) {
+      switch field {
+      case .scenesEchoWait: throw ServerOptionError.invalidSceneEchoWait
+      case .scenesCleanupQuiet: throw ServerOptionError.invalidSceneCleanupQuiet
+      case .scenesCleanupCap: throw ServerOptionError.invalidSceneCleanupCap
+      }
+    }
+    tuningSources = sources
   }
 
   private static func level(_ text: String) throws -> Logger.Level {
@@ -150,6 +182,13 @@ public enum ServerOptionError: Error, CustomStringConvertible {
   case invalidLogLevel
   /// `INSTEON_TRACE_ADDRESSES` isn't `0` or `1`.
   case invalidTraceAddresses
+  /// `--scene-echo-wait-ms` or its variable isn't a whole number of milliseconds from 1 through 60000.
+  case invalidSceneEchoWait
+  /// `--scene-cleanup-quiet-ms` or its variable isn't a whole number of milliseconds from 2150
+  /// through the cap, which is the Insteon Developer's Guide's time for the first cleanup.
+  case invalidSceneCleanupQuiet
+  /// `--scene-cleanup-cap-ms` or its variable isn't a whole number of milliseconds from 2150 through 300000.
+  case invalidSceneCleanupCap
   /// A `pair` command needs a client name of 1 through 64 characters and a scope of read, control or admin.
   case invalidClient
 

@@ -1,3 +1,5 @@
+import Foundation
+import InsteonService
 import Logging
 import Testing
 @testable import InsteonServerSupport
@@ -127,5 +129,145 @@ extension ServerTests {
     #expect(ServerRunner.help.contains("--log-level LEVEL"))
     #expect(ServerRunner.help.contains("INSTEON_LOG_LEVEL"))
     #expect(ServerRunner.help.contains("trace, debug, info, notice, warning, error, critical"))
+  }
+}
+
+extension ServerTests {
+  @Test func theSceneWaitsDefaultToTheStandardTuningAndSayTheyAreDefaults() throws {
+    let options = try ServerOptions(arguments: [], environment: [:])
+    #expect(options.tuning == .standard)
+    #expect(options.tuningSources.isEmpty)
+  }
+
+  @Test func eachSceneWaitFlagSetsItsValueInMillisecondsAndIsReportedAsAFlag() throws {
+    let options = try ServerOptions(arguments: ["--scene-echo-wait-ms", "8000", "--scene-cleanup-quiet-ms", "20000", "--scene-cleanup-cap-ms", "90000"], environment: [:])
+    #expect(options.tuning.scenes == .init(echoWait: .seconds(8), cleanupQuietPeriod: .seconds(20), cleanupCap: .seconds(90)))
+    #expect(options.tuningSources == ["scenes.echoWaitMs": .flag, "scenes.cleanupQuietMs": .flag, "scenes.cleanupCapMs": .flag])
+  }
+
+  @Test func eachSceneWaitEnvironmentVariableSetsItsValueAndIsReportedAsTheEnvironment() throws {
+    let environment = ["INSTEON_SCENE_ECHO_WAIT_MS": "9000", "INSTEON_SCENE_CLEANUP_QUIET_MS": "30000", "INSTEON_SCENE_CLEANUP_CAP_MS": "120000"]
+    let options = try ServerOptions(arguments: [], environment: environment)
+    #expect(options.tuning.scenes == .init(echoWait: .seconds(9), cleanupQuietPeriod: .seconds(30), cleanupCap: .seconds(120)))
+    #expect(options.tuningSources == ["scenes.echoWaitMs": .environment, "scenes.cleanupQuietMs": .environment, "scenes.cleanupCapMs": .environment])
+  }
+
+  @Test func aFlagBeatsTheEnvironmentWhichBeatsTheDefaultForEachValueSeparately() throws {
+    let options = try ServerOptions(arguments: ["--scene-echo-wait-ms", "8000"], environment: ["INSTEON_SCENE_ECHO_WAIT_MS": "9000", "INSTEON_SCENE_CLEANUP_CAP_MS": "100000"])
+    #expect(options.tuning.scenes.echoWait == .seconds(8))
+    #expect(options.tuning.scenes.cleanupCap == .seconds(100))
+    #expect(options.tuning.scenes.cleanupQuietPeriod == .seconds(15))
+    #expect(options.tuningSources == ["scenes.echoWaitMs": .flag, "scenes.cleanupCapMs": .environment])
+  }
+
+  @Test(arguments: ["0", "-5", "60001", "fast", "1.5", " "])
+  func anEchoWaitOutOfRangeIsRefused(_ value: String) {
+    #expect(throws: ServerOptionError.invalidSceneEchoWait) { try ServerOptions(arguments: ["--scene-echo-wait-ms", value], environment: [:]) }
+    #expect(throws: ServerOptionError.invalidSceneEchoWait) { try ServerOptions(arguments: [], environment: ["INSTEON_SCENE_ECHO_WAIT_MS": value]) }
+  }
+
+  // The Insteon Developer's Guide gives 2.150 seconds to the first cleanup, so a shorter quiet period is refused.
+  @Test(arguments: ["0", "2149", "300001", "slow"])
+  func aQuietPeriodShorterThanTheGuidesFirstCleanupOrTooLongIsRefused(_ value: String) {
+    #expect(throws: ServerOptionError.invalidSceneCleanupQuiet) { try ServerOptions(arguments: ["--scene-cleanup-quiet-ms", value], environment: [:]) }
+    #expect(throws: ServerOptionError.invalidSceneCleanupQuiet) { try ServerOptions(arguments: [], environment: ["INSTEON_SCENE_CLEANUP_QUIET_MS": value]) }
+  }
+
+  @Test(arguments: ["0", "300001", "-1", "long"])
+  func aCapOutOfRangeIsRefused(_ value: String) {
+    #expect(throws: ServerOptionError.invalidSceneCleanupCap) { try ServerOptions(arguments: ["--scene-cleanup-cap-ms", value], environment: [:]) }
+    #expect(throws: ServerOptionError.invalidSceneCleanupCap) { try ServerOptions(arguments: [], environment: ["INSTEON_SCENE_CLEANUP_CAP_MS": value]) }
+  }
+
+  @Test func aQuietPeriodLongerThanTheCapIsRefusedAsTheQuietPeriod() {
+    #expect(throws: ServerOptionError.invalidSceneCleanupQuiet) { try ServerOptions(arguments: ["--scene-cleanup-quiet-ms", "70000"], environment: [:]) }
+    #expect(throws: ServerOptionError.invalidSceneCleanupQuiet) { try ServerOptions(arguments: ["--scene-cleanup-quiet-ms", "20000", "--scene-cleanup-cap-ms", "10000"], environment: [:]) }
+  }
+
+  // Setting only the cap leaves the quiet period unset, so it is the shorter of its standard value and the cap.
+  @Test(arguments: [("10000", 10_000), ("15000", 15_000), ("120000", 15_000), ("2150", 2_150)])
+  func aCapBelowTheStandardQuietPeriodShortensTheQuietPeriodThatWasNotSet(_ cap: String, _ quietMilliseconds: Int) throws {
+    for options in [
+      try ServerOptions(arguments: ["--scene-cleanup-cap-ms", cap], environment: [:]),
+      try ServerOptions(arguments: [], environment: ["INSTEON_SCENE_CLEANUP_CAP_MS": cap])
+    ] {
+      #expect(options.tuning.scenes.cleanupQuietPeriod == .milliseconds(quietMilliseconds))
+      #expect(options.tuningSources[ServiceTuningError.Field.scenesCleanupQuiet.name] == nil)
+    }
+  }
+
+  @Test func aCapShorterThanTheFirstCleanupIsRefusedAsTheCapNotTheQuietPeriod() {
+    #expect(throws: ServerOptionError.invalidSceneCleanupCap) { try ServerOptions(arguments: ["--scene-cleanup-cap-ms", "2149"], environment: [:]) }
+    #expect(throws: ServerOptionError.invalidSceneCleanupCap) { try ServerOptions(arguments: ["--scene-cleanup-cap-ms", "1000"], environment: [:]) }
+  }
+
+  @Test func aQuietPeriodTheOperatorSetThatPassesTheCapIsRefusedAsTheQuietPeriodEvenWhenTheCapIsShort() {
+    #expect(throws: ServerOptionError.invalidSceneCleanupQuiet) { try ServerOptions(arguments: ["--scene-cleanup-quiet-ms", "20000", "--scene-cleanup-cap-ms", "10000"], environment: [:]) }
+    #expect(throws: ServerOptionError.invalidSceneCleanupQuiet) { try ServerOptions(arguments: ["--scene-cleanup-cap-ms", "10000"], environment: ["INSTEON_SCENE_CLEANUP_QUIET_MS": "20000"]) }
+  }
+
+  @Test func theHelpSaysAnUnsetQuietPeriodFollowsAShortCap() {
+    #expect(ServerRunner.help.contains("shorter cap"))
+  }
+
+  @Test func eachBadSceneValueHasItsOwnCodeAndNamesTheFlagAndTheVariableButNotTheValue() {
+    let cases: [(ServerOptionError, ServerFailure.Code, String, String)] = [
+      (.invalidSceneEchoWait, .sceneEchoWaitInvalid, "--scene-echo-wait-ms", "INSTEON_SCENE_ECHO_WAIT_MS"),
+      (.invalidSceneCleanupQuiet, .sceneCleanupQuietInvalid, "--scene-cleanup-quiet-ms", "INSTEON_SCENE_CLEANUP_QUIET_MS"),
+      (.invalidSceneCleanupCap, .sceneCleanupCapInvalid, "--scene-cleanup-cap-ms", "INSTEON_SCENE_CLEANUP_CAP_MS")
+    ]
+    for (error, code, flag, variable) in cases {
+      let failure = ServerFailure(error)
+      #expect(failure.code == code)
+      #expect(failure.exitStatus == ServerFailure.configurationStatus)
+      #expect(failure.message.contains(flag) && failure.message.contains(variable))
+    }
+  }
+
+  @Test func theHelpHasAnAdvancedSettingsPartNamingEachSceneFlagAndVariable() {
+    #expect(ServerRunner.help.contains("Advanced settings"))
+    for name in ["--scene-echo-wait-ms", "--scene-cleanup-quiet-ms", "--scene-cleanup-cap-ms", "INSTEON_SCENE_ECHO_WAIT_MS", "INSTEON_SCENE_CLEANUP_QUIET_MS", "INSTEON_SCENE_CLEANUP_CAP_MS"] {
+      #expect(ServerRunner.help.contains(name), "\(name)")
+    }
+  }
+}
+
+extension ServerTests {
+  private func environmentFile(_ text: String) throws -> String {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("insteon-env-" + UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    let file = directory.appendingPathComponent("env")
+    try Data(text.utf8).write(to: file)
+    #expect(chmod(file.path, 0o600) == 0)
+    return file.path
+  }
+
+  @Test func theSceneSettingsComeFromTheEnvironmentFileToo() throws {
+    let path = try environmentFile("INSTEON_SCENE_CLEANUP_CAP_MS=90000\nINSTEON_SCENE_ECHO_WAIT_MS=7000\n")
+
+    let options = try ServerRunner.resolvedOptions(arguments: ["--env-file", path], environment: [:], warn: { _ in }).options
+
+    #expect(options.tuning.scenes.cleanupCap == .seconds(90))
+    #expect(options.tuning.scenes.echoWait == .seconds(7))
+    #expect(options.tuningSources[ServiceTuningError.Field.scenesCleanupCap.name] == .environment)
+  }
+
+  @Test func aFlagBeatsTheFileAndTheProcessEnvironmentBeatsTheFile() throws {
+    let path = try environmentFile("INSTEON_SCENE_CLEANUP_CAP_MS=90000\nINSTEON_SCENE_ECHO_WAIT_MS=7000\n")
+
+    let options = try ServerRunner.resolvedOptions(arguments: ["--env-file", path, "--scene-cleanup-cap-ms", "100000"], environment: ["INSTEON_SCENE_ECHO_WAIT_MS": "8000"], warn: { _ in }).options
+
+    #expect(options.tuning.scenes.cleanupCap == .seconds(100))
+    #expect(options.tuning.scenes.echoWait == .seconds(8))
+  }
+
+  @Test func aBadSceneValueInTheFileIsRefusedWithItsCode() throws {
+    let path = try environmentFile("INSTEON_SCENE_ECHO_WAIT_MS=soon\n")
+
+    #expect(throws: ServerOptionError.invalidSceneEchoWait) { try ServerRunner.resolvedOptions(arguments: ["--env-file", path], environment: [:], warn: { _ in }) }
+  }
+
+  @Test func theHelpSaysTheEnvironmentFileCarriesTheSceneSettingsAndNotTheLogLevel() {
+    #expect(ServerRunner.help.contains("the environment file or the process's environment"))
   }
 }

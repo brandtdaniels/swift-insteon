@@ -46,6 +46,9 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case timeZoneInvalid = "time_zone_invalid"
     case logLevelInvalid = "log_level_invalid"
     case traceAddressesInvalid = "trace_addresses_invalid"
+    case sceneEchoWaitInvalid = "scene_echo_wait_invalid"
+    case sceneCleanupQuietInvalid = "scene_cleanup_quiet_invalid"
+    case sceneCleanupCapInvalid = "scene_cleanup_cap_invalid"
     case schedulesFileUnusable = "schedules_file_unusable"
     case pairingOptionsInvalid = "pairing_options_invalid"
     case modemConnectionEnded = "modem_connection_ended"
@@ -156,6 +159,9 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case .invalidLocation: ServerFailure(.locationInvalid, "--latitude and --longitude are given together: latitude from -90 through 90 and longitude from -180 through 180, in degrees.", configurationStatus)
     case .invalidLogLevel: ServerFailure(.logLevelInvalid, "--log-level and INSTEON_LOG_LEVEL must be one of trace, debug, info, notice, warning, error, critical.", configurationStatus)
     case .invalidTraceAddresses: ServerFailure(.traceAddressesInvalid, "INSTEON_TRACE_ADDRESSES must be 0 or 1.", configurationStatus)
+    case .invalidSceneEchoWait: ServerFailure(.sceneEchoWaitInvalid, "--scene-echo-wait-ms and INSTEON_SCENE_ECHO_WAIT_MS must be a whole number of milliseconds from 1 through 60000.", configurationStatus)
+    case .invalidSceneCleanupQuiet: ServerFailure(.sceneCleanupQuietInvalid, "--scene-cleanup-quiet-ms and INSTEON_SCENE_CLEANUP_QUIET_MS must be a whole number of milliseconds from 2150 up to the cleanup cap.", configurationStatus)
+    case .invalidSceneCleanupCap: ServerFailure(.sceneCleanupCapInvalid, "--scene-cleanup-cap-ms and INSTEON_SCENE_CLEANUP_CAP_MS must be a whole number of milliseconds from 2150 through 300000.", configurationStatus)
     case .invalidTimeZone: ServerFailure(.timeZoneInvalid, "--time-zone must be an IANA time zone's name, such as America/Los_Angeles.", configurationStatus)
     case .invalidNetworkName: ServerFailure(.networkNameInvalid, "--network-name must be 1 through 64 characters without control characters.", configurationStatus)
     }

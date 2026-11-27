@@ -66,6 +66,15 @@ struct HealthDTO: Encodable {
   let snapshotAgeSeconds: Int?
   let persistence: String
   let notes: [Note]
+  let tuning: [TuningValue]
+
+  /// One tuning value in use, and where it came from.
+  struct TuningValue: Encodable {
+    let name: String
+    let value: Int
+    let unit = "ms"
+    let source: String
+  }
 
   /// Something worth knowing that doesn't change what the service can do.
   struct Note: Encodable {
@@ -96,6 +105,7 @@ struct HealthDTO: Encodable {
     lastPollAgeSeconds = age(health.lastPoll)
     snapshotAgeSeconds = age(health.deviceInformationUpdated)
     persistence = PersistenceName(health.persistence).rawValue
+    tuning = health.tuning.map { TuningValue(name: $0.name, value: $0.milliseconds, source: $0.source.rawValue) }
     notes = health.notes.map { note in
       switch note {
       case .timeZoneUnavailable: Note(code: HealthNoteCode.timeZoneUnavailable.rawValue, message: "The configured time zone isn't in this host's time zone database, so schedules with a time of day are refused.")
@@ -114,8 +124,9 @@ struct HealthDTO: Encodable {
     try container.encode(snapshotAgeSeconds, forKey: .snapshotAgeSeconds)
     try container.encode(persistence, forKey: .persistence)
     try container.encode(notes, forKey: .notes)
+    try container.encode(tuning, forKey: .tuning)
   }
-  private enum CodingKeys: String, CodingKey { case version, status, modem, lastExchangeAgeSeconds, lastPollAgeSeconds, snapshotAgeSeconds, persistence, notes }
+  private enum CodingKeys: String, CodingKey { case version, status, modem, lastExchangeAgeSeconds, lastPollAgeSeconds, snapshotAgeSeconds, persistence, notes, tuning }
 }
 
 struct DeviceDTO: Encodable {

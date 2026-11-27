@@ -45,15 +45,15 @@ public actor InMemoryModem: LinkingModem {
     /// The command broadcast.
     public let command: Command
 
-    /// How long the sender allowed for the cleanups.
-    public let timeout: Duration
+    /// How long the sender allowed for the echo and the cleanups.
+    public let wait: AllLinkCleanupWait
 
     /// Creates a group command.
-    public init(group: AllLinkGroupNumber, command: Command, timeout: Duration) {
+    public init(group: AllLinkGroupNumber, command: Command, wait: AllLinkCleanupWait) {
 
       self.group = group
       self.command = command
-      self.timeout = timeout
+      self.wait = wait
 
     }
 
@@ -777,7 +777,7 @@ public actor InMemoryModem: LinkingModem {
   /// - Throws: `ModemError.rejected` for a group the modem has no controller records for, or
   ///   while ``setRejectsGroupCommands(_:)`` is on, the error of the hook
   ///   ``setBeforeOperation(_:)`` set, or `CancellationError` if the task is canceled.
-  public func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, timeout: Duration) async throws -> AllLinkCleanupReport {
+  public func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, wait: AllLinkCleanupWait) async throws -> AllLinkCleanupReport {
 
     try await begin(.sendAllLinkCommand(group: group, command: command))
 
@@ -795,7 +795,7 @@ public actor InMemoryModem: LinkingModem {
 
     }
 
-    groupCommands.append(GroupCommand(group: group, command: command, timeout: timeout))
+    groupCommands.append(GroupCommand(group: group, command: command, wait: wait))
 
     if stopsAnsweringAfterGroupCommand {
 

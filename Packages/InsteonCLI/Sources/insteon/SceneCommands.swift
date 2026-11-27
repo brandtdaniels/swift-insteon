@@ -25,7 +25,7 @@ enum SceneCommands {
 
     do {
 
-      report = try await scene.send(turningOn: isOn, responderCount: responders.count, through: modem)
+      report = try await scene.send(turningOn: isOn, through: modem)
 
     } catch {
 
