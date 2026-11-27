@@ -61,7 +61,7 @@ struct SceneMembershipPlanServiceTests {
   }
 
   private func change(_ scene: UInt8 = 4, add: [SceneMembershipChange.Addition] = [], remove: [InsteonAddress] = []) -> SceneMembershipChange {
-    SceneMembershipChange(scene: scene, additions: add, removals: remove)!
+    SceneMembershipChange(scene: scene, additions: add, removals: remove.map { SceneMembershipChange.Removal(device: $0) })!
   }
 
   @Test func plansFromTheCachedDatabasesAndTheCatalogAndSendsNothing() async throws {

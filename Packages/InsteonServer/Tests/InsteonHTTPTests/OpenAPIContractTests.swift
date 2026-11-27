@@ -309,7 +309,7 @@ struct OpenAPIContractTests {
     }
     let applicable = await ScenePlanExample.receipt(ScenePlanExample.addLamp())
     let refused = await ScenePlanExample.receipt(SceneMembershipChange(scene: 4, additions: [.init(device: ScenePlanExample.stale, onLevel: 255, rampRate: 31)], removals: [])!)
-    let removal = await ScenePlanExample.receipt(SceneMembershipChange(scene: 4, additions: [], removals: [ScenePlanExample.lamp])!)
+    let removal = await ScenePlanExample.receipt(SceneMembershipChange(scene: 4, additions: [], removals: [.init(device: ScenePlanExample.lamp)])!)
     for planReceipt in [applicable, refused, removal] {
       validate(try json(SceneMembershipPlanDTO(planReceipt)), as: "SceneMembershipPlan", in: document)
     }

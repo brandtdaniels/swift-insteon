@@ -262,7 +262,7 @@ public actor InsteonService: InsteonServiceAPI {
     let scenes = SceneListing(backup).scenes.filter { $0.number == change.scene }
     if !scenes.isEmpty, !scenes.contains(where: \.isWritable) { throw ServiceControlError.unknownScene }
     var registered: [InsteonAddress: RegisteredDevice] = [:]
-    for address in change.additions.map(\.device) + change.removals {
+    for address in change.additions.map(\.device) + change.removals.map(\.device) {
       if let device = await network.registeredDevice(address) { registered[address] = device }
     }
     var modemLinkData: ModemLinkData?

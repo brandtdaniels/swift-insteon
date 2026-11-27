@@ -284,13 +284,32 @@ struct SceneCommandBody {
 }
 
 /// The body of a membership plan request: `add`, a list of `{device, onLevel, rampRate}`, and `remove`,
-/// a list of addresses, each with at most 32 devices, and at least one device in all.
+/// a list of addresses or `{device, group}` objects, each with at most 32 devices, and at least one device in all.
 enum SceneMembershipBody {
   static let longestList = 32
 
   private struct Raw: Decodable {
     let add: [RawAddition]?
-    let remove: [String]?
+    let remove: [RawRemoval]?
+  }
+
+  /// A device to remove: an address for all of its records in the scene, or `{device, group}` for one group.
+  private struct RawRemoval: Decodable {
+    let device: String
+    let group: Int?
+
+    private enum Keys: String, CodingKey { case device, group }
+
+    init(from decoder: Decoder) throws {
+      if let text = try? decoder.singleValueContainer().decode(String.self) {
+        device = text
+        group = nil
+        return
+      }
+      let keys = try decoder.container(keyedBy: Keys.self)
+      device = try keys.decode(String.self, forKey: .device)
+      group = try keys.decodeIfPresent(Int.self, forKey: .group)
+    }
   }
 
   private struct RawAddition: Decodable {
@@ -302,6 +321,11 @@ enum SceneMembershipBody {
 
   static func change(scene: UInt8, from data: Data) throws -> SceneMembershipChange {
     guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], Set(object.keys).isSubset(of: ["add", "remove"]) else { throw SceneInputError.invalidMembership }
+    if let removed = object["remove"] as? [Any] {
+      for element in removed {
+        if let fields = element as? [String: Any], !Set(fields.keys).isSubset(of: ["device", "group"]) { throw SceneInputError.invalidMembership }
+      }
+    }
     if let added = object["add"] as? [Any] {
       for element in added {
         guard let fields = element as? [String: Any], Set(fields.keys).isSubset(of: ["device", "onLevel", "rampRate", "group"]) else { throw SceneInputError.invalidMembership }
@@ -317,10 +341,10 @@ enum SceneMembershipBody {
       guard let address = InsteonAddress(item.device) else { throw HTTPInputError.invalidAddress }
       additions.append(SceneMembershipChange.Addition(device: address, onLevel: try byte(item.onLevel), rampRate: try byte(item.rampRate), group: try item.group.map(group)))
     }
-    var removals: [InsteonAddress] = []
-    for text in removed {
-      guard let address = InsteonAddress(text) else { throw HTTPInputError.invalidAddress }
-      removals.append(address)
+    var removals: [SceneMembershipChange.Removal] = []
+    for item in removed {
+      guard let address = InsteonAddress(item.device) else { throw HTTPInputError.invalidAddress }
+      removals.append(SceneMembershipChange.Removal(device: address, group: try item.group.map(group)))
     }
     // A device named twice for the same group, or in both lists, is for the planner to refuse.
     guard let change = SceneMembershipChange(scene: scene, additions: additions, removals: removals) else { throw SceneInputError.invalidMembership }

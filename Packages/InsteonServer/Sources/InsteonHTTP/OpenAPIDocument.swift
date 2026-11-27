@@ -117,7 +117,16 @@ enum OpenAPIDocument {
           "rampRate": Schema.integer(minimum: 0, maximum: 255, description: "What the member's record holds for the ramp rate. Left out, the record holds 0.5 s (28). A device whose record has no ramp rate byte refuses it."),
           "group": Schema.integer(minimum: 1, maximum: 255, description: "The device's own group that answers the scene, such as one button of a keypad. Left out, the device's main group. The catalog must give the device the group, or the plan refuses it as `unknownGroup`.")
         ], required: ["device"])),
-        "remove": Schema.array(of: address)
+        "remove": Schema.array(of: [
+          "oneOf": [
+            address,
+            Schema.object([
+              "device": address,
+              "group": Schema.integer(minimum: 1, maximum: 255, description: "The device's own group to remove, such as one button of a keypad. The modem's record of the device goes when no group of it stays in the scene.")
+            ], required: ["device"])
+          ],
+          "description": "A device's address removes all of its records of the scene, or an object names one group of it."
+        ])
       ], required: [], description: "At least one device in all and at most 32 in each list. A device named twice for the same group, or in both lists, is refused in the plan as `duplicateEntry` or `addedAndRemoved`."),
       "SceneMembershipPlan": Schema.object([
         "version": version,

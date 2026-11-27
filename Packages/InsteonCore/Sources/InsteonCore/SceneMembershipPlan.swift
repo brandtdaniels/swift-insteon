@@ -13,7 +13,7 @@ import InsteonProtocol
 /// let change = SceneMembershipChange(
 ///   scene: 4,
 ///   additions: [.init(device: lamp, onLevel: 0xFF, rampRate: 0x1F)],
-///   removals: [porch]
+///   removals: [.init(device: porch)]
 /// )
 /// ```
 public struct SceneMembershipChange: Hashable, Sendable {
@@ -53,6 +53,30 @@ public struct SceneMembershipChange: Hashable, Sendable {
 
   }
 
+  /// A device to remove from the scene.
+  public struct Removal: Hashable, Sendable {
+
+    /// The device.
+    public var device: InsteonAddress
+
+    /// The device's own group to remove, or `nil` for every record the device has in the scene. The
+    /// modem's record of the device goes only when no group of it stays in the scene.
+    public var group: UInt8?
+
+    /// Creates a removal.
+    ///
+    /// - Parameters:
+    ///   - device: The device.
+    ///   - group: The device's own group to remove, or `nil` for all of them. Defaults to `nil`.
+    public init(device: InsteonAddress, group: UInt8? = nil) {
+
+      self.device = device
+      self.group = group
+
+    }
+
+  }
+
   /// The scene's ALL-Link group, from 1 through 254.
   public var scene: UInt8
 
@@ -60,7 +84,7 @@ public struct SceneMembershipChange: Hashable, Sendable {
   public var additions: [Addition]
 
   /// The devices to remove, in the order given.
-  public var removals: [InsteonAddress]
+  public var removals: [Removal]
 
   /// Creates a change.
   ///
@@ -69,7 +93,7 @@ public struct SceneMembershipChange: Hashable, Sendable {
   ///   - additions: The devices to add.
   ///   - removals: The devices to remove.
   /// - Returns: The change, or `nil` when `scene` is group 0 or group 255.
-  public init?(scene: UInt8, additions: [Addition], removals: [InsteonAddress]) {
+  public init?(scene: UInt8, additions: [Addition], removals: [Removal]) {
 
     guard (1...254).contains(scene) else {
 

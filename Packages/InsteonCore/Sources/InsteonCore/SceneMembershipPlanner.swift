@@ -12,15 +12,16 @@ public enum SceneMembershipPlanner {
 
   /// Plans the writes that make a change to a scene's members.
   ///
-  /// For each device to add, the plan writes the device's responder record for the scene, with the
-  /// on-level, ramp rate and own group the catalog's link data for the device's group gives, and
-  /// the modem's controller record for the device. A device already a member with the same record
-  /// gets no step. One with another on-level or ramp rate gets an update step in place, which the
-  /// plan refuses as ``SceneMembershipFinding/Code/notYetSupported``. For each device to remove, it
-  /// deletes the modem's record and clears the device's, the modem's first.
+  /// For each device and group to add, the plan writes the device's responder record for the scene, with
+  /// the on-level, ramp rate and own group the catalog's link data for the device's group gives, and
+  /// the modem's controller record for the device, once for the device however many groups it has in
+  /// the scene. A group already a member with the same record gets no step. One with another on-level
+  /// or ramp rate gets an update step in place, which the plan refuses as
+  /// ``SceneMembershipFinding/Code/notYetSupported``. For each device to remove, it clears the
+  /// device's records of the scene, or the one for the group named, and deletes the modem's record when
+  /// no group of the device stays in the scene, the modem's first.
   ///
-  /// A device named in both lists is planned for its addition only, and one named twice is planned
-  /// once.
+  /// A device named in both lists, or for the same group twice, is refused and planned for nothing.
   ///
   /// - Parameters:
   ///   - change: What to add and remove.
@@ -57,7 +58,7 @@ public enum SceneMembershipPlanner {
     // is meant isn't clear, so none of them is planned.
     var refused: Set<InsteonAddress> = []
 
-    for device in change.additions.map(\.device) where change.removals.contains(device) && refused.insert(device).inserted {
+    for device in change.additions.map(\.device) where change.removals.map(\.device).contains(device) && refused.insert(device).inserted {
 
       plan.refusals.append(SceneMembershipFinding(code: .addedAndRemoved, device: device, detail: "The change adds the device and removes it."))
 
@@ -99,27 +100,36 @@ public enum SceneMembershipPlanner {
 
     }
 
-    var removing: Set<InsteonAddress> = []
+    // A device's removals: each group once, or all of its records once. Naming one twice, or all of it and
+    // a group, is refused for the device.
+    var order: [InsteonAddress] = []
+    var asked: [InsteonAddress: [UInt8?]] = [:]
 
-    for removal in change.removals where !refused.contains(removal) {
+    for removal in change.removals where !refused.contains(removal.device) {
 
-      guard removing.insert(removal).inserted else {
+      if asked[removal.device] == nil {
 
-        if !plan.refusals.contains(where: { (finding: SceneMembershipFinding) -> Bool in finding.code == .duplicateEntry && finding.device == removal }) {
+        order.append(removal.device)
 
-          plan.refusals.append(SceneMembershipFinding(code: .duplicateEntry, device: removal, detail: "The change removes the device more than once."))
+      }
 
-        }
+      asked[removal.device, default: []].append(removal.group)
+
+    }
+
+    for device in order {
+
+      let groups: [UInt8?] = asked[device] ?? []
+
+      guard Set(groups).count == groups.count, groups.count == 1 || !groups.contains(nil) else {
+
+        plan.refusals.append(SceneMembershipFinding(code: .duplicateEntry, device: device, detail: "The change removes the same group of the device more than once."))
 
         continue
 
       }
 
-    }
-
-    for removal in change.removals where removing.contains(removal) && !plan.refusals.contains(where: { (finding: SceneMembershipFinding) -> Bool in finding.code == .duplicateEntry && finding.device == removal }) {
-
-      plan.remove(removal, backup: backup, registered: devices[removal])
+      plan.remove(device, groups: groups.contains(nil) ? nil : groups.compactMap { $0 }, backup: backup, registered: devices[device])
 
     }
 
@@ -615,7 +625,7 @@ private struct Planning {
 
   // MARK: Removing
 
-  mutating func remove(_ address: InsteonAddress, backup: NetworkBackup, registered: RegisteredDevice?) {
+  mutating func remove(_ address: InsteonAddress, groups: [UInt8]?, backup: NetworkBackup, registered: RegisteredDevice?) {
 
     guard let eligible = eligibility(of: address, backup: backup, registered: registered) else {
 
@@ -623,14 +633,65 @@ private struct Planning {
 
     }
 
-    let modemHalf: BackupRecord? = modemRecords.first { (record: BackupRecord) -> Bool in
-      record.isInUse && record.role == .controller && record.group == change.scene && record.address == address
-    }
-    let deviceHalf: BackupRecord? = eligible.records.first { (record: BackupRecord) -> Bool in
-      record.isInUse && record.role == .responder && record.group == change.scene && record.address == modem
+    func refuse(_ code: SceneMembershipFinding.Code, _ detail: String) {
+
+      refusals.append(SceneMembershipFinding(code: code, device: address, detail: detail))
+
     }
 
-    guard modemHalf != nil || deviceHalf != nil else {
+    // The device's records of the scene: one for each of its groups that answers it.
+    let sceneRecords: [BackupRecord] = eligible.records.filter { (record: BackupRecord) -> Bool in
+      record.isInUse && record.role == .responder && record.group == change.scene && record.address == modem
+    }
+    var doomed: [BackupRecord] = sceneRecords
+
+    if let groups {
+
+      guard let registered else {
+
+        refuse(.notIdentified, "The service has no identity recorded for the device, so the catalog can't say which of its records is for the group.")
+
+        return
+
+      }
+
+      doomed = []
+
+      for asked in groups {
+
+        let description: DeviceDescription = registered.deviceDescription
+
+        guard let named = description.profile?.groups.first(where: { (group: DeviceProfile.Group) -> Bool in group.number.rawValue == asked }) else {
+
+          refuse(.unknownGroup, "The catalog gives the device no group \(asked).")
+
+          return
+
+        }
+
+        guard let position = description.groupType(forGroup: named.number)?.linkData.responder.first(where: \.isPerGroup)?.position else {
+
+          refuse(.undescribedLinkData, "The catalog doesn't say which data byte of the device's responder record holds its own group.")
+
+          return
+
+        }
+
+        doomed += sceneRecords.filter { (record: BackupRecord) -> Bool in Self.isRecord(record, ofGroup: asked, at: position) }
+
+      }
+
+    }
+
+    let modemHalves: [BackupRecord] = modemRecords.filter { (record: BackupRecord) -> Bool in
+      record.isInUse && record.role == .controller && record.group == change.scene && record.address == address
+    }
+    let staying: [BackupRecord] = sceneRecords.filter { (record: BackupRecord) -> Bool in !doomed.contains(record) }
+    // The modem's record goes when no group of the device stays in the scene, and then first, so the
+    // device keeps its record of the modem until its last write.
+    let removedModem: [BackupRecord] = staying.isEmpty ? modemHalves : []
+
+    guard !removedModem.isEmpty || !doomed.isEmpty else {
 
       warnings.append(SceneMembershipFinding(code: .notAMember, device: address))
 
@@ -638,19 +699,20 @@ private struct Planning {
 
     }
 
-    // The modem's record goes first, so the device keeps its record of the modem until its last write.
-    if let modemHalf {
+    for modemHalf in removedModem {
 
       steps.append(SceneMembershipStep(kind: .removeModemRecord, endpoint: .modem, record: LinkRecord(isController: true, isInUse: false, group: group, address: address, data: modemHalf.data)))
 
     }
 
-    if let deviceHalf {
+    let otherLinks: Int = eligible.records.filter { (record: BackupRecord) -> Bool in
+      record.isInUse && record.address == modem && !doomed.contains(record)
+    }.count
 
-      let otherLinks: Int = eligible.records.filter { (record: BackupRecord) -> Bool in
-        record.isInUse && record.address == modem && record != deviceHalf
-      }.count
-      let risks: [SceneMembershipStep.Risk] = eligible.engine == .i2cs && otherLinks == 0 ? [.rejectsModemOnceUnlinked] : []
+    for (index, deviceHalf) in doomed.enumerated() {
+
+      let isLast: Bool = index == doomed.count - 1
+      let risks: [SceneMembershipStep.Risk] = isLast && eligible.engine == .i2cs && otherLinks == 0 ? [.rejectsModemOnceUnlinked] : []
 
       steps.append(SceneMembershipStep(kind: .removeDeviceRecord, endpoint: .device(address), record: LinkRecord(isController: false, isInUse: false, group: group, address: modem, data: deviceHalf.data, memoryAddress: deviceHalf.memoryAddress), risks: risks))
 

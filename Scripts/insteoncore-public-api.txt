@@ -698,6 +698,7 @@ init SceneListing(scenes:looseHalfLinks:unreadable:unreadableReasons:unlisted:is
 init SceneListing.Member(address:data:)
 init SceneListing.Scene(number:controller:members:halfLinks:)
 init SceneMembershipChange.Addition(device:onLevel:rampRate:group:)
+init SceneMembershipChange.Removal(device:group:)
 init SceneMembershipChange?(scene:additions:removals:)
 init SceneMembershipFinding(code:device:detail:)
 init SceneResult(acknowledged:unacknowledged:isComplete:statusReportAfter:failureReportedAfter:responderCount:)
@@ -926,6 +927,7 @@ struct SceneListing.Member
 struct SceneListing.Scene
 struct SceneMembershipChange
 struct SceneMembershipChange.Addition
+struct SceneMembershipChange.Removal
 struct SceneMembershipDevice
 struct SceneMembershipFinding
 struct SceneMembershipPlan
@@ -1378,6 +1380,8 @@ var SceneMembershipChange.Addition.device
 var SceneMembershipChange.Addition.group
 var SceneMembershipChange.Addition.onLevel
 var SceneMembershipChange.Addition.rampRate
+var SceneMembershipChange.Removal.device
+var SceneMembershipChange.Removal.group
 var SceneMembershipChange.additions
 var SceneMembershipChange.removals
 var SceneMembershipChange.scene

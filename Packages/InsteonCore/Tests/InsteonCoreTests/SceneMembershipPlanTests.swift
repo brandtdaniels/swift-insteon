@@ -196,9 +196,9 @@ struct SceneMembershipPlanTests {
 
   }
 
-  private func change(_ additions: [SceneMembershipChange.Addition] = [], remove: [InsteonAddress] = [], scene: UInt8 = 3) -> SceneMembershipChange {
+  private func change(_ additions: [SceneMembershipChange.Addition] = [], remove: [InsteonAddress] = [], removeGroups: [SceneMembershipChange.Removal] = [], scene: UInt8 = 3) -> SceneMembershipChange {
 
-    SceneMembershipChange(scene: scene, additions: additions, removals: remove)!
+    SceneMembershipChange(scene: scene, additions: additions, removals: remove.map { SceneMembershipChange.Removal(device: $0) } + removeGroups)!
 
   }
 
@@ -311,10 +311,10 @@ struct SceneMembershipPlanTests {
 
   @Test func neverPlansTheReservedGroups() {
 
-    #expect(SceneMembershipChange(scene: 0, additions: [], removals: [lamp]) == nil)
-    #expect(SceneMembershipChange(scene: 255, additions: [], removals: [lamp]) == nil)
-    #expect(SceneMembershipChange(scene: 1, additions: [], removals: [lamp]) != nil)
-    #expect(SceneMembershipChange(scene: 254, additions: [], removals: [lamp]) != nil)
+    #expect(SceneMembershipChange(scene: 0, additions: [], removals: [.init(device: lamp)]) == nil)
+    #expect(SceneMembershipChange(scene: 255, additions: [], removals: [.init(device: lamp)]) == nil)
+    #expect(SceneMembershipChange(scene: 1, additions: [], removals: [.init(device: lamp)]) != nil)
+    #expect(SceneMembershipChange(scene: 254, additions: [], removals: [.init(device: lamp)]) != nil)
 
   }
 
@@ -356,6 +356,87 @@ struct SceneMembershipPlanTests {
     #expect(plan.steps.isEmpty)
     #expect(plan.warnings.map(\.code) == [.notAMember])
     #expect(plan.refusals.isEmpty)
+
+  }
+
+  /// A two-group device that is in the scene through both its buttons, and the modem's one record of it.
+  private var bothButtons: (modem: [BackupRecord], device: [BackupRecord]) {
+
+    (
+      [record(.controller, group: 3, lamp, data: [0x01, 0x00, 0x00])],
+      slots([record(.responder, group: 3, modem, data: [0xFF, 0x1F, 0x01]), record(.responder, group: 3, modem, data: [0xFF, 0x1F, 0x02]), record(.responder, group: 9, modem)])
+    )
+
+  }
+
+  @Test func removesEveryRecordOfADeviceInTheSceneWhenNoGroupIsNamed() async throws {
+
+    let held = bothButtons
+    let plan = await keypadPlan(change(remove: [lamp]), modemRecords: held.modem, keypadRecords: held.device)
+
+    #expect(plan.steps.map(\.kind) == [.removeModemRecord, .removeDeviceRecord, .removeDeviceRecord])
+    #expect(plan.steps.compactMap(\.record.memoryAddress) == [0x0FFF, 0x0FF7])
+    // The device keeps its record of the modem for the other group, so only the last write says so.
+    #expect(plan.steps.map(\.risks) == [[], [], []])
+    #expect(plan.isApplicable)
+
+  }
+
+  @Test func removesOnlyTheRecordOfTheGroupNamedAndKeepsTheModemsWhileAnotherGroupRemains() async throws {
+
+    let held = bothButtons
+    let plan = await keypadPlan(change(removeGroups: [.init(device: lamp, group: 2)]), modemRecords: held.modem, keypadRecords: held.device)
+
+    #expect(plan.steps.map(\.kind) == [.removeDeviceRecord])
+    #expect(plan.steps.first?.record.memoryAddress == 0x0FF7)
+    #expect(plan.steps.first?.record.data == [0xFF, 0x1F, 0x02])
+    #expect(plan.warnings.isEmpty)
+
+  }
+
+  @Test func removesTheModemsRecordWithTheLastGroupOfTheDeviceInTheScene() async throws {
+
+    let held = bothButtons
+    let plan = await keypadPlan(change(removeGroups: [.init(device: lamp, group: 1), .init(device: lamp, group: 2)]), modemRecords: held.modem, keypadRecords: held.device)
+
+    #expect(plan.steps.map(\.kind) == [.removeModemRecord, .removeDeviceRecord, .removeDeviceRecord])
+    #expect(plan.refusals.isEmpty)
+
+  }
+
+  @Test func saysAGroupThatIsNotInTheSceneIsNotAMember() async throws {
+
+    let plan = await keypadPlan(
+      change(removeGroups: [.init(device: lamp, group: 2)]),
+      modemRecords: [record(.controller, group: 3, lamp)],
+      keypadRecords: slots([record(.responder, group: 3, modem, data: [0xFF, 0x1F, 0x01]), record(.responder, group: 9, modem)])
+    )
+
+    #expect(plan.steps.isEmpty)
+    #expect(plan.warnings.map(\.code) == [.notAMember])
+
+  }
+
+  @Test func refusesAGroupToRemoveThatTheCatalogDoesNotGiveTheDevice() async throws {
+
+    let held = bothButtons
+    let plan = await keypadPlan(change(removeGroups: [.init(device: lamp, group: 7)]), modemRecords: held.modem, keypadRecords: held.device)
+
+    #expect(plan.refusals.map(\.code) == [.unknownGroup])
+    #expect(plan.steps.isEmpty)
+
+  }
+
+  @Test func refusesTheSameRemovalNamedTwiceAndAllNamedWithAGroup() async throws {
+
+    let held = bothButtons
+    let twice = await keypadPlan(change(removeGroups: [.init(device: lamp, group: 1), .init(device: lamp, group: 1)]), modemRecords: held.modem, keypadRecords: held.device)
+    let overlapping = await keypadPlan(change(remove: [lamp], removeGroups: [.init(device: lamp, group: 1)]), modemRecords: held.modem, keypadRecords: held.device)
+
+    #expect(twice.refusals.map(\.code) == [.duplicateEntry])
+    #expect(twice.steps.isEmpty)
+    #expect(overlapping.refusals.map(\.code) == [.duplicateEntry])
+    #expect(overlapping.steps.isEmpty)
 
   }
 

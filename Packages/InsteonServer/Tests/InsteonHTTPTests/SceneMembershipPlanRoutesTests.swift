@@ -179,6 +179,18 @@ struct SceneMembershipPlanRoutesTests {
     #expect(await setup.service.membershipRequests.first?.additions.first?.group == 2)
   }
 
+  @Test func passesTheGroupOfARemovalToTheServiceAndTakesAnAddressAsAllOfTheDevice() async throws {
+    let setup = try setup(await ScenePlanExample.receipt(ScenePlanExample.addLamp()))
+    _ = try await plan(setup, body: #"{"remove":[{"device":"1A.2B.3C","group":2},"4D.5E.6F"]}"#, authorization: basic)
+
+    #expect(await setup.service.membershipRequests == [
+      SceneMembershipChange(scene: 4, additions: [], removals: [
+        .init(device: ScenePlanExample.lamp, group: 2),
+        .init(device: InsteonAddress(0x4D, 0x5E, 0x6F))
+      ])
+    ])
+  }
+
   @Test func passesTheChangeToTheServiceAsAskedWithNoDefaultsFilledIn() async throws {
     let setup = try setup(await ScenePlanExample.receipt(ScenePlanExample.addLamp()))
     _ = try await plan(setup, number: "9", body: #"{"add":[{"device":"1A.2B.3C","onLevel":128},{"device":"7A.8B.9C","rampRate":28}],"remove":["4D.5E.6F"]}"#, authorization: basic)
@@ -187,7 +199,7 @@ struct SceneMembershipPlanRoutesTests {
       SceneMembershipChange(scene: 9, additions: [
         .init(device: InsteonAddress(0x1A, 0x2B, 0x3C), onLevel: 128, rampRate: nil),
         .init(device: InsteonAddress(0x7A, 0x8B, 0x9C), onLevel: nil, rampRate: 28)
-      ], removals: [InsteonAddress(0x4D, 0x5E, 0x6F)])
+      ], removals: [.init(device: InsteonAddress(0x4D, 0x5E, 0x6F))])
     ])
   }
 
@@ -201,7 +213,7 @@ struct SceneMembershipPlanRoutesTests {
       SceneMembershipChange(scene: 4, additions: [
         .init(device: ScenePlanExample.lamp, onLevel: nil, rampRate: nil, group: 1),
         .init(device: ScenePlanExample.lamp, onLevel: nil, rampRate: nil, group: 2)
-      ], removals: [ScenePlanExample.lamp, ScenePlanExample.lamp])
+      ], removals: [.init(device: ScenePlanExample.lamp), .init(device: ScenePlanExample.lamp)])
     ])
   }
 
@@ -335,7 +347,11 @@ struct SceneMembershipPlanRoutesTests {
     #"{"add":[{"device":"1A.2B.3C","group":256}]}"#,
     #"{"add":[{"device":"1A.2B.3C","group":"1"}]}"#,
     #"{"add":"1A.2B.3C"}"#,
-    #"{"remove":[5]}"#
+    #"{"remove":[5]}"#,
+    #"{"remove":[{"device":"1A.2B.3C","group":0}]}"#,
+    #"{"remove":[{"device":"1A.2B.3C","group":"1"}]}"#,
+    #"{"remove":[{"device":"1A.2B.3C","onLevel":1}]}"#,
+    #"{"remove":[{"group":1}]}"#
   ])
   func refusesAChangeThatIsNotAnAddAndARemoveList(_ body: String) async throws {
     let setup = try setup(await ScenePlanExample.receipt(ScenePlanExample.addLamp()))
