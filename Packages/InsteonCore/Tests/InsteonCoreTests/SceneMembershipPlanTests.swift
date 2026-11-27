@@ -808,6 +808,20 @@ struct SceneMembershipPlanTests {
 
   }
 
+  @Test func saysAHalfLinkWasCompletedOnlyWhenTheRecordForTheGroupAskedForWasInPlace() async throws {
+
+    let records: [BackupRecord] = slots([record(.responder, group: 3, modem, data: [0xFF, 0x1F, 0x01])])
+    // Button 1 has its record and the modem has none; button 2 has neither.
+    let second = await keypadPlan(change([add(lamp, group: 2)]), keypadRecords: records)
+    let first = await keypadPlan(change([add(lamp, group: 1)]), keypadRecords: records)
+
+    #expect(second.steps.map(\.kind) == [.addDeviceRecord, .addModemRecord])
+    #expect(second.warnings.isEmpty)
+    #expect(first.steps.map(\.kind) == [.addModemRecord])
+    #expect(first.warnings.map(\.code) == [.halfLinkCompleted])
+
+  }
+
   @Test func saysAGroupIsAlreadyAMemberOnlyWhenTheDevicesOwnGroupMatches() async throws {
 
     let records: [BackupRecord] = slots([record(.responder, group: 3, modem, data: [0xFF, 0x1F, 0x02])])
