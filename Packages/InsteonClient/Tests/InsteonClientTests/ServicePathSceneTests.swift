@@ -261,7 +261,7 @@ struct ServicePathSceneTests {
     await #expect(throws: ConnectionPathError.interrupted) { _ = try await c.runScene(3, action: .on, idempotencyKey: "run-1") }
   }
 
-  @Test func aReceiptThatBreaksTheContractIsABadResponse() async throws {
+  @Test func aRunAnswerThatCannotBeReadMayHaveTakenEffectSoItIsAnUnknownOutcomeNeverABadResponse() async throws {
     let bodies = [
       "{}",
       #"{"acknowledged":[],"action":"dim","isComplete":true,"outcome":"acknowledged","persistence":"saved","responderCount":2,"scene":3,"unacknowledged":[],"version":1}"#,
@@ -272,7 +272,7 @@ struct ServicePathSceneTests {
     for body in bodies {
       let (c, _) = try await calls(json(body))
 
-      await #expect(throws: ConnectionPathError.badResponse, "\(body)") { _ = try await c.runScene(3, action: .on, idempotencyKey: "run-1") }
+      await #expect(throws: ConnectionError.outcomeUnknown(sent: true), "\(body)") { _ = try await c.runScene(3, action: .on, idempotencyKey: "run-1") }
     }
   }
 

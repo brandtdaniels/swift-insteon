@@ -154,8 +154,9 @@ private struct ServiceCalls: ConnectionCalls {
     do {
       return try JSONDecoder().decode(WireSceneReceipt.self, from: response.body).receipt()
     } catch {
-      // The run was accepted and its answer can't be read: it may have taken effect.
-      throw ConnectionPathError.badResponse
+      // The service accepted the run and its answer can't be read: the scene ran. That is an unknown
+      // outcome, never a bad response, which would read as nothing having happened.
+      throw ConnectionError.outcomeUnknown(sent: true)
     }
   }
 

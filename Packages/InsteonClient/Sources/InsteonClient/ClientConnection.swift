@@ -104,7 +104,9 @@ public actor ClientConnection: DeviceQuerying, DeviceCommanding {
   /// idempotency key, one per call unless the caller passes its own, so the service answers a repeat
   /// of the same key with the recorded answer and sends nothing. A caller that lost the answer asks
   /// again with the same key: ``ConnectionError/interrupted(path:)`` and
-  /// ``ConnectionError/outcomeUnknown(sent:)`` mean the lights may have changed.
+  /// ``ConnectionError/outcomeUnknown(sent:)`` mean the lights may have changed. A successful answer
+  /// that can't be read is ``ConnectionError/outcomeUnknown(sent:)`` with `sent` true, not a bad
+  /// response: the service ran the scene.
   ///
   /// - Parameters:
   ///   - number: The scene's ALL-Link group number, from 1 through 254.
