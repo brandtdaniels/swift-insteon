@@ -150,6 +150,22 @@ struct SceneRunTests {
     #expect(run.receipt == receipt)
   }
 
+  @Test func carriesHowLongAfterTheEchoTheModemsReportsCameInTheReceiptAndTheEvent() async throws {
+    let modem = await modemWithScenes()
+    await modem.setGroupReport(AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [keypad], isComplete: true, statusReportAfter: .seconds(24), failureReportedAfter: .seconds(12)))
+    let service = service(modem)
+    _ = try await service.refreshScenes()
+    let events = await service.events()
+
+    let receipt = try await service.runScene(SceneCommand(number: 3, action: .on))
+
+    #expect(receipt.statusReportAfter == .seconds(24))
+    #expect(receipt.failureReportedAfter == .seconds(12))
+    var reader = events.makeAsyncIterator()
+    guard case let .scene(run)? = try await reader.next() else { Issue.record("expected a scene event"); return }
+    #expect(run.receipt.statusReportAfter == .seconds(24))
+  }
+
   @Test func afterTheModemAcceptsTheCommandAndStopsAnsweringItSavesACheckpointAndPublishesAnIncompleteRun() async throws {
     let modem = await modemWithScenes()
     let store = RecordingStore()

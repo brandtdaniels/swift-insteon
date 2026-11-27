@@ -71,7 +71,7 @@ actor ProductDataModem: LinkingModem {
 
   }
 
-  func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, timeout: Duration) async throws -> AllLinkCleanupReport {
+  func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, wait: AllLinkCleanupWait) async throws -> AllLinkCleanupReport {
 
     throw ModemError.rejected(.sendAllLinkCommand)
 

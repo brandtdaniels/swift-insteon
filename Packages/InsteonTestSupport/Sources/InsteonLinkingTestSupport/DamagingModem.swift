@@ -104,9 +104,9 @@ public actor DamagingModem: LinkingModem {
   }
 
   /// The base modem's cleanup report.
-  public func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, timeout: Duration) async throws -> AllLinkCleanupReport {
+  public func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, wait: AllLinkCleanupWait) async throws -> AllLinkCleanupReport {
 
-    try await base.sendAllLinkCommand(group: group, command: command, timeout: timeout)
+    try await base.sendAllLinkCommand(group: group, command: command, wait: wait)
 
   }
 

@@ -223,6 +223,8 @@ struct OpenAPIContractTests {
     }
     let noted = ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000), notes: [.timeZoneUnavailable("Not/AZone"), .hubClockDrift(seconds: 90)])
     validate(try json(HealthDTO(noted)), as: "Health", in: document)
+    let tuned = ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000), tuning: ServiceTuning.standard.entries(sources: ["scenes.cleanupCapMs": .flag, "scenes.echoWaitMs": .environment]))
+    validate(try json(HealthDTO(tuned)), as: "Health", in: document)
 
     let readings: [DeviceStatus.Reading] = [.percent(50), .onOff(true), .named("Quiet"), .raw]
     for reading in readings {

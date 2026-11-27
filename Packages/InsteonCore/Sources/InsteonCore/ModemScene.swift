@@ -8,7 +8,7 @@ import InsteonProtocol
 /// ```swift
 /// let scene = ModemScene(group: group)
 /// let responders = try await scene.responders(in: session)
-/// let report = try await scene.send(turningOn: true, responderCount: responders.count, through: session)
+/// let report = try await scene.send(turningOn: true, through: session)
 ///
 /// print(report.acknowledged.count, "of", responders.count, "acknowledged")
 /// ```
@@ -54,41 +54,23 @@ public struct ModemScene: Hashable, Sendable {
 
   }
 
-  /// How long to wait for the modem to send every responder its ALL-Link cleanup.
-  ///
-  /// The Insteon Developer's Guide gives up to 2.150 seconds to the first cleanup and 1.550
-  /// seconds to each one after, for responders that answer. A responder that doesn't answer
-  /// costs more, and the Insteon Developer's Guide doesn't say how much, so these numbers are unverified: a bench
-  /// Hub 2 with one silent responder took more than 10 seconds, so this allows 5 seconds and 3
-  /// more for each responder, never less than 20 seconds and never more than 40, so a run
-  /// holds the service for a bounded time.
-  ///
-  /// - Parameter responderCount: How many responders the group has.
-  /// - Returns: The time to wait.
-  public static func cleanupTimeout(responderCount: Int) -> Duration {
-
-    .seconds(min(40, max(20, 5 + 3 * responderCount)))
-
-  }
-
   /// Sends the group Light On at full level, or Light Off, and waits for the modem's ALL-Link
   /// cleanups.
   ///
   /// - Parameters:
   ///   - isOn: Whether to turn the group's responders on, or off.
-  ///   - responderCount: How many responders the group has, such as `responders(in:)`
-  ///     gives, which sets how long to wait with ``cleanupTimeout(responderCount:)``.
   ///   - modem: The modem that sends the command.
+  ///   - wait: How long to wait for the modem's echo and its cleanups.
   /// - Returns: Which responders acknowledged their cleanup, which didn't, and whether the
   ///   modem reached them all.
   /// - Throws: `ModemError.rejected` if the modem rejects the command, as it does for a group
   ///   it has no records for, the modem's other errors, or `CancellationError` if the task is
   ///   canceled.
-  func send(turningOn isOn: Bool, responderCount: Int, through modem: any LinkingModem) async throws -> AllLinkCleanupReport {
+  func send(turningOn isOn: Bool, through modem: any LinkingModem, wait: AllLinkCleanupWait = .standard) async throws -> AllLinkCleanupReport {
 
     let command: Command = isOn ? StandardDirectCommand.on(level: .max).command : StandardDirectCommand.off.command
 
-    return try await modem.sendAllLinkCommand(group: group, command: command, timeout: Self.cleanupTimeout(responderCount: responderCount))
+    return try await modem.sendAllLinkCommand(group: group, command: command, wait: wait)
 
   }
 
@@ -112,17 +94,16 @@ public struct ModemScene: Hashable, Sendable {
   ///
   /// - Parameters:
   ///   - isOn: Whether to turn the group's responders on, or off.
-  ///   - responderCount: How many responders the group has, which sets how long to wait with
-  ///     ``cleanupTimeout(responderCount:)``.
   ///   - session: The session whose modem sends the command.
+  ///   - wait: How long to wait for the modem's echo and its cleanups.
   /// - Returns: Which responders acknowledged their cleanup, which didn't, and whether the
   ///   modem reached them all.
   /// - Throws: The modem's error, which ``SendFailure`` reads as
   ///   ``SendFailure/modemRejected`` for a group the modem has no records for, or
   ///   `CancellationError`.
-  public func send(turningOn isOn: Bool, responderCount: Int, through session: ModemSession) async throws -> SceneResult {
+  public func send(turningOn isOn: Bool, through session: ModemSession, wait: AllLinkCleanupWait = .standard) async throws -> SceneResult {
 
-    let report: AllLinkCleanupReport = try await send(turningOn: isOn, responderCount: responderCount, through: session.modem)
+    let report: AllLinkCleanupReport = try await send(turningOn: isOn, through: session.modem, wait: wait)
 
     return SceneResult(report)
 

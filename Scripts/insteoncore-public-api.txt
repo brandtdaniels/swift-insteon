@@ -484,7 +484,7 @@ func DeviceNetwork.identify(_:)
 func DeviceNetwork.modemDatabase()
 func DeviceNetwork.modemInfo()
 func DeviceNetwork.productData(of:)
-func DeviceNetwork.run(_:turningOn:)
+func DeviceNetwork.run(_:turningOn:wait:)
 func DeviceNetwork.send(_:collectingFor:consent:onSending:onAcknowledgment:)
 func DeviceNetwork.snapshot()
 func DeviceNetwork.state(of:)
@@ -545,7 +545,7 @@ func ModemDeviceOperations.turnOffFast()
 func ModemDeviceOperations.turnOn(level:)
 func ModemDeviceOperations.turnOnFast(level:)
 func ModemScene.responders(in:)
-func ModemScene.send(turningOn:responderCount:through:)
+func ModemScene.send(turningOn:through:wait:)
 func ModemSession.beep(isDouble:)
 func ModemSession.cancelLinking()
 func ModemSession.info()
@@ -664,7 +664,7 @@ init SceneListing(_:)
 init SceneListing(scenes:looseHalfLinks:unreadable:unreadableReasons:unlisted:isModemUnread:)
 init SceneListing.Member(address:data:)
 init SceneListing.Scene(number:controller:members:halfLinks:)
-init SceneResult(acknowledged:unacknowledged:isComplete:)
+init SceneResult(acknowledged:unacknowledged:isComplete:statusReportAfter:failureReportedAfter:responderCount:)
 init SelfTestCheck(kind:outcome:detail:fixes:group:)
 init SelfTestGroup(number:name:)
 init SelfTestOptions(actuates:)
@@ -736,7 +736,6 @@ static func InsteonErrorDescription.modemUnanswered(command:)
 static func JSONFileDeviceRegistryStore.json(_:)
 static func JSONFileDeviceRegistryStore.networkSnapshot(json:)
 static func JSONFileDeviceRegistryStore.snapshot(json:)
-static func ModemScene.cleanupTimeout(responderCount:)
 static func ModemSession.withHub(host:port:user:password:catalog:onPollSucceeded:_:)
 static func ModemSession.withSerialPort(path:catalog:_:)
 static func NetworkBackup.check(_:)
@@ -1332,7 +1331,10 @@ var SceneListing.unlisted
 var SceneListing.unreadable
 var SceneListing.unreadableReasons
 var SceneResult.acknowledged
+var SceneResult.failureReportedAfter
 var SceneResult.isComplete
+var SceneResult.responderCount
+var SceneResult.statusReportAfter
 var SceneResult.unacknowledged
 var SelfTestCheck.detail
 var SelfTestCheck.fixes
