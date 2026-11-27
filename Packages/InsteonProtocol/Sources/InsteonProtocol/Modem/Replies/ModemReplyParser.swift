@@ -182,6 +182,15 @@ enum ModemFraming: Framing {
   /// 7th byte starts the next frame, a start byte followed by a number a modem sends. An address
   /// that ends in a start byte doesn't, since the frame after it starts with another start byte.
   /// A 7th byte that is a start byte waits for the byte after it.
+  ///
+  /// Two consequences are known and accepted:
+  /// - A 6-byte report that is the last of the bytes read waits for the next byte to decide its
+  ///   length, so it is reported once that byte arrives. The Hub 2 sends a status report right
+  ///   behind it in the traces.
+  /// - The decision is a heuristic where an address ends in `02` and the byte after it is a
+  ///   number a modem sends, such as `5C`: a 7-byte report and a 6-byte one followed by a frame
+  ///   look the same through those bytes, and the frame is read as 6 bytes. A 7-byte report's
+  ///   successor starts with its own start byte, so this takes bytes lost between the frames.
   private static func cleanupFailureLength(of bytes: [UInt8]) -> FrameLength {
 
     guard bytes.count >= 7 else {
