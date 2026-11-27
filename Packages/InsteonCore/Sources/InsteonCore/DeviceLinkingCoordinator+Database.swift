@@ -453,6 +453,14 @@ extension DeviceLinkingCoordinator {
   /// catalog doesn't give, or one of an identity the device didn't report, is `0x00`.
   static func modemData(_ linkData: ModemLinkData?, isController: Bool, identity: SetButtonPressed?) -> [UInt8] {
 
+    modemData(linkData, isController: isController, reported: identity.map(ReportedIdentity.init))
+
+  }
+
+  /// The data bytes of a record the modem keeps for a device whose identity is known, as
+  /// ``modemData(_:isController:identity:)`` gives them for the identity the modem reported.
+  static func modemData(_ linkData: ModemLinkData?, isController: Bool, reported: ReportedIdentity?) -> [UInt8] {
+
     var data: [UInt8] = [0x00, 0x00, 0x00]
     let bytes: [ModemLinkDataByte] = (isController ? linkData?.controller : linkData?.responder) ?? []
 
@@ -462,15 +470,15 @@ extension DeviceLinkingCoordinator {
 
         data[byte.position - 1] = value
 
-      } else if let identity, byte.identity == .category {
+      } else if let reported, byte.identity == .category {
 
-        data[byte.position - 1] = identity.category.rawValue
+        data[byte.position - 1] = reported.category.rawValue
 
-      } else if let identity, byte.identity == .subcategory {
+      } else if let reported, byte.identity == .subcategory {
 
-        data[byte.position - 1] = identity.subcategory.rawValue
+        data[byte.position - 1] = reported.subcategory.rawValue
 
-      } else if let identity, byte.identity == .firmware, let firmware = identity.firmwareVersion {
+      } else if let reported, byte.identity == .firmware, let firmware = reported.firmwareVersion {
 
         data[byte.position - 1] = firmware.rawValue
 

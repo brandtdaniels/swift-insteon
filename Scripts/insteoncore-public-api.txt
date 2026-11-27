@@ -304,6 +304,31 @@ case ResendDecision.doNotResend
 case ResendDecision.resend
 case ResetErasure.links
 case ResetErasure.settings
+case SceneMembershipFinding.Code.alreadyMember
+case SceneMembershipFinding.Code.damagedRecords
+case SceneMembershipFinding.Code.databaseFull
+case SceneMembershipFinding.Code.databaseNotCached
+case SceneMembershipFinding.Code.groupCannotRespond
+case SceneMembershipFinding.Code.halfLinkCompleted
+case SceneMembershipFinding.Code.noEndOfDatabase
+case SceneMembershipFinding.Code.notAMember
+case SceneMembershipFinding.Code.notIdentified
+case SceneMembershipFinding.Code.notInCatalog
+case SceneMembershipFinding.Code.notYetSupported
+case SceneMembershipFinding.Code.rejectsModem
+case SceneMembershipFinding.Code.undescribedLinkData
+case SceneMembershipFinding.Code.unknownLinkDataByte
+case SceneMembershipFinding.Code.unsupportedEngine
+case SceneMembershipFinding.Code.valueNotTaken
+case SceneMembershipFinding.Code.valueOutOfRange
+case SceneMembershipStep.Kind.addDeviceRecord
+case SceneMembershipStep.Kind.addModemRecord
+case SceneMembershipStep.Kind.markEndOfDatabase
+case SceneMembershipStep.Kind.removeDeviceRecord
+case SceneMembershipStep.Kind.removeModemRecord
+case SceneMembershipStep.Kind.updateDeviceRecord
+case SceneMembershipStep.Risk.movesEndOfDatabase
+case SceneMembershipStep.Risk.rejectsModemOnceUnlinked
 case SelfTestCheckKind.answers
 case SelfTestCheckKind.beep
 case SelfTestCheckKind.catalog
@@ -425,6 +450,10 @@ enum RelayStateLinkingError
 enum ResendDecision
 enum ResendPolicy
 enum ResetErasure
+enum SceneMembershipFinding.Code
+enum SceneMembershipPlanner
+enum SceneMembershipStep.Kind
+enum SceneMembershipStep.Risk
 enum SelfTestCheckKind
 enum SelfTestChecklistItem
 enum SelfTestFix
@@ -665,6 +694,9 @@ init SceneListing(_:)
 init SceneListing(scenes:looseHalfLinks:unreadable:unreadableReasons:unlisted:isModemUnread:)
 init SceneListing.Member(address:data:)
 init SceneListing.Scene(number:controller:members:halfLinks:)
+init SceneMembershipChange.Addition(device:onLevel:rampRate:)
+init SceneMembershipChange?(scene:additions:removals:)
+init SceneMembershipFinding(code:device:detail:)
 init SceneResult(acknowledged:unacknowledged:isComplete:statusReportAfter:failureReportedAfter:responderCount:)
 init SelfTestCheck(kind:outcome:detail:fixes:group:)
 init SelfTestGroup(number:name:)
@@ -750,6 +782,7 @@ static func ProductCatalog.update(replacing:currentVersion:from:requestTimeout:r
 static func ProductCatalogStore.version(json:)
 static func ProductCatalogStore.versionJSON(_:)
 static func ResendPolicy.decision(after:isIdempotent:)
+static func SceneMembershipPlanner.plan(_:from:devices:modemLinkData:)
 static func SceneResult.==(left:right:)
 static func SendPolicy.decision(effect:declaredEffect:refusal:consent:)
 static func SerialCommandPolicy.consent(forcing:)
@@ -888,6 +921,12 @@ struct SETButtonPrompt
 struct SceneListing
 struct SceneListing.Member
 struct SceneListing.Scene
+struct SceneMembershipChange
+struct SceneMembershipChange.Addition
+struct SceneMembershipDevice
+struct SceneMembershipFinding
+struct SceneMembershipPlan
+struct SceneMembershipStep
 struct SceneResult
 struct SelfTestCheck
 struct SelfTestGroup
@@ -1332,6 +1371,35 @@ var SceneListing.scenes
 var SceneListing.unlisted
 var SceneListing.unreadable
 var SceneListing.unreadableReasons
+var SceneMembershipChange.Addition.device
+var SceneMembershipChange.Addition.onLevel
+var SceneMembershipChange.Addition.rampRate
+var SceneMembershipChange.additions
+var SceneMembershipChange.removals
+var SceneMembershipChange.scene
+var SceneMembershipDevice.acceptsRemoteWrite
+var SceneMembershipDevice.address
+var SceneMembershipDevice.engine
+var SceneMembershipDevice.product
+var SceneMembershipFinding.code
+var SceneMembershipFinding.detail
+var SceneMembershipFinding.device
+var SceneMembershipPlan.devices
+var SceneMembershipPlan.fingerprint
+var SceneMembershipPlan.id
+var SceneMembershipPlan.isApplicable
+var SceneMembershipPlan.isEmpty
+var SceneMembershipPlan.refusals
+var SceneMembershipPlan.requiredConsent
+var SceneMembershipPlan.scene
+var SceneMembershipPlan.steps
+var SceneMembershipPlan.warnings
+var SceneMembershipStep.endpoint
+var SceneMembershipStep.isRemoval
+var SceneMembershipStep.isUpdateInPlace
+var SceneMembershipStep.kind
+var SceneMembershipStep.record
+var SceneMembershipStep.risks
 var SceneResult.acknowledged
 var SceneResult.failureReportedAfter
 var SceneResult.isComplete
