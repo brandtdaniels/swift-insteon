@@ -228,7 +228,7 @@ public enum ServerRunner {
     )
   }
 
-  /// The pairing document's home name and its local network route: the advertised address, or the one the server listens on.
+  /// The pairing document's network name and its local network route: the advertised address, or the one the server listens on.
   static func pairingConfiguration(for options: ServerOptions) -> PairingConfiguration {
     PairingConfiguration(networkName: options.networkName, routes: [PairingRoute(kind: "lan", url: options.advertiseURL ?? "http://" + options.listen + ":" + String(options.port))])
   }

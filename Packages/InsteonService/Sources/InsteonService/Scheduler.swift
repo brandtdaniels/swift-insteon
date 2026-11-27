@@ -19,7 +19,7 @@ struct ScheduleHost: Sendable {
 /// sunset source. The scheduler never writes a clock or a schedule to a Hub, modem or device. It
 /// sends only the service's own commands.
 ///
-/// A schedule's next run is found with ``ScheduleCalendar`` in the home's time zone. A run is on time
+/// A schedule's next run is found with ``ScheduleCalendar`` in the network's time zone. A run is on time
 /// when the service handles it less than a minute late; a later one is missed and skipped, unless
 /// the schedule asks to catch up and it is less than 15 minutes late. Looking again at the wall
 /// clock at least every 30 seconds, the scheduler notices when the clock was set, and a run is

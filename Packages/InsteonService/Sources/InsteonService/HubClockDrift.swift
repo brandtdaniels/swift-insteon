@@ -9,7 +9,7 @@ enum HubClockDrift {
   ///
   /// - Parameters:
   ///   - reported: The Hub's local time, such as `11/20/2026 02:38:39 PM`.
-  ///   - zone: The home's time zone, which the Hub's local time is in.
+  ///   - zone: The network's time zone, which the Hub's local time is in.
   ///   - date: The service's time.
   static func seconds(reported: String, in zone: TimeZone, at date: Date) -> Int? {
     let formatter = DateFormatter()

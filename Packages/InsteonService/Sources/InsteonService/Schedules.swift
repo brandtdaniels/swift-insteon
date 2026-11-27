@@ -39,8 +39,8 @@ public struct ScheduledAction: Hashable, Sendable {
 /// A command the service sends at the same time on chosen days, such as "turn the porch light on 15
 /// minutes after sunset".
 ///
-/// A clock time means wall-clock time in the home's time zone, so it follows daylight saving time
-/// with no edit. Sunrise and sunset are worked out for the home's location.
+/// A clock time means wall-clock time in the network's time zone, so it follows daylight saving time
+/// with no edit. Sunrise and sunset are worked out for the network's location.
 public struct ServiceSchedule: Hashable, Sendable {
   /// The most schedules the service keeps.
   public static let maximumCount = 64
@@ -202,7 +202,7 @@ public enum ScheduleError: Error, Equatable, Sendable {
   case unsupportedAction
   /// The schedule is relative to sunrise or sunset, and the service has no location.
   case locationMissing
-  /// The home's time zone isn't in the host's time zone database, so the service can't work out a time of day.
+  /// The network's time zone isn't in the host's time zone database, so the service can't work out a time of day.
   case timeZoneUnavailable
   /// No schedule has that identifier.
   case unknownSchedule
@@ -233,11 +233,11 @@ public protocol ScheduleManaging: Sendable {
   func removeTimer(id: String) async throws
 }
 
-/// Where the home's place and time zone come from, and what the service remembers of them.
+/// Where the network's place and time zone come from, and what the service remembers of them.
 public struct ScheduleSettings: Equatable, Sendable {
   /// The IANA time zone's identifier, such as `America/Los_Angeles`, or `nil` for the host's.
   public var timeZoneIdentifier: String?
-  /// The home's latitude and longitude, or `nil` when unknown. Without it, sunrise and sunset schedules are refused.
+  /// The network's latitude and longitude, or `nil` when unknown. Without it, sunrise and sunset schedules are refused.
   public var location: GeographicCoordinate?
 
   /// Creates settings.

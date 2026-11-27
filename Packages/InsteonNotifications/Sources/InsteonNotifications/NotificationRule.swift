@@ -4,7 +4,7 @@ import InsteonProtocol
 /// A rule that someone wants to hear about something a device does, such as a leak sensor
 /// turning wet, a door opening or a sensor going quiet.
 ///
-/// A ``NotificationRuleSet`` checks a home's devices against its rules. How a notification
+/// A ``NotificationRuleSet`` checks a network's devices against its rules. How a notification
 /// reaches people, such as a push notification or an email, is up to the app.
 ///
 /// ```swift

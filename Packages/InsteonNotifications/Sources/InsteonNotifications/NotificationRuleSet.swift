@@ -1,7 +1,7 @@
 import InsteonDeviceCatalog
 import InsteonProtocol
 
-/// A home's notification rules, and the notifications its devices set off.
+/// A network's notification rules, and the notifications its devices set off.
 ///
 /// Give the rule set each event a `DeviceEventInterpreter` reads, and from time to time the
 /// devices a `HeartbeatMonitor` finds silent. It returns the notifications to deliver, in the
