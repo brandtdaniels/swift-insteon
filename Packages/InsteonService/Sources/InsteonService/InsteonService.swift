@@ -81,7 +81,7 @@ public actor InsteonService: InsteonServiceAPI {
   ///   - throughHub: Whether the modem is reached through a Hub. A modem that doesn't answer is then
   ///     reported as ``ModemUnavailability/hubUnreachable``, because the Hub is what to check.
   ///   - notificationRules: Where the notification rules are kept, if anywhere. Without it they last as long as the service.
-  ///   - scheduling: The home's time zone and location and where schedules and timers are kept. Schedules and timers run on `clock` and `now`.
+  ///   - scheduling: The network's time zone and location and where schedules and timers are kept. Schedules and timers run on `clock` and `now`.
   ///   - tuning: How long scene runs wait. Check it with ``ServiceTuning/validated()`` first; the service uses it as given.
   ///   - tuningSources: Where each tuning value came from, by name such as `scenes.echoWaitMs`, for health. A value with no entry is a default.
   public init(
