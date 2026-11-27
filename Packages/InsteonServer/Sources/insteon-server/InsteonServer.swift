@@ -15,7 +15,8 @@ struct InsteonServer {
       print(ServerRunner.help)
       return
     }
-    LoggingSystem.bootstrap { StreamLogHandler.standardError(label: $0) }
+    let level = ServerLogging.level(arguments: arguments, environment: ProcessInfo.processInfo.environment)
+    LoggingSystem.bootstrap { ServerLogging.handler(label: $0, level: level) }
     let logger = Logger(label: "insteon-server")
     do {
       if arguments.first == "pair" {

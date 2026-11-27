@@ -34,6 +34,11 @@ public enum ServerRunner {
   --time-zone NAME  The home's IANA time zone, such as America/Los_Angeles, which a clock time
                    in a schedule follows through daylight saving changes (default: the one
                    the server remembers, else this computer's).
+  --log-level LEVEL  How much the server logs, one of
+                   trace, debug, info, notice, warning, error, critical (default: info).
+                   Without the option, INSTEON_LOG_LEVEL in the process's environment is
+                   used; the option wins. The environment file does not set it. A bad
+                   value of either is refused. Debug lines carry no device addresses.
   --help           Show this help without connecting.
 
   Advanced settings (each also has an environment variable; the flag wins over it):

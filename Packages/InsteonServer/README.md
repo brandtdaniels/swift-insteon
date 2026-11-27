@@ -1014,6 +1014,17 @@ without credentials logs `authenticationRequired` at info level, a wrong passwor
 a refused command logs a warning. The log doesn't
 summarize or rate-limit failed authentication.
 
+### Log level
+
+`--log-level LEVEL` sets how much the server logs: `trace`, `debug`, `info`, `notice`, `warning`, `error` or `critical`, `info` by default. Without the option, the `INSTEON_LOG_LEVEL` variable in the process's environment is used, and the option wins when both are given. The environment file does not set it: it is read after logging starts. A value that is not one of the levels, in either place, stops the server with `log_level_invalid` and exit status 78, even when the other one is good; the level is read case-insensitively. `insteon-server pair` takes the option too.
+
+```sh
+insteon-server --hub 192.168.1.20 --log-level debug
+INSTEON_LOG_LEVEL=debug insteon-server --hub 192.168.1.20
+```
+
+The debug lines are the scene run's, `scene run finished` and `scene run failed`. They carry the scene number, the action, the seconds the run took, whether the cleanups completed, how many members acknowledged them and, for a failure, its code. Debug lines carry no device addresses, no credentials and nothing a client sent. This holds unless a later change says otherwise in its pull request and here.
+
 The server is a prototype for local and private VPN testing. Tests cover a real local HTTP
 listener and an in-memory modem. macOS and physical hardware validation are still required
 before relying on it unattended.
