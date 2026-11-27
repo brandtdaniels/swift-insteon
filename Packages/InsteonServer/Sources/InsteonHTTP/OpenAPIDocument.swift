@@ -131,7 +131,7 @@ enum OpenAPIDocument {
       "SceneMembershipPlan": Schema.object([
         "version": version,
         "scene": Schema.integer(minimum: 1, maximum: 254),
-        "planId": Schema.string(pattern: "^sha256:[0-9a-f]{64}$", description: "A hash of the scene and the steps. The service keeps a plan it could apply in memory by this id until `expiresAt`."),
+        "planId": Schema.string(pattern: "^sha256:[0-9a-f]{64}$", description: "A hash of the scene, the steps and the records they were made from, the same as the consent's `readFingerprint`. The service keeps a plan it could apply in memory by this id until `expiresAt`."),
         "expiresAt": ["type": "string", "format": "date-time", "description": "Five minutes after the plan was made."],
         "isApplicable": ["type": "boolean", "description": "Whether the plan has steps and no refusal."],
         "isEmpty": ["type": "boolean", "description": "Whether the plan writes nothing."],

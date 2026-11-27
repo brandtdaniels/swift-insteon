@@ -368,7 +368,7 @@ enum SceneMembershipBody {
 struct SceneMembershipPlanDTO: Encodable {
   let version = 1
   let scene: Int
-  /// A hash of the steps, which names the plan until it expires.
+  /// A hash of the steps and the records they were made from, which names the plan until it expires.
   let planId: String
   let expiresAt: String
   /// Whether the plan has steps and no refusal.

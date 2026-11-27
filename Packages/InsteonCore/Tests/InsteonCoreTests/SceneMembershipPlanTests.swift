@@ -834,9 +834,10 @@ struct SceneMembershipPlanTests {
 
     #expect(consent == DatabaseLinkConsent(writeLinkRecords: true, readFingerprint: first.fingerprint))
     #expect(consent.writeLinkRecords)
-    // The steps are the same, but one more record was read, so another plan is shown.
+    // The steps are the same, but one more record was read, so another plan is shown, and the id a
+    // service keeps it under is another, so consent for one never meets the other.
     #expect(first.steps == reread.steps)
-    #expect(first.id == reread.id)
+    #expect(first.id != reread.id)
     #expect(first.fingerprint != reread.fingerprint)
     #expect(first.fingerprint.hasPrefix("sha256:"))
 

@@ -331,8 +331,9 @@ public struct SceneMembershipPlan: Hashable, Sendable {
   /// The devices the change names, with whether each takes a remote write.
   public var devices: [SceneMembershipDevice]
 
-  /// A SHA-256 over the scene and the steps, as `sha256:` and 64 hexadecimal digits. The same
-  /// change on the same databases gives the same identifier.
+  /// The plan's name: the same SHA-256 as ``fingerprint``, as `sha256:` and 64 hexadecimal digits.
+  /// The same change on the same databases gives the same identifier, and databases that differ give
+  /// another, so a service that keeps plans by it never hands consent for one plan to another.
   public var id: String
 
   /// A SHA-256 over the steps and the records of the databases they were made from, as `sha256:`
@@ -377,8 +378,8 @@ public struct SceneMembershipPlan: Hashable, Sendable {
 
     }
 
-    id = Self.digest(stepLines)
     fingerprint = Self.digest(stepLines + readLines)
+    id = fingerprint
 
   }
 
