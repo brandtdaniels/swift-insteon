@@ -32,6 +32,14 @@ struct ScenesScreenTests {
     #expect(screen.rows[0].members.map(\.title) == ["1A.2B.3C", "4D.5E.6F"])
   }
 
+  @Test func aSourceTheClientHasNoCaseForIsNamedAsTheServiceWroteIt() async {
+    let scene = SceneList.Scene(number: 6, source: .other("cloud"), isWritable: false, members: [Fixtures.described], halfLinks: [])
+    let (screen, _) = await loaded(Fixtures.whole([scene]))
+
+    #expect(screen.rows.map(\.source) == ["Started by cloud"])
+    #expect(screen.rows[0].canRun == false)
+  }
+
   @Test func aDescribedMemberShowsWhatEachByteMeansAndLeavesOutTheGroupByte() async {
     let (screen, _) = await loaded(Fixtures.whole())
 
@@ -335,6 +343,7 @@ struct ScenesScreenTests {
       (ServiceControlError.sceneEmpty, "That scene has no members."),
       (ServiceControlError.databasesUnavailable, "This network doesn't give out its ALL-Link databases."),
       (ConnectionError.invalidScene, "That isn't a scene the service can run."),
+      (ConnectionError.idempotencyKeyReused, "The service already used that request's key for a different command."),
       (ConnectionError.noPathReached([]), "The service couldn't be reached."),
       (ConnectionError.unauthorized(paths: ["lan"]), "The service refused this device's credential. Pair this device again."),
       (ConnectionError.forbidden(path: "lan"), "This device isn't allowed to control the service."),

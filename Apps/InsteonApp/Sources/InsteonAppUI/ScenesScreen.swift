@@ -201,6 +201,7 @@ public final class ScenesScreen<Network: SceneManaging> {
     switch source {
     case .modem: "Started by the modem"
     case let .device(address): "Started by \(address)"
+    case let .other(name): "Started by \(name)"
     }
   }
 
@@ -297,6 +298,7 @@ public final class ScenesScreen<Network: SceneManaging> {
       case .unauthorized: return .refused("The service refused this device's credential. Pair this device again.")
       case .forbidden: return .refused("This device isn't allowed to control the service.")
       case .unsupported: return .refused("This connection can't run scenes.")
+      case .idempotencyKeyReused: return .refused("The service already used that request's key for a different command.")
       case .invalidScene: return .refused("That isn't a scene the service can run.")
       case .modemUnavailable: return .refused("The service can't reach its modem right now.")
       case let .rejected(code, sent): return sent ? .mayHaveBeenSent : .refused("The service refused the request (\(code)).")
