@@ -1,3 +1,4 @@
+import Foundation
 import InsteonService
 import Logging
 import Testing
@@ -228,5 +229,45 @@ extension ServerTests {
     for name in ["--scene-echo-wait-ms", "--scene-cleanup-quiet-ms", "--scene-cleanup-cap-ms", "INSTEON_SCENE_ECHO_WAIT_MS", "INSTEON_SCENE_CLEANUP_QUIET_MS", "INSTEON_SCENE_CLEANUP_CAP_MS"] {
       #expect(ServerRunner.help.contains(name), "\(name)")
     }
+  }
+}
+
+extension ServerTests {
+  private func environmentFile(_ text: String) throws -> String {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("insteon-env-" + UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    let file = directory.appendingPathComponent("env")
+    try Data(text.utf8).write(to: file)
+    #expect(chmod(file.path, 0o600) == 0)
+    return file.path
+  }
+
+  @Test func theSceneSettingsComeFromTheEnvironmentFileToo() throws {
+    let path = try environmentFile("INSTEON_SCENE_CLEANUP_CAP_MS=90000\nINSTEON_SCENE_ECHO_WAIT_MS=7000\n")
+
+    let options = try ServerRunner.resolvedOptions(arguments: ["--env-file", path], environment: [:], warn: { _ in }).options
+
+    #expect(options.tuning.scenes.cleanupCap == .seconds(90))
+    #expect(options.tuning.scenes.echoWait == .seconds(7))
+    #expect(options.tuningSources[ServiceTuningError.Field.scenesCleanupCap.name] == .environment)
+  }
+
+  @Test func aFlagBeatsTheFileAndTheProcessEnvironmentBeatsTheFile() throws {
+    let path = try environmentFile("INSTEON_SCENE_CLEANUP_CAP_MS=90000\nINSTEON_SCENE_ECHO_WAIT_MS=7000\n")
+
+    let options = try ServerRunner.resolvedOptions(arguments: ["--env-file", path, "--scene-cleanup-cap-ms", "100000"], environment: ["INSTEON_SCENE_ECHO_WAIT_MS": "8000"], warn: { _ in }).options
+
+    #expect(options.tuning.scenes.cleanupCap == .seconds(100))
+    #expect(options.tuning.scenes.echoWait == .seconds(8))
+  }
+
+  @Test func aBadSceneValueInTheFileIsRefusedWithItsCode() throws {
+    let path = try environmentFile("INSTEON_SCENE_ECHO_WAIT_MS=soon\n")
+
+    #expect(throws: ServerOptionError.invalidSceneEchoWait) { try ServerRunner.resolvedOptions(arguments: ["--env-file", path], environment: [:], warn: { _ in }) }
+  }
+
+  @Test func theHelpSaysTheEnvironmentFileCarriesTheSceneSettingsAndNotTheLogLevel() {
+    #expect(ServerRunner.help.contains("the environment file or the process's environment"))
   }
 }

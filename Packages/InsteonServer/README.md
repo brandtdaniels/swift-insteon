@@ -731,7 +731,7 @@ curl -s -X POST -H "Authorization: Bearer $(cat control.token)" -H "X-Insteon-Re
 
 ### Advanced settings
 
-These tune how long a scene run waits. The standard values are unverified, so a bench run on a Hub 2 can show whether they fit; each setting is a flag, with an environment variable of the same name in capitals with the `INSTEON_` prefix, and the flag wins over the variable, which wins over the standard value. A value out of range stops the server at start with its own code and exit status 78 (`scene_echo_wait_invalid`, `scene_cleanup_quiet_invalid`, `scene_cleanup_cap_invalid`); the message names the flag and the variable, never the value.
+These tune how long a scene run waits. The standard values are unverified, so a bench run on a Hub 2 can show whether they fit; each setting is a flag, with an environment variable of the same name in capitals with the `INSTEON_` prefix, and the flag wins over the variable, which wins over the standard value. The variable can be in the process's environment or in the environment file (the process's winning), like the Hub's settings; the log level's variable is the exception, since logging starts before the file is read. A value out of range stops the server at start with its own code and exit status 78 (`scene_echo_wait_invalid`, `scene_cleanup_quiet_invalid`, `scene_cleanup_cap_invalid`); the message names the flag and the variable, never the value.
 
 | Flag | Variable | Standard | Range | What it is |
 | --- | --- | --- | --- | --- |

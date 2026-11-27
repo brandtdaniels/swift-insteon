@@ -41,7 +41,8 @@ public enum ServerRunner {
                    value of either is refused. Debug lines carry no device addresses.
   --help           Show this help without connecting.
 
-  Advanced settings (each also has an environment variable; the flag wins over it):
+  Advanced settings. Each has an environment variable, read from
+  the environment file or the process's environment (the process's wins); the flag wins over both.
   --scene-echo-wait-ms MS  How long a scene run waits for the modem to accept the group
                    command (default: 5000; 1 through 60000). INSTEON_SCENE_ECHO_WAIT_MS.
   --scene-cleanup-quiet-ms MS  How long a scene run waits for more cleanup traffic before it
@@ -174,9 +175,20 @@ public enum ServerRunner {
     }
   }
 
+  /// The options, read twice: once from the process's environment to find `--env-file`, then
+  /// again from the process's environment with the file's variables added, so a setting such as
+  /// the scene waits can come from the file too. The log level is the exception: logging starts
+  /// before the file is read, so it comes from the process's environment alone.
+  ///
+  /// - Returns: The options, and the environment with the file's variables added.
+  static func resolvedOptions(arguments: [String], environment: [String: String], warn: (String) -> Void) throws -> (options: ServerOptions, environment: [String: String]) {
+    let first = try ServerOptions(arguments: arguments, environment: environment)
+    let merged = try EnvironmentFile.load(explicitPath: first.envFilePath, environment: environment, warn: warn)
+    return (try ServerOptions(arguments: arguments, environment: merged), merged)
+  }
+
   static func run(arguments: [String], environment: [String: String], logger: Logger, openModem: @escaping ModemOpener, timing: Timing, hubPro: HubProAccess) async throws {
-    let options = try ServerOptions(arguments: arguments, environment: environment)
-    let environment = try EnvironmentFile.load(explicitPath: options.envFilePath, environment: environment, warn: { logger.warning("\($0)") })
+    let (options, environment) = try resolvedOptions(arguments: arguments, environment: environment, warn: { logger.warning("\($0)") })
     let target = try ModemTarget.resolve(hub: options.hub, serialPath: options.serialPath, environment: environment)
     guard let password = environment["INSTEON_GATEWAY_PASSWORD"] else { throw ServerRunError.missingPassword }
     // Validate server authentication before opening any hardware connection.
