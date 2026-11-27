@@ -39,7 +39,7 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
     return response
   }
 
-  /// Plans adding and removing a scene's members. It needs the `control` scope, which the authentication
+  /// Plans adding and removing a scene's members. It needs the `admin` scope, which the authentication
   /// middleware has already enforced, and the request marker. The service reads only what it has cached,
   /// so nothing is sent to hardware and nothing is written.
   func planMembership(_ request: Request, number: String?) async throws -> Response {
@@ -297,13 +297,14 @@ enum SceneMembershipBody {
     let device: String
     let onLevel: Int?
     let rampRate: Int?
+    let group: Int?
   }
 
   static func change(scene: UInt8, from data: Data) throws -> SceneMembershipChange {
     guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], Set(object.keys).isSubset(of: ["add", "remove"]) else { throw SceneInputError.invalidMembership }
     if let added = object["add"] as? [Any] {
       for element in added {
-        guard let fields = element as? [String: Any], Set(fields.keys).isSubset(of: ["device", "onLevel", "rampRate"]) else { throw SceneInputError.invalidMembership }
+        guard let fields = element as? [String: Any], Set(fields.keys).isSubset(of: ["device", "onLevel", "rampRate", "group"]) else { throw SceneInputError.invalidMembership }
       }
     }
     let raw: Raw
@@ -314,7 +315,7 @@ enum SceneMembershipBody {
     var additions: [SceneMembershipChange.Addition] = []
     for item in added {
       guard let address = InsteonAddress(item.device) else { throw HTTPInputError.invalidAddress }
-      additions.append(SceneMembershipChange.Addition(device: address, onLevel: try byte(item.onLevel), rampRate: try byte(item.rampRate)))
+      additions.append(SceneMembershipChange.Addition(device: address, onLevel: try byte(item.onLevel), rampRate: try byte(item.rampRate), group: try item.group.map(group)))
     }
     var removals: [InsteonAddress] = []
     for text in removed {
@@ -325,6 +326,12 @@ enum SceneMembershipBody {
     let named = additions.map(\.device) + removals
     guard Set(named).count == named.count, let change = SceneMembershipChange(scene: scene, additions: additions, removals: removals) else { throw SceneInputError.invalidMembership }
     return change
+  }
+
+  /// A device's own group, from 1 through 255.
+  private static func group(_ value: Int) throws -> UInt8 {
+    guard (1...255).contains(value), let group = UInt8(exactly: value) else { throw SceneInputError.invalidMembership }
+    return group
   }
 
   private static func byte(_ value: Int?) throws -> UInt8? {

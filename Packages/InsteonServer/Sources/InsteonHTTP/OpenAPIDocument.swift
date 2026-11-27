@@ -114,7 +114,8 @@ enum OpenAPIDocument {
         "add": Schema.array(of: Schema.object([
           "device": address,
           "onLevel": Schema.integer(minimum: 0, maximum: 255, description: "What the member's record holds for the on-level. Left out, the record holds full on (255). A device whose record has no on-level byte refuses it."),
-          "rampRate": Schema.integer(minimum: 0, maximum: 255, description: "What the member's record holds for the ramp rate. Left out, the record holds 0.5 s (28). A device whose record has no ramp rate byte refuses it.")
+          "rampRate": Schema.integer(minimum: 0, maximum: 255, description: "What the member's record holds for the ramp rate. Left out, the record holds 0.5 s (28). A device whose record has no ramp rate byte refuses it."),
+          "group": Schema.integer(minimum: 1, maximum: 255, description: "The device's own group that answers the scene, such as one button of a keypad. Left out, the device's main group. The catalog must give the device the group, or the plan refuses it as `unknownGroup`.")
         ], required: ["device"])),
         "remove": Schema.array(of: address)
       ], required: [], description: "At least one device in all, at most 32 in each list, and none named twice."),

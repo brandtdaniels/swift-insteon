@@ -317,6 +317,7 @@ case SceneMembershipFinding.Code.notInCatalog
 case SceneMembershipFinding.Code.notYetSupported
 case SceneMembershipFinding.Code.rejectsModem
 case SceneMembershipFinding.Code.undescribedLinkData
+case SceneMembershipFinding.Code.unknownGroup
 case SceneMembershipFinding.Code.unknownLinkDataByte
 case SceneMembershipFinding.Code.unsupportedEngine
 case SceneMembershipFinding.Code.valueNotTaken
@@ -694,7 +695,7 @@ init SceneListing(_:)
 init SceneListing(scenes:looseHalfLinks:unreadable:unreadableReasons:unlisted:isModemUnread:)
 init SceneListing.Member(address:data:)
 init SceneListing.Scene(number:controller:members:halfLinks:)
-init SceneMembershipChange.Addition(device:onLevel:rampRate:)
+init SceneMembershipChange.Addition(device:onLevel:rampRate:group:)
 init SceneMembershipChange?(scene:additions:removals:)
 init SceneMembershipFinding(code:device:detail:)
 init SceneResult(acknowledged:unacknowledged:isComplete:statusReportAfter:failureReportedAfter:responderCount:)
@@ -1372,6 +1373,7 @@ var SceneListing.unlisted
 var SceneListing.unreadable
 var SceneListing.unreadableReasons
 var SceneMembershipChange.Addition.device
+var SceneMembershipChange.Addition.group
 var SceneMembershipChange.Addition.onLevel
 var SceneMembershipChange.Addition.rampRate
 var SceneMembershipChange.additions

@@ -75,7 +75,7 @@ enum ScenePlanExample {
   }
 }
 
-/// `POST /api/v1/scenes/{number}/membership/plan`: what adding and removing members would write,
+/// `POST /api/v1/scenes/{number}/plans`: what adding and removing members would write,
 /// from the cache and the catalog, with nothing sent.
 @Suite(.timeLimit(.minutes(1)))
 struct SceneMembershipPlanRoutesTests {
@@ -108,7 +108,7 @@ struct SceneMembershipPlanRoutesTests {
     if marker { fields[HTTPField.Name("X-Insteon-Request")!] = "1" }
     let headers = fields
     return try await setup.app.test(.router) { client in
-      try await client.execute(uri: "/api/v1/scenes/\(number)/membership/plan", method: .post, headers: headers, body: ByteBuffer(string: body))
+      try await client.execute(uri: "/api/v1/scenes/\(number)/plans", method: .post, headers: headers, body: ByteBuffer(string: body))
     }
   }
 
@@ -120,7 +120,7 @@ struct SceneMembershipPlanRoutesTests {
 
   @Test func answersTheOrderedStepsWithTheRecordsAndTheDataBytesEachWouldWrite() async throws {
     let setup = try setup(await ScenePlanExample.receipt(ScenePlanExample.addLamp()))
-    let response = try await plan(setup, body: #"{"add":[{"device":"1A.2B.3C","onLevel":255,"rampRate":31}]}"#, authorization: try await token(setup, scope: .control))
+    let response = try await plan(setup, body: #"{"add":[{"device":"1A.2B.3C","onLevel":255,"rampRate":31}]}"#, authorization: try await token(setup, scope: .admin))
     let body = try object(response)
     let steps = try #require(body["steps"] as? [[String: Any]])
 
@@ -172,6 +172,13 @@ struct SceneMembershipPlanRoutesTests {
     #expect(devices[0]["product"] as? String != nil)
   }
 
+  @Test func passesAMembersGroupToTheService() async throws {
+    let setup = try setup(await ScenePlanExample.receipt(ScenePlanExample.addLamp()))
+    _ = try await plan(setup, body: #"{"add":[{"device":"1A.2B.3C","group":2}]}"#, authorization: basic)
+
+    #expect(await setup.service.membershipRequests.first?.additions.first?.group == 2)
+  }
+
   @Test func passesTheChangeToTheServiceAsAskedWithNoDefaultsFilledIn() async throws {
     let setup = try setup(await ScenePlanExample.receipt(ScenePlanExample.addLamp()))
     _ = try await plan(setup, number: "9", body: #"{"add":[{"device":"1A.2B.3C","onLevel":128},{"device":"7A.8B.9C","rampRate":28}],"remove":["4D.5E.6F"]}"#, authorization: basic)
@@ -182,6 +189,16 @@ struct SceneMembershipPlanRoutesTests {
         .init(device: InsteonAddress(0x7A, 0x8B, 0x9C), onLevel: nil, rampRate: 28)
       ], removals: [InsteonAddress(0x4D, 0x5E, 0x6F)])
     ])
+  }
+
+  @Test func answersAnUnknownGroupRefusalForAGroupTheCatalogDoesNotGiveTheDevice() async throws {
+    let change = SceneMembershipChange(scene: 4, additions: [.init(device: ScenePlanExample.lamp, onLevel: 255, rampRate: 31, group: 9)], removals: [])!
+    let setup = try setup(await ScenePlanExample.receipt(change))
+    let body = try object(try await plan(setup, authorization: basic))
+    let refusals = try #require(body["refusals"] as? [[String: Any]])
+
+    #expect(refusals.map { $0["code"] as? String } == ["unknownGroup"])
+    #expect(body["isApplicable"] as? Bool == false)
   }
 
   @Test func answersARefusalForADeviceWhoseDatabaseIsNotCachedWithTheHintToRefresh() async throws {
@@ -244,6 +261,15 @@ struct SceneMembershipPlanRoutesTests {
     #expect(await setup.service.membershipRequests.isEmpty)
   }
 
+  @Test func refusesAControlClientBecauseAPlanNeedsTheAdminScope() async throws {
+    let setup = try setup(await ScenePlanExample.receipt(ScenePlanExample.addLamp()))
+    let response = try await plan(setup, authorization: try await token(setup, scope: .control))
+
+    #expect(response.status == .forbidden)
+    #expect(try object(response)["code"] as? String == "forbidden")
+    #expect(await setup.service.membershipRequests.isEmpty)
+  }
+
   @Test func refusesACallWithNoCredential() async throws {
     let setup = try setup(await ScenePlanExample.receipt(ScenePlanExample.addLamp()))
 
@@ -291,6 +317,9 @@ struct SceneMembershipPlanRoutesTests {
     #"{"add":[{"device":"1A.2B.3C","onLevel":-1}]}"#,
     #"{"add":[{"device":"1A.2B.3C","rampRate":"fast"}]}"#,
     #"{"add":[{"device":"1A.2B.3C","onLevel":1.5}]}"#,
+    #"{"add":[{"device":"1A.2B.3C","group":0}]}"#,
+    #"{"add":[{"device":"1A.2B.3C","group":256}]}"#,
+    #"{"add":[{"device":"1A.2B.3C","group":"1"}]}"#,
     #"{"add":[{"device":"1A.2B.3C"},{"device":"1A.2B.3C"}]}"#,
     #"{"remove":["1A.2B.3C","1A.2B.3C"]}"#,
     #"{"add":[{"device":"1A.2B.3C"}],"remove":["1A.2B.3C"]}"#,
