@@ -317,7 +317,7 @@ struct NetworkBackupReaderTests {
       case let .standardRequest(message):
         // Light Status Request and ID Request's engine query ask; anything else would change something.
         if ![0x19, 0x0D, 0x10].contains(message.command.command1) { writes.add("standard \(message.command.command1)") }
-      case .send, .extendedRequest:
+      case .send, .extendedRequest, .sendAllLinkCommand:
         writes.add("\(operation)")
       }
 

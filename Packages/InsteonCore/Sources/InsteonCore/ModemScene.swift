@@ -37,7 +37,17 @@ public struct ModemScene: Hashable, Sendable {
   /// - Throws: The modem's error, or `CancellationError` if the task is canceled.
   func responders(in modem: any LinkingModem) async throws -> [InsteonAddress] {
 
-    let records: [AllLinkRecord] = try await modem.allLinkRecords()
+    responders(among: try await modem.allLinkRecords())
+
+  }
+
+  /// The devices a copy of the modem's ALL-Link database lists as the group's responders, each
+  /// once, in the order of their addresses as text.
+  ///
+  /// - Parameter records: The modem's records.
+  /// - Returns: The responders' addresses.
+  func responders(among records: [AllLinkRecord]) -> [InsteonAddress] {
+
     let members: [InsteonAddress] = records.filter { $0.flags.contains(.controller) && $0.group == group }.map(\.address)
 
     return Array(Set(members)).sorted { $0.description < $1.description }
@@ -71,7 +81,7 @@ public struct ModemScene: Hashable, Sendable {
   /// - Throws: `ModemError.rejected` if the modem rejects the command, as it does for a group
   ///   it has no records for, the modem's other errors, or `CancellationError` if the task is
   ///   canceled.
-  func send(turningOn isOn: Bool, responderCount: Int, through modem: Modem) async throws -> AllLinkCleanupReport {
+  func send(turningOn isOn: Bool, responderCount: Int, through modem: any LinkingModem) async throws -> AllLinkCleanupReport {
 
     let command: Command = isOn ? StandardDirectCommand.on(level: .max).command : StandardDirectCommand.off.command
 

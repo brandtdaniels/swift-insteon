@@ -163,6 +163,12 @@ actor MonitorModem: LinkingModem {
 
   }
 
+  func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, timeout: Duration) async throws -> AllLinkCleanupReport {
+
+    throw ModemError.rejected(.sendAllLinkCommand)
+
+  }
+
   func replies() -> AsyncStream<ModemReply> {
 
     let (stream, continuation): (AsyncStream<ModemReply>, AsyncStream<ModemReply>.Continuation) = AsyncStream<ModemReply>.makeStream()

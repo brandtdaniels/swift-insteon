@@ -669,6 +669,12 @@ struct RejectingModem: LinkingModem {
 
   }
 
+  func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, timeout: Duration) async throws -> AllLinkCleanupReport {
+
+    try await inner.sendAllLinkCommand(group: group, command: command, timeout: timeout)
+
+  }
+
   func replies() async -> AsyncStream<ModemReply> {
 
     await inner.replies()

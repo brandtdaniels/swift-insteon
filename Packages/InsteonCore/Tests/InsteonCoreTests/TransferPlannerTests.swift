@@ -530,7 +530,7 @@ struct TransferPlannerTests {
       switch operation {
       case .readModemDatabase:
         break
-      case .send, .standardRequest, .extendedRequest:
+      case .send, .standardRequest, .extendedRequest, .sendAllLinkCommand:
         writes.add("\(operation)")
       }
 
