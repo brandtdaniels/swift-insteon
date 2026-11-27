@@ -36,6 +36,18 @@ public enum ServerRunner {
                    the server remembers, else this computer's).
   --help           Show this help without connecting.
 
+  Advanced settings (each also has an environment variable; the flag wins over it):
+  --scene-echo-wait-ms MS  How long a scene run waits for the modem to accept the group
+                   command (default: 5000; 1 through 60000). INSTEON_SCENE_ECHO_WAIT_MS.
+  --scene-cleanup-quiet-ms MS  How long a scene run waits for more cleanup traffic before it
+                   gives up on the modem's report (default: 15000; from 2150, the first
+                   cleanup's time in the Insteon Developer's Guide, up to the cap).
+                   INSTEON_SCENE_CLEANUP_QUIET_MS.
+  --scene-cleanup-cap-ms MS  The longest a scene run waits for the report however much
+                   traffic comes (default: 60000; up to 300000). INSTEON_SCENE_CLEANUP_CAP_MS.
+  The defaults for these are unverified. GET /api/v1/health lists every value in use and
+  whether it is the default, a flag or an environment variable.
+
   Settings are read from the same protected per-user environment file as insteon.
   A Hub uses INSTEON_HUB_HOST, INSTEON_HUB_PORT, INSTEON_HUB_USERNAME and
   INSTEON_HUB_PASSWORD. A Hub Pro has no user name or password: with none set, a host
@@ -251,7 +263,7 @@ public enum ServerRunner {
     logger: Logger,
     timing: Timing
   ) async throws {
-    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter, throughHub: hub != nil, notificationRules: notificationRules, scheduling: scheduling)
+    let service = InsteonService(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: timing.reconnect, clock: timing.clock, now: timing.now, jitter: timing.jitter, throughHub: hub != nil, notificationRules: notificationRules, scheduling: scheduling, tuning: options.tuning, tuningSources: options.tuningSources)
     let router = makeInsteonRouter(service: service, authentication: authentication, clients: clients, pairing: pairing, routes: routes, logger: logger, now: timing.now)
     let app = Application(
       responder: router.buildResponder(),

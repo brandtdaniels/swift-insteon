@@ -1,5 +1,6 @@
 import Foundation
 import InsteonScheduling
+import InsteonService
 
 /// The listener, hardware and files selected before a server opens a connection.
 public struct ServerOptions: Sendable {
@@ -29,12 +30,17 @@ public struct ServerOptions: Sendable {
   /// The home's IANA time zone, such as `America/Los_Angeles`, or nil for the one the server remembers
   /// or the computer's. The host's time zone database decides whether the server can use it.
   public let timeZone: String?
+  /// The tuning the service runs with: each value from its flag, else its `INSTEON_` environment
+  /// variable, else the standard value. Checked with ``ServiceTuning/validated()``.
+  public let tuning: ServiceTuning
+  /// Where each tuning value that isn't the standard one came from, by name such as `scenes.echoWaitMs`.
+  public let tuningSources: [String: TuningSource]
 
   /// Parses pairs of options, rejecting duplicates, public listeners and wildcard binds.
   /// Hub resolution and file permissions are checked by the CLI's existing helpers.
   public init(arguments: [String], environment: [String: String]) throws {
     var options: [String: String] = [:]
-    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--network-name", "--poll-interval", "--latitude", "--longitude", "--time-zone"]
+    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--network-name", "--poll-interval", "--latitude", "--longitude", "--time-zone", "--scene-echo-wait-ms", "--scene-cleanup-quiet-ms", "--scene-cleanup-cap-ms"]
     var index = 0
     while index < arguments.count {
       let name = arguments[index]
@@ -79,6 +85,29 @@ public struct ServerOptions: Sendable {
       guard (1...64).contains(timeZone.count), timeZone.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "/_+-".contains($0)) }) else { throw ServerOptionError.invalidTimeZone }
     }
     self.timeZone = timeZone
+    var scenes = ServiceTuning.Scenes.standard
+    var sources: [String: TuningSource] = [:]
+    // A flag beats its environment variable, which beats the standard value.
+    func milliseconds(_ flag: String, _ variable: String, _ name: String, _ error: ServerOptionError) throws -> Duration? {
+      let flagValue = options[flag], variableValue = environment[variable]
+      guard let text = flagValue ?? variableValue else { return nil }
+      guard let value = Int(text), (1...300_000).contains(value) else { throw error }
+      sources[name] = flagValue != nil ? .flag : .environment
+      return .milliseconds(value)
+    }
+    if let value = try milliseconds("--scene-echo-wait-ms", "INSTEON_SCENE_ECHO_WAIT_MS", "scenes.echoWaitMs", .invalidSceneEchoWait) { scenes.echoWait = value }
+    if let value = try milliseconds("--scene-cleanup-quiet-ms", "INSTEON_SCENE_CLEANUP_QUIET_MS", "scenes.cleanupQuietMs", .invalidSceneCleanupQuiet) { scenes.cleanupQuietPeriod = value }
+    if let value = try milliseconds("--scene-cleanup-cap-ms", "INSTEON_SCENE_CLEANUP_CAP_MS", "scenes.cleanupCapMs", .invalidSceneCleanupCap) { scenes.cleanupCap = value }
+    do {
+      tuning = try ServiceTuning(scenes: scenes).validated()
+    } catch ServiceTuningError.invalid(let field) {
+      switch field {
+      case "scenes.echoWaitMs": throw ServerOptionError.invalidSceneEchoWait
+      case "scenes.cleanupCapMs": throw ServerOptionError.invalidSceneCleanupCap
+      default: throw ServerOptionError.invalidSceneCleanupQuiet
+      }
+    }
+    tuningSources = sources
   }
 
   /// The address without a trailing slash, or an error if it isn't a plain http or https address.
@@ -117,6 +146,13 @@ public enum ServerOptionError: Error, CustomStringConvertible {
   case invalidLocation
   /// `--time-zone` isn't an IANA time zone's name of 1 through 64 letters, digits and `/_+-`.
   case invalidTimeZone
+  /// `--scene-echo-wait-ms` or its variable isn't a whole number of milliseconds from 1 through 60000.
+  case invalidSceneEchoWait
+  /// `--scene-cleanup-quiet-ms` or its variable isn't a whole number of milliseconds from 2150
+  /// through the cap, which is the Insteon Developer's Guide's time for the first cleanup.
+  case invalidSceneCleanupQuiet
+  /// `--scene-cleanup-cap-ms` or its variable isn't a whole number of milliseconds from 1 through 300000.
+  case invalidSceneCleanupCap
   /// A `pair` command needs a client name of 1 through 64 characters and a scope of read, control or admin.
   case invalidClient
 
