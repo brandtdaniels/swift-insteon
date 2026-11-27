@@ -23,7 +23,20 @@ public final class WireTraceLogger: WireTrace, Sendable {
     var masker: AddressMasker
     var previous: ContinuousClock.Instant
     var previousRead: ContinuousClock.Instant?
+    /// The quiet reads since the last one that was logged, which aren't logged one by one.
+    var quiet: QuietReads?
   }
+
+  /// Reads that brought nothing, after the first of them was logged.
+  private struct QuietReads {
+    /// The first quiet read's instant, which starts the time the summary reports.
+    var since: ContinuousClock.Instant
+    var last: ContinuousClock.Instant
+    var count = 0
+  }
+
+  /// How long quiet reads go unsummarized at most: 30 seconds.
+  static let summaryInterval: Duration = .seconds(30)
 
   /// Creates a tracer.
   ///
@@ -43,7 +56,55 @@ public final class WireTraceLogger: WireTrace, Sendable {
   /// Logs the bytes.
   public func trace(_ direction: WireTraceDirection, _ bytes: [UInt8], at instant: ContinuousClock.Instant) {
 
-    let line: String = lock.withLock {
+    let lines: [String] = lock.withLock {
+
+      var lines: [String] = []
+
+      // A quiet read after a change is logged once; the ones after it are counted.
+      if case let .hubBuffer(_, step) = direction, step == .unchanged {
+
+        let gap = state.previousRead.map { " gap=\(Self.seconds(instant - $0))" } ?? ""
+        let first = state.quiet == nil
+        state.previousRead = instant
+
+        if first {
+
+          state.quiet = QuietReads(since: instant, last: instant)
+          lines.append("+\(Self.seconds(instant - state.previous)) hub read end=\(endIndexText(direction)) cursor=unchanged\(gap)")
+          state.previous = instant
+
+        } else {
+
+          state.quiet?.count += 1
+          state.quiet?.last = instant
+
+          if let quiet = state.quiet, instant - quiet.since >= Self.summaryInterval {
+
+            lines.append(summary(quiet))
+            state.previous = instant
+            state.quiet = QuietReads(since: instant, last: instant)
+
+          }
+
+        }
+
+        return lines
+
+      }
+
+      // Anything else ends a quiet stretch, so its summary comes first.
+      if let quiet = state.quiet {
+
+        if quiet.count > 0 {
+
+          lines.append(summary(quiet))
+          state.previous = quiet.last
+
+        }
+
+        state.quiet = nil
+
+      }
 
       let elapsed = Self.seconds(instant - state.previous)
       state.previous = instant
@@ -70,11 +131,26 @@ public final class WireTraceLogger: WireTrace, Sendable {
         text = render(bytes, in: .inbound)
       }
 
-      return "+\(elapsed) \(label)" + (text.isEmpty ? "" : " " + text)
+      lines.append("+\(elapsed) \(label)" + (text.isEmpty ? "" : " " + text))
+
+      return lines
 
     }
 
-    logger.trace("\(line)")
+    for line in lines { logger.trace("\(line)") }
+
+  }
+
+  /// The summary line of a quiet stretch, timed to its last read, which the state's `previous` must then follow.
+  private func summary(_ quiet: QuietReads) -> String {
+
+    "+\(Self.seconds(quiet.last - state.previous)) hub read unchanged x\(quiet.count) for \(Self.seconds(quiet.last - quiet.since))"
+
+  }
+
+  private func endIndexText(_ direction: WireTraceDirection) -> String {
+
+    if case let .hubBuffer(endIndex, _) = direction { "\(endIndex)" } else { "" }
 
   }
 

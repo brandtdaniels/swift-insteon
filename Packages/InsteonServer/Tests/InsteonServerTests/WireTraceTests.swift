@@ -181,6 +181,73 @@ struct WireTraceTests {
 
   }
 
+  // MARK: Reads with nothing new
+
+  /// A scripted run of reads of a Hub's buffer, each `(endIndex, step, bytes)` at a time in milliseconds.
+  func play(_ reads: [(Int, WireTraceBufferStep, [UInt8], Int)], through tracer: WireTraceLogger) {
+
+    for (end, step, bytes, milliseconds) in reads { tracer.trace(.hubBuffer(endIndex: end, step: step), bytes, at: base + .milliseconds(milliseconds)) }
+
+  }
+
+  @Test func readsWithNothingNewAreSummarizedWhenTheNextChangeComes() {
+
+    let (tracer, lines) = capture()
+
+    play([
+      (4, .advanced, [0x02, 0x58, 0x06, 0x01], 0),
+      (4, .unchanged, [], 500), (4, .unchanged, [], 1000), (4, .unchanged, [], 1500), (4, .unchanged, [], 2000),
+      (6, .advanced, [0x02, 0x58], 2500),
+    ], through: tracer)
+
+    #expect(lines.messages == [
+      "+0.000s hub read end=4 cursor=advanced 02 58 06 01",
+      "+0.500s hub read end=4 cursor=unchanged gap=0.500s",
+      "+1.500s hub read unchanged x3 for 1.500s",
+      "+0.500s hub read end=6 cursor=advanced gap=0.500s 02 58",
+    ])
+
+  }
+
+  @Test func aLongQuietStretchIsSummarizedEveryThirtySecondsAndStaysReadable() {
+
+    let (tracer, lines) = capture()
+
+    play([(4, .advanced, [0x01], 0)] + (1...200).map { (4, WireTraceBufferStep.unchanged, [UInt8](), $0 * 500) }, through: tracer)
+
+    // 100 seconds of reads: the first, then a summary each 30 seconds, not 200 lines.
+    #expect(lines.messages.count < 10)
+    #expect(lines.messages.filter { $0.contains("unchanged x") }.count == 3)
+    #expect(lines.messages.filter { $0.contains("cursor=unchanged") }.count == 1)
+
+  }
+
+  @Test func theFirstQuietReadAfterEachChangeIsLoggedAndAChangeWithNoQuietReadsAddsNoSummary() {
+
+    let (tracer, lines) = capture()
+
+    play([
+      (2, .advanced, [1, 2], 0), (4, .advanced, [3, 4], 500),
+      (4, .unchanged, [], 1000), (6, .advanced, [5, 6], 1500),
+      (6, .unchanged, [], 2000),
+    ], through: tracer)
+
+    #expect(lines.messages.filter { $0.contains("unchanged x") }.isEmpty)
+    #expect(lines.messages.filter { $0.contains("cursor=unchanged") }.count == 2)
+
+  }
+
+  @Test func aRequestEndsTheQuietStretchSoTheSummaryComesBeforeIt() {
+
+    let (tracer, lines) = capture()
+
+    play([(4, .advanced, [1], 0), (4, .unchanged, [], 500), (4, .unchanged, [], 1000), (4, .unchanged, [], 1500)], through: tracer)
+    tracer.trace(.hubRequest(path: "/3"), [0x02, 0x60], at: base + .milliseconds(1600))
+
+    #expect(lines.messages.suffix(2) == ["+1.000s hub read unchanged x2 for 1.000s", "+0.100s hub request /3 02 60"])
+
+  }
+
   @Test func withMaskingOffTheBytesAreLoggedAsTheyAre() {
 
     let lines = LogLines()
