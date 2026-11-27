@@ -39,7 +39,7 @@ struct SceneRunTests {
 
   @Test func sendsTheGroupOneLightOnAtFullLevelAndAnswersTheCleanupReport() async throws {
     let modem = await modemWithScenes()
-    await modem.setCleanupReport(AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [keypad], isComplete: true))
+    await modem.setGroupReport(AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [keypad], isComplete: true))
     let service = service(modem)
     _ = try await service.refreshScenes()
 
@@ -98,7 +98,7 @@ struct SceneRunTests {
 
   @Test func publishesASceneEventAfterTheRunWithWhatTheModemReported() async throws {
     let modem = await modemWithScenes()
-    await modem.setCleanupReport(AllLinkCleanupReport(acknowledged: [lamp, keypad], unacknowledged: [], isComplete: true))
+    await modem.setGroupReport(AllLinkCleanupReport(acknowledged: [lamp, keypad], unacknowledged: [], isComplete: true))
     let service = service(modem)
     _ = try await service.refreshScenes()
     let events = await service.events()

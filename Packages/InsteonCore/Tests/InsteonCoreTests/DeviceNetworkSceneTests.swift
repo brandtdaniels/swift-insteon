@@ -26,7 +26,7 @@ struct DeviceNetworkSceneTests {
 
     let modem = InMemoryModem()
     await modem.setModemRecords(controllers(3, of: [Example.lamp, Example.plug]))
-    await modem.setCleanupReport(AllLinkCleanupReport(acknowledged: [Example.lamp], unacknowledged: [Example.plug], isComplete: true))
+    await modem.setGroupReport(AllLinkCleanupReport(acknowledged: [Example.lamp], unacknowledged: [Example.plug], isComplete: true))
 
     let result: SceneResult = try await network(modem).run(ModemScene(group: 3), turningOn: true)
 

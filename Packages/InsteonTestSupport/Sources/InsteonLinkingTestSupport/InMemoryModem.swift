@@ -99,7 +99,7 @@ public actor InMemoryModem: LinkingModem {
 
   /// The cleanup report every group command answers with, or `nil` for one that lists each
   /// responder of the group as acknowledged.
-  public private(set) var cleanupReport: AllLinkCleanupReport?
+  public private(set) var groupReport: AllLinkCleanupReport?
 
   /// Whether the modem refuses every group command, as it does for a group it has no records for.
   public private(set) var rejectsGroupCommands: Bool = false
@@ -746,9 +746,9 @@ public actor InMemoryModem: LinkingModem {
   /// Sets the cleanup report group commands answer with.
   ///
   /// - Parameter report: The report, or `nil` for one that lists each responder as acknowledged.
-  public func setCleanupReport(_ report: AllLinkCleanupReport?) {
+  public func setGroupReport(_ report: AllLinkCleanupReport?) {
 
-    cleanupReport = report
+    groupReport = report
 
   }
 
@@ -786,7 +786,7 @@ public actor InMemoryModem: LinkingModem {
 
     groupCommands.append(GroupCommand(group: group, command: command, timeout: timeout))
 
-    return cleanupReport ?? AllLinkCleanupReport(acknowledged: responders, unacknowledged: [], isComplete: true)
+    return groupReport ?? AllLinkCleanupReport(acknowledged: responders, unacknowledged: [], isComplete: true)
 
   }
 
