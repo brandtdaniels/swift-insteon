@@ -319,6 +319,7 @@ case SceneMembershipFinding.Code.notInCatalog
 case SceneMembershipFinding.Code.notYetSupported
 case SceneMembershipFinding.Code.rejectsModem
 case SceneMembershipFinding.Code.undescribedLinkData
+case SceneMembershipFinding.Code.unexpectedDatabaseLayout
 case SceneMembershipFinding.Code.unknownGroup
 case SceneMembershipFinding.Code.unknownLinkDataByte
 case SceneMembershipFinding.Code.unsupportedEngine

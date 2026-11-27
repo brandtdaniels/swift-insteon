@@ -560,6 +560,62 @@ struct SceneMembershipPlanTests {
 
   }
 
+  @Test func refusesACachedDatabaseWithAnEndAboveARecordInUseAndPlansNoWrite() async throws {
+
+    let inUse = record(.responder, group: 9, modem, memory: 0x0FFF)
+    let end = BackupRecord(state: .end, role: .responder, group: 0, address: InsteonAddress(0, 0, 0), data: [0, 0, 0], memoryAddress: 0x0FF7)
+    // A record in use below an end, and another end below it: writing to the last end's slot would put an
+    // end above a link, so which end the device reads up to isn't known.
+    let below = record(.responder, group: 4, fan, memory: 0x0FEF)
+    let last = BackupRecord(state: .end, role: .responder, group: 0, address: InsteonAddress(0, 0, 0), data: [0, 0, 0], memoryAddress: 0x0FE7)
+    let plan = await plan(change([add(lamp)]), lampRecords: [inUse, end, below, last])
+
+    #expect(plan.refusals.map(\.code) == [.unexpectedDatabaseLayout])
+    #expect(plan.refusals.first?.device == lamp)
+    #expect(plan.steps.isEmpty)
+
+  }
+
+  @Test func refusesACachedDatabaseWhoseFreeSlotIsBelowItsEnd() async throws {
+
+    let inUse = record(.responder, group: 9, modem, memory: 0x0FFF)
+    let end = BackupRecord(state: .end, role: .responder, group: 0, address: InsteonAddress(0, 0, 0), data: [0, 0, 0], memoryAddress: 0x0FEF)
+    let free = BackupRecord(state: .free, role: .responder, group: 0, address: InsteonAddress(0, 0, 0), data: [0, 0, 0], memoryAddress: 0x0FE7)
+    // The slot a plan would write is past the end the device reads up to, and so would never be read.
+    let plan = await plan(change([add(lamp)]), lampRecords: [inUse, free, end])
+
+    #expect(plan.refusals.map(\.code) == [.unexpectedDatabaseLayout])
+    #expect(plan.steps.isEmpty)
+
+  }
+
+  @Test func refusesACachedDatabaseWhoseRecordsAreNotInDescendingOrder() async throws {
+
+    let records = [
+      record(.responder, group: 9, modem, memory: 0x0FF7),
+      record(.responder, group: 4, fan, memory: 0x0FFF),
+      BackupRecord(state: .end, role: .responder, group: 0, address: InsteonAddress(0, 0, 0), data: [0, 0, 0], memoryAddress: 0x0FEF)
+    ]
+    let plan = await plan(change([add(lamp)]), lampRecords: records)
+
+    #expect(plan.refusals.map(\.code) == [.unexpectedDatabaseLayout])
+    #expect(plan.steps.isEmpty)
+
+  }
+
+  @Test func refusesToRemoveARecordWhoseSlotTheCacheDoesNotGive() async throws {
+
+    let plan = await plan(
+      change(remove: [lamp]),
+      modemRecords: [record(.controller, group: 3, lamp)],
+      lampRecords: [record(.responder, group: 3, modem), record(.responder, group: 9, modem), BackupRecord(state: .end, role: .responder, group: 0, address: InsteonAddress(0, 0, 0), data: [0, 0, 0], memoryAddress: 0x0FEF)]
+    )
+
+    #expect(plan.refusals.map(\.code) == [.unexpectedDatabaseLayout])
+    #expect(plan.steps.isEmpty)
+
+  }
+
   @Test func refusesAGroupThatCannotRespond() async throws {
 
     let backup = backup(modemRecords: [], [device(sensor, Self.sensorIdentity, records: slots([record(.responder, group: 9, modem)]))])

@@ -451,6 +451,16 @@ private struct Planning {
 
     let record = LinkRecord(isController: false, isInUse: true, group: group, address: modem, data: data)
 
+    // The writes assume the records run from the highest address down and end with the end's record, so
+    // a slot that isn't free or the end's is never written over.
+    guard Self.hasExpectedLayout(records) else {
+
+      refusals.append(SceneMembershipFinding(code: .unexpectedDatabaseLayout, device: address, detail: "The cached database isn't laid out as a write assumes: records from the highest address down, free slots above the end, and the end's record last. Refresh the scenes to read it again."))
+
+      return false
+
+    }
+
     if let free = records.first(where: { (held: BackupRecord) -> Bool in held.state == .free && held.memoryAddress != nil }), let slot = free.memoryAddress {
 
       var written: LinkRecord = record
@@ -501,6 +511,22 @@ private struct Planning {
     working[address]?.records = updated
 
     return true
+
+  }
+
+  /// Whether the records each have a slot, run strictly downward in address, and end with the one
+  /// record that marks the end.
+  private static func hasExpectedLayout(_ records: [BackupRecord]) -> Bool {
+
+    let addresses: [UInt16] = records.compactMap(\.memoryAddress)
+
+    guard addresses.count == records.count, zip(addresses, addresses.dropFirst()).allSatisfy({ (pair: (UInt16, UInt16)) -> Bool in pair.0 > pair.1 }) else {
+
+      return false
+
+    }
+
+    return records.last?.state == .end && records.filter { (record: BackupRecord) -> Bool in record.state == .end }.count == 1
 
   }
 
@@ -691,6 +717,14 @@ private struct Planning {
     // The modem's record goes when no group of the device stays in the scene, and then first, so the
     // device keeps its record of the modem until its last write.
     let removedModem: [BackupRecord] = staying.isEmpty ? modemHalves : []
+
+    guard doomed.allSatisfy({ (record: BackupRecord) -> Bool in record.memoryAddress != nil }) else {
+
+      refuse(.unexpectedDatabaseLayout, "The cached database gives no slot for a record to clear. Refresh the scenes to read it again.")
+
+      return
+
+    }
 
     guard !removedModem.isEmpty || !doomed.isEmpty else {
 

@@ -230,6 +230,10 @@ public struct SceneMembershipFinding: Hashable, Sendable {
     /// The device's database has no room for the record.
     case databaseFull
 
+    /// The cached database isn't laid out as a plan assumes: records from the highest address down,
+    /// a free slot above the end, and the record that marks the end last. Nothing is planned over it.
+    case unexpectedDatabaseLayout
+
     /// The catalog doesn't give the device the group asked for.
     case unknownGroup
 
