@@ -88,4 +88,41 @@ struct AppModelTests {
     #expect(first != none)
     #expect(model.identity != first)
   }
+
+  @Test func theScenesScreenIsMissingUntilANetworkIsChosen() {
+    #expect(AppModel(arguments: []).scenes == nil)
+  }
+
+  @Test func choosingTheDemoGivesAScenesScreenThatReadsAndRunsTheDemoScenes() async throws {
+    let model = AppModel(arguments: [])
+    model.choose(.demo)
+    let screen = try #require(model.scenes)
+
+    await screen.load()
+    #expect(screen.isEmpty, "the demo's databases are read on request")
+    await screen.refresh()
+    let scene = try #require(screen.rows.first)
+    await screen.run(scene, .on)
+
+    #expect(screen.isWhole)
+    #expect(screen.rows.allSatisfy { $0.canRun })
+    #expect(screen.outcome?.kind == .complete)
+  }
+
+  @Test func aPairedChoiceGivesAScenesScreenOverTheConnection() async throws {
+    let model = AppModel(arguments: [])
+
+    model.choose(.paired(ClientConnection(paths: [])))
+    let screen = try #require(model.scenes)
+    await screen.load()
+
+    #expect(screen.rows.isEmpty)
+    #expect(screen.failure == "The service couldn't be reached.")
+  }
+
+  @Test func theDemoLaunchArgumentGivesBothScreens() {
+    let model = AppModel(arguments: ["InsteonApp", "--demo"])
+
+    #expect(model.devices != nil && model.scenes != nil)
+  }
 }

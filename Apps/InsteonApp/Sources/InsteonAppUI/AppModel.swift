@@ -12,7 +12,7 @@ public enum NetworkChoice: Sendable {
 }
 
 /// The network a screen calls, whichever the choice was. Both answer through the same service protocols.
-public struct AppNetwork: DeviceQuerying, DeviceCommanding {
+public struct AppNetwork: DeviceQuerying, DeviceCommanding, SceneManaging {
   private enum Backing: Sendable {
     case demo(InsteonService)
     case paired(ClientConnection)
@@ -40,6 +40,27 @@ public struct AppNetwork: DeviceQuerying, DeviceCommanding {
     case let .paired(connection): try await connection.execute(command)
     }
   }
+
+  public func scenes() async throws -> SceneList {
+    switch backing {
+    case let .demo(service): try await ServiceScenes(service).scenes()
+    case let .paired(connection): try await connection.scenes()
+    }
+  }
+
+  public func refreshScenes() async throws -> SceneList {
+    switch backing {
+    case let .demo(service): try await ServiceScenes(service).refreshScenes()
+    case let .paired(connection): try await connection.refreshScenes()
+    }
+  }
+
+  public func runScene(_ number: Int, action: SceneAction, idempotencyKey: String?) async throws -> SceneRunReceipt {
+    switch backing {
+    case let .demo(service): try await ServiceScenes(service).runScene(number, action: action, idempotencyKey: idempotencyKey)
+    case let .paired(connection): try await connection.runScene(number, action: action, idempotencyKey: idempotencyKey)
+    }
+  }
 }
 
 /// The app's choice of network and the screen it gives.
@@ -55,6 +76,9 @@ public final class AppModel {
   /// The devices screen over the chosen network, or `nil` until a choice is made.
   public private(set) var devices: DevicesScreen<AppNetwork>?
 
+  /// The scenes screen over the chosen network, or `nil` until a choice is made.
+  public private(set) var scenes: ScenesScreen<AppNetwork>?
+
   /// A value that differs after each choice, for a view to use as its identity so it takes the new screen.
   public private(set) var identity = 0
 
@@ -66,6 +90,8 @@ public final class AppModel {
   /// Runs the app on a network, replacing any earlier choice.
   public func choose(_ choice: NetworkChoice) {
     identity += 1
-    devices = DevicesScreen(network: AppNetwork(choice))
+    let network = AppNetwork(choice)
+    devices = DevicesScreen(network: network)
+    scenes = ScenesScreen(network: network)
   }
 }
