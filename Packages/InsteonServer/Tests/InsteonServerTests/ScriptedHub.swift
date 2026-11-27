@@ -62,7 +62,7 @@ actor RecordingModem: LinkingModem {
   /// server is up never loses one to a service that hasn't started listening yet.
   private var heldBeforeAnyoneListened: [ModemReply] = []
 
-  func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, timeout: Duration) async throws -> AllLinkCleanupReport {
+  func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, wait: AllLinkCleanupWait) async throws -> AllLinkCleanupReport {
 
     throw ModemError.rejected(.sendAllLinkCommand)
 

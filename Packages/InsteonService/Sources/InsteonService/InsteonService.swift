@@ -43,6 +43,8 @@ public actor InsteonService: InsteonServiceAPI {
   private var rulesAreBeingEdited = false
   private var waitingToEditRules: [CheckedContinuation<Void, Never>] = []
   private let scheduling: ScheduleConfiguration
+  private let tuning: ServiceTuning
+  private let tuningSources: [String: TuningSource]
   private var scheduler: Scheduler?
   private var hubClock: (reported: String, readAt: Date)?
   /// Why the last refresh left each device unread. It lives in memory: the saved snapshot keeps
@@ -57,9 +59,10 @@ public actor InsteonService: InsteonServiceAPI {
   public private(set) var persistenceOutcome: PersistenceOutcome
 
   /// Creates a service for a network whose connection the host keeps open, and an optional
-  /// persistence policy. The run ends if that connection does.
-  public init(network: DeviceNetwork, persistence: (any SnapshotPersisting)? = nil, clock: any Clock<Duration> = ContinuousClock(), runID: String? = nil, scheduling: ScheduleConfiguration = ScheduleConfiguration()) {
-    self.init(network: network, opener: FixedNetworkOpener(network: network), persistence: persistence, snapshotSavedAt: nil, reconnect: .never, clock: clock, now: { Date() }, jitter: { 0 }, isConnected: true, runID: runID, scheduling: scheduling)
+  /// persistence policy. The run ends if that connection does. `tuning` and `tuningSources` are as for
+  /// ``init(network:opener:persistence:snapshotSavedAt:reconnect:clock:now:jitter:throughHub:runID:notificationRules:scheduling:tuning:tuningSources:)``.
+  public init(network: DeviceNetwork, persistence: (any SnapshotPersisting)? = nil, clock: any Clock<Duration> = ContinuousClock(), runID: String? = nil, scheduling: ScheduleConfiguration = ScheduleConfiguration(), tuning: ServiceTuning = .standard, tuningSources: [String: TuningSource] = [:]) {
+    self.init(network: network, opener: FixedNetworkOpener(network: network), persistence: persistence, snapshotSavedAt: nil, reconnect: .never, clock: clock, now: { Date() }, jitter: { 0 }, isConnected: true, runID: runID, scheduling: scheduling, tuning: tuning, tuningSources: tuningSources)
   }
 
   /// Creates a service that opens and reopens its own modem connection.
@@ -79,6 +82,8 @@ public actor InsteonService: InsteonServiceAPI {
   ///     reported as ``ModemUnavailability/hubUnreachable``, because the Hub is what to check.
   ///   - notificationRules: Where the notification rules are kept, if anywhere. Without it they last as long as the service.
   ///   - scheduling: The network's time zone and location and where schedules and timers are kept. Schedules and timers run on `clock` and `now`.
+  ///   - tuning: How long scene runs wait. Check it with ``ServiceTuning/validated()`` first; the service uses it as given.
+  ///   - tuningSources: Where each tuning value came from, by name such as `scenes.echoWaitMs`, for health. A value with no entry is a default.
   public init(
     network: DeviceNetwork,
     opener: any ServedNetworkOpening,
@@ -91,9 +96,11 @@ public actor InsteonService: InsteonServiceAPI {
     throughHub: Bool = false,
     runID: String? = nil,
     notificationRules: (any NotificationRulePersisting)? = nil,
-    scheduling: ScheduleConfiguration = ScheduleConfiguration()
+    scheduling: ScheduleConfiguration = ScheduleConfiguration(),
+    tuning: ServiceTuning = .standard,
+    tuningSources: [String: TuningSource] = [:]
   ) {
-    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false, throughHub: throughHub, runID: runID, notificationRules: notificationRules, scheduling: scheduling)
+    self.init(network: network, opener: opener, persistence: persistence, snapshotSavedAt: snapshotSavedAt, reconnect: reconnect, clock: clock, now: now, jitter: jitter, isConnected: false, throughHub: throughHub, runID: runID, notificationRules: notificationRules, scheduling: scheduling, tuning: tuning, tuningSources: tuningSources)
   }
 
   private init(
@@ -109,8 +116,12 @@ public actor InsteonService: InsteonServiceAPI {
     throughHub: Bool = false,
     runID: String? = nil,
     notificationRules: (any NotificationRulePersisting)? = nil,
-    scheduling: ScheduleConfiguration = ScheduleConfiguration()
+    scheduling: ScheduleConfiguration = ScheduleConfiguration(),
+    tuning: ServiceTuning = .standard,
+    tuningSources: [String: TuningSource] = [:]
   ) {
+    self.tuning = tuning
+    self.tuningSources = tuningSources
     self.scheduling = scheduling
     self.notificationPersistence = notificationRules
     self.network = ModemServedNetwork(network: network)
@@ -205,10 +216,14 @@ public actor InsteonService: InsteonServiceAPI {
     if case let .unavailable(cause) = connection { throw ServiceControlError.modemUnavailable(cause) }
     guard let scene = await listing().scenes.first(where: { $0.number == command.number && $0.isWritable }) else { throw ServiceControlError.unknownScene }
     guard !scene.members.isEmpty else { throw ServiceControlError.sceneEmpty }
-    let responderCount = Set(scene.members.map(\.address)).count
+    // A run that went out has the count of the modem's controller records in its result. A failure has no
+    // result, so the listing's members stand in, each device once. A responder the listing could not read is
+    // not in it, so the two counts can differ.
+    let listedMembers = Set(scene.members.map(\.address)).count
     let result: SceneResult
     do {
-      result = try await network.runScene(group: AllLinkGroupNumber(rawValue: command.number), turningOn: command.action == .on)
+      let wait = AllLinkCleanupWait(echo: tuning.scenes.echoWait, quietPeriod: tuning.scenes.cleanupQuietPeriod, cap: tuning.scenes.cleanupCap)
+      result = try await network.runScene(group: AllLinkGroupNumber(rawValue: command.number), turningOn: command.action == .on, wait: wait)
     } catch let ModemError.rejected(refused) {
       // The modem refused the command, so nothing went out.
       throw ModemError.rejected(refused)
@@ -219,13 +234,13 @@ public actor InsteonService: InsteonServiceAPI {
       // Say so, so a client reads them again, and save what the service knows. The failure is still the answer.
       lastExchange = now()
       let saved = await persist()
-      let unknown = SceneReceipt(scene: command.number, action: command.action, acknowledged: [], unacknowledged: [], isComplete: false, responderCount: responderCount, persistence: saved)
+      let unknown = SceneReceipt(scene: command.number, action: command.action, acknowledged: [], unacknowledged: [], isComplete: false, responderCount: listedMembers, persistence: saved)
       publish(.scene(SceneRun(number: command.number, name: nil, source: .api, action: command.action, receipt: unknown, firedAt: now())))
       throw error
     }
     lastExchange = now()
     let saved = await persist()
-    let receipt = SceneReceipt(scene: command.number, action: command.action, acknowledged: result.acknowledged, unacknowledged: result.unacknowledged, isComplete: result.isComplete, responderCount: responderCount, persistence: saved)
+    let receipt = SceneReceipt(scene: command.number, action: command.action, acknowledged: result.acknowledged, unacknowledged: result.unacknowledged, isComplete: result.isComplete, responderCount: result.responderCount, persistence: saved, statusReportAfter: result.statusReportAfter, failureReportedAfter: result.failureReportedAfter)
     // No suspension between publishing and releasing admission in defer, as for a device command.
     publish(.scene(SceneRun(number: command.number, name: nil, source: .api, action: command.action, receipt: receipt, firedAt: now())))
     return receipt
@@ -480,7 +495,7 @@ public actor InsteonService: InsteonServiceAPI {
     case .connected: readiness = .ready
     case .unavailable: readiness = hasConnected ? .degraded : .starting
     }
-    return ServiceHealth(readiness: readiness, modem: connection, lastHardwareExchange: lastExchange, lastPoll: lastPoll, deviceInformationUpdated: informationUpdated, persistence: persistenceOutcome, checkedAt: now(), notes: await healthNotes())
+    return ServiceHealth(readiness: readiness, modem: connection, lastHardwareExchange: lastExchange, lastPoll: lastPoll, deviceInformationUpdated: informationUpdated, persistence: persistenceOutcome, checkedAt: now(), notes: await healthNotes(), tuning: tuning.entries(sources: tuningSources))
   }
 
   /// Subscribes to typed events. Each subscription is iterated by one caller task. A subscriber

@@ -776,7 +776,7 @@ struct RequestTests {
   }
 
   // The modem accepted the command, so it was sent; only the report of the cleanups is missing.
-  @Test func answersWhatItHeardWhenTheCleanupsRunOutAfterTheModemAcceptedTheCommand() async throws {
+  @Test func givesUpAfterAQuietPeriodWithNoCleanupTrafficAndAnswersWhatItHeard() async throws {
 
     let connection = ScriptedConnection { written, _ in written + [0x06] }
     let modem = makeModem(connection)
@@ -784,12 +784,13 @@ struct RequestTests {
     try await run(modem) {
 
       async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
-      await clock.waitForSleeper(until: Modem.defaultAllLinkCommandTimeout)
-      clock.advance(by: Modem.defaultAllLinkCommandTimeout)
+      await clock.waitForSleeper(until: AllLinkCleanupWait.standard.quietPeriod)
+      clock.advance(by: AllLinkCleanupWait.standard.quietPeriod)
 
       let result = try await report
 
       #expect(result == AllLinkCleanupReport(acknowledged: [], unacknowledged: [], isComplete: false))
+      #expect(result.statusReportAfter == nil)
 
     }
 
@@ -807,19 +808,78 @@ struct RequestTests {
     try await run(modem) {
 
       async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
-      await clock.waitForSleeper(until: Modem.defaultAllLinkCommandTimeout)
-      clock.advance(by: Modem.defaultAllLinkCommandTimeout)
+      // One timer for the start and one for each of the two messages, all ending at the quiet period.
+      await clock.waitForSleepers(3, until: AllLinkCleanupWait.standard.quietPeriod)
+      clock.advance(by: AllLinkCleanupWait.standard.quietPeriod)
 
       let result = try await report
 
       #expect(result == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [keypad], isComplete: false))
+      #expect(result.failureReportedAfter == .zero)
+      #expect(result.statusReportAfter == nil)
+
+    }
+
+  }
+
+  // Cleanup traffic means the modem is still working through its members, so each message starts the quiet period again.
+  @Test func eachCleanupMessageStartsTheQuietPeriodAgain() async throws {
+
+    let lamp = device
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgment, command1: 0x11, command2: 0x01)
+    let connection = ScriptedConnection { written, _ in written + [0x06] }
+    let modem = makeModem(connection)
+    let wait = AllLinkCleanupWait(echo: .seconds(5), quietPeriod: .seconds(10), cap: .seconds(40))
+
+    try await run(modem) {
+
+      async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF), wait: wait)
+      await clock.waitForSleeper(until: .seconds(10))
+      clock.advance(by: .seconds(8))
+      connection.incoming.yield(ack)
+      // Without the message the wait would have ended at 10 seconds.
+      await clock.waitForSleeper(until: .seconds(18))
+      clock.advance(by: .seconds(10))
+
+      let result = try await report
+
+      #expect(result == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [], isComplete: false))
+
+    }
+
+  }
+
+  @Test func trafficExtendsTheWaitOnlyUpToTheCap() async throws {
+
+    let lamp = device
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgment, command1: 0x11, command2: 0x01)
+    let connection = ScriptedConnection { written, _ in written + [0x06] }
+    let modem = makeModem(connection)
+    let wait = AllLinkCleanupWait(echo: .seconds(5), quietPeriod: .seconds(10), cap: .seconds(22))
+
+    try await run(modem) {
+
+      async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF), wait: wait)
+      await clock.waitForSleeper(until: .seconds(10))
+      clock.advance(by: .seconds(8))
+      connection.incoming.yield(ack)
+      await clock.waitForSleeper(until: .seconds(18))
+      clock.advance(by: .seconds(8))
+      connection.incoming.yield(ack)
+      // A third quiet period would end at 26 seconds; the cap ends it at 22.
+      await clock.waitForSleeper(until: .seconds(22))
+      clock.advance(by: .seconds(6))
+
+      let result = try await report
+
+      #expect(result == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [], isComplete: false))
 
     }
 
   }
 
   // A Hub brings the modem's reports over polling, so the status report can come well after the echo.
-  @Test func waitsForAStatusReportThatComesLongAfterTheEcho() async throws {
+  @Test func aStatusReportThatComesLongAfterTheEchoIsCompleteAndSaysHowLongItTook() async throws {
 
     let lamp = device
     let ack = received(from: lamp, .allLinkCleanupAcknowledgment, command1: 0x11, command2: 0x01)
@@ -829,13 +889,21 @@ struct RequestTests {
     try await run(modem) {
 
       async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
-      await clock.waitForSleeper(until: Modem.defaultAllLinkCommandTimeout)
-      clock.advance(by: Modem.defaultAllLinkCommandTimeout - .seconds(1))
-      connection.incoming.yield(ack + [0x02, 0x58, 0x06])
+      await clock.waitForSleeper(until: .seconds(15))
+      clock.advance(by: .seconds(10))
+      connection.incoming.yield(ack)
+      await clock.waitForSleeper(until: .seconds(25))
+      clock.advance(by: .seconds(10))
+      connection.incoming.yield(ack)
+      // Each message made the wait longer, so it is still open at 25 seconds.
+      await clock.waitForSleeper(until: .seconds(35))
+      clock.advance(by: .seconds(5))
+      connection.incoming.yield([0x02, 0x58, 0x06])
 
       let result = try await report
 
       #expect(result == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [], isComplete: true))
+      #expect(result.statusReportAfter == .seconds(25))
 
     }
 
@@ -852,11 +920,98 @@ struct RequestTests {
       await #expect(throws: ModemError.timedOut(.sendAllLinkCommand)) {
 
         async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
-        await clock.waitForSleeper(until: Modem.allLinkCommandEchoTimeout)
-        clock.advance(by: Modem.allLinkCommandEchoTimeout)
+        await clock.waitForSleeper(until: AllLinkCleanupWait.standard.echo)
+        clock.advance(by: AllLinkCleanupWait.standard.echo)
         _ = try await report
 
       }
+
+    }
+
+  }
+
+  @Test func theEchoWaitIsTheOneTheCallerChose() async throws {
+
+    let connection = ScriptedConnection { _, _ in [] }
+    let modem = makeModem(connection)
+    let wait = AllLinkCleanupWait(echo: .seconds(9), quietPeriod: .seconds(10), cap: .seconds(40))
+
+    try await run(modem) {
+
+      await #expect(throws: ModemError.timedOut(.sendAllLinkCommand)) {
+
+        async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF), wait: wait)
+        await clock.waitForSleeper(until: .seconds(9))
+        clock.advance(by: .seconds(9))
+        _ = try await report
+
+      }
+
+    }
+
+  }
+
+  // A message makes the earlier quiet-period timer pointless, so it is canceled before the next one starts.
+  @Test func aCleanupMessageCancelsTheTimerItReplaces() async throws {
+
+    let lamp = device
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgment, command1: 0x11, command2: 0x01)
+    let connection = ScriptedConnection { written, _ in written + [0x06] }
+    let modem = makeModem(connection)
+    let wait = AllLinkCleanupWait(echo: .seconds(5), quietPeriod: .seconds(10), cap: .seconds(40))
+
+    try await run(modem) {
+
+      async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF), wait: wait)
+      await clock.waitForSleeper(until: .seconds(10))
+      clock.advance(by: .seconds(8))
+      connection.incoming.yield(ack)
+      await clock.waitForSleeper(until: .seconds(18))
+
+      // The 10 second timer is canceled by the message, which takes a few turns of the executor.
+      var turns = 0
+
+      while clock.sleeperCount(until: .seconds(10)) > 0 && turns < 10_000 {
+
+        await Task.yield()
+        turns += 1
+
+      }
+
+      #expect(clock.sleeperCount(until: .seconds(10)) == 0)
+      #expect(clock.sleeperCount(until: .seconds(18)) == 1)
+
+      clock.advance(by: .seconds(10))
+      _ = try await report
+
+    }
+
+  }
+
+  // The times come from the clock read when the modem accepted the command, not from the time before it.
+  @Test func theReportTimesStartWhenTheModemAcceptedTheCommand() async throws {
+
+    let lamp = device
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgment, command1: 0x11, command2: 0x01)
+    let connection = ScriptedConnection { _, _ in [] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      // Forty seconds pass before the command is sent at all, and three more before the modem echoes it.
+      clock.advance(by: .seconds(40))
+      async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+      await clock.waitForSleeper(until: .seconds(45))
+      clock.advance(by: .seconds(3))
+      connection.incoming.yield([0x02, 0x61, 0x01, 0x11, 0xFF, 0x06])
+      await clock.waitForSleeper(until: .seconds(58))
+      clock.advance(by: .seconds(4))
+      connection.incoming.yield(ack + [0x02, 0x58, 0x06])
+
+      let result = try await report
+
+      #expect(result.statusReportAfter == .seconds(4))
+      #expect(result.isComplete)
 
     }
 

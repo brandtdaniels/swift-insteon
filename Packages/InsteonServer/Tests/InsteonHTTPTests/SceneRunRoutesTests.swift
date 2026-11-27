@@ -272,6 +272,51 @@ struct SceneRunRoutesTests {
     #expect(!"\(line.metadata)".contains("1A.2B.3C"))
   }
 
+  @Test func logsHowLongAfterTheEchoTheStatusAndFailureReportsCameWhenTheReceiptSaysSo() async throws {
+    let timed = FakeService(sceneReceipt: SceneReceipt(scene: 3, action: .on, acknowledged: [], unacknowledged: [], isComplete: true, responderCount: 2, persistence: .saved, statusReportAfter: .milliseconds(24_500), failureReportedAfter: .seconds(12)))
+    let capture = LogCapture()
+    let app = Application(responder: makeInsteonRouter(service: timed, authentication: try HTTPAuthentication(password: password), logger: capture.logger).buildResponder())
+    try await app.test(.router) { client in
+      _ = try await client.execute(uri: "/api/v1/scenes/3/commands", method: .post, headers: [.authorization: basic, .contentType: "application/json", HTTPField.Name("X-Insteon-Request")!: "1"], body: ByteBuffer(string: #"{"action":"on"}"#))
+    }
+
+    let line = try #require(capture.records.first { $0.message == "scene run finished" })
+    #expect(line.metadata["statusReportSeconds"] == "24.5")
+    #expect(line.metadata["failureReportSeconds"] == "12.0")
+  }
+
+  @Test func logsNoReportTimesWhenTheModemSentNone() async throws {
+    let capture = LogCapture()
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password), logger: capture.logger).buildResponder())
+    try await app.test(.router) { client in
+      _ = try await client.execute(uri: "/api/v1/scenes/3/commands", method: .post, headers: [.authorization: basic, .contentType: "application/json", HTTPField.Name("X-Insteon-Request")!: "1"], body: ByteBuffer(string: #"{"action":"on"}"#))
+    }
+
+    let line = try #require(capture.records.first { $0.message == "scene run finished" })
+    #expect(line.metadata["statusReportSeconds"] == "none")
+    #expect(line.metadata["failureReportSeconds"] == "none")
+  }
+
+  // MARK: Health shows the tuning
+
+  @Test func healthListsEveryTuningValueWithItsSource() async throws {
+    let entries = [TuningEntry(name: "scenes.echoWaitMs", milliseconds: 8_000, source: .flag), TuningEntry(name: "scenes.cleanupQuietMs", milliseconds: 15_000, source: .default)]
+    let fake = FakeService()
+    await fake.setHealth(ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000), tuning: entries))
+    let setup = try Setup(password: password, service: fake)
+    let response = try await setup.app.test(.router) { client in
+      try await client.execute(uri: "/api/v1/health", method: .get, headers: [.authorization: basic])
+    }
+    let tuning = try #require(try object(response)["tuning"] as? [[String: Any]])
+
+    #expect(tuning.count == 2)
+    #expect(tuning[0]["name"] as? String == "scenes.echoWaitMs")
+    #expect(tuning[0]["value"] as? Int == 8_000)
+    #expect(tuning[0]["unit"] as? String == "ms")
+    #expect(tuning[0]["source"] as? String == "flag")
+    #expect(tuning[1]["source"] as? String == "default")
+  }
+
   // MARK: Description
 
   @Test func declaresTheControlScopeAPostWithAJSONBodyAndTheErrorsARunCanAnswer() {

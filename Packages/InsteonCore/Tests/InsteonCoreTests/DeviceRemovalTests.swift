@@ -669,9 +669,9 @@ struct RejectingModem: LinkingModem {
 
   }
 
-  func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, timeout: Duration) async throws -> AllLinkCleanupReport {
+  func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, wait: AllLinkCleanupWait) async throws -> AllLinkCleanupReport {
 
-    try await inner.sendAllLinkCommand(group: group, command: command, timeout: timeout)
+    try await inner.sendAllLinkCommand(group: group, command: command, wait: wait)
 
   }
 

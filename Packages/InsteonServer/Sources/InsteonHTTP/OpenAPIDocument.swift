@@ -158,8 +158,15 @@ enum OpenAPIDocument {
         "lastPollAgeSeconds": Schema.nullable(Schema.integer(minimum: 0)),
         "snapshotAgeSeconds": Schema.nullable(Schema.integer(minimum: 0)),
         "persistence": Schema.ref("Persistence"),
-        "notes": Schema.array(of: Schema.ref("HealthNote"))
+        "notes": Schema.array(of: Schema.ref("HealthNote")),
+        "tuning": Schema.array(of: Schema.ref("TuningValue"))
       ], required: ["version", "status", "modem", "lastExchangeAgeSeconds", "lastPollAgeSeconds", "snapshotAgeSeconds", "persistence"]),
+      "TuningValue": Schema.object([
+        "name": Schema.string(description: "The setting, such as `scenes.echoWaitMs`. A client ignores a name it doesn't know."),
+        "value": Schema.integer(minimum: 0, description: "The value in use, in the unit."),
+        "unit": Schema.constant("ms"),
+        "source": Schema.string(enum: ["default", "flag", "environment"], description: "Where the value came from: the standard value, a command-line option or an environment variable.")
+      ], required: ["name", "value", "unit", "source"], description: "A setting that tunes how the service waits, with its effective value. The standard values are unverified."),
       "HealthNote": Schema.object([
         "code": Schema.string(enum: HealthNoteCode.allCases.map(\.rawValue)),
         "message": Schema.string(description: "For a person. The wording can change.")

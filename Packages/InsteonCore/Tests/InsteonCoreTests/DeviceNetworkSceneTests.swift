@@ -30,8 +30,8 @@ struct DeviceNetworkSceneTests {
 
     let result: SceneResult = try await network(modem).run(ModemScene(group: 3), turningOn: true)
 
-    #expect(result == SceneResult(acknowledged: [Example.lamp], unacknowledged: [Example.plug], isComplete: true))
-    #expect(await modem.groupCommands == [InMemoryModem.GroupCommand(group: 3, command: Command(command1: 0x11, command2: 0xFF), timeout: .seconds(20))])
+    #expect(result == SceneResult(acknowledged: [Example.lamp], unacknowledged: [Example.plug], isComplete: true, responderCount: 2))
+    #expect(await modem.groupCommands == [InMemoryModem.GroupCommand(group: 3, command: Command(command1: 0x11, command2: 0xFF), wait: .standard)])
 
   }
 
@@ -46,15 +46,28 @@ struct DeviceNetworkSceneTests {
 
   }
 
-  @Test func waitsLongerForAGroupWithMoreResponders() async throws {
+  @Test func passesOnTheWaitItWasGiven() async throws {
 
     let modem = InMemoryModem()
-    let devices: [InsteonAddress] = (1...8).map { InsteonAddress(0x30, 0x00, UInt8($0)) }
-    await modem.setModemRecords(controllers(3, of: devices) + controllers(4, of: [Example.lamp]))
+    let wait: AllLinkCleanupWait = AllLinkCleanupWait(echo: .seconds(7), quietPeriod: .seconds(11), cap: .seconds(90))
+    await modem.setModemRecords(controllers(3, of: [Example.lamp]))
 
-    _ = try await network(modem).run(ModemScene(group: 3), turningOn: true)
+    _ = try await network(modem).run(ModemScene(group: 3), turningOn: true, wait: wait)
 
-    #expect(await modem.groupCommands.map(\.timeout) == [ModemScene.cleanupTimeout(responderCount: 8)])
+    #expect(await modem.groupCommands.map(\.wait) == [wait])
+
+  }
+
+  @Test func reportsHowManyControllerRecordsTheModemHoldsSoAResponderThatDoesNotAnswerIsCounted() async throws {
+
+    let modem = InMemoryModem()
+    // The lamp answers; the plug is a controller record too, but nothing reads or answers for it.
+    await modem.setModemRecords(controllers(3, of: [Example.lamp, Example.plug]) + controllers(4, of: [Example.sensor]))
+    await modem.setUnanswering(Example.plug)
+
+    let result: SceneResult = try await network(modem).run(ModemScene(group: 3), turningOn: true)
+
+    #expect(result.responderCount == 2)
 
   }
 
@@ -127,6 +140,31 @@ struct DeviceNetworkSceneTests {
 
     await #expect(throws: CancellationError.self) { try await task.value }
     #expect(await modem.groupCommands.isEmpty)
+
+  }
+
+}
+
+/// Two results are equal when they say the same about the members, however long the modem took.
+struct SceneResultEqualityTests {
+
+  private func result(status: Duration?, failure: Duration?, responders: Int = 2) -> SceneResult {
+
+    SceneResult(acknowledged: [Example.lamp], unacknowledged: [Example.plug], isComplete: true, statusReportAfter: status, failureReportedAfter: failure, responderCount: responders)
+
+  }
+
+  @Test func resultsWithTheSameMembersAndDifferentTimingsAreEqual() {
+
+    #expect(result(status: .seconds(3), failure: .seconds(1)) == result(status: .seconds(25), failure: nil))
+    #expect(result(status: .seconds(3), failure: .seconds(1)).hashValue == result(status: nil, failure: nil).hashValue)
+
+  }
+
+  @Test func resultsThatDifferInTheirMembersOrTheirCountAreNotEqual() {
+
+    #expect(result(status: nil, failure: nil) != result(status: nil, failure: nil, responders: 3))
+    #expect(result(status: nil, failure: nil) != SceneResult(acknowledged: [], unacknowledged: [Example.plug], isComplete: true, responderCount: 2))
 
   }
 

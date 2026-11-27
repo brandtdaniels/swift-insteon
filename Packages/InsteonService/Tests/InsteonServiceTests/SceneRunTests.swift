@@ -150,6 +150,22 @@ struct SceneRunTests {
     #expect(run.receipt == receipt)
   }
 
+  @Test func carriesHowLongAfterTheEchoTheModemsReportsCameInTheReceiptAndTheEvent() async throws {
+    let modem = await modemWithScenes()
+    await modem.setGroupReport(AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [keypad], isComplete: true, statusReportAfter: .seconds(24), failureReportedAfter: .seconds(12)))
+    let service = service(modem)
+    _ = try await service.refreshScenes()
+    let events = await service.events()
+
+    let receipt = try await service.runScene(SceneCommand(number: 3, action: .on))
+
+    #expect(receipt.statusReportAfter == .seconds(24))
+    #expect(receipt.failureReportedAfter == .seconds(12))
+    var reader = events.makeAsyncIterator()
+    guard case let .scene(run)? = try await reader.next() else { Issue.record("expected a scene event"); return }
+    #expect(run.receipt.statusReportAfter == .seconds(24))
+  }
+
   @Test func afterTheModemAcceptsTheCommandAndStopsAnsweringItSavesACheckpointAndPublishesAnIncompleteRun() async throws {
     let modem = await modemWithScenes()
     let store = RecordingStore()
@@ -182,6 +198,25 @@ struct SceneRunTests {
     await #expect(throws: ModemError.timedOut(.sendAllLinkCommand)) { try await service.runScene(SceneCommand(number: 3, action: .on)) }
 
     #expect(await modem.groupCommands.count == 1)
+  }
+
+  // A failure has no result to count the modem's controller records from, so the receipt counts the listing's members, each device once.
+  @Test func aFailureThatMayHaveSentCountsTheListingsMembersEachDeviceOnce() async throws {
+    let modem = await modemWithScenes()
+    // The lamp holds two responder records for the group with different data, so the listing names it twice.
+    let other = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 3, address: modemAddress, data1: 0x80, data2: 0x1C, data3: 0x01)
+    await modem.setDatabase([0x0FFF: responder(group: 3), 0x0FF7: other], of: lamp)
+    let service = service(modem)
+    let listing = try await service.refreshScenes()
+    #expect(listing.scenes.first { $0.number == 3 }?.members.count == 3)
+    await modem.setStopsAnsweringAfterGroupCommand(true)
+    let events = await service.events()
+
+    await #expect(throws: ModemError.timedOut(.sendAllLinkCommand)) { try await service.runScene(SceneCommand(number: 3, action: .on)) }
+
+    var reader = events.makeAsyncIterator()
+    guard case let .scene(run)? = try await reader.next() else { Issue.record("expected a scene event"); return }
+    #expect(run.receipt.responderCount == 2)
   }
 
   @Test func staysSilentForAFailureBeforeAnythingIsSent() async throws {
