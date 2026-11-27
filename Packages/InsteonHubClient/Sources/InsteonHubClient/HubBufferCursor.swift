@@ -1,3 +1,5 @@
+import InsteonModem
+
 /// Tracks how far the Hub's buffer has been read, so each read returns only new bytes.
 ///
 /// Clear the buffer before the first read, so earlier replies aren't returned as new:
@@ -36,11 +38,18 @@ public struct HubBufferCursor: Hashable, Sendable {
   /// - Returns: The bytes written since the previous call, oldest first.
   public mutating func advance(to buffer: HubBuffer) -> [UInt8] {
 
+    advanceReporting(to: buffer).bytes
+
+  }
+
+  /// Like ``advance(to:)``, and says how the cursor treated the buffer.
+  package mutating func advanceReporting(to buffer: HubBuffer) -> (bytes: [UInt8], step: WireTraceBufferStep) {
+
     guard buffer.bytes.contains(where: { $0 != 0 }) else {
 
       reset()
 
-      return []
+      return ([], .cleared)
 
     }
 
@@ -51,7 +60,7 @@ public struct HubBufferCursor: Hashable, Sendable {
 
     if end > start {
 
-      return Array(buffer.bytes[start..<end])
+      return (Array(buffer.bytes[start..<end]), .advanced)
 
     }
 
@@ -61,15 +70,15 @@ public struct HubBufferCursor: Hashable, Sendable {
       // wrapped: only the bytes before the end position are new.
       guard buffer.bytes[end...].contains(where: { $0 != 0 }) else {
 
-        return Array(buffer.bytes[..<end])
+        return (Array(buffer.bytes[..<end]), .refilled)
 
       }
 
-      return Array(buffer.bytes[start...]) + buffer.bytes[..<end]
+      return (Array(buffer.bytes[start...]) + buffer.bytes[..<end], .wrapped)
 
     }
 
-    return []
+    return ([], .unchanged)
 
   }
 

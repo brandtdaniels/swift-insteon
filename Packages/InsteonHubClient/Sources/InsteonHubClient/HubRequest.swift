@@ -49,6 +49,21 @@ package enum HubRequest {
 
   }
 
+  /// What a trace shows of the request: the bytes written, or a short command's command and
+  /// group, and nothing for a request with neither.
+  var traceBytes: [UInt8] {
+
+    switch self {
+    case let .write(bytes): bytes
+    case let .shortCommand(.groupCommand(command1, group)): [command1, group.rawValue]
+    case let .shortCommand(.startLinking(group)): [0x09, group.rawValue]
+    case let .shortCommand(.startUnlinking(group)): [0x0A, group.rawValue]
+    case .shortCommand(.cancelLinking): [0x08]
+    default: []
+    }
+
+  }
+
   /// The query, already percent-encoded. The Hub expects the bytes as hex where a query name
   /// would go.
   var query: String? {

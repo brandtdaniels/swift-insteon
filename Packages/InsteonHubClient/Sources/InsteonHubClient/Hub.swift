@@ -2,6 +2,7 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+import InsteonModem
 import InsteonNetworking
 
 /// The local HTTP interface of a Hub 2245 or Hub 2242.
@@ -58,6 +59,9 @@ public struct Hub: Sendable {
 
   private let clock: any Clock<Duration>
 
+  /// Where requests and buffer reads are traced, or `nil` for none.
+  package private(set) var wireTrace: (any WireTrace)?
+
   /// Creates a Hub interface that sends requests through a client as-is.
   ///
   /// - Parameters:
@@ -111,6 +115,21 @@ public struct Hub: Sendable {
       requestTimeout: requestTimeout,
       clock: clock
     )
+
+  }
+
+  /// This Hub, tracing each request it sends and each read of its buffer by a ``HubConnection``.
+  ///
+  /// A request is traced by its path and payload, never by its credentials or headers.
+  ///
+  /// - Parameter tracer: Receives the traffic, or `nil` to trace nothing, which costs nothing.
+  /// - Returns: A Hub that talks to the same endpoint through the same client.
+  public func tracing(_ tracer: (any WireTrace)?) -> Hub {
+
+    var traced = self
+    traced.wireTrace = tracer
+
+    return traced
 
   }
 
@@ -174,6 +193,8 @@ public struct Hub: Sendable {
 
     let urlRequest: URLRequest = try request.urlRequest(for: endpoint, timeout: requestTimeout)
     let httpClient: any HTTPClient = httpClient
+
+    wireTrace?.trace(.hubRequest(path: request.path), request.traceBytes, at: .now)
 
     // The request's own timeout limits only the wait between bytes, so the whole request is
     // limited too.
