@@ -50,6 +50,10 @@ public enum ConnectionError: Error, Equatable, Sendable {
   /// The service refused a scene number: it isn't a group from 1 through 254. Nothing was sent.
   case invalidScene
 
+  /// The idempotency key was already used for a different command, so the service sent nothing. Use a
+  /// new key for a new command.
+  case idempotencyKeyReused
+
   /// The service sent a command and can't say whether it took effect: the modem accepted it and then
   /// stopped answering, or the service gave up waiting. `sent` says whether the command may have
   /// reached a device. Read the devices before sending it again.

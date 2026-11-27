@@ -151,10 +151,26 @@ struct ServicePathSceneTests {
     #expect(bytes.map(\.verification) == [.conflicting, .other("later")])
   }
 
+  @Test func aSourceThatIsNeitherTheModemNorAnAddressIsKeptByNameAndTheListStillDecodes() async throws {
+    let body = #"{"looseHalfLinks":[{"address":"11.22.33","data":[1,2,3],"endpoint":"cloud","group":9,"role":"responder"}],"modemUnread":false,"scenes":[{"controller":"cloud","halfLinks":[],"members":[],"number":3,"writable":false},{"controller":"modem","halfLinks":[],"members":[],"number":4,"writable":true}],"undescribedMembers":[],"unlisted":[],"unreadable":[],"version":1,"whole":true}"#
+    let (c, _) = try await calls(json(body))
+
+    let list = try await c.scenes()
+
+    #expect(list.scenes.map(\.source) == [.other("cloud"), .modem])
+    #expect(list.looseHalfLinks.map(\.endpoint) == [.other("cloud")])
+  }
+
+  @Test func aSceneNumberOutsideTheGroupsIsKeptAsReadAndTheListStillDecodes() async throws {
+    let body = #"{"looseHalfLinks":[],"modemUnread":false,"scenes":[{"controller":"modem","halfLinks":[],"members":[],"number":0,"writable":true},{"controller":"modem","halfLinks":[],"members":[],"number":300,"writable":false}],"undescribedMembers":[],"unlisted":[],"unreadable":[],"version":1,"whole":true}"#
+    let (c, _) = try await calls(json(body))
+
+    #expect(try await c.scenes().scenes.map(\.number) == [0, 300])
+  }
+
   @Test func aListingThatBreaksTheContractIsABadResponseAndOneBadEntryFailsTheWholeList() async throws {
     let bodies = [
       "not json", "{}",
-      #"{"looseHalfLinks":[],"modemUnread":false,"scenes":[{"controller":"nonsense","halfLinks":[],"members":[],"number":3,"writable":true}],"undescribedMembers":[],"unlisted":[],"unreadable":[],"version":1,"whole":true}"#,
       #"{"looseHalfLinks":[],"modemUnread":false,"scenes":[{"controller":"modem","halfLinks":[],"members":[{"address":"nonsense","bytes":[],"data":[0,0,0],"described":false}],"number":3,"writable":true}],"undescribedMembers":[],"unlisted":[],"unreadable":[],"version":1,"whole":true}"#,
       #"{"looseHalfLinks":[],"modemUnread":false,"scenes":[{"controller":"modem","halfLinks":[],"members":[{"address":"1A.2B.3C","bytes":[],"data":[0,0,300],"described":false}],"number":3,"writable":true}],"undescribedMembers":[],"unlisted":[],"unreadable":[],"version":1,"whole":true}"#,
       #"{"looseHalfLinks":[],"modemUnread":false,"scenes":[],"undescribedMembers":[],"unlisted":["nonsense"],"unreadable":[],"version":1,"whole":true}"#,
@@ -261,7 +277,7 @@ struct ServicePathSceneTests {
     await #expect(throws: ConnectionPathError.interrupted) { _ = try await c.runScene(3, action: .on, idempotencyKey: "run-1") }
   }
 
-  @Test func aReceiptThatBreaksTheContractIsABadResponse() async throws {
+  @Test func aRunAnswerThatCannotBeReadMayHaveTakenEffectSoItIsAnUnknownOutcomeNeverABadResponse() async throws {
     let bodies = [
       "{}",
       #"{"acknowledged":[],"action":"dim","isComplete":true,"outcome":"acknowledged","persistence":"saved","responderCount":2,"scene":3,"unacknowledged":[],"version":1}"#,
@@ -272,7 +288,7 @@ struct ServicePathSceneTests {
     for body in bodies {
       let (c, _) = try await calls(json(body))
 
-      await #expect(throws: ConnectionPathError.badResponse, "\(body)") { _ = try await c.runScene(3, action: .on, idempotencyKey: "run-1") }
+      await #expect(throws: ConnectionError.outcomeUnknown(sent: true), "\(body)") { _ = try await c.runScene(3, action: .on, idempotencyKey: "run-1") }
     }
   }
 
@@ -301,6 +317,12 @@ struct ServicePathSceneTests {
 
     await #expect(throws: ServiceControlError.modemUnavailable(.connecting)) { _ = try await c.runScene(3, action: .on, idempotencyKey: "run-1") }
     await #expect(throws: ServiceControlError.modemUnavailable(.connecting)) { _ = try await c.refreshScenes() }
+  }
+
+  @Test func aReusedIdempotencyKeyIsTypedAndNothingWasSent() async throws {
+    let (c, _) = try await calls(refusal("idempotencyKeyReused", sent: false, status: 422))
+
+    await #expect(throws: ConnectionError.idempotencyKeyReused) { _ = try await c.runScene(3, action: .on, idempotencyKey: "run-1") }
   }
 
   @Test func anUnknownOutcomeSaysWhetherTheCommandWasSent() async throws {

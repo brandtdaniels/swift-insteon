@@ -154,8 +154,9 @@ private struct ServiceCalls: ConnectionCalls {
     do {
       return try JSONDecoder().decode(WireSceneReceipt.self, from: response.body).receipt()
     } catch {
-      // The run was accepted and its answer can't be read: it may have taken effect.
-      throw ConnectionPathError.badResponse
+      // The service accepted the run and its answer can't be read: the scene ran. That is an unknown
+      // outcome, never a bad response, which would read as nothing having happened.
+      throw ConnectionError.outcomeUnknown(sent: true)
     }
   }
 
@@ -235,6 +236,7 @@ private struct ServiceCalls: ConnectionCalls {
     case "sceneEmpty": return ServiceControlError.sceneEmpty
     case "databasesUnavailable": return ServiceControlError.databasesUnavailable
     case "invalidScene": return ConnectionError.invalidScene
+    case "idempotencyKeyReused": return ConnectionError.idempotencyKeyReused
     case "outcomeUnknown": return ConnectionError.outcomeUnknown(sent: refusal.sent ?? true)
     case "modemUnavailable":
       if let cause = Self.cause(refusal.cause) { return ServiceControlError.modemUnavailable(cause) }
