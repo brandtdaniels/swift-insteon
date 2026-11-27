@@ -159,6 +159,7 @@ scope, command all devices known by this service. Per-device permissions aren't 
 | PUT, DELETE | `/api/v1/routes/{kind}` | Register or remove a transport's route (`admin`) |
 | GET | `/api/v1/backup` | A backup of the cached network, the format `insteon backup` writes (`admin`; see Backups) |
 | GET | `/api/v1/scenes` | The scenes of the network from the cached ALL-Link databases (`read`; see Scenes) |
+| POST | `/api/v1/scenes/{number}/commands` | Turn a scene the modem controls on or off (`control`; see Scenes) |
 | POST | `/api/v1/scenes/refresh` | Read the ALL-Link databases from the hardware, then list the scenes (`control`; see Scenes) |
 | GET | `/devices/1A.2B.3C` | Authenticated card fragment from cached state; no hardware polling |
 
@@ -718,6 +719,16 @@ curl -s -H "Authorization: Bearer $(cat read.token)" $BASE/api/v1/scenes
 curl -s -X POST -H "Authorization: Bearer $(cat control.token)" -H "X-Insteon-Request: 1" $BASE/api/v1/scenes/refresh
 ```
 
+`POST /api/v1/scenes/{number}/commands` (`control`, with `X-Insteon-Request: 1` and `Content-Type: application/json`) runs a scene the modem controls. The body is `{"action": "on"}` or `{"action": "off"}` and nothing else: a level is refused as `invalidCommand`, because each member recalls the on-level its own link data holds. The service sends the scene's ALL-Link group one Light On at full level or one Light Off through the modem and waits for the modem's ALL-Link cleanups. It sends nothing to a device and does not read the members afterward, so `GET /api/v1/devices` keeps the levels it held until a device is read or reports.
+
+The answer is a receipt: `scene`, `action`, `outcome` (`acknowledged`, meaning the modem acknowledged sending the group command), `acknowledged` and `unacknowledged` (the members that did and did not acknowledge their cleanup; one that did not may still have acted), `isComplete` (the modem's report that it reached every member), `responderCount` and `persistence`. A modem that passes no per-member acknowledgment up, as a Hub 2 does not, leaves `acknowledged` empty and carries its report in `isComplete`. An empty `acknowledged` never means that no member acted. The command counts as sent once the modem echoes it. If the modem's cleanup report does not come within 5 seconds plus 3 for each member (at least 20 and at most 40 seconds; unverified, from one bench Hub 2), the answer is still 200 with `outcome` `acknowledged` and `isComplete` false: the cleanups' end is unknown, and the members may have acted. Only a command the modem never echoed is `outcomeUnknown`. With the `debug` log level, each run logs how long it took.
+
+A number that is not a group from 1 through 254 is `invalidScene` (400). A number the service has not read, or a group a device controls, is `unknownScene` (404); a scene with no members is `sceneEmpty` (422). Nothing is sent for either. While the modem is not connected it answers `modemUnavailable` before sending anything, and while another operation holds the service's gate it answers `busy`. If the modem refuses the command it answers `modemRejected` (`sent: false`); if the modem never echoes the command, it answers `outcomeUnknown` with `sent: true`. The service never sends a scene command twice by itself. With an `Idempotency-Key` header a repeat of the same run returns the recorded answer with `Idempotent-Replay: true` and sends nothing; a refusal that sent nothing is not recorded. A scene number is a canonical decimal, such as `3`: `005` and `+5` are `invalidScene`. Each run that completes publishes a numbered `scene` event on `/api/v1/events` with `scene`, `name` (null while a scene has no name), `source` (`api`), `action`, `acknowledged`, `unacknowledged`, `isComplete` and `firedAt`. A run that ends in `outcomeUnknown` also publishes a `scene` event, with `isComplete` false and empty `acknowledged` and `unacknowledged`, so a client reads the members again. A run refused before anything is sent publishes nothing. A scene run by a member's button or by the command line is not reported, because the modem does not report its own group sends.
+
+```sh
+curl -s -X POST -H "Authorization: Bearer $(cat control.token)" -H "X-Insteon-Request: 1" -H "Content-Type: application/json" -d '{"action":"off"}' $BASE/api/v1/scenes/3/commands
+```
+
 ## Persistence and lifecycle
 
 The service writes its own network snapshot at
@@ -837,6 +848,9 @@ same status for the same failure.
 | `invalidLevel` | 400 | false | The percentage is outside 0 through 100, or the device or action doesn't take one. |
 | `invalidIdempotencyKey` | 400 | false | The `Idempotency-Key` header is malformed. |
 | `unknownDevice` | 404 | false | The service doesn't know the device. |
+| `invalidScene` | 400 | false | The scene number is not a group from 1 through 254. |
+| `unknownScene` | 404 | false | The service holds no scene of that number that the modem controls. |
+| `sceneEmpty` | 422 | false | The scene has no members, so nothing was sent. |
 | `routeNotFound` | 404 | false | No such route. |
 | `apiMarkerMissing` | 403 | false | `X-Insteon-Request: 1` is missing. |
 | `bodyTooLarge` | 413 | false | The body is over 8 KiB. |

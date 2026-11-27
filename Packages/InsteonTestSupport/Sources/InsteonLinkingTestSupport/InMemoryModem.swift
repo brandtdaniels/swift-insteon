@@ -31,6 +31,32 @@ public actor InMemoryModem: LinkingModem {
     /// and before they're returned.
     case readModemDatabase
 
+    /// A command to one of the modem's ALL-Link groups.
+    case sendAllLinkCommand(group: AllLinkGroupNumber, command: Command)
+
+  }
+
+  /// A command sent to one of the modem's ALL-Link groups.
+  public struct GroupCommand: Hashable, Sendable {
+
+    /// The group.
+    public let group: AllLinkGroupNumber
+
+    /// The command broadcast.
+    public let command: Command
+
+    /// How long the sender allowed for the cleanups.
+    public let timeout: Duration
+
+    /// Creates a group command.
+    public init(group: AllLinkGroupNumber, command: Command, timeout: Duration) {
+
+      self.group = group
+      self.command = command
+      self.timeout = timeout
+
+    }
+
   }
 
   /// What runs before the modem carries out each operation, if anything.
@@ -67,6 +93,20 @@ public actor InMemoryModem: LinkingModem {
 
   /// The modem's own records, in the order it found or added them.
   public var modemRecords: [AllLinkRecord] = []
+
+  /// Every command the modem broadcast to a group, in order.
+  public private(set) var groupCommands: [GroupCommand] = []
+
+  /// The cleanup report every group command answers with, or `nil` for one that lists each
+  /// responder of the group as acknowledged.
+  public private(set) var groupReport: AllLinkCleanupReport?
+
+  /// Whether the modem refuses every group command, as it does for a group it has no records for.
+  public private(set) var rejectsGroupCommands: Bool = false
+
+  /// Whether the modem accepts a group command and then stops answering, so the command went out
+  /// and its cleanups are never reported.
+  public private(set) var stopsAnsweringAfterGroupCommand: Bool = false
 
   /// Every write to a device's database, in order.
   public private(set) var writes: [Write] = []
@@ -707,7 +747,65 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Sets the cleanup report group commands answer with.
+  ///
+  /// - Parameter report: The report, or `nil` for one that lists each responder as acknowledged.
+  public func setGroupReport(_ report: AllLinkCleanupReport?) {
+
+    groupReport = report
+
+  }
+
+  /// Makes the modem accept each group command and then stop answering, or answer again.
+  public func setStopsAnsweringAfterGroupCommand(_ stops: Bool) {
+
+    stopsAnsweringAfterGroupCommand = stops
+
+  }
+
+  /// Makes the modem refuse every group command, or accept them again.
+  public func setRejectsGroupCommands(_ rejects: Bool) {
+
+    rejectsGroupCommands = rejects
+
+  }
+
   // MARK: - LinkingModem
+
+  /// Records a command broadcast to a group and answers with its cleanup report.
+  ///
+  /// - Throws: `ModemError.rejected` for a group the modem has no controller records for, or
+  ///   while ``setRejectsGroupCommands(_:)`` is on, the error of the hook
+  ///   ``setBeforeOperation(_:)`` set, or `CancellationError` if the task is canceled.
+  public func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, timeout: Duration) async throws -> AllLinkCleanupReport {
+
+    try await begin(.sendAllLinkCommand(group: group, command: command))
+
+    var responders: [InsteonAddress] = []
+
+    for record in modemRecords where record.flags.contains(.controller) && record.flags.contains(.inUse) && record.group == group && !responders.contains(record.address) {
+
+      responders.append(record.address)
+
+    }
+
+    guard !rejectsGroupCommands, !responders.isEmpty else {
+
+      throw ModemError.rejected(.sendAllLinkCommand)
+
+    }
+
+    groupCommands.append(GroupCommand(group: group, command: command, timeout: timeout))
+
+    if stopsAnsweringAfterGroupCommand {
+
+      throw ModemError.timedOut(.sendAllLinkCommand)
+
+    }
+
+    return groupReport ?? AllLinkCleanupReport(acknowledged: responders, unacknowledged: [], isComplete: true)
+
+  }
 
   /// Returns the modem's address, category, subcategory and firmware version, and records
   /// that it was asked.

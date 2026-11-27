@@ -32,6 +32,8 @@ struct ErrorContractTests {
   static let table: [Expected] = [
     Expected(failure: ServiceControlError.busy, action: "on", code: "busy", status: 409, sent: false),
     Expected(failure: ServiceControlError.unknownDevice, action: "on", code: "unknownDevice", status: 404, sent: false),
+    Expected(failure: ServiceControlError.unknownScene, action: "on", code: "unknownScene", status: 404, sent: false),
+    Expected(failure: ServiceControlError.sceneEmpty, action: "on", code: "sceneEmpty", status: 422, sent: false),
     Expected(failure: ServiceControlError.invalidLevel, action: "on", code: "invalidLevel", status: 400, sent: false),
     Expected(failure: ServiceControlError.unsupportedControl, action: "on", code: "unsupportedControl", status: 422, sent: false),
     Expected(failure: ServiceControlError.notIdentified, action: "status", code: "notIdentified", status: 409, sent: false),

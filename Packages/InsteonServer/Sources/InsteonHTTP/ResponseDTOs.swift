@@ -150,6 +150,32 @@ struct StatusDTO: Encodable {
   }
 }
 
+/// What a client's request for a scene says to do, and what the `scene` event reports.
+enum HTTPSceneAction: String, Decodable, CaseIterable, Sendable { case on, off }
+
+/// A scene's answer to a command. `acknowledged` means the modem acknowledged sending the group
+/// command; each member's own cleanup is in `acknowledged` and `unacknowledged`.
+struct SceneReceiptDTO: Encodable {
+  let version = 1
+  let scene: Int
+  let action: String
+  let outcome = ReceiptOutcome.acknowledged.rawValue
+  let acknowledged: [String]
+  let unacknowledged: [String]
+  let isComplete: Bool
+  let responderCount: Int
+  let persistence: String
+  init(_ receipt: SceneReceipt) {
+    scene = Int(receipt.scene)
+    action = (receipt.action == .on ? HTTPSceneAction.on : .off).rawValue
+    acknowledged = receipt.acknowledged.map(\.description)
+    unacknowledged = receipt.unacknowledged.map(\.description)
+    isComplete = receipt.isComplete
+    responderCount = receipt.responderCount
+    persistence = PersistenceName(receipt.persistence).rawValue
+  }
+}
+
 struct ReceiptDTO: Encodable {
   let version = 1
   let address: String
@@ -198,6 +224,11 @@ struct EventDTO: Encodable {
   let outcome: String?
   let reason: String?
   let nextRun: String?
+  let scene: Int?
+  let action: String?
+  let acknowledged: [String]?
+  let unacknowledged: [String]?
+  let isComplete: Bool?
   init(_ event: ServiceEvent, at position: EventCursor) {
     runId = position.runID
     sequence = position.sequence
@@ -206,6 +237,9 @@ struct EventDTO: Encodable {
       ruleId = note.ruleID; ruleName = note.ruleName
       firedAt = ISO8601DateFormatter().string(from: note.firedAt)
     case let .schedule(run):
+      ruleId = nil; ruleName = nil
+      firedAt = ISO8601DateFormatter().string(from: run.firedAt)
+    case let .scene(run):
       ruleId = nil; ruleName = nil
       firedAt = ISO8601DateFormatter().string(from: run.firedAt)
     default:
@@ -228,8 +262,19 @@ struct EventDTO: Encodable {
       case .unknown: outcome = ScheduleOutcomeName.unknown.rawValue; reason = nil
       }
       nextRun = run.nextRun.map { ISO8601DateFormatter().string(from: $0) }
+    } else if case .scene = event {
+      scheduleId = nil; source = SceneSourceName.api.rawValue; outcome = nil; reason = nil; nextRun = nil
     } else {
       scheduleId = nil; source = nil; outcome = nil; reason = nil; nextRun = nil
+    }
+    if case let .scene(run) = event {
+      scene = Int(run.number)
+      action = run.action == .on ? HTTPSceneAction.on.rawValue : HTTPSceneAction.off.rawValue
+      acknowledged = run.receipt.acknowledged.map(\.description)
+      unacknowledged = run.receipt.unacknowledged.map(\.description)
+      isComplete = run.receipt.isComplete
+    } else {
+      scene = nil; action = nil; acknowledged = nil; unacknowledged = nil; isComplete = nil
     }
     if case let .commandCompleted(command, receipt) = event {
       completion = CommandCompletionDTO(command: command, receipt: receipt)
@@ -257,6 +302,8 @@ struct EventDTO: Encodable {
       kind = EventKind.notification.rawValue; address = note.device.description; group = nil; name = note.eventName; productName = nil
     case let .schedule(run):
       kind = EventKind.schedule.rawValue; address = run.device.description; group = nil; name = run.name; productName = nil
+    case let .scene(run):
+      kind = EventKind.scene.rawValue; address = nil; group = nil; name = run.name; productName = nil
     }
   }
 }

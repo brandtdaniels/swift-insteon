@@ -299,6 +299,12 @@ struct OpenAPIContractTests {
     }
     validate(try json(ErrorDTO(HTTPFailure(ServiceControlError.modemUnavailable(.credentialsRejected)), requestID: "abc123")), as: "Error", in: document)
 
+    for sceneReceipt in [
+      SceneReceipt(scene: 3, action: .on, acknowledged: [address], unacknowledged: [], isComplete: true, responderCount: 1, persistence: .saved),
+      SceneReceipt(scene: 254, action: .off, acknowledged: [], unacknowledged: [address], isComplete: false, responderCount: 1)
+    ] {
+      validate(try json(SceneReceiptDTO(sceneReceipt)), as: "SceneReceipt", in: document)
+    }
     let receipt = CommandReceipt(address: address, outcome: .acknowledged, status: nil, persistence: .saved)
     let command = ServiceCommand(address: address, action: .on, levelPercent: 50)
     let events: [ServiceEvent] = [
@@ -307,7 +313,9 @@ struct OpenAPIContractTests {
       .heartbeat(address, group: 1), .heartbeat(address, group: nil), .statusChanged(address),
       .modemUnavailable(.hubUnreachable), .modemUnavailable(.hubErrorStatus(503)), .modemReconnected,
       .notification(ServiceNotification(ruleID: "basement-leak", ruleName: "Basement leak", device: address, firedAt: Date(timeIntervalSince1970: 1_800_000_000), eventName: nil)),
-      .notification(ServiceNotification(ruleID: "basement-leak", ruleName: "Basement leak", device: address, firedAt: Date(timeIntervalSince1970: 1_800_000_000), eventName: "wet"))
+      .notification(ServiceNotification(ruleID: "basement-leak", ruleName: "Basement leak", device: address, firedAt: Date(timeIntervalSince1970: 1_800_000_000), eventName: "wet")),
+      .scene(SceneRun(number: 3, name: nil, source: .api, action: .on, receipt: SceneReceipt(scene: 3, action: .on, acknowledged: [address], unacknowledged: [], isComplete: true, responderCount: 1, persistence: .saved), firedAt: Date(timeIntervalSince1970: 1_800_000_000))),
+      .scene(SceneRun(number: 4, name: "Evening", source: .api, action: .off, receipt: SceneReceipt(scene: 4, action: .off, acknowledged: [], unacknowledged: [address], isComplete: false, responderCount: 1), firedAt: Date(timeIntervalSince1970: 1_800_000_000)))
     ] + [
       ScheduleRun.Outcome.acknowledged, .missed, .unavailable(.hubUnreachable), .refused(.notLinked), .unknown
     ].flatMap { outcome in

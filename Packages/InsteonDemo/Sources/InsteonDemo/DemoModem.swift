@@ -146,6 +146,43 @@ actor DemoModem: LinkingModem {
 
   }
 
+  func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, timeout: Duration) async throws -> AllLinkCleanupReport {
+
+    var members: [InsteonAddress] = []
+
+    for record in modemRecords where record.flags.contains(.controller) && record.group == group && !members.contains(record.address) {
+
+      members.append(record.address)
+
+    }
+
+    guard !members.isEmpty else {
+
+      throw ModemError.rejected(.sendAllLinkCommand)
+
+    }
+
+    for member in members {
+
+      switch command.command1 {
+
+      case 0x11, 0x12:
+        levels[member] = command.command2
+
+      case 0x13, 0x14:
+        levels[member] = 0x00
+
+      default:
+        break
+
+      }
+
+    }
+
+    return AllLinkCleanupReport(acknowledged: members, unacknowledged: [], isComplete: true)
+
+  }
+
   func replies() async -> AsyncStream<ModemReply> {
 
     AsyncStream<ModemReply> { _ in }

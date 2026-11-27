@@ -46,7 +46,7 @@ final class OperationLog: @unchecked Sendable {
     all.filter { (operation: InMemoryModem.Operation) -> Bool in
 
       switch operation {
-      case .send, .extendedRequest:
+      case .send, .extendedRequest, .sendAllLinkCommand:
         true
       case .standardRequest, .readModemDatabase:
         false

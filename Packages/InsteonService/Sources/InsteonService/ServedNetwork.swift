@@ -47,6 +47,13 @@ public protocol ServedNetwork: Sendable {
   ///   connection is lost.
   func refreshDatabases() async throws -> [InsteonAddress: BackupUnreadableReason]
 
+  /// Sends one of the modem's scenes Light On or Light Off and waits for the modem's ALL-Link cleanups.
+  ///
+  /// - Throws: ``ServiceControlError/databasesUnavailable`` for a network whose modem can't run a
+  ///   scene, as a Hub Pro's can't, `CancellationError` when canceled, and the modem's error when
+  ///   it rejects the command or stops answering.
+  func runScene(group: AllLinkGroupNumber, turningOn: Bool) async throws -> SceneResult
+
   /// The local time the Hub reported when the connection opened, as it wrote it, or `nil` for a
   /// connection that doesn't report one. Reading it changes nothing on the Hub.
   func reportedLocalTime() async -> String?
@@ -102,6 +109,10 @@ struct ModemServedNetwork: ServedNetwork {
   }
 
   func changes() async throws -> NetworkChanges { .heard(await network.monitor.changes()) }
+
+  func runScene(group: AllLinkGroupNumber, turningOn: Bool) async throws -> SceneResult {
+    try await network.run(ModemScene(group: group), turningOn: turningOn)
+  }
 
   func refreshDatabases() async throws -> [InsteonAddress: BackupUnreadableReason] {
     let info = try await network.modemInfo()
@@ -178,6 +189,8 @@ struct HubProServedNetwork: ServedNetwork {
   func changes() async throws -> NetworkChanges { .polled(network.changes()) }
 
   func refreshDatabases() async throws -> [InsteonAddress: BackupUnreadableReason] { throw ServiceControlError.databasesUnavailable }
+
+  func runScene(group: AllLinkGroupNumber, turningOn: Bool) async throws -> SceneResult { throw ServiceControlError.databasesUnavailable }
 
   func reportedLocalTime() async -> String? { await network.reportedTime }
 

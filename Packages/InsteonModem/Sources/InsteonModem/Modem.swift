@@ -298,12 +298,19 @@ public actor Modem: SerialCommandSender {
   }
 
   /// How long ``Modem/sendAllLinkCommand(group:command:timeout:)`` waits for the cleanups by
-  /// default: 10 seconds.
+  /// default: 20 seconds.
   ///
   /// The Insteon Developer's Guide gives the worst case as 2.150 seconds from the broadcast to the
-  /// first member's cleanup report and 1.550 seconds to each one after, so 10 seconds covers a
-  /// group of up to six members that all need every retry. Pass more for a larger group.
-  public static let defaultAllLinkCommandTimeout: Duration = .seconds(10)
+  /// first member's cleanup report and 1.550 seconds to each one after, for members that answer.
+  /// A bench Hub 2 with one silent member needed more than 10 seconds before its status report
+  /// came, and the time a silent member costs is not in the Insteon Developer's Guide, so 20 seconds is unverified: it
+  /// is a floor chosen from that bench run. Pass more for a larger group.
+  public static let defaultAllLinkCommandTimeout: Duration = .seconds(20)
+
+  /// How long ``Modem/sendAllLinkCommand(group:command:timeout:)`` waits for the modem to accept
+  /// the command, by echoing it with an ACK: 5 seconds. A Hub brings the echo over polling, so it
+  /// can come later than a serial modem's. Unverified for a Hub.
+  public static let allLinkCommandEchoTimeout: Duration = .seconds(5)
 
   /// Sends a command to one of the modem's ALL-Link groups and waits for the modem to finish
   /// its cleanups.
@@ -313,6 +320,10 @@ public actor Modem: SerialCommandSender {
   /// Cleanup Status Report (`0x58`), since the Insteon Developer's Guide says any message sent
   /// before then cancels the rest of the cleanups. Meanwhile each member's cleanup acknowledgment,
   /// cleanup NAK or ALL-Link Cleanup Failure Report (`0x56`) is collected.
+  ///
+  /// The command counts as sent once the modem echoes it with an ACK. If the status report
+  /// doesn't come within `timeout` after that, the call still returns, with what was collected
+  /// and `isComplete` false: the command went out, and only how the cleanups ended is unknown.
   ///
   /// ```swift
   /// let report = try await modem.sendAllLinkCommand(group: 0x01, command: StandardDirectCommand.on(level: 0xFF).command)
@@ -327,14 +338,15 @@ public actor Modem: SerialCommandSender {
   ///   - command: The command to broadcast. Its cmd2 goes in the broadcast; the cleanups carry the
   ///     group number instead. The Insteon Developer's Guide says not to send Light Start Manual
   ///     Change (cmd1 `0x17`) this way, so it isn't allowed.
-  ///   - timeout: How long to wait for the modem's echo and every cleanup together. Defaults to
-  ///     ``Modem/defaultAllLinkCommandTimeout``.
+  ///   - timeout: How long to wait for the cleanups after the modem accepted the command.
+  ///     Defaults to ``Modem/defaultAllLinkCommandTimeout``.
   /// - Returns: Which members acknowledged their cleanup, which didn't, and whether the modem
-  ///   reached them all.
+  ///   reported that it reached them all.
   /// - Throws: ``ModemError/rejected(_:)`` if the modem NAKs every attempt, as it does for a
-  ///   group it has no records for, ``ModemError/timedOut(_:)`` if the cleanups don't finish
-  ///   in time, ``ModemError/connectionClosed`` if the modem is closed, `CancellationError` if
-  ///   the task is canceled, or the connection's error.
+  ///   group it has no records for, ``ModemError/timedOut(_:)`` if the modem doesn't echo the
+  ///   command within ``Modem/allLinkCommandEchoTimeout``, so it may not have been sent,
+  ///   ``ModemError/connectionClosed`` if the modem is closed, `CancellationError` if the task is
+  ///   canceled, or the connection's error.
   public func sendAllLinkCommand(
     group: AllLinkGroupNumber,
     command: Command,
@@ -345,21 +357,8 @@ public actor Modem: SerialCommandSender {
 
     let serialCommand = SerialCommand.sendAllLinkCommand(group: group, command: command)
     let echo = Self.exchange(for: serialCommand).steps
-    let status = AnswerStep<ModemReply>(
-      verdict: { reply in
-
-        if case .allLinkCleanupStatus = reply {
-
-          return .accepted
-
-        }
-
-        return nil
-
-      },
-      timedOut: ModemError.timedOut(.sendAllLinkCommand)
-    )
-    let exchange = Exchange(bytes: serialCommand.bytes, steps: echo + [status], timeout: timeout)
+    let exchange = Exchange(bytes: serialCommand.bytes, steps: echo, timeout: Self.allLinkCommandEchoTimeout)
+    let clock = self.clock
 
     return try await pacer.withTurn { turn in
 
@@ -369,25 +368,99 @@ public actor Modem: SerialCommandSender {
 
       _ = try await turn.send(exchange)
 
-      return try await Self.cleanupReport(in: replies, for: serialCommand, group: group, command1: command.command1)
+      // The cleanups are read until the status report, or until the wait runs out. Whichever
+      // ends first cancels the other, and the reader keeps what it collected.
+      let collected = try await withThrowingTaskGroup(of: CleanupCollection?.self) { tasks in
+
+        tasks.addTask { await Self.collectCleanups(in: replies, for: serialCommand, group: group, command1: command.command1) }
+        tasks.addTask {
+
+          try? await clock.sleep(for: timeout)
+
+          return nil
+
+        }
+
+        var collected: CleanupCollection?
+
+        for try await result in tasks {
+
+          if let result {
+
+            collected = result
+
+          }
+
+          tasks.cancelAll()
+
+        }
+
+        return collected
+
+      }
+
+      try Task.checkCancellation()
+
+      guard let collected else {
+
+        throw ModemError.connectionClosed
+
+      }
+
+      if collected.endedWithoutReport && !collected.wasCanceled {
+
+        throw ModemError.connectionClosed
+
+      }
+
+      return collected.report
+
+    }
+
+  }
+
+  /// What was heard of a group command's cleanups.
+  private struct CleanupCollection: Sendable {
+
+    var acknowledged: [InsteonAddress] = []
+
+    var unacknowledged: [InsteonAddress] = []
+
+    /// The modem's report of whether it reached every member, or `nil` if it never came.
+    var isComplete: Bool?
+
+    /// Whether the reader was canceled, such as when the wait ran out.
+    var wasCanceled = false
+
+    /// Whether the replies ended with no status report.
+    var endedWithoutReport: Bool { isComplete == nil }
+
+    var report: AllLinkCleanupReport {
+
+      let answered = Set(acknowledged)
+
+      return AllLinkCleanupReport(
+        acknowledged: Modem.unique(acknowledged),
+        unacknowledged: Modem.unique(unacknowledged.filter { !answered.contains($0) }),
+        isComplete: isComplete ?? false
+      )
 
     }
 
   }
 
   /// Reads a group command's cleanups from the replies that followed it, up to the modem's
-  /// status report.
-  private static func cleanupReport(
+  /// status report or until the task is canceled.
+  private static func collectCleanups(
     in replies: AsyncStream<ModemReply>,
     for serialCommand: SerialCommand,
     group: AllLinkGroupNumber,
     command1: UInt8
-  ) async throws -> AllLinkCleanupReport {
+  ) async -> CleanupCollection {
 
     // What came before the command's accepted echo belongs to something else.
     var hasStarted = false
-    var acknowledged: [InsteonAddress] = []
-    var unacknowledged: [InsteonAddress] = []
+    var collected = CleanupCollection()
 
     for await reply in replies {
 
@@ -398,31 +471,29 @@ public actor Modem: SerialCommandSender {
       case let .messageReceived(message)
         where hasStarted && message.command == Command(command1: command1, command2: group.rawValue)
           && message.flags.messageType == .allLinkCleanupAcknowledgment:
-        acknowledged.append(message.sender)
+        collected.acknowledged.append(message.sender)
       // A cleanup NAK carries its reason in cmd2. A device still searching its database
       // answers again once it's done, so that one isn't a failure.
       case let .messageReceived(message)
         where hasStarted && message.command.command1 == command1
           && message.flags.messageType == .allLinkCleanupNegativeAcknowledgment
           && message.nakReason != .databaseSearchPending:
-        unacknowledged.append(message.sender)
+        collected.unacknowledged.append(message.sender)
       case let .allLinkCleanupFailed(failedGroup, address) where hasStarted && failedGroup == group:
-        unacknowledged.append(address)
+        collected.unacknowledged.append(address)
       case let .allLinkCleanupStatus(isComplete) where hasStarted:
-        let answered = Set(acknowledged)
+        collected.isComplete = isComplete
 
-        return AllLinkCleanupReport(
-          acknowledged: unique(acknowledged),
-          unacknowledged: unique(unacknowledged.filter { !answered.contains($0) }),
-          isComplete: isComplete
-        )
+        return collected
       default:
         break
       }
 
     }
 
-    throw ModemError.connectionClosed
+    collected.wasCanceled = Task.isCancelled
+
+    return collected
 
   }
 

@@ -106,6 +106,20 @@ enum OpenAPIDocument {
         "action": Schema.string(enum: HTTPCommand.Action.allCases.map(\.rawValue)),
         "levelPercent": Schema.integer(minimum: 0, maximum: 100, description: "Only for `on`, and only for a device that dims.")
       ], required: ["action"]),
+      "SceneCommand": Schema.object([
+        "action": Schema.string(enum: HTTPSceneAction.allCases.map(\.rawValue))
+      ], required: ["action"]),
+      "SceneReceipt": Schema.object([
+        "version": version,
+        "scene": Schema.integer(minimum: 1, maximum: 254),
+        "action": Schema.string(enum: HTTPSceneAction.allCases.map(\.rawValue)),
+        "outcome": Schema.string(enum: ReceiptOutcome.allCases.map(\.rawValue)),
+        "acknowledged": ["type": "array", "items": address, "description": "The members that acknowledged their ALL-Link cleanup. Empty for a modem that passes no per-member acknowledgment up, which never means that no member acted."],
+        "unacknowledged": ["type": "array", "items": address, "description": "The members that did not acknowledge their cleanup and may still have acted."],
+        "isComplete": ["type": "boolean", "description": "Whether the modem reports that it sent every member its cleanup."],
+        "responderCount": Schema.integer(minimum: 0, description: "How many members the scene had when it ran."),
+        "persistence": Schema.ref("Persistence")
+      ], required: ["version", "scene", "action", "outcome", "acknowledged", "unacknowledged", "isComplete", "responderCount", "persistence"], description: "How a scene's command went. The service does not read the members afterward."),
       "Status": Schema.object([
         "group": Schema.nullable(Schema.integer()),
         "kind": Schema.string(enum: ReadingKind.allCases.map(\.rawValue)),
@@ -171,11 +185,16 @@ enum OpenAPIDocument {
         "ruleName": Schema.string(description: "On `notification`: the rule's name."),
         "firedAt": ["type": "string", "format": "date-time", "description": "On `notification`: when the rule fired. On `schedule`: when the service handled the run."],
         "scheduleId": Schema.string(description: "On `schedule`: the schedule's or timer's identifier."),
-        "source": Schema.string(enum: ScheduleSourceName.allCases.map(\.rawValue), description: "On `schedule`: whether a schedule or a timer ran."),
+        "source": Schema.string(enum: ScheduleSourceName.allCases.map(\.rawValue) + SceneSourceName.allCases.map(\.rawValue), description: "On `schedule`: whether a schedule or a timer ran. On `scene`: `api`, a client's request."),
         "outcome": Schema.string(enum: ScheduleOutcomeName.allCases.map(\.rawValue), description: "On `schedule`: `acknowledged` when the device acknowledged the command; `missed` when the run time passed while the service wasn't running or the clock moved past it, so nothing was sent; `unavailable` when the Hub or modem was away, so nothing was sent (`cause` says why); `refused` when the service refused the command before sending it (`reason` is the error code); `unknown` when the command may have reached the device. A run is never retried."),
         "reason": Schema.string(description: "On `schedule` with outcome `refused`: the error code the same command would answer with."),
+        "scene": Schema.integer(minimum: 1, maximum: 254, description: "On `scene`: the scene's group number."),
+        "action": Schema.string(enum: HTTPSceneAction.allCases.map(\.rawValue), description: "On `scene`: what the scene was told to do."),
+        "acknowledged": ["type": "array", "items": address, "description": "On `scene`: the members that acknowledged their ALL-Link cleanup. Empty for a modem that passes no per-member acknowledgment up, so an empty list never means no member acted."],
+        "unacknowledged": ["type": "array", "items": address, "description": "On `scene`: the members that did not acknowledge their cleanup and may still have acted."],
+        "isComplete": Schema.boolean,
         "nextRun": Schema.nullable(["type": "string", "format": "date-time", "description": "On `schedule`: when the schedule runs next, in the service's time zone, or null for a timer or a schedule with no run to come."])
-      ], required: ["version", "runId", "sequence", "kind"], description: "The `data` of one frame. `commandCompleted` carries `completion`; `modemUnavailable` carries `cause` and `message`; `reconnected` says the modem is back and a client refreshes what it shows. `notification` carries `ruleId`, `ruleName`, the device as `address` and `firedAt`, and `name` only when the rule includes detail. `schedule` carries `scheduleId`, `name`, `source`, the device as `address`, `outcome`, `firedAt` and `nextRun`."),
+      ], required: ["version", "runId", "sequence", "kind"], description: "The `data` of one frame. `commandCompleted` carries `completion`; `modemUnavailable` carries `cause` and `message`; `reconnected` says the modem is back and a client refreshes what it shows. `notification` carries `ruleId`, `ruleName`, the device as `address` and `firedAt`, and `name` only when the rule includes detail. `schedule` carries `scheduleId`, `name`, `source`, the device as `address`, `outcome`, `firedAt` and `nextRun`. `scene` carries `scene`, `name` (null when the scene has no name), `source` (`api`), `action`, `acknowledged`, `unacknowledged`, `isComplete` and `firedAt`. A scene run by a member's button or the command line is not reported, because the modem does not report its own group sends."),
       "Gap": Schema.object([
         "version": version,
         "kind": Schema.constant(EventKind.gap.rawValue),

@@ -103,6 +103,13 @@ public actor DamagingModem: LinkingModem {
 
   }
 
+  /// The base modem's cleanup report.
+  public func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, timeout: Duration) async throws -> AllLinkCleanupReport {
+
+    try await base.sendAllLinkCommand(group: group, command: command, timeout: timeout)
+
+  }
+
   /// The base modem's replies.
   public func replies() async -> AsyncStream<ModemReply> {
 

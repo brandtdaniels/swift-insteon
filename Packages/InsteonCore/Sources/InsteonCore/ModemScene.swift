@@ -37,7 +37,17 @@ public struct ModemScene: Hashable, Sendable {
   /// - Throws: The modem's error, or `CancellationError` if the task is canceled.
   func responders(in modem: any LinkingModem) async throws -> [InsteonAddress] {
 
-    let records: [AllLinkRecord] = try await modem.allLinkRecords()
+    responders(among: try await modem.allLinkRecords())
+
+  }
+
+  /// The devices a copy of the modem's ALL-Link database lists as the group's responders, each
+  /// once, in the order of their addresses as text.
+  ///
+  /// - Parameter records: The modem's records.
+  /// - Returns: The responders' addresses.
+  func responders(among records: [AllLinkRecord]) -> [InsteonAddress] {
+
     let members: [InsteonAddress] = records.filter { $0.flags.contains(.controller) && $0.group == group }.map(\.address)
 
     return Array(Set(members)).sorted { $0.description < $1.description }
@@ -47,14 +57,17 @@ public struct ModemScene: Hashable, Sendable {
   /// How long to wait for the modem to send every responder its ALL-Link cleanup.
   ///
   /// The Insteon Developer's Guide gives up to 2.150 seconds to the first cleanup and 1.550
-  /// seconds to each one after, so this allows 3 seconds and 2 more for each responder, and
-  /// never less than 10 seconds.
+  /// seconds to each one after, for responders that answer. A responder that doesn't answer
+  /// costs more, and the Insteon Developer's Guide doesn't say how much, so these numbers are unverified: a bench
+  /// Hub 2 with one silent responder took more than 10 seconds, so this allows 5 seconds and 3
+  /// more for each responder, never less than 20 seconds and never more than 40, so a run
+  /// holds the service for a bounded time.
   ///
   /// - Parameter responderCount: How many responders the group has.
   /// - Returns: The time to wait.
   public static func cleanupTimeout(responderCount: Int) -> Duration {
 
-    .seconds(max(10, 3 + 2 * responderCount))
+    .seconds(min(40, max(20, 5 + 3 * responderCount)))
 
   }
 
@@ -71,7 +84,7 @@ public struct ModemScene: Hashable, Sendable {
   /// - Throws: `ModemError.rejected` if the modem rejects the command, as it does for a group
   ///   it has no records for, the modem's other errors, or `CancellationError` if the task is
   ///   canceled.
-  func send(turningOn isOn: Bool, responderCount: Int, through modem: Modem) async throws -> AllLinkCleanupReport {
+  func send(turningOn isOn: Bool, responderCount: Int, through modem: any LinkingModem) async throws -> AllLinkCleanupReport {
 
     let command: Command = isOn ? StandardDirectCommand.on(level: .max).command : StandardDirectCommand.off.command
 

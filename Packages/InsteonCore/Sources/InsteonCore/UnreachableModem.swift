@@ -54,6 +54,12 @@ struct UnreachableModem: LinkingModem {
 
   }
 
+  func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, timeout: Duration) async throws -> AllLinkCleanupReport {
+
+    throw ModemError.connectionClosed
+
+  }
+
   func replies() async -> AsyncStream<ModemReply> {
 
     AsyncStream { $0.finish() }

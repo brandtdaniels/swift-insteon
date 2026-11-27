@@ -13,6 +13,68 @@ import Logging
 struct SceneAPI<Service: SceneProviding>: Sendable {
   let service: Service
   let logger: Logger
+  let idempotency: IdempotencyStore
+  let now: @Sendable () -> Date
+
+  init(service: Service, logger: Logger, idempotency: IdempotencyStore = IdempotencyStore(), now: @escaping @Sendable () -> Date = { Date() }) {
+    self.now = now
+    self.service = service
+    self.logger = logger
+    self.idempotency = idempotency
+  }
+
+  /// Runs a scene the modem controls. It needs the `control` scope, which the authentication
+  /// middleware has already enforced, and the request marker. With an `Idempotency-Key`, a repeat of
+  /// the same run returns the recorded answer and sends nothing.
+  func run(_ request: Request, number: String?) async throws -> Response {
+    guard HTTPBody.mediaType(request) == "application/json" else { throw HTTPInputError.unsupportedMedia }
+    try HTTPBody.requireMarker(request)
+    guard let number, Self.isCanonicalDecimal(number), let group = UInt8(number), (1...254).contains(group) else { throw SceneInputError.invalidScene }
+    let command = SceneCommand(number: group, action: try SceneCommandBody(try await HTTPBody.read(request)).action)
+    let key = try IdempotencyKey(header: request.headers[values: .idempotencyKey])
+    guard let key else { return try Self.response(await perform(command)) }
+    let (outcome, replayed) = try await idempotency.perform(scope: .gateway, key: key.value, fingerprint: Self.fingerprint(command)) { await perform(command) }
+    var response = try Self.response(outcome, replayed: replayed)
+    if replayed { response.headers[.idempotentReplay] = "true" }
+    return response
+  }
+
+  /// One to three ASCII digits with no sign and no leading zero, so each scene has one path.
+  private static func isCanonicalDecimal(_ text: String) -> Bool {
+    (1...3).contains(text.utf8.count) && text.utf8.allSatisfy { (0x30...0x39).contains($0) } && text.utf8.first != 0x30
+  }
+
+  private func perform(_ command: SceneCommand) async -> IdempotentOutcome {
+    let start = now()
+    do {
+      let receipt = try await service.runScene(command)
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.sortedKeys]
+      // How long a run took, so a Hub's delay is visible without a wire log. No address is logged.
+      logger.debug("scene run finished", metadata: [
+        "scene": "\(command.number)", "action": "\(command.action == .on ? "on" : "off")", "seconds": "\(now().timeIntervalSince(start))",
+        "isComplete": "\(receipt.isComplete)", "acknowledged": "\(receipt.acknowledged.count)", "unacknowledged": "\(receipt.unacknowledged.count)"
+      ])
+      return .response(.ok, try encoder.encode(SceneReceiptDTO(receipt)))
+    } catch {
+      // A scene command changes devices, so a failure is classified as a control.
+      let failure = HTTPFailure(CommandFailure(action: .on, underlying: error))
+      logger.debug("scene run failed", metadata: ["scene": "\(command.number)", "code": "\(failure.code.rawValue)", "seconds": "\(now().timeIntervalSince(start))"])
+      return .failure(failure)
+    }
+  }
+
+  /// Names a run by what it asks for, not by how the request spelled it.
+  private static func fingerprint(_ command: SceneCommand) -> String {
+    SecureDigest.of("POST\n/api/v1/scenes/\(command.number)/commands\n\(command.action)").map { String(format: "%02x", $0) }.joined()
+  }
+
+  private static func response(_ outcome: IdempotentOutcome, replayed: Bool = false) throws -> Response {
+    switch outcome {
+    case let .response(status, body): Response(status: status, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(bytes: body)))
+    case let .failure(failure): throw OutcomeFailure(failure: failure, replayed: replayed)
+    }
+  }
 
   func list() async throws -> Response {
     try await answer(await service.scenes())
@@ -176,5 +238,20 @@ enum SceneWire {
     case .modem: "modem"
     case let .device(address): address.description
     }
+  }
+}
+
+/// A scene number that is not a group from 1 through 254.
+enum SceneInputError: Error { case invalidScene }
+
+/// The body of a scene command: an `action` of `on` or `off`, and nothing else.
+struct SceneCommandBody {
+  let action: SceneCommand.Action
+
+  private struct Raw: Decodable { let action: HTTPSceneAction }
+
+  init(_ data: Data) throws {
+    guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], Set(object.keys) == ["action"] else { throw HTTPInputError.invalid }
+    action = try JSONDecoder().decode(Raw.self, from: data).action == .on ? .on : .off
   }
 }

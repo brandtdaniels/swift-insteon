@@ -37,6 +37,9 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   case invalidIdempotencyKey
   case invalidLevel
   case unknownDevice
+  case invalidScene
+  case unknownScene
+  case sceneEmpty
   case routeNotFound
   case apiMarkerMissing
   case formKeyInvalid
@@ -60,15 +63,15 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   var status: HTTPResponse.Status {
     switch self {
     case .authenticationRequired, .authenticationFailed: .unauthorized
-    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel, .invalidClient, .invalidNotificationRule, .invalidRouteRegistration, .invalidSchedule, .invalidTimer: .badRequest
-    case .unknownDevice, .routeNotFound, .unknownClient, .unknownNotificationRule, .unknownRouteRegistration, .unknownSchedule, .unknownTimer: .notFound
+    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel, .invalidClient, .invalidNotificationRule, .invalidRouteRegistration, .invalidSchedule, .invalidTimer, .invalidScene: .badRequest
+    case .unknownDevice, .routeNotFound, .unknownClient, .unknownNotificationRule, .unknownRouteRegistration, .unknownSchedule, .unknownTimer, .unknownScene: .notFound
     case .forbidden, .apiMarkerMissing, .formKeyInvalid: .forbidden
     case .bodyTooLarge: .contentTooLarge
     case .unsupportedMediaType: .unsupportedMediaType
     case .requestRejected: .badRequest
     case .busy, .notIdentified, .notLinked, .clientLimitReached, .notificationRuleLimitReached, .routeRegistrationLimitReached, .scheduleLimitReached, .timerLimitReached, .locationNotConfigured, .timeZoneUnavailable: .conflict
     case .clientsNotSaved, .notificationRulesNotSaved, .routeRegistrationsNotSaved, .schedulesNotSaved: .internalServerError
-    case .unsupportedControl, .deviceRejected, .idempotencyKeyReused, .databasesUnavailable: .unprocessableContent
+    case .unsupportedControl, .deviceRejected, .idempotencyKeyReused, .databasesUnavailable, .sceneEmpty: .unprocessableContent
     case .modemRejected, .modemUnavailable, .canceled: .serviceUnavailable
     case .deviceNotAnswering: .gatewayTimeout
     case .outcomeUnknown: .badGateway
@@ -118,6 +121,9 @@ enum APIErrorCode: String, CaseIterable, Sendable {
     case .idempotencyKeyReused: "That Idempotency-Key was used for a different command. Use a new key for a new command."
     case .invalidLevel: "The device or action does not accept that percentage."
     case .unknownDevice: "Unknown device."
+    case .invalidScene: "A scene is a group number from 1 through 254."
+    case .unknownScene: "The service holds no scene of that number that the modem controls. Refresh the scenes, or use a scene `GET /api/v1/scenes` lists as writable. Nothing was sent."
+    case .sceneEmpty: "The scene has no members, so nothing was sent."
     case .routeNotFound: "No such route."
     case .apiMarkerMissing: "An explicit API request is required."
     case .formKeyInvalid: "The form expired. Reload the page and try again."
