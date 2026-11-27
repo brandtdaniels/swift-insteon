@@ -1,3 +1,4 @@
+import Logging
 import Testing
 @testable import InsteonServerSupport
 
@@ -77,5 +78,54 @@ extension ServerTests {
 
   @Test func aTimeZoneTheHostMightNotHaveIsStillAccepted() throws {
     #expect(try ServerOptions(arguments: ["--time-zone", "Not/AZone"], environment: [:]).timeZone == "Not/AZone")
+  }
+}
+
+extension ServerTests {
+  @Test func theLogLevelDefaultsToInfoAndTakesEachLevelByName() throws {
+    #expect(try ServerOptions(arguments: [], environment: [:]).logLevel == .info)
+    for level in Logger.Level.allCases {
+      #expect(try ServerOptions(arguments: ["--log-level", level.rawValue], environment: [:]).logLevel == level)
+    }
+  }
+
+  @Test func theEnvironmentVariableSetsTheLevelWhenTheOptionIsAbsentAndTheOptionWins() throws {
+    #expect(try ServerOptions(arguments: [], environment: ["INSTEON_LOG_LEVEL": "debug"]).logLevel == .debug)
+    #expect(try ServerOptions(arguments: ["--log-level", "warning"], environment: ["INSTEON_LOG_LEVEL": "debug"]).logLevel == .warning)
+  }
+
+  @Test(arguments: ["verbose", "", "debug ", "5", "--debug"])
+  func anUnknownLevelInTheOptionIsRefused(_ value: String) {
+    #expect(throws: ServerOptionError.self) { try ServerOptions(arguments: ["--log-level", value], environment: [:]) }
+  }
+
+  @Test(arguments: ["verbose", "", "loud"])
+  func anUnknownLevelInTheEnvironmentIsRefusedNotIgnored(_ value: String) {
+    #expect(throws: ServerOptionError.invalidLogLevel) { try ServerOptions(arguments: [], environment: ["INSTEON_LOG_LEVEL": value]) }
+  }
+
+  @Test func aBadEnvironmentLevelIsStillRefusedWhenTheOptionIsGood() {
+    #expect(throws: ServerOptionError.invalidLogLevel) { try ServerOptions(arguments: ["--log-level", "debug"], environment: ["INSTEON_LOG_LEVEL": "loud"]) }
+  }
+
+  @Test func aBadLevelHasItsOwnCodeAndNamesTheOptionAndTheVariableButNotTheValue() {
+    let failure = ServerFailure(ServerOptionError.invalidLogLevel)
+    #expect(failure.code == .logLevelInvalid)
+    #expect(failure.code.rawValue == "log_level_invalid")
+    #expect(failure.exitStatus == ServerFailure.configurationStatus)
+    #expect(failure.message.contains("--log-level") && failure.message.contains("INSTEON_LOG_LEVEL"))
+    for level in Logger.Level.allCases { #expect(failure.message.contains(level.rawValue)) }
+  }
+
+  @Test func theHandlerTheServerLogsThroughUsesTheChosenLevel() throws {
+    let handler = ServerLogging.handler(label: "test", level: try ServerOptions(arguments: ["--log-level", "debug"], environment: [:]).logLevel)
+    #expect(handler.logLevel == .debug)
+    #expect(ServerLogging.handler(label: "test", level: .info).logLevel == .info)
+  }
+
+  @Test func theHelpNamesTheOptionTheVariableAndThePrecedence() {
+    #expect(ServerRunner.help.contains("--log-level LEVEL"))
+    #expect(ServerRunner.help.contains("INSTEON_LOG_LEVEL"))
+    #expect(ServerRunner.help.contains("trace, debug, info, notice, warning, error, critical"))
   }
 }
