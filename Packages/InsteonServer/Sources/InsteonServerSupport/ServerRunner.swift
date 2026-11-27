@@ -55,6 +55,9 @@ public enum ServerRunner {
                    INSTEON_SCENE_CLEANUP_QUIET_MS. Without it, a shorter cap shortens it to the cap.
   --scene-cleanup-cap-ms MS  The longest a scene run waits for the report however much
                    traffic comes (default: 60000; from 2150 up to 300000). INSTEON_SCENE_CLEANUP_CAP_MS.
+  --hub-poll-interval-ms MS  How often a Hub's buffer is read while the service waits for a
+                   reply (default: 500; 50 through 5000). INSTEON_HUB_POLL_INTERVAL_MS. A
+                   shorter interval sees a reply sooner and sends more requests to the Hub.
   The defaults for these are unverified. GET /api/v1/health lists every value in use and
   whether it is the default, a flag or an environment variable.
 
@@ -92,14 +95,14 @@ public enum ServerRunner {
   ) async throws -> Void
 
   /// Opens the Hub or serial port the endpoint names.
-  public static let openModem: ModemOpener = opener(tracer: nil)
+  public static let openModem: ModemOpener = opener(tracer: nil, hubPollInterval: HubConnection.defaultPollInterval)
 
   /// An opener of the Hub or serial port the endpoint names, which traces its wire traffic to `tracer`.
-  static func opener(tracer: (any WireTrace)?) -> ModemOpener {
+  static func opener(tracer: (any WireTrace)?, hubPollInterval: Duration) -> ModemOpener {
     { endpoint, catalog, snapshot, onPollSucceeded, body in
     switch endpoint {
     case let .hub(location, credentials):
-      try await ModemSession.withHub(host: location.host, port: location.port, user: credentials.user, password: credentials.password, catalog: catalog, onPollSucceeded: onPollSucceeded, tracer: tracer) { session in
+      try await ModemSession.withHub(host: location.host, port: location.port, user: credentials.user, password: credentials.password, catalog: catalog, onPollSucceeded: onPollSucceeded, tracer: tracer, pollInterval: hubPollInterval) { session in
         try await body(session.network(catalog: catalog, snapshot: snapshot, hub: session.hub))
       }
     case let .serial(path):
@@ -199,7 +202,7 @@ public enum ServerRunner {
   static func run(arguments: [String], environment: [String: String], logger: Logger, openModem: ModemOpener?, timing: Timing, hubPro: HubProAccess) async throws {
     let (options, environment) = try resolvedOptions(arguments: arguments, environment: environment, warn: { logger.warning("\($0)") })
     // Only a run at the trace level traces, so every other run does no work for it.
-    let openModem = openModem ?? opener(tracer: ServerLogging.wireTrace(level: options.logLevel, logger: logger, maskAddresses: !options.traceAddresses))
+    let openModem = openModem ?? opener(tracer: ServerLogging.wireTrace(level: options.logLevel, logger: logger, maskAddresses: !options.traceAddresses), hubPollInterval: options.tuning.hub.pollInterval)
     let target = try ModemTarget.resolve(hub: options.hub, serialPath: options.serialPath, environment: environment)
     guard let password = environment["INSTEON_GATEWAY_PASSWORD"] else { throw ServerRunError.missingPassword }
     // Validate server authentication before opening any hardware connection.

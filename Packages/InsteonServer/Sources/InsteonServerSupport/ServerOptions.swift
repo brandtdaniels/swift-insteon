@@ -48,7 +48,7 @@ public struct ServerOptions: Sendable {
   /// Hub resolution and file permissions are checked by the CLI's existing helpers.
   public init(arguments: [String], environment: [String: String]) throws {
     var options: [String: String] = [:]
-    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--network-name", "--poll-interval", "--latitude", "--longitude", "--time-zone", "--log-level", "--scene-echo-wait-ms", "--scene-cleanup-quiet-ms", "--scene-cleanup-cap-ms"]
+    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--network-name", "--poll-interval", "--latitude", "--longitude", "--time-zone", "--log-level", "--scene-echo-wait-ms", "--scene-cleanup-quiet-ms", "--scene-cleanup-cap-ms", "--hub-poll-interval-ms"]
     let flags: Set<String> = ["--trace-addresses"]
     var givenFlags: Set<String> = []
     var index = 0
@@ -125,13 +125,16 @@ public struct ServerOptions: Sendable {
     if let value = try milliseconds("--scene-cleanup-cap-ms", "INSTEON_SCENE_CLEANUP_CAP_MS", ServiceTuningError.Field.scenesCleanupCap.name, .invalidSceneCleanupCap) { scenes.cleanupCap = value }
     // A quiet period nobody set follows a cap shorter than its standard value, so setting only a short cap works.
     if sources[ServiceTuningError.Field.scenesCleanupQuiet.name] == nil { scenes.cleanupQuietPeriod = min(scenes.cleanupQuietPeriod, scenes.cleanupCap) }
+    var hub = ServiceTuning.Hub.standard
+    if let value = try milliseconds("--hub-poll-interval-ms", "INSTEON_HUB_POLL_INTERVAL_MS", ServiceTuningError.Field.hubPollInterval.name, .invalidHubPollInterval) { hub.pollInterval = value }
     do {
-      tuning = try ServiceTuning(scenes: scenes).validated()
+      tuning = try ServiceTuning(scenes: scenes, hub: hub).validated()
     } catch ServiceTuningError.invalid(let field) {
       switch field {
       case .scenesEchoWait: throw ServerOptionError.invalidSceneEchoWait
       case .scenesCleanupQuiet: throw ServerOptionError.invalidSceneCleanupQuiet
       case .scenesCleanupCap: throw ServerOptionError.invalidSceneCleanupCap
+      case .hubPollInterval: throw ServerOptionError.invalidHubPollInterval
       }
     }
     tuningSources = sources
@@ -189,6 +192,8 @@ public enum ServerOptionError: Error, CustomStringConvertible {
   case invalidSceneCleanupQuiet
   /// `--scene-cleanup-cap-ms` or its variable isn't a whole number of milliseconds from 2150 through 300000.
   case invalidSceneCleanupCap
+  /// `--hub-poll-interval-ms` or its variable isn't a whole number of milliseconds from 50 through 5000.
+  case invalidHubPollInterval
   /// A `pair` command needs a client name of 1 through 64 characters and a scope of read, control or admin.
   case invalidClient
 

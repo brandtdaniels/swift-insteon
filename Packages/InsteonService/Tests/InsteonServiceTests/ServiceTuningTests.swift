@@ -1,5 +1,6 @@
 import Foundation
 import InsteonCore
+import InsteonHubClient
 import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
@@ -15,6 +16,25 @@ struct ServiceTuningTests {
     #expect(scenes.cleanupQuietPeriod == .seconds(15))
     #expect(scenes.cleanupCap == .seconds(60))
     #expect(try ServiceTuning.standard.validated() == .standard)
+  }
+
+  @Test func theStandardHubPollIntervalIsHalfASecond() throws {
+    #expect(ServiceTuning.standard.hub.pollInterval == .milliseconds(500))
+    #expect(ServiceTuning.Hub.standard.pollInterval == HubConnection.defaultPollInterval)
+  }
+
+  @Test(arguments: [Duration.zero, .milliseconds(-1), .milliseconds(49), .milliseconds(5_001), .seconds(60)])
+  func refusesAHubPollIntervalOutOfRangeAndNamesTheField(_ interval: Duration) {
+    var tuning = ServiceTuning.standard
+    tuning.hub.pollInterval = interval
+    #expect(throws: ServiceTuningError.invalid(field: .hubPollInterval)) { try tuning.validated() }
+  }
+
+  @Test(arguments: [Duration.milliseconds(50), .milliseconds(150), .seconds(5)])
+  func acceptsAHubPollIntervalFromFiftyMillisecondsToFiveSeconds(_ interval: Duration) throws {
+    var tuning = ServiceTuning.standard
+    tuning.hub.pollInterval = interval
+    #expect(try tuning.validated() == tuning)
   }
 
   @Test func roundTripsThroughJSON() throws {
@@ -53,6 +73,7 @@ struct ServiceTuningTests {
     #expect(ServiceTuningError.Field.scenesEchoWait.name == "scenes.echoWaitMs")
     #expect(ServiceTuningError.Field.scenesCleanupQuiet.name == "scenes.cleanupQuietMs")
     #expect(ServiceTuningError.Field.scenesCleanupCap.name == "scenes.cleanupCapMs")
+    #expect(ServiceTuningError.Field.hubPollInterval.name == "hub.pollIntervalMs")
   }
 
   @Test func listsEveryValueWithItsSourceDefaultingToDefault() {
@@ -63,7 +84,8 @@ struct ServiceTuningTests {
     #expect(entries == [
       TuningEntry(name: "scenes.echoWaitMs", milliseconds: 5_000, source: .environment),
       TuningEntry(name: "scenes.cleanupQuietMs", milliseconds: 15_000, source: .default),
-      TuningEntry(name: "scenes.cleanupCapMs", milliseconds: 90_000, source: .flag)
+      TuningEntry(name: "scenes.cleanupCapMs", milliseconds: 90_000, source: .flag),
+      TuningEntry(name: "hub.pollIntervalMs", milliseconds: 500, source: .default)
     ])
   }
 
@@ -95,7 +117,7 @@ struct ServiceTuningTests {
     let health = await service.health()
 
     #expect(health.tuning.first == TuningEntry(name: "scenes.echoWaitMs", milliseconds: 8_000, source: .flag))
-    #expect(health.tuning.count == 3)
+    #expect(health.tuning.count == 4)
     #expect(health.tuning.dropFirst().allSatisfy { $0.source == .default })
   }
 }

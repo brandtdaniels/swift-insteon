@@ -271,3 +271,44 @@ extension ServerTests {
     #expect(ServerRunner.help.contains("the environment file or the process's environment"))
   }
 }
+
+extension ServerTests {
+  @Test func theHubPollIntervalDefaultsToHalfASecondAndSaysItIsADefault() throws {
+    let options = try ServerOptions(arguments: [], environment: [:])
+    #expect(options.tuning.hub.pollInterval == .milliseconds(500))
+    #expect(options.tuningSources["hub.pollIntervalMs"] == nil)
+  }
+
+  @Test func theHubPollIntervalFlagSetsItInMillisecondsAndIsReportedAsAFlag() throws {
+    let options = try ServerOptions(arguments: ["--hub-poll-interval-ms", "150"], environment: [:])
+    #expect(options.tuning.hub.pollInterval == .milliseconds(150))
+    #expect(options.tuningSources == ["hub.pollIntervalMs": .flag])
+  }
+
+  @Test func theHubPollIntervalVariableSetsItAndTheFlagWins() throws {
+    let fromVariable = try ServerOptions(arguments: [], environment: ["INSTEON_HUB_POLL_INTERVAL_MS": "250"])
+    #expect(fromVariable.tuning.hub.pollInterval == .milliseconds(250))
+    #expect(fromVariable.tuningSources == ["hub.pollIntervalMs": .environment])
+    let both = try ServerOptions(arguments: ["--hub-poll-interval-ms", "100"], environment: ["INSTEON_HUB_POLL_INTERVAL_MS": "250"])
+    #expect(both.tuning.hub.pollInterval == .milliseconds(100))
+    #expect(both.tuningSources == ["hub.pollIntervalMs": .flag])
+  }
+
+  @Test(arguments: ["0", "-5", "49", "5001", "fast", "1.5", " "])
+  func aHubPollIntervalOutOfRangeIsRefused(_ value: String) {
+    #expect(throws: ServerOptionError.invalidHubPollInterval) { try ServerOptions(arguments: ["--hub-poll-interval-ms", value], environment: [:]) }
+    #expect(throws: ServerOptionError.invalidHubPollInterval) { try ServerOptions(arguments: [], environment: ["INSTEON_HUB_POLL_INTERVAL_MS": value]) }
+  }
+
+  @Test func aBadHubPollIntervalHasItsOwnCodeAndNamesTheFlagAndTheVariableButNotTheValue() {
+    let failure = ServerFailure(ServerOptionError.invalidHubPollInterval)
+    #expect(failure.code.rawValue == "hub_poll_interval_invalid")
+    #expect(failure.exitStatus == ServerFailure.configurationStatus)
+    #expect(failure.message.contains("--hub-poll-interval-ms") && failure.message.contains("INSTEON_HUB_POLL_INTERVAL_MS"))
+  }
+
+  @Test func theHelpNamesTheHubPollIntervalFlagAndVariable() {
+    #expect(ServerRunner.help.contains("--hub-poll-interval-ms"))
+    #expect(ServerRunner.help.contains("INSTEON_HUB_POLL_INTERVAL_MS"))
+  }
+}

@@ -49,6 +49,7 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case sceneEchoWaitInvalid = "scene_echo_wait_invalid"
     case sceneCleanupQuietInvalid = "scene_cleanup_quiet_invalid"
     case sceneCleanupCapInvalid = "scene_cleanup_cap_invalid"
+    case hubPollIntervalInvalid = "hub_poll_interval_invalid"
     case schedulesFileUnusable = "schedules_file_unusable"
     case pairingOptionsInvalid = "pairing_options_invalid"
     case modemConnectionEnded = "modem_connection_ended"
@@ -162,6 +163,7 @@ public struct ServerFailure: Error, Equatable, Sendable {
     case .invalidSceneEchoWait: ServerFailure(.sceneEchoWaitInvalid, "--scene-echo-wait-ms and INSTEON_SCENE_ECHO_WAIT_MS must be a whole number of milliseconds from 1 through 60000.", configurationStatus)
     case .invalidSceneCleanupQuiet: ServerFailure(.sceneCleanupQuietInvalid, "--scene-cleanup-quiet-ms and INSTEON_SCENE_CLEANUP_QUIET_MS must be a whole number of milliseconds from 2150 up to the cleanup cap.", configurationStatus)
     case .invalidSceneCleanupCap: ServerFailure(.sceneCleanupCapInvalid, "--scene-cleanup-cap-ms and INSTEON_SCENE_CLEANUP_CAP_MS must be a whole number of milliseconds from 2150 through 300000.", configurationStatus)
+    case .invalidHubPollInterval: ServerFailure(.hubPollIntervalInvalid, "--hub-poll-interval-ms and INSTEON_HUB_POLL_INTERVAL_MS must be a whole number of milliseconds from 50 through 5000.", configurationStatus)
     case .invalidTimeZone: ServerFailure(.timeZoneInvalid, "--time-zone must be an IANA time zone's name, such as America/Los_Angeles.", configurationStatus)
     case .invalidNetworkName: ServerFailure(.networkNameInvalid, "--network-name must be 1 through 64 characters without control characters.", configurationStatus)
     }

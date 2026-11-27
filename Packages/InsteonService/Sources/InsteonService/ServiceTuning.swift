@@ -45,8 +45,38 @@ public struct ServiceTuning: Sendable, Codable, Equatable {
 
   }
 
+  /// How the service reads a Hub.
+  public struct Hub: Sendable, Codable, Equatable {
+
+    /// How often the Hub's buffer is read while the connection waits for replies. A shorter
+    /// interval sees a reply sooner and sends more requests. Unverified: the standard is the
+    /// Hub client's default, and the bench has not shown whether a Hub 2 holds a reply longer
+    /// than that.
+    public var pollInterval: Duration
+
+    /// Creates the Hub values.
+    public init(pollInterval: Duration) {
+
+      self.pollInterval = pollInterval
+
+    }
+
+    /// 500 milliseconds.
+    public static let standard = Hub(pollInterval: .milliseconds(500))
+
+  }
+
   /// How long a scene run waits.
   public var scenes: Scenes
+
+  /// How the service reads a Hub.
+  public var hub: Hub
+
+  /// The shortest the Hub poll interval may be set to: 50 milliseconds.
+  public static let shortestHubPollInterval: Duration = .milliseconds(50)
+
+  /// The longest the Hub poll interval may be set to: 5 seconds.
+  public static let longestHubPollInterval: Duration = .seconds(5)
 
   /// The first cleanup comes up to 2.150 seconds after the broadcast, the Insteon Developer's
   /// Guide says, for a member that answers. A quiet period shorter than that could give up before
@@ -60,12 +90,13 @@ public struct ServiceTuning: Sendable, Codable, Equatable {
   public static let longestEchoWait: Duration = .seconds(60)
 
   /// The standard tuning.
-  public static let standard = ServiceTuning(scenes: .standard)
+  public static let standard = ServiceTuning(scenes: .standard, hub: .standard)
 
   /// Creates a tuning.
-  public init(scenes: Scenes = .standard) {
+  public init(scenes: Scenes = .standard, hub: Hub = .standard) {
 
     self.scenes = scenes
+    self.hub = hub
 
   }
 
@@ -82,6 +113,8 @@ public struct ServiceTuning: Sendable, Codable, Equatable {
     guard scenes.cleanupCap >= Self.minimumCleanupQuietPeriod, scenes.cleanupCap <= Self.longestWait else { throw ServiceTuningError.invalid(field: .scenesCleanupCap) }
     guard scenes.cleanupQuietPeriod >= Self.minimumCleanupQuietPeriod, scenes.cleanupQuietPeriod <= scenes.cleanupCap else { throw ServiceTuningError.invalid(field: .scenesCleanupQuiet) }
 
+    guard hub.pollInterval >= Self.shortestHubPollInterval, hub.pollInterval <= Self.longestHubPollInterval else { throw ServiceTuningError.invalid(field: .hubPollInterval) }
+
     return self
 
   }
@@ -95,7 +128,8 @@ public struct ServiceTuning: Sendable, Codable, Equatable {
     [
       TuningEntry(name: ServiceTuningError.Field.scenesEchoWait.name, milliseconds: Self.milliseconds(scenes.echoWait), source: sources[ServiceTuningError.Field.scenesEchoWait.name] ?? .default),
       TuningEntry(name: ServiceTuningError.Field.scenesCleanupQuiet.name, milliseconds: Self.milliseconds(scenes.cleanupQuietPeriod), source: sources[ServiceTuningError.Field.scenesCleanupQuiet.name] ?? .default),
-      TuningEntry(name: ServiceTuningError.Field.scenesCleanupCap.name, milliseconds: Self.milliseconds(scenes.cleanupCap), source: sources[ServiceTuningError.Field.scenesCleanupCap.name] ?? .default)
+      TuningEntry(name: ServiceTuningError.Field.scenesCleanupCap.name, milliseconds: Self.milliseconds(scenes.cleanupCap), source: sources[ServiceTuningError.Field.scenesCleanupCap.name] ?? .default),
+      TuningEntry(name: ServiceTuningError.Field.hubPollInterval.name, milliseconds: Self.milliseconds(hub.pollInterval), source: sources[ServiceTuningError.Field.hubPollInterval.name] ?? .default)
     ]
 
   }
@@ -159,6 +193,9 @@ public enum ServiceTuningError: Error, Equatable {
 
     /// ``ServiceTuning/Scenes/cleanupCap``.
     case scenesCleanupCap = "scenes.cleanupCapMs"
+
+    /// ``ServiceTuning/Hub/pollInterval``.
+    case hubPollInterval = "hub.pollIntervalMs"
 
     /// The name health lists the value under.
     public var name: String { rawValue }

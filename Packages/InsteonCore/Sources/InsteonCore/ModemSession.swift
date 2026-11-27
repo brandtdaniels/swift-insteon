@@ -70,6 +70,8 @@ public struct ModemSession: Sendable {
   ///     the poll brought bytes, or `nil` to report nothing. Defaults to `nil`.
   ///   - tracer: Receives each request to the Hub and each read of its buffer, or `nil` to trace
   ///     nothing. Defaults to `nil`.
+  ///   - pollInterval: How often the Hub's buffer is read. Defaults to the Hub client's, half a
+  ///     second.
   ///   - body: The work to do with the modem.
   /// - Throws: ``HubAddressRefused`` for a host that isn't a private IPv4 address, the error
   ///   `body` throws, or the connection's, such as the Hub's `HubStoppedAnswering`, which
@@ -82,6 +84,7 @@ public struct ModemSession: Sendable {
     catalog: ProductCatalog? = nil,
     onPollSucceeded: (@Sendable () async -> Void)? = nil,
     tracer: (any WireTrace)? = nil,
+    pollInterval: Duration = HubConnection.defaultPollInterval,
     _ body: @Sendable (ModemSession) async throws -> Void
   ) async throws {
 
@@ -96,7 +99,7 @@ public struct ModemSession: Sendable {
     let hub = Hub(endpoint: endpoint, user: user, password: password).tracing(tracer)
     let location = HubLocation(host: endpoint.host, port: endpoint.port)
 
-    try await Modem.withConnection(HubConnection(hub: hub, onPollSucceeded: onPollSucceeded)) { (modem: Modem) async throws -> Void in
+    try await Modem.withConnection(HubConnection(hub: hub, pollInterval: pollInterval, onPollSucceeded: onPollSucceeded)) { (modem: Modem) async throws -> Void in
 
       try await body(ModemSession(modem: modem, hub: location, catalog: catalog))
 
