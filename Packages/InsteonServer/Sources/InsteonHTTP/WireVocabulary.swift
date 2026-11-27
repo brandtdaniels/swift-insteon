@@ -41,6 +41,8 @@ enum EventKind: String, CaseIterable, Sendable {
   case notification
   /// A schedule or a timer ran, or a run was missed.
   case schedule
+  /// A scene ran.
+  case scene
   /// The client missed events the server can't replay.
   case gap
 }
@@ -58,6 +60,11 @@ enum ScheduleOutcomeName: String, CaseIterable, Sendable {
 /// Whether a schedule or a timer ran.
 enum ScheduleSourceName: String, CaseIterable, Sendable {
   case schedule, timer
+}
+
+/// What started a scene run.
+enum SceneSourceName: String, CaseIterable, Sendable {
+  case api
 }
 
 /// How a schedule's time of day is written.

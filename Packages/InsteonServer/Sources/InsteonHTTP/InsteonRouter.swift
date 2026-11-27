@@ -29,13 +29,14 @@ func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authenti
   router.add(middleware: AuthenticationMiddleware<BasicRequestContext>(authentication: authentication, clients: clients))
   router.add(middleware: RequestBodyLimitMiddleware<BasicRequestContext>())
   let streams = EventStreamRegistry(limit: EventStreamPolicy.standard.maximumStreams)
-  let api = DeviceAPI(service: service, idempotency: IdempotencyStore(now: now), registry: streams, isClientActive: { id in ((try? await clients.clients()) ?? []).contains { $0.id == id } })
+  let idempotency = IdempotencyStore(now: now)
+  let api = DeviceAPI(service: service, idempotency: idempotency, registry: streams, isClientActive: { id in ((try? await clients.clients()) ?? []).contains { $0.id == id } })
   let clientAPI = ClientAPI(clients: clients, pairing: pairing, routes: routes, streams: streams)
   let routeAPI = RouteAPI(routes: routes)
   let ruleAPI = NotificationRuleAPI(service: service)
   let backupAPI = BackupAPI(service: service, routes: routes)
   let scheduleAPI = ScheduleAPI(service: service)
-  let sceneAPI = SceneAPI(service: service, logger: logger)
+  let sceneAPI = SceneAPI(service: service, logger: logger, idempotency: idempotency)
   let website = DeviceWebsite(service: service)
 
   // The one place a route is registered. The switch is exhaustive, so an operation without a handler doesn't compile.
@@ -65,6 +66,7 @@ func makeRegisteredRouter<Service: InsteonServiceAPI>(service: Service, authenti
     case .getBackup: { _, _ in try await backupAPI.get() }
     case .listScenes: { _, _ in try await sceneAPI.list() }
     case .refreshScenes: { request, _ in try await sceneAPI.refresh(request) }
+    case .runScene: { request, context in try await sceneAPI.run(request, number: context.parameters.get("number")) }
     case .browserIndex: { request, _ in try await website.index(request) }
     case .browserControls: { _, _ in Response(status: .ok, headers: [.contentType: "text/javascript; charset=utf-8"], body: .init(byteBuffer: ByteBuffer(string: BrowserControls.source))) }
     case .browserCard: { _, context in try await website.device(address: context.parameters.get("address")) }

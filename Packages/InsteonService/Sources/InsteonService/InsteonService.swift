@@ -195,6 +195,25 @@ public actor InsteonService: InsteonServiceAPI {
     return await listing()
   }
 
+  /// Runs a scene the modem controls. It takes the admission gate the way ``execute(_:)`` does, checks the
+  /// scene against the listing the service holds, and sends the group once. A run that fails is never
+  /// repeated, and publishes no event.
+  public func runScene(_ command: SceneCommand) async throws -> SceneReceipt {
+    guard !busy else { throw ServiceControlError.busy }
+    busy = true
+    defer { busy = false }
+    if case let .unavailable(cause) = connection { throw ServiceControlError.modemUnavailable(cause) }
+    guard let scene = await listing().scenes.first(where: { $0.number == command.number && $0.isWritable }) else { throw ServiceControlError.unknownScene }
+    guard !scene.members.isEmpty else { throw ServiceControlError.sceneEmpty }
+    let result = try await network.runScene(group: AllLinkGroupNumber(rawValue: command.number), turningOn: command.action == .on)
+    lastExchange = now()
+    let saved = await persist()
+    let receipt = SceneReceipt(scene: command.number, action: command.action, acknowledged: result.acknowledged, unacknowledged: result.unacknowledged, isComplete: result.isComplete, responderCount: Set(scene.members.map(\.address)).count, persistence: saved)
+    // No suspension between publishing and releasing admission in defer, as for a device command.
+    publish(.scene(SceneRun(number: command.number, name: nil, source: .api, action: command.action, receipt: receipt, firedAt: now())))
+    return receipt
+  }
+
   /// What a scene member's link data bytes mean, from the catalog and the identity the service
   /// has recorded for the device, without asking hardware.
   public func meaning(ofMemberData data: [UInt8], of device: InsteonAddress, group: UInt8) async -> LinkDataMeaning? {

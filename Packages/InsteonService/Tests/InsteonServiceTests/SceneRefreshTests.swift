@@ -311,14 +311,14 @@ struct SceneRefreshTests {
   }
 }
 
-private actor RecordingStore: NetworkSnapshotStore {
+actor RecordingStore: NetworkSnapshotStore {
   var saved: NetworkSnapshot?
   func loadNetwork() async throws -> NetworkSnapshot { saved ?? NetworkSnapshot() }
   func saveNetwork(_ snapshot: NetworkSnapshot) async throws { saved = snapshot }
 }
 
 /// Holds one operation until the test releases it, with signals in place of waits on time.
-private actor Pause {
+actor Pause {
   private var paused = false
   private var started: CheckedContinuation<Void, Never>?
   private var continuation: CheckedContinuation<Void, Never>?

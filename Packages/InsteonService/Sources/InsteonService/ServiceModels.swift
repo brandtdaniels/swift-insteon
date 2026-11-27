@@ -148,6 +148,89 @@ public protocol NetworkBackupProviding: Sendable {
   func networkBackup() async -> NetworkBackup
 }
 
+/// An explicit command to one of the modem's scenes.
+public struct SceneCommand: Equatable, Sendable {
+  /// What a scene can be told to do. Each member recalls the on-level or off its own link data
+  /// holds, so a scene takes no level.
+  public enum Action: Equatable, Sendable {
+    /// Turn the scene on.
+    case on
+    /// Turn the scene off.
+    case off
+  }
+  /// The scene's ALL-Link group, from 1 through 254.
+  public let number: UInt8
+  /// The requested operation.
+  public let action: Action
+
+  /// Creates a command. The service checks that the modem controls the scene and that it has members.
+  public init(number: UInt8, action: Action) {
+    self.number = number
+    self.action = action
+  }
+}
+
+/// How a scene's command went, as the modem reported it. A scene is run once and never repeated by the service.
+public struct SceneReceipt: Equatable, Sendable {
+  /// The scene's ALL-Link group.
+  public let scene: UInt8
+  /// What the scene was told to do.
+  public let action: SceneCommand.Action
+  /// The members that acknowledged their ALL-Link cleanup. It is empty for a modem that passes no
+  /// per-member acknowledgment up, so an empty list never means that no member acted.
+  public let acknowledged: [InsteonAddress]
+  /// The members that did not acknowledge their cleanup, and may still have acted on the broadcast.
+  public let unacknowledged: [InsteonAddress]
+  /// Whether the modem sent every member its cleanup. `false` when it stopped partway.
+  public let isComplete: Bool
+  /// How many members the scene had in the listing the run was made from.
+  public let responderCount: Int
+  /// The independent outcome of saving the learned network state.
+  public let persistence: PersistenceOutcome
+
+  /// Creates a receipt.
+  public init(scene: UInt8, action: SceneCommand.Action, acknowledged: [InsteonAddress], unacknowledged: [InsteonAddress], isComplete: Bool, responderCount: Int, persistence: PersistenceOutcome = .notConfigured) {
+    self.scene = scene
+    self.action = action
+    self.acknowledged = acknowledged
+    self.unacknowledged = unacknowledged
+    self.isComplete = isComplete
+    self.responderCount = responderCount
+    self.persistence = persistence
+  }
+}
+
+/// A scene that ran, as the `scene` event reports it.
+public struct SceneRun: Equatable, Sendable {
+  /// What started the run.
+  public enum Source: Equatable, Sendable {
+    /// A client's request to the service.
+    case api
+  }
+  /// The scene's ALL-Link group.
+  public let number: UInt8
+  /// The scene's name, or `nil` when it has none.
+  public let name: String?
+  /// What started the run.
+  public let source: Source
+  /// What the scene was told to do.
+  public let action: SceneCommand.Action
+  /// What the modem reported.
+  public let receipt: SceneReceipt
+  /// When the service handled the run.
+  public let firedAt: Date
+
+  /// Creates a run.
+  public init(number: UInt8, name: String?, source: Source, action: SceneCommand.Action, receipt: SceneReceipt, firedAt: Date) {
+    self.number = number
+    self.name = name
+    self.source = source
+    self.action = action
+    self.receipt = receipt
+    self.firedAt = firedAt
+  }
+}
+
 /// The scenes role of an Insteon service.
 public protocol SceneProviding: Sendable {
   /// The scenes of the network, listed from the ALL-Link databases the service holds. It sends nothing
@@ -170,6 +253,21 @@ public protocol SceneProviding: Sendable {
   ///   lost.
   func refreshScenes() async throws -> SceneListing
 
+  /// Runs a scene the modem controls: sends its group one Light On at full level or one Light Off,
+  /// waits for the modem's ALL-Link cleanups, and publishes a ``ServiceEvent/scene(_:)`` event. It
+  /// sends nothing to a device and doesn't read one afterward, so the cached device levels are left
+  /// as they were.
+  ///
+  /// It takes the admission gate and is never repeated by the service.
+  ///
+  /// - Throws: ``ServiceControlError/busy`` while another operation holds the gate,
+  ///   ``ServiceControlError/modemUnavailable(_:)`` while the modem isn't connected,
+  ///   ``ServiceControlError/unknownScene`` when the listing holds no scene of that number that the
+  ///   modem controls, ``ServiceControlError/sceneEmpty`` when the scene has no members (each
+  ///   before anything is sent), `CancellationError` when canceled, and the modem's error when it
+  ///   rejects the command or stops answering.
+  func runScene(_ command: SceneCommand) async throws -> SceneReceipt
+
   /// What the data bytes a scene's member holds mean, as the Insteon device catalog gives them for
   /// the device's identity. It sends nothing to hardware.
   ///
@@ -190,6 +288,10 @@ public protocol InsteonServiceAPI: DeviceQuerying, DeviceCommanding, DeviceEvent
 public enum ServiceControlError: Error, Equatable {
   /// The device isn't known to this network.
   case unknownDevice
+  /// The listing the service holds has no scene of that number the modem controls, so nothing was sent.
+  case unknownScene
+  /// The scene has no members, so nothing was sent.
+  case sceneEmpty
   /// A percentage is invalid or unsupported by the action or device.
   case invalidLevel
   /// The main group doesn't support switching.
@@ -243,6 +345,9 @@ public enum ServiceEvent: Equatable, Sendable {
   case modemReconnected
   /// A schedule or a timer ran, or a run was missed. Numbered and retained like every other event.
   case schedule(ScheduleRun)
+  /// A scene ran. Numbered and retained like every other event. A scene run by a member's button or
+  /// by the command line is not reported, because the modem does not report its own group sends.
+  case scene(SceneRun)
 
   init?(_ event: DeviceMonitorEvent) {
     switch event {
