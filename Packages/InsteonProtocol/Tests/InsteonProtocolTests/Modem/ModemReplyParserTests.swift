@@ -405,6 +405,20 @@ struct ModemReplyParserTests {
 
   }
 
+  // The frame that follows a six-byte failure can be any the modem sends, the unrecognized one included.
+  @Test func readsACleanupFailureOfSixBytesBeforeAFrameOfAnUnrecognizedNumber() {
+
+    var parser = ModemReplyParser()
+
+    let replies = parser.parse(bytes("0256" + "05" + "C1C2C3" + "025C" + "A1A2A3" + "B1B2B3" + "2313" + "05"))
+
+    #expect(replies == [
+      .allLinkCleanupFailed(group: 0x05, address: InsteonAddress(0xC1, 0xC2, 0xC3)),
+      .unrecognized(number: 0x5C, body: bytes("A1A2A3" + "B1B2B3" + "2313" + "05"))
+    ])
+
+  }
+
   @Test func skipsNoiseAndUnrecognizedNumbers() {
 
     var parser = ModemReplyParser()

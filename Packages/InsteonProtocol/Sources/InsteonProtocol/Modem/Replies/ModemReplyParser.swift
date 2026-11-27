@@ -125,6 +125,21 @@ private enum ModemFraming: Framing {
 
   }
 
+  /// The length of each report the modem sends of its own, by number. A frame starts with one of
+  /// these numbers or with the number of a reply to a host command, and `startsFrame` reads this
+  /// same table, so the two can't drift apart. `0x56` is 7 bytes here, but its length is decided
+  /// by `cleanupFailureLength(of:)`.
+  ///
+  /// `0x5C` is seen once in a Hub's buffer and not in a cited document. Its 11 bytes (`02 5C`
+  /// and 9 more) are inferred from that one bench trace, whose byte counts fit exactly: 17 bytes
+  /// for the `5C` frame and the 6-byte failure report after it, then 14 for the status report and
+  /// a standard message. A byte after the frame that isn't a start byte is skipped up to the next
+  /// start byte, so a wrong length costs only the frame it swallows. Unverified.
+  private static let reportLengths: [UInt8: Int] = [
+    0x50: 11, 0x51: 25, 0x52: 4, 0x53: 10, 0x54: 3, 0x55: 2, 0x56: 7, 0x57: 10, 0x58: 3,
+    0x59: 12, 0x5A: 13, 0x5B: 13, 0x5C: 11
+  ]
+
   /// The total length of the frame at the start of `bytes`, which starts with `0x02`.
   static func frameLength(of bytes: [UInt8], after written: [UInt8]?) -> FrameLength {
 
@@ -134,21 +149,19 @@ private enum ModemFraming: Framing {
 
     }
 
+    if bytes[1] == 0x56 {
+
+      return cleanupFailureLength(of: bytes)
+
+    }
+
+    if let length = reportLengths[bytes[1]] {
+
+      return .complete(length)
+
+    }
+
     switch bytes[1] {
-    case 0x50: return .complete(11)
-    case 0x51: return .complete(25)
-    case 0x52: return .complete(4)
-    case 0x53: return .complete(10)
-    case 0x54: return .complete(3)
-    case 0x55: return .complete(2)
-    case 0x56: return cleanupFailureLength(of: bytes)
-    case 0x57: return .complete(10)
-    case 0x58: return .complete(3)
-    case 0x59: return .complete(12)
-    // Seen once in a Hub's buffer, as long as a standard message. Unverified: no cited document
-    // lists it.
-    case 0x5C: return .complete(11)
-    case 0x5A, 0x5B: return .complete(13)
     default:
       guard let number = SerialCommandNumber(rawValue: bytes[1]) else {
 
@@ -247,10 +260,10 @@ private enum ModemFraming: Framing {
   }
 
   /// Whether a number after a start byte begins a frame the modem sends: a report of its own,
-  /// `0x50` through `0x5B`, or the reply to a host command.
+  /// one in `reportLengths`, or the reply to a host command.
   private static func startsFrame(_ number: UInt8) -> Bool {
 
-    (0x50...0x5B).contains(number) || SerialCommandNumber(rawValue: number) != nil
+    reportLengths[number] != nil || SerialCommandNumber(rawValue: number) != nil
 
   }
 
