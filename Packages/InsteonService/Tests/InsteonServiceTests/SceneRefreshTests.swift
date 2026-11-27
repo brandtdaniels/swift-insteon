@@ -313,6 +313,7 @@ struct SceneRefreshTests {
 
 actor RecordingStore: NetworkSnapshotStore {
   var saved: NetworkSnapshot?
+  func clear() { saved = nil }
   func loadNetwork() async throws -> NetworkSnapshot { saved ?? NetworkSnapshot() }
   func saveNetwork(_ snapshot: NetworkSnapshot) async throws { saved = snapshot }
 }

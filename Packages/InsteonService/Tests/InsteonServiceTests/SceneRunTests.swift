@@ -132,6 +132,64 @@ struct SceneRunTests {
     #expect(run.receipt == receipt)
   }
 
+  @Test func afterTheModemAcceptsTheCommandAndStopsAnsweringItSavesACheckpointAndPublishesAnIncompleteRun() async throws {
+    let modem = await modemWithScenes()
+    let store = RecordingStore()
+    let service = service(modem, persistence: NetworkSnapshotPersistence(store: store))
+    _ = try await service.refreshScenes()
+    await store.clear()
+    await modem.setStopsAnsweringAfterGroupCommand(true)
+    let events = await service.events()
+
+    await #expect(throws: ModemError.timedOut(.sendAllLinkCommand)) { try await service.runScene(SceneCommand(number: 3, action: .on)) }
+
+    #expect(await modem.groupCommands.count == 1)
+    #expect(await store.saved != nil)
+    var reader = events.makeAsyncIterator()
+    guard case let .scene(run)? = try await reader.next() else { Issue.record("expected a scene event"); return }
+    #expect(run.number == 3)
+    #expect(run.action == .on)
+    #expect(!run.receipt.isComplete)
+    #expect(run.receipt.acknowledged.isEmpty)
+    #expect(run.receipt.unacknowledged.isEmpty)
+    #expect(run.receipt.persistence == .saved)
+  }
+
+  @Test func afterAFailureThatMayHaveSentItTheServiceStillNeverSendsAgain() async throws {
+    let modem = await modemWithScenes()
+    let service = service(modem)
+    _ = try await service.refreshScenes()
+    await modem.setStopsAnsweringAfterGroupCommand(true)
+
+    await #expect(throws: ModemError.timedOut(.sendAllLinkCommand)) { try await service.runScene(SceneCommand(number: 3, action: .on)) }
+
+    #expect(await modem.groupCommands.count == 1)
+  }
+
+  @Test func staysSilentForAFailureBeforeAnythingIsSent() async throws {
+    let modem = await modemWithScenes()
+    let service = service(modem)
+    _ = try await service.refreshScenes()
+    let events = await service.events()
+    let pause = Pause()
+    await modem.setBeforeOperation { operation in
+      if case .sendAllLinkCommand = operation { await pause.wait() }
+    }
+    let task = Task { try await service.runScene(SceneCommand(number: 3, action: .on)) }
+    await pause.waitUntilPaused()
+    await #expect(throws: ServiceControlError.busy) { try await service.runScene(SceneCommand(number: 3, action: .off)) }
+    task.cancel()
+    await pause.release()
+    await #expect(throws: CancellationError.self) { try await task.value }
+    await modem.setBeforeOperation(nil)
+    await #expect(throws: ServiceControlError.unknownScene) { try await service.runScene(SceneCommand(number: 9, action: .on)) }
+    let receipt = try await service.runScene(SceneCommand(number: 3, action: .on))
+
+    var reader = events.makeAsyncIterator()
+    guard case let .scene(run)? = try await reader.next() else { Issue.record("expected the scene event of the run that went out"); return }
+    #expect(run.receipt == receipt)
+  }
+
   // MARK: Refusals, each before anything is sent
 
   @Test func refusesASceneTheListingDoesNotHold() async throws {

@@ -104,6 +104,10 @@ public actor InMemoryModem: LinkingModem {
   /// Whether the modem refuses every group command, as it does for a group it has no records for.
   public private(set) var rejectsGroupCommands: Bool = false
 
+  /// Whether the modem accepts a group command and then stops answering, so the command went out
+  /// and its cleanups are never reported.
+  public private(set) var stopsAnsweringAfterGroupCommand: Bool = false
+
   /// Every write to a device's database, in order.
   public private(set) var writes: [Write] = []
 
@@ -752,6 +756,13 @@ public actor InMemoryModem: LinkingModem {
 
   }
 
+  /// Makes the modem accept each group command and then stop answering, or answer again.
+  public func setStopsAnsweringAfterGroupCommand(_ stops: Bool) {
+
+    stopsAnsweringAfterGroupCommand = stops
+
+  }
+
   /// Makes the modem refuse every group command, or accept them again.
   public func setRejectsGroupCommands(_ rejects: Bool) {
 
@@ -785,6 +796,12 @@ public actor InMemoryModem: LinkingModem {
     }
 
     groupCommands.append(GroupCommand(group: group, command: command, timeout: timeout))
+
+    if stopsAnsweringAfterGroupCommand {
+
+      throw ModemError.timedOut(.sendAllLinkCommand)
+
+    }
 
     return groupReport ?? AllLinkCleanupReport(acknowledged: responders, unacknowledged: [], isComplete: true)
 

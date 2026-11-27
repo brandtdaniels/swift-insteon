@@ -205,10 +205,27 @@ public actor InsteonService: InsteonServiceAPI {
     if case let .unavailable(cause) = connection { throw ServiceControlError.modemUnavailable(cause) }
     guard let scene = await listing().scenes.first(where: { $0.number == command.number && $0.isWritable }) else { throw ServiceControlError.unknownScene }
     guard !scene.members.isEmpty else { throw ServiceControlError.sceneEmpty }
-    let result = try await network.runScene(group: AllLinkGroupNumber(rawValue: command.number), turningOn: command.action == .on)
+    let responderCount = Set(scene.members.map(\.address)).count
+    let result: SceneResult
+    do {
+      result = try await network.runScene(group: AllLinkGroupNumber(rawValue: command.number), turningOn: command.action == .on)
+    } catch let ModemError.rejected(refused) {
+      // The modem refused the command, so nothing went out.
+      throw ModemError.rejected(refused)
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch {
+      // The command may have gone out and the modem stopped answering, so the members may have changed.
+      // Say so, so a client reads them again, and save what the service knows. The failure is still the answer.
+      lastExchange = now()
+      let saved = await persist()
+      let unknown = SceneReceipt(scene: command.number, action: command.action, acknowledged: [], unacknowledged: [], isComplete: false, responderCount: responderCount, persistence: saved)
+      publish(.scene(SceneRun(number: command.number, name: nil, source: .api, action: command.action, receipt: unknown, firedAt: now())))
+      throw error
+    }
     lastExchange = now()
     let saved = await persist()
-    let receipt = SceneReceipt(scene: command.number, action: command.action, acknowledged: result.acknowledged, unacknowledged: result.unacknowledged, isComplete: result.isComplete, responderCount: Set(scene.members.map(\.address)).count, persistence: saved)
+    let receipt = SceneReceipt(scene: command.number, action: command.action, acknowledged: result.acknowledged, unacknowledged: result.unacknowledged, isComplete: result.isComplete, responderCount: responderCount, persistence: saved)
     // No suspension between publishing and releasing admission in defer, as for a device command.
     publish(.scene(SceneRun(number: command.number, name: nil, source: .api, action: command.action, receipt: receipt, firedAt: now())))
     return receipt
