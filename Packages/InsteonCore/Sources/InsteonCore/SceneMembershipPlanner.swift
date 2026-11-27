@@ -203,8 +203,24 @@ private struct Planning {
   /// What a device's responder record would hold, or why it can't be written.
   private enum ResponderData {
 
-    case bytes([UInt8])
+    /// The data bytes, the device's group that answers, and the data byte (1 through 3) that holds
+    /// that group, or `nil` when the catalog gives the record no such byte.
+    case bytes([UInt8], group: UInt8, groupPosition: Int?)
     case refused(SceneMembershipFinding.Code, String)
+
+  }
+
+  /// Whether a record of the device's is for the device's group `group`: its own-group data byte
+  /// says so, or the catalog gives the record none, so the device has the one group.
+  private static func isRecord(_ record: BackupRecord, ofGroup group: UInt8, at position: Int?) -> Bool {
+
+    guard let position, record.data.count >= position else {
+
+      return true
+
+    }
+
+    return record.data[position - 1] == group
 
   }
 
@@ -243,10 +259,14 @@ private struct Planning {
     }
 
     let data: [UInt8]
+    let deviceGroup: UInt8
+    let groupPosition: Int?
 
     switch Self.responderData(addition, of: registered) {
-    case let .bytes(held):
+    case let .bytes(held, group, position):
       data = held
+      deviceGroup = group
+      groupPosition = position
     case let .refused(code, detail):
       refuse(code, detail)
 
@@ -256,8 +276,12 @@ private struct Planning {
     let modemHalf: BackupRecord? = modemRecords.first { (record: BackupRecord) -> Bool in
       record.isInUse && record.role == .controller && record.group == change.scene && record.address == address
     }
-    let deviceHalf: BackupRecord? = eligible.records.first { (record: BackupRecord) -> Bool in
+    // The device's records of the scene: one for each of its groups that answers it.
+    let sceneRecords: [BackupRecord] = eligible.records.filter { (record: BackupRecord) -> Bool in
       record.isInUse && record.role == .responder && record.group == change.scene && record.address == modem
+    }
+    let deviceHalf: BackupRecord? = sceneRecords.first { (record: BackupRecord) -> Bool in
+      Self.isRecord(record, ofGroup: deviceGroup, at: groupPosition)
     }
 
     var addedHalf: Bool = false
@@ -290,14 +314,15 @@ private struct Planning {
       steps.append(SceneMembershipStep(kind: .addModemRecord, endpoint: .modem, record: LinkRecord(isController: true, isInUse: true, group: group, address: address, data: modemData)))
       addedHalf = true
 
-      if deviceHalf != nil {
+      if !sceneRecords.isEmpty {
 
         warnings.append(SceneMembershipFinding(code: .halfLinkCompleted, device: address, detail: "The device's record was in place and the modem's was missing."))
 
       }
 
-    } else if addedHalf {
+    } else if addedHalf, sceneRecords.isEmpty {
 
+      // A group added to a device already in the scene by another group is a member's second record, not a half link.
       warnings.append(SceneMembershipFinding(code: .halfLinkCompleted, device: address, detail: "The modem's record was in place and the device's was missing."))
 
     }
@@ -402,6 +427,7 @@ private struct Planning {
 
     var data: [UInt8] = [0x00, 0x00, 0x00]
     var used: Set<String> = []
+    var groupPosition: Int?
 
     for byte in type.linkData.responder where (1...3).contains(byte.position) {
 
@@ -430,6 +456,7 @@ private struct Planning {
       } else if byte.isPerGroup {
 
         data[byte.position - 1] = main.number.rawValue
+        groupPosition = byte.position
 
       } else if name == "onLevel" || name == "rampRate" {
 
@@ -465,7 +492,7 @@ private struct Planning {
 
     }
 
-    return .bytes(data)
+    return .bytes(data, group: main.number.rawValue, groupPosition: groupPosition)
 
   }
 

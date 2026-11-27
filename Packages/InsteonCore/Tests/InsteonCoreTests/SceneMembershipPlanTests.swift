@@ -570,6 +570,53 @@ struct SceneMembershipPlanTests {
 
   }
 
+  // MARK: A device with more than one group
+
+  /// A plan for the two-group device, from the records its database and the modem's hold.
+  private func keypadPlan(_ change: SceneMembershipChange, modemRecords: [BackupRecord] = [], keypadRecords: [BackupRecord]? = nil, free: Int = 1) async -> SceneMembershipPlan {
+
+    let held: [BackupRecord] = keypadRecords ?? slots([record(.responder, group: 9, modem)], free: free)
+    let backup = backup(modemRecords: modemRecords, [device(lamp, Self.twoGroupIdentity, records: held)])
+
+    return SceneMembershipPlanner.plan(change, from: backup, devices: await registered([lamp: Self.twoGroupIdentity]), modemLinkData: Self.modemData)
+
+  }
+
+  @Test func addsASecondGroupOfAMemberAsAnotherRecordAndNotOverTheFirst() async throws {
+
+    let plan = await keypadPlan(
+      change([add(lamp, group: 2)]),
+      modemRecords: [record(.controller, group: 3, lamp, data: [0x01, 0x00, 0x00])],
+      keypadRecords: slots([record(.responder, group: 3, modem, data: [0xFF, 0x1F, 0x01])])
+    )
+
+    // The first button's record stays, the second button gets a record of its own, and the modem's
+    // record for the device is already there.
+    #expect(plan.steps.map(\.kind) == [.addDeviceRecord])
+    #expect(plan.steps.first?.record.data == [0xFF, 0x1F, 0x02])
+    #expect(plan.steps.first?.record.memoryAddress == 0x0FF7)
+    #expect(plan.refusals.isEmpty)
+    #expect(plan.warnings.isEmpty)
+    #expect(plan.isApplicable)
+
+  }
+
+  @Test func saysAGroupIsAlreadyAMemberOnlyWhenTheDevicesOwnGroupMatches() async throws {
+
+    let records: [BackupRecord] = slots([record(.responder, group: 3, modem, data: [0xFF, 0x1F, 0x02])])
+    let held: [BackupRecord] = [record(.controller, group: 3, lamp, data: [0x01, 0x00, 0x00])]
+    let second = await keypadPlan(change([add(lamp, group: 2)]), modemRecords: held, keypadRecords: records)
+    let first = await keypadPlan(change([add(lamp, group: 1)]), modemRecords: held, keypadRecords: records)
+
+    #expect(second.steps.isEmpty)
+    #expect(second.warnings.map(\.code) == [.alreadyMember])
+    // Button 1 isn't in the scene though button 2 is, so it gets its own record and no update.
+    #expect(first.steps.map(\.kind) == [.addDeviceRecord])
+    #expect(first.steps.first?.record.data == [0xFF, 0x1F, 0x01])
+    #expect(first.warnings.isEmpty)
+
+  }
+
   // MARK: Identity of a plan
 
   @Test func namesAPlanByAHashOfItsStepsSoTheSameChangeHasTheSameId() async throws {
