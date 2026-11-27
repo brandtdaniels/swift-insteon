@@ -304,10 +304,12 @@ case ResendDecision.doNotResend
 case ResendDecision.resend
 case ResetErasure.links
 case ResetErasure.settings
+case SceneMembershipFinding.Code.addedAndRemoved
 case SceneMembershipFinding.Code.alreadyMember
 case SceneMembershipFinding.Code.damagedRecords
 case SceneMembershipFinding.Code.databaseFull
 case SceneMembershipFinding.Code.databaseNotCached
+case SceneMembershipFinding.Code.duplicateEntry
 case SceneMembershipFinding.Code.groupCannotRespond
 case SceneMembershipFinding.Code.halfLinkCompleted
 case SceneMembershipFinding.Code.noEndOfDatabase

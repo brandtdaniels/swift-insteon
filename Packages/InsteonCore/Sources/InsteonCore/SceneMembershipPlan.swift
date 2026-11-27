@@ -228,6 +228,12 @@ public struct SceneMembershipFinding: Hashable, Sendable {
     /// The step rewrites a record in use, which isn't made until it has been tried on hardware.
     case notYetSupported
 
+    /// The change names the same device and group twice, so which record is meant isn't clear.
+    case duplicateEntry
+
+    /// The change adds a device and removes it, so which of the two is meant isn't clear.
+    case addedAndRemoved
+
   }
 
   /// What the finding says.

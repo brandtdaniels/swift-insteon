@@ -508,21 +508,49 @@ struct SceneMembershipPlanTests {
 
   }
 
-  @Test func plansADeviceNamedInBothListsOnceForItsAddition() async throws {
+  @Test func refusesADeviceNamedInBothListsAndPlansNothingForIt() async throws {
 
     let plan = await plan(change([add(lamp)], remove: [lamp]))
 
-    #expect(plan.steps.map(\.kind) == [.addDeviceRecord, .addModemRecord])
-    #expect(plan.warnings.isEmpty)
+    #expect(plan.refusals.map(\.code) == [.addedAndRemoved])
+    #expect(plan.refusals.first?.device == lamp)
+    #expect(plan.steps.isEmpty)
+    #expect(!plan.isApplicable)
 
   }
 
-  @Test func plansADeviceNamedTwiceOnce() async throws {
+  @Test func refusesTheSameDeviceAndGroupNamedTwiceAndPlansNothingForIt() async throws {
 
     let plan = await plan(change([add(lamp), add(lamp, onLevel: 0x10)]))
 
-    #expect(plan.steps.map(\.kind) == [.addDeviceRecord, .addModemRecord])
-    #expect(plan.steps.first?.record.data == [0xFF, 0x1F, 0x01])
+    #expect(plan.refusals.map(\.code) == [.duplicateEntry])
+    #expect(plan.refusals.first?.device == lamp)
+    #expect(plan.steps.isEmpty)
+
+  }
+
+  @Test func takesAnAdditionWithNoGroupAndOneNamingTheMainGroupAsTheSame() async throws {
+
+    let plan = await keypadPlan(change([add(lamp), add(lamp, group: 1)]))
+
+    #expect(plan.refusals.map(\.code) == [.duplicateEntry])
+    #expect(plan.steps.isEmpty)
+
+  }
+
+  @Test func plansTwoGroupsOfOneDeviceEachInASlotOfItsOwnWithTheModemsRecordOnce() async throws {
+
+    let plan = await keypadPlan(change([add(lamp, group: 1), add(lamp, group: 2)]), free: 1)
+
+    #expect(plan.refusals.isEmpty)
+    #expect(plan.warnings.isEmpty)
+    #expect(plan.steps.map(\.kind) == [.addDeviceRecord, .addModemRecord, .markEndOfDatabase, .addDeviceRecord])
+    // The first takes the free slot, the second the end's, with the end marked a slot below first.
+    #expect(plan.steps[0].record.memoryAddress == 0x0FF7)
+    #expect(plan.steps[0].record.data == [0xFF, 0x1F, 0x01])
+    #expect(plan.steps[2].record.memoryAddress == 0x0FE7)
+    #expect(plan.steps[3].record.memoryAddress == 0x0FEF)
+    #expect(plan.steps[3].record.data == [0xFF, 0x1F, 0x02])
 
   }
 

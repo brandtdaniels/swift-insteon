@@ -191,6 +191,20 @@ struct SceneMembershipPlanRoutesTests {
     ])
   }
 
+  @Test func leavesTheDevicesAChangeNamesTwiceOrInBothListsToThePlannerToRefuse() async throws {
+    let setup = try setup(await ScenePlanExample.receipt(ScenePlanExample.addLamp()))
+    let body = #"{"add":[{"device":"1A.2B.3C","group":1},{"device":"1A.2B.3C","group":2}],"remove":["1A.2B.3C","1A.2B.3C"]}"#
+    let response = try await plan(setup, body: body, authorization: basic)
+
+    #expect(response.status == .ok)
+    #expect(await setup.service.membershipRequests == [
+      SceneMembershipChange(scene: 4, additions: [
+        .init(device: ScenePlanExample.lamp, onLevel: nil, rampRate: nil, group: 1),
+        .init(device: ScenePlanExample.lamp, onLevel: nil, rampRate: nil, group: 2)
+      ], removals: [ScenePlanExample.lamp, ScenePlanExample.lamp])
+    ])
+  }
+
   @Test func answersAnUnknownGroupRefusalForAGroupTheCatalogDoesNotGiveTheDevice() async throws {
     let change = SceneMembershipChange(scene: 4, additions: [.init(device: ScenePlanExample.lamp, onLevel: 255, rampRate: 31, group: 9)], removals: [])!
     let setup = try setup(await ScenePlanExample.receipt(change))
@@ -320,13 +334,10 @@ struct SceneMembershipPlanRoutesTests {
     #"{"add":[{"device":"1A.2B.3C","group":0}]}"#,
     #"{"add":[{"device":"1A.2B.3C","group":256}]}"#,
     #"{"add":[{"device":"1A.2B.3C","group":"1"}]}"#,
-    #"{"add":[{"device":"1A.2B.3C"},{"device":"1A.2B.3C"}]}"#,
-    #"{"remove":["1A.2B.3C","1A.2B.3C"]}"#,
-    #"{"add":[{"device":"1A.2B.3C"}],"remove":["1A.2B.3C"]}"#,
     #"{"add":"1A.2B.3C"}"#,
     #"{"remove":[5]}"#
   ])
-  func refusesAChangeThatIsNotAnAddAndARemoveListOfDistinctDevices(_ body: String) async throws {
+  func refusesAChangeThatIsNotAnAddAndARemoveList(_ body: String) async throws {
     let setup = try setup(await ScenePlanExample.receipt(ScenePlanExample.addLamp()))
     let response = try await plan(setup, body: body, authorization: basic)
 

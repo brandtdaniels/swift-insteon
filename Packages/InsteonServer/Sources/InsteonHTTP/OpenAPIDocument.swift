@@ -118,7 +118,7 @@ enum OpenAPIDocument {
           "group": Schema.integer(minimum: 1, maximum: 255, description: "The device's own group that answers the scene, such as one button of a keypad. Left out, the device's main group. The catalog must give the device the group, or the plan refuses it as `unknownGroup`.")
         ], required: ["device"])),
         "remove": Schema.array(of: address)
-      ], required: [], description: "At least one device in all, at most 32 in each list, and none named twice."),
+      ], required: [], description: "At least one device in all and at most 32 in each list. A device named twice for the same group, or in both lists, is refused in the plan as `duplicateEntry` or `addedAndRemoved`."),
       "SceneMembershipPlan": Schema.object([
         "version": version,
         "scene": Schema.integer(minimum: 1, maximum: 254),

@@ -51,21 +51,94 @@ public enum SceneMembershipPlanner {
     plan.modem = modem.address
     plan.readLines = modemRecords.filter(\.isInUse).map { (record: BackupRecord) -> String in "modemRecord \(Self.line(record))" }
 
-    var named: Set<InsteonAddress> = []
+    plan.modemRecords = modemRecords
 
-    for addition in change.additions where named.insert(addition.device).inserted {
+    // A device named in both lists, or twice for the same group, is refused whole: which of the entries
+    // is meant isn't clear, so none of them is planned.
+    var refused: Set<InsteonAddress> = []
 
-      plan.add(addition, backup: backup, registered: devices[addition.device], modemRecords: modemRecords, modemLinkData: modemLinkData)
+    for device in change.additions.map(\.device) where change.removals.contains(device) && refused.insert(device).inserted {
+
+      plan.refusals.append(SceneMembershipFinding(code: .addedAndRemoved, device: device, detail: "The change adds the device and removes it."))
 
     }
 
-    for removal in change.removals where named.insert(removal).inserted {
+    var counts: [AdditionKey: Int] = [:]
 
-      plan.remove(removal, backup: backup, registered: devices[removal], modemRecords: modemRecords)
+    for addition in change.additions {
+
+      counts[Self.key(of: addition, registered: devices[addition.device]), default: 0] += 1
+
+    }
+
+    var reported: Set<AdditionKey> = []
+
+    for addition in change.additions {
+
+      let key: AdditionKey = Self.key(of: addition, registered: devices[addition.device])
+
+      guard !refused.contains(addition.device) else {
+
+        continue
+
+      }
+
+      if counts[key, default: 0] > 1 {
+
+        if reported.insert(key).inserted {
+
+          plan.refusals.append(SceneMembershipFinding(code: .duplicateEntry, device: addition.device, detail: "The change adds the device's group more than once."))
+
+        }
+
+        continue
+
+      }
+
+      plan.add(addition, backup: backup, registered: devices[addition.device], modemLinkData: modemLinkData)
+
+    }
+
+    var removing: Set<InsteonAddress> = []
+
+    for removal in change.removals where !refused.contains(removal) {
+
+      guard removing.insert(removal).inserted else {
+
+        if !plan.refusals.contains(where: { (finding: SceneMembershipFinding) -> Bool in finding.code == .duplicateEntry && finding.device == removal }) {
+
+          plan.refusals.append(SceneMembershipFinding(code: .duplicateEntry, device: removal, detail: "The change removes the device more than once."))
+
+        }
+
+        continue
+
+      }
+
+    }
+
+    for removal in change.removals where removing.contains(removal) && !plan.refusals.contains(where: { (finding: SceneMembershipFinding) -> Bool in finding.code == .duplicateEntry && finding.device == removal }) {
+
+      plan.remove(removal, backup: backup, registered: devices[removal])
 
     }
 
     return plan.result
+
+  }
+
+  /// What names an addition: the device and the group of it that answers, which is its main group when the
+  /// request names none and the catalog says which that is.
+  private struct AdditionKey: Hashable {
+
+    let device: InsteonAddress
+    let group: UInt8?
+
+  }
+
+  private static func key(of addition: SceneMembershipChange.Addition, registered: RegisteredDevice?) -> AdditionKey {
+
+    AdditionKey(device: addition.device, group: addition.group ?? registered?.deviceDescription.mainGroup?.number.rawValue)
 
   }
 
@@ -87,6 +160,16 @@ private struct Planning {
   var refusals: [SceneMembershipFinding] = []
   var devices: [SceneMembershipDevice] = []
   var readLines: [String] = []
+
+  /// The modem's records, with the controller records the plan adds.
+  var modemRecords: [BackupRecord] = []
+
+  /// The records of each device the plan could write to, with the records the plan adds, so a second
+  /// record for a device takes the next slot.
+  private var working: [InsteonAddress: Eligible] = [:]
+
+  /// The devices already refused as unable to take a write.
+  private var unable: Set<InsteonAddress> = []
 
   init(change: SceneMembershipChange) {
 
@@ -120,12 +203,25 @@ private struct Planning {
   /// write, and records the device's facts.
   private mutating func eligibility(of address: InsteonAddress, backup: NetworkBackup, registered: RegisteredDevice?) -> Eligible? {
 
+    if let held = working[address] {
+
+      return held
+
+    }
+
+    guard !unable.contains(address) else {
+
+      return nil
+
+    }
+
     let held: BackupDevice? = backup.devices.first { (device: BackupDevice) -> Bool in device.address == address }
     let engine: InsteonEngine? = (held?.engine).map(Self.engine) ?? registered?.info.engine
     var fact = SceneMembershipDevice(address: address, product: registered?.info.displayName, engine: engine, acceptsRemoteWrite: false)
 
     func refuse(_ code: SceneMembershipFinding.Code, _ detail: String? = nil) -> Eligible? {
 
+      unable.insert(address)
       devices.append(fact)
       refusals.append(SceneMembershipFinding(code: code, device: address, detail: detail))
 
@@ -183,7 +279,10 @@ private struct Planning {
     fact.acceptsRemoteWrite = true
     devices.append(fact)
 
-    return Eligible(records: database.records, engine: engine ?? .i2cs)
+    let eligible = Eligible(records: database.records, engine: engine ?? .i2cs)
+    working[address] = eligible
+
+    return eligible
 
   }
 
@@ -226,7 +325,7 @@ private struct Planning {
 
   // MARK: Adding
 
-  mutating func add(_ addition: SceneMembershipChange.Addition, backup: NetworkBackup, registered: RegisteredDevice?, modemRecords: [BackupRecord], modemLinkData: ModemLinkData?) {
+  mutating func add(_ addition: SceneMembershipChange.Addition, backup: NetworkBackup, registered: RegisteredDevice?, modemLinkData: ModemLinkData?) {
 
     let address: InsteonAddress = addition.device
 
@@ -312,6 +411,7 @@ private struct Planning {
       let modemData: [UInt8] = DeviceLinkingCoordinator.modemData(modemLinkData, isController: true, reported: registered.identity)
 
       steps.append(SceneMembershipStep(kind: .addModemRecord, endpoint: .modem, record: LinkRecord(isController: true, isInUse: true, group: group, address: address, data: modemData)))
+      modemRecords.append(BackupRecord(state: .inUse, role: .controller, group: change.scene, address: address, data: modemData))
       addedHalf = true
 
       if !sceneRecords.isEmpty {
@@ -345,6 +445,10 @@ private struct Planning {
       var written: LinkRecord = record
       written.memoryAddress = slot
       steps.append(SceneMembershipStep(kind: .addDeviceRecord, endpoint: .device(address), record: written))
+      let updated: [BackupRecord] = records.map { (held: BackupRecord) -> BackupRecord in
+        held.memoryAddress == slot ? writtenRecord(data, at: slot) : held
+      }
+      working[address]?.records = updated
 
       return true
 
@@ -378,8 +482,21 @@ private struct Planning {
     var written: LinkRecord = record
     written.memoryAddress = end
     steps.append(SceneMembershipStep(kind: .addDeviceRecord, endpoint: .device(address), record: written))
+    // The end's slot now holds the record and the slot below it is the end.
+    let updated: [BackupRecord] = records.dropLast() + [
+      writtenRecord(data, at: end),
+      BackupRecord(state: .end, role: .responder, group: 0, address: InsteonAddress(0, 0, 0), data: [0, 0, 0], memoryAddress: newEnd)
+    ]
+    working[address]?.records = updated
 
     return true
+
+  }
+
+  /// The cached record of a responder record the plan writes to the slot.
+  private func writtenRecord(_ data: [UInt8], at slot: UInt16) -> BackupRecord {
+
+    BackupRecord(state: .inUse, role: .responder, group: change.scene, address: modem, data: data, memoryAddress: slot)
 
   }
 
@@ -498,7 +615,7 @@ private struct Planning {
 
   // MARK: Removing
 
-  mutating func remove(_ address: InsteonAddress, backup: NetworkBackup, registered: RegisteredDevice?, modemRecords: [BackupRecord]) {
+  mutating func remove(_ address: InsteonAddress, backup: NetworkBackup, registered: RegisteredDevice?) {
 
     guard let eligible = eligibility(of: address, backup: backup, registered: registered) else {
 

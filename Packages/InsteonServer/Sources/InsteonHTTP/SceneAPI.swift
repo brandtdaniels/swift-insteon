@@ -268,7 +268,7 @@ enum SceneWire {
 }
 
 /// A scene number that is not a group from 1 through 254, or a membership change that is not an add list and
-/// a remove list of distinct devices.
+/// a remove list of devices.
 enum SceneInputError: Error { case invalidScene, invalidMembership }
 
 /// The body of a scene command: an `action` of `on` or `off`, and nothing else.
@@ -284,7 +284,7 @@ struct SceneCommandBody {
 }
 
 /// The body of a membership plan request: `add`, a list of `{device, onLevel, rampRate}`, and `remove`,
-/// a list of addresses, each with at most 32 devices, none named twice, and at least one device in all.
+/// a list of addresses, each with at most 32 devices, and at least one device in all.
 enum SceneMembershipBody {
   static let longestList = 32
 
@@ -322,9 +322,8 @@ enum SceneMembershipBody {
       guard let address = InsteonAddress(text) else { throw HTTPInputError.invalidAddress }
       removals.append(address)
     }
-    // One device is named once, in one list.
-    let named = additions.map(\.device) + removals
-    guard Set(named).count == named.count, let change = SceneMembershipChange(scene: scene, additions: additions, removals: removals) else { throw SceneInputError.invalidMembership }
+    // A device named twice for the same group, or in both lists, is for the planner to refuse.
+    guard let change = SceneMembershipChange(scene: scene, additions: additions, removals: removals) else { throw SceneInputError.invalidMembership }
     return change
   }
 
