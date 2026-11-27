@@ -8,8 +8,10 @@ extension DeviceNetwork {
   /// modem's ALL-Link cleanups.
   ///
   /// The network's copy of the modem's ALL-Link database, read from the modem only when the
-  /// network holds none, says how many controller records the group has, which the result
-  /// reports so a missing report can say how many responders were expected. Nothing is sent to a device, and the network's record of the devices' levels is left as it
+  /// network holds none, says how many controller records the group has. The result reports that
+  /// count, so a missing report can say how many responders were expected.
+  ///
+  /// Nothing is sent to a device, and the network's record of the devices' levels is left as it
   /// was, since a modem that passes no cleanup report up says nothing about each responder.
   ///
   /// ```swift
