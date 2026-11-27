@@ -155,6 +155,14 @@ struct ServicePathTests {
     }
   }
 
+  @Test func anUnknownOutcomeOfADeviceCommandIsTypedAndSaysWhetherItWasSent() async throws {
+    let c = try await calls(FakeHTTPClient { request in
+      request.url?.path == "/api/v1/health" ? healthy : refusal("outcomeUnknown", sent: true, status: 502)
+    })
+
+    await #expect(throws: ConnectionError.outcomeUnknown(sent: true)) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+  }
+
   @Test func aModemThatIsAwayKeepsItsCause() async throws {
     let c = try await calls(FakeHTTPClient { request in
       request.url?.path == "/api/v1/health" ? healthy : refusal("modemUnavailable", sent: false, cause: "hubUnreachable", status: 503)
@@ -165,10 +173,10 @@ struct ServicePathTests {
 
   @Test func anyOtherRefusalKeepsItsCodeAndWhetherTheCommandMayHaveBeenSent() async throws {
     let c = try await calls(FakeHTTPClient { request in
-      request.url?.path == "/api/v1/health" ? healthy : refusal("outcomeUnknown", sent: true, status: 502)
+      request.url?.path == "/api/v1/health" ? healthy : refusal("modemRejected", sent: false, status: 503)
     })
 
-    await #expect(throws: ConnectionError.rejected(code: "outcomeUnknown", sent: true)) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
+    await #expect(throws: ConnectionError.rejected(code: "modemRejected", sent: false)) { _ = try await c.execute(ServiceCommand(address: lampAddress, action: .on)) }
   }
 
   @Test func aTokenNeverAppearsInADescriptionOrAnError() async throws {
