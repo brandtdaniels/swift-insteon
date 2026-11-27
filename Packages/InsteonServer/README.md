@@ -736,8 +736,8 @@ These tune how long a scene run waits. The standard values are unverified, so a 
 | Flag | Variable | Standard | Range | What it is |
 | --- | --- | --- | --- | --- |
 | `--scene-echo-wait-ms` | `INSTEON_SCENE_ECHO_WAIT_MS` | 5000 | 1 through 60000 | How long a run waits for the modem to accept the group command. No echo is `outcomeUnknown`. |
-| `--scene-cleanup-quiet-ms` | `INSTEON_SCENE_CLEANUP_QUIET_MS` | 15000 | 2150 up to the cap | How long a run waits for more cleanup traffic before it gives up on the report. It can't be shorter than 2150, the Insteon Developer's Guide's time for the first cleanup. |
-| `--scene-cleanup-cap-ms` | `INSTEON_SCENE_CLEANUP_CAP_MS` | 60000 | 1 through 300000 | The longest a run waits for the report however much traffic comes, so a run holds the admission gate for a bounded time. |
+| `--scene-cleanup-quiet-ms` | `INSTEON_SCENE_CLEANUP_QUIET_MS` | 15000 | 2150 up to the cap | How long a run waits for more cleanup traffic before it gives up on the report. It can't be shorter than 2150, the Insteon Developer's Guide's time for the first cleanup. When you set only a shorter cap, it is the cap, so setting just the cap works; a quiet period you set that passes the cap is refused as the quiet period. |
+| `--scene-cleanup-cap-ms` | `INSTEON_SCENE_CLEANUP_CAP_MS` | 60000 | 2150 through 300000 | The longest a run waits for the report however much traffic comes, so a run holds the admission gate for a bounded time. |
 
 `GET /api/v1/health` lists every value in use as `tuning`: an array of `{name, value, unit, source}` with the unit `ms` and a source of `default`, `flag` or `environment`, for example `scenes.echoWaitMs`. A client ignores a name it doesn't know. The settings are grouped by who uses them, so other groups of settings can be added in the same way.
 

@@ -107,6 +107,8 @@ public struct ServerOptions: Sendable {
     if let value = try milliseconds("--scene-echo-wait-ms", "INSTEON_SCENE_ECHO_WAIT_MS", ServiceTuningError.Field.scenesEchoWait.name, .invalidSceneEchoWait) { scenes.echoWait = value }
     if let value = try milliseconds("--scene-cleanup-quiet-ms", "INSTEON_SCENE_CLEANUP_QUIET_MS", ServiceTuningError.Field.scenesCleanupQuiet.name, .invalidSceneCleanupQuiet) { scenes.cleanupQuietPeriod = value }
     if let value = try milliseconds("--scene-cleanup-cap-ms", "INSTEON_SCENE_CLEANUP_CAP_MS", ServiceTuningError.Field.scenesCleanupCap.name, .invalidSceneCleanupCap) { scenes.cleanupCap = value }
+    // A quiet period nobody set follows a cap shorter than its standard value, so setting only a short cap works.
+    if sources[ServiceTuningError.Field.scenesCleanupQuiet.name] == nil { scenes.cleanupQuietPeriod = min(scenes.cleanupQuietPeriod, scenes.cleanupCap) }
     do {
       tuning = try ServiceTuning(scenes: scenes).validated()
     } catch ServiceTuningError.invalid(let field) {
@@ -167,7 +169,7 @@ public enum ServerOptionError: Error, CustomStringConvertible {
   /// `--scene-cleanup-quiet-ms` or its variable isn't a whole number of milliseconds from 2150
   /// through the cap, which is the Insteon Developer's Guide's time for the first cleanup.
   case invalidSceneCleanupQuiet
-  /// `--scene-cleanup-cap-ms` or its variable isn't a whole number of milliseconds from 1 through 300000.
+  /// `--scene-cleanup-cap-ms` or its variable isn't a whole number of milliseconds from 2150 through 300000.
   case invalidSceneCleanupCap
   /// A `pair` command needs a client name of 1 through 64 characters and a scope of read, control or admin.
   case invalidClient

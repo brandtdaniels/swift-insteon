@@ -47,9 +47,9 @@ public enum ServerRunner {
   --scene-cleanup-quiet-ms MS  How long a scene run waits for more cleanup traffic before it
                    gives up on the modem's report (default: 15000; from 2150, the first
                    cleanup's time in the Insteon Developer's Guide, up to the cap).
-                   INSTEON_SCENE_CLEANUP_QUIET_MS.
+                   INSTEON_SCENE_CLEANUP_QUIET_MS. Without it, a shorter cap shortens it to the cap.
   --scene-cleanup-cap-ms MS  The longest a scene run waits for the report however much
-                   traffic comes (default: 60000; up to 300000). INSTEON_SCENE_CLEANUP_CAP_MS.
+                   traffic comes (default: 60000; from 2150 up to 300000). INSTEON_SCENE_CLEANUP_CAP_MS.
   The defaults for these are unverified. GET /api/v1/health lists every value in use and
   whether it is the default, a flag or an environment variable.
 

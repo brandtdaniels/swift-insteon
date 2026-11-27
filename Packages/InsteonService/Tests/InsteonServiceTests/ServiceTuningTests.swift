@@ -32,7 +32,10 @@ struct ServiceTuningTests {
     (.seconds(5), .milliseconds(2_149), .seconds(60), ServiceTuningError.Field.scenesCleanupQuiet),
     (.seconds(5), .seconds(61), .seconds(60), ServiceTuningError.Field.scenesCleanupQuiet),
     (.seconds(5), .seconds(15), .zero, ServiceTuningError.Field.scenesCleanupCap),
-    (.seconds(5), .seconds(15), .seconds(301), ServiceTuningError.Field.scenesCleanupCap)
+    (.seconds(5), .seconds(15), .seconds(301), ServiceTuningError.Field.scenesCleanupCap),
+    // A cap shorter than the first cleanup's time is the cap's fault, whatever the quiet period is.
+    (.seconds(5), .milliseconds(2_149), .milliseconds(2_149), ServiceTuningError.Field.scenesCleanupCap),
+    (.seconds(5), .seconds(15), .milliseconds(2_149), ServiceTuningError.Field.scenesCleanupCap)
   ])
   func refusesAValueOutOfRangeAndNamesTheField(_ echo: Duration, _ quiet: Duration, _ cap: Duration, _ field: ServiceTuningError.Field) {
     let tuning = ServiceTuning(scenes: .init(echoWait: echo, cleanupQuietPeriod: quiet, cleanupCap: cap))

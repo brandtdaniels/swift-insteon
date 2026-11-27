@@ -183,6 +183,32 @@ extension ServerTests {
     #expect(throws: ServerOptionError.invalidSceneCleanupQuiet) { try ServerOptions(arguments: ["--scene-cleanup-quiet-ms", "20000", "--scene-cleanup-cap-ms", "10000"], environment: [:]) }
   }
 
+  // Setting only the cap leaves the quiet period unset, so it is the shorter of its standard value and the cap.
+  @Test(arguments: [("10000", 10_000), ("15000", 15_000), ("120000", 15_000), ("2150", 2_150)])
+  func aCapBelowTheStandardQuietPeriodShortensTheQuietPeriodThatWasNotSet(_ cap: String, _ quietMilliseconds: Int) throws {
+    for options in [
+      try ServerOptions(arguments: ["--scene-cleanup-cap-ms", cap], environment: [:]),
+      try ServerOptions(arguments: [], environment: ["INSTEON_SCENE_CLEANUP_CAP_MS": cap])
+    ] {
+      #expect(options.tuning.scenes.cleanupQuietPeriod == .milliseconds(quietMilliseconds))
+      #expect(options.tuningSources[ServiceTuningError.Field.scenesCleanupQuiet.name] == nil)
+    }
+  }
+
+  @Test func aCapShorterThanTheFirstCleanupIsRefusedAsTheCapNotTheQuietPeriod() {
+    #expect(throws: ServerOptionError.invalidSceneCleanupCap) { try ServerOptions(arguments: ["--scene-cleanup-cap-ms", "2149"], environment: [:]) }
+    #expect(throws: ServerOptionError.invalidSceneCleanupCap) { try ServerOptions(arguments: ["--scene-cleanup-cap-ms", "1000"], environment: [:]) }
+  }
+
+  @Test func aQuietPeriodTheOperatorSetThatPassesTheCapIsRefusedAsTheQuietPeriodEvenWhenTheCapIsShort() {
+    #expect(throws: ServerOptionError.invalidSceneCleanupQuiet) { try ServerOptions(arguments: ["--scene-cleanup-quiet-ms", "20000", "--scene-cleanup-cap-ms", "10000"], environment: [:]) }
+    #expect(throws: ServerOptionError.invalidSceneCleanupQuiet) { try ServerOptions(arguments: ["--scene-cleanup-cap-ms", "10000"], environment: ["INSTEON_SCENE_CLEANUP_QUIET_MS": "20000"]) }
+  }
+
+  @Test func theHelpSaysAnUnsetQuietPeriodFollowsAShortCap() {
+    #expect(ServerRunner.help.contains("shorter cap"))
+  }
+
   @Test func eachBadSceneValueHasItsOwnCodeAndNamesTheFlagAndTheVariableButNotTheValue() {
     let cases: [(ServerOptionError, ServerFailure.Code, String, String)] = [
       (.invalidSceneEchoWait, .sceneEchoWaitInvalid, "--scene-echo-wait-ms", "INSTEON_SCENE_ECHO_WAIT_MS"),

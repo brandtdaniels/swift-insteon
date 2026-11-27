@@ -72,12 +72,14 @@ public struct ServiceTuning: Sendable, Codable, Equatable {
   /// This tuning, if every value is in range.
   ///
   /// - Throws: ``ServiceTuningError/invalid(field:)`` for the first value that is not positive,
-  ///   is shorter than a document's figure, or is longer than its limit. A quiet period longer
-  ///   than the cap is refused as the quiet period.
+  ///   is shorter than a document's figure, or is longer than its limit. A cap shorter than the
+  ///   quiet period's minimum is refused as the cap, and a quiet period longer than the cap as the
+  ///   quiet period.
   public func validated() throws -> ServiceTuning {
 
     guard scenes.echoWait > .zero, scenes.echoWait <= Self.longestEchoWait else { throw ServiceTuningError.invalid(field: .scenesEchoWait) }
-    guard scenes.cleanupCap > .zero, scenes.cleanupCap <= Self.longestWait else { throw ServiceTuningError.invalid(field: .scenesCleanupCap) }
+    // A cap shorter than the first cleanup's time can't hold any quiet period, so it is the cap that is wrong.
+    guard scenes.cleanupCap >= Self.minimumCleanupQuietPeriod, scenes.cleanupCap <= Self.longestWait else { throw ServiceTuningError.invalid(field: .scenesCleanupCap) }
     guard scenes.cleanupQuietPeriod >= Self.minimumCleanupQuietPeriod, scenes.cleanupQuietPeriod <= scenes.cleanupCap else { throw ServiceTuningError.invalid(field: .scenesCleanupQuiet) }
 
     return self
