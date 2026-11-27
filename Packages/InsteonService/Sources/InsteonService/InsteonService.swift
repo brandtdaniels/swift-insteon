@@ -50,6 +50,14 @@ public actor InsteonService: InsteonServiceAPI {
   /// Why the last refresh left each device unread. It lives in memory: the saved snapshot keeps
   /// no reason, so a restart reports ``BackupUnreadableReason/notCached`` until the next refresh.
   private var unreadReasons: [InsteonAddress: BackupUnreadableReason] = [:]
+  /// The membership plans a client could apply, newest last, each with when it expires. They live in
+  /// memory: a restart forgets them.
+  private var openPlans: [(plan: SceneMembershipPlan, expiresAt: Date)] = []
+
+  /// How long the service keeps a membership plan.
+  static let planLifetime: TimeInterval = 300
+  /// How many membership plans the service keeps at once. The oldest goes first.
+  static let maximumOpenPlans = 8
 
   /// How many of the newest events the service keeps for a client to resume from. Memory is
   /// bounded by this count; nothing is kept on disk, and a restart forgets every event.
@@ -61,8 +69,8 @@ public actor InsteonService: InsteonServiceAPI {
   /// Creates a service for a network whose connection the host keeps open, and an optional
   /// persistence policy. The run ends if that connection does. `tuning` and `tuningSources` are as for
   /// ``init(network:opener:persistence:snapshotSavedAt:reconnect:clock:now:jitter:throughHub:runID:notificationRules:scheduling:tuning:tuningSources:)``.
-  public init(network: DeviceNetwork, persistence: (any SnapshotPersisting)? = nil, clock: any Clock<Duration> = ContinuousClock(), runID: String? = nil, scheduling: ScheduleConfiguration = ScheduleConfiguration(), tuning: ServiceTuning = .standard, tuningSources: [String: TuningSource] = [:]) {
-    self.init(network: network, opener: FixedNetworkOpener(network: network), persistence: persistence, snapshotSavedAt: nil, reconnect: .never, clock: clock, now: { Date() }, jitter: { 0 }, isConnected: true, runID: runID, scheduling: scheduling, tuning: tuning, tuningSources: tuningSources)
+  public init(network: DeviceNetwork, persistence: (any SnapshotPersisting)? = nil, clock: any Clock<Duration> = ContinuousClock(), now: @escaping @Sendable () -> Date = { Date() }, runID: String? = nil, scheduling: ScheduleConfiguration = ScheduleConfiguration(), tuning: ServiceTuning = .standard, tuningSources: [String: TuningSource] = [:]) {
+    self.init(network: network, opener: FixedNetworkOpener(network: network), persistence: persistence, snapshotSavedAt: nil, reconnect: .never, clock: clock, now: now, jitter: { 0 }, isConnected: true, runID: runID, scheduling: scheduling, tuning: tuning, tuningSources: tuningSources)
   }
 
   /// Creates a service that opens and reopens its own modem connection.
@@ -244,6 +252,45 @@ public actor InsteonService: InsteonServiceAPI {
     // No suspension between publishing and releasing admission in defer, as for a device command.
     publish(.scene(SceneRun(number: command.number, name: nil, source: .api, action: command.action, receipt: receipt, firedAt: now())))
     return receipt
+  }
+
+  public func planSceneMembership(_ change: SceneMembershipChange) async throws -> SceneMembershipPlanReceipt {
+    let network = network
+    let backup = await networkBackup()
+    // A group a device controls is read only. A number nothing controls is a scene to create.
+    let scenes = SceneListing(backup).scenes.filter { $0.number == change.scene }
+    if !scenes.isEmpty, !scenes.contains(where: \.isWritable) { throw ServiceControlError.unknownScene }
+    var registered: [InsteonAddress: RegisteredDevice] = [:]
+    for address in change.additions.map(\.device) + change.removals {
+      if let device = await network.registeredDevice(address) { registered[address] = device }
+    }
+    var modemLinkData: ModemLinkData?
+    if let modem = await network.modemIdentity(), let identity = modem.identity {
+      modemLinkData = await network.catalog()?.profile(category: identity.category, subcategory: identity.subcategory, firmwareVersion: identity.firmwareVersion)?.modemLinkData
+    }
+    let plan = SceneMembershipPlanner.plan(change, from: backup, devices: registered, modemLinkData: modemLinkData)
+    let expiresAt = now().addingTimeInterval(Self.planLifetime)
+    keepOpenPlans(adding: plan.isApplicable ? (plan, expiresAt) : nil)
+    return SceneMembershipPlanReceipt(plan: plan, expiresAt: expiresAt)
+  }
+
+  /// The plan with this identifier, if the service still keeps it: one it made less than five minutes
+  /// ago that could be applied.
+  func openSceneMembershipPlan(_ id: String) -> SceneMembershipPlan? {
+    keepOpenPlans(adding: nil)
+    return openPlans.first { $0.plan.id == id }?.plan
+  }
+
+  /// Drops the plans that expired and the oldest beyond the limit, then keeps `added`. A plan made
+  /// again takes its place as the newest, with its new expiry.
+  private func keepOpenPlans(adding added: (SceneMembershipPlan, Date)?) {
+    let moment = now()
+    openPlans.removeAll { $0.expiresAt <= moment }
+    if let added {
+      openPlans.removeAll { $0.plan.id == added.0.id }
+      openPlans.append((added.0, added.1))
+      if openPlans.count > Self.maximumOpenPlans { openPlans.removeFirst(openPlans.count - Self.maximumOpenPlans) }
+    }
   }
 
   /// What a scene member's link data bytes mean, from the catalog and the identity the service

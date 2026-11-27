@@ -531,6 +531,10 @@ actor FakeService: InsteonServiceAPI {
   private(set) var sceneCommands: [SceneCommand] = []
   let sceneReceipt: SceneReceipt?
   let sceneFailure: (any Error)?
+  /// The membership changes the service was asked to plan, what it answers and the error it answers with instead.
+  private(set) var membershipRequests: [SceneMembershipChange] = []
+  let membershipReceipt: SceneMembershipPlanReceipt?
+  let membershipFailure: (any Error)?
   /// What the catalog says each member's bytes mean, and what the service was asked.
   let memberMeanings: [InsteonAddress: LinkDataMeaning]
   struct MeaningQuestion: Hashable, Sendable {
@@ -548,7 +552,9 @@ actor FakeService: InsteonServiceAPI {
   private var openSources: [AsyncStream<ServiceEvent>.Continuation] = []
   var reported = ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000))
   let address = InsteonAddress(0x1A, 0x2B, 0x3C)
-  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false, scriptedItems: [SequencedItem] = [], ruleFailure: NotificationRuleError? = nil, scenes: SceneListing = SceneListing(scenes: []), memberMeanings: [InsteonAddress: LinkDataMeaning] = [:], refreshFailure: (any Error)? = nil, sceneReceipt: SceneReceipt? = nil, sceneFailure: (any Error)? = nil) {
+  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false, scriptedItems: [SequencedItem] = [], ruleFailure: NotificationRuleError? = nil, scenes: SceneListing = SceneListing(scenes: []), memberMeanings: [InsteonAddress: LinkDataMeaning] = [:], refreshFailure: (any Error)? = nil, sceneReceipt: SceneReceipt? = nil, sceneFailure: (any Error)? = nil, membershipReceipt: SceneMembershipPlanReceipt? = nil, membershipFailure: (any Error)? = nil) {
+    self.membershipReceipt = membershipReceipt
+    self.membershipFailure = membershipFailure
     self.sceneReceipt = sceneReceipt
     self.sceneFailure = sceneFailure
     self.refreshFailure = refreshFailure
@@ -591,6 +597,12 @@ actor FakeService: InsteonServiceAPI {
     sceneCommands.append(command)
     if let sceneFailure { throw sceneFailure }
     return sceneReceipt ?? SceneReceipt(scene: command.number, action: command.action, acknowledged: [], unacknowledged: [], isComplete: true, responderCount: 0, persistence: persistence)
+  }
+  func planSceneMembership(_ change: SceneMembershipChange) async throws -> SceneMembershipPlanReceipt {
+    membershipRequests.append(change)
+    if let membershipFailure { throw membershipFailure }
+    guard let membershipReceipt else { throw ServiceControlError.unknownScene }
+    return membershipReceipt
   }
   func meaning(ofMemberData data: [UInt8], of device: InsteonAddress, group: UInt8) async -> LinkDataMeaning? {
     askedMeanings.append(MeaningQuestion(device: device, data: data, group: group))

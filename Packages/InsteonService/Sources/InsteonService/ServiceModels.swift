@@ -239,6 +239,20 @@ public struct SceneRun: Equatable, Sendable {
   }
 }
 
+/// A plan for a scene's members and when the service stops keeping it.
+public struct SceneMembershipPlanReceipt: Equatable, Sendable {
+  /// What adding and removing the members would write. A plan with a refusal can't be applied.
+  public let plan: SceneMembershipPlan
+  /// When the service drops the plan from memory: five minutes after it was made.
+  public let expiresAt: Date
+
+  /// Creates a receipt.
+  public init(plan: SceneMembershipPlan, expiresAt: Date) {
+    self.plan = plan
+    self.expiresAt = expiresAt
+  }
+}
+
 /// The scenes role of an Insteon service.
 public protocol SceneProviding: Sendable {
   /// The scenes of the network, listed from the ALL-Link databases the service holds. It sends nothing
@@ -275,6 +289,19 @@ public protocol SceneProviding: Sendable {
   ///   before anything is sent), `CancellationError` when canceled, and the modem's error when it
   ///   rejects the command or stops answering.
   func runScene(_ command: SceneCommand) async throws -> SceneReceipt
+
+  /// Plans adding and removing a scene's members from the ALL-Link databases the service has cached
+  /// and the catalog, and writes and sends nothing. The service keeps a plan it could apply in memory
+  /// for five minutes.
+  ///
+  /// It reads only the cache, so it doesn't take the admission gate. A database the cache doesn't hold
+  /// is a refusal in the plan, with the hint to refresh the scenes, not an error.
+  ///
+  /// - Parameter change: What to add and remove.
+  /// - Returns: The plan and when it expires.
+  /// - Throws: ``ServiceControlError/unknownScene`` when the listing holds a scene of that number that
+  ///   a device controls and none the modem controls. A number nothing controls is a scene to create.
+  func planSceneMembership(_ change: SceneMembershipChange) async throws -> SceneMembershipPlanReceipt
 
   /// What the data bytes a scene's member holds mean, as the Insteon device catalog gives them for
   /// the device's identity. It sends nothing to hardware.
