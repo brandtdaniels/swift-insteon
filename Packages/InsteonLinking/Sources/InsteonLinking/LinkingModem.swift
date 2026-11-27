@@ -39,7 +39,7 @@ public protocol LinkingModem: Sendable {
   func allLinkRecords() async throws -> [AllLinkRecord]
 
   /// Sends a command to one of the modem's ALL-Link groups and waits for the modem to finish its
-  /// cleanups, as ``Modem/sendAllLinkCommand(group:command:timeout:)`` does.
+  /// cleanups, as `Modem.sendAllLinkCommand(group:command:timeout:)` does.
   func sendAllLinkCommand(group: AllLinkGroupNumber, command: Command, timeout: Duration) async throws -> AllLinkCleanupReport
 
   /// Returns a stream of everything the modem sends after this call.
