@@ -14,8 +14,10 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
   let service: Service
   let logger: Logger
   let idempotency: IdempotencyStore
+  let now: @Sendable () -> Date
 
-  init(service: Service, logger: Logger, idempotency: IdempotencyStore = IdempotencyStore()) {
+  init(service: Service, logger: Logger, idempotency: IdempotencyStore = IdempotencyStore(), now: @escaping @Sendable () -> Date = { Date() }) {
+    self.now = now
     self.service = service
     self.logger = logger
     self.idempotency = idempotency
@@ -43,13 +45,22 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
   }
 
   private func perform(_ command: SceneCommand) async -> IdempotentOutcome {
+    let start = now()
     do {
+      let receipt = try await service.runScene(command)
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.sortedKeys]
-      return .response(.ok, try encoder.encode(SceneReceiptDTO(try await service.runScene(command))))
+      // How long a run took, so a Hub's delay is visible without a wire log. No address is logged.
+      logger.debug("scene run finished", metadata: [
+        "scene": "\(command.number)", "action": "\(command.action == .on ? "on" : "off")", "seconds": "\(now().timeIntervalSince(start))",
+        "isComplete": "\(receipt.isComplete)", "acknowledged": "\(receipt.acknowledged.count)", "unacknowledged": "\(receipt.unacknowledged.count)"
+      ])
+      return .response(.ok, try encoder.encode(SceneReceiptDTO(receipt)))
     } catch {
       // A scene command changes devices, so a failure is classified as a control.
-      return .failure(HTTPFailure(CommandFailure(action: .on, underlying: error)))
+      let failure = HTTPFailure(CommandFailure(action: .on, underlying: error))
+      logger.debug("scene run failed", metadata: ["scene": "\(command.number)", "code": "\(failure.code.rawValue)", "seconds": "\(now().timeIntervalSince(start))"])
+      return .failure(failure)
     }
   }
 

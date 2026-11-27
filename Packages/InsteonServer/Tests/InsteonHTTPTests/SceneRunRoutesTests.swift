@@ -251,6 +251,27 @@ struct SceneRunRoutesTests {
     #expect(await setup.service.sceneCommands.isEmpty)
   }
 
+  // MARK: Timing
+
+  @Test func logsHowLongARunTookAtDebugLevelWithNoAddress() async throws {
+    let capture = LogCapture()
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password), logger: capture.logger).buildResponder())
+    try await app.test(.router) { client in
+      let response = try await client.execute(uri: "/api/v1/scenes/3/commands", method: .post, headers: [.authorization: basic, .contentType: "application/json", HTTPField.Name("X-Insteon-Request")!: "1"], body: ByteBuffer(string: #"{"action":"on"}"#))
+      #expect(response.status == .ok)
+    }
+
+    let line = try #require(capture.records.first { $0.message == "scene run finished" })
+    #expect(line.level == .debug)
+    #expect(line.metadata["scene"] == "3")
+    #expect(line.metadata["action"] == "on")
+    #expect(line.metadata["isComplete"] == "true")
+    #expect(line.metadata["acknowledged"] == "1")
+    #expect(line.metadata["unacknowledged"] == "1")
+    #expect(line.metadata["seconds"] != nil)
+    #expect(!"\(line.metadata)".contains("1A.2B.3C"))
+  }
+
   // MARK: Description
 
   @Test func declaresTheControlScopeAPostWithAJSONBodyAndTheErrorsARunCanAnswer() {
