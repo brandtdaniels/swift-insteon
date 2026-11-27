@@ -25,6 +25,7 @@ struct SceneMembershipPlanTests {
   private static let unconfirmedIdentity = ReportedIdentity(category: 0x01, subcategory: 0x05, firmwareVersion: 0x45)
   private static let limitedIdentity = ReportedIdentity(category: 0x01, subcategory: 0x06, firmwareVersion: 0x45)
   private static let twoGroupIdentity = ReportedIdentity(category: 0x01, subcategory: 0x07, firmwareVersion: 0x45)
+  private static let singleGroupIdentity = ReportedIdentity(category: 0x01, subcategory: 0x08, firmwareVersion: 0x45)
   private static let strangerIdentity = ReportedIdentity(category: 0x09, subcategory: 0x09, firmwareVersion: 0x45)
 
   private static let commands = CommandSet(
@@ -58,6 +59,15 @@ struct SceneMembershipPlanTests {
         linkData: GroupType.LinkData(responder: [
           LinkDataByte(position: 1, name: "onLevel", summary: "The on-level, as a percentage.", range: 0x00...0x64),
           LinkDataByte(position: 3, name: "button", summary: "The device's own group.", isPerGroup: true)
+        ])
+      ),
+      GroupType(
+        name: "singleLoad",
+        label: "Load",
+        kind: .dimmer,
+        linkData: GroupType.LinkData(responder: [
+          LinkDataByte(position: 1, name: "onLevel", summary: "The on-level."),
+          LinkDataByte(position: 2, name: "rampRate", summary: "The ramp rate.")
         ])
       ),
       GroupType(name: "plainLoad", label: "Load", kind: .dimmer)
@@ -97,6 +107,7 @@ struct SceneMembershipPlanTests {
           DeviceProfile.Group(number: 3, name: "Button 3", role: .controller, type: "load")
         ]
       ),
+      profile("9609", singleGroupIdentity, type: "singleLoad", engines: [DeviceEngine(engine: .i2cs, category: singleGroupIdentity.category, subcategory: singleGroupIdentity.subcategory)]),
       profile("9607", limitedIdentity, type: "limitedLoad", engines: [DeviceEngine(engine: .i2cs, category: limitedIdentity.category, subcategory: limitedIdentity.subcategory)])
     ],
     commandSets: [commands]
@@ -431,6 +442,24 @@ struct SceneMembershipPlanTests {
 
     #expect(plan.steps.isEmpty)
     #expect(plan.warnings.map(\.code) == [.notAMember])
+
+  }
+
+  @Test func removesAGroupOfADeviceWhoseRecordHasNoOwnGroupByteWhenItIsTheMainGroup() async throws {
+
+    let held: [BackupRecord] = slots([record(.responder, group: 3, modem, data: [0xFF, 0x1F, 0x00]), record(.responder, group: 9, modem)])
+    let backup = backup(modemRecords: [record(.controller, group: 3, lamp)], [device(lamp, Self.singleGroupIdentity, records: held)])
+    let identities: [InsteonAddress: ReportedIdentity] = [lamp: Self.singleGroupIdentity]
+    let main = SceneMembershipPlanner.plan(change(removeGroups: [.init(device: lamp, group: 1)]), from: backup, devices: await registered(identities), modemLinkData: Self.modemData)
+    let other = SceneMembershipPlanner.plan(change(removeGroups: [.init(device: lamp, group: 2)]), from: backup, devices: await registered(identities), modemLinkData: Self.modemData)
+    let added = SceneMembershipPlanner.plan(change([add(lamp, group: 1)]), from: backup, devices: await registered(identities), modemLinkData: Self.modemData)
+
+    #expect(main.steps.map(\.kind) == [.removeModemRecord, .removeDeviceRecord])
+    #expect(main.refusals.isEmpty)
+    #expect(other.refusals.map(\.code) == [.unknownGroup])
+    #expect(other.steps.isEmpty)
+    // Adding the same group works, so removing it does too.
+    #expect(added.refusals.isEmpty)
 
   }
 

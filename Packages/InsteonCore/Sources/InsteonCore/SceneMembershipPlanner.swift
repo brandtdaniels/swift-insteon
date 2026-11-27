@@ -739,9 +739,18 @@ private struct Planning {
 
         guard let position = description.groupType(forGroup: named.number)?.linkData.responder.first(where: \.isPerGroup)?.position else {
 
-          refuse(.undescribedLinkData, "The catalog doesn't say which data byte of the device's responder record holds its own group.")
+          // A record with no byte for the device's own group is for its main group alone.
+          guard named.number == description.mainGroup?.number else {
 
-          return
+            refuse(.unknownGroup, "The catalog gives the device's record no byte for its own group, so only its main group is in a scene.")
+
+            return
+
+          }
+
+          doomed += sceneRecords.filter { (record: BackupRecord) -> Bool in !doomed.contains(record) }
+
+          continue
 
         }
 
