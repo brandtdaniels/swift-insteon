@@ -1035,7 +1035,7 @@ At `--log-level trace`, and only then, the server logs the raw traffic to its mo
 +0.512s hub read end=11 cursor=advanced gap=0.512s 02 62 @A1 0F 11 FF 06
 ```
 
-Insteon addresses are masked: each 3-byte address in a frame the trace recognizes shows as a short tag such as `@A1`. The same address has the same tag for one run of the server, a different address another tag, and a new run uses a new salt, so a tag means nothing outside its trace. Masking is best effort: bytes outside a recognized frame show as they are. The trace never holds the Hub's user name or password or the `Authorization` header.
+Insteon addresses are masked: each 3-byte address in a frame the trace recognizes shows as a short tag such as `@A1`. The same address has the same tag for one run of the server, a different address another tag, and a new run uses a new salt, so a tag means nothing outside its trace. Masking is best effort. It knows the frames numbered `0x50`, `0x51`, `0x53`, `0x56`, `0x57`, `0x5C`, `0x60`, `0x62` and `0x6F`; the layouts of `0x56` (six bytes, a group then an address) and `0x5C` (like `0x50`) are inferred from a Hub 2's bench trace. In a frame it doesn't know, a three-byte run that is an address seen earlier in the same read is masked too; other bytes outside a recognized frame show as they are. The trace never holds the Hub's user name or password or the `Authorization` header.
 
 `--trace-addresses`, or `INSTEON_TRACE_ADDRESSES=1` in the process's environment, turns masking off; the option wins. An unmasked trace names your devices, so treat it as sensitive and don't post it.
 

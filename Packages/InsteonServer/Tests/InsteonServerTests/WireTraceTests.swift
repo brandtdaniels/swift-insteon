@@ -119,8 +119,8 @@ struct WireTraceTests {
     func tag(_ address: [UInt8]) -> String { masker.mask([0x02, 0x62] + address + [0x0F, 0x11, 0xFF], in: .outbound).split(separator: " ")[2].description }
     let (a, b) = (tag([0xAA, 0xBB, 0xCC]), tag([0xDD, 0xEE, 0xFF]))
 
-    // ALL-Link Cleanup Failure Report: 02 56 data group address.
-    #expect(masker.mask([0x02, 0x56, 0x01, 0x05, 0xAA, 0xBB, 0xCC], in: .inbound) == "02 56 01 05 \(a)")
+    // ALL-Link Cleanup Failure Report: 02 56 group address, as a Hub 2's bench trace shows it.
+    #expect(masker.mask([0x02, 0x56, 0x05, 0xAA, 0xBB, 0xCC], in: .inbound) == "02 56 05 \(a)")
     // ALL-Link Cleanup Status Report carries no address.
     #expect(masker.mask([0x02, 0x58, 0x06], in: .inbound) == "02 58 06")
     // Extended message: from and to.
@@ -128,6 +128,42 @@ struct WireTraceTests {
     // ALL-Link record response, and Manage ALL-Link Record.
     #expect(masker.mask([0x02, 0x57, 0xE2, 0x01, 0xDD, 0xEE, 0xFF, 0x00, 0x00, 0x00], in: .inbound) == "02 57 E2 01 \(b) 00 00 00")
     #expect(masker.mask([0x02, 0x6F, 0x40, 0xE2, 0x01, 0xAA, 0xBB, 0xCC, 0x00, 0x00, 0x00], in: .outbound) == "02 6F 40 E2 01 \(a) 00 00 00")
+
+  }
+
+  // An invented sequence in the layout a Hub 2 sent: 02 5C like a standard message received, then
+  // a failure report and a status report, then a standard message, all in one read.
+  @Test func everyFrameOfARunKeepsItsStartByteAndEveryAddressIsMaskedConsistently() {
+
+    var masker = AddressMasker(salt: 1)
+    let read: [UInt8] = [0x02, 0x5C, 0xA1, 0xA2, 0xA3, 0xB1, 0xB2, 0xB3, 0x23, 0x13, 0x05, 0x02, 0x56, 0x05, 0xC1, 0xC2, 0xC3, 0x02, 0x58, 0x06, 0x02, 0x50, 0xD1, 0xD2, 0xD3, 0xE1, 0xE2, 0xE3, 0x60, 0x13, 0x05]
+
+    let masked = masker.mask(read, in: .inbound).split(separator: " ").map(String.init)
+
+    #expect(masked.filter { $0 == "02" }.count == 4)
+    let tags = masked.filter { $0.hasPrefix("@") }
+    #expect(tags.count == 5 && Set(tags).count == 5)
+    #expect(masked.count == 31 - 15 + 5)
+    let frames = masked.split(separator: "02").map(Array.init)
+    #expect(frames.map { $0.first } == ["5C", "56", "58", "50"])
+    #expect(frames[1][1] == "05" && frames[1][2].hasPrefix("@") && frames[1].count == 3)
+    #expect(frames[2] == ["58", "06"])
+    for hidden in ["A1", "A2", "A3", "B1", "B2", "B3", "C1", "C2", "C3", "D1", "D2", "D3", "E1", "E2", "E3"] { #expect(!masked.contains(hidden)) }
+
+    // The same read once more gives the same tags.
+    #expect(masker.mask(read, in: .inbound) == masked.joined(separator: " "))
+
+  }
+
+  @Test func aFrameOfAnUnknownNumberDoesNotShowAnAddressSeenEarlierInTheRun() {
+
+    var masker = AddressMasker(salt: 1)
+    let seen = masker.mask([0x02, 0x62, 0xAA, 0xBB, 0xCC, 0x0F, 0x11, 0xFF], in: .outbound).split(separator: " ")[2]
+
+    let unknown = masker.mask([0x02, 0x7F, 0x01, 0xAA, 0xBB, 0xCC, 0x02, 0x58, 0x06], in: .inbound)
+
+    #expect(unknown == "02 7F 01 \(seen) 02 58 06")
+    #expect(masker.mask([0x02, 0x7F, 0x01, 0xAA, 0xBB, 0xCD], in: .inbound) == "02 7F 01 AA BB CD")
 
   }
 
