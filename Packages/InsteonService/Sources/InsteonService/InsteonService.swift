@@ -216,7 +216,9 @@ public actor InsteonService: InsteonServiceAPI {
     if case let .unavailable(cause) = connection { throw ServiceControlError.modemUnavailable(cause) }
     guard let scene = await listing().scenes.first(where: { $0.number == command.number && $0.isWritable }) else { throw ServiceControlError.unknownScene }
     guard !scene.members.isEmpty else { throw ServiceControlError.sceneEmpty }
-    // A failure has no result to count the modem's controller records from, so the listing's members stand in.
+    // A run that went out has the count of the modem's controller records in its result. A failure has no
+    // result, so the listing's members stand in, each device once. A responder the listing could not read is
+    // not in it, so the two counts can differ.
     let listedMembers = Set(scene.members.map(\.address)).count
     let result: SceneResult
     do {
