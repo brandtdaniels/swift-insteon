@@ -353,7 +353,9 @@ public actor Modem: SerialCommandSender {
 
       _ = try await turn.send(exchange)
 
-      let collected = await Self.collectCleanups(in: replies, for: serialCommand, group: group, command1: command.command1, wait: wait, clock: clock)
+      // The modem has accepted the command: every time below is measured from now, on the modem's own clock.
+      let sinceAccepted = Self.stopwatch(clock)
+      let collected = await Self.collectCleanups(in: replies, for: serialCommand, group: group, command1: command.command1, wait: wait, clock: clock, sinceAccepted: sinceAccepted)
 
       try Task.checkCancellation()
 
@@ -429,7 +431,8 @@ public actor Modem: SerialCommandSender {
     group: AllLinkGroupNumber,
     command1: UInt8,
     wait: AllLinkCleanupWait,
-    clock: any Clock<Duration>
+    clock: any Clock<Duration>,
+    sinceAccepted: @escaping @Sendable () -> Duration
   ) async -> CleanupCollection {
 
     let (events, continuation) = AsyncStream<CleanupEvent>.makeStream()
@@ -451,37 +454,31 @@ public actor Modem: SerialCommandSender {
       // What came before the command's accepted echo belongs to something else.
       var hasStarted = false
       var collected = CleanupCollection()
-      // The time spent waiting for events since the command was accepted, which is when the
-      // modem's reports came, since the echo of an accepted command is already waiting.
-      var elapsed: Duration = .zero
       var timerNumber = 0
+      // Cancels the quiet-period timer that is running, so a superseded timer never lingers.
+      var cancelTimer: AsyncStream<Void>.Continuation?
       var iterator = events.makeAsyncIterator()
-
       // The quiet period starts when the command is accepted, and again at each cleanup message, but never runs past the cap.
-      // A timer is started inside the measured wait, so the clock has been read before anything
-      // that waits on the timer can move it.
       var timerBudget: Duration?
 
       while true {
 
-        var heard: CleanupEvent?
+        if let budget = timerBudget {
 
-        elapsed += await clock.measure {
-
-          if let budget = timerBudget {
-
-            timerNumber += 1
-            startTimer(&tasks, number: timerNumber, after: budget, clock: clock, continuation: continuation)
-            timerBudget = nil
-
-          }
-
-          heard = await iterator.next()
+          cancelTimer?.finish()
+          timerNumber += 1
+          cancelTimer = startTimer(&tasks, number: timerNumber, after: budget, clock: clock, continuation: continuation)
+          timerBudget = nil
 
         }
 
+        let heard: CleanupEvent? = await iterator.next()
+        // When the event arrived, counted from the command being accepted.
+        let elapsed: Duration = sinceAccepted()
+
         guard let event = heard else {
 
+          cancelTimer?.finish()
           tasks.cancelAll()
 
           return collected
@@ -492,6 +489,7 @@ public actor Modem: SerialCommandSender {
 
         switch event {
         case .repliesEnded:
+          cancelTimer?.finish()
           tasks.cancelAll()
 
           return collected
@@ -500,7 +498,8 @@ public actor Modem: SerialCommandSender {
           if number == timerNumber {
 
             collected.timedOut = true
-            tasks.cancelAll()
+            cancelTimer?.finish()
+          tasks.cancelAll()
 
             return collected
 
@@ -536,7 +535,8 @@ public actor Modem: SerialCommandSender {
           case let .allLinkCleanupStatus(isComplete) where hasStarted:
             collected.isComplete = isComplete
             collected.statusReportAfter = elapsed
-            tasks.cancelAll()
+            cancelTimer?.finish()
+          tasks.cancelAll()
 
             return collected
           default:
@@ -546,12 +546,13 @@ public actor Modem: SerialCommandSender {
 
         if isTraffic {
 
-          let budget: Duration = min(wait.quietPeriod, wait.cap - elapsed)
+          let budget: Duration = min(wait.quietPeriod, wait.cap - sinceAccepted())
 
           guard budget > .zero else {
 
             collected.timedOut = true
-            tasks.cancelAll()
+            cancelTimer?.finish()
+          tasks.cancelAll()
 
             return collected
 
@@ -568,27 +569,71 @@ public actor Modem: SerialCommandSender {
   }
 
   /// Starts a timer that adds its number to the events when it goes off.
+  ///
+  /// - Returns: A continuation that cancels the timer when it is finished.
   private static func startTimer(
     _ tasks: inout TaskGroup<Void>,
     number: Int,
     after delay: Duration,
     clock: any Clock<Duration>,
     continuation: AsyncStream<CleanupEvent>.Continuation
-  ) {
+  ) -> AsyncStream<Void>.Continuation {
+
+    let (canceled, cancel) = AsyncStream<Void>.makeStream()
 
     tasks.addTask {
 
-      do {
+      let fired: Bool = await withTaskGroup(of: Bool.self) { race in
 
-        try await clock.sleep(for: delay)
+        race.addTask {
+
+          do {
+
+            try await clock.sleep(for: delay)
+
+            return true
+
+          } catch {
+
+            return false
+
+          }
+
+        }
+        race.addTask {
+
+          for await _ in canceled {}
+
+          return false
+
+        }
+
+        let first: Bool = await race.next() ?? false
+
+        race.cancelAll()
+
+        return first
+
+      }
+
+      if fired {
+
         continuation.yield(.timer(number))
 
-      } catch {
-
-        // Canceled: the wait is over.
       }
 
     }
+
+    return cancel
+
+  }
+
+  /// Reads the clock now, and answers how long ago that was each time it is called.
+  private static func stopwatch<C: Clock<Duration>>(_ clock: C) -> @Sendable () -> Duration {
+
+    let start: C.Instant = clock.now
+
+    return { start.duration(to: clock.now) }
 
   }
 

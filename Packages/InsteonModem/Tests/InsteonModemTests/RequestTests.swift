@@ -951,4 +951,70 @@ struct RequestTests {
 
   }
 
+  // A message makes the earlier quiet-period timer pointless, so it is canceled before the next one starts.
+  @Test func aCleanupMessageCancelsTheTimerItReplaces() async throws {
+
+    let lamp = device
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgment, command1: 0x11, command2: 0x01)
+    let connection = ScriptedConnection { written, _ in written + [0x06] }
+    let modem = makeModem(connection)
+    let wait = AllLinkCleanupWait(echo: .seconds(5), quietPeriod: .seconds(10), cap: .seconds(40))
+
+    try await run(modem) {
+
+      async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF), wait: wait)
+      await clock.waitForSleeper(until: .seconds(10))
+      clock.advance(by: .seconds(8))
+      connection.incoming.yield(ack)
+      await clock.waitForSleeper(until: .seconds(18))
+
+      // The 10 second timer is canceled by the message, which takes a few turns of the executor.
+      var turns = 0
+
+      while clock.sleeperCount(until: .seconds(10)) > 0 && turns < 10_000 {
+
+        await Task.yield()
+        turns += 1
+
+      }
+
+      #expect(clock.sleeperCount(until: .seconds(10)) == 0)
+      #expect(clock.sleeperCount(until: .seconds(18)) == 1)
+
+      clock.advance(by: .seconds(10))
+      _ = try await report
+
+    }
+
+  }
+
+  // The times come from the clock read when the modem accepted the command, not from the time before it.
+  @Test func theReportTimesStartWhenTheModemAcceptedTheCommand() async throws {
+
+    let lamp = device
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgment, command1: 0x11, command2: 0x01)
+    let connection = ScriptedConnection { _, _ in [] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      // Forty seconds pass before the command is sent at all, and three more before the modem echoes it.
+      clock.advance(by: .seconds(40))
+      async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+      await clock.waitForSleeper(until: .seconds(45))
+      clock.advance(by: .seconds(3))
+      connection.incoming.yield([0x02, 0x61, 0x01, 0x11, 0xFF, 0x06])
+      await clock.waitForSleeper(until: .seconds(58))
+      clock.advance(by: .seconds(4))
+      connection.incoming.yield(ack + [0x02, 0x58, 0x06])
+
+      let result = try await report
+
+      #expect(result.statusReportAfter == .seconds(4))
+      #expect(result.isComplete)
+
+    }
+
+  }
+
 }

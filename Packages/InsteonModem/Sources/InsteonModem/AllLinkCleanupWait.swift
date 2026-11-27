@@ -6,6 +6,9 @@
 /// Cleanup Failure Report), and gives up after ``quietPeriod`` with none, or at ``cap`` after the
 /// modem accepted the command, whichever comes first.
 ///
+/// A quiet period longer than the cap is clamped to it, and the values aren't checked here: only the
+/// server's options validate them, with ``Modem``'s callers free to pass any.
+///
 /// The Insteon Developer's Guide gives the time for members that answer, and not for a member
 /// that doesn't, which makes the modem retry its cleanup before it reports. So the standard
 /// values are unverified, chosen from bench runs.
