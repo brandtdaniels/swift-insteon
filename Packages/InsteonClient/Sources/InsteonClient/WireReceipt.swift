@@ -27,14 +27,7 @@ struct WireReceipt: Decodable {
     case "acknowledged": outcome = .acknowledged
     default: throw ConnectionPathError.badResponse
     }
-    let persistence: PersistenceOutcome
-    switch self.persistence {
-    case "notConfigured": persistence = .notConfigured
-    case "notAttempted": persistence = .notAttempted
-    case "saved": persistence = .saved
-    case "failed": persistence = .failed
-    default: throw ConnectionPathError.badResponse
-    }
+    guard let persistence = PersistenceOutcome(wireName: self.persistence) else { throw ConnectionPathError.badResponse }
     // A status accompanies a read, and only a read.
     if status != nil, outcome != .read { throw ConnectionPathError.badResponse }
     return CommandReceipt(address: address, outcome: outcome, status: try status.map(Self.deviceStatus), persistence: persistence)

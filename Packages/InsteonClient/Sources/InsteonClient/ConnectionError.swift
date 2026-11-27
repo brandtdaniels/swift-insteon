@@ -47,6 +47,18 @@ public enum ConnectionError: Error, Equatable, Sendable {
   /// that answered with an error, so that cause is reported by name too. Nothing was sent.
   case modemUnavailable(cause: String?)
 
+  /// The service refused a scene number: it isn't a group from 1 through 254. Nothing was sent.
+  case invalidScene
+
+  /// The idempotency key was already used for a different command, so the service sent nothing. Use a
+  /// new key for a new command.
+  case idempotencyKeyReused
+
+  /// The service sent a command and can't say whether it took effect: the modem accepted it and then
+  /// stopped answering, or the service gave up waiting. `sent` says whether the command may have
+  /// reached a device. Read the devices before sending it again.
+  case outcomeUnknown(sent: Bool)
+
   /// The service refused a request with a code this library has no case for.
   case rejected(code: String, sent: Bool)
 

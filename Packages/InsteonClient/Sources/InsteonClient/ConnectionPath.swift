@@ -20,6 +20,20 @@ public protocol ConnectionCalls: DeviceQuerying, DeviceCommanding {
   /// A subscription that is lost later ends by throwing, and the connection resubscribes.
   func sequencedEvents(after cursor: EventCursor?) async throws -> SequencedEvents
 
+  /// The scenes the service lists from the ALL-Link databases it holds. The call sends nothing to
+  /// hardware. The default throws ``ConnectionPathError/unsupported``, for a path that carries no
+  /// scenes.
+  func scenes() async throws -> SceneList
+
+  /// Asks the service to read the ALL-Link databases from the hardware, then answers the list. The
+  /// default throws ``ConnectionPathError/unsupported``.
+  func refreshScenes() async throws -> SceneList
+
+  /// Runs a scene the modem controls. The key makes a repeat of the same run return the answer
+  /// recorded for it and send nothing, so a caller that lost the answer asks again with the same key.
+  /// The default throws ``ConnectionPathError/unsupported``.
+  func runScene(_ number: Int, action: SceneAction, idempotencyKey: String) async throws -> SceneRunReceipt
+
 }
 
 extension ConnectionCalls {
@@ -27,6 +41,14 @@ extension ConnectionCalls {
   public func close() async {}
 
   public func sequencedEvents(after cursor: EventCursor?) async throws -> SequencedEvents {
+    throw ConnectionPathError.unsupported
+  }
+
+  public func scenes() async throws -> SceneList { throw ConnectionPathError.unsupported }
+
+  public func refreshScenes() async throws -> SceneList { throw ConnectionPathError.unsupported }
+
+  public func runScene(_ number: Int, action: SceneAction, idempotencyKey: String) async throws -> SceneRunReceipt {
     throw ConnectionPathError.unsupported
   }
 
