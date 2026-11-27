@@ -13,7 +13,25 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
   let service: Service
 
   func list() async throws -> Response {
-    let listing = await service.scenes()
+    try await answer(await service.scenes())
+  }
+
+  /// Reads the databases from the hardware and answers with the listing a read of the cache gives
+  /// afterward. It needs the `control` scope, which the authentication middleware has already
+  /// enforced, and the request marker, so a page can't start a read of the hardware by accident.
+  func refresh(_ request: Request) async throws -> Response {
+    try HTTPBody.requireMarker(request)
+    let listing: SceneListing
+    do {
+      listing = try await service.refreshScenes()
+    } catch {
+      // A refresh only reads, so a failure is classified as a read: safe to repeat, nothing sent.
+      throw CommandFailure(action: .status, underlying: error)
+    }
+    return try await answer(listing)
+  }
+
+  private func answer(_ listing: SceneListing) async throws -> Response {
     // One question for each distinct member, so a device that holds several records of the same
     // bytes is not asked about again.
     var asked: [MemberQuestion: LinkDataMeaning?] = [:]

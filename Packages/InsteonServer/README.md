@@ -159,6 +159,7 @@ scope, command all devices known by this service. Per-device permissions aren't 
 | PUT, DELETE | `/api/v1/routes/{kind}` | Register or remove a transport's route (`admin`) |
 | GET | `/api/v1/backup` | A backup of the cached network, the format `insteon backup` writes (`admin`; see Backups) |
 | GET | `/api/v1/scenes` | The scenes of the network from the cached ALL-Link databases (`read`; see Scenes) |
+| POST | `/api/v1/scenes/refresh` | Read the ALL-Link databases from the hardware, then list the scenes (`control`; see Scenes) |
 | GET | `/devices/1A.2B.3C` | Authenticated card fragment from cached state; no hardware polling |
 
 JSON commands need `Content-Type: application/json` and `X-Insteon-Request: 1`. Example body:
@@ -711,6 +712,12 @@ Each member also carries what its three data bytes mean, as the Insteon device c
 curl -s -H "Authorization: Bearer $(cat read.token)" $BASE/api/v1/scenes
 ```
 
+`POST /api/v1/scenes/refresh` (`control`, with `X-Insteon-Request: 1` and no body) reads the ALL-Link database of the modem and of each device from the hardware, one request at a time, and answers with the same JSON as `GET /api/v1/scenes` lists after the read. It only reads: nothing is written to the modem or to a device. A device that does not answer is listed under `unreadable`, and the refresh still succeeds with `whole: false`. A device is asked once, and one that does not answer costs the modem's own time out (about 25 seconds on a Hub 2), so a refresh with several silent devices takes that long for each; cancel the request to stop it between devices. A device whose copy still matches the delta it reports is not read again. The read holds the service's one admission gate for as long as it lasts, so another operation, or a second refresh, is refused as `busy` and nothing is queued. While the modem is not connected it answers `modemUnavailable` before sending anything. A Hub Pro does not give out its ALL-Link databases, so it answers `databasesUnavailable` (422). A refresh that fails midway is safe to repeat (`sent: false`).
+
+```sh
+curl -s -X POST -H "Authorization: Bearer $(cat control.token)" -H "X-Insteon-Request: 1" $BASE/api/v1/scenes/refresh
+```
+
 ## Persistence and lifecycle
 
 The service writes its own network snapshot at
@@ -844,6 +851,7 @@ same status for the same failure.
 | `modemRejected` | 503 | false | The modem refused the command (a NAK). |
 | `modemUnavailable` | 503 | false | The Hub or modem is away, or the Hub rejected its credentials. `cause` says why; a Hub target that doesn't answer is `hubUnreachable`, a serial modem that doesn't is `modemUnreachable`. |
 | `canceled` | 503 | true for a control, false for a read | The request was canceled while it ran. |
+| `databasesUnavailable` | 422 | false | The network doesn't give out its ALL-Link databases, as a Hub Pro doesn't, so a scenes refresh has nothing to read. |
 | `deviceNotAnswering` | 504 | false | A read got no answer, or failed in the modem. |
 | `outcomeUnknown` | 502 | true | A control may have reached the device and no answer proves what happened. Read status before repeating it. |
 

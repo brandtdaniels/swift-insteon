@@ -173,6 +173,7 @@ public final class DevicesScreen<Network: DeviceQuerying & DeviceCommanding> {
     case .unsupportedControl?: return "That device has no on and off control."
     case .invalidLevel?: return "That level isn't one the device can take."
     case .unknownDevice?: return "The service doesn't know that device."
+    case .databasesUnavailable?: return "This network doesn't give out its ALL-Link databases."
     case nil: return "The service couldn't be reached."
     }
   }

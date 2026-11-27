@@ -36,6 +36,7 @@ struct ErrorContractTests {
     Expected(failure: ServiceControlError.unsupportedControl, action: "on", code: "unsupportedControl", status: 422, sent: false),
     Expected(failure: ServiceControlError.notIdentified, action: "status", code: "notIdentified", status: 409, sent: false),
     Expected(failure: ServiceControlError.notLinked, action: "on", code: "notLinked", status: 409, sent: false),
+    Expected(failure: ServiceControlError.databasesUnavailable, action: "status", code: "databasesUnavailable", status: 422, sent: false),
     Expected(failure: ServiceControlError.modemUnavailable(.hubUnreachable), action: "on", code: "modemUnavailable", status: 503, sent: false),
     // A control that timed out may have reached the device.
     Expected(failure: ModemError.deviceTimedOut(device), action: "on", code: "outcomeUnknown", status: 502, sent: true),

@@ -51,6 +51,7 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   case deviceRejected
   case modemRejected
   case modemUnavailable
+  case databasesUnavailable
   case deviceNotAnswering
   case outcomeUnknown
   case canceled
@@ -67,7 +68,7 @@ enum APIErrorCode: String, CaseIterable, Sendable {
     case .requestRejected: .badRequest
     case .busy, .notIdentified, .notLinked, .clientLimitReached, .notificationRuleLimitReached, .routeRegistrationLimitReached, .scheduleLimitReached, .timerLimitReached, .locationNotConfigured, .timeZoneUnavailable: .conflict
     case .clientsNotSaved, .notificationRulesNotSaved, .routeRegistrationsNotSaved, .schedulesNotSaved: .internalServerError
-    case .unsupportedControl, .deviceRejected, .idempotencyKeyReused: .unprocessableContent
+    case .unsupportedControl, .deviceRejected, .idempotencyKeyReused, .databasesUnavailable: .unprocessableContent
     case .modemRejected, .modemUnavailable, .canceled: .serviceUnavailable
     case .deviceNotAnswering: .gatewayTimeout
     case .outcomeUnknown: .badGateway
@@ -127,6 +128,7 @@ enum APIErrorCode: String, CaseIterable, Sendable {
     case .notIdentified: "The device has not reported what it is, so no control was sent. Identify it, or try again when it is awake."
     case .notLinked: "The device rejected the modem because it is not linked to it. Link it first. Nothing changed."
     case .unsupportedControl: "The device does not support that control."
+    case .databasesUnavailable: "A Hub Pro does not give out its ALL-Link databases, so there is nothing to read. Nothing was sent."
     case .deviceRejected: "The device rejected the command. Nothing changed."
     case .modemRejected: "The modem refused the command. Nothing was sent; try again."
     case .modemUnavailable: "The modem is not connected. Nothing was sent."

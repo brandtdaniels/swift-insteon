@@ -1,0 +1,279 @@
+import Foundation
+import InsteonCore
+import InsteonLinkingTestSupport
+import InsteonHubClient
+import InsteonModem
+import InsteonProtocol
+import Testing
+@testable import InsteonService
+
+/// Refreshing the scenes reads the ALL-Link databases of the modem and of each device from
+/// the hardware, one request at a time, and writes nothing.
+@Suite(.timeLimit(.minutes(1)))
+struct SceneRefreshTests {
+  let modemAddress = InsteonAddress(0x11, 0x22, 0x33)
+  let lamp = InsteonAddress(0x1A, 0x2B, 0x3C)
+  let keypad = InsteonAddress(0x4D, 0x5E, 0x6F)
+  let identity = ReportedIdentity(category: 1, subcategory: 125, firmwareVersion: 69)
+
+  private func network(_ modem: InMemoryModem, knowing devices: [InsteonAddress]) -> DeviceNetwork {
+    let identities = Dictionary(uniqueKeysWithValues: devices.map { ($0, identity) })
+    return DeviceNetwork(modem: modem, catalog: nil, snapshot: NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: identities)), now: { Date(timeIntervalSince1970: 1_800_000_000) })
+  }
+
+  /// A modem whose scene 3 has the lamp as a member, with both halves of the link in place.
+  private func modemWithOneScene() async -> InMemoryModem {
+    let modem = InMemoryModem()
+    await modem.setModemRecords([AllLinkRecord(flags: [.inUse, .controller], group: 3, address: lamp, data1: 0, data2: 0, data3: 0)])
+    await modem.setDatabase([0x0FFF: AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 3, address: modemAddress, data1: 0xFF, data2: 0x1F, data3: 0x01)], of: lamp)
+    return modem
+  }
+
+  @Test func readsTheModemAndEachDeviceThenListsTheScenesWithTheirMembers() async throws {
+    let modem = await modemWithOneScene()
+    let service = InsteonService(network: network(modem, knowing: [lamp]))
+    #expect(await service.scenes().scenes.isEmpty)
+
+    let listing = try await service.refreshScenes()
+
+    let scene = try #require(listing.scenes.first)
+    #expect(scene.number == 3)
+    #expect(scene.members == [SceneListing.Member(address: lamp, data: [0xFF, 0x1F, 0x01])])
+    #expect(listing.isWhole)
+    #expect(await service.scenes() == listing)
+    #expect(await modem.modemDatabaseReads == 1)
+    #expect(await modem.databaseReads[lamp] == 1)
+  }
+
+  @Test func readsADeviceOnlyTheModemNamesAsWellAsOnesTheRegistryKnows() async throws {
+    let modem = await modemWithOneScene()
+    await modem.setModemRecords([AllLinkRecord(flags: [.inUse, .controller], group: 3, address: lamp, data1: 0, data2: 0, data3: 0)])
+    let service = InsteonService(network: network(modem, knowing: [keypad]))
+
+    _ = try await service.refreshScenes()
+
+    #expect(await modem.databaseReads[lamp] == 1)
+    #expect(await modem.databaseReads[keypad] == 1)
+    #expect(await modem.databaseReads[modemAddress] == nil)
+  }
+
+  @Test func listsADeviceThatDoesNotAnswerAsUnreadableAndStillSucceeds() async throws {
+    let modem = await modemWithOneScene()
+    await modem.setUnlinked(keypad)
+    let service = InsteonService(network: network(modem, knowing: [lamp, keypad]))
+
+    let listing = try await service.refreshScenes()
+
+    #expect(listing.unreadable == [keypad])
+    #expect(!listing.isWhole)
+    #expect(listing.scenes.first?.members.map(\.address) == [lamp])
+  }
+
+  @Test func writesNothingToAnyDeviceOrTheModem() async throws {
+    let modem = await modemWithOneScene()
+    let service = InsteonService(network: network(modem, knowing: [lamp, keypad]))
+
+    _ = try await service.refreshScenes()
+
+    #expect(await modem.writes.isEmpty)
+    #expect(await modem.linkingSteps.isEmpty)
+    #expect(await modem.modemDeletions == 0)
+    #expect(await modem.extendedRequests.isEmpty)
+  }
+
+  @Test func savesACheckpointOfWhatItRead() async throws {
+    let modem = await modemWithOneScene()
+    let store = RecordingStore()
+    let service = InsteonService(network: network(modem, knowing: [lamp]), persistence: NetworkSnapshotPersistence(store: store))
+
+    _ = try await service.refreshScenes()
+
+    let saved = try #require(await store.saved)
+    #expect(saved.modemDatabase?.count == 1)
+    #expect(saved.devices[lamp]?.allLinkDatabase != nil)
+  }
+
+  @Test func refusesWhileAnotherOperationHoldsTheGateAndQueuesNothing() async throws {
+    let modem = await modemWithOneScene()
+    let pause = Pause()
+    await modem.setBeforeOperation { operation in
+      if case .readModemDatabase = operation { await pause.wait() }
+    }
+    let service = InsteonService(network: network(modem, knowing: [lamp]))
+    try await withThrowingTaskGroup(of: Void.self) { group in
+      group.addTask { _ = try await service.refreshScenes() }
+      await pause.waitUntilPaused()
+      await #expect(throws: ServiceControlError.busy) { try await service.refreshScenes() }
+      await #expect(throws: ServiceControlError.busy) { try await service.execute(ServiceCommand(address: lamp, action: .on)) }
+      await pause.release()
+      try await group.waitForAll()
+    }
+    #expect(await modem.modemDatabaseReads == 1)
+    #expect(await modem.levels.isEmpty)
+  }
+
+  @Test func readsNothingAndReleasesTheGateWhenCanceled() async throws {
+    let modem = await modemWithOneScene()
+    // The modem goes on answering after the cancellation, so only the service's own check stops the read.
+    await modem.setHonorsCancellation(false)
+    let pause = Pause()
+    await modem.setBeforeOperation { operation in
+      if case .readModemDatabase = operation { await pause.wait() }
+    }
+    let service = InsteonService(network: network(modem, knowing: [lamp]))
+    let task = Task { try await service.refreshScenes() }
+    await pause.waitUntilPaused()
+    task.cancel()
+    await pause.release()
+    await #expect(throws: CancellationError.self) { try await task.value }
+    #expect(await modem.databaseReads.isEmpty)
+
+    await modem.setBeforeOperation(nil)
+    await modem.setHonorsCancellation(true)
+    let listing = try await service.refreshScenes()
+    #expect(listing.scenes.count == 1)
+  }
+
+  @Test func failsWhenTheConnectionIsLostAndReleasesTheGate() async throws {
+    let modem = await modemWithOneScene()
+    await modem.setBeforeOperation { operation in
+      if case .readModemDatabase = operation { throw ModemError.connectionClosed }
+    }
+    let service = InsteonService(network: network(modem, knowing: [lamp]))
+    await #expect(throws: ModemError.connectionClosed) { try await service.refreshScenes() }
+
+    await modem.setBeforeOperation(nil)
+    #expect(try await service.refreshScenes().scenes.count == 1)
+  }
+
+  /// A modem whose scene 3 has the lamp and the keypad as members, each with its responder record.
+  private func modemWithTwoMembers() async -> InMemoryModem {
+    let modem = await modemWithOneScene()
+    await modem.setModemRecords([
+      AllLinkRecord(flags: [.inUse, .controller], group: 3, address: lamp, data1: 0, data2: 0, data3: 0),
+      AllLinkRecord(flags: [.inUse, .controller], group: 3, address: keypad, data1: 0, data2: 0, data3: 0)
+    ])
+    await modem.setDatabase([0x0FFF: AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0xA2), group: 3, address: modemAddress, data1: 0x80, data2: 0x1C, data3: 0x00)], of: keypad)
+    return modem
+  }
+
+  @Test func leavesADeviceUnreadableWhenTheModemRefusesItsRequestAndGoesOnToTheNext() async throws {
+    let modem = await modemWithTwoMembers()
+    let lamp = lamp
+    await modem.setBeforeOperation { operation in
+      if case let .standardRequest(message) = operation, message.destination == lamp { throw ModemError.rejected(.getModemInfo) }
+    }
+    let service = InsteonService(network: network(modem, knowing: [lamp, keypad]))
+
+    let listing = try await service.refreshScenes()
+
+    #expect(listing.unreadable == [lamp])
+    #expect(listing.scenes.first?.members.map(\.address) == [keypad])
+    #expect(await modem.databaseReads[keypad] == 1)
+  }
+
+  /// What the modem and the Hub throw when a device doesn't answer while they are still reachable.
+  static let unansweredErrors: [any Error] = [
+    ModemStoppedEchoing(device: InsteonAddress(0x1A, 0x2B, 0x3C), command: .sendMessage),
+    HubStoppedAnswering(underlyingError: URLError(.timedOut))
+  ]
+
+  @Test(arguments: SceneRefreshTests.unansweredErrors.indices)
+  func leavesADeviceUnreadableWhenTheModemStopsEchoingToItAndReadsTheRest(_ index: Int) async throws {
+    let modem = await modemWithTwoMembers()
+    let lamp = lamp
+    let failure = Self.unansweredErrors[index]
+    await modem.setBeforeOperation { operation in
+      if case let .standardRequest(message) = operation, message.destination == lamp { throw failure }
+    }
+    let service = InsteonService(network: network(modem, knowing: [lamp, keypad]))
+
+    let listing = try await service.refreshScenes()
+
+    #expect(listing.unreadable == [lamp])
+    #expect(listing.scenes.first?.members.map(\.address) == [keypad])
+    #expect(await modem.databaseReads[keypad] == 1)
+  }
+
+  @Test func savesWhatItReadWhenTheConnectionIsLostPartway() async throws {
+    let modem = await modemWithTwoMembers()
+    let keypad = keypad
+    await modem.setBeforeOperation { operation in
+      if case let .standardRequest(message) = operation, message.destination == keypad { throw ModemError.connectionClosed }
+    }
+    let store = RecordingStore()
+    let service = InsteonService(network: network(modem, knowing: [lamp, keypad]), persistence: NetworkSnapshotPersistence(store: store))
+
+    await #expect(throws: ModemError.connectionClosed) { try await service.refreshScenes() }
+
+    let saved = try #require(await store.saved)
+    #expect(saved.modemDatabase?.count == 2)
+    #expect(saved.devices[lamp]?.allLinkDatabase != nil)
+    #expect(await service.health().lastHardwareExchange != nil)
+  }
+
+  @Test func savesWhatItReadWhenCanceledPartway() async throws {
+    let modem = await modemWithTwoMembers()
+    await modem.setHonorsCancellation(false)
+    let lamp = lamp
+    await modem.setBeforeOperation { operation in
+      if case let .standardRequest(message) = operation, message.destination == lamp { withUnsafeCurrentTask { $0?.cancel() } }
+    }
+    let store = RecordingStore()
+    let service = InsteonService(network: network(modem, knowing: [lamp, keypad]), persistence: NetworkSnapshotPersistence(store: store))
+
+    await #expect(throws: CancellationError.self) { try await service.refreshScenes() }
+
+    let saved = try #require(await store.saved)
+    #expect(saved.devices[lamp]?.allLinkDatabase != nil)
+    #expect(saved.devices[keypad]?.allLinkDatabase == nil)
+    #expect(await service.health().lastHardwareExchange != nil)
+  }
+
+  @Test func listsADeviceAsUnreadableWhenItsDatabaseIsDamagedOnBothReads() async throws {
+    let modem = await modemWithOneScene()
+    await modem.setDamaged(true, record: 0x0FFF, of: lamp)
+    let service = InsteonService(network: network(modem, knowing: [lamp]))
+
+    let listing = try await service.refreshScenes()
+
+    #expect(listing.unreadable == [lamp])
+    #expect(!listing.isWhole)
+    #expect(await modem.databaseReads[lamp] == 2)
+  }
+
+  @Test func dropsAnEarlierCopyWhenTheDeviceChangedAndNowReadsDamagedTwice() async throws {
+    let modem = await modemWithOneScene()
+    let service = InsteonService(network: network(modem, knowing: [lamp]))
+    #expect(try await service.refreshScenes().unreadable.isEmpty)
+
+    await modem.changeDatabase(of: lamp)
+    await modem.setDamaged(true, record: 0x0FFF, of: lamp)
+    let listing = try await service.refreshScenes()
+
+    #expect(listing.unreadable == [lamp])
+  }
+}
+
+private actor RecordingStore: NetworkSnapshotStore {
+  var saved: NetworkSnapshot?
+  func loadNetwork() async throws -> NetworkSnapshot { saved ?? NetworkSnapshot() }
+  func saveNetwork(_ snapshot: NetworkSnapshot) async throws { saved = snapshot }
+}
+
+/// Holds one operation until the test releases it, with signals in place of waits on time.
+private actor Pause {
+  private var paused = false
+  private var started: CheckedContinuation<Void, Never>?
+  private var continuation: CheckedContinuation<Void, Never>?
+  func wait() async {
+    await withCheckedContinuation {
+      continuation = $0
+      paused = true
+      started?.resume()
+      started = nil
+    }
+  }
+  func waitUntilPaused() async { if !paused { await withCheckedContinuation { started = $0 } } }
+  func release() { continuation?.resume(); continuation = nil }
+}

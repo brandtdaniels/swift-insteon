@@ -67,6 +67,19 @@ struct ReconnectionTests {
     }
   }
 
+  @Test func refusesASceneRefreshWhileTheHubIsAwayBeforeSendingAnything() async throws {
+    let opener = ScriptedOpener([.fail(hubAway)])
+    let service = service(opener: opener)
+    try await running(service) { events in
+      var attempts = opener.started.makeAsyncIterator()
+      #expect(await attempts.next() == 1)
+      await clock.waitForSleeper(until: .seconds(1))
+      await #expect(throws: ServiceControlError.modemUnavailable(.hubUnreachable)) {
+        try await service.refreshScenes()
+      }
+    }
+  }
+
   @Test func healthSaysStartingWithTheCauseUntilTheFirstConnectionAndNeverTouchesHardware() async throws {
     let modem = InMemoryModem()
     let opener = ScriptedOpener([.fail(hubAway), .connect(ScriptedLink(modem: modem))])

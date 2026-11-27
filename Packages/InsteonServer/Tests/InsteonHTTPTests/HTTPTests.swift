@@ -443,7 +443,7 @@ struct HTTPTests {
     #expect(await service.reads == 1)
   }
 
-  @Test(arguments: [ServiceControlError.busy, .unknownDevice, .invalidLevel, .unsupportedControl, .notIdentified, .notLinked, .modemUnavailable(.hubUnreachable)])
+  @Test(arguments: [ServiceControlError.busy, .unknownDevice, .invalidLevel, .unsupportedControl, .notIdentified, .notLinked, .modemUnavailable(.hubUnreachable), .databasesUnavailable])
   func serviceRefusalsHaveAnHTTPMapping(_ failure: ServiceControlError) async throws {
     let service = FakeService(refusal: failure)
     let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
@@ -456,6 +456,7 @@ struct HTTPTests {
         case .unsupportedControl: #expect(response.status == .unprocessableContent)
         case .notIdentified, .notLinked: #expect(response.status == .conflict)
         case .modemUnavailable: #expect(response.status == .serviceUnavailable)
+        case .databasesUnavailable: #expect(response.status == .unprocessableContent)
         }
       }
     }
@@ -521,6 +522,9 @@ actor FakeService: InsteonServiceAPI {
   /// The scenes the service reports, and how many times it was asked.
   let scenes: SceneListing
   private(set) var sceneReads = 0
+  /// How many times the service was asked to read the databases again, and the error it answers with.
+  private(set) var refreshes = 0
+  let refreshFailure: (any Error)?
   /// What the catalog says each member's bytes mean, and what the service was asked.
   let memberMeanings: [InsteonAddress: LinkDataMeaning]
   struct MeaningQuestion: Hashable, Sendable {
@@ -538,7 +542,8 @@ actor FakeService: InsteonServiceAPI {
   private var openSources: [AsyncStream<ServiceEvent>.Continuation] = []
   var reported = ServiceHealth(readiness: .ready, modem: .connected, lastHardwareExchange: nil, deviceInformationUpdated: nil, persistence: .saved, checkedAt: Date(timeIntervalSince1970: 1_800_000_000))
   let address = InsteonAddress(0x1A, 0x2B, 0x3C)
-  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false, scriptedItems: [SequencedItem] = [], ruleFailure: NotificationRuleError? = nil, scenes: SceneListing = SceneListing(scenes: []), memberMeanings: [InsteonAddress: LinkDataMeaning] = [:]) {
+  init(persistence: PersistenceOutcome = .saved, fails: Bool = false, refusal: ServiceControlError? = nil, failure: (any Error)? = nil, reading: DeviceStatus.Reading = .percent(50), eventStream: AsyncStream<ServiceEvent>? = nil, endlessEvents: Bool = false, scriptedItems: [SequencedItem] = [], ruleFailure: NotificationRuleError? = nil, scenes: SceneListing = SceneListing(scenes: []), memberMeanings: [InsteonAddress: LinkDataMeaning] = [:], refreshFailure: (any Error)? = nil) {
+    self.refreshFailure = refreshFailure
     self.scenes = scenes
     self.memberMeanings = memberMeanings
     self.ruleFailure = ruleFailure
@@ -567,6 +572,11 @@ actor FakeService: InsteonServiceAPI {
   }
   func scenes() async -> SceneListing {
     sceneReads += 1
+    return scenes
+  }
+  func refreshScenes() async throws -> SceneListing {
+    refreshes += 1
+    if let refreshFailure { throw refreshFailure }
     return scenes
   }
   func meaning(ofMemberData data: [UInt8], of device: InsteonAddress, group: UInt8) async -> LinkDataMeaning? {

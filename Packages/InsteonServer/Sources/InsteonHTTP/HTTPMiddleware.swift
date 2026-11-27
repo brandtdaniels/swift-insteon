@@ -145,6 +145,7 @@ struct HTTPFailure: Sendable {
     case let ServiceControlError.modemUnavailable(unavailable):
       self.init(.modemUnavailable, message: unavailable.refusal, modemUnavailability: unavailable)
     case ServiceControlError.busy: self.init(.busy)
+    case ServiceControlError.databasesUnavailable: self.init(.databasesUnavailable)
     case ServiceControlError.unknownDevice: self.init(.unknownDevice)
     case ServiceControlError.invalidLevel: self.init(.invalidLevel)
     case ServiceControlError.unsupportedControl: self.init(.unsupportedControl)

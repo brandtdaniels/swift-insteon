@@ -146,7 +146,7 @@ struct DevicesScreenTests {
 
   @Test func eachRefusalHasItsOwnText() async {
     var texts: [String] = []
-    let refusals: [ServiceControlError] = [.busy, .modemUnavailable(.connecting), .notLinked, .notIdentified, .unsupportedControl, .invalidLevel, .unknownDevice]
+    let refusals: [ServiceControlError] = [.busy, .modemUnavailable(.connecting), .notLinked, .notIdentified, .unsupportedControl, .invalidLevel, .unknownDevice, .databasesUnavailable]
     for refusal in refusals {
       let screen = DevicesScreen(network: ScriptedNetwork(devices: [lamp], refusal: refusal))
       await screen.load()
