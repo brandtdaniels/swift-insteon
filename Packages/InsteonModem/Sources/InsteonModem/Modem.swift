@@ -353,7 +353,7 @@ public actor Modem: SerialCommandSender {
 
       _ = try await turn.send(exchange)
 
-      // The modem has accepted the command: every time below is measured from now, on the modem's own clock.
+      // The modem has accepted the command: every time below is counted from the echo, on the modem's own clock.
       let sinceAccepted = Self.stopwatch(clock)
       let collected = await Self.collectCleanups(in: replies, for: serialCommand, group: group, command1: command.command1, wait: wait, clock: clock, sinceAccepted: sinceAccepted)
 
@@ -628,7 +628,7 @@ public actor Modem: SerialCommandSender {
 
   }
 
-  /// Reads the clock now, and answers how long ago that was each time it is called.
+  /// Reads the clock, and answers how long ago that was each time it is called.
   private static func stopwatch<C: Clock<Duration>>(_ clock: C) -> @Sendable () -> Duration {
 
     let start: C.Instant = clock.now
