@@ -775,9 +775,76 @@ struct RequestTests {
 
   }
 
-  @Test func waitsForTheCleanupsUpToTheTimeout() async throws {
+  // The modem accepted the command, so it was sent; only the report of the cleanups is missing.
+  @Test func answersWhatItHeardWhenTheCleanupsRunOutAfterTheModemAcceptedTheCommand() async throws {
 
     let connection = ScriptedConnection { written, _ in written + [0x06] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+      await clock.waitForSleeper(until: Modem.defaultAllLinkCommandTimeout)
+      clock.advance(by: Modem.defaultAllLinkCommandTimeout)
+
+      let result = try await report
+
+      #expect(result == AllLinkCleanupReport(acknowledged: [], unacknowledged: [], isComplete: false))
+
+    }
+
+  }
+
+  @Test func keepsTheCleanupsThatArrivedWhenTheStatusReportDoesNot() async throws {
+
+    let lamp = device
+    let keypad = self.keypad
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgment, command1: 0x11, command2: 0x01)
+    let failure: [UInt8] = [0x02, 0x56, 0x01, 0x01] + keypad.bytes
+    let connection = ScriptedConnection { written, _ in written + [0x06] + ack + failure }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+      await clock.waitForSleeper(until: Modem.defaultAllLinkCommandTimeout)
+      clock.advance(by: Modem.defaultAllLinkCommandTimeout)
+
+      let result = try await report
+
+      #expect(result == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [keypad], isComplete: false))
+
+    }
+
+  }
+
+  // A Hub brings the modem's reports over polling, so the status report can come well after the echo.
+  @Test func waitsForAStatusReportThatComesLongAfterTheEcho() async throws {
+
+    let lamp = device
+    let ack = received(from: lamp, .allLinkCleanupAcknowledgment, command1: 0x11, command2: 0x01)
+    let connection = ScriptedConnection { written, _ in written + [0x06] }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+      await clock.waitForSleeper(until: Modem.defaultAllLinkCommandTimeout)
+      clock.advance(by: Modem.defaultAllLinkCommandTimeout - .seconds(1))
+      connection.incoming.yield(ack + [0x02, 0x58, 0x06])
+
+      let result = try await report
+
+      #expect(result == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [], isComplete: true))
+
+    }
+
+  }
+
+  // Without the echo the command may not have reached the modem, and what happened is unknown.
+  @Test func throwsTimedOutWhenTheModemNeverEchoesTheCommand() async throws {
+
+    let connection = ScriptedConnection { _, _ in [] }
     let modem = makeModem(connection)
 
     try await run(modem) {
@@ -785,8 +852,8 @@ struct RequestTests {
       await #expect(throws: ModemError.timedOut(.sendAllLinkCommand)) {
 
         async let report = modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
-        await clock.waitForSleeper(until: Modem.defaultAllLinkCommandTimeout)
-        clock.advance(by: Modem.defaultAllLinkCommandTimeout)
+        await clock.waitForSleeper(until: Modem.allLinkCommandEchoTimeout)
+        clock.advance(by: Modem.allLinkCommandEchoTimeout)
         _ = try await report
 
       }

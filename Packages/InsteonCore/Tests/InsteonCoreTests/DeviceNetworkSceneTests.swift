@@ -31,7 +31,7 @@ struct DeviceNetworkSceneTests {
     let result: SceneResult = try await network(modem).run(ModemScene(group: 3), turningOn: true)
 
     #expect(result == SceneResult(acknowledged: [Example.lamp], unacknowledged: [Example.plug], isComplete: true))
-    #expect(await modem.groupCommands == [InMemoryModem.GroupCommand(group: 3, command: Command(command1: 0x11, command2: 0xFF), timeout: .seconds(10))])
+    #expect(await modem.groupCommands == [InMemoryModem.GroupCommand(group: 3, command: Command(command1: 0x11, command2: 0xFF), timeout: .seconds(20))])
 
   }
 
@@ -49,12 +49,12 @@ struct DeviceNetworkSceneTests {
   @Test func waitsLongerForAGroupWithMoreResponders() async throws {
 
     let modem = InMemoryModem()
-    let devices: [InsteonAddress] = (1...5).map { InsteonAddress(0x30, 0x00, UInt8($0)) }
+    let devices: [InsteonAddress] = (1...8).map { InsteonAddress(0x30, 0x00, UInt8($0)) }
     await modem.setModemRecords(controllers(3, of: devices) + controllers(4, of: [Example.lamp]))
 
     _ = try await network(modem).run(ModemScene(group: 3), turningOn: true)
 
-    #expect(await modem.groupCommands.map(\.timeout) == [ModemScene.cleanupTimeout(responderCount: 5)])
+    #expect(await modem.groupCommands.map(\.timeout) == [ModemScene.cleanupTimeout(responderCount: 8)])
 
   }
 

@@ -30,9 +30,12 @@ struct ModemSceneTests {
 
   @Test func waitsLongerForMoreResponders() {
 
-    #expect(ModemScene.cleanupTimeout(responderCount: 0) == .seconds(10))
-    #expect(ModemScene.cleanupTimeout(responderCount: 3) == .seconds(10))
-    #expect(ModemScene.cleanupTimeout(responderCount: 5) == .seconds(13))
+    #expect(ModemScene.cleanupTimeout(responderCount: 0) == .seconds(20))
+    #expect(ModemScene.cleanupTimeout(responderCount: 5) == .seconds(20))
+    #expect(ModemScene.cleanupTimeout(responderCount: 6) == .seconds(23))
+    #expect(ModemScene.cleanupTimeout(responderCount: 10) == .seconds(35))
+    #expect(ModemScene.cleanupTimeout(responderCount: 12) == .seconds(40))
+    #expect(ModemScene.cleanupTimeout(responderCount: 200) == .seconds(40))
 
   }
 

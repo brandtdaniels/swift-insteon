@@ -132,6 +132,24 @@ struct SceneRunTests {
     #expect(run.receipt == receipt)
   }
 
+  // The modem accepted the command and its cleanups never reported: the run went out, so it is a receipt, not a failure.
+  @Test func answersAReceiptWithIsCompleteFalseWhenTheModemAcceptedTheCommandButNoCleanupReportCame() async throws {
+    let modem = await modemWithScenes()
+    await modem.setGroupReport(AllLinkCleanupReport(acknowledged: [], unacknowledged: [], isComplete: false))
+    let service = service(modem)
+    _ = try await service.refreshScenes()
+    let events = await service.events()
+
+    let receipt = try await service.runScene(SceneCommand(number: 3, action: .on))
+
+    #expect(!receipt.isComplete)
+    #expect(receipt.acknowledged.isEmpty)
+    #expect(receipt.responderCount == 2)
+    var reader = events.makeAsyncIterator()
+    guard case let .scene(run)? = try await reader.next() else { Issue.record("expected a scene event"); return }
+    #expect(run.receipt == receipt)
+  }
+
   @Test func afterTheModemAcceptsTheCommandAndStopsAnsweringItSavesACheckpointAndPublishesAnIncompleteRun() async throws {
     let modem = await modemWithScenes()
     let store = RecordingStore()
