@@ -460,6 +460,22 @@ struct SceneMembershipApplyTests {
     #expect(result.deviceChecks[lamp] == .unanswered)
   }
 
+  @Test func leavesAStepNotReachedWhenTheDeviceDoesNotAnswerTheReadOfItsSlotBecauseNothingWasWrittenForIt() async throws {
+    let memory = await modem()
+    let damaging = DamagingModem(memory)
+    let network = network(damaging)
+    let plan = try await plan(add(lamp), on: network)
+    await damaging.setFailingReads([ModemError.deviceTimedOut(lamp)], at: 0x0FF7, of: lamp)
+
+    let interrupted = await #expect(throws: SceneMembershipInterrupted.self) { try await network.linking.apply(plan, consent: consent(plan)) }
+
+    let result = try #require(interrupted?.result)
+    #expect(result.steps.map(\.outcome) == [.written, .notReached, .notReached])
+    #expect(interrupted?.cause as? ModemError == .deviceTimedOut(lamp))
+    #expect(await memory.writes.count == 1)
+    #expect(await memory.modemRecords.contains(controller(group: 4, lamp)) == false)
+  }
+
   @Test func throwsWhatStoppedTheStepsWithEachStepsOutcomeWhenTheModemFails() async throws {
     let modem = await modem()
     let network = network(modem)

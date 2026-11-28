@@ -312,7 +312,9 @@ extension DeviceLinkingCoordinator {
 
             } catch where Self.isDeviceProblem(error) {
 
-              results.append(SceneMembershipResult.StepResult(step: step, outcome: .unanswered))
+              // Nothing was written for this step: only its slot was read, so it was not reached.
+              results.append(SceneMembershipResult.StepResult(step: step, outcome: .notReached))
+              interruption = error
               isStopped = true
 
               continue

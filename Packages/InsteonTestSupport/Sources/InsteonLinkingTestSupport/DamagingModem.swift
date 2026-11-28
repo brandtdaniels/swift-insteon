@@ -15,6 +15,10 @@ public actor DamagingModem: LinkingModem {
   /// in order. A read past the list arrives as the base modem sends it.
   private var damagedReads: [InsteonAddress: [UInt16: [Bool]]] = [:]
 
+  /// For each device and address, the error each coming read of the record throws, in order, or `nil` for a read
+  /// that goes through. A read past the list goes through.
+  private var failingReads: [InsteonAddress: [UInt16: [(any Error)?]]] = [:]
+
   /// Creates a modem that passes each call to `base`.
   ///
   /// - Parameter base: The modem each call goes to.
@@ -36,8 +40,34 @@ public actor DamagingModem: LinkingModem {
 
   }
 
+  /// Sets the error each coming read of a record throws, in order, such as a device that doesn't answer.
+  ///
+  /// - Parameters:
+  ///   - errors: For each coming read, the error it throws, or `nil` to read.
+  ///   - address: The record's address.
+  ///   - device: The device.
+  public func setFailingReads(_ errors: [(any Error)?], at address: UInt16, of device: InsteonAddress) {
+
+    failingReads[device, default: [:]][address] = errors
+
+  }
+
   /// Reads through the base modem, failing the checksum when the next listed read says so.
   public func readAllLinkRecord(of device: InsteonAddress, at address: UInt16, timeout: Duration) async throws -> AllLinkRecordResponse {
+
+    if var errors = failingReads[device]?[address], !errors.isEmpty {
+
+      let error: (any Error)? = errors.removeFirst()
+
+      failingReads[device]?[address] = errors
+
+      if let error {
+
+        throw error
+
+      }
+
+    }
 
     var response: AllLinkRecordResponse = try await base.readAllLinkRecord(of: device, at: address, timeout: timeout)
 
