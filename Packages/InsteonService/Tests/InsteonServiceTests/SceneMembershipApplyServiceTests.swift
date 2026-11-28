@@ -561,6 +561,67 @@ struct SceneMembershipApplyServiceTests {
 
   // MARK: Failures, a step at a time
 
+  /// A three-byte address as the service prints one, which no description of why steps stopped carries.
+  private static func hasAddress(_ text: String) -> Bool {
+    text.range(of: #"[0-9A-Fa-f]{2}\.[0-9A-Fa-f]{2}\.[0-9A-Fa-f]{2}"#, options: .regularExpression) != nil
+  }
+
+  @Test func saysHowManyStepsWereWrittenAndNeverThatNothingWasWhenASlotChangedMidRun() async throws {
+    let (service, modem, plan, _) = try await planned(change(add: [lamp, fan]))
+    #expect(plan.steps.count == 6)
+    let added = Flag()
+    // After the lamp's three steps, someone writes the fan's end slot, which the fan's steps are about to use.
+    await modem.setBeforeOperation { [self] operation in
+      if Self.isAddingModemRecord(operation), await added.raise() {
+        await modem.setBeforeOperation(nil)
+        let first = await modem.record(of: fan, at: 0x0FFF)
+        await modem.setDatabase([0x0FFF: first, 0x0FF7: responder(group: 8)], of: fan)
+      }
+    }
+    _ = modem
+
+    let application = try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan))
+
+    guard case let .failed(detail)? = application.interruption else { Issue.record("expected a failed interruption, got \(String(describing: application.interruption))"); return }
+    #expect(application.outcome == .incomplete)
+    #expect(application.result.madeSteps.count == 4)
+    #expect(detail.contains("after 4 of 6 steps were made"))
+    #expect(detail.contains("step 5"))
+    #expect(!detail.contains("Nothing was written"))
+    #expect(!Self.hasAddress(detail))
+  }
+
+  @Test func describesAModemFailureByTheStepAndWithoutAnAddress() async throws {
+    let (service, modem, plan, _) = try await planned()
+    await modem.setBeforeOperation { operation in
+      if Self.isAddingModemRecord(operation) { throw ModemError.connectionClosed }
+    }
+
+    let application = try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan))
+
+    guard case let .failed(detail)? = application.interruption else { Issue.record("expected a failed interruption"); return }
+    #expect(detail.contains("Step 3"))
+    #expect(detail.contains("2 of 3 steps were made"))
+    #expect(!Self.hasAddress(detail))
+  }
+
+  @Test func describesADeviceThatStopsAnsweringByTheStepAndWithoutAnAddress() async throws {
+    let memory = await modem()
+    let damaging = DamagingModem(memory)
+    let service = service(damaging, clock: WallClock("2026-11-27T10:00:00Z"))
+    _ = try await service.refreshScenes()
+    let plan = try await service.planSceneMembership(change(add: [lamp])).plan
+    // The lamp answers the slot read before the first step and not the one before the second.
+    await damaging.setFailingReads([ModemError.deviceTimedOut(lamp)], at: 0x0FF7, of: lamp)
+
+    let application = try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan))
+
+    guard case let .failed(detail)? = application.interruption else { Issue.record("expected a failed interruption"); return }
+    #expect(detail.contains("1 of 3 steps were made"))
+    #expect(detail.contains("Step 2"))
+    #expect(!Self.hasAddress(detail))
+  }
+
   @Test func callsAnApplyWhoseStepsWereAllMadeButWhoseFinalReadDidNotFinishUnverifiedAndNotIncomplete() async throws {
     let memory = await modem()
     let damaging = DamagingModem(memory)

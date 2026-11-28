@@ -357,7 +357,7 @@ public actor InsteonService: InsteonServiceAPI {
         // The plan is still open: nothing was written, so the same consent applies it again.
         throw interrupted.cause
       }
-      interruption = interrupted.cause is CancellationError ? .canceled : .failed(Self.explanation(of: interrupted.cause))
+      interruption = interrupted.cause is CancellationError ? .canceled : .failed(Self.detail(of: interrupted.cause, result: result))
     } catch SceneMembershipRefusal.planStale {
       // Nothing was written, and the databases are not as the plan read them, so the plan is used.
       close(plan, as: .spent)
@@ -386,9 +386,28 @@ public actor InsteonService: InsteonServiceAPI {
     return SceneMembershipApplication(scene: plan.scene, planId: plan.id, result: result, interruption: interruption, persistence: saved, isCacheReloaded: isReloaded, expectedUnreadable: reload?.expectedUnreadable ?? [])
   }
 
-  /// A one-line reason the steps stopped, without a credential.
-  private static func explanation(of error: any Error) -> String {
-    InsteonErrorDescription.message(for: error) ?? "The steps stopped for an error this service doesn't describe."
+  /// Why the steps stopped, from the typed cause, naming the step by its number and no device, address or credential.
+  private static func detail(of cause: any Error, result: SceneMembershipResult) -> String {
+    let total = result.steps.count
+    let made = result.madeSteps.count
+    // The step that stopped is the first one not made.
+    let number = (result.steps.firstIndex { !$0.outcome.isDone } ?? max(total - 1, 0)) + 1
+    let counts = "\(made) of \(total) steps were made"
+    switch cause {
+    case is SceneMembershipSlotChanged:
+      return "A slot that step \(number) writes changed after \(counts). Step \(number) and the steps after it were not made, and nothing was undone."
+    case let error as ModemError:
+      let phrase: String
+      switch error {
+      case .deviceTimedOut, .timedOut: phrase = "a device or the modem did not answer"
+      case .connectionClosed: phrase = "the connection to the modem closed"
+      case .deviceRejected: phrase = "a device rejected a request"
+      case .rejected: phrase = "the modem refused a request"
+      }
+      return "Step \(number) stopped after \(counts) because \(phrase). Nothing was undone."
+    default:
+      return "Step \(number) stopped after \(counts) for an error this service doesn't describe. Nothing was undone."
+    }
   }
 
   /// What a scene member's link data bytes mean, from the catalog and the identity the service

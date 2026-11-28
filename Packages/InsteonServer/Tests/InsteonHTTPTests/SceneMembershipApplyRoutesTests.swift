@@ -193,6 +193,7 @@ struct SceneMembershipApplyRoutesTests {
     #expect(line.metadata["notWritten"] == "1")
     #expect(!"\(line.metadata)".contains("1A.2B.3C"))
     #expect(capture.records.contains { $0.message == "scene membership applied" } == false)
+    #expect(!line.rendered.contains("Nothing was written"))
   }
 
   @Test func logsACompleteApplyAtInfo() async throws {
