@@ -919,7 +919,7 @@ struct RequestTests {
 
   }
 
-  // The quiet period started by earlier traffic runs out during the grace, but it is no longer the
+  // The quiet period started by earlier traffic runs out during the grace, but it isn't the
   // timer that counts: the report started the grace's own.
   @Test func aQuietPeriodStartedBeforeTheStatusReportDoesNotEndTheGrace() async throws {
 
