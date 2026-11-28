@@ -348,6 +348,15 @@ public actor InsteonService: InsteonServiceAPI {
       result = try await network.applySceneMembership(plan, consent: consent)
     } catch let interrupted as SceneMembershipInterrupted {
       result = interrupted.result
+      // Steps that only read leave the databases as they were, and the service refuses as it would before the gate.
+      guard result.steps.contains(where: { $0.outcome != .notReached }) else {
+        if case SceneMembershipRefusal.planStale = interrupted.cause {
+          close(plan, as: .spent)
+          throw ServiceControlError.planStale
+        }
+        // The plan is still open: nothing was written, so the same consent applies it again.
+        throw interrupted.cause
+      }
       interruption = interrupted.cause is CancellationError ? .canceled : .failed(Self.explanation(of: interrupted.cause))
     } catch SceneMembershipRefusal.planStale {
       // Nothing was written, and the databases are not as the plan read them, so the plan is used.
@@ -364,23 +373,26 @@ public actor InsteonService: InsteonServiceAPI {
     // A step was tried, so the plan is used and its steps are never repeated by the service.
     close(plan, as: .spent)
     lastExchange = now()
-    if !(interruption == .canceled) {
-      // The databases the plan changed are read into the cache, so the listing shows the members without a refresh.
-      try? await network.reloadDatabases(of: Self.devices(changedBy: result))
+    // The coordinator forgot the network's copies of the modem's database and of each touched device's, so they are
+    // read again, even when the request was canceled: they run in a task a cancellation doesn't reach.
+    let touched = Self.devices(touchedBy: result)
+    let isReloaded = await DeviceLinkingCoordinator.runToEnd { () async -> Bool in
+      guard let unread = try? await network.reloadDatabases(of: touched) else { return false }
+      return unread.isEmpty
     }
     let saved = await persist()
-    if result.steps.contains(where: { $0.outcome != .notReached }) {
-      // No suspension between publishing and releasing admission in defer, as for a device command.
-      publish(.sceneChanged(SceneChanged(number: plan.scene, source: .api, isComplete: interruption == nil && result.isComplete, firedAt: now())))
-    }
-    return SceneMembershipApplication(scene: plan.scene, planId: plan.id, result: result, interruption: interruption, persistence: saved)
+    // No suspension between publishing and releasing admission in defer, as for a device command.
+    publish(.sceneChanged(SceneChanged(number: plan.scene, source: .api, isComplete: interruption == nil && result.isComplete, firedAt: now())))
+    return SceneMembershipApplication(scene: plan.scene, planId: plan.id, result: result, interruption: interruption, persistence: saved, isCacheReloaded: isReloaded)
   }
 
-  /// The devices whose databases a result's steps wrote to or may have, each once.
-  private static func devices(changedBy result: SceneMembershipResult) -> [InsteonAddress] {
+  /// The devices whose databases a result's steps wrote to, or whose records of the modem they touched, each once.
+  private static func devices(touchedBy result: SceneMembershipResult) -> [InsteonAddress] {
     var devices: [InsteonAddress] = []
     for step in result.steps where step.outcome != .notReached {
-      if case let .device(address) = step.step.endpoint, !devices.contains(address) { devices.append(address) }
+      let address: InsteonAddress
+      if case let .device(device) = step.step.endpoint { address = device } else { address = step.step.record.address }
+      if !devices.contains(address) { devices.append(address) }
     }
     return devices
   }

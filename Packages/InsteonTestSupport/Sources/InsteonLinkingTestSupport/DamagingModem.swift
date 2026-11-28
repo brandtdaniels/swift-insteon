@@ -19,8 +19,21 @@ public actor DamagingModem: LinkingModem {
   /// that goes through. A read past the list goes through.
   private var failingReads: [InsteonAddress: [UInt16: [(any Error)?]]] = [:]
 
-  /// What runs after each read of the modem's records for a group and device, if anything.
-  private var afterGroupRead: (@Sendable () async -> Void)?
+  /// A read the modem carries out, which ``setAfterRead(_:)`` can follow.
+  public enum Read: Sendable {
+
+    /// One record of a device's database, with the device and the record's address.
+    case record(InsteonAddress, UInt16)
+
+    /// A device's whole database.
+    case database(InsteonAddress)
+
+    /// The modem's records for a group and device.
+    case group
+  }
+
+  /// What runs after each read the modem carries out, if anything.
+  private var afterRead: (@Sendable (Read) async -> Void)?
 
   /// Creates a modem that passes each call to `base`.
   ///
@@ -83,6 +96,8 @@ public actor DamagingModem: LinkingModem {
 
     }
 
+    await afterRead?(.record(device, address))
+
     return response
 
   }
@@ -118,15 +133,19 @@ public actor DamagingModem: LinkingModem {
   /// Reads through the base modem.
   public func readAllLinkDatabase(of device: InsteonAddress, timeout: Duration) async throws -> [AllLinkRecordResponse] {
 
-    try await base.readAllLinkDatabase(of: device, timeout: timeout)
+    let records: [AllLinkRecordResponse] = try await base.readAllLinkDatabase(of: device, timeout: timeout)
+
+    await afterRead?(.database(device))
+
+    return records
 
   }
 
-  /// Runs `hook` after each read of the modem's records for a group and device, such as to cancel the task that
-  /// asked, or stops running one.
-  public func setAfterGroupRead(_ hook: (@Sendable () async -> Void)?) {
+  /// Runs `hook` after each read of a record, a database or the modem's records for a group has been read and
+  /// before it is returned, such as to cancel the task that asked, or stops running one.
+  public func setAfterRead(_ hook: (@Sendable (Read) async -> Void)?) {
 
-    afterGroupRead = hook
+    afterRead = hook
 
   }
 
@@ -135,7 +154,7 @@ public actor DamagingModem: LinkingModem {
 
     let records: [AllLinkRecord] = try await base.allLinkRecords(group: group, device: device)
 
-    await afterGroupRead?()
+    await afterRead?(.group)
 
     return records
 

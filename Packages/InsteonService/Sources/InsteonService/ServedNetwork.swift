@@ -64,8 +64,9 @@ public protocol ServedNetwork: Sendable {
   /// Reads the ALL-Link databases of the modem and of the given devices from the hardware into what ``snapshot()``
   /// returns, after a write changed them. A device that doesn't answer stays unread and doesn't fail the read.
   ///
+  /// - Returns: Why each device left unread was left unread.
   /// - Throws: `CancellationError` when canceled and the modem's error when the connection is lost.
-  func reloadDatabases(of devices: [InsteonAddress]) async throws
+  func reloadDatabases(of devices: [InsteonAddress]) async throws -> [InsteonAddress: BackupUnreadableReason]
 
   /// Whether the network gives out its ALL-Link databases: a modem's does, a Hub Pro's doesn't. It
   /// sends nothing.
@@ -137,12 +138,14 @@ struct ModemServedNetwork: ServedNetwork {
     try await network.linking.apply(plan, consent: consent)
   }
 
-  func reloadDatabases(of devices: [InsteonAddress]) async throws {
+  func reloadDatabases(of devices: [InsteonAddress]) async throws -> [InsteonAddress: BackupUnreadableReason] {
     _ = try await network.modemDatabase()
+    var unread: [InsteonAddress: BackupUnreadableReason] = [:]
     for address in devices {
       try Task.checkCancellation()
-      _ = try await readDatabase(of: address)
+      unread[address] = try await readDatabase(of: address)
     }
+    return unread
   }
 
   func refreshDatabases() async throws -> [InsteonAddress: BackupUnreadableReason] {
@@ -225,7 +228,7 @@ struct HubProServedNetwork: ServedNetwork {
 
   func applySceneMembership(_ plan: SceneMembershipPlan, consent: DatabaseLinkConsent) async throws -> SceneMembershipResult { throw ServiceControlError.databasesUnavailable }
 
-  func reloadDatabases(of devices: [InsteonAddress]) async throws { throw ServiceControlError.databasesUnavailable }
+  func reloadDatabases(of devices: [InsteonAddress]) async throws -> [InsteonAddress: BackupUnreadableReason] { throw ServiceControlError.databasesUnavailable }
 
   func runScene(group: AllLinkGroupNumber, turningOn: Bool, wait: AllLinkCleanupWait) async throws -> SceneResult { throw ServiceControlError.databasesUnavailable }
 

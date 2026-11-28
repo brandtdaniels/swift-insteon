@@ -300,11 +300,16 @@ public struct SceneMembershipApplication: Equatable, Sendable {
   /// The independent outcome of saving the learned network state.
   public let persistence: PersistenceOutcome
 
+  /// Whether the service read the modem's database and the databases of the devices the steps touched into its cache
+  /// afterward. `false` says the cache doesn't show what was written until the scenes are refreshed.
+  public let isCacheReloaded: Bool
+
   /// Whether every step was made and every database read back as expected.
   public var isComplete: Bool { interruption == nil && result.isComplete }
 
   /// Creates an application.
-  public init(scene: UInt8, planId: String, result: SceneMembershipResult, interruption: Interruption? = nil, persistence: PersistenceOutcome = .notConfigured) {
+  public init(scene: UInt8, planId: String, result: SceneMembershipResult, interruption: Interruption? = nil, persistence: PersistenceOutcome = .notConfigured, isCacheReloaded: Bool = true) {
+    self.isCacheReloaded = isCacheReloaded
     self.scene = scene
     self.planId = planId
     self.result = result

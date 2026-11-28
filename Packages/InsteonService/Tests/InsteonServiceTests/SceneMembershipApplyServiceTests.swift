@@ -1,6 +1,7 @@
 import Foundation
 import InsteonCore
 import InsteonDeviceCatalog
+import InsteonLinking
 import InsteonLinkingTestSupport
 import InsteonModem
 import InsteonProtocol
@@ -57,7 +58,7 @@ struct SceneMembershipApplyServiceTests {
     return modem
   }
 
-  private func service(_ modem: InMemoryModem, clock: WallClock, persistence: (any SnapshotPersisting)? = nil) -> InsteonService {
+  private func service(_ modem: any LinkingModem, clock: WallClock, persistence: (any SnapshotPersisting)? = nil) -> InsteonService {
     let network = DeviceNetwork(modem: modem, catalog: Self.catalog, snapshot: NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: [lamp: identity, fan: identity, keypad: identity])), now: { clock.now })
     return InsteonService(network: network, persistence: persistence, now: { clock.now })
   }
@@ -416,6 +417,136 @@ struct SceneMembershipApplyServiceTests {
     #expect(await modem.modemDatabaseReads == 0)
   }
 
+  // MARK: Cancellation, a device that doesn't answer, and the cache
+
+  /// A lamp whose database holds a free slot, so the plan writes into it with no end moved.
+  private func freeSlotModem() async -> InMemoryModem {
+    let modem = await modem()
+    let freed = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0x22), group: 0, address: InsteonAddress(0, 0, 0), data1: 0, data2: 0, data3: 0)
+    await modem.setDatabase([0x0FFF: responder(group: 3), 0x0FF7: freed], of: lamp)
+    return modem
+  }
+
+  @Test func readsTheDatabasesItChangedIntoTheCacheEvenWhenTheRequestIsCanceledBetweenSteps() async throws {
+    let memory = await modem()
+    let damaging = DamagingModem(memory)
+    let service = service(damaging, clock: WallClock("2026-11-27T10:00:00Z"))
+    _ = try await service.refreshScenes()
+    let plan = try await service.planSceneMembership(change(add: [lamp])).plan
+    let box = TaskBox()
+    let reads = Counter()
+    // Canceled after the second read of a record of the lamp's: the plan's record has been written and read back.
+    await damaging.setAfterRead { read in
+      if case .record = read, await reads.next() == 3 { await box.cancel() }
+    }
+    let running = Task { try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan)) }
+    await box.set(running)
+
+    let application = try await running.value
+    await damaging.setAfterRead(nil)
+
+    #expect(application.interruption == .canceled)
+    #expect(application.result.steps.map(\.outcome) == [.written, .written, .notReached])
+    #expect(application.isCacheReloaded)
+    // The listing shows the lamp's half of the link at once, so the cache was read again after the cancellation.
+    let listing = await service.scenes()
+    #expect(listing.looseHalfLinks.contains { $0.endpoint == .device(lamp) && $0.record.group == 4 } || listing.scenes.contains { $0.number == 4 && !$0.halfLinks.isEmpty })
+    #expect(listing.unreadable.isEmpty)
+  }
+
+  @Test func writesNothingAndKeepsThePlanWhenTheDeviceDoesNotAnswerTheReadOfItsFirstSlot() async throws {
+    let memory = await freeSlotModem()
+    let damaging = DamagingModem(memory)
+    let service = service(damaging, clock: WallClock("2026-11-27T10:00:00Z"))
+    _ = try await service.refreshScenes()
+    let plan = try await service.planSceneMembership(change(add: [lamp])).plan
+    #expect(plan.steps.map(\.kind) == [.addDeviceRecord, .addModemRecord])
+    let events = await service.events()
+    await damaging.setFailingReads([ModemError.deviceTimedOut(lamp)], at: 0x0FF7, of: lamp)
+
+    await #expect(throws: ModemError.deviceTimedOut(lamp)) { try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan)) }
+
+    #expect(await memory.writes.isEmpty)
+    // Nothing was written, so the plan is still open and the same consent applies it.
+    let application = try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan))
+    #expect(application.isComplete)
+    var reader = events.makeAsyncIterator()
+    guard case let .sceneChanged(changed)? = try await reader.next() else { Issue.record("expected one sceneChanged event"); return }
+    #expect(changed.isComplete)
+  }
+
+  @Test func writesNothingAndKeepsThePlanWhenTheRequestIsCanceledBeforeTheFirstStep() async throws {
+    let memory = await modem()
+    let damaging = DamagingModem(memory)
+    let service = service(damaging, clock: WallClock("2026-11-27T10:00:00Z"))
+    _ = try await service.refreshScenes()
+    let plan = try await service.planSceneMembership(change(add: [lamp])).plan
+    let box = TaskBox()
+    // Canceled once the lamp's database has been read for the comparison, before the first step.
+    await damaging.setAfterRead { read in
+      if case .database = read { await box.cancel() }
+    }
+    let running = Task { try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan)) }
+    await box.set(running)
+
+    await #expect(throws: CancellationError.self) { try await running.value }
+    await damaging.setAfterRead(nil)
+
+    #expect(await memory.writes.isEmpty)
+    let application = try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan))
+    #expect(application.isComplete)
+  }
+
+  @Test func answersStaleAndSpendsThePlanWhenTheFirstSlotChangedAfterItWasReadAndNothingWasWritten() async throws {
+    let memory = await freeSlotModem()
+    let damaging = DamagingModem(memory)
+    let service = service(damaging, clock: WallClock("2026-11-27T10:00:00Z"))
+    _ = try await service.refreshScenes()
+    let plan = try await service.planSceneMembership(change(add: [lamp])).plan
+    let lampRecord = responder(group: 8)
+    // The slot is written by someone else after the comparison read and before the step's own read of the slot.
+    await damaging.setAfterRead { read in
+      if case .database(lamp) = read { await memory.setDatabase([0x0FFF: responder(group: 3), 0x0FF7: lampRecord], of: lamp) }
+    }
+
+    await #expect(throws: ServiceControlError.planStale) { try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan)) }
+
+    #expect(await memory.writes.isEmpty)
+    #expect(await memory.record(of: lamp, at: 0x0FF7) == lampRecord)
+    await #expect(throws: ServiceControlError.planAlreadyApplied) { try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan)) }
+  }
+
+  @Test func reportsThatTheCacheWasNotReloadedWhenTheModemFailsTheReadAfterTheWrites() async throws {
+    let (service, modem, plan, _) = try await planned()
+    let reads = Counter()
+    // The modem's database is read before the writes, after them for the comparison, and then into the cache.
+    await modem.setBeforeOperation { operation in
+      if case .readModemDatabase = operation, await reads.next() == 3 { throw ModemError.connectionClosed }
+    }
+
+    let application = try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan))
+
+    #expect(application.isComplete)
+    #expect(application.isCacheReloaded == false)
+  }
+
+  @Test func readsTheDatabaseOfADeviceNamedOnlyByAModemStepIntoTheCache() async throws {
+    let modem = await modem()
+    // The lamp has its half of the link to scene 4 and the modem lacks the other half, so the plan has one modem step.
+    await modem.setDatabase([0x0FFF: responder(group: 3), 0x0FF7: responder(group: 4)], of: lamp)
+    let (service, _, plan, _) = try await planned(modem: modem)
+    #expect(plan.steps.map(\.kind) == [.addModemRecord])
+    let reads = await modem.databaseReads[lamp] ?? 0
+
+    let application = try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan))
+
+    #expect(application.isComplete)
+    #expect(application.isCacheReloaded)
+    #expect(await modem.databaseReads[lamp] ?? 0 > reads)
+    let listing = await service.scenes()
+    #expect(listing.scenes.first { $0.number == 4 }?.members.map(\.address) == [lamp])
+  }
+
   // MARK: Failures, a step at a time
 
   @Test func stopsAtTheFirstStepThatReadsBackDifferentlyTwiceAndSaysWhatWasAndWasNotWritten() async throws {
@@ -544,6 +675,15 @@ struct SceneMembershipApplyServiceTests {
     // The lamp holds its half of the link and the modem lacks the other, which the listing says as a half link.
     let listing = await service.scenes()
     #expect(listing.looseHalfLinks.contains { $0.endpoint == .device(lamp) && $0.record.group == 4 } || listing.scenes.contains { $0.number == 4 && !$0.halfLinks.isEmpty })
+  }
+}
+
+/// Counts calls, from 1.
+private actor Counter {
+  private var count = 0
+  func next() -> Int {
+    count += 1
+    return count
   }
 }
 
