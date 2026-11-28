@@ -538,7 +538,7 @@ struct SceneMembershipApplyRoutesTests {
   }
 }
 
-/// The `scene` event of kind membership changed: published after a plan is applied, in whole or in part.
+/// The `sceneMembership` event: published after a plan is applied, in whole or in part. A `scene` event is a run.
 @Suite(.timeLimit(.minutes(1)))
 struct SceneMembershipChangedEventTests {
   private func wire(_ event: ServiceEvent) throws -> [String: Any] {
@@ -546,38 +546,46 @@ struct SceneMembershipChangedEventTests {
     return try #require(try JSONSerialization.jsonObject(with: try JSONEncoder().encode(frame)) as? [String: Any])
   }
 
-  @Test func carriesTheSceneTheSourceAndWhetherEveryStepWasMade() throws {
+  @Test func isItsOwnKindWithTheSceneTheOutcomeAndHowManyStepsWereMade() throws {
     let moment = Date(timeIntervalSince1970: 1_800_000_000)
-    let whole = try wire(.sceneChanged(SceneChanged(number: 4, source: .api, isComplete: true, firedAt: moment)))
-    let partial = try wire(.sceneChanged(SceneChanged(number: 4, source: .api, isComplete: false, firedAt: moment)))
+    let whole = try wire(.sceneChanged(SceneChanged(number: 4, source: .api, outcome: .applied, stepsMade: 3, stepsNotMade: 0, firedAt: moment)))
+    let unverified = try wire(.sceneChanged(SceneChanged(number: 4, source: .api, outcome: .appliedUnverified, stepsMade: 3, stepsNotMade: 0, firedAt: moment)))
+    let partial = try wire(.sceneChanged(SceneChanged(number: 4, source: .api, outcome: .incomplete, stepsMade: 1, stepsNotMade: 2, firedAt: moment)))
 
-    #expect(whole["kind"] as? String == "scene")
-    #expect(whole["change"] as? String == "membership")
+    #expect(whole["kind"] as? String == "sceneMembership")
     #expect(whole["scene"] as? Int == 4)
     #expect(whole["source"] as? String == "api")
-    #expect(whole["isComplete"] as? Bool == true)
-    #expect(partial["isComplete"] as? Bool == false)
+    #expect(whole["outcome"] as? String == "applied")
+    #expect(whole["stepsMade"] as? Int == 3)
+    #expect(whole["stepsNotMade"] as? Int == 0)
+    #expect(unverified["outcome"] as? String == "appliedUnverified")
+    #expect(partial["outcome"] as? String == "incomplete")
+    #expect(partial["stepsMade"] as? Int == 1)
+    #expect(partial["stepsNotMade"] as? Int == 2)
     #expect(whole["firedAt"] as? String == ISO8601DateFormatter().string(from: moment))
     #expect(whole["sequence"] as? Int == 7)
   }
 
-  @Test func carriesNoRunFieldsAndNoAddressSoNoClientReadsItAsARun() throws {
-    let frame = try wire(.sceneChanged(SceneChanged(number: 4, source: .api, isComplete: true, firedAt: Date(timeIntervalSince1970: 1_800_000_000))))
+  @Test func carriesNoRunFieldsNoNameAndNoAddress() throws {
+    let frame = try wire(.sceneChanged(SceneChanged(number: 4, source: .api, outcome: .applied, stepsMade: 3, stepsNotMade: 0, firedAt: Date(timeIntervalSince1970: 1_800_000_000))))
 
     #expect(frame["action"] == nil)
     #expect(frame["acknowledged"] == nil)
     #expect(frame["unacknowledged"] == nil)
+    #expect(frame["isComplete"] == nil)
+    #expect(frame["change"] == nil)
     #expect(frame["address"] == nil)
     #expect(frame["name"] == nil)
   }
 
-  @Test func aRunKeepsItsShapeAndSaysNothingOfMembership() throws {
+  @Test func aRunKeepsKindSceneAndItsShapeAndSaysNothingOfMembership() throws {
     let address = InsteonAddress(0x1A, 0x2B, 0x3C)
     let receipt = SceneReceipt(scene: 3, action: .on, acknowledged: [address], unacknowledged: [], isComplete: true, responderCount: 1, persistence: .saved)
     let frame = try wire(.scene(SceneRun(number: 3, name: nil, source: .api, action: .on, receipt: receipt, firedAt: Date(timeIntervalSince1970: 1_800_000_000))))
 
     #expect(frame["kind"] as? String == "scene")
-    #expect(frame["change"] == nil)
+    #expect(frame["stepsMade"] == nil)
+    #expect(frame["stepsNotMade"] == nil)
     #expect(frame["action"] as? String == "on")
     #expect(frame["acknowledged"] as? [String] == ["1A.2B.3C"])
   }

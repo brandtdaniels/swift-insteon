@@ -186,6 +186,8 @@ enum ServiceEventFrame {
         guard let device = try device(), let ruleId, let ruleName, let fired = firedAt.flatMap(Self.date) else { return nil }
         return .notification(ServiceNotification(ruleID: ruleId, ruleName: ruleName, device: device, firedAt: fired, eventName: name))
       case "schedule": return try schedule()
+      // The service also sends `scene` (a run) and `sceneMembership` (a plan applied). The library has no case for either, so
+      // each moves the cursor and is not delivered until the client's scene calls come with their events.
       default: return nil
       }
     }

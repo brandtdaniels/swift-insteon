@@ -344,8 +344,9 @@ struct OpenAPIContractTests {
       .notification(ServiceNotification(ruleID: "basement-leak", ruleName: "Basement leak", device: address, firedAt: Date(timeIntervalSince1970: 1_800_000_000), eventName: nil)),
       .notification(ServiceNotification(ruleID: "basement-leak", ruleName: "Basement leak", device: address, firedAt: Date(timeIntervalSince1970: 1_800_000_000), eventName: "wet")),
       .scene(SceneRun(number: 3, name: nil, source: .api, action: .on, receipt: SceneReceipt(scene: 3, action: .on, acknowledged: [address], unacknowledged: [], isComplete: true, responderCount: 1, persistence: .saved), firedAt: Date(timeIntervalSince1970: 1_800_000_000))),
-      .sceneChanged(SceneChanged(number: 4, source: .api, isComplete: true, firedAt: Date(timeIntervalSince1970: 1_800_000_000))),
-      .sceneChanged(SceneChanged(number: 4, source: .api, isComplete: false, firedAt: Date(timeIntervalSince1970: 1_800_000_000))),
+      .sceneChanged(SceneChanged(number: 4, source: .api, outcome: .applied, stepsMade: 3, stepsNotMade: 0, firedAt: Date(timeIntervalSince1970: 1_800_000_000))),
+      .sceneChanged(SceneChanged(number: 4, source: .api, outcome: .appliedUnverified, stepsMade: 3, stepsNotMade: 0, firedAt: Date(timeIntervalSince1970: 1_800_000_000))),
+      .sceneChanged(SceneChanged(number: 4, source: .api, outcome: .incomplete, stepsMade: 1, stepsNotMade: 2, firedAt: Date(timeIntervalSince1970: 1_800_000_000))),
       .scene(SceneRun(number: 4, name: "Evening", source: .api, action: .off, receipt: SceneReceipt(scene: 4, action: .off, acknowledged: [], unacknowledged: [address], isComplete: false, responderCount: 1), firedAt: Date(timeIntervalSince1970: 1_800_000_000)))
     ] + [
       ScheduleRun.Outcome.acknowledged, .missed, .unavailable(.hubUnreachable), .refused(.notLinked), .unknown

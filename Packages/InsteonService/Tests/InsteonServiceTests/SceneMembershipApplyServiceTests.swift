@@ -178,7 +178,9 @@ struct SceneMembershipApplyServiceTests {
     guard case let .sceneChanged(changed)? = try await reader.next() else { Issue.record("expected a sceneChanged event"); return }
     #expect(changed.number == 4)
     #expect(changed.source == .api)
-    #expect(changed.isComplete)
+    #expect(changed.outcome == .applied)
+    #expect(changed.stepsMade == 3)
+    #expect(changed.stepsNotMade == 0)
     #expect(changed.firedAt == clock.now)
   }
 
@@ -474,7 +476,7 @@ struct SceneMembershipApplyServiceTests {
     #expect(application.isComplete)
     var reader = events.makeAsyncIterator()
     guard case let .sceneChanged(changed)? = try await reader.next() else { Issue.record("expected one sceneChanged event"); return }
-    #expect(changed.isComplete)
+    #expect(changed.outcome == .applied)
   }
 
   @Test func keepsThePlanWhenADeviceFailsTheReadBeforeAnythingIsWrittenAndAnswersTheRetry() async throws {
@@ -657,7 +659,8 @@ struct SceneMembershipApplyServiceTests {
     #expect(!application.isComplete)
     var reader = events.makeAsyncIterator()
     guard case let .sceneChanged(changed)? = try await reader.next() else { Issue.record("expected a sceneChanged event"); return }
-    #expect(!changed.isComplete)
+    #expect(changed.outcome == .appliedUnverified)
+    #expect(changed.stepsMade == 3)
   }
 
   @Test func callsAnApplyIncompleteWhenAStepWasNotMadeOrARecordIsOtherThanExpected() async throws {
@@ -786,7 +789,9 @@ struct SceneMembershipApplyServiceTests {
     var reader = events.makeAsyncIterator()
     guard case let .sceneChanged(changed)? = try await reader.next() else { Issue.record("expected a sceneChanged event"); return }
     #expect(changed.number == 4)
-    #expect(changed.isComplete == false)
+    #expect(changed.outcome == .incomplete)
+    #expect(changed.stepsMade == 2)
+    #expect(changed.stepsNotMade == 1)
   }
 
   @Test func readsTheDatabasesItChangedIntoTheCacheEvenWhenAStepFailed() async throws {

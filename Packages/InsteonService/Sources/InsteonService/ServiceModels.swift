@@ -250,17 +250,25 @@ public struct SceneChanged: Equatable, Sendable {
   public let number: UInt8
   /// What started the change.
   public let source: Source
-  /// Whether every step of the plan was made and both databases read back as expected. `false` says
-  /// the scene may hold only some of the planned members, so a client reads the scenes again.
-  public let isComplete: Bool
+  /// What the apply came to. Anything but ``SceneMembershipApplication/Outcome/applied`` says the scene may hold only
+  /// some of the planned members, or that what was written isn't confirmed, so a client reads the scenes again.
+  public let outcome: SceneMembershipApplication.Outcome
+  /// How many steps were made.
+  public let stepsMade: Int
+  /// How many steps were not made: failed, or not reached.
+  public let stepsNotMade: Int
+  /// Whether every step of the plan was made and both databases read back as expected.
+  public var isComplete: Bool { outcome == .applied }
   /// When the service handled the change.
   public let firedAt: Date
 
   /// Creates a change.
-  public init(number: UInt8, source: Source, isComplete: Bool, firedAt: Date) {
+  public init(number: UInt8, source: Source, outcome: SceneMembershipApplication.Outcome, stepsMade: Int, stepsNotMade: Int, firedAt: Date) {
     self.number = number
     self.source = source
-    self.isComplete = isComplete
+    self.outcome = outcome
+    self.stepsMade = stepsMade
+    self.stepsNotMade = stepsNotMade
     self.firedAt = firedAt
   }
 }

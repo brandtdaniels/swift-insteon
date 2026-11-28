@@ -385,9 +385,10 @@ public actor InsteonService: InsteonServiceAPI {
     let reload = result.cacheReload
     let isReloaded = reload?.isReloaded ?? true
     let saved = await persist()
+    let application = SceneMembershipApplication(scene: plan.scene, planId: plan.id, result: result, interruption: interruption, persistence: saved, isCacheReloaded: isReloaded, expectedUnreadable: reload?.expectedUnreadable ?? [])
     // No suspension between publishing and releasing admission in defer, as for a device command.
-    publish(.sceneChanged(SceneChanged(number: plan.scene, source: .api, isComplete: interruption == nil && result.isComplete, firedAt: now())))
-    return SceneMembershipApplication(scene: plan.scene, planId: plan.id, result: result, interruption: interruption, persistence: saved, isCacheReloaded: isReloaded, expectedUnreadable: reload?.expectedUnreadable ?? [])
+    publish(.sceneChanged(SceneChanged(number: plan.scene, source: .api, outcome: application.outcome, stepsMade: result.madeSteps.count, stepsNotMade: result.unmadeSteps.count, firedAt: now())))
+    return application
   }
 
   /// Why the steps stopped, from the typed cause, naming the step by its number and no device, address or credential.
