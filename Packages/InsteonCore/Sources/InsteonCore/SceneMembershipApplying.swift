@@ -272,6 +272,7 @@ extension DeviceLinkingCoordinator {
     var results: [SceneMembershipResult.StepResult] = []
     var isStopped: Bool = false
     var interruption: (any Error)?
+    var staleBeforeWriting: InsteonAddress?
     // What each slot of each device's database holds, as read and as written since.
     var slots: [InsteonAddress: [UInt16: AllLinkRecord]] = reading.devices.mapValues { (responses: [AllLinkRecordResponse]) -> [UInt16: AllLinkRecord] in Self.slots(of: responses) }
 
@@ -323,9 +324,20 @@ extension DeviceLinkingCoordinator {
 
             guard holds else {
 
-              // Something else wrote the slot since it was read, so it isn't written over.
+              // Something else wrote the slot since it was read, so it isn't written over. Before the first step
+              // that is a plan gone stale with nothing written; after one, steps stay written and the cause says how many.
+              guard !results.isEmpty else {
+
+                // Refused once the loop ends: a throw here would be taken for the step's own failure.
+                staleBeforeWriting = device
+                isStopped = true
+
+                continue
+
+              }
+
               results.append(SceneMembershipResult.StepResult(step: step, outcome: .notReached))
-              interruption = SceneMembershipRefusal.planStale(device)
+              interruption = SceneMembershipSlotChanged(device: device, made: results.filter { (result: SceneMembershipResult.StepResult) -> Bool in result.outcome.isDone }.count, total: plan.steps.count)
               isStopped = true
 
               continue
@@ -360,6 +372,12 @@ extension DeviceLinkingCoordinator {
         isStopped = true
 
       }
+
+    }
+
+    if let staleBeforeWriting {
+
+      throw SceneMembershipRefusal.planStale(staleBeforeWriting)
 
     }
 

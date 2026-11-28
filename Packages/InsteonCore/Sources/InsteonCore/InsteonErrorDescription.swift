@@ -64,6 +64,8 @@ public enum InsteonErrorDescription {
       return error.description
     case let error as SceneMembershipRefusal:
       return error.description
+    case let error as SceneMembershipSlotChanged:
+      return error.description
     case let error as SceneMembershipInterrupted:
       return error.description
     case let error as DatabaseLinkInterrupted:

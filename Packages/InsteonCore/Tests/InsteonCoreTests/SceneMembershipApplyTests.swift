@@ -393,12 +393,34 @@ struct SceneMembershipApplyTests {
 
     let result = try #require(interrupted?.result)
     #expect(result.steps.map(\.outcome) == [.written, .notReached, .notReached])
-    #expect(interrupted?.cause as? SceneMembershipRefusal == .planStale(lamp))
+    // Steps were written, so it is not the refusal that says nothing was: the cause says how many were made.
+    #expect(interrupted?.cause as? SceneMembershipSlotChanged == SceneMembershipSlotChanged(device: lamp, made: 1, total: 3))
+    #expect((interrupted?.cause as? SceneMembershipSlotChanged)?.description.contains("after 1 of 3 steps were made") == true)
+    #expect((interrupted?.cause as? SceneMembershipSlotChanged)?.description.contains("Nothing was written") == false)
     // The record someone else wrote there is not written over.
     #expect(await modem.record(of: lamp, at: 0x0FF7) == responder(group: 8))
   }
 
   // MARK: Failures, a step at a time
+
+  @Test func refusesAsStaleWhenTheSlotOfTheFirstStepChangedBeforeAnythingWasWritten() async throws {
+    let memory = await modem()
+    let freed = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0x22), group: 0, address: InsteonAddress(0, 0, 0), data1: 0, data2: 0, data3: 0)
+    await memory.setDatabase([0x0FFF: responder(group: 3), 0x0FF7: freed], of: lamp)
+    let damaging = DamagingModem(memory)
+    let network = network(damaging)
+    let plan = try await plan(add(lamp), on: network)
+    #expect(plan.steps.first?.record.memoryAddress == 0x0FF7)
+    // Someone writes the slot after the comparison read and before the step's own read of it.
+    await damaging.setAfterRead { read in
+      if case .database(lamp) = read { await memory.setDatabase([0x0FFF: responder(group: 3), 0x0FF7: responder(group: 8)], of: lamp) }
+    }
+
+    let error = await #expect(throws: SceneMembershipRefusal.self) { try await network.linking.apply(plan, consent: consent(plan)) }
+
+    #expect(error == .planStale(lamp))
+    #expect(await memory.writes.isEmpty)
+  }
 
   @Test func stopsAtTheFirstStepThatReadsBackDifferentlyTwiceAndMakesNoStepAfterIt() async throws {
     let modem = await modem()

@@ -186,3 +186,46 @@ extension SceneMembershipInterrupted: CustomStringConvertible, LocalizedError {
   }
 
 }
+
+/// A slot of a device's database changed after some steps were written, so the step for it and the steps after it
+/// weren't made. Thrown inside ``SceneMembershipInterrupted`` as its cause, since the steps before it stay written.
+/// A slot found changed before the first write is ``SceneMembershipRefusal/planStale(_:)`` instead.
+public struct SceneMembershipSlotChanged: Error, Hashable, Sendable {
+
+  /// The device whose slot changed.
+  public let device: InsteonAddress
+
+  /// How many steps were made before it was found.
+  public let made: Int
+
+  /// How many steps the plan has.
+  public let total: Int
+
+  /// Creates the error.
+  public init(device: InsteonAddress, made: Int, total: Int) {
+
+    self.device = device
+    self.made = made
+    self.total = total
+
+  }
+
+}
+
+extension SceneMembershipSlotChanged: CustomStringConvertible, LocalizedError {
+
+  /// A one-line explanation that says how many steps were made.
+  public var description: String {
+
+    "\(device)'s ALL-Link database changed after \(made) of \(total) steps were made. The step for it and the \(total - made - 1 < 0 ? 0 : total - made - 1) after it were not made, and nothing was undone. Read the databases again and plan again."
+
+  }
+
+  /// The same text as the error's `description`, for `localizedDescription`.
+  public var errorDescription: String? {
+
+    description
+
+  }
+
+}
