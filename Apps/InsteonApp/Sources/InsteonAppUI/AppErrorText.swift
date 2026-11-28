@@ -18,6 +18,12 @@ enum AppErrorText {
     case .databasesUnavailable?: return "This network doesn't give out its ALL-Link databases."
     case .unknownScene?: return "The service holds no such scene."
     case .sceneEmpty?: return "That scene has no members."
+    case .unknownPlan?, .planExpired?: return "That plan is gone. Plan again."
+    case .planAlreadyApplied?: return "That plan was used. Plan again."
+    case .deviceNotAnswering?: return "A device didn't answer, and nothing was written. Try again."
+    case .planNotApplicable?: return "That plan can't be applied."
+    case .planStale?: return "A database differs from what the plan was made from. Refresh the scenes and plan again."
+    case .consentRequired?, .consentMismatch?: return "Writing records needs consent that names the plan."
     case nil: return "The service couldn't be reached."
     }
   }

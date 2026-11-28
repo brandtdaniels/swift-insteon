@@ -15,6 +15,30 @@ public actor DamagingModem: LinkingModem {
   /// in order. A read past the list arrives as the base modem sends it.
   private var damagedReads: [InsteonAddress: [UInt16: [Bool]]] = [:]
 
+  /// For each device and address, the error each coming read of the record throws, in order, or `nil` for a read
+  /// that goes through. A read past the list goes through.
+  private var failingReads: [InsteonAddress: [UInt16: [(any Error)?]]] = [:]
+
+  /// A read the modem carries out, which ``setAfterRead(_:)`` can follow.
+  public enum Read: Sendable {
+
+    /// One record of a device's database, with the device and the record's address.
+    case record(InsteonAddress, UInt16)
+
+    /// A device's whole database.
+    case database(InsteonAddress)
+
+    /// The modem's records for a group and device.
+    case group
+  }
+
+  /// For each device, the error each coming read of its whole database throws, in order, or `nil` for a read that
+  /// goes through. A read past the list goes through.
+  private var failingDatabaseReads: [InsteonAddress: [(any Error)?]] = [:]
+
+  /// What runs after each read the modem carries out, if anything.
+  private var afterRead: (@Sendable (Read) async -> Void)?
+
   /// Creates a modem that passes each call to `base`.
   ///
   /// - Parameter base: The modem each call goes to.
@@ -36,8 +60,41 @@ public actor DamagingModem: LinkingModem {
 
   }
 
+  /// Sets the error each coming read of a record throws, in order, such as a device that doesn't answer.
+  ///
+  /// - Parameters:
+  ///   - errors: For each coming read, the error it throws, or `nil` to read.
+  ///   - address: The record's address.
+  ///   - device: The device.
+  public func setFailingReads(_ errors: [(any Error)?], at address: UInt16, of device: InsteonAddress) {
+
+    failingReads[device, default: [:]][address] = errors
+
+  }
+
+  /// Sets the error each coming read of a device's whole database throws, in order.
+  public func setFailingDatabaseReads(_ errors: [(any Error)?], of device: InsteonAddress) {
+
+    failingDatabaseReads[device] = errors
+
+  }
+
   /// Reads through the base modem, failing the checksum when the next listed read says so.
   public func readAllLinkRecord(of device: InsteonAddress, at address: UInt16, timeout: Duration) async throws -> AllLinkRecordResponse {
+
+    if var errors = failingReads[device]?[address], !errors.isEmpty {
+
+      let error: (any Error)? = errors.removeFirst()
+
+      failingReads[device]?[address] = errors
+
+      if let error {
+
+        throw error
+
+      }
+
+    }
 
     var response: AllLinkRecordResponse = try await base.readAllLinkRecord(of: device, at: address, timeout: timeout)
 
@@ -49,6 +106,8 @@ public actor DamagingModem: LinkingModem {
       response.hasIntactChecksum = response.hasIntactChecksum && !isDamaged
 
     }
+
+    await afterRead?(.record(device, address))
 
     return response
 
@@ -85,14 +144,44 @@ public actor DamagingModem: LinkingModem {
   /// Reads through the base modem.
   public func readAllLinkDatabase(of device: InsteonAddress, timeout: Duration) async throws -> [AllLinkRecordResponse] {
 
-    try await base.readAllLinkDatabase(of: device, timeout: timeout)
+    if var errors = failingDatabaseReads[device], !errors.isEmpty {
+
+      let error: (any Error)? = errors.removeFirst()
+
+      failingDatabaseReads[device] = errors
+
+      if let error {
+
+        throw error
+
+      }
+
+    }
+
+    let records: [AllLinkRecordResponse] = try await base.readAllLinkDatabase(of: device, timeout: timeout)
+
+    await afterRead?(.database(device))
+
+    return records
+
+  }
+
+  /// Runs `hook` after each read of a record, a database or the modem's records for a group has been read and
+  /// before it is returned, such as to cancel the task that asked, or stops running one.
+  public func setAfterRead(_ hook: (@Sendable (Read) async -> Void)?) {
+
+    afterRead = hook
 
   }
 
   /// Reads through the base modem.
   public func allLinkRecords(group: AllLinkGroupNumber, device: InsteonAddress) async throws -> [AllLinkRecord] {
 
-    try await base.allLinkRecords(group: group, device: device)
+    let records: [AllLinkRecord] = try await base.allLinkRecords(group: group, device: device)
+
+    await afterRead?(.group)
+
+    return records
 
   }
 

@@ -43,6 +43,8 @@ enum EventKind: String, CaseIterable, Sendable {
   case schedule
   /// A scene ran.
   case scene
+  /// A scene's members were changed by applying a plan, in whole or in part.
+  case sceneMembership
   /// The client missed events the server can't replay.
   case gap
 }

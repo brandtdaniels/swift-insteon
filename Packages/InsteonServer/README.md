@@ -161,6 +161,7 @@ scope, command all devices known by this service. Per-device permissions aren't 
 | GET | `/api/v1/scenes` | The scenes of the network from the cached ALL-Link databases (`read`; see Scenes) |
 | POST | `/api/v1/scenes/{number}/commands` | Turn a scene the modem controls on or off (`control`; see Scenes) |
 | POST | `/api/v1/scenes/{number}/plans` | Plan adding and removing a scene's members from the cache; writes and sends nothing (`admin`; see Scenes) |
+| POST | `/api/v1/scenes/{number}/plans/{id}/apply` | Write a plan's ALL-Link records, with consent that names the plan (`admin`; see Scenes) |
 | POST | `/api/v1/scenes/refresh` | Read the ALL-Link databases from the hardware, then list the scenes (`control`; see Scenes) |
 | GET | `/devices/1A.2B.3C` | Authenticated card fragment from cached state; no hardware polling |
 
@@ -732,7 +733,7 @@ curl -s -X POST -H "Authorization: Bearer $(cat control.token)" -H "X-Insteon-Re
 
 ### Planning a scene's members
 
-`POST /api/v1/scenes/{number}/plans` (`admin`, with `X-Insteon-Request: 1` and `Content-Type: application/json`) answers what adding and removing members of a scene would write. It writes nothing and sends nothing: the service plans from the ALL-Link databases it has cached and the Insteon device catalog, so it never takes the admission gate and works while the modem is away. Applying a plan is not part of this route, and it will need consent as well: the `admin` scope never stands for it.
+`POST /api/v1/scenes/{number}/plans` (`admin`, with `X-Insteon-Request: 1` and `Content-Type: application/json`) answers what adding and removing members of a scene would write. It writes nothing and sends nothing: the service plans from the ALL-Link databases it has cached and the Insteon device catalog, so it never takes the admission gate and works while the modem is away. Applying a plan is the next route, and it needs consent that names the plan: the `admin` scope never stands for it.
 
 The body is `{"add": [{"device": "1A.2B.3C", "onLevel": 255, "rampRate": 31}], "remove": ["4D.5E.6F"]}`. A removal is an address, for all of the device's records of the scene, or `{"device": "4D.5E.6F", "group": 2}` for one group of it, such as one button of a keypad; the modem's record of the device goes when no group of it stays in the scene. Either list can be left out, at least one device is needed, and each list takes at most 32. A device named twice for the same group, or in both lists, is refused in the plan as `duplicateEntry` or `addedAndRemoved`, and a keypad's groups can each be named once. `onLevel` and `rampRate` are bytes from 0 through 255 and can be left out: the record then holds full on (255) and 0.5 s (28). `group` (1 through 255) is the device's own group that answers the scene, such as one button of a keypad; left out, it is the device's main group, and a group the catalog doesn't give the device is refused as `unknownGroup`. Unknown fields are refused as `invalidMembership` (400), and an address that is not an Insteon address is `invalidAddress`. The scene is a group from 1 through 254 (`invalidScene`, 400, for any other number). A Hub Pro gives out no ALL-Link databases, so a plan on one is `databasesUnavailable` (422). A number no controller uses is a scene to create, so its first member can be planned; a group a device controls is `unknownScene` (404).
 
@@ -746,6 +747,40 @@ The answer is a plan:
 
 ```sh
 curl -s -X POST -H "Authorization: Bearer $(cat control.token)" -H "X-Insteon-Request: 1" -H "Content-Type: application/json" -d '{"add":[{"device":"1A.2B.3C","onLevel":255,"rampRate":31}],"remove":["4D.5E.6F"]}' $BASE/api/v1/scenes/4/plans
+```
+
+### Applying a plan
+
+`POST /api/v1/scenes/{number}/plans/{id}/apply` (`admin`, with `X-Insteon-Request: 1`, `Content-Type: application/json` and an optional `Idempotency-Key`) writes the ALL-Link records of a plan, where `{id}` is the plan's `planId`. The body is the consent the plan answered with and nothing else:
+
+```json
+{"consent": {"writeLinkRecords": true, "readFingerprint": "sha256:..."}}
+```
+
+There is no `force` field, any other field is `invalidCommand`, and a field of the wrong type (`consent` that isn't an object, `writeLinkRecords` that isn't true or false, `readFingerprint` that isn't a string) is `invalidBody` (400): a plan only adds records to a free slot or the end of a database, or clears the records of a link between a member and the modem, so it never overwrites a record in use. Consent is never implied by the `admin` scope. A body with no consent, a false or missing `writeLinkRecords`, or no fingerprint is `consentRequired` (422), and a fingerprint of another plan is `consentMismatch` (422). Neither sends anything, and neither uses up the plan.
+
+The service answers `unknownPlan` (404) for a plan it never made for that scene or has forgotten in a restart, `planExpired` (410) for one older than five minutes by its clock, and `planNotApplicable` (422) for one with a refusal or no steps, which can never be applied. A plan is used once: after any step was tried, the same plan again is `planAlreadyApplied` (409). A plan refused as stale wrote nothing and can never be applied: asking again is `planStale` again. A repeat with the same `Idempotency-Key` and consent returns the recorded answer with `Idempotent-Replay: true` and writes nothing; a refusal that wrote nothing is not recorded. A Hub Pro takes no database write: `databasesUnavailable`. While the modem is not connected it answers `modemUnavailable` before anything is sent.
+
+The service then takes its one admission gate (`busy` while another operation holds it, and nothing is queued) and reads the modem's database and the database of each device a step writes to from the hardware, never from its cache. If any differs from what the plan was made from, it writes nothing and answers `planStale` (409): refresh the scenes and plan again. Otherwise it makes each step in the plan's order through the same writes as the command line's database writer. A record in use is never overwritten. A device's record goes into a free slot or into the end's, with the end marked one slot below first, so the database always has an end. Each device write is read back from its slot, and a record that reads back differently is written once more and never a third time. The modem's records are added or deleted with Manage ALL-Link Record and read back from the modem. The steps stop after the first that fails. A request canceled before the first step writes, or a device that does not answer the read of its slot before anything was written, answers `canceled` or `deviceNotAnswering` with `sent` false and leaves the plan usable A step whose slot read fails is `notReached`, never `unanswered`, because nothing was written for it. Last, the modem's database and each device's are read again and compared with what the steps that were made should have left, and the databases it changed are read into the service's cache, so `GET /api/v1/scenes` shows the change without a refresh.
+
+The answer lists every step with its `outcome`:
+
+| Outcome | Meaning |
+| --- | --- |
+| `written` | The record read back as written. |
+| `writtenOnRetry` | It read back differently once, was written again, and then read back as written. |
+| `unverifiable` | The step removed an i2CS device's last record of the modem. The device rejects the modem from then on, so the record can't be read back. |
+| `notWritten` | It read back differently after two writes. The steps after it were not made. |
+| `rejected` | The device or the modem rejected the write each time. |
+| `unanswered` | The device or the modem did not answer, so whether it took is not known. |
+| `notReached` | An earlier step failed, so it was not made. |
+
+When every step was made and both databases read back as planned, the answer is 200 with `outcome` `applied` and `isComplete` true. When every step was made and no record differs but reading the databases again did not finish (a device did not answer the read, or the modem failed it), the answer is 200 with `outcome` `appliedUnverified`, `isComplete` false and a `message` that says to refresh the scenes and check; nothing says a record is wrong, and the answer is recorded for an `Idempotency-Key` like any apply. Otherwise, when a step failed or was not reached or a record read back differently, it is 502 with the code `outcomeUnknown` and `sent` true, and the same body: `outcome` `incomplete`, `written` and `notWritten` counts, every step's outcome, `mismatches` (each record the final read found other than expected, `target` `modem` or a device's address, with `expected` and `found`), `cacheReload` (`reloaded`, or `failed` when the service could not read the modem's database and the databases of the devices the steps touched into its cache, so the listing holds the old records until the scenes are refreshed; a device that rejects the modem once its last record of it is removed is expected to be unreadable, so it is listed in `expectedUnreadable` and does not make this `failed`), `modemChecked`, `deviceChecks` (`checked`, `rejectsModemAfterUnlinking` or `unanswered` for each device), and `interruption` (`canceled` when the request was canceled between steps, or `failed` with a description when the modem or the connection failed). The steps before the first failure stay written, and nothing is rolled back or repeated beyond the one retry, so a client plans again from a fresh read.
+
+Either answer publishes a numbered `sceneMembership` event on `/api/v1/events`, a kind of its own: a `scene` event is a run and has an `action`, and this has none. It carries `scene`, `source` (`api`), `outcome` (`applied`, `appliedUnverified` or `incomplete`, as in the answer), `stepsMade`, `stepsNotMade` and `firedAt`, so a client that sees an outcome other than `applied` reads the scenes again. A request refused before the first step publishes nothing.
+
+```sh
+curl -s -X POST -H "Authorization: Bearer $(cat admin.token)" -H "X-Insteon-Request: 1" -H "Content-Type: application/json" -H "Idempotency-Key: apply-4-1" -d '{"consent":{"writeLinkRecords":true,"readFingerprint":"sha256:..."}}' $BASE/api/v1/scenes/4/plans/sha256:.../apply
 ```
 
 ### Advanced settings

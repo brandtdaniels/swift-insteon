@@ -53,11 +53,28 @@ public actor InsteonService: InsteonServiceAPI {
   /// The membership plans a client could apply, newest last, each with when it expires. They live in
   /// memory: a restart forgets them.
   private var openPlans: [(plan: SceneMembershipPlan, expiresAt: Date)] = []
+  /// Why a plan the service made is closed, so a client that comes back to it is told which. Newest last, and
+  /// bounded: a plan older than the list is unknown.
+  private var closedPlans: [(id: String, scene: UInt8, reason: PlanClosure)] = []
+
+  /// Why a plan is closed.
+  private enum PlanClosure {
+    /// Five minutes passed, or newer plans pushed it out.
+    case expired
+    /// It was applied, so it is used.
+    case spent
+    /// A database differs from what it was made from, so it can't be applied. Nothing was written.
+    case stale
+    /// It has a refusal or no steps, so it never could be applied.
+    case notApplicable
+  }
 
   /// How long the service keeps a membership plan.
   static let planLifetime: TimeInterval = 300
   /// How many membership plans the service keeps at once. The oldest goes first.
   static let maximumOpenPlans = 8
+  /// How many closed plans the service remembers, so it can say why a plan is closed.
+  static let maximumClosedPlans = 64
 
   /// How many of the newest events the service keeps for a client to resume from. Memory is
   /// bounded by this count; nothing is kept on disk, and a restart forgets every event.
@@ -272,6 +289,7 @@ public actor InsteonService: InsteonServiceAPI {
     let plan = SceneMembershipPlanner.plan(change, from: backup, devices: registered, modemLinkData: modemLinkData)
     let expiresAt = now().addingTimeInterval(Self.planLifetime)
     keepOpenPlans(adding: plan.isApplicable ? (plan, expiresAt) : nil)
+    if !plan.isApplicable { close(plan, as: .notApplicable) }
     return SceneMembershipPlanReceipt(plan: plan, expiresAt: expiresAt)
   }
 
@@ -286,11 +304,114 @@ public actor InsteonService: InsteonServiceAPI {
   /// again takes its place as the newest, with its new expiry.
   private func keepOpenPlans(adding added: (SceneMembershipPlan, Date)?) {
     let moment = now()
+    for plan in openPlans where plan.expiresAt <= moment { close(plan.plan, as: .expired) }
     openPlans.removeAll { $0.expiresAt <= moment }
     if let added {
       openPlans.removeAll { $0.plan.id == added.0.id }
+      closedPlans.removeAll { $0.id == added.0.id }
       openPlans.append((added.0, added.1))
-      if openPlans.count > Self.maximumOpenPlans { openPlans.removeFirst(openPlans.count - Self.maximumOpenPlans) }
+      if openPlans.count > Self.maximumOpenPlans {
+        // Closing a plan drops it from the open plans, so the oldest beyond the limit are closed and no more.
+        for dropped in openPlans.prefix(openPlans.count - Self.maximumOpenPlans) { close(dropped.plan, as: .expired) }
+      }
+    }
+  }
+
+  /// Remembers why a plan is closed, and drops it from the open plans.
+  private func close(_ plan: SceneMembershipPlan, as reason: PlanClosure) {
+    openPlans.removeAll { $0.plan.id == plan.id }
+    closedPlans.removeAll { $0.id == plan.id }
+    closedPlans.append((plan.id, plan.scene, reason))
+    if closedPlans.count > Self.maximumClosedPlans { closedPlans.removeFirst(closedPlans.count - Self.maximumClosedPlans) }
+  }
+
+  public func applySceneMembership(scene: UInt8, planId: String, consent: DatabaseLinkConsent) async throws -> SceneMembershipApplication {
+    let network = network
+    guard network.servesDatabases else { throw ServiceControlError.databasesUnavailable }
+    if case let .unavailable(cause) = connection { throw ServiceControlError.modemUnavailable(cause) }
+    keepOpenPlans(adding: nil)
+    guard let plan = openPlans.first(where: { $0.plan.id == planId && $0.plan.scene == scene })?.plan else {
+      switch closedPlans.first(where: { $0.id == planId && $0.scene == scene })?.reason {
+      case .expired?: throw ServiceControlError.planExpired
+      case .spent?: throw ServiceControlError.planAlreadyApplied
+      case .stale?: throw ServiceControlError.planStale
+      case .notApplicable?: throw ServiceControlError.planNotApplicable
+      case nil: throw ServiceControlError.unknownPlan
+      }
+    }
+    // Consent is judged here and again by the coordinator, so no front end can skip it. It is never implied by who asks.
+    guard consent.writeLinkRecords else { throw ServiceControlError.consentRequired }
+    guard consent.readFingerprint == plan.fingerprint else { throw ServiceControlError.consentMismatch }
+    guard !busy else { throw ServiceControlError.busy }
+    busy = true
+    defer { busy = false }
+    let result: SceneMembershipResult
+    var interruption: SceneMembershipApplication.Interruption?
+    do {
+      result = try await network.applySceneMembership(plan, consent: consent)
+    } catch let interrupted as SceneMembershipInterrupted {
+      result = interrupted.result
+      // Steps that only read leave the databases as they were, and the service refuses as it would before the gate.
+      guard result.steps.contains(where: { $0.outcome != .notReached }) else {
+        if case SceneMembershipRefusal.planStale = interrupted.cause {
+          close(plan, as: .stale)
+          throw ServiceControlError.planStale
+        }
+        // The plan is still open: nothing was written, so the same consent applies it again.
+        throw interrupted.cause
+      }
+      interruption = interrupted.cause is CancellationError ? .canceled : .failed(Self.detail(of: interrupted.cause, result: result))
+    } catch SceneMembershipRefusal.planStale {
+      // Nothing was written, and the databases are not as the plan read them, so the plan can't be applied. Asking
+      // again says so again, not that the plan was applied.
+      close(plan, as: .stale)
+      throw ServiceControlError.planStale
+    } catch SceneMembershipRefusal.notApplicable, SceneMembershipRefusal.wouldOverwriteRecord {
+      close(plan, as: .notApplicable)
+      throw ServiceControlError.planNotApplicable
+    } catch SceneMembershipRefusal.deviceNotAnswering {
+      // Nothing was written, so the plan stays open and the same consent applies it again.
+      throw ServiceControlError.deviceNotAnswering
+    } catch SceneMembershipRefusal.consentRequired {
+      throw ServiceControlError.consentRequired
+    } catch SceneMembershipRefusal.consentMismatch {
+      throw ServiceControlError.consentMismatch
+    }
+    // A step was tried, so the plan is used and its steps are never repeated by the service.
+    close(plan, as: .spent)
+    lastExchange = now()
+    // The coordinator forgot the network's copies of the databases the steps changed and read them again, and says
+    // whether it could. A device that rejects the modem once its last record is gone is expected not to be read.
+    let reload = result.cacheReload
+    let isReloaded = reload?.isReloaded ?? true
+    let saved = await persist()
+    let application = SceneMembershipApplication(scene: plan.scene, planId: plan.id, result: result, interruption: interruption, persistence: saved, isCacheReloaded: isReloaded, expectedUnreadable: reload?.expectedUnreadable ?? [])
+    // No suspension between publishing and releasing admission in defer, as for a device command.
+    publish(.sceneChanged(SceneChanged(number: plan.scene, source: .api, outcome: application.outcome, stepsMade: result.madeSteps.count, stepsNotMade: result.unmadeSteps.count, firedAt: now())))
+    return application
+  }
+
+  /// Why the steps stopped, from the typed cause, naming the step by its number and no device, address or credential.
+  private static func detail(of cause: any Error, result: SceneMembershipResult) -> String {
+    let total = result.steps.count
+    let made = result.madeSteps.count
+    // The step that stopped is the first one not made.
+    let number = (result.steps.firstIndex { !$0.outcome.isDone } ?? max(total - 1, 0)) + 1
+    let counts = "\(made) of \(total) steps were made"
+    switch cause {
+    case is SceneMembershipSlotChanged:
+      return "A slot that step \(number) writes changed after \(counts). Step \(number) and the steps after it were not made, and nothing was undone."
+    case let error as ModemError:
+      let phrase: String
+      switch error {
+      case .deviceTimedOut, .timedOut: phrase = "a device or the modem did not answer"
+      case .connectionClosed: phrase = "the connection to the modem closed"
+      case .deviceRejected: phrase = "a device rejected a request"
+      case .rejected: phrase = "the modem refused a request"
+      }
+      return "Step \(number) stopped after \(counts) because \(phrase). Nothing was undone."
+    default:
+      return "Step \(number) stopped after \(counts) for an error this service doesn't describe. Nothing was undone."
     }
   }
 

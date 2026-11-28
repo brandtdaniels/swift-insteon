@@ -239,6 +239,40 @@ public struct SceneRun: Equatable, Sendable {
   }
 }
 
+/// A scene whose members changed, as the `scene` event reports it.
+public struct SceneChanged: Equatable, Sendable {
+  /// What started the change.
+  public enum Source: Equatable, Sendable {
+    /// A client's request to apply a membership plan.
+    case api
+  }
+  /// The scene's ALL-Link group.
+  public let number: UInt8
+  /// What started the change.
+  public let source: Source
+  /// What the apply came to. Anything but ``SceneMembershipApplication/Outcome/applied`` says the scene may hold only
+  /// some of the planned members, or that what was written isn't confirmed, so a client reads the scenes again.
+  public let outcome: SceneMembershipApplication.Outcome
+  /// How many steps were made.
+  public let stepsMade: Int
+  /// How many steps were not made: failed, or not reached.
+  public let stepsNotMade: Int
+  /// Whether every step of the plan was made and both databases read back as expected.
+  public var isComplete: Bool { outcome == .applied }
+  /// When the service handled the change.
+  public let firedAt: Date
+
+  /// Creates a change.
+  public init(number: UInt8, source: Source, outcome: SceneMembershipApplication.Outcome, stepsMade: Int, stepsNotMade: Int, firedAt: Date) {
+    self.number = number
+    self.source = source
+    self.outcome = outcome
+    self.stepsMade = stepsMade
+    self.stepsNotMade = stepsNotMade
+    self.firedAt = firedAt
+  }
+}
+
 /// A plan for a scene's members and when the service stops keeping it.
 public struct SceneMembershipPlanReceipt: Equatable, Sendable {
   /// What adding and removing the members would write. A plan with a refusal can't be applied.
@@ -250,6 +284,67 @@ public struct SceneMembershipPlanReceipt: Equatable, Sendable {
   public init(plan: SceneMembershipPlan, expiresAt: Date) {
     self.plan = plan
     self.expiresAt = expiresAt
+  }
+}
+
+/// What applying a scene membership plan did: each step's outcome and what reading the modem's database
+/// and each device's again found.
+public struct SceneMembershipApplication: Equatable, Sendable {
+  /// Why the steps stopped for a reason other than a step's own failure.
+  public enum Interruption: Equatable, Sendable {
+    /// The request was canceled between steps or during one, so the steps after it were not made.
+    case canceled
+    /// The modem or the connection failed, with a description that carries no address or credential.
+    case failed(String)
+  }
+  /// The scene's ALL-Link group.
+  public let scene: UInt8
+  /// The plan's identifier, which the apply request named.
+  public let planId: String
+  /// Each step with its outcome, and the records not as expected afterward.
+  public let result: SceneMembershipResult
+  /// Why the steps stopped, or `nil` when every step was tried.
+  public let interruption: Interruption?
+  /// The independent outcome of saving the learned network state.
+  public let persistence: PersistenceOutcome
+
+  /// Whether the service read the modem's database and the databases of the devices the steps touched into its cache
+  /// afterward. `false` says the cache doesn't show what was written until the scenes are refreshed.
+  public let isCacheReloaded: Bool
+
+  /// The devices that reject the modem once their last record of it is removed, as an i2CS device does, so the service
+  /// holds no copy of their databases. Expected after such a removal: it doesn't make ``isCacheReloaded`` false.
+  public let expectedUnreadable: [InsteonAddress]
+
+  /// What the apply came to.
+  public enum Outcome: Equatable, Sendable {
+    /// Every step was made and both databases read back as planned.
+    case applied
+    /// Every step was made and no record was found other than expected, but reading the databases again didn't
+    /// finish, so what was written isn't confirmed.
+    case appliedUnverified
+    /// A step failed or wasn't reached, or a record was found other than expected.
+    case incomplete
+  }
+
+  /// Whether every step was made and every database read back as expected.
+  public var isComplete: Bool { interruption == nil && result.isComplete }
+
+  /// What the apply came to: complete, made but not confirmed, or incomplete.
+  public var outcome: Outcome {
+    if isComplete { return .applied }
+    return result.isUnverified ? .appliedUnverified : .incomplete
+  }
+
+  /// Creates an application.
+  public init(scene: UInt8, planId: String, result: SceneMembershipResult, interruption: Interruption? = nil, persistence: PersistenceOutcome = .notConfigured, isCacheReloaded: Bool = true, expectedUnreadable: [InsteonAddress] = []) {
+    self.isCacheReloaded = isCacheReloaded
+    self.expectedUnreadable = expectedUnreadable
+    self.scene = scene
+    self.planId = planId
+    self.result = result
+    self.interruption = interruption
+    self.persistence = persistence
   }
 }
 
@@ -305,6 +400,35 @@ public protocol SceneProviding: Sendable {
   ///   controls is a scene to create.
   func planSceneMembership(_ change: SceneMembershipChange) async throws -> SceneMembershipPlanReceipt
 
+  /// Applies a plan from ``planSceneMembership(_:)``: writes its ALL-Link records, each in order, and
+  /// reads each back.
+  ///
+  /// The plan is single use. Consent must agree to the writes and name the plan's fingerprint; an
+  /// `admin` credential never stands in for it. The service takes the admission gate, reads the
+  /// modem's database and each device's from the hardware, and writes nothing if any differs from
+  /// what the plan was made from. It then makes each step through the same write, read-back and
+  /// retry-once path as the command line's database writer, stops after the first step that fails,
+  /// and reads both databases again to compare them with what the steps made should have left. A
+  /// step that fails leaves the steps before it written and the steps after it unmade; the service
+  /// never rolls anything back, and a client plans again from a fresh read.
+  ///
+  /// Afterward the service reads the databases it changed into its cache, publishes a
+  /// ``ServiceEvent/sceneChanged(_:)`` event, and answers each step's outcome.
+  ///
+  /// - Parameters:
+  ///   - scene: The scene's ALL-Link group, which the plan must be for.
+  ///   - planId: The plan's identifier.
+  ///   - consent: What the client granted.
+  /// - Returns: The outcome of each step, whether or not every step was made.
+  /// - Throws: ``ServiceControlError/unknownPlan``, ``ServiceControlError/planExpired``,
+  ///   ``ServiceControlError/planAlreadyApplied``, ``ServiceControlError/planNotApplicable``,
+  ///   ``ServiceControlError/consentRequired``, ``ServiceControlError/consentMismatch``,
+  ///   ``ServiceControlError/busy``, ``ServiceControlError/modemUnavailable(_:)``,
+  ///   ``ServiceControlError/databasesUnavailable``, ``ServiceControlError/deviceNotAnswering`` (a device didn't answer the read of the first slot, and the plan stays usable) and ``ServiceControlError/planStale``, each before
+  ///   anything is written, and the modem's error when a database can't be read before the first
+  ///   write.
+  func applySceneMembership(scene: UInt8, planId: String, consent: DatabaseLinkConsent) async throws -> SceneMembershipApplication
+
   /// What the data bytes a scene's member holds mean, as the Insteon device catalog gives them for
   /// the device's identity. It sends nothing to hardware.
   ///
@@ -346,6 +470,23 @@ public enum ServiceControlError: Error, Equatable {
   /// The network doesn't give out its ALL-Link databases, as a Hub Pro doesn't, so there is
   /// nothing to read. Nothing was sent.
   case databasesUnavailable
+  /// The service holds no plan with that identifier for that scene: it never made one, or restarted
+  /// since. Nothing was sent.
+  case unknownPlan
+  /// The plan is older than five minutes. Nothing was sent; plan again.
+  case planExpired
+  /// The plan was applied, so it can't be used again. Nothing was sent.
+  case planAlreadyApplied
+  /// The plan has a refusal or no steps, so it can't be applied. Nothing was sent.
+  case planNotApplicable
+  /// A database differs from what the plan was made from. Nothing was written; plan again.
+  case planStale
+  /// The consent doesn't agree to the writes. Nothing was sent.
+  case consentRequired
+  /// The consent names another plan than the one given. Nothing was sent.
+  case consentMismatch
+  /// A device didn't answer the read of the slot the first step writes, so nothing was written. The plan stays usable.
+  case deviceNotAnswering
 }
 
 /// A service runtime failure, independent of its host.
@@ -385,6 +526,9 @@ public enum ServiceEvent: Equatable, Sendable {
   /// A scene ran. Numbered and retained like every other event. A scene run by a member's button or
   /// by the command line is not reported, because the modem does not report its own group sends.
   case scene(SceneRun)
+  /// The ALL-Link records of a scene's members changed, or may have: a membership plan was applied, in
+  /// whole or in part. Numbered and retained like every other event.
+  case sceneChanged(SceneChanged)
 
   init?(_ event: DeviceMonitorEvent) {
     switch event {

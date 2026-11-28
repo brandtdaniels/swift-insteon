@@ -172,6 +172,51 @@ enum OpenAPIDocument {
         "writeLinkRecords": ["type": "boolean", "const": true],
         "readFingerprint": Schema.string(pattern: "^sha256:[0-9a-f]{64}$", description: "Names the steps and the records they were made from.")
       ], required: ["writeLinkRecords", "readFingerprint"], description: "What applying the plan will need: the consent that applying a database link plan takes."),
+      "SceneMembershipApplyRequest": Schema.object([
+        "consent": Schema.object([
+          "writeLinkRecords": ["type": "boolean", "const": true, "description": "Agrees that ALL-Link records are written. A missing or false value is `consentRequired`."],
+          "readFingerprint": Schema.string(pattern: "^sha256:[0-9a-f]{64}$", description: "The plan's `consent.readFingerprint`, which names the steps and the records they were made from. Another plan's is `consentMismatch`.")
+        ], required: ["writeLinkRecords", "readFingerprint"])
+      ], required: ["consent"], description: "The consent the plan answered with. There is no `force`: a plan never overwrites a record in use, and any other field is refused. A consent that is missing or does not agree is `consentRequired` (422), whatever the credential's scope."),
+      "SceneMembershipApplication": Schema.object([
+        "version": version,
+        "scene": Schema.integer(minimum: 1, maximum: 254),
+        "planId": Schema.string(pattern: "^sha256:[0-9a-f]{64}$"),
+        "outcome": Schema.string(enum: ["applied", "appliedUnverified", "incomplete"], description: "`applied` when every step was made and both databases read back as planned. `appliedUnverified` (200) when every step was made and no record was found other than expected, but reading the databases again did not finish, so a client refreshes the scenes and checks. `incomplete` (502) when a step was not made or a record was found other than expected."),
+        "isComplete": ["type": "boolean"],
+        "written": Schema.integer(minimum: 0, description: "How many steps were made."),
+        "notWritten": Schema.integer(minimum: 0, description: "How many steps were not made: failed, or not reached because an earlier one failed."),
+        "steps": Schema.array(of: Schema.ref("SceneMembershipAppliedStep")),
+        "mismatches": Schema.array(of: Schema.ref("SceneMembershipMismatch")),
+        "modemChecked": ["type": "boolean", "description": "Whether the modem's database was read again and compared with what the steps made should have left."],
+        "deviceChecks": Schema.array(of: Schema.object([
+          "device": address,
+          "check": Schema.string(enum: DatabaseLinkResult.DeviceCheck.allCases.map(\.rawValue), description: "`checked` when the device's database was read again and compared, `rejectsModemAfterUnlinking` when an i2CS device rejects the modem once its last record of the modem is gone, `unanswered` when it did not answer.")
+        ], required: ["device", "check"])),
+        "interruption": Schema.nullable(Schema.string(enum: ["canceled", "failed"], description: "Why the steps stopped for a reason other than a step's own failure.")),
+        "interruptionDetail": Schema.nullable(Schema.string(description: "For `failed`: the modem's error without an address or credential.")),
+        "cacheReload": Schema.string(enum: ["reloaded", "failed"], description: "`reloaded` when the service read the modem's database and the databases of the devices the steps touched into its cache afterward, so `GET /api/v1/scenes` shows the change. `failed` when it could not read the modem or a device that should be readable, and the listing holds the records as they were until a client refreshes the scenes. A device that rejects the modem once its last record of it is removed is expected unreadable: it is listed in `expectedUnreadable` and does not make this `failed`."),
+        "expectedUnreadable": Schema.array(of: address),
+        "persistence": Schema.ref("Persistence"),
+        "code": Schema.ref("ErrorCode"),
+        "message": Schema.string(description: "Present when `appliedUnverified` or `incomplete`. For a person, from the counts of steps made and records found."),
+        "sent": ["type": "boolean", "const": true, "description": "Present when `incomplete`: ALL-Link records may have been written."],
+        "requestId": Schema.string(description: "Present when `incomplete`: the request_id of the log record for this request.")
+      ], required: ["version", "scene", "planId", "outcome", "isComplete", "written", "notWritten", "steps", "mismatches", "modemChecked", "deviceChecks", "interruption", "interruptionDetail", "cacheReload", "expectedUnreadable", "persistence"], description: "What applying a plan did. An `incomplete` answer is also an error body (`code` `outcomeUnknown`, `sent` true): the steps before the first failure are written, the failed one may be, and the rest were not made. The service never rolls back, so a client plans again from a fresh read."),
+      "SceneMembershipAppliedStep": Schema.object([
+        "order": Schema.integer(minimum: 1),
+        "kind": Schema.string(enum: SceneMembershipStep.Kind.allCases.map(\.rawValue)),
+        "target": Schema.string(description: "`modem`, or the address of the device whose database the step writes."),
+        "effect": Schema.string(enum: ["write", "delete"]),
+        "record": Schema.ref("SceneMembershipRecord"),
+        "outcome": Schema.string(enum: DatabaseLinkStepOutcome.allCases.map(\.rawValue), description: "`written` and `writtenOnRetry` read back as written; `unverifiable` removed an i2CS device's last record of the modem, which then rejects the modem; `notWritten` read back differently twice; `rejected` was rejected each time; `unanswered` got no answer, so whether it took is not known; `notReached` was not made because an earlier step failed.")
+      ], required: ["order", "kind", "target", "effect", "record", "outcome"]),
+      "SceneMembershipMismatch": Schema.object([
+        "target": Schema.string(description: "`modem`, or the address of the device whose database holds the record."),
+        "memoryAddress": Schema.nullable(Schema.string(pattern: "^0x[0-9A-F]{4}$")),
+        "expected": Schema.nullable(Schema.ref("SceneMembershipRecord")),
+        "found": Schema.nullable(Schema.ref("SceneMembershipRecord"))
+      ], required: ["target", "memoryAddress", "expected", "found"], description: "A record that reading the database again did not find as the steps made should have left it."),
       "SceneReceipt": Schema.object([
         "version": version,
         "scene": Schema.integer(minimum: 1, maximum: 254),
@@ -255,14 +300,16 @@ enum OpenAPIDocument {
         "ruleName": Schema.string(description: "On `notification`: the rule's name."),
         "firedAt": ["type": "string", "format": "date-time", "description": "On `notification`: when the rule fired. On `schedule`: when the service handled the run."],
         "scheduleId": Schema.string(description: "On `schedule`: the schedule's or timer's identifier."),
-        "source": Schema.string(enum: ScheduleSourceName.allCases.map(\.rawValue) + SceneSourceName.allCases.map(\.rawValue), description: "On `schedule`: whether a schedule or a timer ran. On `scene`: `api`, a client's request."),
-        "outcome": Schema.string(enum: ScheduleOutcomeName.allCases.map(\.rawValue), description: "On `schedule`: `acknowledged` when the device acknowledged the command; `missed` when the run time passed while the service wasn't running or the clock moved past it, so nothing was sent; `unavailable` when the Hub or modem was away, so nothing was sent (`cause` says why); `refused` when the service refused the command before sending it (`reason` is the error code); `unknown` when the command may have reached the device. A run is never retried."),
+        "source": Schema.string(enum: ScheduleSourceName.allCases.map(\.rawValue) + SceneSourceName.allCases.map(\.rawValue), description: "On `schedule`: whether a schedule or a timer ran. On `scene` and `sceneMembership`: `api`, a client's request."),
+        "outcome": Schema.string(enum: ScheduleOutcomeName.allCases.map(\.rawValue) + ["applied", "appliedUnverified", "incomplete"], description: "On `sceneMembership`: `applied` when every step of the plan was made and both databases read back as planned, `appliedUnverified` when every step was made and the comparison did not finish, `incomplete` otherwise. On `schedule`: `acknowledged` when the device acknowledged the command; `missed` when the run time passed while the service wasn't running or the clock moved past it, so nothing was sent; `unavailable` when the Hub or modem was away, so nothing was sent (`cause` says why); `refused` when the service refused the command before sending it (`reason` is the error code); `unknown` when the command may have reached the device. A run is never retried."),
         "reason": Schema.string(description: "On `schedule` with outcome `refused`: the error code the same command would answer with."),
         "scene": Schema.integer(minimum: 1, maximum: 254, description: "On `scene`: the scene's group number."),
         "action": Schema.string(enum: HTTPSceneAction.allCases.map(\.rawValue), description: "On `scene`: what the scene was told to do."),
         "acknowledged": ["type": "array", "items": address, "description": "On `scene`: the members that acknowledged their ALL-Link cleanup. Empty for a modem that passes no per-member acknowledgment up, so an empty list never means no member acted."],
         "unacknowledged": ["type": "array", "items": address, "description": "On `scene`: the members that did not acknowledge their cleanup and may still have acted."],
-        "isComplete": Schema.boolean,
+        "isComplete": ["type": "boolean", "description": "On `scene`: whether the modem sent every member its cleanup."],
+        "stepsMade": Schema.integer(minimum: 0, description: "On `sceneMembership`: how many steps of the applied plan were made."),
+        "stepsNotMade": Schema.integer(minimum: 0, description: "On `sceneMembership`: how many steps were not made, because one failed or an earlier one did. Together with `outcome` this says whether the scene may hold only some of the planned members, so a client reads the scenes again."),
         "nextRun": Schema.nullable(["type": "string", "format": "date-time", "description": "On `schedule`: when the schedule runs next, in the service's time zone, or null for a timer or a schedule with no run to come."])
       ], required: ["version", "runId", "sequence", "kind"], description: "The `data` of one frame. `commandCompleted` carries `completion`; `modemUnavailable` carries `cause` and `message`; `reconnected` says the modem is back and a client refreshes what it shows. `notification` carries `ruleId`, `ruleName`, the device as `address` and `firedAt`, and `name` only when the rule includes detail. `schedule` carries `scheduleId`, `name`, `source`, the device as `address`, `outcome`, `firedAt` and `nextRun`. `scene` carries `scene`, `name` (null when the scene has no name), `source` (`api`), `action`, `acknowledged`, `unacknowledged`, `isComplete` and `firedAt`. A scene run by a member's button or the command line is not reported, because the modem does not report its own group sends."),
       "Gap": Schema.object([

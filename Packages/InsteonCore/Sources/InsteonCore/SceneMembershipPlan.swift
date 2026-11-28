@@ -362,8 +362,16 @@ public struct SceneMembershipPlan: Hashable, Sendable {
 
   }
 
-  init(scene: UInt8, steps: [SceneMembershipStep], warnings: [SceneMembershipFinding], refusals: [SceneMembershipFinding], devices: [SceneMembershipDevice], readLines: [String]) {
+  /// The records in use of the modem's database that the plan was made from.
+  var modemRead: [BackupRecord]
 
+  /// The records of each device's database that the plan was made from, from its first to its end.
+  var deviceReads: [InsteonAddress: [BackupRecord]]
+
+  init(scene: UInt8, steps: [SceneMembershipStep], warnings: [SceneMembershipFinding], refusals: [SceneMembershipFinding], devices: [SceneMembershipDevice], readLines: [String], modemRead: [BackupRecord] = [], deviceReads: [InsteonAddress: [BackupRecord]] = [:]) {
+
+    self.modemRead = modemRead
+    self.deviceReads = deviceReads
     self.scene = scene
     self.steps = steps
     self.warnings = warnings

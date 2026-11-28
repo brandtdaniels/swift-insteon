@@ -240,6 +240,9 @@ struct EventDTO: Encodable {
   let acknowledged: [String]?
   let unacknowledged: [String]?
   let isComplete: Bool?
+  /// On `sceneMembership`: how many steps of the applied plan were made, and how many were not.
+  let stepsMade: Int?
+  let stepsNotMade: Int?
   init(_ event: ServiceEvent, at position: EventCursor) {
     runId = position.runID
     sequence = position.sequence
@@ -253,6 +256,9 @@ struct EventDTO: Encodable {
     case let .scene(run):
       ruleId = nil; ruleName = nil
       firedAt = ISO8601DateFormatter().string(from: run.firedAt)
+    case let .sceneChanged(changed):
+      ruleId = nil; ruleName = nil
+      firedAt = ISO8601DateFormatter().string(from: changed.firedAt)
     default:
       ruleId = nil; ruleName = nil; firedAt = nil
     }
@@ -275,6 +281,13 @@ struct EventDTO: Encodable {
       nextRun = run.nextRun.map { ISO8601DateFormatter().string(from: $0) }
     } else if case .scene = event {
       scheduleId = nil; source = SceneSourceName.api.rawValue; outcome = nil; reason = nil; nextRun = nil
+    } else if case let .sceneChanged(changed) = event {
+      scheduleId = nil; source = SceneSourceName.api.rawValue; reason = nil; nextRun = nil
+      switch changed.outcome {
+      case .applied: outcome = "applied"
+      case .appliedUnverified: outcome = "appliedUnverified"
+      case .incomplete: outcome = "incomplete"
+      }
     } else {
       scheduleId = nil; source = nil; outcome = nil; reason = nil; nextRun = nil
     }
@@ -284,8 +297,13 @@ struct EventDTO: Encodable {
       acknowledged = run.receipt.acknowledged.map(\.description)
       unacknowledged = run.receipt.unacknowledged.map(\.description)
       isComplete = run.receipt.isComplete
+      stepsMade = nil; stepsNotMade = nil
+    } else if case let .sceneChanged(changed) = event {
+      scene = Int(changed.number)
+      action = nil; acknowledged = nil; unacknowledged = nil; isComplete = nil
+      stepsMade = changed.stepsMade; stepsNotMade = changed.stepsNotMade
     } else {
-      scene = nil; action = nil; acknowledged = nil; unacknowledged = nil; isComplete = nil
+      scene = nil; action = nil; acknowledged = nil; unacknowledged = nil; isComplete = nil; stepsMade = nil; stepsNotMade = nil
     }
     if case let .commandCompleted(command, receipt) = event {
       completion = CommandCompletionDTO(command: command, receipt: receipt)
@@ -315,6 +333,8 @@ struct EventDTO: Encodable {
       kind = EventKind.schedule.rawValue; address = run.device.description; group = nil; name = run.name; productName = nil
     case let .scene(run):
       kind = EventKind.scene.rawValue; address = nil; group = nil; name = run.name; productName = nil
+    case .sceneChanged:
+      kind = EventKind.sceneMembership.rawValue; address = nil; group = nil; name = nil; productName = nil
     }
   }
 }

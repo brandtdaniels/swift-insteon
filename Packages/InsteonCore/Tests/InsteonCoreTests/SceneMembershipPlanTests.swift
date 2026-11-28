@@ -676,6 +676,36 @@ struct SceneMembershipPlanTests {
 
   }
 
+  @Test func refusesToRemoveAMemberWhoseGroupTheModemAlsoRespondsToBecauseDeletingItsRecordWouldTakeBothHalves() async throws {
+
+    // The modem deletes the first record of a group that names a device whatever its role, so the controller record's
+    // deletion would take the modem's responder record of the same group and device too.
+    let plan = await plan(
+      change(remove: [lamp]),
+      modemRecords: [record(.controller, group: 3, lamp), record(.responder, group: 3, lamp)],
+      lampRecords: slots([record(.responder, group: 3, modem), record(.responder, group: 9, modem)])
+    )
+
+    #expect(plan.refusals.map(\.code) == [.unexpectedDatabaseLayout])
+    #expect(plan.steps.isEmpty)
+
+  }
+
+  @Test func plansADeviceOnlyRemovalOfOneGroupWhenTheModemHoldsBothRolesButNoModemDeletionIsPlanned() async throws {
+
+    // Another group of the device stays in the scene, so the modem's record stays and nothing is deleted from the modem.
+    let plan = await plan(
+      change(removeGroups: [SceneMembershipChange.Removal(device: lamp, group: 2)]),
+      modemRecords: [record(.controller, group: 3, lamp), record(.responder, group: 3, lamp)],
+      lampRecords: slots([record(.responder, group: 3, modem, data: [0xFF, 0x1F, 0x01]), record(.responder, group: 3, modem, data: [0xFF, 0x1F, 0x02])]),
+      identities: [lamp: Self.twoGroupIdentity]
+    )
+
+    #expect(plan.refusals.isEmpty)
+    #expect(plan.steps.map(\.kind) == [.removeDeviceRecord])
+
+  }
+
   @Test func refusesAGroupThatCannotRespond() async throws {
 
     let backup = backup(modemRecords: [], [device(sensor, Self.sensorIdentity, records: slots([record(.responder, group: 9, modem)]))])

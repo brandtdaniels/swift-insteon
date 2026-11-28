@@ -39,8 +39,16 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   case unknownDevice
   case invalidScene
   case invalidMembership
+  case invalidBody
   case unknownScene
   case sceneEmpty
+  case unknownPlan
+  case planExpired
+  case planAlreadyApplied
+  case planNotApplicable
+  case planStale
+  case consentRequired
+  case consentMismatch
   case routeNotFound
   case apiMarkerMissing
   case formKeyInvalid
@@ -64,15 +72,17 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   var status: HTTPResponse.Status {
     switch self {
     case .authenticationRequired, .authenticationFailed: .unauthorized
-    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel, .invalidClient, .invalidNotificationRule, .invalidRouteRegistration, .invalidSchedule, .invalidTimer, .invalidScene, .invalidMembership: .badRequest
+    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel, .invalidClient, .invalidNotificationRule, .invalidRouteRegistration, .invalidSchedule, .invalidTimer, .invalidScene, .invalidMembership, .invalidBody: .badRequest
+    case .unknownPlan: .notFound
+    case .planExpired: .gone
     case .unknownDevice, .routeNotFound, .unknownClient, .unknownNotificationRule, .unknownRouteRegistration, .unknownSchedule, .unknownTimer, .unknownScene: .notFound
     case .forbidden, .apiMarkerMissing, .formKeyInvalid: .forbidden
     case .bodyTooLarge: .contentTooLarge
     case .unsupportedMediaType: .unsupportedMediaType
     case .requestRejected: .badRequest
-    case .busy, .notIdentified, .notLinked, .clientLimitReached, .notificationRuleLimitReached, .routeRegistrationLimitReached, .scheduleLimitReached, .timerLimitReached, .locationNotConfigured, .timeZoneUnavailable: .conflict
+    case .busy, .planAlreadyApplied, .planStale, .notIdentified, .notLinked, .clientLimitReached, .notificationRuleLimitReached, .routeRegistrationLimitReached, .scheduleLimitReached, .timerLimitReached, .locationNotConfigured, .timeZoneUnavailable: .conflict
     case .clientsNotSaved, .notificationRulesNotSaved, .routeRegistrationsNotSaved, .schedulesNotSaved: .internalServerError
-    case .unsupportedControl, .deviceRejected, .idempotencyKeyReused, .databasesUnavailable, .sceneEmpty: .unprocessableContent
+    case .unsupportedControl, .deviceRejected, .idempotencyKeyReused, .databasesUnavailable, .sceneEmpty, .planNotApplicable, .consentRequired, .consentMismatch: .unprocessableContent
     case .modemRejected, .modemUnavailable, .canceled: .serviceUnavailable
     case .deviceNotAnswering: .gatewayTimeout
     case .outcomeUnknown: .badGateway
@@ -124,8 +134,16 @@ enum APIErrorCode: String, CaseIterable, Sendable {
     case .unknownDevice: "Unknown device."
     case .invalidScene: "A scene is a group number from 1 through 254."
     case .invalidMembership: "A membership change needs `add`, a list of devices with an optional `onLevel` and `rampRate` of 0 through 255, or `remove`, a list of device addresses or `{device, group}` objects, at most 32 of each, and no other field."
+    case .invalidBody: "A field of the body has the wrong type: `consent` is an object, `writeLinkRecords` is true or false, and `readFingerprint` is a string. Nothing was sent."
     case .unknownScene: "The service holds no scene of that number that the modem controls. Refresh the scenes, or use a scene `GET /api/v1/scenes` lists as writable. Nothing was sent."
     case .sceneEmpty: "The scene has no members, so nothing was sent."
+    case .unknownPlan: "The service holds no plan with that identifier for that scene: it never made one, or it restarted since. Plan again. Nothing was written."
+    case .planExpired: "The plan is older than five minutes. Plan again. Nothing was written."
+    case .planAlreadyApplied: "The plan was applied, so it cannot be used again. Plan again from a fresh read. Nothing was written."
+    case .planNotApplicable: "The plan has a refusal or no steps, so it cannot be applied. Nothing was written."
+    case .planStale: "A database differs from what the plan was made from. Refresh the scenes and plan again. Nothing was written."
+    case .consentRequired: "Applying a plan writes ALL-Link records and needs `consent` with `writeLinkRecords` true and the plan's `readFingerprint`. An admin credential never stands in for it. Nothing was written."
+    case .consentMismatch: "The consent names another plan than this one. Send the `readFingerprint` of the plan being applied. Nothing was written."
     case .routeNotFound: "No such route."
     case .apiMarkerMissing: "An explicit API request is required."
     case .formKeyInvalid: "The form expired. Reload the page and try again."

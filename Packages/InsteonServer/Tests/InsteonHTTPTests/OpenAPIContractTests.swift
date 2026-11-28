@@ -313,6 +313,27 @@ struct OpenAPIContractTests {
     for planReceipt in [applicable, refused, removal] {
       validate(try json(SceneMembershipPlanDTO(planReceipt)), as: "SceneMembershipPlan", in: document)
     }
+    let applied = await SceneApplyExample.plan()
+    let removed = await ScenePlanExample.plan(SceneMembershipChange(scene: 4, additions: [], removals: [.init(device: ScenePlanExample.lamp)])!, lampRecords: [
+      BackupRecord(state: .inUse, role: .responder, group: 4, address: ScenePlanExample.modem, data: [255, 31, 1], memoryAddress: 0x0FFF),
+      BackupRecord(state: .end, role: .responder, group: 0, address: InsteonAddress(0, 0, 0), data: [0, 0, 0], memoryAddress: 0x0FF7)
+    ], modemRecords: [BackupRecord(state: .inUse, role: .controller, group: 4, address: ScenePlanExample.lamp, data: [0, 0, 0])])
+    let mismatch = SceneMembershipResult.Mismatch(device: ScenePlanExample.lamp, mismatch: DatabaseMismatch(isDevice: true, memoryAddress: 0x0FF7, expected: LinkRecord(isController: false, isInUse: true, group: 4, address: ScenePlanExample.modem, data: [255, 31, 1], memoryAddress: 0x0FF7), found: nil))
+    let modemMismatch = SceneMembershipResult.Mismatch(device: nil, mismatch: DatabaseMismatch(isDevice: false, memoryAddress: nil, expected: nil, found: LinkRecord(isController: true, isInUse: true, group: 4, address: ScenePlanExample.lamp, data: [0, 0, 0])))
+    for application in [
+      SceneApplyExample.application(applied),
+      SceneApplyExample.application(applied, outcomes: [.writtenOnRetry, .written]),
+      SceneApplyExample.application(applied, deviceCheck: .unanswered),
+      SceneApplyExample.application(applied, interruption: .failed("The modem stopped answering.")),
+      SceneApplyExample.application(applied, isCacheReloaded: false, expectedUnreadable: [ScenePlanExample.lamp]),
+      SceneApplyExample.application(applied, outcomes: [.written, .notReached]),
+      SceneApplyExample.application(applied, outcomes: [.rejected, .notReached], mismatches: [mismatch, modemMismatch]),
+      SceneApplyExample.application(applied, outcomes: [.written, .unanswered], interruption: .failed("The modem stopped answering.")),
+      SceneApplyExample.application(applied, outcomes: [.written, .notReached], interruption: .canceled),
+      SceneApplyExample.application(removed, outcomes: [.written, .unverifiable])
+    ] {
+      validate(try json(SceneMembershipApplicationDTO(application, requestID: "abc123")), as: "SceneMembershipApplication", in: document)
+    }
     let receipt = CommandReceipt(address: address, outcome: .acknowledged, status: nil, persistence: .saved)
     let command = ServiceCommand(address: address, action: .on, levelPercent: 50)
     let events: [ServiceEvent] = [
@@ -323,6 +344,9 @@ struct OpenAPIContractTests {
       .notification(ServiceNotification(ruleID: "basement-leak", ruleName: "Basement leak", device: address, firedAt: Date(timeIntervalSince1970: 1_800_000_000), eventName: nil)),
       .notification(ServiceNotification(ruleID: "basement-leak", ruleName: "Basement leak", device: address, firedAt: Date(timeIntervalSince1970: 1_800_000_000), eventName: "wet")),
       .scene(SceneRun(number: 3, name: nil, source: .api, action: .on, receipt: SceneReceipt(scene: 3, action: .on, acknowledged: [address], unacknowledged: [], isComplete: true, responderCount: 1, persistence: .saved), firedAt: Date(timeIntervalSince1970: 1_800_000_000))),
+      .sceneChanged(SceneChanged(number: 4, source: .api, outcome: .applied, stepsMade: 3, stepsNotMade: 0, firedAt: Date(timeIntervalSince1970: 1_800_000_000))),
+      .sceneChanged(SceneChanged(number: 4, source: .api, outcome: .appliedUnverified, stepsMade: 3, stepsNotMade: 0, firedAt: Date(timeIntervalSince1970: 1_800_000_000))),
+      .sceneChanged(SceneChanged(number: 4, source: .api, outcome: .incomplete, stepsMade: 1, stepsNotMade: 2, firedAt: Date(timeIntervalSince1970: 1_800_000_000))),
       .scene(SceneRun(number: 4, name: "Evening", source: .api, action: .off, receipt: SceneReceipt(scene: 4, action: .off, acknowledged: [], unacknowledged: [address], isComplete: false, responderCount: 1), firedAt: Date(timeIntervalSince1970: 1_800_000_000)))
     ] + [
       ScheduleRun.Outcome.acknowledged, .missed, .unavailable(.hubUnreachable), .refused(.notLinked), .unknown
@@ -444,6 +468,24 @@ struct OpenAPIContractTests {
     for body in [#"{}"#, #"{"action":"remove"}"#, #"{"action":"on","levelPercent":101}"#, #"{"action":"on","levle":50}"#, #"{"action":"on","levelPercent":"50"}"#] {
       let value = try JSONSerialization.jsonObject(with: Data(body.utf8))
       #expect(!validator.validate(value, against: command, path: "Command").isEmpty, "\(body)")
+    }
+  }
+
+  @Test func theApplyRequestSchemaAcceptsTheConsentTheServerTakesAndRefusesWhatItRefuses() async throws {
+    let (_, document) = try await fetch()
+    let validator = SchemaValidator(document: document)
+    let request: [String: Any] = ["$ref": "#/components/schemas/SceneMembershipApplyRequest"]
+    let fingerprint = "sha256:" + String(repeating: "a", count: 64)
+    for body in [#"{"consent":{"writeLinkRecords":true,"readFingerprint":"\#(fingerprint)"}}"#] {
+      let value = try JSONSerialization.jsonObject(with: Data(body.utf8))
+      #expect(validator.validate(value, against: request, path: "SceneMembershipApplyRequest").isEmpty, "\(body)")
+      #expect(try SceneMembershipApplyBody(Data(body.utf8)).consent == DatabaseLinkConsent(writeLinkRecords: true, readFingerprint: fingerprint))
+    }
+    for body in [#"{}"#, #"{"consent":{"writeLinkRecords":false,"readFingerprint":"\#(fingerprint)"}}"#, #"{"consent":{"writeLinkRecords":true}}"#, #"{"consent":{"writeLinkRecords":true,"readFingerprint":"\#(fingerprint)","force":true}}"#, #"{"consent":{"writeLinkRecords":true,"readFingerprint":"\#(fingerprint)"},"force":true}"#] {
+      let value = try JSONSerialization.jsonObject(with: Data(body.utf8))
+      #expect(!validator.validate(value, against: request, path: "SceneMembershipApplyRequest").isEmpty, "\(body)")
+      // What the schema refuses the server never takes as consent: it is no consent or a malformed body.
+      #expect((try? SceneMembershipApplyBody(Data(body.utf8)))?.consent == nil, "\(body)")
     }
   }
 
