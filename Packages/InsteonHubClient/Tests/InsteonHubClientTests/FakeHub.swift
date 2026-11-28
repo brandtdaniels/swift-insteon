@@ -131,6 +131,8 @@ actor FakeHub: HTTPClient {
       clear()
       deliver(respond(command))
       writesContinuation.yield(command)
+    case "/0":
+      break
     case "/1":
       clear()
     case "/buffstatus.xml":

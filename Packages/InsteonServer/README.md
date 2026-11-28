@@ -731,13 +731,14 @@ curl -s -X POST -H "Authorization: Bearer $(cat control.token)" -H "X-Insteon-Re
 
 ### Advanced settings
 
-These tune how long a scene run waits. The standard values are unverified, so a bench run on a Hub 2 can show whether they fit; each setting is a flag, with an environment variable of the same name in capitals with the `INSTEON_` prefix, and the flag wins over the variable, which wins over the standard value. The variable can be in the process's environment or in the environment file (the process's winning), like the Hub's settings; the log level's variable is the exception, since logging starts before the file is read. A value out of range stops the server at start with its own code and exit status 78 (`scene_echo_wait_invalid`, `scene_cleanup_quiet_invalid`, `scene_cleanup_cap_invalid`); the message names the flag and the variable, never the value.
+These tune how long a scene run waits and how often a Hub is polled. The standard values are unverified, so a bench run on a Hub 2 can show whether they fit; each setting is a flag, with an environment variable of the same name in capitals with the `INSTEON_` prefix, and the flag wins over the variable, which wins over the standard value. The variable can be in the process's environment or in the environment file (the process's winning), like the Hub's settings; the log level's variable is the exception, since logging starts before the file is read. A value out of range stops the server at start with its own code and exit status 78 (`scene_echo_wait_invalid`, `scene_cleanup_quiet_invalid`, `scene_cleanup_cap_invalid`); the message names the flag and the variable, never the value.
 
 | Flag | Variable | Standard | Range | What it is |
 | --- | --- | --- | --- | --- |
 | `--scene-echo-wait-ms` | `INSTEON_SCENE_ECHO_WAIT_MS` | 5000 | 1 through 60000 | How long a run waits for the modem to accept the group command. No echo is `outcomeUnknown`. |
 | `--scene-cleanup-quiet-ms` | `INSTEON_SCENE_CLEANUP_QUIET_MS` | 15000 | 2150 up to the cap | How long a run waits for more cleanup traffic before it gives up on the report. It can't be shorter than 2150, the Insteon Developer's Guide's time for the first cleanup. When you set only a shorter cap, it is the cap, so setting just the cap works; a quiet period you set that passes the cap is refused as the quiet period. |
 | `--scene-cleanup-cap-ms` | `INSTEON_SCENE_CLEANUP_CAP_MS` | 60000 | 2150 through 300000 | The longest a run waits for the report however much traffic comes, so a run holds the admission gate for a bounded time. |
+| `--hub-poll-interval-ms` | `INSTEON_HUB_POLL_INTERVAL_MS` | 500 | 50 through 5000 | How often a Hub's buffer is read while the service waits for a reply. A shorter interval sees a reply sooner and sends more requests to the Hub. Unverified. Health lists it as `hub.pollIntervalMs`. |
 
 `GET /api/v1/health` lists every value in use as `tuning`: an array of `{name, value, unit, source}` with the unit `ms` and a source of `default`, `flag` or `environment`, for example `scenes.echoWaitMs`. A client ignores a name it doesn't know. The settings are grouped by who uses them, so other groups of settings can be added in the same way.
 
@@ -1024,6 +1025,21 @@ INSTEON_LOG_LEVEL=debug insteon-server --hub 192.168.1.20
 ```
 
 The debug lines are the scene run's, `scene run finished` and `scene run failed`. They carry the scene number, the action, the seconds the run took, whether the cleanups completed, how many members acknowledged them and, for a failure, its code. Debug lines carry no device addresses, no credentials and nothing a client sent. This holds unless a later change says otherwise in its pull request and here.
+
+### Tracing
+
+At `--log-level trace`, and only then, the server logs the raw traffic to its modem, one line each, to standard error. For a Hub, a line for every request it sends (the path and, for a command, its bytes) and for every read of the Hub's buffer: the bytes new since the previous read, the buffer's end position, whether the cursor treated the buffer as `advanced`, `wrapped`, `cleared` (all zeros), `refilled` (cleared, then written again) or `unchanged`, and `gap=` the time since the previous read. For a serial modem, every frame written and every chunk read. Each line starts with the time since the previous line. Reads that bring nothing new are not logged one by one: the first after a change is, and the quiet reads after it are counted into one line, `hub read unchanged x59 for 29.500s`, written when the next change or request comes, and at least every 30 seconds, so the gaps stay known. Above the trace level nothing is built, so a server that isn't tracing does no work for it.
+
+```
++0.000s hub request /3 02 62 @A1 0F 11 FF
++0.512s hub read end=11 cursor=advanced gap=0.512s 02 62 @A1 0F 11 FF 06
+```
+
+Insteon addresses are masked: each 3-byte address in a frame the trace recognizes shows as a short tag such as `@A1`. The same address has the same tag for one run of the server, a different address another tag, and a new run uses a new salt, so a tag means nothing outside its trace. Masking is best effort. It knows the frames numbered `0x50`, `0x51`, `0x53`, `0x56`, `0x57`, `0x5C`, `0x60`, `0x62` and `0x6F`; the layouts of `0x56` (six bytes, a group then an address) and `0x5C` (like `0x50`) are inferred from a Hub 2's bench trace. In a frame it doesn't know, a three-byte run that is an address seen earlier in the same read is masked too; other bytes outside a recognized frame show as they are. The trace never holds the Hub's user name or password or the `Authorization` header.
+
+`--trace-addresses`, or `INSTEON_TRACE_ADDRESSES=1` in the process's environment, turns masking off; the option wins. An unmasked trace names your devices, so treat it as sensitive and don't post it.
+
+To send a trace, run with `--log-level trace`, do one thing (such as run a scene), copy the lines around it from standard error, and paste them in the report as they are, masked.
 
 The server is a prototype for local and private VPN testing. Tests cover a real local HTTP
 listener and an in-memory modem. macOS and physical hardware validation are still required

@@ -34,6 +34,10 @@ public struct ServerOptions: Sendable {
   /// How much the server logs: `--log-level`, else `INSTEON_LOG_LEVEL` in the process's environment,
   /// else `info`. The environment file is read later and doesn't set it.
   public let logLevel: Logger.Level
+  /// Whether a wire trace shows Insteon addresses as they are, from `--trace-addresses`, else
+  /// `INSTEON_TRACE_ADDRESSES=1` in the process's environment, else false: addresses are masked.
+  /// The option wins over the variable. A trace is written only at the `trace` log level.
+  public let traceAddresses: Bool
   /// The tuning the service runs with: each value from its flag, else its `INSTEON_` environment
   /// variable, else the standard value. Checked with ``ServiceTuning/validated()``.
   public let tuning: ServiceTuning
@@ -44,10 +48,17 @@ public struct ServerOptions: Sendable {
   /// Hub resolution and file permissions are checked by the CLI's existing helpers.
   public init(arguments: [String], environment: [String: String]) throws {
     var options: [String: String] = [:]
-    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--network-name", "--poll-interval", "--latitude", "--longitude", "--time-zone", "--log-level", "--scene-echo-wait-ms", "--scene-cleanup-quiet-ms", "--scene-cleanup-cap-ms"]
+    let names: Set<String> = ["--listen", "--port", "--hub", "--serial", "--env-file", "--state", "--advertise-url", "--network-name", "--poll-interval", "--latitude", "--longitude", "--time-zone", "--log-level", "--scene-echo-wait-ms", "--scene-cleanup-quiet-ms", "--scene-cleanup-cap-ms", "--hub-poll-interval-ms"]
+    let flags: Set<String> = ["--trace-addresses"]
+    var givenFlags: Set<String> = []
     var index = 0
     while index < arguments.count {
       let name = arguments[index]
+      if flags.contains(name) {
+        guard givenFlags.insert(name).inserted else { throw ServerOptionError.invalidArguments }
+        index += 1
+        continue
+      }
       guard names.contains(name), options[name] == nil, index + 1 < arguments.count else { throw ServerOptionError.invalidArguments }
       let value = arguments[index + 1]
       guard !value.isEmpty, !value.hasPrefix("--") else { throw ServerOptionError.invalidArguments }
@@ -93,6 +104,11 @@ public struct ServerOptions: Sendable {
     let fromEnvironment = try environment["INSTEON_LOG_LEVEL"].map { try Self.level($0) }
     let fromOption = try options["--log-level"].map { try Self.level($0) }
     self.logLevel = fromOption ?? fromEnvironment ?? .info
+    switch environment["INSTEON_TRACE_ADDRESSES"] {
+    case nil, "0": self.traceAddresses = givenFlags.contains("--trace-addresses")
+    case "1": self.traceAddresses = true
+    default: throw ServerOptionError.invalidTraceAddresses
+    }
     var scenes = ServiceTuning.Scenes.standard
     var sources: [String: TuningSource] = [:]
     // A flag beats its environment variable, which beats the standard value.
@@ -109,13 +125,16 @@ public struct ServerOptions: Sendable {
     if let value = try milliseconds("--scene-cleanup-cap-ms", "INSTEON_SCENE_CLEANUP_CAP_MS", ServiceTuningError.Field.scenesCleanupCap.name, .invalidSceneCleanupCap) { scenes.cleanupCap = value }
     // A quiet period nobody set follows a cap shorter than its standard value, so setting only a short cap works.
     if sources[ServiceTuningError.Field.scenesCleanupQuiet.name] == nil { scenes.cleanupQuietPeriod = min(scenes.cleanupQuietPeriod, scenes.cleanupCap) }
+    var hub = ServiceTuning.Hub.standard
+    if let value = try milliseconds("--hub-poll-interval-ms", "INSTEON_HUB_POLL_INTERVAL_MS", ServiceTuningError.Field.hubPollInterval.name, .invalidHubPollInterval) { hub.pollInterval = value }
     do {
-      tuning = try ServiceTuning(scenes: scenes).validated()
+      tuning = try ServiceTuning(scenes: scenes, hub: hub).validated()
     } catch ServiceTuningError.invalid(let field) {
       switch field {
       case .scenesEchoWait: throw ServerOptionError.invalidSceneEchoWait
       case .scenesCleanupQuiet: throw ServerOptionError.invalidSceneCleanupQuiet
       case .scenesCleanupCap: throw ServerOptionError.invalidSceneCleanupCap
+      case .hubPollInterval: throw ServerOptionError.invalidHubPollInterval
       }
     }
     tuningSources = sources
@@ -164,6 +183,8 @@ public enum ServerOptionError: Error, CustomStringConvertible {
   case invalidTimeZone
   /// `--log-level` or `INSTEON_LOG_LEVEL` isn't trace, debug, info, notice, warning, error or critical.
   case invalidLogLevel
+  /// `INSTEON_TRACE_ADDRESSES` isn't `0` or `1`.
+  case invalidTraceAddresses
   /// `--scene-echo-wait-ms` or its variable isn't a whole number of milliseconds from 1 through 60000.
   case invalidSceneEchoWait
   /// `--scene-cleanup-quiet-ms` or its variable isn't a whole number of milliseconds from 2150
@@ -171,6 +192,8 @@ public enum ServerOptionError: Error, CustomStringConvertible {
   case invalidSceneCleanupQuiet
   /// `--scene-cleanup-cap-ms` or its variable isn't a whole number of milliseconds from 2150 through 300000.
   case invalidSceneCleanupCap
+  /// `--hub-poll-interval-ms` or its variable isn't a whole number of milliseconds from 50 through 5000.
+  case invalidHubPollInterval
   /// A `pair` command needs a client name of 1 through 64 characters and a scope of read, control or admin.
   case invalidClient
 

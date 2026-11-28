@@ -135,7 +135,7 @@ public actor HubConnection: ModemConnection {
 
         let buffer: HubBuffer = try await hub.readBuffer()
         hasAnswered = true
-        unreadBytes += Self.collapsingNAKRun(cursor.advance(to: buffer))
+        unreadBytes += Self.collapsingNAKRun(advanceCursor(to: buffer))
 
       } catch {
 
@@ -288,7 +288,7 @@ public actor HubConnection: ModemConnection {
       let buffer: HubBuffer = try await hub.readBuffer()
       hasAnswered = true
 
-      let received = unreadBytes + Self.collapsingNAKRun(cursor.advance(to: buffer))
+      let received = unreadBytes + Self.collapsingNAKRun(advanceCursor(to: buffer))
       unreadBytes = []
 
       return received
@@ -366,6 +366,17 @@ public actor HubConnection: ModemConnection {
     default:
       true
     }
+
+  }
+
+  /// The bytes new since the last read, traced with the buffer's end and how the cursor read it.
+  private func advanceCursor(to buffer: HubBuffer) -> [UInt8] {
+
+    let (bytes, step) = cursor.advanceReporting(to: buffer)
+
+    hub.wireTrace?.trace(.hubBuffer(endIndex: buffer.endIndex, step: step), bytes, at: .now)
+
+    return bytes
 
   }
 
