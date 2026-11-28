@@ -117,16 +117,6 @@ private enum Outcome<Reply: Sendable>: Sendable {
 
 }
 
-/// What a listener on a device's reads hears: a reply, or the end of the read of bytes that
-/// completed the replies before it, with whether the bytes of a frame it began are still pending.
-enum ReplyRead<Reply: Sendable>: Sendable {
-
-  case reply(Reply)
-
-  case endOfRead(hasPendingFrame: Bool)
-
-}
-
 /// Paces commands to a device that answers each one before it takes the next, such as a
 /// PowerLinc Modem or a PowerLinc Controller.
 ///
@@ -194,9 +184,6 @@ actor CommandPacer<Parser: ReplyParser> {
 
   private var subscribers: [AsyncStream<Reply>.Continuation] = []
 
-  /// The subscribers that also hear where each read of bytes ends.
-  private var readSubscribers: [AsyncStream<ReplyRead<Reply>>.Continuation] = []
-
   private var pendingAnswer: PendingAnswer?
 
   private var unansweredCommand: UnansweredCommand?
@@ -252,18 +239,7 @@ actor CommandPacer<Parser: ReplyParser> {
       for try await chunk in connection.receive() {
 
         receivedChunks &+= 1
-
-        let replies = parser.parse(chunk)
-
-        deliver(replies)
-
-        if !replies.isEmpty {
-
-          let hasPendingFrame: Bool = parser.pendingFrameStart != nil
-
-          for subscriber in readSubscribers { subscriber.yield(.endOfRead(hasPendingFrame: hasPendingFrame)) }
-
-        }
+        deliver(parser.parse(chunk))
 
       }
 
@@ -337,14 +313,6 @@ actor CommandPacer<Parser: ReplyParser> {
 
     }
 
-    /// Like ``replies()``, with a mark after the last reply of each read of bytes that had any,
-    /// so a body can tell what arrived together.
-    func reads() async -> AsyncStream<ReplyRead<Reply>> {
-
-      await pacer.reads()
-
-    }
-
   }
 
   /// Holds one turn while `body` sends commands, for a sequence whose next command depends on
@@ -406,26 +374,6 @@ actor CommandPacer<Parser: ReplyParser> {
     } else {
 
       subscribers.append(continuation)
-
-    }
-
-    return stream
-
-  }
-
-  /// Returns a stream of everything the device sends after this call, with a mark where each
-  /// read of bytes that completed any reply ends. It finishes when the device closes.
-  func reads() -> AsyncStream<ReplyRead<Reply>> {
-
-    let (stream, continuation) = AsyncStream<ReplyRead<Reply>>.makeStream()
-
-    if isClosed {
-
-      continuation.finish()
-
-    } else {
-
-      readSubscribers.append(continuation)
 
     }
 
@@ -832,18 +780,6 @@ actor CommandPacer<Parser: ReplyParser> {
 
       }
 
-      readSubscribers.removeAll { subscriber in
-
-        if case .terminated = subscriber.yield(.reply(reply)) {
-
-          return true
-
-        }
-
-        return false
-
-      }
-
       // A stream whose listener has stopped listening is dropped.
       subscribers.removeAll { subscriber in
 
@@ -873,14 +809,6 @@ actor CommandPacer<Parser: ReplyParser> {
     }
 
     subscribers.removeAll()
-
-    for subscriber in readSubscribers {
-
-      subscriber.finish()
-
-    }
-
-    readSubscribers.removeAll()
 
   }
 

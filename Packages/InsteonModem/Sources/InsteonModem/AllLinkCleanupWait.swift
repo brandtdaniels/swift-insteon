@@ -6,7 +6,7 @@
 /// Cleanup Failure Report), and gives up after ``quietPeriod`` with none, or at ``cap`` after the
 /// modem accepted the command, whichever comes first. Once the status report comes it keeps
 /// listening for ``grace`` for the cleanup acknowledgments, NAKs and failure reports behind it,
-/// and stops sooner if the read of bytes that held the report held nothing more.
+/// whether they come in the same read of bytes as the report or a later one.
 ///
 /// A quiet period longer than the cap is clamped to it, and the values aren't checked here: only the
 /// server's options validate them, with ``Modem``'s callers free to pass any.

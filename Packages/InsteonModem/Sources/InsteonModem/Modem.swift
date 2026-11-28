@@ -306,8 +306,8 @@ public actor Modem: SerialCommandSender {
   /// before then cancels the rest of the cleanups. Meanwhile each member's cleanup acknowledgment,
   /// cleanup NAK or ALL-Link Cleanup Failure Report (`0x56`) is collected.
   /// A Hub was seen to send the status report ahead of a member's acknowledgment, so the call
-  /// goes on collecting them for `wait.grace` after it, and stops sooner when the read of bytes
-  /// that held the report left no frame pending.
+  /// goes on collecting them for `wait.grace` after it, whatever else arrives or doesn't, so a
+  /// run takes that much longer.
   ///
   /// The command counts as sent once the modem echoes it with an ACK. After that the call waits
   /// for the status report while cleanup traffic keeps arriving, as `wait` says. If the report
@@ -352,7 +352,7 @@ public actor Modem: SerialCommandSender {
 
       // Listening starts within the turn, after any earlier command has been answered, so
       // only this command's cleanups are heard.
-      let replies = await turn.reads()
+      let replies = await turn.replies()
 
       _ = try await turn.send(exchange)
 
@@ -416,10 +416,6 @@ public actor Modem: SerialCommandSender {
 
     case reply(ModemReply)
 
-    /// The read of bytes that completed the replies before this ended, and whether it left the
-    /// bytes of a frame pending.
-    case endOfRead(hasPendingFrame: Bool)
-
     case repliesEnded
 
     /// The timer started with this number went off.
@@ -433,7 +429,7 @@ public actor Modem: SerialCommandSender {
   /// Replies and timers feed one stream of events that this reads in order, so what each message
   /// does to the wait never depends on which task ran first.
   private static func collectCleanups(
-    in replies: AsyncStream<ReplyRead<ModemReply>>,
+    in replies: AsyncStream<ModemReply>,
     for serialCommand: SerialCommand,
     group: AllLinkGroupNumber,
     command1: UInt8,
@@ -448,12 +444,9 @@ public actor Modem: SerialCommandSender {
 
       tasks.addTask {
 
-        for await read in replies {
+        for await reply in replies {
 
-          switch read {
-          case let .reply(reply): continuation.yield(.reply(reply))
-          case let .endOfRead(hasPendingFrame): continuation.yield(.endOfRead(hasPendingFrame: hasPendingFrame))
-          }
+          continuation.yield(.reply(reply))
 
         }
 
@@ -505,17 +498,6 @@ public actor Modem: SerialCommandSender {
           tasks.cancelAll()
 
           return collected
-        case let .endOfRead(hasPendingFrame):
-          // The read left nothing more pending in the buffer, so nothing is on its way behind the
-          // status report, and a frame cut off at its end is waited for, up to the grace.
-          if inGrace && !hasPendingFrame {
-
-            cancelTimer?.finish()
-            tasks.cancelAll()
-
-            return collected
-
-          }
         case let .timer(number):
           // A timer from before the latest cleanup message doesn't count.
           if number == timerNumber {

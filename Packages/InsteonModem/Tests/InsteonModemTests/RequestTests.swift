@@ -688,7 +688,7 @@ struct RequestTests {
 
     try await run(modem) {
 
-      let report = try await modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+      let report = try await sendAfterGrace(modem, group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
 
       #expect(report == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [keypad], isComplete: true))
 
@@ -707,7 +707,7 @@ struct RequestTests {
 
     try await run(modem) {
 
-      let report = try await modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x13, command2: 0x00))
+      let report = try await sendAfterGrace(modem, group: 0x01, command: Command(command1: 0x13, command2: 0x00))
 
       #expect(report == AllLinkCleanupReport(acknowledged: [], unacknowledged: [], isComplete: false))
 
@@ -725,7 +725,7 @@ struct RequestTests {
 
     try await run(modem) {
 
-      let report = try await modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+      let report = try await sendAfterGrace(modem, group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
 
       #expect(report == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [], isComplete: true))
 
@@ -744,7 +744,7 @@ struct RequestTests {
 
     try await run(modem) {
 
-      let report = try await modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+      let report = try await sendAfterGrace(modem, group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
 
       #expect(report == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [], isComplete: true))
 
@@ -766,7 +766,7 @@ struct RequestTests {
 
     try await run(modem) {
 
-      let report = try await modem.sendAllLinkCommand(group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
+      let report = try await sendAfterGrace(modem, group: 0x01, command: Command(command1: 0x11, command2: 0xFF))
 
       // The lamp acknowledged, so a later failure report for it doesn't list it twice.
       #expect(report == AllLinkCleanupReport(acknowledged: [lamp], unacknowledged: [], isComplete: true))
@@ -789,7 +789,7 @@ struct RequestTests {
 
     try await run(modem) {
 
-      let report = try await modem.sendAllLinkCommand(group: 0x05, command: Command(command1: 0x13, command2: 0x00))
+      let report = try await sendAfterGrace(modem, group: 0x05, command: Command(command1: 0x13, command2: 0x00))
 
       #expect(report.unacknowledged == [InsteonAddress(0xC1, 0xC2, 0xC3)])
       #expect(report.isComplete)
@@ -812,13 +812,29 @@ struct RequestTests {
 
     try await run(modem) {
 
-      let report = try await modem.sendAllLinkCommand(group: 0x05, command: Command(command1: 0x13, command2: 0x00))
+      let report = try await sendAfterGrace(modem, group: 0x05, command: Command(command1: 0x13, command2: 0x00))
 
       #expect(report.unacknowledged == [InsteonAddress(0xC1, 0xC2, 0xC3)])
       #expect(report.isComplete)
       #expect(report.statusReportAfter != nil)
 
     }
+
+  }
+
+  /// Sends an ALL-Link command whose status report comes at once, and lets the grace after the report pass.
+  func sendAfterGrace(
+    _ modem: Modem,
+    group: AllLinkGroupNumber,
+    command: Command,
+    wait: AllLinkCleanupWait = .standard
+  ) async throws -> AllLinkCleanupReport {
+
+    async let report = modem.sendAllLinkCommand(group: group, command: command, wait: wait)
+    await clock.waitForSleeper(until: clock.now.offset + wait.grace)
+    clock.advance(by: wait.grace)
+
+    return try await report
 
   }
 
@@ -838,7 +854,7 @@ struct RequestTests {
 
     try await run(modem) {
 
-      let report = try await modem.sendAllLinkCommand(group: 0x05, command: Command(command1: 0x13, command2: 0x00))
+      let report = try await sendAfterGrace(modem, group: 0x05, command: Command(command1: 0x13, command2: 0x00))
 
       #expect(report.acknowledged == [plug])
       #expect(report.unacknowledged == [silent])
@@ -848,19 +864,39 @@ struct RequestTests {
 
   }
 
-  // An acknowledgment cut off at the end of the read that held the status report is still pending in
-  // the buffer, so the wait goes on for it, up to the grace.
-  @Test func waitsTheGraceForAnAcknowledgmentCutOffBehindTheStatusReport() async throws {
+  // The grace is how the wait ends after the status report, whatever else is or isn't coming: the
+  // quiet period (10 seconds here) and the cap (40) are far later.
+  @Test(arguments: [[], [0x02, 0x50, 0xD1]] as [[UInt8]])
+  func endsAtTheGraceAfterAStatusReportWithNothingBehindIt(_ behind: [UInt8]) async throws {
 
-    let plug = InsteonAddress(0xD1, 0xD2, 0xD3)
     let silent = InsteonAddress(0xC1, 0xC2, 0xC3)
-    let late = InsteonAddress(0xE1, 0xE2, 0xE3)
     let echo: [UInt8] = [0x02, 0x61, 0x05, 0x13, 0x00, 0x06]
     let failure: [UInt8] = [0x02, 0x56, 0x05] + silent.bytes
     let status: [UInt8] = [0x02, 0x58, 0x06]
+    let connection = ScriptedConnection { _, _ in echo + failure + status + behind }
+    let modem = makeModem(connection)
+    let wait = AllLinkCleanupWait(echo: .seconds(5), quietPeriod: .seconds(10), cap: .seconds(40), grace: .milliseconds(500))
+
+    try await run(modem) {
+
+      let result = try await sendAfterGrace(modem, group: 0x05, command: Command(command1: 0x13, command2: 0x00), wait: wait)
+
+      #expect(result.unacknowledged == [silent])
+      #expect(result.isComplete)
+
+    }
+
+  }
+
+  // An acknowledgment that comes in a later read, inside the grace, is collected; the grace isn't
+  // extended by it, so the run still ends 500 milliseconds after the report.
+  @Test func collectsAnAcknowledgmentThatComesInALaterReadInsideTheGrace() async throws {
+
+    let plug = InsteonAddress(0xD1, 0xD2, 0xD3)
+    let echo: [UInt8] = [0x02, 0x61, 0x05, 0x13, 0x00, 0x06]
+    let status: [UInt8] = [0x02, 0x58, 0x06]
     let ack = received(from: plug, .allLinkCleanupAcknowledgment, command1: 0x13, command2: 0x05)
-    let lateAck = received(from: late, .allLinkCleanupAcknowledgment, command1: 0x13, command2: 0x05)
-    let connection = ScriptedConnection { _, _ in echo + failure + status + ack.prefix(5) }
+    let connection = ScriptedConnection { _, _ in echo + status }
     let modem = makeModem(connection)
     let wait = AllLinkCleanupWait(echo: .seconds(5), quietPeriod: .seconds(10), cap: .seconds(40), grace: .milliseconds(500))
 
@@ -869,42 +905,35 @@ struct RequestTests {
       async let report = modem.sendAllLinkCommand(group: 0x05, command: Command(command1: 0x13, command2: 0x00), wait: wait)
       await clock.waitForSleeper(until: .milliseconds(500))
       clock.advance(by: .milliseconds(400))
-      // The rest of the first acknowledgment, and a second one that comes in the same read but cut off.
-      connection.incoming.yield(Array(ack.dropFirst(5)) + lateAck.prefix(5))
+      connection.incoming.yield(ack)
       clock.advance(by: .milliseconds(100))
 
       let result = try await report
 
-      // The second doesn't extend the grace, so it ends at 500 milliseconds with only the first heard.
       #expect(result.acknowledged == [plug])
-      #expect(result.unacknowledged == [silent])
       #expect(result.isComplete)
 
     }
 
   }
 
-  // With nothing behind the status report but a cut-off frame that never completes, the run ends
-  // after the grace at most, and it isn't a timeout.
-  @Test func endsAfterTheGraceWhenNothingFollowsTheStatusReport() async throws {
+  // Once the grace has passed the run is over, so a later acknowledgment isn't in its report.
+  @Test func doesNotCollectAnAcknowledgmentAfterTheGrace() async throws {
 
-    let silent = InsteonAddress(0xC1, 0xC2, 0xC3)
+    let plug = InsteonAddress(0xD1, 0xD2, 0xD3)
     let echo: [UInt8] = [0x02, 0x61, 0x05, 0x13, 0x00, 0x06]
-    let failure: [UInt8] = [0x02, 0x56, 0x05] + silent.bytes
     let status: [UInt8] = [0x02, 0x58, 0x06]
-    let connection = ScriptedConnection { _, _ in echo + failure + status + [0x02, 0x50, 0xD1] }
+    let ack = received(from: plug, .allLinkCleanupAcknowledgment, command1: 0x13, command2: 0x05)
+    let connection = ScriptedConnection { _, _ in echo + status }
     let modem = makeModem(connection)
     let wait = AllLinkCleanupWait(echo: .seconds(5), quietPeriod: .seconds(10), cap: .seconds(40), grace: .milliseconds(500))
 
     try await run(modem) {
 
-      async let report = modem.sendAllLinkCommand(group: 0x05, command: Command(command1: 0x13, command2: 0x00), wait: wait)
-      await clock.waitForSleeper(until: .milliseconds(500))
-      clock.advance(by: .milliseconds(500))
+      let result = try await sendAfterGrace(modem, group: 0x05, command: Command(command1: 0x13, command2: 0x00), wait: wait)
+      connection.incoming.yield(ack)
 
-      let result = try await report
-
-      #expect(result.unacknowledged == [silent])
+      #expect(result.acknowledged.isEmpty)
       #expect(result.isComplete)
 
     }
@@ -1061,6 +1090,8 @@ struct RequestTests {
       await clock.waitForSleeper(until: .seconds(35))
       clock.advance(by: .seconds(5))
       connection.incoming.yield([0x02, 0x58, 0x06])
+      await clock.waitForSleeper(until: .milliseconds(25500))
+      clock.advance(by: .milliseconds(500))
 
       let result = try await report
 
@@ -1169,6 +1200,8 @@ struct RequestTests {
       await clock.waitForSleeper(until: .seconds(58))
       clock.advance(by: .seconds(4))
       connection.incoming.yield(ack + [0x02, 0x58, 0x06])
+      await clock.waitForSleeper(until: .milliseconds(47500))
+      clock.advance(by: .milliseconds(500))
 
       let result = try await report
 
