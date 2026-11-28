@@ -777,9 +777,14 @@ private struct Planning {
 
     let modemHalves: [BackupRecord] = modemLinks(of: address)
 
+    let staying: [BackupRecord] = sceneRecords.filter { (record: BackupRecord) -> Bool in !doomed.contains(record) }
+    // The modem's record goes when no group of the device stays in the scene, and then first, so the
+    // device keeps its record of the modem until its last write.
+    let removedModem: [BackupRecord] = staying.isEmpty ? modemHalves : []
+
     // The modem deletes its first record of a group that names a device whatever its role, so a responder record of
     // the same group and device would go with the controller's. The plan doesn't take what it doesn't show.
-    if !modemHalves.isEmpty, modemRecords.contains(where: { (record: BackupRecord) -> Bool in
+    if !removedModem.isEmpty, modemRecords.contains(where: { (record: BackupRecord) -> Bool in
       record.isInUse && record.role == .responder && record.group == change.scene && record.address == address
     }) {
 
@@ -788,11 +793,6 @@ private struct Planning {
       return
 
     }
-
-    let staying: [BackupRecord] = sceneRecords.filter { (record: BackupRecord) -> Bool in !doomed.contains(record) }
-    // The modem's record goes when no group of the device stays in the scene, and then first, so the
-    // device keeps its record of the modem until its last write.
-    let removedModem: [BackupRecord] = staying.isEmpty ? modemHalves : []
 
     guard doomed.allSatisfy({ (record: BackupRecord) -> Bool in record.memoryAddress != nil }) else {
 
