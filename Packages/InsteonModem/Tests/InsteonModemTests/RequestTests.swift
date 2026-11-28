@@ -906,11 +906,51 @@ struct RequestTests {
       await clock.waitForSleeper(until: .milliseconds(500))
       clock.advance(by: .milliseconds(400))
       connection.incoming.yield(ack)
+      // Lets the acknowledgment reach the wait before the grace ends.
+      for _ in 0..<200 { await Task.yield() }
       clock.advance(by: .milliseconds(100))
 
       let result = try await report
 
       #expect(result.acknowledged == [plug])
+      #expect(result.isComplete)
+
+    }
+
+  }
+
+  // The quiet period started by earlier traffic runs out during the grace, but it is no longer the
+  // timer that counts: the report started the grace's own.
+  @Test func aQuietPeriodStartedBeforeTheStatusReportDoesNotEndTheGrace() async throws {
+
+    let early = InsteonAddress(0xD1, 0xD2, 0xD3)
+    let late = InsteonAddress(0xE1, 0xE2, 0xE3)
+    let echo: [UInt8] = [0x02, 0x61, 0x05, 0x13, 0x00, 0x06]
+    let earlyAck = received(from: early, .allLinkCleanupAcknowledgment, command1: 0x13, command2: 0x05)
+    let lateAck = received(from: late, .allLinkCleanupAcknowledgment, command1: 0x13, command2: 0x05)
+    let connection = ScriptedConnection { _, _ in echo + earlyAck }
+    let modem = makeModem(connection)
+    let wait = AllLinkCleanupWait(echo: .seconds(5), quietPeriod: .seconds(15), cap: .seconds(60), grace: .milliseconds(500))
+
+    try await run(modem) {
+
+      async let report = modem.sendAllLinkCommand(group: 0x05, command: Command(command1: 0x13, command2: 0x00), wait: wait)
+      // The traffic at time zero started a quiet period that ends at 15 seconds.
+      await clock.waitForSleeper(until: .seconds(15))
+      clock.advance(by: .milliseconds(14900))
+      connection.incoming.yield([0x02, 0x58, 0x06])
+      await clock.waitForSleeper(until: .milliseconds(15400))
+      // Past the 15 seconds, inside the grace.
+      clock.advance(by: .milliseconds(400))
+      connection.incoming.yield(lateAck)
+      // Lets the acknowledgment reach the wait before the grace ends.
+      for _ in 0..<200 { await Task.yield() }
+      clock.advance(by: .milliseconds(100))
+
+      let result = try await report
+
+      #expect(result.acknowledged == [early, late])
+      #expect(result.statusReportAfter == .milliseconds(14900))
       #expect(result.isComplete)
 
     }
