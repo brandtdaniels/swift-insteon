@@ -523,6 +523,30 @@ struct SceneMembershipApplyTests {
     #expect(await memory.writes.count == 1)
   }
 
+  @Test func stillReadsTheDatabasesAgainWhenTheRequestIsCanceledAfterTheLastStepAndReportsTheApplyAsMade() async throws {
+    let memory = await modem()
+    let damaging = DamagingModem(memory)
+    let network = network(damaging)
+    let plan = try await plan(add(lamp), on: network)
+    let box = TaskBox()
+    // The task is canceled once the last step, the modem's record, has read back, before the final read: the step
+    // reads the modem's records for the device before it writes and after, and only the second read cancels.
+    let reads = Flag()
+    await damaging.setAfterGroupRead {
+      if await reads.raise() == false { await box.cancel() }
+    }
+    let running = Task { try await network.linking.apply(plan, consent: consent(plan)) }
+    await box.set(running)
+
+    let result = try await running.value
+
+    #expect(result.steps.map(\.outcome) == [.written, .written, .written])
+    #expect(result.isModemChecked)
+    #expect(result.deviceChecks == [lamp: .checked])
+    #expect(result.mismatches.isEmpty)
+    #expect(result.isComplete)
+  }
+
   @Test func reportsARecordTheFinalReadFoundThatNoStepWrote() async throws {
     let modem = await modem()
     let network = network(modem)

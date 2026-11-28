@@ -584,7 +584,7 @@ extension DeviceLinkingCoordinator {
   ///
   /// - Parameter send: What puts the device back.
   /// - Returns: What `send` returns.
-  static func runToEnd<Value: Sendable>(_ send: @escaping @Sendable () async -> Value) async -> Value {
+  public static func runToEnd<Value: Sendable>(_ send: @escaping @Sendable () async -> Value) async -> Value {
 
     // Unstructured, so cancellation that arrives while it sends doesn't stop it.
     await Task { await send() }.value

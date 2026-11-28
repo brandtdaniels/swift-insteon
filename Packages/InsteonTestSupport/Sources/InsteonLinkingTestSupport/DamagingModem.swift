@@ -19,6 +19,9 @@ public actor DamagingModem: LinkingModem {
   /// that goes through. A read past the list goes through.
   private var failingReads: [InsteonAddress: [UInt16: [(any Error)?]]] = [:]
 
+  /// What runs after each read of the modem's records for a group and device, if anything.
+  private var afterGroupRead: (@Sendable () async -> Void)?
+
   /// Creates a modem that passes each call to `base`.
   ///
   /// - Parameter base: The modem each call goes to.
@@ -119,10 +122,22 @@ public actor DamagingModem: LinkingModem {
 
   }
 
+  /// Runs `hook` after each read of the modem's records for a group and device, such as to cancel the task that
+  /// asked, or stops running one.
+  public func setAfterGroupRead(_ hook: (@Sendable () async -> Void)?) {
+
+    afterGroupRead = hook
+
+  }
+
   /// Reads through the base modem.
   public func allLinkRecords(group: AllLinkGroupNumber, device: InsteonAddress) async throws -> [AllLinkRecord] {
 
-    try await base.allLinkRecords(group: group, device: device)
+    let records: [AllLinkRecord] = try await base.allLinkRecords(group: group, device: device)
+
+    await afterGroupRead?()
+
+    return records
 
   }
 
