@@ -54,6 +54,19 @@ public protocol ServedNetwork: Sendable {
   ///   it rejects the command or stops answering.
   func runScene(group: AllLinkGroupNumber, turningOn: Bool, wait: AllLinkCleanupWait) async throws -> SceneResult
 
+  /// Carries out a scene membership plan: reads the databases from the devices, writes each step, reads each back and
+  /// reads the databases again. See `DeviceLinkingCoordinator.apply(_:consent:)` for a scene membership plan.
+  ///
+  /// - Throws: ``ServiceControlError/databasesUnavailable`` for a network that takes no database writes, as a Hub
+  ///   Pro's doesn't, and what `DeviceLinkingCoordinator.apply(_:consent:)` throws.
+  func applySceneMembership(_ plan: SceneMembershipPlan, consent: DatabaseLinkConsent) async throws -> SceneMembershipResult
+
+  /// Reads the ALL-Link databases of the modem and of the given devices from the hardware into what ``snapshot()``
+  /// returns, after a write changed them. A device that doesn't answer stays unread and doesn't fail the read.
+  ///
+  /// - Throws: `CancellationError` when canceled and the modem's error when the connection is lost.
+  func reloadDatabases(of devices: [InsteonAddress]) async throws
+
   /// Whether the network gives out its ALL-Link databases: a modem's does, a Hub Pro's doesn't. It
   /// sends nothing.
   var servesDatabases: Bool { get }
@@ -118,6 +131,18 @@ struct ModemServedNetwork: ServedNetwork {
 
   func runScene(group: AllLinkGroupNumber, turningOn: Bool, wait: AllLinkCleanupWait) async throws -> SceneResult {
     try await network.run(ModemScene(group: group), turningOn: turningOn, wait: wait)
+  }
+
+  func applySceneMembership(_ plan: SceneMembershipPlan, consent: DatabaseLinkConsent) async throws -> SceneMembershipResult {
+    try await network.linking.apply(plan, consent: consent)
+  }
+
+  func reloadDatabases(of devices: [InsteonAddress]) async throws {
+    _ = try await network.modemDatabase()
+    for address in devices {
+      try Task.checkCancellation()
+      _ = try await readDatabase(of: address)
+    }
   }
 
   func refreshDatabases() async throws -> [InsteonAddress: BackupUnreadableReason] {
@@ -197,6 +222,10 @@ struct HubProServedNetwork: ServedNetwork {
   func changes() async throws -> NetworkChanges { .polled(network.changes()) }
 
   func refreshDatabases() async throws -> [InsteonAddress: BackupUnreadableReason] { throw ServiceControlError.databasesUnavailable }
+
+  func applySceneMembership(_ plan: SceneMembershipPlan, consent: DatabaseLinkConsent) async throws -> SceneMembershipResult { throw ServiceControlError.databasesUnavailable }
+
+  func reloadDatabases(of devices: [InsteonAddress]) async throws { throw ServiceControlError.databasesUnavailable }
 
   func runScene(group: AllLinkGroupNumber, turningOn: Bool, wait: AllLinkCleanupWait) async throws -> SceneResult { throw ServiceControlError.databasesUnavailable }
 

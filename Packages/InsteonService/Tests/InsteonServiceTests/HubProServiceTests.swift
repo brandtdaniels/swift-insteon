@@ -143,6 +143,22 @@ struct HubProServiceTests {
     }
   }
 
+  @Test func refusesToApplyASceneMembershipPlanBecauseAHubProTakesNoDatabaseWriteAndSendsNothing() async throws {
+    let unit = Unit()
+    let service = service(unit)
+    try await running(service) { events in
+      _ = try await next(events) { $0 == .modemReconnected }
+      let before = await unit.routes.sent.count
+      let id = "sha256:" + String(repeating: "a", count: 64)
+      await #expect(throws: ServiceControlError.databasesUnavailable) {
+        try await service.applySceneMembership(scene: 4, planId: id, consent: DatabaseLinkConsent(writeLinkRecords: true, readFingerprint: id))
+      }
+      #expect(await unit.routes.sent.count == before)
+      // The gate is free again.
+      #expect(try await service.execute(ServiceCommand(address: address, action: .status)).outcome == .read)
+    }
+  }
+
   @Test func refusesACommandTheUnitDoesNotListWithoutSendingIt() async throws {
     let unit = Unit()
     await unit.routes.answer("GET /insteon/describe?device=3A.4B.01", with: answerJSON(HubProUnit.describe(device: "3A.4B.01", category: 1, subcategory: 125, firmware: 69, commands: [("StatusRequest", [])])))

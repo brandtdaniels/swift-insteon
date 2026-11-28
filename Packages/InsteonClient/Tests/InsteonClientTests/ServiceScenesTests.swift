@@ -43,6 +43,16 @@ private actor FakeSceneService: SceneProviding {
     return receipt
   }
 
+  func planSceneMembership(_ change: SceneMembershipChange) async throws -> SceneMembershipPlanReceipt {
+    calls.append("planSceneMembership")
+    throw failure ?? ServiceControlError.unknownScene
+  }
+
+  func applySceneMembership(scene: UInt8, planId: String, consent: DatabaseLinkConsent) async throws -> SceneMembershipApplication {
+    calls.append("applySceneMembership")
+    throw failure ?? ServiceControlError.unknownPlan
+  }
+
   func meaning(ofMemberData data: [UInt8], of device: InsteonAddress, group: UInt8) async -> LinkDataMeaning? { meanings[device] }
 }
 
