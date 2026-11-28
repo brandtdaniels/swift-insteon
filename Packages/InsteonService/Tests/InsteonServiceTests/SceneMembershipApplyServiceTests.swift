@@ -318,7 +318,8 @@ struct SceneMembershipApplyServiceTests {
 
     #expect(await modem.writes.isEmpty)
     #expect(await modem.modemRecords.count == 3)
-    await #expect(throws: ServiceControlError.planAlreadyApplied) { try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan)) }
+    // The plan wrote nothing and is stale for good: asking again says so, not that it was applied.
+    await #expect(throws: ServiceControlError.planStale) { try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan)) }
   }
 
   @Test func writesNothingWhenADevicesDatabaseChangedSinceThePlan() async throws {
@@ -435,9 +436,10 @@ struct SceneMembershipApplyServiceTests {
     let plan = try await service.planSceneMembership(change(add: [lamp])).plan
     let box = TaskBox()
     let reads = Counter()
-    // Canceled after the second read of a record of the lamp's: the plan's record has been written and read back.
+    // Canceled after the fourth read of a record of the lamp's: the first step read its slot and was read back, and the
+    // second read its slot and was read back, so the plan's record has been written.
     await damaging.setAfterRead { read in
-      if case .record = read, await reads.next() == 3 { await box.cancel() }
+      if case .record = read, await reads.next() == 4 { await box.cancel() }
     }
     let running = Task { try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan)) }
     await box.set(running)
@@ -473,6 +475,22 @@ struct SceneMembershipApplyServiceTests {
     var reader = events.makeAsyncIterator()
     guard case let .sceneChanged(changed)? = try await reader.next() else { Issue.record("expected one sceneChanged event"); return }
     #expect(changed.isComplete)
+  }
+
+  @Test func keepsThePlanWhenADeviceFailsTheReadBeforeAnythingIsWrittenAndAnswersTheRetry() async throws {
+    let memory = await modem()
+    let damaging = DamagingModem(memory)
+    let service = service(damaging, clock: WallClock("2026-11-27T10:00:00Z"))
+    _ = try await service.refreshScenes()
+    let plan = try await service.planSceneMembership(change(add: [lamp])).plan
+    // The lamp does not answer the read of its database before the writes, once.
+    await damaging.setFailingDatabaseReads([ModemError.deviceTimedOut(lamp)], of: lamp)
+
+    await #expect(throws: ModemError.deviceTimedOut(lamp)) { try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan)) }
+
+    #expect(await memory.writes.isEmpty)
+    let application = try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan))
+    #expect(application.isComplete)
   }
 
   @Test func writesNothingAndKeepsThePlanWhenTheRequestIsCanceledBeforeTheFirstStep() async throws {
@@ -513,7 +531,7 @@ struct SceneMembershipApplyServiceTests {
 
     #expect(await memory.writes.isEmpty)
     #expect(await memory.record(of: lamp, at: 0x0FF7) == lampRecord)
-    await #expect(throws: ServiceControlError.planAlreadyApplied) { try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan)) }
+    await #expect(throws: ServiceControlError.planStale) { try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan)) }
   }
 
   @Test func reportsThatTheCacheWasNotReloadedWhenTheModemFailsTheReadAfterTheWrites() async throws {

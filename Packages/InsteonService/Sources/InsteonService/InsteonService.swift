@@ -61,8 +61,10 @@ public actor InsteonService: InsteonServiceAPI {
   private enum PlanClosure {
     /// Five minutes passed, or newer plans pushed it out.
     case expired
-    /// It was applied, or refused because a database changed, so it is used.
+    /// It was applied, so it is used.
     case spent
+    /// A database differs from what it was made from, so it can't be applied. Nothing was written.
+    case stale
     /// It has a refusal or no steps, so it never could be applied.
     case notApplicable
   }
@@ -332,6 +334,7 @@ public actor InsteonService: InsteonServiceAPI {
       switch closedPlans.first(where: { $0.id == planId && $0.scene == scene })?.reason {
       case .expired?: throw ServiceControlError.planExpired
       case .spent?: throw ServiceControlError.planAlreadyApplied
+      case .stale?: throw ServiceControlError.planStale
       case .notApplicable?: throw ServiceControlError.planNotApplicable
       case nil: throw ServiceControlError.unknownPlan
       }
@@ -351,7 +354,7 @@ public actor InsteonService: InsteonServiceAPI {
       // Steps that only read leave the databases as they were, and the service refuses as it would before the gate.
       guard result.steps.contains(where: { $0.outcome != .notReached }) else {
         if case SceneMembershipRefusal.planStale = interrupted.cause {
-          close(plan, as: .spent)
+          close(plan, as: .stale)
           throw ServiceControlError.planStale
         }
         // The plan is still open: nothing was written, so the same consent applies it again.
@@ -359,8 +362,9 @@ public actor InsteonService: InsteonServiceAPI {
       }
       interruption = interrupted.cause is CancellationError ? .canceled : .failed(Self.detail(of: interrupted.cause, result: result))
     } catch SceneMembershipRefusal.planStale {
-      // Nothing was written, and the databases are not as the plan read them, so the plan is used.
-      close(plan, as: .spent)
+      // Nothing was written, and the databases are not as the plan read them, so the plan can't be applied. Asking
+      // again says so again, not that the plan was applied.
+      close(plan, as: .stale)
       throw ServiceControlError.planStale
     } catch SceneMembershipRefusal.notApplicable, SceneMembershipRefusal.wouldOverwriteRecord {
       close(plan, as: .notApplicable)

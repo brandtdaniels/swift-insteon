@@ -139,7 +139,7 @@ enum APIErrorCode: String, CaseIterable, Sendable {
     case .sceneEmpty: "The scene has no members, so nothing was sent."
     case .unknownPlan: "The service holds no plan with that identifier for that scene: it never made one, or it restarted since. Plan again. Nothing was written."
     case .planExpired: "The plan is older than five minutes. Plan again. Nothing was written."
-    case .planAlreadyApplied: "The plan was applied, or refused because a database changed, so it cannot be used again. Plan again from a fresh read. Nothing was written."
+    case .planAlreadyApplied: "The plan was applied, so it cannot be used again. Plan again from a fresh read. Nothing was written."
     case .planNotApplicable: "The plan has a refusal or no steps, so it cannot be applied. Nothing was written."
     case .planStale: "A database differs from what the plan was made from. Refresh the scenes and plan again. Nothing was written."
     case .consentRequired: "Applying a plan writes ALL-Link records and needs `consent` with `writeLinkRecords` true and the plan's `readFingerprint`. An admin credential never stands in for it. Nothing was written."

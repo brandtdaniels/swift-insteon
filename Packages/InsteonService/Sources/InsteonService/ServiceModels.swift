@@ -467,7 +467,7 @@ public enum ServiceControlError: Error, Equatable {
   case unknownPlan
   /// The plan is older than five minutes. Nothing was sent; plan again.
   case planExpired
-  /// The plan was applied, or refused as stale, so it can't be used again. Nothing was sent.
+  /// The plan was applied, so it can't be used again. Nothing was sent.
   case planAlreadyApplied
   /// The plan has a refusal or no steps, so it can't be applied. Nothing was sent.
   case planNotApplicable
