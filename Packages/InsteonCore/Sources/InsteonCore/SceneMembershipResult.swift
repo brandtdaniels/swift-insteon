@@ -259,7 +259,9 @@ extension SceneMembershipInterrupted: CustomStringConvertible, LocalizedError {
   /// A one-line explanation that says what was written.
   public var description: String {
 
-    "Applying the plan stopped after \(result.madeSteps.count) of \(result.steps.count) steps were made: \(InsteonErrorDescription.message(for: cause) ?? "\(cause)")"
+    let reason: String = cause is CancellationError ? "it was canceled." : (InsteonErrorDescription.message(for: cause) ?? "\(cause)")
+
+    return "Applying the plan stopped after \(result.madeSteps.count) of \(result.steps.count) steps were made: \(reason)"
 
   }
 

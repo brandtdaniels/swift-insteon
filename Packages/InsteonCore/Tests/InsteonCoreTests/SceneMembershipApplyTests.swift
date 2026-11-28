@@ -648,6 +648,9 @@ struct SceneMembershipApplyTests {
     #expect(result.deviceChecks == [lamp: .checked])
     #expect(result.mismatches.isEmpty)
     #expect(await memory.writes.count == 1)
+    // The text says it was canceled, as an interrupted link does, and how many steps were made.
+    #expect(error?.description.contains("canceled") == true)
+    #expect(error?.description.contains("1 of 3 steps were made") == true)
   }
 
   @Test func stillReadsTheDatabasesAgainWhenTheRequestIsCanceledAfterTheLastStepAndReportsTheApplyAsMade() async throws {
