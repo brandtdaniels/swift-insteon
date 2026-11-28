@@ -104,7 +104,7 @@ public struct ModemReplyParser: ReplyParser, Hashable, Sendable {
 }
 
 /// The frames of the Insteon modem (IM) serial protocol.
-private enum ModemFraming: Framing {
+enum ModemFraming: Framing {
 
   static let negativeAcknowledgment: ModemReply = .negativeAcknowledgment
 
@@ -125,6 +125,21 @@ private enum ModemFraming: Framing {
 
   }
 
+  /// The length of each report the modem sends of its own, by number. A frame starts with one of
+  /// these numbers or with the number of a reply to a host command, and `startsFrame` reads this
+  /// same table, so the two can't drift apart. `0x56` is 7 bytes here, but its length is decided
+  /// by `cleanupFailureLength(of:)`.
+  ///
+  /// `0x5C` is seen once in a Hub's buffer and not in a cited document. Its 11 bytes (`02 5C`
+  /// and 9 more) are inferred from that one bench trace, whose byte counts fit exactly: 17 bytes
+  /// for the `5C` frame and the 6-byte failure report after it, then 14 for the status report and
+  /// a standard message. A byte after the frame that isn't a start byte is skipped up to the next
+  /// start byte, so a wrong length costs only the frame it swallows. Unverified.
+  private static let reportLengths: [UInt8: Int] = [
+    0x50: 11, 0x51: 25, 0x52: 4, 0x53: 10, 0x54: 3, 0x55: 2, 0x56: 7, 0x57: 10, 0x58: 3,
+    0x59: 12, 0x5A: 13, 0x5B: 13, 0x5C: 11
+  ]
+
   /// The total length of the frame at the start of `bytes`, which starts with `0x02`.
   static func frameLength(of bytes: [UInt8], after written: [UInt8]?) -> FrameLength {
 
@@ -134,18 +149,19 @@ private enum ModemFraming: Framing {
 
     }
 
+    if bytes[1] == 0x56 {
+
+      return cleanupFailureLength(of: bytes)
+
+    }
+
+    if let length = reportLengths[bytes[1]] {
+
+      return .complete(length)
+
+    }
+
     switch bytes[1] {
-    case 0x50: return .complete(11)
-    case 0x51: return .complete(25)
-    case 0x52: return .complete(4)
-    case 0x53: return .complete(10)
-    case 0x54: return .complete(3)
-    case 0x55: return .complete(2)
-    case 0x56: return .complete(7)
-    case 0x57: return .complete(10)
-    case 0x58: return .complete(3)
-    case 0x59: return .complete(12)
-    case 0x5A, 0x5B: return .complete(13)
     default:
       guard let number = SerialCommandNumber(rawValue: bytes[1]) else {
 
@@ -155,6 +171,47 @@ private enum ModemFraming: Framing {
 
       return replyLength(to: number, in: bytes)
     }
+
+  }
+
+  /// The length of an ALL-Link Cleanup Failure Report: 7 bytes, `02 56 <reserved> <group> <address>`,
+  /// the layout the parser was written for, or 6 bytes, `02 56 <group> <address>`, as the bench
+  /// Hub 2 sends it (a hardware observation; unverified against a document).
+  ///
+  /// The two can't be told apart by their start, so the frame is read as 7 bytes unless the
+  /// 7th byte starts the next frame, a start byte followed by a number a modem sends. An address
+  /// that ends in a start byte doesn't, since the frame after it starts with another start byte.
+  /// A 7th byte that is a start byte waits for the byte after it.
+  ///
+  /// Two consequences are known and accepted:
+  /// - A 6-byte report that is the last of the bytes read waits for the next byte to decide its
+  ///   length, so it is reported once that byte arrives. The Hub 2 sends a status report right
+  ///   behind it in the traces.
+  /// - The decision is a heuristic where an address ends in `02` and the byte after it is a
+  ///   number a modem sends, such as `5C`: a 7-byte report and a 6-byte one followed by a frame
+  ///   look the same through those bytes, and the frame is read as 6 bytes. A 7-byte report's
+  ///   successor starts with its own start byte, so this takes bytes lost between the frames.
+  private static func cleanupFailureLength(of bytes: [UInt8]) -> FrameLength {
+
+    guard bytes.count >= 7 else {
+
+      return .needMoreBytes
+
+    }
+
+    guard bytes[6] == ControlByte.startOfText else {
+
+      return .complete(7)
+
+    }
+
+    guard bytes.count >= 8 else {
+
+      return .needMoreBytes
+
+    }
+
+    return .complete(startsFrame(bytes[7]) ? 6 : 7)
 
   }
 
@@ -212,16 +269,32 @@ private enum ModemFraming: Framing {
   }
 
   /// Whether a number after a start byte begins a frame the modem sends: a report of its own,
-  /// `0x50` through `0x5B`, or the reply to a host command.
+  /// one in `reportLengths`, or the reply to a host command.
   private static func startsFrame(_ number: UInt8) -> Bool {
 
-    (0x50...0x5B).contains(number) || SerialCommandNumber(rawValue: number) != nil
+    reportLengths[number] != nil || SerialCommandNumber(rawValue: number) != nil
 
   }
 
   static func decode(_ frame: [UInt8]) -> ModemReply {
 
+    // The reader decodes only frames of the length `frameLength` gave, but a length that doesn't
+    // fit its number is reported rather than trapping on a missing byte.
+    guard frame.count >= 2 else {
+
+      return .unrecognized(number: frame.last ?? 0, body: [])
+
+    }
+
     let body = Array(frame.dropFirst(2))
+
+    let isOfItsLength: Bool = frame[1] == 0x56 ? frame.count == 6 || frame.count == 7 : reportLengths[frame[1]].map { $0 == frame.count } ?? true
+
+    guard isOfItsLength else {
+
+      return .unrecognized(number: frame[1], body: body)
+
+    }
 
     switch frame[1] {
     case 0x50, 0x51:
@@ -245,6 +318,8 @@ private enum ModemFraming: Framing {
       return .buttonEvent(ModemButtonEvent(rawValue: body[0]))
     case 0x55:
       return .userReset
+    case 0x56 where frame.count == 6:
+      return .allLinkCleanupFailed(group: AllLinkGroupNumber(rawValue: body[0]), address: address(body, at: 1))
     case 0x56:
       return .allLinkCleanupFailed(group: AllLinkGroupNumber(rawValue: body[1]), address: address(body, at: 2))
     case 0x57:
@@ -257,6 +332,8 @@ private enum ModemFraming: Framing {
       return .diagnosticRecord(ModemDiagnosticRecord(body))
     case 0x5B:
       return .deviceRecordFound(address: UInt16(highByte: body[0], lowByte: body[1]), record: AllLinkRecord(body, at: 2))
+    case 0x5C:
+      return .unrecognized(number: frame[1], body: body)
     case 0x7E where body.count == 7 && body.last == ControlByte.acknowledgment:
       return .radioStatus(ModemRadioStatus(
         frequencyCode: body[0],

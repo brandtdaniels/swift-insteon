@@ -390,6 +390,27 @@ struct DeviceMonitorTests {
 
   }
 
+  // A frame the package can't name says which it was and how long, and none of the bytes that may be addresses.
+  @Test func namesAnUnrecognizedFrameByItsNumberAndLengthOnly() {
+
+    let reply = ModemReply.unrecognized(number: 0x5C, body: [0xA1, 0xA2, 0xA3, 0xB1, 0xB2, 0xB3, 0x23, 0x13, 0x05])
+
+    #expect(DeviceMonitor.replyKind(reply) == "unrecognized frame 0x5C (9 bytes)")
+
+    guard case let .other(kind, description) = RawModemReply(reply) else {
+
+      Issue.record("an unrecognized frame should be another reply")
+
+      return
+
+    }
+
+    #expect(kind == "unrecognized frame 0x5C (9 bytes)")
+    #expect(description == "unrecognized frame 0x5C (9 bytes)")
+    #expect(!description.uppercased().contains("A1"))
+
+  }
+
   @Test(.timeLimit(.minutes(1))) func endsTheStreamWhenTheReadersTaskIsCanceled() async throws {
 
     let modem = MonitorModem()

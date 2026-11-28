@@ -437,6 +437,9 @@ public enum RawModemReply: Hashable, Sendable {
       self = .message(ReceivedFrame(message))
     case .negativeAcknowledgment:
       self = .negativeAcknowledgment
+    case .unrecognized:
+      // Its bytes aren't shown: nothing says whether they hold addresses.
+      self = .other(kind: DeviceMonitor.replyKind(reply), description: DeviceMonitor.replyKind(reply))
     default:
       self = .other(kind: DeviceMonitor.replyKind(reply), description: "\(reply)")
     }

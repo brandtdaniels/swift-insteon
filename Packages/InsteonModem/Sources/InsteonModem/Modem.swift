@@ -305,6 +305,9 @@ public actor Modem: SerialCommandSender {
   /// Cleanup Status Report (`0x58`), since the Insteon Developer's Guide says any message sent
   /// before then cancels the rest of the cleanups. Meanwhile each member's cleanup acknowledgment,
   /// cleanup NAK or ALL-Link Cleanup Failure Report (`0x56`) is collected.
+  /// A Hub was seen to send the status report ahead of a member's acknowledgment, so the call
+  /// goes on collecting them for `wait.grace` after it, whatever else arrives or doesn't, so a
+  /// run takes that much longer.
   ///
   /// The command counts as sent once the modem echoes it with an ACK. After that the call waits
   /// for the status report while cleanup traffic keeps arriving, as `wait` says. If the report
@@ -453,6 +456,8 @@ public actor Modem: SerialCommandSender {
 
       // What came before the command's accepted echo belongs to something else.
       var hasStarted = false
+      // Whether the status report came, after which only the cleanup messages behind it are collected.
+      var inGrace = false
       var collected = CleanupCollection()
       var timerNumber = 0
       // Cancels the quiet-period timer that is running, so a superseded timer never lingers.
@@ -497,7 +502,8 @@ public actor Modem: SerialCommandSender {
           // A timer from before the latest cleanup message doesn't count.
           if number == timerNumber {
 
-            collected.timedOut = true
+            // The grace after the status report is how that wait ends, not a timeout.
+            collected.timedOut = !inGrace
             cancelTimer?.finish()
           tasks.cancelAll()
 
@@ -532,19 +538,32 @@ public actor Modem: SerialCommandSender {
             collected.unacknowledged.append(address)
             collected.failureReportedAfter = collected.failureReportedAfter ?? elapsed
             isTraffic = true
-          case let .allLinkCleanupStatus(isComplete) where hasStarted:
+          case let .allLinkCleanupStatus(isComplete) where hasStarted && !inGrace:
             collected.isComplete = isComplete
             collected.statusReportAfter = elapsed
-            cancelTimer?.finish()
-          tasks.cancelAll()
 
-            return collected
+            // A Hub was seen to send the status report ahead of a member's acknowledgment, so
+            // the cleanup messages behind it are collected for the grace, without extending it.
+            guard wait.grace > .zero else {
+
+              cancelTimer?.finish()
+              tasks.cancelAll()
+
+              return collected
+
+            }
+
+            inGrace = true
+            timerBudget = wait.grace
           default:
+            // Anything else, an unrecognized frame (`ModemReply.unrecognized`) included, is neither
+            // cleanup traffic nor device traffic: it doesn't start the quiet period again, since
+            // nothing says it belongs to this command's cleanups.
             break
           }
         }
 
-        if isTraffic {
+        if isTraffic && !inGrace {
 
           let budget: Duration = min(wait.quietPeriod, wait.cap - sinceAccepted())
 

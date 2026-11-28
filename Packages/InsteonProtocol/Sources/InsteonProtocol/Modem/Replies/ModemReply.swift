@@ -69,6 +69,18 @@ public enum ModemReply: Hashable, Sendable {
   /// The modem's echo of a command the host sent, with its ACK or NAK.
   case echo(CommandEcho)
 
+  /// A frame whose number the modem protocol documents nowhere the repository cites, read to its
+  /// end so the replies after it aren't lost.
+  ///
+  /// Only the frames the parser knows the length of reach here, and each one's layout is
+  /// inferred (unverified): `0x5C`, seen once in a Hub's buffer, is taken as long as a standard
+  /// message (11 bytes).
+  ///
+  /// - Parameters:
+  ///   - number: The frame's number, the byte after its start byte.
+  ///   - body: The bytes after the number.
+  case unrecognized(number: UInt8, body: [UInt8])
+
   /// A lone NAK (`0x15`): the modem rejected the last command without echoing it, usually
   /// because it was busy. Send the command again after a short delay.
   case negativeAcknowledgment

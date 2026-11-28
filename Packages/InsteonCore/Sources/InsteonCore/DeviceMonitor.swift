@@ -96,6 +96,15 @@ public struct DeviceMonitor: Sendable {
 
   }
 
+  /// A byte as two uppercase hexadecimal digits.
+  private static func hex(_ byte: UInt8) -> String {
+
+    let digits = String(byte, radix: 16, uppercase: true)
+
+    return digits.count == 1 ? "0" + digits : digits
+
+  }
+
   /// The kind of a reply the modem sent, as a front end names a reply that isn't a message
   /// from a device, such as `"ALL-Link record"` or `"echo of Get IM Info"`.
   ///
@@ -119,6 +128,7 @@ public struct DeviceMonitor: Sendable {
     case .modemInfo: "Get IM Info reply"
     case .modemConfiguration: "configuration"
     case let .echo(echo): "echo of \(echo.number.name)\(echo.isAccepted ? "" : ", NAK")"
+    case let .unrecognized(number, body): "unrecognized frame 0x\(hex(number)) (\(body.count) bytes)"
     case .negativeAcknowledgment: "NAK"
     }
 
