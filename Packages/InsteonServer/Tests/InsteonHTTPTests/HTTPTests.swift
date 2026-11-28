@@ -443,7 +443,7 @@ struct HTTPTests {
     #expect(await service.reads == 1)
   }
 
-  @Test(arguments: [ServiceControlError.busy, .unknownDevice, .invalidLevel, .unsupportedControl, .notIdentified, .notLinked, .modemUnavailable(.hubUnreachable), .databasesUnavailable, .unknownScene, .sceneEmpty])
+  @Test(arguments: [ServiceControlError.busy, .unknownDevice, .invalidLevel, .unsupportedControl, .notIdentified, .notLinked, .modemUnavailable(.hubUnreachable), .databasesUnavailable, .unknownScene, .sceneEmpty, .unknownPlan, .planExpired, .planAlreadyApplied, .planNotApplicable, .planStale, .consentRequired, .consentMismatch])
   func serviceRefusalsHaveAnHTTPMapping(_ failure: ServiceControlError) async throws {
     let service = FakeService(refusal: failure)
     let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
@@ -459,6 +459,10 @@ struct HTTPTests {
         case .databasesUnavailable: #expect(response.status == .unprocessableContent)
         case .unknownScene: #expect(response.status == .notFound)
         case .sceneEmpty: #expect(response.status == .unprocessableContent)
+        case .unknownPlan: #expect(response.status == .notFound)
+        case .planExpired: #expect(response.status == .gone)
+        case .planAlreadyApplied, .planStale: #expect(response.status == .conflict)
+        case .planNotApplicable, .consentRequired, .consentMismatch: #expect(response.status == .unprocessableContent)
         }
       }
     }
@@ -603,6 +607,25 @@ actor FakeService: InsteonServiceAPI {
     if let membershipFailure { throw membershipFailure }
     guard let membershipReceipt else { throw ServiceControlError.unknownScene }
     return membershipReceipt
+  }
+  /// What the service was asked to apply, what it answers and the error it answers with instead.
+  struct ApplyRequest: Equatable, Sendable {
+    let scene: UInt8
+    let planId: String
+    let consent: DatabaseLinkConsent
+  }
+  private(set) var applyRequests: [ApplyRequest] = []
+  private var applyAnswer: SceneMembershipApplication?
+  private var applyFailure: (any Error)?
+  func scriptApply(answer: SceneMembershipApplication? = nil, failure: (any Error)? = nil) {
+    applyAnswer = answer
+    applyFailure = failure
+  }
+  func applySceneMembership(scene: UInt8, planId: String, consent: DatabaseLinkConsent) async throws -> SceneMembershipApplication {
+    applyRequests.append(ApplyRequest(scene: scene, planId: planId, consent: consent))
+    if let applyFailure { throw applyFailure }
+    guard let applyAnswer else { throw ServiceControlError.unknownPlan }
+    return applyAnswer
   }
   func meaning(ofMemberData data: [UInt8], of device: InsteonAddress, group: UInt8) async -> LinkDataMeaning? {
     askedMeanings.append(MeaningQuestion(device: device, data: data, group: group))

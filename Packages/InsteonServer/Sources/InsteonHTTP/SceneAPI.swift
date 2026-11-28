@@ -59,6 +59,51 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
     return Response(status: .ok, headers: [.contentType: "application/json"], body: .init(byteBuffer: ByteBuffer(bytes: try encoder.encode(SceneMembershipPlanDTO(receipt)))))
   }
 
+  /// Writes a plan's ALL-Link records. It needs the `admin` scope, which the authentication middleware has
+  /// already enforced, the request marker, and consent in the body that agrees to the writes and names the
+  /// plan. Consent is never implied by the scope. With an `Idempotency-Key`, a repeat of the same apply returns
+  /// the recorded answer and writes nothing.
+  func applyMembership(_ request: Request, number: String?, planId: String?, requestID: String) async throws -> Response {
+    guard HTTPBody.mediaType(request) == "application/json" else { throw HTTPInputError.unsupportedMedia }
+    try HTTPBody.requireMarker(request)
+    guard let number, Self.isCanonicalDecimal(number), let scene = UInt8(number), (1...254).contains(scene) else { throw SceneInputError.invalidScene }
+    let body = try SceneMembershipApplyBody(try await HTTPBody.read(request))
+    let key = try IdempotencyKey(header: request.headers[values: .idempotencyKey])
+    // The consent is judged before the plan is looked up, so a request that never agreed to the writes learns nothing about the plans the service holds.
+    guard let consent = body.consent else { throw ServiceControlError.consentRequired }
+    guard let planId, SceneMembershipApplyBody.isPlanID(planId) else { throw ServiceControlError.unknownPlan }
+    guard let key else { return try Self.response(await perform(scene: scene, planId: planId, consent: consent, requestID: requestID)) }
+    let fingerprint = Self.fingerprint(scene: scene, planId: planId, consent: consent)
+    let (outcome, replayed) = try await idempotency.perform(scope: .gateway, key: key.value, fingerprint: fingerprint) { await perform(scene: scene, planId: planId, consent: consent, requestID: requestID) }
+    var response = try Self.response(outcome, replayed: replayed)
+    if replayed { response.headers[.idempotentReplay] = "true" }
+    return response
+  }
+
+  private func perform(scene: UInt8, planId: String, consent: DatabaseLinkConsent, requestID: String) async -> IdempotentOutcome {
+    let start = now()
+    do {
+      let application = try await service.applySceneMembership(scene: scene, planId: planId, consent: consent)
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.sortedKeys]
+      logger.info("scene membership applied", metadata: [
+        "scene": "\(scene)", "isComplete": "\(application.isComplete)", "steps": "\(application.result.steps.count)", "made": "\(application.result.madeSteps.count)", "seconds": "\(now().timeIntervalSince(start))"
+      ])
+      // An apply that stopped partway, or read back differently, is recorded like a success: it wrote, so a repeat must not.
+      return .response(application.isComplete ? .ok : .badGateway, try encoder.encode(SceneMembershipApplicationDTO(application, requestID: requestID)))
+    } catch {
+      // Any failure the service throws came before the first write, so it is classified as a read.
+      let failure = HTTPFailure(CommandFailure(action: .status, underlying: error))
+      logger.debug("scene membership apply refused", metadata: ["scene": "\(scene)", "code": "\(failure.code.rawValue)", "seconds": "\(now().timeIntervalSince(start))"])
+      return .failure(failure)
+    }
+  }
+
+  /// Names an apply by the scene, the plan and the consent it carries, not by how the request spelled it.
+  private static func fingerprint(scene: UInt8, planId: String, consent: DatabaseLinkConsent) -> String {
+    SecureDigest.of("POST\n/api/v1/scenes/\(scene)/plans/\(planId)/apply\n\(consent.writeLinkRecords)\n\(consent.readFingerprint)").map { String(format: "%02x", $0) }.joined()
+  }
+
   /// One to three ASCII digits with no sign and no leading zero, so each scene has one path.
   private static func isCanonicalDecimal(_ text: String) -> Bool {
     (1...3).contains(text.utf8.count) && text.utf8.allSatisfy { (0x30...0x39).contains($0) } && text.utf8.first != 0x30
@@ -280,6 +325,49 @@ struct SceneCommandBody {
   init(_ data: Data) throws {
     guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], Set(object.keys) == ["action"] else { throw HTTPInputError.invalid }
     action = try JSONDecoder().decode(Raw.self, from: data).action == .on ? .on : .off
+  }
+}
+
+/// The body of an apply request: `consent`, with `writeLinkRecords` and `readFingerprint`, and nothing else.
+/// A consent that is missing, null, or whose fields are missing or of another type has no value, which the
+/// route answers as `consentRequired`; a field this body doesn't take is malformed.
+struct SceneMembershipApplyBody {
+  /// The consent, or `nil` when it doesn't agree to the writes or doesn't name a plan.
+  let consent: DatabaseLinkConsent?
+
+  private struct Raw: Decodable {
+    let consent: Consent?
+    struct Consent: Decodable {
+      let writeLinkRecords: Bool?
+      let readFingerprint: String?
+      private enum Keys: String, CodingKey { case writeLinkRecords, readFingerprint }
+      init(from decoder: Decoder) throws {
+        let keys = try decoder.container(keyedBy: Keys.self)
+        writeLinkRecords = try? keys.decodeIfPresent(Bool.self, forKey: .writeLinkRecords)
+        readFingerprint = try? keys.decodeIfPresent(String.self, forKey: .readFingerprint)
+      }
+    }
+  }
+
+  init(_ data: Data) throws {
+    guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], Set(object.keys).isSubset(of: ["consent"]) else { throw HTTPInputError.invalid }
+    switch object["consent"] {
+    case nil, is NSNull: consent = nil
+    case let fields as [String: Any]:
+      guard Set(fields.keys).isSubset(of: ["writeLinkRecords", "readFingerprint"]) else { throw HTTPInputError.invalid }
+      let raw = try JSONDecoder().decode(Raw.self, from: data)
+      if let given = raw.consent, given.writeLinkRecords == true, let fingerprint = given.readFingerprint, !fingerprint.isEmpty {
+        consent = DatabaseLinkConsent(writeLinkRecords: true, readFingerprint: fingerprint)
+      } else {
+        consent = nil
+      }
+    default: throw HTTPInputError.invalid
+    }
+  }
+
+  /// A plan's identifier: `sha256:` and 64 lowercase hexadecimal digits.
+  static func isPlanID(_ text: String) -> Bool {
+    text.utf8.count == 71 && text.hasPrefix("sha256:") && text.dropFirst(7).utf8.allSatisfy { (0x30...0x39).contains($0) || (0x61...0x66).contains($0) }
   }
 }
 
@@ -518,4 +606,134 @@ struct SceneMembershipPlanDTO: Encodable {
   }
 
   private enum CodingKeys: String, CodingKey { case version, scene, planId, expiresAt, isApplicable, isEmpty, steps, devices, warnings, refusals, consent }
+}
+
+
+/// A plan applied, as it goes on the wire: each step's outcome, and what reading both databases again found.
+/// A plan that stopped partway or read back differently also carries the typed failure of every error body,
+/// so a client that branches on `code` finds `outcomeUnknown` and still sees which records were written.
+struct SceneMembershipApplicationDTO: Encodable {
+  let version = 1
+  let scene: Int
+  let planId: String
+  /// `applied` when every step was made and both databases read back as planned, else `incomplete`.
+  let outcome: String
+  let isComplete: Bool
+  /// How many steps were made, and how many were not (failed or not reached).
+  let written: Int
+  let notWritten: Int
+  let steps: [StepDTO]
+  let mismatches: [MismatchDTO]
+  /// Whether the modem's database was read again and compared.
+  let modemChecked: Bool
+  let deviceChecks: [DeviceCheckDTO]
+  /// `canceled` or `failed` when the steps stopped for a reason other than a step's own failure.
+  let interruption: String?
+  let interruptionDetail: String?
+  let persistence: String
+  let code: String?
+  let message: String?
+  let sent: Bool?
+  let requestId: String?
+
+  struct StepDTO: Encodable {
+    let order: Int
+    let kind: String
+    let target: String
+    let effect: String
+    let record: SceneMembershipPlanDTO.RecordDTO
+    /// `written`, `writtenOnRetry`, `unverifiable`, `notWritten`, `rejected`, `unanswered` or `notReached`.
+    let outcome: String
+
+    init(_ result: SceneMembershipResult.StepResult, order: Int) {
+      self.order = order
+      kind = result.step.kind.rawValue
+      target = SceneWire.name(result.step.endpoint)
+      effect = result.step.isRemoval ? "delete" : "write"
+      record = SceneMembershipPlanDTO.RecordDTO(result.step.record)
+      outcome = result.outcome.rawValue
+    }
+  }
+
+  struct MismatchDTO: Encodable {
+    let target: String
+    let memoryAddress: String?
+    let expected: SceneMembershipPlanDTO.RecordDTO?
+    let found: SceneMembershipPlanDTO.RecordDTO?
+
+    init(_ mismatch: SceneMembershipResult.Mismatch) {
+      target = mismatch.device?.description ?? "modem"
+      memoryAddress = mismatch.mismatch.memoryAddress.map { String(format: "0x%04X", $0) }
+      expected = mismatch.mismatch.expected.map(SceneMembershipPlanDTO.RecordDTO.init)
+      found = mismatch.mismatch.found.map(SceneMembershipPlanDTO.RecordDTO.init)
+    }
+
+    func encode(to encoder: any Encoder) throws {
+      var container = encoder.container(keyedBy: CodingKeys.self)
+      try container.encode(target, forKey: .target)
+      try container.encode(memoryAddress, forKey: .memoryAddress)
+      try container.encode(expected, forKey: .expected)
+      try container.encode(found, forKey: .found)
+    }
+
+    private enum CodingKeys: String, CodingKey { case target, memoryAddress, expected, found }
+  }
+
+  struct DeviceCheckDTO: Encodable {
+    let device: String
+    /// `checked`, `rejectsModemAfterUnlinking` or `unanswered`.
+    let check: String
+  }
+
+  init(_ application: SceneMembershipApplication, requestID: String) {
+    let result = application.result
+    scene = Int(application.scene)
+    planId = application.planId
+    isComplete = application.isComplete
+    outcome = application.isComplete ? "applied" : "incomplete"
+    written = result.madeSteps.count
+    notWritten = result.unmadeSteps.count
+    steps = result.steps.enumerated().map { StepDTO($1, order: $0 + 1) }
+    mismatches = result.mismatches.map(MismatchDTO.init)
+    modemChecked = result.isModemChecked
+    deviceChecks = result.deviceChecks.map { DeviceCheckDTO(device: $0.key.description, check: $0.value.rawValue) }.sorted { $0.device < $1.device }
+    switch application.interruption {
+    case .canceled?: interruption = "canceled"; interruptionDetail = nil
+    case let .failed(detail)?: interruption = "failed"; interruptionDetail = detail
+    case nil: interruption = nil; interruptionDetail = nil
+    }
+    persistence = PersistenceName(application.persistence).rawValue
+    if application.isComplete {
+      code = nil; message = nil; sent = nil; requestId = nil
+    } else {
+      code = APIErrorCode.outcomeUnknown.rawValue
+      message = "Some of the plan's records may have been written and the rest were not. `steps` says which, and `mismatches` says what reading the databases again found. Nothing was undone and no step was repeated beyond its one retry. Refresh the scenes and plan again."
+      sent = true
+      requestId = requestID
+    }
+  }
+
+  func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(version, forKey: .version)
+    try container.encode(scene, forKey: .scene)
+    try container.encode(planId, forKey: .planId)
+    try container.encode(outcome, forKey: .outcome)
+    try container.encode(isComplete, forKey: .isComplete)
+    try container.encode(written, forKey: .written)
+    try container.encode(notWritten, forKey: .notWritten)
+    try container.encode(steps, forKey: .steps)
+    try container.encode(mismatches, forKey: .mismatches)
+    try container.encode(modemChecked, forKey: .modemChecked)
+    try container.encode(deviceChecks, forKey: .deviceChecks)
+    try container.encode(interruption, forKey: .interruption)
+    try container.encode(interruptionDetail, forKey: .interruptionDetail)
+    try container.encode(persistence, forKey: .persistence)
+    try container.encodeIfPresent(code, forKey: .code)
+    try container.encodeIfPresent(message, forKey: .message)
+    try container.encodeIfPresent(sent, forKey: .sent)
+    try container.encodeIfPresent(requestId, forKey: .requestId)
+  }
+
+  private enum CodingKeys: String, CodingKey { case version, scene, planId, outcome, isComplete, written, notWritten, steps, mismatches, modemChecked, deviceChecks, interruption, interruptionDetail, persistence, code, message, sent, requestId }
 }

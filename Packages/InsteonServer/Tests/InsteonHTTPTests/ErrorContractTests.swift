@@ -15,6 +15,7 @@ struct ErrorContractTests {
   let password = String(repeating: "p", count: 40)
   let address = InsteonAddress(0x1A, 0x2B, 0x3C)
   private var authorization: String { "Basic " + Data(("insteon:" + password).utf8).base64EncodedString() }
+  private let planID = "sha256:" + String(repeating: "0", count: 64)
   private var commandHeaders: HTTPFields {
     [.authorization: authorization, .contentType: "application/json", HTTPField.Name("X-Insteon-Request")!: "1"]
   }
@@ -34,6 +35,13 @@ struct ErrorContractTests {
     Expected(failure: ServiceControlError.unknownDevice, action: "on", code: "unknownDevice", status: 404, sent: false),
     Expected(failure: ServiceControlError.unknownScene, action: "on", code: "unknownScene", status: 404, sent: false),
     Expected(failure: ServiceControlError.sceneEmpty, action: "on", code: "sceneEmpty", status: 422, sent: false),
+    Expected(failure: ServiceControlError.unknownPlan, action: "on", code: "unknownPlan", status: 404, sent: false),
+    Expected(failure: ServiceControlError.planExpired, action: "on", code: "planExpired", status: 410, sent: false),
+    Expected(failure: ServiceControlError.planAlreadyApplied, action: "on", code: "planAlreadyApplied", status: 409, sent: false),
+    Expected(failure: ServiceControlError.planNotApplicable, action: "on", code: "planNotApplicable", status: 422, sent: false),
+    Expected(failure: ServiceControlError.planStale, action: "on", code: "planStale", status: 409, sent: false),
+    Expected(failure: ServiceControlError.consentRequired, action: "on", code: "consentRequired", status: 422, sent: false),
+    Expected(failure: ServiceControlError.consentMismatch, action: "on", code: "consentMismatch", status: 422, sent: false),
     Expected(failure: ServiceControlError.invalidLevel, action: "on", code: "invalidLevel", status: 400, sent: false),
     Expected(failure: ServiceControlError.unsupportedControl, action: "on", code: "unsupportedControl", status: 422, sent: false),
     Expected(failure: ServiceControlError.notIdentified, action: "status", code: "notIdentified", status: 409, sent: false),
@@ -121,6 +129,8 @@ struct ErrorContractTests {
     }
     try await app.test(.router) { client in
       let path = "/api/v1/devices/1A.2B.3C/commands"
+      var keyed = commandHeaders
+      keyed[.idempotencyKey] = "bad key!"
       let cases: [(String, HTTPRequest.Method, HTTPFields, String?, Int, String)] = [
         (path, .post, [.authorization: authorization], #"{"action":"on"}"#, 415, "unsupportedMediaType"),
         (path, .post, [.authorization: authorization, .contentType: "application/json"], #"{"action":"on"}"#, 403, "apiMarkerMissing"),
@@ -133,6 +143,15 @@ struct ErrorContractTests {
         ("/api/v1/scenes/4/plans", .post, commandHeaders, #"{"remove":["nope"]}"#, 400, "invalidAddress"),
         ("/api/v1/scenes/0/plans", .post, commandHeaders, #"{"remove":["1A.2B.3C"]}"#, 400, "invalidScene"),
         ("/api/v1/scenes/7/plans", .post, commandHeaders, #"{"remove":["1A.2B.3C"]}"#, 404, "unknownScene"),
+        ("/api/v1/scenes/4/plans/\(planID)/apply", .post, commandHeaders, "{}", 422, "consentRequired"),
+        ("/api/v1/scenes/4/plans/\(planID)/apply", .post, commandHeaders, #"{"consent":{"writeLinkRecords":true,"readFingerprint":"\#(planID)"},"force":true}"#, 400, "invalidCommand"),
+        ("/api/v1/scenes/4/plans/\(planID)/apply", .post, [.authorization: authorization, .contentType: "application/json"], "{}", 403, "apiMarkerMissing"),
+        ("/api/v1/scenes/4/plans/\(planID)/apply", .post, [.authorization: authorization], "{}", 415, "unsupportedMediaType"),
+        ("/api/v1/scenes/4/plans/\(planID)/apply", .post, commandHeaders, String(repeating: " ", count: 8193), 413, "bodyTooLarge"),
+        ("/api/v1/scenes/4/plans/nope/apply", .post, commandHeaders, #"{"consent":{"writeLinkRecords":true,"readFingerprint":"x"}}"#, 404, "unknownPlan"),
+        ("/api/v1/scenes/0/plans/\(planID)/apply", .post, commandHeaders, "{}", 400, "invalidScene"),
+        ("/api/v1/scenes/4/plans/\(planID)/apply", .post, keyed, "{}", 400, "invalidIdempotencyKey"),
+        ("/api/v1/scenes/4/plans/\(planID)/apply", .post, commandHeaders, #"{"consent":{"writeLinkRecords":true,"readFingerprint":"\#(planID)"}}"#, 404, "unknownPlan"),
         ("/api/v1/nothing-here", .get, [.authorization: authorization], nil, 404, "routeNotFound")
       ]
       for (uri, method, headers, body, status, code) in cases {
