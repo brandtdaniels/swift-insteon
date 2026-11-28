@@ -36,8 +36,8 @@ actor DemoModem: LinkingModem {
 
       for member in scene.members {
 
-        controllers.append(AllLinkRecord(flags: [.inUse, .controller], group: scene.group, address: member, data1: 0x00))
-        responders[member, default: []].append(AllLinkRecord(flags: [.inUse], group: scene.group, address: address, data1: 0xFF, data2: 0x1F, data3: 0x01))
+        controllers.append(AllLinkRecord(flags: [.inUse, .controller, .usedBefore], group: scene.group, address: member, data1: 0x00))
+        responders[member, default: []].append(AllLinkRecord(flags: [.inUse, .usedBefore], group: scene.group, address: address, data1: 0xFF, data2: 0x1F, data3: 0x01))
 
       }
 

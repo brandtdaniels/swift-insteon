@@ -53,6 +53,9 @@ if let scene = list.scenes.first(where: \.isWritable) {
 }
 ```
 
+A screen takes ``SceneManaging``, which a ``ClientConnection`` adopts and which ``ServiceScenes``
+adopts for a service in the same process, so the same screen runs on a paired service and on a demo network.
+
 The connection holds no user interface and no device knowledge. Each interface parses input, calls it
 and presents the answer.
 
@@ -79,6 +82,8 @@ and presents the answer.
 - ``SceneList``
 - ``SceneAction``
 - ``SceneRunReceipt``
+- ``SceneManaging``
+- ``ServiceScenes``
 
 ### Events
 
