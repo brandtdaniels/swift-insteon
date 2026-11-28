@@ -506,6 +506,42 @@ struct SceneMembershipApplyTests {
     #expect(await memory.writes.isEmpty)
   }
 
+  @Test func refusesAsStaleWhenAnotherWriterExtendedTheDatabaseBeyondItsEndBeforeTheFirstStep() async throws {
+    let memory = await modem()
+    let damaging = DamagingModem(memory)
+    let network = network(damaging)
+    let plan = try await plan(add(lamp), on: network)
+    #expect(plan.steps.first?.kind == .markEndOfDatabase)
+    // After the comparison read, another writer puts a record in the slot below the end that the first step marks.
+    await damaging.setAfterRead { read in
+      if case .database(lamp) = read { await memory.setDatabase([0x0FFF: responder(group: 3), 0x0FEF: responder(group: 8)], of: lamp) }
+    }
+
+    let error = await #expect(throws: SceneMembershipRefusal.self) { try await network.linking.apply(plan, consent: consent(plan)) }
+
+    #expect(error == .planStale(lamp))
+    #expect(await memory.writes.isEmpty)
+    #expect(await memory.record(of: lamp, at: 0x0FEF) == responder(group: 8))
+  }
+
+  @Test func stopsBeforeAWriteBeyondTheEndWhenAnotherWriterExtendedAnotherDevicesDatabaseMidRun() async throws {
+    let memory = await modem()
+    let damaging = DamagingModem(memory)
+    let network = network(damaging)
+    let plan = try await plan(add(lamp, fan), on: network)
+    let reads = Counter()
+    // After the lamp's steps, another writer puts a record below the fan's end, in the slot the fan's first step marks.
+    await damaging.setAfterRead { read in
+      if case .group = read, await reads.next() == 2 { await memory.setDatabase([0x0FFF: responder(group: 3), 0x0FEF: responder(group: 8)], of: fan) }
+    }
+
+    let interrupted = await #expect(throws: SceneMembershipInterrupted.self) { try await network.linking.apply(plan, consent: consent(plan)) }
+
+    #expect(interrupted?.cause as? SceneMembershipSlotChanged == SceneMembershipSlotChanged(device: fan, made: 3, total: 6))
+    #expect(await memory.writes.contains { $0.device == fan } == false)
+    #expect(await memory.record(of: fan, at: 0x0FEF) == responder(group: 8))
+  }
+
   @Test func stopsAtTheFirstStepThatReadsBackDifferentlyTwiceAndMakesNoStepAfterIt() async throws {
     let modem = await modem()
     let network = network(modem)
@@ -775,6 +811,15 @@ private final class Moment: @unchecked Sendable {
   var value: Date {
     get { lock.withLock { date } }
     set { lock.withLock { date = newValue } }
+  }
+}
+
+/// Counts calls, from 1.
+private actor Counter {
+  private var count = 0
+  func next() -> Int {
+    count += 1
+    return count
   }
 }
 

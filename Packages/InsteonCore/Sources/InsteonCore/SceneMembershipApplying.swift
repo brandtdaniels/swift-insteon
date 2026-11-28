@@ -393,13 +393,23 @@ extension DeviceLinkingCoordinator {
 
           let engine: InsteonEngine = engines[device] ?? .i2cs
 
-          if let expected = slots[device]?[address] {
+          // Every device write is preceded by a read of its slot, whether or not the slot was in the database read
+          // before the steps: one beyond the end it read must still hold nothing in use.
+          do {
 
             let holds: Bool
 
             do {
 
-              holds = try await slotHolds(expected, at: address, of: device, engine: engine)
+              if let expected = slots[device]?[address] {
+
+                holds = try await slotHolds(expected, at: address, of: device, engine: engine)
+
+              } else {
+
+                holds = !(try await readRecord(at: address, of: device, engine: engine).record.flags.contains(.inUse))
+
+              }
 
             } catch where Self.isDeviceProblem(error) {
 
