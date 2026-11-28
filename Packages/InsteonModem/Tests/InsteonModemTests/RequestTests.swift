@@ -822,6 +822,95 @@ struct RequestTests {
 
   }
 
+  // The bench trace (REQ-7) has the status report before the answering member's acknowledgment, all
+  // in one buffer read.
+  @Test func hearsACleanupAcknowledgmentBehindTheStatusReport() async throws {
+
+    let plug = InsteonAddress(0xD1, 0xD2, 0xD3)
+    let silent = InsteonAddress(0xC1, 0xC2, 0xC3)
+    let echo: [UInt8] = [0x02, 0x61, 0x05, 0x13, 0x00, 0x06]
+    let unknown: [UInt8] = [0x02, 0x5C, 0xA1, 0xA2, 0xA3, 0xB1, 0xB2, 0xB3, 0x23, 0x13, 0x05]
+    let failure: [UInt8] = [0x02, 0x56, 0x05] + silent.bytes
+    let status: [UInt8] = [0x02, 0x58, 0x06]
+    let ack = received(from: plug, .allLinkCleanupAcknowledgment, command1: 0x13, command2: 0x05)
+    let connection = ScriptedConnection { _, _ in echo + unknown + failure + status + ack }
+    let modem = makeModem(connection)
+
+    try await run(modem) {
+
+      let report = try await modem.sendAllLinkCommand(group: 0x05, command: Command(command1: 0x13, command2: 0x00))
+
+      #expect(report.acknowledged == [plug])
+      #expect(report.unacknowledged == [silent])
+      #expect(report.isComplete)
+
+    }
+
+  }
+
+  // An acknowledgment cut off at the end of the read that held the status report is still pending in
+  // the buffer, so the wait goes on for it, up to the grace.
+  @Test func waitsTheGraceForAnAcknowledgmentCutOffBehindTheStatusReport() async throws {
+
+    let plug = InsteonAddress(0xD1, 0xD2, 0xD3)
+    let silent = InsteonAddress(0xC1, 0xC2, 0xC3)
+    let late = InsteonAddress(0xE1, 0xE2, 0xE3)
+    let echo: [UInt8] = [0x02, 0x61, 0x05, 0x13, 0x00, 0x06]
+    let failure: [UInt8] = [0x02, 0x56, 0x05] + silent.bytes
+    let status: [UInt8] = [0x02, 0x58, 0x06]
+    let ack = received(from: plug, .allLinkCleanupAcknowledgment, command1: 0x13, command2: 0x05)
+    let lateAck = received(from: late, .allLinkCleanupAcknowledgment, command1: 0x13, command2: 0x05)
+    let connection = ScriptedConnection { _, _ in echo + failure + status + ack.prefix(5) }
+    let modem = makeModem(connection)
+    let wait = AllLinkCleanupWait(echo: .seconds(5), quietPeriod: .seconds(10), cap: .seconds(40), grace: .milliseconds(500))
+
+    try await run(modem) {
+
+      async let report = modem.sendAllLinkCommand(group: 0x05, command: Command(command1: 0x13, command2: 0x00), wait: wait)
+      await clock.waitForSleeper(until: .milliseconds(500))
+      clock.advance(by: .milliseconds(400))
+      // The rest of the first acknowledgment, and a second one that comes in the same read but cut off.
+      connection.incoming.yield(Array(ack.dropFirst(5)) + lateAck.prefix(5))
+      clock.advance(by: .milliseconds(100))
+
+      let result = try await report
+
+      // The second doesn't extend the grace, so it ends at 500 milliseconds with only the first heard.
+      #expect(result.acknowledged == [plug])
+      #expect(result.unacknowledged == [silent])
+      #expect(result.isComplete)
+
+    }
+
+  }
+
+  // With nothing behind the status report but a cut-off frame that never completes, the run ends
+  // after the grace at most, and it isn't a timeout.
+  @Test func endsAfterTheGraceWhenNothingFollowsTheStatusReport() async throws {
+
+    let silent = InsteonAddress(0xC1, 0xC2, 0xC3)
+    let echo: [UInt8] = [0x02, 0x61, 0x05, 0x13, 0x00, 0x06]
+    let failure: [UInt8] = [0x02, 0x56, 0x05] + silent.bytes
+    let status: [UInt8] = [0x02, 0x58, 0x06]
+    let connection = ScriptedConnection { _, _ in echo + failure + status + [0x02, 0x50, 0xD1] }
+    let modem = makeModem(connection)
+    let wait = AllLinkCleanupWait(echo: .seconds(5), quietPeriod: .seconds(10), cap: .seconds(40), grace: .milliseconds(500))
+
+    try await run(modem) {
+
+      async let report = modem.sendAllLinkCommand(group: 0x05, command: Command(command1: 0x13, command2: 0x00), wait: wait)
+      await clock.waitForSleeper(until: .milliseconds(500))
+      clock.advance(by: .milliseconds(500))
+
+      let result = try await report
+
+      #expect(result.unacknowledged == [silent])
+      #expect(result.isComplete)
+
+    }
+
+  }
+
   // The modem accepted the command, so it was sent; only the report of the cleanups is missing.
   @Test func givesUpAfterAQuietPeriodWithNoCleanupTrafficAndAnswersWhatItHeard() async throws {
 
