@@ -1444,6 +1444,7 @@ var SceneMembershipResult.changedDevices
 var SceneMembershipResult.deviceChecks
 var SceneMembershipResult.isComplete
 var SceneMembershipResult.isModemChecked
+var SceneMembershipResult.isUnverified
 var SceneMembershipResult.madeSteps
 var SceneMembershipResult.mismatches
 var SceneMembershipResult.plan

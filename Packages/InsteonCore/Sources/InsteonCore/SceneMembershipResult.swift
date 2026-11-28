@@ -143,6 +143,14 @@ public struct SceneMembershipResult: Hashable, Sendable {
 
   }
 
+  /// Whether every step was made and no record was found other than expected, but reading the databases again didn't
+  /// finish: a device didn't answer, or a read failed. What was written isn't confirmed, and nothing says it is wrong.
+  public var isUnverified: Bool {
+
+    steps.allSatisfy(\.outcome.isDone) && mismatches.isEmpty && !isComplete
+
+  }
+
   /// The devices a step was tried for, each once: the ones whose databases a step wrote to, and the ones a record
   /// of the modem's names. The network forgets its copies of their databases and the modem's, and reads them again.
   public var changedDevices: [InsteonAddress] {

@@ -90,9 +90,12 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
         "scene": "\(scene)", "steps": "\(application.result.steps.count)", "written": "\(application.result.madeSteps.count)", "notWritten": "\(application.result.unmadeSteps.count)",
         "mismatches": "\(application.result.mismatches.count)", "seconds": "\(now().timeIntervalSince(start))"
       ]
-      if application.isComplete {
+      switch application.outcome {
+      case .applied:
         logger.info("scene membership applied", metadata: metadata)
-      } else {
+      case .appliedUnverified:
+        logger.warning("scene membership applied without confirmation", metadata: metadata)
+      case .incomplete:
         // It wrote something and did not finish, so a person needs to see it: no address, only the counts.
         logger.warning("scene membership apply incomplete", metadata: metadata.merging(["interruption": "\(Self.name(of: application.interruption))"]) { $1 })
       }
@@ -100,7 +103,7 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
         logger.warning("scene membership apply left the cache stale", metadata: ["scene": "\(scene)"])
       }
       // An apply that stopped partway, or read back differently, is recorded like a success: it wrote, so a repeat must not.
-      return .response(application.isComplete ? .ok : .badGateway, try encoder.encode(SceneMembershipApplicationDTO(application, requestID: requestID)))
+      return .response(application.outcome == .incomplete ? .badGateway : .ok, try encoder.encode(SceneMembershipApplicationDTO(application, requestID: requestID)))
     } catch {
       // Any failure the service throws came before the first write, so it is classified as a read.
       let failure = HTTPFailure(CommandFailure(action: .status, underlying: error))
@@ -733,7 +736,11 @@ struct SceneMembershipApplicationDTO: Encodable {
     scene = Int(application.scene)
     planId = application.planId
     isComplete = application.isComplete
-    outcome = application.isComplete ? "applied" : "incomplete"
+    switch application.outcome {
+    case .applied: outcome = "applied"
+    case .appliedUnverified: outcome = "appliedUnverified"
+    case .incomplete: outcome = "incomplete"
+    }
     written = result.madeSteps.count
     notWritten = result.unmadeSteps.count
     steps = result.steps.enumerated().map { StepDTO($1, order: $0 + 1) }
@@ -748,13 +755,24 @@ struct SceneMembershipApplicationDTO: Encodable {
     cacheReload = application.isCacheReloaded ? "reloaded" : "failed"
     expectedUnreadable = application.expectedUnreadable.map(\.description)
     persistence = PersistenceName(application.persistence).rawValue
-    if application.isComplete {
+    let made = result.madeSteps.count
+    let total = result.steps.count
+    switch application.outcome {
+    case .applied:
       code = nil; message = nil; sent = nil; requestId = nil
-    } else {
+    case .appliedUnverified:
+      code = nil; sent = nil; requestId = nil
+      message = "Every step was made, but reading the databases again did not finish, so what was written is not confirmed. Nothing says a record is wrong. Refresh the scenes and check them."
+    case .incomplete:
       code = APIErrorCode.outcomeUnknown.rawValue
-      message = "Some of the plan's records may have been written and the rest were not. `steps` says which, and `mismatches` says what reading the databases again found. Nothing was undone and no step was repeated beyond its one retry. Refresh the scenes and plan again."
       sent = true
       requestId = requestID
+      let found = result.mismatches.count
+      let seen = found == 1 ? "1 record" : "\(found) records"
+      let first = made == total
+        ? "Every step was made, but reading the databases again found \(seen) other than the steps should have left."
+        : "\(made) of \(total) steps were made and \(total - made) were not (failed or not reached)\(found > 0 ? ", and reading the databases again found \(seen) other than expected" : "")."
+      message = first + " `steps` says which, and `mismatches` says what was found. Nothing was undone and no step was repeated beyond its one retry. Refresh the scenes and plan again."
     }
   }
 

@@ -182,7 +182,7 @@ enum OpenAPIDocument {
         "version": version,
         "scene": Schema.integer(minimum: 1, maximum: 254),
         "planId": Schema.string(pattern: "^sha256:[0-9a-f]{64}$"),
-        "outcome": Schema.string(enum: ["applied", "incomplete"], description: "`applied` when every step was made and both databases read back as planned, else `incomplete`, which answers 502."),
+        "outcome": Schema.string(enum: ["applied", "appliedUnverified", "incomplete"], description: "`applied` when every step was made and both databases read back as planned. `appliedUnverified` (200) when every step was made and no record was found other than expected, but reading the databases again did not finish, so a client refreshes the scenes and checks. `incomplete` (502) when a step was not made or a record was found other than expected."),
         "isComplete": ["type": "boolean"],
         "written": Schema.integer(minimum: 0, description: "How many steps were made."),
         "notWritten": Schema.integer(minimum: 0, description: "How many steps were not made: failed, or not reached because an earlier one failed."),
@@ -199,7 +199,7 @@ enum OpenAPIDocument {
         "expectedUnreadable": Schema.array(of: address),
         "persistence": Schema.ref("Persistence"),
         "code": Schema.ref("ErrorCode"),
-        "message": Schema.string(description: "Present when `incomplete`. For a person."),
+        "message": Schema.string(description: "Present when `appliedUnverified` or `incomplete`. For a person, from the counts of steps made and records found."),
         "sent": ["type": "boolean", "const": true, "description": "Present when `incomplete`: ALL-Link records may have been written."],
         "requestId": Schema.string(description: "Present when `incomplete`: the request_id of the log record for this request.")
       ], required: ["version", "scene", "planId", "outcome", "isComplete", "written", "notWritten", "steps", "mismatches", "modemChecked", "deviceChecks", "interruption", "interruptionDetail", "cacheReload", "expectedUnreadable", "persistence"], description: "What applying a plan did. An `incomplete` answer is also an error body (`code` `outcomeUnknown`, `sent` true): the steps before the first failure are written, the failed one may be, and the rest were not made. The service never rolls back, so a client plans again from a fresh read."),

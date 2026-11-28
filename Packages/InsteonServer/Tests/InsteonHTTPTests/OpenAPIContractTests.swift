@@ -323,6 +323,9 @@ struct OpenAPIContractTests {
     for application in [
       SceneApplyExample.application(applied),
       SceneApplyExample.application(applied, outcomes: [.writtenOnRetry, .written]),
+      SceneApplyExample.application(applied, deviceCheck: .unanswered),
+      SceneApplyExample.application(applied, interruption: .failed("The modem stopped answering.")),
+      SceneApplyExample.application(applied, isCacheReloaded: false, expectedUnreadable: [ScenePlanExample.lamp]),
       SceneApplyExample.application(applied, outcomes: [.written, .notReached]),
       SceneApplyExample.application(applied, outcomes: [.rejected, .notReached], mismatches: [mismatch, modemMismatch]),
       SceneApplyExample.application(applied, outcomes: [.written, .unanswered], interruption: .failed("The modem stopped answering.")),

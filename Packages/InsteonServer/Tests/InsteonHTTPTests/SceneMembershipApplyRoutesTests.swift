@@ -17,13 +17,13 @@ enum SceneApplyExample {
     await ScenePlanExample.plan(ScenePlanExample.addLamp())
   }
 
-  static func application(_ plan: SceneMembershipPlan, outcomes: [DatabaseLinkStepOutcome]? = nil, mismatches: [SceneMembershipResult.Mismatch] = [], interruption: SceneMembershipApplication.Interruption? = nil, isCacheReloaded: Bool = true, expectedUnreadable: [InsteonAddress] = []) -> SceneMembershipApplication {
+  static func application(_ plan: SceneMembershipPlan, outcomes: [DatabaseLinkStepOutcome]? = nil, mismatches: [SceneMembershipResult.Mismatch] = [], interruption: SceneMembershipApplication.Interruption? = nil, isCacheReloaded: Bool = true, expectedUnreadable: [InsteonAddress] = [], deviceCheck: DatabaseLinkResult.DeviceCheck = .checked) -> SceneMembershipApplication {
     let outcomes = outcomes ?? plan.steps.map { _ in .written }
     let result = SceneMembershipResult(
       plan: plan,
       steps: zip(plan.steps, outcomes).map { SceneMembershipResult.StepResult(step: $0, outcome: $1) },
       mismatches: mismatches,
-      deviceChecks: [ScenePlanExample.lamp: .checked],
+      deviceChecks: [ScenePlanExample.lamp: deviceCheck],
       isModemChecked: true
     )
     return SceneMembershipApplication(scene: plan.scene, planId: plan.id, result: result, interruption: interruption, persistence: .saved, isCacheReloaded: isCacheReloaded, expectedUnreadable: expectedUnreadable)
@@ -44,10 +44,10 @@ struct SceneMembershipApplyRoutesTests {
     let app: Application<RouterResponder<BasicRequestContext>>
   }
 
-  private func setup(outcomes: [DatabaseLinkStepOutcome]? = nil, mismatches: [SceneMembershipResult.Mismatch] = [], interruption: SceneMembershipApplication.Interruption? = nil, isCacheReloaded: Bool = true, expectedUnreadable: [InsteonAddress] = [], failure: (any Error)? = nil, logger: Logger? = nil) async throws -> Setup {
+  private func setup(outcomes: [DatabaseLinkStepOutcome]? = nil, mismatches: [SceneMembershipResult.Mismatch] = [], interruption: SceneMembershipApplication.Interruption? = nil, isCacheReloaded: Bool = true, expectedUnreadable: [InsteonAddress] = [], deviceCheck: DatabaseLinkResult.DeviceCheck = .checked, failure: (any Error)? = nil, logger: Logger? = nil) async throws -> Setup {
     let plan = await SceneApplyExample.plan()
     let service = FakeService()
-    await service.scriptApply(answer: failure == nil ? SceneApplyExample.application(plan, outcomes: outcomes, mismatches: mismatches, interruption: interruption, isCacheReloaded: isCacheReloaded, expectedUnreadable: expectedUnreadable) : nil, failure: failure)
+    await service.scriptApply(answer: failure == nil ? SceneApplyExample.application(plan, outcomes: outcomes, mismatches: mismatches, interruption: interruption, isCacheReloaded: isCacheReloaded, expectedUnreadable: expectedUnreadable, deviceCheck: deviceCheck) : nil, failure: failure)
     let clients = ClientStore(persistence: InMemoryClientPersistence())
     let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password), clients: clients, logger: logger ?? Logger(label: "test")).buildResponder())
     return Setup(service: service, clients: clients, plan: plan, app: app)
@@ -119,6 +119,48 @@ struct SceneMembershipApplyRoutesTests {
 
     #expect(steps.map { $0["outcome"] as? String } == ["writtenOnRetry", "written"])
     #expect(body["isComplete"] as? Bool == true)
+  }
+
+  // MARK: Made but not confirmed
+
+  @Test func answers200AppliedUnverifiedWhenEveryStepWasMadeAndADeviceDidNotAnswerTheFinalRead() async throws {
+    let setup = try await setup(deviceCheck: .unanswered)
+    let response = try await apply(setup, authorization: basic)
+    let body = try object(response)
+
+    #expect(response.status == .ok)
+    #expect(body["outcome"] as? String == "appliedUnverified")
+    #expect(body["isComplete"] as? Bool == false)
+    #expect(body["written"] as? Int == 2)
+    #expect(body["notWritten"] as? Int == 0)
+    #expect((body["mismatches"] as? [Any])?.isEmpty == true)
+    #expect((body["deviceChecks"] as? [[String: Any]])?.first?["check"] as? String == "unanswered")
+    // Not an error body: nothing says the records are wrong, and the message says to refresh and check.
+    #expect(body["code"] == nil)
+    #expect(body["sent"] == nil)
+    #expect((body["message"] as? String)?.contains("Refresh the scenes") == true)
+  }
+
+  @Test func recordsAnUnverifiedAnswerForReplayLikeAnyApplyThatWrote() async throws {
+    let setup = try await setup(deviceCheck: .unanswered)
+    let first = try await apply(setup, authorization: basic, key: "unverified-1")
+    let second = try await apply(setup, authorization: basic, key: "unverified-1")
+
+    #expect(first.status == .ok)
+    #expect(second.headers[.idempotentReplay] == "true")
+    #expect(await setup.service.applyRequests.count == 1)
+  }
+
+  @Test func saysWhatIsTrueFromTheCountsInTheIncompleteMessage() async throws {
+    let partial = try object(try await apply(try await setup(outcomes: [.written, .notReached]), authorization: basic))
+    let mismatched = try object(try await apply(try await setup(mismatches: [SceneMembershipResult.Mismatch(device: nil, mismatch: DatabaseMismatch(isDevice: false, memoryAddress: nil, expected: nil, found: LinkRecord(isController: true, isInUse: true, group: 4, address: ScenePlanExample.lamp, data: [0, 0, 0])))]), authorization: basic))
+
+    #expect((partial["message"] as? String)?.contains("1 of 2 steps were made") == true)
+    #expect((partial["message"] as? String)?.contains("plan again") == true)
+    #expect((mismatched["message"] as? String)?.contains("Every step was made") == true)
+    #expect((mismatched["message"] as? String)?.contains("1 record") == true)
+    #expect(partial["outcome"] as? String == "incomplete")
+    #expect(mismatched["outcome"] as? String == "incomplete")
   }
 
   // MARK: What a client and the log are told

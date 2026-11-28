@@ -561,6 +561,41 @@ struct SceneMembershipApplyServiceTests {
 
   // MARK: Failures, a step at a time
 
+  @Test func callsAnApplyWhoseStepsWereAllMadeButWhoseFinalReadDidNotFinishUnverifiedAndNotIncomplete() async throws {
+    let memory = await modem()
+    let damaging = DamagingModem(memory)
+    let service = service(damaging, clock: WallClock("2026-11-27T10:00:00Z"))
+    _ = try await service.refreshScenes()
+    let plan = try await service.planSceneMembership(change(add: [lamp])).plan
+    let events = await service.events()
+    // The lamp answers the read before the writes and not the final one.
+    await damaging.setFailingDatabaseReads([nil, ModemError.deviceTimedOut(lamp)], of: lamp)
+
+    let application = try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan))
+
+    #expect(application.result.steps.map(\.outcome) == [.written, .written, .written])
+    #expect(application.outcome == .appliedUnverified)
+    #expect(!application.isComplete)
+    var reader = events.makeAsyncIterator()
+    guard case let .sceneChanged(changed)? = try await reader.next() else { Issue.record("expected a sceneChanged event"); return }
+    #expect(!changed.isComplete)
+  }
+
+  @Test func callsAnApplyIncompleteWhenAStepWasNotMadeOrARecordIsOtherThanExpected() async throws {
+    let (service, modem, plan, _) = try await planned()
+    await modem.setForgetful(lamp)
+
+    let application = try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan))
+
+    #expect(application.outcome == .incomplete)
+  }
+
+  @Test func callsACompleteApplyApplied() async throws {
+    let (service, _, plan, _) = try await planned()
+
+    #expect(try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan)).outcome == .applied)
+  }
+
   @Test func stopsAtTheFirstStepThatReadsBackDifferentlyTwiceAndSaysWhatWasAndWasNotWritten() async throws {
     let (service, modem, plan, _) = try await planned()
     // The lamp acknowledges its writes and keeps none.

@@ -674,6 +674,38 @@ struct SceneMembershipApplyTests {
     #expect(result.isComplete)
   }
 
+  @Test func saysTheApplyIsUnverifiedWhenEveryStepWasMadeAndADeviceDidNotAnswerTheFinalRead() async throws {
+    let memory = await modem()
+    let damaging = DamagingModem(memory)
+    let network = network(damaging)
+    let plan = try await plan(add(lamp), on: network)
+    // The lamp answers the read before the writes and not the one after.
+    await damaging.setFailingDatabaseReads([nil, ModemError.deviceTimedOut(lamp)], of: lamp)
+
+    let result = try await network.linking.apply(plan, consent: consent(plan))
+
+    #expect(result.steps.map(\.outcome) == [.written, .written, .written])
+    #expect(result.mismatches.isEmpty)
+    #expect(result.deviceChecks == [lamp: .unanswered])
+    #expect(!result.isComplete)
+    #expect(result.isUnverified)
+  }
+
+  @Test func doesNotCallAnApplyUnverifiedWhenAStepFailedOrARecordIsOtherThanExpected() async throws {
+    let modem = await modem()
+    let network = network(modem)
+    let plan = try await plan(add(lamp), on: network)
+    await modem.setBeforeOperation { [self] operation in
+      if Self.isAddingModemRecord(operation) { await modem.setModemRecords(await modem.modemRecords + [controller(group: 9, stranger)]) }
+    }
+
+    let result = try await network.linking.apply(plan, consent: consent(plan))
+
+    #expect(!result.mismatches.isEmpty)
+    #expect(!result.isUnverified)
+    #expect(!result.isComplete)
+  }
+
   @Test func reportsARecordTheFinalReadFoundThatNoStepWrote() async throws {
     let modem = await modem()
     let network = network(modem)

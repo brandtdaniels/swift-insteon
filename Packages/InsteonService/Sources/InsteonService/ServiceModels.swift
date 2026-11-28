@@ -308,8 +308,25 @@ public struct SceneMembershipApplication: Equatable, Sendable {
   /// holds no copy of their databases. Expected after such a removal: it doesn't make ``isCacheReloaded`` false.
   public let expectedUnreadable: [InsteonAddress]
 
+  /// What the apply came to.
+  public enum Outcome: Equatable, Sendable {
+    /// Every step was made and both databases read back as planned.
+    case applied
+    /// Every step was made and no record was found other than expected, but reading the databases again didn't
+    /// finish, so what was written isn't confirmed.
+    case appliedUnverified
+    /// A step failed or wasn't reached, or a record was found other than expected.
+    case incomplete
+  }
+
   /// Whether every step was made and every database read back as expected.
   public var isComplete: Bool { interruption == nil && result.isComplete }
+
+  /// What the apply came to: complete, made but not confirmed, or incomplete.
+  public var outcome: Outcome {
+    if isComplete { return .applied }
+    return result.isUnverified ? .appliedUnverified : .incomplete
+  }
 
   /// Creates an application.
   public init(scene: UInt8, planId: String, result: SceneMembershipResult, interruption: Interruption? = nil, persistence: PersistenceOutcome = .notConfigured, isCacheReloaded: Bool = true, expectedUnreadable: [InsteonAddress] = []) {
