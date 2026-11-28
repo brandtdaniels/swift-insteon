@@ -443,7 +443,7 @@ struct HTTPTests {
     #expect(await service.reads == 1)
   }
 
-  @Test(arguments: [ServiceControlError.busy, .unknownDevice, .invalidLevel, .unsupportedControl, .notIdentified, .notLinked, .modemUnavailable(.hubUnreachable), .databasesUnavailable, .unknownScene, .sceneEmpty, .unknownPlan, .planExpired, .planAlreadyApplied, .planNotApplicable, .planStale, .consentRequired, .consentMismatch])
+  @Test(arguments: [ServiceControlError.busy, .unknownDevice, .invalidLevel, .unsupportedControl, .notIdentified, .notLinked, .modemUnavailable(.hubUnreachable), .databasesUnavailable, .unknownScene, .sceneEmpty, .unknownPlan, .planExpired, .planAlreadyApplied, .planNotApplicable, .planStale, .consentRequired, .consentMismatch, .deviceNotAnswering])
   func serviceRefusalsHaveAnHTTPMapping(_ failure: ServiceControlError) async throws {
     let service = FakeService(refusal: failure)
     let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password)).buildResponder())
@@ -463,6 +463,7 @@ struct HTTPTests {
         case .planExpired: #expect(response.status == .gone)
         case .planAlreadyApplied, .planStale: #expect(response.status == .conflict)
         case .planNotApplicable, .consentRequired, .consentMismatch: #expect(response.status == .unprocessableContent)
+        case .deviceNotAnswering: #expect(response.status == .gatewayTimeout)
         }
       }
     }

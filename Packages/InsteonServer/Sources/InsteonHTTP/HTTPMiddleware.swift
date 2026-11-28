@@ -156,6 +156,7 @@ struct HTTPFailure: Sendable {
     case ServiceControlError.planStale: self.init(.planStale)
     case ServiceControlError.consentRequired: self.init(.consentRequired)
     case ServiceControlError.consentMismatch: self.init(.consentMismatch)
+    case ServiceControlError.deviceNotAnswering: self.init(.deviceNotAnswering)
     case ServiceControlError.invalidLevel: self.init(.invalidLevel)
     case ServiceControlError.unsupportedControl: self.init(.unsupportedControl)
     case ServiceControlError.notIdentified: self.init(.notIdentified)

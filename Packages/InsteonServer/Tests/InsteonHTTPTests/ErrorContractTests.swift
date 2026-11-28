@@ -42,6 +42,7 @@ struct ErrorContractTests {
     Expected(failure: ServiceControlError.planStale, action: "on", code: "planStale", status: 409, sent: false),
     Expected(failure: ServiceControlError.consentRequired, action: "on", code: "consentRequired", status: 422, sent: false),
     Expected(failure: ServiceControlError.consentMismatch, action: "on", code: "consentMismatch", status: 422, sent: false),
+    Expected(failure: ServiceControlError.deviceNotAnswering, action: "on", code: "deviceNotAnswering", status: 504, sent: false),
     Expected(failure: ServiceControlError.invalidLevel, action: "on", code: "invalidLevel", status: 400, sent: false),
     Expected(failure: ServiceControlError.unsupportedControl, action: "on", code: "unsupportedControl", status: 422, sent: false),
     Expected(failure: ServiceControlError.notIdentified, action: "status", code: "notIdentified", status: 409, sent: false),

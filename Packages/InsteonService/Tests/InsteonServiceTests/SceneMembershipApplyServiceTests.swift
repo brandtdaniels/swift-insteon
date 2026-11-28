@@ -464,7 +464,7 @@ struct SceneMembershipApplyServiceTests {
     let events = await service.events()
     await damaging.setFailingReads([ModemError.deviceTimedOut(lamp)], at: 0x0FF7, of: lamp)
 
-    await #expect(throws: ModemError.deviceTimedOut(lamp)) { try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan)) }
+    await #expect(throws: ServiceControlError.deviceNotAnswering) { try await service.applySceneMembership(scene: 4, planId: plan.id, consent: consent(plan)) }
 
     #expect(await memory.writes.isEmpty)
     // Nothing was written, so the plan is still open and the same consent applies it.

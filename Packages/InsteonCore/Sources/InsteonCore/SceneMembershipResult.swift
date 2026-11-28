@@ -23,6 +23,10 @@ public enum SceneMembershipRefusal: Error, Hashable, Sendable {
   /// it was made.
   case wouldOverwriteRecord(InsteonAddress)
 
+  /// A device didn't answer the read of the first step's slot, so nothing was written. A device that stops
+  /// answering after a step was written is the cause inside ``SceneMembershipInterrupted`` instead.
+  case deviceNotAnswering(InsteonAddress)
+
 }
 
 extension SceneMembershipRefusal: CustomStringConvertible, LocalizedError {
@@ -37,6 +41,8 @@ extension SceneMembershipRefusal: CustomStringConvertible, LocalizedError {
       "Writing ALL-Link records needs consent that agrees to the writes. Nothing was written."
     case .consentMismatch:
       "The consent names another plan than the one that was shown. Nothing was written."
+    case let .deviceNotAnswering(device):
+      "\(device) didn't answer the read of the slot the first step writes. Nothing was written; try again."
     case let .wouldOverwriteRecord(device):
       "A step of the plan would write over a record in use in \(device)'s ALL-Link database. Nothing was written."
     case let .planStale(device):
@@ -146,11 +152,13 @@ public struct SceneMembershipResult: Hashable, Sendable {
 
 }
 
-/// The steps of a ``SceneMembershipPlan`` stopped partway, for something other than a device's own
-/// timeout or rejection: the modem's error, a slot that changed before it was written, or
-/// `CancellationError`.
+/// The steps of a ``SceneMembershipPlan`` stopped after some were made, for something other than a step's own
+/// failure: the modem's error, a device that didn't answer the read of the slot of a later step (the device's own
+/// timeout or rejection is the cause), a slot that changed (``SceneMembershipSlotChanged``), or `CancellationError`.
 ///
-/// ``result`` says which steps were made, so a front end can say which records were written.
+/// ``result`` says which steps were made, so a front end can say which records were written, and carries what reading
+/// the databases again found, which runs even when the request is canceled. A plan stopped before its first step
+/// is a ``SceneMembershipRefusal`` instead, or a `CancellationError`.
 public struct SceneMembershipInterrupted: Error, Sendable {
 
   /// Each step's outcome, and what reading the databases again found when they could be read.

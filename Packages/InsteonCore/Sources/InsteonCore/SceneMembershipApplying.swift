@@ -30,12 +30,15 @@ extension DeviceLinkingCoordinator {
   ///   - plan: The plan.
   ///   - consent: What the client granted.
   /// - Returns: Each step's outcome and what reading the databases again found.
-  /// - Throws: ``SceneMembershipRefusal`` when the plan or the consent can't be carried out or a database
-  ///   isn't as the plan read it, before anything is written. The modem's error when a database can't be read
-  ///   before the first write. ``SceneMembershipInterrupted`` when the steps stop partway for anything but a device's
-  ///   own timeout or rejection, such as the modem's error, a slot that changed before it was written, or
-  ///   `CancellationError`: it carries the outcome of each step, and what reading the databases again found when
-  ///   they could be read. A device's own timeouts and rejections don't throw; a step's outcome says so.
+  /// - Throws: ``SceneMembershipRefusal`` when the plan or the consent can't be carried out, a database isn't as the
+  ///   plan read it, a slot the first step writes changed, or a device didn't answer the read of that slot, each before
+  ///   anything is written. The modem's error when a database can't be read before the first write, and
+  ///   `CancellationError` when the request is canceled before the first step. ``SceneMembershipInterrupted`` when
+  ///   steps were made and then stop for anything but a step's own failure: the modem's error, a device that doesn't
+  ///   answer the read of the slot of a later step (``SceneMembershipInterrupted/cause`` is the device's error), a slot
+  ///   that changed (``SceneMembershipSlotChanged``), or `CancellationError`. It carries the outcome of each step, and
+  ///   what reading the databases again found, which runs to its end even if the request is canceled. A step's own
+  ///   timeouts and rejections of a write or its read back don't throw; the step's outcome says so.
   public func apply(_ plan: SceneMembershipPlan, consent: DatabaseLinkConsent) async throws -> SceneMembershipResult {
 
     guard plan.isApplicable else {
@@ -273,6 +276,7 @@ extension DeviceLinkingCoordinator {
     var isStopped: Bool = false
     var interruption: (any Error)?
     var staleBeforeWriting: InsteonAddress?
+    var silentBeforeWriting: InsteonAddress?
     // What each slot of each device's database holds, as read and as written since.
     var slots: [InsteonAddress: [UInt16: AllLinkRecord]] = reading.devices.mapValues { (responses: [AllLinkRecordResponse]) -> [UInt16: AllLinkRecord] in Self.slots(of: responses) }
 
@@ -313,7 +317,17 @@ extension DeviceLinkingCoordinator {
 
             } catch where Self.isDeviceProblem(error) {
 
-              // Nothing was written for this step: only its slot was read, so it was not reached.
+              // Nothing was written for this step: only its slot was read, so it was not reached. Before the first
+              // step that is a refusal with nothing written; after one, the steps made stay and it is the cause.
+              guard !results.isEmpty else {
+
+                silentBeforeWriting = device
+                isStopped = true
+
+                continue
+
+              }
+
               results.append(SceneMembershipResult.StepResult(step: step, outcome: .notReached))
               interruption = error
               isStopped = true
@@ -378,6 +392,12 @@ extension DeviceLinkingCoordinator {
     if let staleBeforeWriting {
 
       throw SceneMembershipRefusal.planStale(staleBeforeWriting)
+
+    }
+
+    if let silentBeforeWriting {
+
+      throw SceneMembershipRefusal.deviceNotAnswering(silentBeforeWriting)
 
     }
 

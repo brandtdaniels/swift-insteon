@@ -182,7 +182,7 @@ struct SceneMembershipApplyRoutesTests {
     var produced: Set<String> = []
     let failures: [any Error] = [
       ServiceControlError.unknownPlan, ServiceControlError.planExpired, ServiceControlError.planAlreadyApplied, ServiceControlError.planNotApplicable,
-      ServiceControlError.planStale, ServiceControlError.consentMismatch, ServiceControlError.busy, ServiceControlError.modemUnavailable(.connecting),
+      ServiceControlError.planStale, ServiceControlError.consentMismatch, ServiceControlError.deviceNotAnswering, ServiceControlError.busy, ServiceControlError.modemUnavailable(.connecting),
       ServiceControlError.databasesUnavailable, ModemError.deviceTimedOut(ScenePlanExample.lamp), ModemError.deviceRejected(ScenePlanExample.lamp, NAKReason(rawValue: 0xFD)),
       ModemError.deviceRejected(ScenePlanExample.lamp, .notLinked), ModemError.rejected(.getModemInfo), CancellationError()
     ]

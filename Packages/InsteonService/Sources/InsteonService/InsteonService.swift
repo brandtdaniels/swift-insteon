@@ -365,6 +365,9 @@ public actor InsteonService: InsteonServiceAPI {
     } catch SceneMembershipRefusal.notApplicable, SceneMembershipRefusal.wouldOverwriteRecord {
       close(plan, as: .notApplicable)
       throw ServiceControlError.planNotApplicable
+    } catch SceneMembershipRefusal.deviceNotAnswering {
+      // Nothing was written, so the plan stays open and the same consent applies it again.
+      throw ServiceControlError.deviceNotAnswering
     } catch SceneMembershipRefusal.consentRequired {
       throw ServiceControlError.consentRequired
     } catch SceneMembershipRefusal.consentMismatch {

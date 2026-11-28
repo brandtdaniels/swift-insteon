@@ -494,7 +494,26 @@ struct SceneMembershipApplyTests {
     let result = try #require(interrupted?.result)
     #expect(result.steps.map(\.outcome) == [.written, .notReached, .notReached])
     #expect(interrupted?.cause as? ModemError == .deviceTimedOut(lamp))
+    // The step before it was written, so the databases are read again and the result says what they hold.
+    #expect(result.isModemChecked)
+    #expect(result.deviceChecks == [lamp: .checked])
     #expect(await memory.writes.count == 1)
+    #expect(await memory.modemRecords.contains(controller(group: 4, lamp)) == false)
+  }
+
+  @Test func refusesAsNotAnsweringWhenTheDeviceDoesNotAnswerTheReadOfTheFirstSlotBecauseNothingWasWritten() async throws {
+    let memory = await modem()
+    let freed = AllLinkRecord(flags: AllLinkRecordFlags(rawValue: 0x22), group: 0, address: InsteonAddress(0, 0, 0), data1: 0, data2: 0, data3: 0)
+    await memory.setDatabase([0x0FFF: responder(group: 3), 0x0FF7: freed], of: lamp)
+    let damaging = DamagingModem(memory)
+    let network = network(damaging)
+    let plan = try await plan(add(lamp), on: network)
+    await damaging.setFailingReads([ModemError.deviceTimedOut(lamp)], at: 0x0FF7, of: lamp)
+
+    let error = await #expect(throws: SceneMembershipRefusal.self) { try await network.linking.apply(plan, consent: consent(plan)) }
+
+    #expect(error == .deviceNotAnswering(lamp))
+    #expect(await memory.writes.isEmpty)
     #expect(await memory.modemRecords.contains(controller(group: 4, lamp)) == false)
   }
 

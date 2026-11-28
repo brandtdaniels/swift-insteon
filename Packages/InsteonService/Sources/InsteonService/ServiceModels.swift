@@ -394,7 +394,7 @@ public protocol SceneProviding: Sendable {
   ///   ``ServiceControlError/planAlreadyApplied``, ``ServiceControlError/planNotApplicable``,
   ///   ``ServiceControlError/consentRequired``, ``ServiceControlError/consentMismatch``,
   ///   ``ServiceControlError/busy``, ``ServiceControlError/modemUnavailable(_:)``,
-  ///   ``ServiceControlError/databasesUnavailable`` and ``ServiceControlError/planStale``, each before
+  ///   ``ServiceControlError/databasesUnavailable``, ``ServiceControlError/deviceNotAnswering`` (a device didn't answer the read of the first slot, and the plan stays usable) and ``ServiceControlError/planStale``, each before
   ///   anything is written, and the modem's error when a database can't be read before the first
   ///   write.
   func applySceneMembership(scene: UInt8, planId: String, consent: DatabaseLinkConsent) async throws -> SceneMembershipApplication
@@ -455,6 +455,8 @@ public enum ServiceControlError: Error, Equatable {
   case consentRequired
   /// The consent names another plan than the one given. Nothing was sent.
   case consentMismatch
+  /// A device didn't answer the read of the slot the first step writes, so nothing was written. The plan stays usable.
+  case deviceNotAnswering
 }
 
 /// A service runtime failure, independent of its host.
