@@ -542,6 +542,28 @@ struct SceneMembershipApplyTests {
     #expect(result.mismatches.first?.mismatch.expected == nil)
   }
 
+  @Test func keepsWhatTheFinalReadFoundWhenALaterReadFails() async throws {
+    let modem = await modem()
+    let network = network(modem)
+    let plan = try await plan(add(lamp), on: network)
+    let reads = Flag()
+    await modem.setBeforeOperation { [self] operation in
+      if Self.isAddingModemRecord(operation) { await modem.setDatabase([0x0FFF: responder(group: 7), 0x0FF7: responder(group: 4)], of: lamp) }
+      // The first read of the modem's database is the one before the writes; the second is the final one.
+      if case .readModemDatabase = operation, await reads.raise() == false { throw ModemError.connectionClosed }
+    }
+
+    let interrupted = await #expect(throws: SceneMembershipInterrupted.self) { try await network.linking.apply(plan, consent: consent(plan)) }
+
+    let result = try #require(interrupted?.result)
+    #expect(interrupted?.cause as? ModemError == .connectionClosed)
+    // The lamp was read again and compared before the modem's read failed, and what it found is kept.
+    #expect(result.deviceChecks == [lamp: .checked])
+    #expect(result.mismatches.map(\.device) == [lamp])
+    #expect(result.isModemChecked == false)
+    #expect(result.steps.map(\.outcome) == [.written, .written, .written])
+  }
+
   @Test func reportsADeviceRecordTheFinalReadFoundDifferentlyFromWhatWasWritten() async throws {
     let modem = await modem()
     let network = network(modem)

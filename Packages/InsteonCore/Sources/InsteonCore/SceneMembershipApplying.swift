@@ -129,7 +129,7 @@ extension DeviceLinkingCoordinator {
   // MARK: - Reading before the writes
 
   /// What the hardware holds before the first step: each device's records by slot, and the modem's records in use.
-  private struct Reading {
+  private struct Reading: Sendable {
 
     var devices: [InsteonAddress: [AllLinkRecordResponse]] = [:]
 
@@ -363,26 +363,17 @@ extension DeviceLinkingCoordinator {
 
     }
 
-    var mismatches: [SceneMembershipResult.Mismatch] = []
-    var deviceChecks: [InsteonAddress: DatabaseLinkResult.DeviceCheck] = [:]
-    var isModemChecked: Bool = false
+    var verification: Verification = Verification()
 
-    // A canceled task reads nothing more, so the databases aren't read again.
+    // Steps skipped for a cancellation read nothing more, so the databases aren't read again.
     if !(interruption is CancellationError) {
 
-      do {
-
-        (mismatches, deviceChecks, isModemChecked) = try await verify(plan, reading: reading, results: results)
-
-      } catch {
-
-        interruption = interruption ?? error
-
-      }
+      verification = await verify(plan, reading: reading, results: results)
+      interruption = interruption ?? verification.failure
 
     }
 
-    let result = SceneMembershipResult(plan: plan, steps: results, mismatches: mismatches, deviceChecks: deviceChecks, isModemChecked: isModemChecked)
+    let result = SceneMembershipResult(plan: plan, steps: results, mismatches: verification.mismatches, deviceChecks: verification.deviceChecks, isModemChecked: verification.isModemChecked)
 
     if let interruption {
 
@@ -396,13 +387,43 @@ extension DeviceLinkingCoordinator {
 
   // MARK: - Reading after the writes
 
+  /// What reading the databases again found. A read that fails ends the reading and is kept in `failure`, with
+  /// everything found before it.
+  private struct Verification: Sendable {
+
+    var mismatches: [SceneMembershipResult.Mismatch] = []
+
+    var deviceChecks: [InsteonAddress: DatabaseLinkResult.DeviceCheck] = [:]
+
+    var isModemChecked: Bool = false
+
+    var failure: (any Error)?
+
+  }
+
   /// Reads the modem's database and each device's again and compares them with what the steps that were made
   /// should have left.
-  private func verify(_ plan: SceneMembershipPlan, reading: Reading, results: [SceneMembershipResult.StepResult]) async throws -> ([SceneMembershipResult.Mismatch], [InsteonAddress: DatabaseLinkResult.DeviceCheck], Bool) {
+  private func verify(_ plan: SceneMembershipPlan, reading: Reading, results: [SceneMembershipResult.StepResult]) async -> Verification {
+
+    var found: Verification = Verification()
+
+    do {
+
+      try await verify(plan, reading: reading, results: results, into: &found)
+
+    } catch {
+
+      found.failure = error
+
+    }
+
+    return found
+
+  }
+
+  private func verify(_ plan: SceneMembershipPlan, reading: Reading, results: [SceneMembershipResult.StepResult], into found: inout Verification) async throws {
 
     let modem: any LinkingModem = network.modem
-    var mismatches: [SceneMembershipResult.Mismatch] = []
-    var deviceChecks: [InsteonAddress: DatabaseLinkResult.DeviceCheck] = [:]
 
     for device in Self.devices(writtenBy: plan) {
 
@@ -426,15 +447,15 @@ extension DeviceLinkingCoordinator {
       do {
 
         let records: [AllLinkRecordResponse] = try await modem.readAllLinkDatabase(of: device, timeout: Modem.defaultExtendedRequestTimeout)
-        let found: [UInt16: AllLinkRecordResponse] = Dictionary(records.map { (response: AllLinkRecordResponse) -> (UInt16, AllLinkRecordResponse) in (response.address, response) }) { (first: AllLinkRecordResponse, _: AllLinkRecordResponse) -> AllLinkRecordResponse in first }
+        let onDevice: [UInt16: AllLinkRecordResponse] = Dictionary(records.map { (response: AllLinkRecordResponse) -> (UInt16, AllLinkRecordResponse) in (response.address, response) }) { (first: AllLinkRecordResponse, _: AllLinkRecordResponse) -> AllLinkRecordResponse in first }
         let end: UInt16 = records.last?.address ?? DeviceDatabaseLayout.firstRecordAddress
 
-        deviceChecks[device] = .checked
+        found.deviceChecks[device] = .checked
 
-        for address in Set(expected.keys).union(found.keys).sorted(by: >) {
+        for address in Set(expected.keys).union(onDevice.keys).sorted(by: >) {
 
           let want: AllLinkRecord? = expected[address]
-          let got: AllLinkRecordResponse? = found[address]
+          let got: AllLinkRecordResponse? = onDevice[address]
 
           if let want, let got, got.record.equalsIgnoringDeviceMaintained(want) {
 
@@ -450,7 +471,7 @@ extension DeviceLinkingCoordinator {
 
           }
 
-          mismatches.append(SceneMembershipResult.Mismatch(device: device, mismatch: DatabaseMismatch(
+          found.mismatches.append(SceneMembershipResult.Mismatch(device: device, mismatch: DatabaseMismatch(
             isDevice: true,
             memoryAddress: address,
             expected: want.map { (record: AllLinkRecord) -> LinkRecord in Self.deviceRecord(record, at: address) },
@@ -461,11 +482,11 @@ extension DeviceLinkingCoordinator {
 
       } catch ModemError.deviceRejected(_, .notLinked) where removesLastRecord && plan.devices.first(where: { (known: SceneMembershipDevice) -> Bool in known.address == device })?.engine == .i2cs {
 
-        deviceChecks[device] = .rejectsModemAfterUnlinking
+        found.deviceChecks[device] = .rejectsModemAfterUnlinking
 
       } catch where Self.isDeviceProblem(error) {
 
-        deviceChecks[device] = .unanswered
+        found.deviceChecks[device] = .unanswered
 
       }
 
@@ -505,7 +526,7 @@ extension DeviceLinkingCoordinator {
 
       } else {
 
-        mismatches.append(SceneMembershipResult.Mismatch(device: nil, mismatch: DatabaseMismatch(isDevice: false, memoryAddress: nil, expected: LinkRecord(want), found: nil)))
+        found.mismatches.append(SceneMembershipResult.Mismatch(device: nil, mismatch: DatabaseMismatch(isDevice: false, memoryAddress: nil, expected: LinkRecord(want), found: nil)))
 
       }
 
@@ -513,11 +534,11 @@ extension DeviceLinkingCoordinator {
 
     for extra in unmatched {
 
-      mismatches.append(SceneMembershipResult.Mismatch(device: nil, mismatch: DatabaseMismatch(isDevice: false, memoryAddress: nil, expected: nil, found: LinkRecord(extra))))
+      found.mismatches.append(SceneMembershipResult.Mismatch(device: nil, mismatch: DatabaseMismatch(isDevice: false, memoryAddress: nil, expected: nil, found: LinkRecord(extra))))
 
     }
 
-    return (mismatches, deviceChecks, true)
+    found.isModemChecked = true
 
   }
 
