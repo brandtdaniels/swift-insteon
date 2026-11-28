@@ -309,8 +309,8 @@ public actor InsteonService: InsteonServiceAPI {
       closedPlans.removeAll { $0.id == added.0.id }
       openPlans.append((added.0, added.1))
       if openPlans.count > Self.maximumOpenPlans {
+        // Closing a plan drops it from the open plans, so the oldest beyond the limit are closed and no more.
         for dropped in openPlans.prefix(openPlans.count - Self.maximumOpenPlans) { close(dropped.plan, as: .expired) }
-        openPlans.removeFirst(openPlans.count - Self.maximumOpenPlans)
       }
     }
   }
