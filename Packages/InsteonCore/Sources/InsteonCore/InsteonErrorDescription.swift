@@ -62,6 +62,10 @@ public enum InsteonErrorDescription {
       return error.description
     case let error as RelayStateLinkingError:
       return error.description
+    case let error as SceneMembershipRefusal:
+      return error.description
+    case let error as SceneMembershipInterrupted:
+      return error.description
     case let error as DatabaseLinkInterrupted:
       let cause: String = error.cause is CancellationError ? "it was canceled." : (message(for: error.cause) ?? error.cause.localizedDescription)
 

@@ -2,7 +2,7 @@ import Crypto
 import Foundation
 import InsteonProtocol
 
-/// What a client with no terminal grants before ``DeviceLinkingCoordinator/apply(_:consent:)``
+/// What a client with no terminal grants before ``DeviceLinkingCoordinator/apply(_:consent:)->DatabaseLinkResult``
 /// writes ALL-Link records: that records may be written, and which plan it has seen.
 public struct DatabaseLinkConsent: Hashable, Sendable {
 
@@ -37,7 +37,7 @@ public struct DatabaseLinkConsent: Hashable, Sendable {
 
 }
 
-/// Why ``DeviceLinkingCoordinator/apply(_:consent:)`` wrote nothing for want of consent.
+/// Why ``DeviceLinkingCoordinator/apply(_:consent:)->DatabaseLinkResult`` wrote nothing for want of consent.
 public enum DatabaseLinkConsentRefusal: Error, Hashable, Sendable {
 
   /// The consent doesn't agree to the writes, or names another plan than the one given.

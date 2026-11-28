@@ -284,7 +284,7 @@ extension DatabaseLinkRefusal: CustomStringConvertible, LocalizedError {
 }
 
 /// What became of one step of a ``DatabaseLinkPlan``.
-public enum DatabaseLinkStepOutcome: String, Hashable, Sendable {
+public enum DatabaseLinkStepOutcome: String, Hashable, Sendable, CaseIterable {
 
   /// The record read back as written.
   case written
@@ -394,7 +394,7 @@ public struct DatabaseLinkResult: Hashable, Sendable {
   public var mismatches: [DatabaseMismatch]
 
   /// What reading the device's database again afterward found.
-  public enum DeviceCheck: String, Hashable, Sendable {
+  public enum DeviceCheck: String, Hashable, Sendable, CaseIterable {
 
     /// The database was read and compared.
     case checked

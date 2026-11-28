@@ -166,6 +166,8 @@ private struct Planning {
   var refusals: [SceneMembershipFinding] = []
   var devices: [SceneMembershipDevice] = []
   var readLines: [String] = []
+  var deviceReads: [InsteonAddress: [BackupRecord]] = [:]
+  let modemRead: [BackupRecord]
 
   /// The modem's records, with the controller records the plan adds.
   private var modemRecords: [BackupRecord]
@@ -186,13 +188,14 @@ private struct Planning {
     self.modem = modem
     self.modemRecords = modemRecords
     self.held = held
-    readLines = modemRecords.filter(\.isInUse).map { (record: BackupRecord) -> String in "modemRecord \(SceneMembershipPlanner.line(record))" }
+    modemRead = modemRecords.filter(\.isInUse)
+    readLines = modemRead.map { (record: BackupRecord) -> String in "modemRecord \(SceneMembershipPlanner.line(record))" }
 
   }
 
   var result: SceneMembershipPlan {
 
-    SceneMembershipPlan(scene: change.scene, steps: steps, warnings: warnings, refusals: refusals, devices: devices, readLines: readLines)
+    SceneMembershipPlan(scene: change.scene, steps: steps, warnings: warnings, refusals: refusals, devices: devices, readLines: readLines, modemRead: modemRead, deviceReads: deviceReads)
 
   }
 
@@ -310,6 +313,7 @@ private struct Planning {
     }
 
     readLines += database.records.map { (record: BackupRecord) -> String in "deviceRecord \(address) \(SceneMembershipPlanner.line(record))" }
+    deviceReads[address] = database.records
 
     switch engine {
     case .i1, nil:
@@ -772,6 +776,19 @@ private struct Planning {
     }
 
     let modemHalves: [BackupRecord] = modemLinks(of: address)
+
+    // The modem deletes its first record of a group that names a device whatever its role, so a responder record of
+    // the same group and device would go with the controller's. The plan doesn't take what it doesn't show.
+    if !modemHalves.isEmpty, modemRecords.contains(where: { (record: BackupRecord) -> Bool in
+      record.isInUse && record.role == .responder && record.group == change.scene && record.address == address
+    }) {
+
+      refuse(.unexpectedDatabaseLayout, "The modem also holds a responder record of the group for the device, which deleting its controller record would remove too. Nothing is planned over it.")
+
+      return
+
+    }
+
     let staying: [BackupRecord] = sceneRecords.filter { (record: BackupRecord) -> Bool in !doomed.contains(record) }
     // The modem's record goes when no group of the device stays in the scene, and then first, so the
     // device keeps its record of the modem until its last write.
