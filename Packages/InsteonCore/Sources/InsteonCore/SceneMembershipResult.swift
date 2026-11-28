@@ -117,6 +117,10 @@ public struct SceneMembershipResult: Hashable, Sendable {
   /// Whether the modem's database was read again and compared.
   public var isModemChecked: Bool
 
+  /// What reading the databases the steps changed into the network's copies found, or `nil` when no step was tried and
+  /// so nothing was forgotten.
+  public var cacheReload: SceneMembershipCacheReload?
+
   /// The steps made: those whose record read back as written, or that can't be read back only
   /// because they removed a device's last record of the modem.
   public var madeSteps: [SceneMembershipStep] {
@@ -139,14 +143,79 @@ public struct SceneMembershipResult: Hashable, Sendable {
 
   }
 
+  /// The devices a step was tried for, each once: the ones whose databases a step wrote to, and the ones a record
+  /// of the modem's names. The network forgets its copies of their databases and the modem's, and reads them again.
+  public var changedDevices: [InsteonAddress] {
+
+    var devices: [InsteonAddress] = []
+
+    for result in steps where result.outcome != .notReached {
+
+      let address: InsteonAddress
+
+      if case let .device(device) = result.step.endpoint {
+
+        address = device
+
+      } else {
+
+        address = result.step.record.address
+
+      }
+
+      if !devices.contains(address) {
+
+        devices.append(address)
+
+      }
+
+    }
+
+    return devices
+
+  }
+
   /// Creates a result.
-  public init(plan: SceneMembershipPlan, steps: [StepResult], mismatches: [Mismatch], deviceChecks: [InsteonAddress: DatabaseLinkResult.DeviceCheck], isModemChecked: Bool) {
+  public init(plan: SceneMembershipPlan, steps: [StepResult], mismatches: [Mismatch], deviceChecks: [InsteonAddress: DatabaseLinkResult.DeviceCheck], isModemChecked: Bool, cacheReload: SceneMembershipCacheReload? = nil) {
+
+    self.cacheReload = cacheReload
 
     self.plan = plan
     self.steps = steps
     self.mismatches = mismatches
     self.deviceChecks = deviceChecks
     self.isModemChecked = isModemChecked
+
+  }
+
+}
+
+/// Whether the network's copies of the databases a plan changed were read again afterward.
+public struct SceneMembershipCacheReload: Hashable, Sendable {
+
+  /// Whether the modem's database was read again.
+  public var isModemReloaded: Bool
+
+  /// The devices whose databases couldn't be read again, though they were expected to be readable.
+  public var unreadDevices: [InsteonAddress]
+
+  /// The devices that reject the modem once their last record of it is gone, so their databases aren't read again.
+  /// Expected after a removal that drops it (``SceneMembershipStep/Risk/rejectsModemOnceUnlinked``).
+  public var expectedUnreadable: [InsteonAddress]
+
+  /// Whether every database that can be read was: the modem's and each device's, except the expected ones.
+  public var isReloaded: Bool {
+
+    isModemReloaded && unreadDevices.isEmpty
+
+  }
+
+  /// Creates a reload.
+  public init(isModemReloaded: Bool, unreadDevices: [InsteonAddress] = [], expectedUnreadable: [InsteonAddress] = []) {
+
+    self.isModemReloaded = isModemReloaded
+    self.unreadDevices = unreadDevices
+    self.expectedUnreadable = expectedUnreadable
 
   }
 

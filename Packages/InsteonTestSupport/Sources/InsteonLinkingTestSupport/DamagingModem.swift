@@ -32,6 +32,10 @@ public actor DamagingModem: LinkingModem {
     case group
   }
 
+  /// For each device, the error each coming read of its whole database throws, in order, or `nil` for a read that
+  /// goes through. A read past the list goes through.
+  private var failingDatabaseReads: [InsteonAddress: [(any Error)?]] = [:]
+
   /// What runs after each read the modem carries out, if anything.
   private var afterRead: (@Sendable (Read) async -> Void)?
 
@@ -65,6 +69,13 @@ public actor DamagingModem: LinkingModem {
   public func setFailingReads(_ errors: [(any Error)?], at address: UInt16, of device: InsteonAddress) {
 
     failingReads[device, default: [:]][address] = errors
+
+  }
+
+  /// Sets the error each coming read of a device's whole database throws, in order.
+  public func setFailingDatabaseReads(_ errors: [(any Error)?], of device: InsteonAddress) {
+
+    failingDatabaseReads[device] = errors
 
   }
 
@@ -132,6 +143,20 @@ public actor DamagingModem: LinkingModem {
 
   /// Reads through the base modem.
   public func readAllLinkDatabase(of device: InsteonAddress, timeout: Duration) async throws -> [AllLinkRecordResponse] {
+
+    if var errors = failingDatabaseReads[device], !errors.isEmpty {
+
+      let error: (any Error)? = errors.removeFirst()
+
+      failingDatabaseReads[device] = errors
+
+      if let error {
+
+        throw error
+
+      }
+
+    }
 
     let records: [AllLinkRecordResponse] = try await base.readAllLinkDatabase(of: device, timeout: timeout)
 

@@ -530,6 +530,18 @@ struct SceneMembershipApplyServiceTests {
     #expect(application.isCacheReloaded == false)
   }
 
+  @Test func listsADeviceThatRejectsTheModemAfterItsLastRecordIsRemovedAsExpectedAndStillSaysTheCacheWasReloaded() async throws {
+    let (service, modem, plan, _) = try await planned(change(3, remove: [lamp]))
+    #expect(plan.steps.last?.risks == [.rejectsModemOnceUnlinked])
+    await modem.setUnlinked(lamp, afterWrites: 1)
+
+    let application = try await service.applySceneMembership(scene: 3, planId: plan.id, consent: consent(plan))
+
+    #expect(application.isComplete)
+    #expect(application.isCacheReloaded)
+    #expect(application.expectedUnreadable == [lamp])
+  }
+
   @Test func readsTheDatabaseOfADeviceNamedOnlyByAModemStepIntoTheCache() async throws {
     let modem = await modem()
     // The lamp has its half of the link to scene 4 and the modem lacks the other half, so the plan has one modem step.

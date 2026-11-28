@@ -195,13 +195,14 @@ enum OpenAPIDocument {
         ], required: ["device", "check"])),
         "interruption": Schema.nullable(Schema.string(enum: ["canceled", "failed"], description: "Why the steps stopped for a reason other than a step's own failure.")),
         "interruptionDetail": Schema.nullable(Schema.string(description: "For `failed`: the modem's error without an address or credential.")),
-        "cacheReload": Schema.string(enum: ["reloaded", "failed"], description: "`reloaded` when the service read the modem's database and the databases of the devices the steps touched into its cache afterward, so `GET /api/v1/scenes` shows the change. `failed` when it could not, and the listing holds the records as they were until a client refreshes the scenes."),
+        "cacheReload": Schema.string(enum: ["reloaded", "failed"], description: "`reloaded` when the service read the modem's database and the databases of the devices the steps touched into its cache afterward, so `GET /api/v1/scenes` shows the change. `failed` when it could not read the modem or a device that should be readable, and the listing holds the records as they were until a client refreshes the scenes. A device that rejects the modem once its last record of it is removed is expected unreadable: it is listed in `expectedUnreadable` and does not make this `failed`."),
+        "expectedUnreadable": Schema.array(of: address),
         "persistence": Schema.ref("Persistence"),
         "code": Schema.ref("ErrorCode"),
         "message": Schema.string(description: "Present when `incomplete`. For a person."),
         "sent": ["type": "boolean", "const": true, "description": "Present when `incomplete`: ALL-Link records may have been written."],
         "requestId": Schema.string(description: "Present when `incomplete`: the request_id of the log record for this request.")
-      ], required: ["version", "scene", "planId", "outcome", "isComplete", "written", "notWritten", "steps", "mismatches", "modemChecked", "deviceChecks", "interruption", "interruptionDetail", "cacheReload", "persistence"], description: "What applying a plan did. An `incomplete` answer is also an error body (`code` `outcomeUnknown`, `sent` true): the steps before the first failure are written, the failed one may be, and the rest were not made. The service never rolls back, so a client plans again from a fresh read."),
+      ], required: ["version", "scene", "planId", "outcome", "isComplete", "written", "notWritten", "steps", "mismatches", "modemChecked", "deviceChecks", "interruption", "interruptionDetail", "cacheReload", "expectedUnreadable", "persistence"], description: "What applying a plan did. An `incomplete` answer is also an error body (`code` `outcomeUnknown`, `sent` true): the steps before the first failure are written, the failed one may be, and the rest were not made. The service never rolls back, so a client plans again from a fresh read."),
       "SceneMembershipAppliedStep": Schema.object([
         "order": Schema.integer(minimum: 1),
         "kind": Schema.string(enum: SceneMembershipStep.Kind.allCases.map(\.rawValue)),

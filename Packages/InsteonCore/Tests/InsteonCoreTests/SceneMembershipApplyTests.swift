@@ -149,10 +149,14 @@ struct SceneMembershipApplyTests {
     #expect(calls[writes[0] + 1] == .readAllLinkRecord(lamp, address: 0x0FEF, timeout: timeout))
     #expect(calls[writes[1] + 1] == .readAllLinkRecord(lamp, address: 0x0FF7, timeout: timeout))
     #expect(writes[0] < writes[1])
-    // The last calls read both databases again.
-    #expect(calls.suffix(2) == [.readAllLinkDatabase(lamp, timeout: timeout), .readModemDatabase])
-    // Nothing else is sent to a device: no command, no level, and the fan and the stranger are never asked.
-    #expect(calls.allSatisfy { if case .standardRequest = $0 { return false } else { return true } })
+    // After the writes both databases are read again to compare them. Then the network reads its copies again: the
+    // modem's, and the lamp's through a status request for its delta.
+    let comparisonStart = try #require(calls.indices.first { $0 > writes[1] && calls[$0] == .readAllLinkDatabase(lamp, timeout: timeout) })
+    let comparing = Array(calls[comparisonStart...])
+    #expect(Array(comparing.prefix(2)) == [.readAllLinkDatabase(lamp, timeout: timeout), .readModemDatabase])
+    #expect(comparing.dropFirst(2).first == .readModemDatabase)
+    // Nothing else is sent to a device before the network reads its copies again: no command, no level, and the fan and the stranger are never asked.
+    #expect(calls[..<comparisonStart].allSatisfy { if case .standardRequest = $0 { return false } else { return true } })
     #expect(!calls.contains(.readAllLinkDatabase(fan, timeout: timeout)))
   }
 
@@ -217,7 +221,7 @@ struct SceneMembershipApplyTests {
     #expect(result.isComplete)
   }
 
-  @Test func afterwardsTheNetworkForgetsItsCopiesOfTheDatabasesItChanged() async throws {
+  @Test func afterwardsTheNetworksCopiesHoldWhatWasWritten() async throws {
     let modem = await modem()
     let network = network(modem)
     _ = try await network.allLinkDatabase(of: lamp)
@@ -226,15 +230,95 @@ struct SceneMembershipApplyTests {
     let plan = try await plan(add(lamp), on: network)
 
     _ = try await network.linking.apply(plan, consent: consent(plan))
-    let forgotten = await network.snapshot()
-    let after = try await network.allLinkDatabase(of: lamp)
+    let after = await network.snapshot()
 
-    #expect(held.devices[lamp]?.allLinkDatabase != nil)
-    #expect(held.modemDatabase != nil)
-    // The copies the network held are gone until they are read again, so no copy shows the old records as current.
-    #expect(forgotten.devices[lamp]?.allLinkDatabase == nil)
-    #expect(forgotten.modemDatabase == nil)
-    #expect(after.records.filter(\.isInUse).count == 2)
+    // The copies were forgotten and read again, so none shows the old records as current.
+    #expect(held.devices[lamp]?.allLinkDatabase?.records.filter { $0.record.flags.contains(.inUse) }.count == 1)
+    #expect(after.devices[lamp]?.allLinkDatabase?.records.filter { $0.record.flags.contains(.inUse) }.count == 2)
+    #expect(after.modemDatabase?.count == (held.modemDatabase?.count ?? 0) + 1)
+  }
+
+  // MARK: The network's copies
+
+  @Test func readsTheChangedDatabasesIntoTheNetworkAndSaysSo() async throws {
+    let modem = await modem()
+    let network = network(modem)
+    let plan = try await plan(add(lamp), on: network)
+
+    let result = try await network.linking.apply(plan, consent: consent(plan))
+
+    #expect(result.cacheReload == SceneMembershipCacheReload(isModemReloaded: true))
+    #expect(result.cacheReload?.isReloaded == true)
+    #expect(result.changedDevices == [lamp])
+    let snapshot = await network.snapshot()
+    #expect(snapshot.modemDatabase != nil)
+    #expect(snapshot.devices[lamp]?.allLinkDatabase != nil)
+  }
+
+  @Test func forgetsAndReadsAgainOnlyTheDevicesAStepWasTriedFor() async throws {
+    let modem = await modem()
+    let network = network(modem)
+    _ = try await network.allLinkDatabase(of: fan)
+    let plan = try await plan(add(lamp, fan), on: network)
+    await modem.setForgetful(lamp)
+    let fanReads = await modem.databaseReads[fan]
+
+    let result = try await network.linking.apply(plan, consent: consent(plan))
+
+    // The lamp's steps failed and the fan's were never reached, so the fan's copy is as it was and is not read again.
+    #expect(result.changedDevices == [lamp])
+    // The fan's database was read for the comparison before the writes and for the one after, and not again for the cache.
+    let afterReads = await modem.databaseReads[fan]
+    #expect(afterReads == (fanReads ?? 0) + 2)
+    #expect(await network.snapshot().devices[fan]?.allLinkDatabase != nil)
+  }
+
+  @Test func listsADeviceThatRejectsTheModemOnceItsLastRecordIsGoneAsExpectedAndNotAsUnread() async throws {
+    let modem = await modem()
+    let network = network(modem)
+    let plan = try await plan(remove(lamp), on: network)
+    await modem.setUnlinked(lamp, afterWrites: 1)
+
+    let result = try await network.linking.apply(plan, consent: consent(plan))
+
+    #expect(result.cacheReload == SceneMembershipCacheReload(isModemReloaded: true, unreadDevices: [], expectedUnreadable: [lamp]))
+    #expect(result.cacheReload?.isReloaded == true)
+  }
+
+  @Test func listsADeviceThatDoesNotAnswerTheReadAfterwardAsUnreadAndDoesNotMarkItAnswered() async throws {
+    let memory = await modem()
+    // The lamp has its half of the link to scene 4, so the plan has one step, the modem's, and no step asks the lamp.
+    await memory.setDatabase([0x0FFF: responder(group: 3), 0x0FF7: responder(group: 4)], of: lamp)
+    let damaging = DamagingModem(memory)
+    let moment = Moment(Date(timeIntervalSince1970: 1_800_000_000))
+    let network = DeviceNetwork(modem: damaging, catalog: Self.catalog, snapshot: NetworkSnapshot(registry: DeviceRegistrySnapshot(identities: [lamp: identity, fan: identity, stranger: identity])), clock: TestClock(), now: { moment.value })
+    let plan = try await plan(add(lamp), on: network)
+    #expect(plan.steps.map(\.kind) == [.addModemRecord])
+    let before = await network.snapshot().devices[lamp]?.lastSeen
+    moment.value = Date(timeIntervalSince1970: 1_800_000_100)
+    await damaging.setFailingDatabaseReads([ModemError.deviceTimedOut(lamp)], of: lamp)
+
+    let result = try await network.linking.apply(plan, consent: consent(plan))
+
+    #expect(result.isComplete)
+    #expect(result.cacheReload == SceneMembershipCacheReload(isModemReloaded: true, unreadDevices: [lamp]))
+    #expect(result.cacheReload?.isReloaded == false)
+    // No step asked the lamp and it did not answer the read afterward, so it was not seen at the later time.
+    #expect(await network.snapshot().devices[lamp]?.lastSeen == before)
+  }
+
+  @Test func carriesTheReloadInAnInterruptedResultAndNoneWhenNoStepWasTried() async throws {
+    let modem = await modem()
+    let network = network(modem)
+    let plan = try await plan(add(lamp), on: network)
+    await modem.setBeforeOperation { operation in
+      if Self.isAddingModemRecord(operation) { throw ModemError.connectionClosed }
+    }
+
+    let interrupted = await #expect(throws: SceneMembershipInterrupted.self) { try await network.linking.apply(plan, consent: consent(plan)) }
+
+    #expect(interrupted?.result.cacheReload?.isModemReloaded == true)
+    #expect(interrupted?.result.changedDevices == [lamp])
   }
 
   // MARK: Consent
@@ -645,6 +729,17 @@ struct SceneMembershipApplyTests {
     #expect(!result.isComplete)
     #expect(result.mismatches.map(\.device) == [lamp])
     #expect(result.mismatches.first?.mismatch.memoryAddress == 0x0FFF)
+  }
+}
+
+/// A moment a test sets.
+private final class Moment: @unchecked Sendable {
+  private let lock = NSLock()
+  private var date: Date
+  init(_ date: Date) { self.date = date }
+  var value: Date {
+    get { lock.withLock { date } }
+    set { lock.withLock { date = newValue } }
   }
 }
 

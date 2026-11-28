@@ -376,28 +376,14 @@ public actor InsteonService: InsteonServiceAPI {
     // A step was tried, so the plan is used and its steps are never repeated by the service.
     close(plan, as: .spent)
     lastExchange = now()
-    // The coordinator forgot the network's copies of the modem's database and of each touched device's, so they are
-    // read again, even when the request was canceled: they run in a task a cancellation doesn't reach.
-    let touched = Self.devices(touchedBy: result)
-    let isReloaded = await DeviceLinkingCoordinator.runToEnd { () async -> Bool in
-      guard let unread = try? await network.reloadDatabases(of: touched) else { return false }
-      return unread.isEmpty
-    }
+    // The coordinator forgot the network's copies of the databases the steps changed and read them again, and says
+    // whether it could. A device that rejects the modem once its last record is gone is expected not to be read.
+    let reload = result.cacheReload
+    let isReloaded = reload?.isReloaded ?? true
     let saved = await persist()
     // No suspension between publishing and releasing admission in defer, as for a device command.
     publish(.sceneChanged(SceneChanged(number: plan.scene, source: .api, isComplete: interruption == nil && result.isComplete, firedAt: now())))
-    return SceneMembershipApplication(scene: plan.scene, planId: plan.id, result: result, interruption: interruption, persistence: saved, isCacheReloaded: isReloaded)
-  }
-
-  /// The devices whose databases a result's steps wrote to, or whose records of the modem they touched, each once.
-  private static func devices(touchedBy result: SceneMembershipResult) -> [InsteonAddress] {
-    var devices: [InsteonAddress] = []
-    for step in result.steps where step.outcome != .notReached {
-      let address: InsteonAddress
-      if case let .device(device) = step.step.endpoint { address = device } else { address = step.step.record.address }
-      if !devices.contains(address) { devices.append(address) }
-    }
-    return devices
+    return SceneMembershipApplication(scene: plan.scene, planId: plan.id, result: result, interruption: interruption, persistence: saved, isCacheReloaded: isReloaded, expectedUnreadable: reload?.expectedUnreadable ?? [])
   }
 
   /// A one-line reason the steps stopped, without a credential.

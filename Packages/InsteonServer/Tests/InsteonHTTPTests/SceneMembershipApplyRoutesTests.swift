@@ -17,7 +17,7 @@ enum SceneApplyExample {
     await ScenePlanExample.plan(ScenePlanExample.addLamp())
   }
 
-  static func application(_ plan: SceneMembershipPlan, outcomes: [DatabaseLinkStepOutcome]? = nil, mismatches: [SceneMembershipResult.Mismatch] = [], interruption: SceneMembershipApplication.Interruption? = nil, isCacheReloaded: Bool = true) -> SceneMembershipApplication {
+  static func application(_ plan: SceneMembershipPlan, outcomes: [DatabaseLinkStepOutcome]? = nil, mismatches: [SceneMembershipResult.Mismatch] = [], interruption: SceneMembershipApplication.Interruption? = nil, isCacheReloaded: Bool = true, expectedUnreadable: [InsteonAddress] = []) -> SceneMembershipApplication {
     let outcomes = outcomes ?? plan.steps.map { _ in .written }
     let result = SceneMembershipResult(
       plan: plan,
@@ -26,7 +26,7 @@ enum SceneApplyExample {
       deviceChecks: [ScenePlanExample.lamp: .checked],
       isModemChecked: true
     )
-    return SceneMembershipApplication(scene: plan.scene, planId: plan.id, result: result, interruption: interruption, persistence: .saved, isCacheReloaded: isCacheReloaded)
+    return SceneMembershipApplication(scene: plan.scene, planId: plan.id, result: result, interruption: interruption, persistence: .saved, isCacheReloaded: isCacheReloaded, expectedUnreadable: expectedUnreadable)
   }
 }
 
@@ -44,10 +44,10 @@ struct SceneMembershipApplyRoutesTests {
     let app: Application<RouterResponder<BasicRequestContext>>
   }
 
-  private func setup(outcomes: [DatabaseLinkStepOutcome]? = nil, mismatches: [SceneMembershipResult.Mismatch] = [], interruption: SceneMembershipApplication.Interruption? = nil, isCacheReloaded: Bool = true, failure: (any Error)? = nil, logger: Logger? = nil) async throws -> Setup {
+  private func setup(outcomes: [DatabaseLinkStepOutcome]? = nil, mismatches: [SceneMembershipResult.Mismatch] = [], interruption: SceneMembershipApplication.Interruption? = nil, isCacheReloaded: Bool = true, expectedUnreadable: [InsteonAddress] = [], failure: (any Error)? = nil, logger: Logger? = nil) async throws -> Setup {
     let plan = await SceneApplyExample.plan()
     let service = FakeService()
-    await service.scriptApply(answer: failure == nil ? SceneApplyExample.application(plan, outcomes: outcomes, mismatches: mismatches, interruption: interruption, isCacheReloaded: isCacheReloaded) : nil, failure: failure)
+    await service.scriptApply(answer: failure == nil ? SceneApplyExample.application(plan, outcomes: outcomes, mismatches: mismatches, interruption: interruption, isCacheReloaded: isCacheReloaded, expectedUnreadable: expectedUnreadable) : nil, failure: failure)
     let clients = ClientStore(persistence: InMemoryClientPersistence())
     let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password), clients: clients, logger: logger ?? Logger(label: "test")).buildResponder())
     return Setup(service: service, clients: clients, plan: plan, app: app)
@@ -129,6 +129,14 @@ struct SceneMembershipApplyRoutesTests {
 
     #expect(reloaded["cacheReload"] as? String == "reloaded")
     #expect(notReloaded["cacheReload"] as? String == "failed")
+  }
+
+  @Test func listsADeviceThatRejectsTheModemAsExpectedAndStillSaysReloaded() async throws {
+    let body = try object(try await apply(try await setup(expectedUnreadable: [ScenePlanExample.lamp]), authorization: basic))
+
+    #expect(body["cacheReload"] as? String == "reloaded")
+    #expect(body["expectedUnreadable"] as? [String] == ["1A.2B.3C"])
+    #expect((try object(try await apply(try await setup(), authorization: basic))["expectedUnreadable"] as? [String])?.isEmpty == true)
   }
 
   @Test func logsAnIncompleteApplyAtWarningWithTheCountsAndNoAddress() async throws {

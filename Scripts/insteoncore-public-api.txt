@@ -327,6 +327,7 @@ case SceneMembershipFinding.Code.valueNotTaken
 case SceneMembershipFinding.Code.valueOutOfRange
 case SceneMembershipRefusal.consentMismatch
 case SceneMembershipRefusal.consentRequired
+case SceneMembershipRefusal.deviceNotAnswering(_:)
 case SceneMembershipRefusal.notApplicable
 case SceneMembershipRefusal.planStale(_:)
 case SceneMembershipRefusal.wouldOverwriteRecord(_:)
@@ -704,14 +705,16 @@ init SceneListing(_:)
 init SceneListing(scenes:looseHalfLinks:unreadable:unreadableReasons:unlisted:isModemUnread:)
 init SceneListing.Member(address:data:)
 init SceneListing.Scene(number:controller:members:halfLinks:)
+init SceneMembershipCacheReload(isModemReloaded:unreadDevices:expectedUnreadable:)
 init SceneMembershipChange.Addition(device:onLevel:rampRate:group:)
 init SceneMembershipChange.Removal(device:group:)
 init SceneMembershipChange?(scene:additions:removals:)
 init SceneMembershipFinding(code:device:detail:)
 init SceneMembershipInterrupted(result:cause:)
-init SceneMembershipResult(plan:steps:mismatches:deviceChecks:isModemChecked:)
+init SceneMembershipResult(plan:steps:mismatches:deviceChecks:isModemChecked:cacheReload:)
 init SceneMembershipResult.Mismatch(device:mismatch:)
 init SceneMembershipResult.StepResult(step:outcome:)
+init SceneMembershipSlotChanged(device:made:total:)
 init SceneResult(acknowledged:unacknowledged:isComplete:statusReportAfter:failureReportedAfter:responderCount:)
 init SelfTestCheck(kind:outcome:detail:fixes:group:)
 init SelfTestGroup(number:name:)
@@ -767,12 +770,14 @@ let ReceivedFrame.frame
 let ReceivedFrame.summary
 let SceneMembershipInterrupted.cause
 let SceneMembershipInterrupted.result
+let SceneMembershipSlotChanged.device
+let SceneMembershipSlotChanged.made
+let SceneMembershipSlotChanged.total
 private(set) var DeviceRegistry.catalog
 protocol DeviceOperating
 protocol DeviceRegistryStore
 protocol LinkingObserver
 protocol NetworkSnapshotStore
-static func DeviceLinkingCoordinator.runToEnd(_:)
 static func DeviceMonitor.replyKind(_:)
 static func DeviceNetwork.offline(catalog:snapshot:hub:)
 static func DeviceSettingChange.OtherSettings.compared(_:unread:)
@@ -939,6 +944,7 @@ struct SETButtonPrompt
 struct SceneListing
 struct SceneListing.Member
 struct SceneListing.Scene
+struct SceneMembershipCacheReload
 struct SceneMembershipChange
 struct SceneMembershipChange.Addition
 struct SceneMembershipChange.Removal
@@ -949,6 +955,7 @@ struct SceneMembershipPlan
 struct SceneMembershipResult
 struct SceneMembershipResult.Mismatch
 struct SceneMembershipResult.StepResult
+struct SceneMembershipSlotChanged
 struct SceneMembershipStep
 struct SceneResult
 struct SelfTestCheck
@@ -1394,6 +1401,10 @@ var SceneListing.scenes
 var SceneListing.unlisted
 var SceneListing.unreadable
 var SceneListing.unreadableReasons
+var SceneMembershipCacheReload.expectedUnreadable
+var SceneMembershipCacheReload.isModemReloaded
+var SceneMembershipCacheReload.isReloaded
+var SceneMembershipCacheReload.unreadDevices
 var SceneMembershipChange.Addition.device
 var SceneMembershipChange.Addition.group
 var SceneMembershipChange.Addition.onLevel
@@ -1428,6 +1439,8 @@ var SceneMembershipResult.Mismatch.device
 var SceneMembershipResult.Mismatch.mismatch
 var SceneMembershipResult.StepResult.outcome
 var SceneMembershipResult.StepResult.step
+var SceneMembershipResult.cacheReload
+var SceneMembershipResult.changedDevices
 var SceneMembershipResult.deviceChecks
 var SceneMembershipResult.isComplete
 var SceneMembershipResult.isModemChecked
@@ -1436,6 +1449,8 @@ var SceneMembershipResult.mismatches
 var SceneMembershipResult.plan
 var SceneMembershipResult.steps
 var SceneMembershipResult.unmadeSteps
+var SceneMembershipSlotChanged.description
+var SceneMembershipSlotChanged.errorDescription
 var SceneMembershipStep.endpoint
 var SceneMembershipStep.isRemoval
 var SceneMembershipStep.isUpdateInPlace

@@ -304,12 +304,17 @@ public struct SceneMembershipApplication: Equatable, Sendable {
   /// afterward. `false` says the cache doesn't show what was written until the scenes are refreshed.
   public let isCacheReloaded: Bool
 
+  /// The devices that reject the modem once their last record of it is removed, as an i2CS device does, so the service
+  /// holds no copy of their databases. Expected after such a removal: it doesn't make ``isCacheReloaded`` false.
+  public let expectedUnreadable: [InsteonAddress]
+
   /// Whether every step was made and every database read back as expected.
   public var isComplete: Bool { interruption == nil && result.isComplete }
 
   /// Creates an application.
-  public init(scene: UInt8, planId: String, result: SceneMembershipResult, interruption: Interruption? = nil, persistence: PersistenceOutcome = .notConfigured, isCacheReloaded: Bool = true) {
+  public init(scene: UInt8, planId: String, result: SceneMembershipResult, interruption: Interruption? = nil, persistence: PersistenceOutcome = .notConfigured, isCacheReloaded: Bool = true, expectedUnreadable: [InsteonAddress] = []) {
     self.isCacheReloaded = isCacheReloaded
+    self.expectedUnreadable = expectedUnreadable
     self.scene = scene
     self.planId = planId
     self.result = result

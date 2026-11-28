@@ -670,6 +670,9 @@ struct SceneMembershipApplicationDTO: Encodable {
   /// `reloaded` when the service read the databases the steps touched into its cache, else `failed`: the listing
   /// holds the records as they were until the scenes are refreshed.
   let cacheReload: String
+  /// Devices that reject the modem once their last record of it is removed, as an i2CS device does, so the service
+  /// holds no copy of their databases. Expected, and not a failure of `cacheReload`.
+  let expectedUnreadable: [String]
   let persistence: String
   let code: String?
   let message: String?
@@ -743,6 +746,7 @@ struct SceneMembershipApplicationDTO: Encodable {
     case nil: interruption = nil; interruptionDetail = nil
     }
     cacheReload = application.isCacheReloaded ? "reloaded" : "failed"
+    expectedUnreadable = application.expectedUnreadable.map(\.description)
     persistence = PersistenceName(application.persistence).rawValue
     if application.isComplete {
       code = nil; message = nil; sent = nil; requestId = nil
@@ -770,6 +774,7 @@ struct SceneMembershipApplicationDTO: Encodable {
     try container.encode(interruption, forKey: .interruption)
     try container.encode(interruptionDetail, forKey: .interruptionDetail)
     try container.encode(cacheReload, forKey: .cacheReload)
+    try container.encode(expectedUnreadable, forKey: .expectedUnreadable)
     try container.encode(persistence, forKey: .persistence)
     try container.encodeIfPresent(code, forKey: .code)
     try container.encodeIfPresent(message, forKey: .message)
@@ -777,5 +782,5 @@ struct SceneMembershipApplicationDTO: Encodable {
     try container.encodeIfPresent(requestId, forKey: .requestId)
   }
 
-  private enum CodingKeys: String, CodingKey { case version, scene, planId, outcome, isComplete, written, notWritten, steps, mismatches, modemChecked, deviceChecks, interruption, interruptionDetail, cacheReload, persistence, code, message, sent, requestId }
+  private enum CodingKeys: String, CodingKey { case version, scene, planId, outcome, isComplete, written, notWritten, steps, mismatches, modemChecked, deviceChecks, interruption, interruptionDetail, cacheReload, expectedUnreadable, persistence, code, message, sent, requestId }
 }

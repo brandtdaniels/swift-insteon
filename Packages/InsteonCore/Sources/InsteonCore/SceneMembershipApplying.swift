@@ -59,8 +59,6 @@ extension DeviceLinkingCoordinator {
 
     }
 
-    let touched: [InsteonAddress] = Self.devices(touchedBy: plan)
-
     do {
 
       let result: SceneMembershipResult = try await inTurn(changing: nil) { () async throws -> SceneMembershipResult in
@@ -69,15 +67,11 @@ extension DeviceLinkingCoordinator {
 
       }
 
-      await forgetDatabases(of: touched, answered: true)
-
-      return result
+      return await finish(result)
 
     } catch let interrupted as SceneMembershipInterrupted {
 
-      await forgetDatabases(of: touched, answered: false)
-
-      throw interrupted
+      throw SceneMembershipInterrupted(result: await finish(interrupted.result), cause: interrupted.cause)
 
     }
 
@@ -102,30 +96,122 @@ extension DeviceLinkingCoordinator {
 
   }
 
-  /// The devices the plan writes to or names in a record of the modem's, each once.
-  static func devices(touchedBy plan: SceneMembershipPlan) -> [InsteonAddress] {
+  /// Forgets the network's copies of the databases the steps changed or may have, and reads them again. The copies
+  /// of the modem's database and of the devices a step was tried for are the ones forgotten, and a device is marked as
+  /// having answered only when a step or the reading afterward heard from it. A plan no step of which was tried
+  /// changed nothing, so nothing is forgotten.
+  private func finish(_ result: SceneMembershipResult) async -> SceneMembershipResult {
 
-    var devices: [InsteonAddress] = devices(writtenBy: plan)
+    let changed: [InsteonAddress] = result.changedDevices
 
-    for step in plan.steps where step.endpoint == .modem && !devices.contains(step.record.address) {
+    guard !changed.isEmpty else {
 
-      devices.append(step.record.address)
+      return result
 
     }
 
-    return devices
+    let answered: Set<InsteonAddress> = Self.answeredDevices(in: result)
+
+    for device in changed {
+
+      await network.recordLinkChange(of: device, answered: answered.contains(device))
+
+    }
+
+    // A device that rejects the modem once its last record of it is gone is expected not to be read again.
+    let expected: [InsteonAddress] = changed.filter { (device: InsteonAddress) -> Bool in
+
+      result.deviceChecks[device] == .rejectsModemAfterUnlinking || result.steps.contains { (step: SceneMembershipResult.StepResult) -> Bool in
+        step.step.endpoint == .device(device) && step.outcome == .unverifiable
+      }
+
+    }
+    let coordinator: DeviceLinkingCoordinator = self
+    var finished: SceneMembershipResult = result
+
+    // Runs to its end whatever the request does: the copies were forgotten, and a client reads what is left.
+    finished.cacheReload = await Self.runToEnd { () async -> SceneMembershipCacheReload in await coordinator.reload(changed, expected: expected) }
+
+    return finished
 
   }
 
-  /// Forgets the network's copies of the databases of the devices and the modem, which the steps changed or
-  /// may have.
-  private func forgetDatabases(of devices: [InsteonAddress], answered: Bool) async {
+  /// The devices that answered a step or the comparison afterward.
+  private static func answeredDevices(in result: SceneMembershipResult) -> Set<InsteonAddress> {
 
-    for device in devices {
+    var answered: Set<InsteonAddress> = []
 
-      await network.recordLinkChange(of: device, answered: answered)
+    for step in result.steps {
+
+      guard case let .device(device) = step.step.endpoint else {
+
+        continue
+
+      }
+
+      switch step.outcome {
+      case .written, .writtenOnRetry, .notWritten, .unverifiable:
+        answered.insert(device)
+      case .unanswered, .rejected, .notReached:
+        break
+      }
 
     }
+
+    for (device, check) in result.deviceChecks where check == .checked {
+
+      answered.insert(device)
+
+    }
+
+    return answered
+
+  }
+
+  /// Reads the modem's database and each device's into the network's copies again.
+  private func reload(_ devices: [InsteonAddress], expected: [InsteonAddress]) async -> SceneMembershipCacheReload {
+
+    var reload: SceneMembershipCacheReload = SceneMembershipCacheReload(isModemReloaded: false, expectedUnreadable: expected)
+
+    do {
+
+      _ = try await network.modemDatabase()
+      reload.isModemReloaded = true
+
+    } catch {
+
+      reload.isModemReloaded = false
+
+    }
+
+    for device in devices where !expected.contains(device) {
+
+      do {
+
+        var database: LinkDatabase = try await network.allLinkDatabase(of: device)
+
+        if !database.hasIntactChecksums {
+
+          // A damaged reading isn't kept, so asking again reads the device again.
+          database = try await network.allLinkDatabase(of: device)
+
+        }
+
+        if !database.hasIntactChecksums {
+
+          reload.unreadDevices.append(device)
+
+        }
+
+      } catch {
+
+        reload.unreadDevices.append(device)
+
+      }
+
+    }
+
+    return reload
 
   }
 
