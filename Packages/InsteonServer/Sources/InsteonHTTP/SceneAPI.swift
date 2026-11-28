@@ -86,9 +86,19 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
       let application = try await service.applySceneMembership(scene: scene, planId: planId, consent: consent)
       let encoder = JSONEncoder()
       encoder.outputFormatting = [.sortedKeys]
-      logger.info("scene membership applied", metadata: [
-        "scene": "\(scene)", "isComplete": "\(application.isComplete)", "steps": "\(application.result.steps.count)", "made": "\(application.result.madeSteps.count)", "seconds": "\(now().timeIntervalSince(start))"
-      ])
+      let metadata: Logger.Metadata = [
+        "scene": "\(scene)", "steps": "\(application.result.steps.count)", "written": "\(application.result.madeSteps.count)", "notWritten": "\(application.result.unmadeSteps.count)",
+        "mismatches": "\(application.result.mismatches.count)", "seconds": "\(now().timeIntervalSince(start))"
+      ]
+      if application.isComplete {
+        logger.info("scene membership applied", metadata: metadata)
+      } else {
+        // It wrote something and did not finish, so a person needs to see it: no address, only the counts.
+        logger.warning("scene membership apply incomplete", metadata: metadata.merging(["interruption": "\(Self.name(of: application.interruption))"]) { $1 })
+      }
+      if !application.isCacheReloaded {
+        logger.warning("scene membership apply left the cache stale", metadata: ["scene": "\(scene)"])
+      }
       // An apply that stopped partway, or read back differently, is recorded like a success: it wrote, so a repeat must not.
       return .response(application.isComplete ? .ok : .badGateway, try encoder.encode(SceneMembershipApplicationDTO(application, requestID: requestID)))
     } catch {
@@ -96,6 +106,15 @@ struct SceneAPI<Service: SceneProviding>: Sendable {
       let failure = HTTPFailure(CommandFailure(action: .status, underlying: error))
       logger.debug("scene membership apply refused", metadata: ["scene": "\(scene)", "code": "\(failure.code.rawValue)", "seconds": "\(now().timeIntervalSince(start))"])
       return .failure(failure)
+    }
+  }
+
+  /// What stopped an apply, without the description a modem error carries.
+  private static func name(of interruption: SceneMembershipApplication.Interruption?) -> String {
+    switch interruption {
+    case .canceled?: "canceled"
+    case .failed?: "failed"
+    case nil: "none"
     }
   }
 
@@ -314,7 +333,7 @@ enum SceneWire {
 
 /// A scene number that is not a group from 1 through 254, or a membership change that is not an add list and
 /// a remove list of devices.
-enum SceneInputError: Error { case invalidScene, invalidMembership }
+enum SceneInputError: Error { case invalidScene, invalidMembership, invalidBody }
 
 /// The body of a scene command: an `action` of `on` or `off`, and nothing else.
 struct SceneCommandBody {
@@ -335,33 +354,51 @@ struct SceneMembershipApplyBody {
   /// The consent, or `nil` when it doesn't agree to the writes or doesn't name a plan.
   let consent: DatabaseLinkConsent?
 
+  /// The body read once: `consent`, an object of `writeLinkRecords` and `readFingerprint`, and nothing else.
   private struct Raw: Decodable {
     let consent: Consent?
+
+    private struct Key: CodingKey {
+      let stringValue: String
+      var intValue: Int? { nil }
+      init?(stringValue: String) { self.stringValue = stringValue }
+      init?(intValue: Int) { nil }
+    }
+
     struct Consent: Decodable {
       let writeLinkRecords: Bool?
       let readFingerprint: String?
-      private enum Keys: String, CodingKey { case writeLinkRecords, readFingerprint }
+
       init(from decoder: Decoder) throws {
-        let keys = try decoder.container(keyedBy: Keys.self)
-        writeLinkRecords = try? keys.decodeIfPresent(Bool.self, forKey: .writeLinkRecords)
-        readFingerprint = try? keys.decodeIfPresent(String.self, forKey: .readFingerprint)
+        let keys = try decoder.container(keyedBy: Key.self)
+        guard Set(keys.allKeys.map(\.stringValue)).isSubset(of: ["writeLinkRecords", "readFingerprint"]) else { throw HTTPInputError.invalid }
+        writeLinkRecords = try keys.decodeIfPresent(Bool.self, forKey: Key(stringValue: "writeLinkRecords")!)
+        readFingerprint = try keys.decodeIfPresent(String.self, forKey: Key(stringValue: "readFingerprint")!)
       }
+    }
+
+    init(from decoder: Decoder) throws {
+      let keys = try decoder.container(keyedBy: Key.self)
+      guard Set(keys.allKeys.map(\.stringValue)).isSubset(of: ["consent"]) else { throw HTTPInputError.invalid }
+      consent = try keys.decodeIfPresent(Consent.self, forKey: Key(stringValue: "consent")!)
     }
   }
 
+  /// - Throws: ``HTTPInputError/invalid`` for a body that is not a JSON object of this shape, and
+  ///   ``SceneInputError/invalidBody`` for a field of the wrong type.
   init(_ data: Data) throws {
-    guard let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any], Set(object.keys).isSubset(of: ["consent"]) else { throw HTTPInputError.invalid }
-    switch object["consent"] {
-    case nil, is NSNull: consent = nil
-    case let fields as [String: Any]:
-      guard Set(fields.keys).isSubset(of: ["writeLinkRecords", "readFingerprint"]) else { throw HTTPInputError.invalid }
-      let raw = try JSONDecoder().decode(Raw.self, from: data)
-      if let given = raw.consent, given.writeLinkRecords == true, let fingerprint = given.readFingerprint, !fingerprint.isEmpty {
-        consent = DatabaseLinkConsent(writeLinkRecords: true, readFingerprint: fingerprint)
-      } else {
-        consent = nil
-      }
-    default: throw HTTPInputError.invalid
+    let raw: Raw
+    do {
+      raw = try JSONDecoder().decode(Raw.self, from: data)
+    } catch let error as DecodingError {
+      // A body that isn't a JSON object stops at the top; a field of the wrong type stops below it.
+      if case let .typeMismatch(_, context) = error, !context.codingPath.isEmpty { throw SceneInputError.invalidBody }
+      throw HTTPInputError.invalid
+    }
+    if let given = raw.consent, given.writeLinkRecords == true, let fingerprint = given.readFingerprint, !fingerprint.isEmpty {
+      consent = DatabaseLinkConsent(writeLinkRecords: true, readFingerprint: fingerprint)
+    } else {
+      consent = nil
     }
   }
 
@@ -630,6 +667,9 @@ struct SceneMembershipApplicationDTO: Encodable {
   /// `canceled` or `failed` when the steps stopped for a reason other than a step's own failure.
   let interruption: String?
   let interruptionDetail: String?
+  /// `reloaded` when the service read the databases the steps touched into its cache, else `failed`: the listing
+  /// holds the records as they were until the scenes are refreshed.
+  let cacheReload: String
   let persistence: String
   let code: String?
   let message: String?
@@ -702,6 +742,7 @@ struct SceneMembershipApplicationDTO: Encodable {
     case let .failed(detail)?: interruption = "failed"; interruptionDetail = detail
     case nil: interruption = nil; interruptionDetail = nil
     }
+    cacheReload = application.isCacheReloaded ? "reloaded" : "failed"
     persistence = PersistenceName(application.persistence).rawValue
     if application.isComplete {
       code = nil; message = nil; sent = nil; requestId = nil
@@ -728,6 +769,7 @@ struct SceneMembershipApplicationDTO: Encodable {
     try container.encode(deviceChecks, forKey: .deviceChecks)
     try container.encode(interruption, forKey: .interruption)
     try container.encode(interruptionDetail, forKey: .interruptionDetail)
+    try container.encode(cacheReload, forKey: .cacheReload)
     try container.encode(persistence, forKey: .persistence)
     try container.encodeIfPresent(code, forKey: .code)
     try container.encodeIfPresent(message, forKey: .message)
@@ -735,5 +777,5 @@ struct SceneMembershipApplicationDTO: Encodable {
     try container.encodeIfPresent(requestId, forKey: .requestId)
   }
 
-  private enum CodingKeys: String, CodingKey { case version, scene, planId, outcome, isComplete, written, notWritten, steps, mismatches, modemChecked, deviceChecks, interruption, interruptionDetail, persistence, code, message, sent, requestId }
+  private enum CodingKeys: String, CodingKey { case version, scene, planId, outcome, isComplete, written, notWritten, steps, mismatches, modemChecked, deviceChecks, interruption, interruptionDetail, cacheReload, persistence, code, message, sent, requestId }
 }

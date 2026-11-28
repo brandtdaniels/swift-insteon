@@ -7,6 +7,7 @@ import InsteonLinking
 import InsteonModem
 import InsteonProtocol
 import InsteonService
+import Logging
 import Testing
 @testable import InsteonHTTP
 
@@ -16,7 +17,7 @@ enum SceneApplyExample {
     await ScenePlanExample.plan(ScenePlanExample.addLamp())
   }
 
-  static func application(_ plan: SceneMembershipPlan, outcomes: [DatabaseLinkStepOutcome]? = nil, mismatches: [SceneMembershipResult.Mismatch] = [], interruption: SceneMembershipApplication.Interruption? = nil) -> SceneMembershipApplication {
+  static func application(_ plan: SceneMembershipPlan, outcomes: [DatabaseLinkStepOutcome]? = nil, mismatches: [SceneMembershipResult.Mismatch] = [], interruption: SceneMembershipApplication.Interruption? = nil, isCacheReloaded: Bool = true) -> SceneMembershipApplication {
     let outcomes = outcomes ?? plan.steps.map { _ in .written }
     let result = SceneMembershipResult(
       plan: plan,
@@ -25,7 +26,7 @@ enum SceneApplyExample {
       deviceChecks: [ScenePlanExample.lamp: .checked],
       isModemChecked: true
     )
-    return SceneMembershipApplication(scene: plan.scene, planId: plan.id, result: result, interruption: interruption, persistence: .saved)
+    return SceneMembershipApplication(scene: plan.scene, planId: plan.id, result: result, interruption: interruption, persistence: .saved, isCacheReloaded: isCacheReloaded)
   }
 }
 
@@ -43,12 +44,12 @@ struct SceneMembershipApplyRoutesTests {
     let app: Application<RouterResponder<BasicRequestContext>>
   }
 
-  private func setup(outcomes: [DatabaseLinkStepOutcome]? = nil, mismatches: [SceneMembershipResult.Mismatch] = [], interruption: SceneMembershipApplication.Interruption? = nil, failure: (any Error)? = nil) async throws -> Setup {
+  private func setup(outcomes: [DatabaseLinkStepOutcome]? = nil, mismatches: [SceneMembershipResult.Mismatch] = [], interruption: SceneMembershipApplication.Interruption? = nil, isCacheReloaded: Bool = true, failure: (any Error)? = nil, logger: Logger? = nil) async throws -> Setup {
     let plan = await SceneApplyExample.plan()
     let service = FakeService()
-    await service.scriptApply(answer: failure == nil ? SceneApplyExample.application(plan, outcomes: outcomes, mismatches: mismatches, interruption: interruption) : nil, failure: failure)
+    await service.scriptApply(answer: failure == nil ? SceneApplyExample.application(plan, outcomes: outcomes, mismatches: mismatches, interruption: interruption, isCacheReloaded: isCacheReloaded) : nil, failure: failure)
     let clients = ClientStore(persistence: InMemoryClientPersistence())
-    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password), clients: clients).buildResponder())
+    let app = Application(responder: makeInsteonRouter(service: service, authentication: try HTTPAuthentication(password: password), clients: clients, logger: logger ?? Logger(label: "test")).buildResponder())
     return Setup(service: service, clients: clients, plan: plan, app: app)
   }
 
@@ -118,6 +119,93 @@ struct SceneMembershipApplyRoutesTests {
 
     #expect(steps.map { $0["outcome"] as? String } == ["writtenOnRetry", "written"])
     #expect(body["isComplete"] as? Bool == true)
+  }
+
+  // MARK: What a client and the log are told
+
+  @Test func saysWhetherTheServiceReadTheChangedDatabasesIntoItsCache() async throws {
+    let reloaded = try object(try await apply(try await setup(), authorization: basic))
+    let notReloaded = try object(try await apply(try await setup(isCacheReloaded: false), authorization: basic))
+
+    #expect(reloaded["cacheReload"] as? String == "reloaded")
+    #expect(notReloaded["cacheReload"] as? String == "failed")
+  }
+
+  @Test func logsAnIncompleteApplyAtWarningWithTheCountsAndNoAddress() async throws {
+    let capture = LogCapture()
+    let setup = try await setup(outcomes: [.written, .notWritten], logger: capture.logger)
+    _ = try await apply(setup, authorization: basic)
+
+    let line = try #require(capture.records.first { $0.message == "scene membership apply incomplete" })
+    #expect(line.level == .warning)
+    #expect(line.metadata["scene"] == "4")
+    #expect(line.metadata["written"] == "1")
+    #expect(line.metadata["notWritten"] == "1")
+    #expect(!"\(line.metadata)".contains("1A.2B.3C"))
+    #expect(capture.records.contains { $0.message == "scene membership applied" } == false)
+  }
+
+  @Test func logsACompleteApplyAtInfo() async throws {
+    let capture = LogCapture()
+    _ = try await apply(try await setup(logger: capture.logger), authorization: basic)
+
+    let line = try #require(capture.records.first { $0.message == "scene membership applied" })
+    #expect(line.level == .info)
+  }
+
+  @Test func logsAWarningWhenTheCacheWasNotReloaded() async throws {
+    let capture = LogCapture()
+    _ = try await apply(try await setup(isCacheReloaded: false, logger: capture.logger), authorization: basic)
+
+    let line = try #require(capture.records.first { $0.message == "scene membership apply left the cache stale" })
+    #expect(line.level == .warning)
+    #expect(line.metadata["scene"] == "4")
+  }
+
+  // MARK: The documented failures
+
+  /// Every failure the route can answer besides the credential's, each produced by a request below.
+  private static let answeredCodes: Set<String> = [
+    "invalidScene", "invalidCommand", "invalidBody", "invalidIdempotencyKey", "apiMarkerMissing", "unsupportedMediaType", "bodyTooLarge",
+    "consentRequired", "consentMismatch", "unknownPlan", "planExpired", "planAlreadyApplied", "planNotApplicable", "planStale",
+    "idempotencyKeyReused", "busy", "modemUnavailable", "databasesUnavailable", "deviceNotAnswering", "deviceRejected", "notLinked", "modemRejected",
+    "canceled", "outcomeUnknown"
+  ]
+
+  @Test func documentsExactlyTheCodesTheRouteAnswers() async throws {
+    let documented = Set(APIOperation.applySceneMembership.errorCodes.map(\.rawValue)).subtracting(["authenticationRequired", "authenticationFailed", "forbidden"])
+
+    #expect(documented == Self.answeredCodes)
+  }
+
+  @Test func answersEachDocumentedCodeFromARequest() async throws {
+    var produced: Set<String> = []
+    let failures: [any Error] = [
+      ServiceControlError.unknownPlan, ServiceControlError.planExpired, ServiceControlError.planAlreadyApplied, ServiceControlError.planNotApplicable,
+      ServiceControlError.planStale, ServiceControlError.consentMismatch, ServiceControlError.busy, ServiceControlError.modemUnavailable(.connecting),
+      ServiceControlError.databasesUnavailable, ModemError.deviceTimedOut(ScenePlanExample.lamp), ModemError.deviceRejected(ScenePlanExample.lamp, NAKReason(rawValue: 0xFD)),
+      ModemError.deviceRejected(ScenePlanExample.lamp, .notLinked), ModemError.rejected(.getModemInfo), CancellationError()
+    ]
+    for failure in failures {
+      let setup = try await setup(failure: failure)
+      let response = try await apply(setup, authorization: basic)
+      produced.insert(try #require(try object(response)["code"] as? String))
+      #expect(try object(response)["sent"] as? Bool == false)
+    }
+    let setup = try await setup(outcomes: [.written, .unanswered])
+    produced.insert(try #require(try object(try await apply(setup, authorization: basic))["code"] as? String))
+    let requests: [(String?, String, Bool, String)] = [("0", consent(setup.plan), true, "application/json"), ("4", "{}", true, "application/json"), ("4", "[1]", true, "application/json"),
+      ("4", #"{"consent":"x"}"#, true, "application/json"), ("4", consent(setup.plan), false, "application/json"), ("4", consent(setup.plan), true, "text/plain"),
+      ("4", String(repeating: " ", count: 8193), true, "application/json")]
+    for (number, body, marker, type) in requests {
+      let response = try await apply(setup, number: number ?? "4", body: body, authorization: basic, marker: marker, contentType: type)
+      produced.insert(try #require(try object(response)["code"] as? String))
+    }
+    produced.insert(try #require(try object(try await apply(setup, authorization: basic, key: "bad key!"))["code"] as? String))
+    _ = try await apply(setup, authorization: basic, key: "k1")
+    produced.insert(try #require(try object(try await apply(setup, planId: "sha256:" + String(repeating: "a", count: 64), authorization: basic, key: "k1"))["code"] as? String))
+
+    #expect(produced == Self.answeredCodes)
   }
 
   // MARK: A step that fails
@@ -190,9 +278,7 @@ struct SceneMembershipApplyRoutesTests {
     #"{"consent":{"writeLinkRecords":false,"readFingerprint":"sha256:x"}}"#,
     #"{"consent":{"readFingerprint":"sha256:x"}}"#,
     #"{"consent":{"writeLinkRecords":true}}"#,
-    #"{"consent":{"writeLinkRecords":true,"readFingerprint":""}}"#,
-    #"{"consent":{"writeLinkRecords":"yes","readFingerprint":"sha256:x"}}"#,
-    #"{"consent":{"writeLinkRecords":1,"readFingerprint":"sha256:x"}}"#
+    #"{"consent":{"writeLinkRecords":true,"readFingerprint":""}}"#
   ])
   func writesNothingWithoutConsentThatAgrees(_ body: String) async throws {
     let setup = try await setup()
@@ -228,7 +314,6 @@ struct SceneMembershipApplyRoutesTests {
     #"{"consent":{"writeLinkRecords":true,"readFingerprint":"sha256:x"},"force":true}"#,
     #"{"consent":{"writeLinkRecords":true,"readFingerprint":"sha256:x","force":true}}"#,
     #"{"consent":{"writeLinkRecords":true,"readFingerprint":"sha256:x"},"extra":1}"#,
-    #"{"consent":"yes"}"#,
     "not json",
     "[]"
   ])
@@ -238,6 +323,26 @@ struct SceneMembershipApplyRoutesTests {
 
     #expect(response.status == .badRequest)
     #expect(try object(response)["code"] as? String == "invalidCommand")
+    #expect(await setup.service.applyRequests.isEmpty)
+  }
+
+  @Test(arguments: [
+    #"{"consent":{"writeLinkRecords":"yes","readFingerprint":"sha256:x"}}"#,
+    #"{"consent":{"writeLinkRecords":1,"readFingerprint":"sha256:x"}}"#,
+    #"{"consent":{"writeLinkRecords":true,"readFingerprint":5}}"#,
+    #"{"consent":{"writeLinkRecords":null,"readFingerprint":["sha256:x"]}}"#,
+    #"{"consent":"yes"}"#,
+    #"{"consent":[true]}"#,
+    #"{"consent":7}"#
+  ])
+  func refusesAConsentOfTheWrongTypeAsAnInvalidBodyAndNotAsMissingConsent(_ body: String) async throws {
+    let setup = try await setup()
+    let response = try await apply(setup, body: body, authorization: basic)
+    let answer = try object(response)
+
+    #expect(response.status == .badRequest)
+    #expect(answer["code"] as? String == "invalidBody")
+    #expect(answer["sent"] as? Bool == false)
     #expect(await setup.service.applyRequests.isEmpty)
   }
 

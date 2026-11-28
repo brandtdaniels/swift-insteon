@@ -39,6 +39,7 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   case unknownDevice
   case invalidScene
   case invalidMembership
+  case invalidBody
   case unknownScene
   case sceneEmpty
   case unknownPlan
@@ -71,7 +72,7 @@ enum APIErrorCode: String, CaseIterable, Sendable {
   var status: HTTPResponse.Status {
     switch self {
     case .authenticationRequired, .authenticationFailed: .unauthorized
-    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel, .invalidClient, .invalidNotificationRule, .invalidRouteRegistration, .invalidSchedule, .invalidTimer, .invalidScene, .invalidMembership: .badRequest
+    case .invalidAddress, .invalidCommand, .invalidIdempotencyKey, .invalidLevel, .invalidClient, .invalidNotificationRule, .invalidRouteRegistration, .invalidSchedule, .invalidTimer, .invalidScene, .invalidMembership, .invalidBody: .badRequest
     case .unknownPlan: .notFound
     case .planExpired: .gone
     case .unknownDevice, .routeNotFound, .unknownClient, .unknownNotificationRule, .unknownRouteRegistration, .unknownSchedule, .unknownTimer, .unknownScene: .notFound
@@ -133,6 +134,7 @@ enum APIErrorCode: String, CaseIterable, Sendable {
     case .unknownDevice: "Unknown device."
     case .invalidScene: "A scene is a group number from 1 through 254."
     case .invalidMembership: "A membership change needs `add`, a list of devices with an optional `onLevel` and `rampRate` of 0 through 255, or `remove`, a list of device addresses or `{device, group}` objects, at most 32 of each, and no other field."
+    case .invalidBody: "A field of the body has the wrong type: `consent` is an object, `writeLinkRecords` is true or false, and `readFingerprint` is a string. Nothing was sent."
     case .unknownScene: "The service holds no scene of that number that the modem controls. Refresh the scenes, or use a scene `GET /api/v1/scenes` lists as writable. Nothing was sent."
     case .sceneEmpty: "The scene has no members, so nothing was sent."
     case .unknownPlan: "The service holds no plan with that identifier for that scene: it never made one, or it restarted since. Plan again. Nothing was written."
