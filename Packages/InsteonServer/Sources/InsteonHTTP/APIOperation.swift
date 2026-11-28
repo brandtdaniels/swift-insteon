@@ -9,7 +9,7 @@ enum APIOperation: String, CaseIterable, Sendable {
   case listNotificationRules, putNotificationRule, deleteNotificationRule
   case listRoutes, putRoute, deleteRoute
   case getBackup
-  case listScenes, refreshScenes, runScene
+  case listScenes, refreshScenes, runScene, planSceneMembership
   case listSchedules, putSchedule, deleteSchedule
   case listTimers, putTimer, deleteTimer
   case browserIndex, browserControls, browserCard, browserCommand
@@ -45,14 +45,14 @@ enum APIOperation: String, CaseIterable, Sendable {
   /// A browser route answers HTML and plain text for a person; the rest answer machines.
   var isAPI: Bool {
     switch self {
-    case .listDevices, .health, .executeCommand, .streamEvents, .openAPI, .listClients, .createClient, .revokeClient, .createPairing, .listNotificationRules, .putNotificationRule, .deleteNotificationRule, .listRoutes, .putRoute, .deleteRoute, .listSchedules, .putSchedule, .deleteSchedule, .listTimers, .putTimer, .deleteTimer, .getBackup, .listScenes, .refreshScenes, .runScene: true
+    case .listDevices, .health, .executeCommand, .streamEvents, .openAPI, .listClients, .createClient, .revokeClient, .createPairing, .listNotificationRules, .putNotificationRule, .deleteNotificationRule, .listRoutes, .putRoute, .deleteRoute, .listSchedules, .putSchedule, .deleteSchedule, .listTimers, .putTimer, .deleteTimer, .getBackup, .listScenes, .refreshScenes, .runScene, .planSceneMembership: true
     case .browserIndex, .browserControls, .browserCard, .browserCommand: false
     }
   }
 
   var method: HTTPRequest.Method {
     switch self {
-    case .executeCommand, .browserCommand, .createClient, .createPairing, .refreshScenes, .runScene: .post
+    case .executeCommand, .browserCommand, .createClient, .createPairing, .refreshScenes, .runScene, .planSceneMembership: .post
     case .revokeClient, .deleteNotificationRule, .deleteRoute, .deleteSchedule, .deleteTimer: .delete
     case .putNotificationRule, .putRoute, .putSchedule, .putTimer: .put
     default: .get
@@ -78,6 +78,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listScenes: "/api/v1/scenes"
     case .refreshScenes: "/api/v1/scenes/refresh"
     case .runScene: "/api/v1/scenes/{number}/commands"
+    case .planSceneMembership: "/api/v1/scenes/{number}/plans"
     case .listSchedules: "/api/v1/schedules"
     case .putSchedule, .deleteSchedule: "/api/v1/schedules/{id}"
     case .listTimers: "/api/v1/timers"
@@ -109,6 +110,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listScenes: "List the scenes of the network"
     case .refreshScenes: "Read the ALL-Link databases from the hardware and list the scenes"
     case .runScene: "Turn a scene the modem controls on or off"
+    case .planSceneMembership: "Plan adding and removing the members of a scene the modem controls"
     case .listSchedules: "List the schedules and when each runs next"
     case .putSchedule: "Store a schedule"
     case .deleteSchedule: "Remove a schedule"
@@ -142,6 +144,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .getBackup: "The same document format `insteon backup` writes: the modem's address and ALL-Link database, each device's ALL-Link database, names and identities, the notification rules, the routes and the schedules (timers are left out). It answers from the cache and sends nothing to hardware, so a device the service holds no copy of is listed with the reason `notCached`. It holds no password, client token or Hub address. Needs the `admin` scope."
     case .listScenes: "A scene is a group of the modem or of a device with the devices that respond to it; the modem's are `writable`, a device's are read only. Each member has its three link data bytes. It answers from the ALL-Link databases the service has cached and sends nothing to hardware. `whole` is false while a device's database is not held (`unreadable`, each with its `reason`), a record names a device with no database (`unlisted`), the modem's database is not held (`modemUnread`) or a record has no other half (`halfLinks`, `looseHalfLinks`). Needs the `read` scope."
     case .runScene: "Sends the scene's ALL-Link group one Light On at full level or one Light Off through the modem, then waits for the modem's ALL-Link cleanups, so each member recalls the on-level or off its own link data holds. The scene is a group from 1 through 254 that the listing from `GET /api/v1/scenes` shows as `writable`; a group a device controls is `unknownScene`, as is a number the service has not read (`POST /api/v1/scenes/refresh` reads them), and a scene with no members is `sceneEmpty`. Nothing is sent in those cases. The receipt's `outcome` is `acknowledged` when the modem acknowledged sending the group command. `acknowledged` lists the members that acknowledged their cleanup and `unacknowledged` those that did not, who may still have acted; a modem that passes no per-member acknowledgment up, as a Hub 2 does not, leaves `acknowledged` empty, and `isComplete` is the modem's own report that it reached every member. Empty never means that no member acted. The command is sent at most once and never repeated by the service. The service does not read the members afterward, so `GET /api/v1/devices` keeps the levels it held until a device is read or reports. With an `Idempotency-Key`, a repeat of the same run returns the recorded answer with `Idempotent-Replay: true` and sends nothing. `sent` in an error says whether the command may have reached the members. It takes the service's one admission gate, so another operation is refused as `busy` and nothing is queued. A `scene` event follows on the event stream. Needs the `control` scope."
+    case .planSceneMembership: "Answers what adding and removing members would write, without writing or sending anything: the service plans from the ALL-Link databases it has cached and the Insteon device catalog, and a database it does not hold is a refusal that says to refresh the scenes. The plan lists its `steps` in the order they would be made, each naming the record written or deleted and whether it is the modem's or a device's, with the three data bytes of a member's record, and `devices` says whether each device takes a remote write. `warnings` and `refusals` carry typed codes; a plan with a refusal cannot be applied and has no `consent`. A member already in the scene with the same record gets no step. One with another on-level or ramp rate is listed as an update in place and refused as `notYetSupported`, because rewriting a record in use has not been tried on hardware. The scene is a group from 1 through 254; a number no controller uses is a scene to create, and a group a device controls is `unknownScene`. The service keeps a plan that can be applied in memory for five minutes, named by `planId`. `consent` is what applying the plan will need, the same consent that applying a database link plan takes. Applying is not part of this route. Needs the `admin` scope, and consent is never implied by it."
     case .refreshScenes: "Reads the ALL-Link database of the modem and of each device from the hardware, one request at a time, and answers with the scenes as `GET /api/v1/scenes` lists them after the read. It only reads: nothing is written to the modem or to a device. A device that does not answer is listed as `unreadable` and the refresh still succeeds. A read takes the service's one admission gate for as long as it lasts, so another operation is refused as `busy` and nothing is queued. A Hub Pro does not give out its ALL-Link databases, so it answers `databasesUnavailable`. Needs the `control` scope."
     case .listSchedules: "The schedules in the order they were added, each with the time it runs next in the service's time zone. Needs the `read` scope."
     case .putSchedule: "Adds the schedule, or replaces the schedule with that identifier, which keeps nothing of the old schedule's last run. It takes effect at once. A clock time is wall-clock time in the service's time zone, so it follows daylight saving time: a time the clocks skip runs once, when the skipped span ends, and a time that happens twice runs at its first occurrence. A run less than a minute late happens; a later one is skipped, unless `catchUp` is true and it is less than 15 minutes late. Each run publishes a `schedule` event on `/api/v1/events`. Needs the `admin` scope."
@@ -182,6 +185,7 @@ enum APIOperation: String, CaseIterable, Sendable {
         Parameter(name: "X-Insteon-Request", location: "header", required: true, schema: Schema.constant("1"), description: "Marks an explicit API request, so a browser page can't run a scene by accident."),
         Parameter(name: "Idempotency-Key", location: "header", required: false, schema: Schema.string(pattern: IdempotencyKey.pattern), description: "A token the client picks, 1 through 128 characters. A repeat with the same key and command returns the recorded answer.")
       ]
+    case .planSceneMembership: [Self.sceneParameter, Self.markerParameter]
     case .createClient, .refreshScenes: [Self.markerParameter]
     case .revokeClient, .createPairing: [Self.clientParameter, Self.markerParameter]
     case .putNotificationRule, .deleteNotificationRule: [Self.ruleParameter, Self.markerParameter]
@@ -202,6 +206,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .putNotificationRule: Body(contentType: "application/json", schema: Schema.ref("NotificationRuleRequest"), description: "The rule without its identifier, which the path gives. Unknown fields are refused. The body is at most 8 KiB.")
     case .putSchedule: Body(contentType: "application/json", schema: Schema.ref("ScheduleRequest"), description: "The schedule without its identifier, which the path gives. Unknown fields are refused. The body is at most 8 KiB.")
     case .putTimer: Body(contentType: "application/json", schema: Schema.ref("TimerRequest"), description: "The timer without its identifier, which the path gives. Unknown fields are refused. The body is at most 8 KiB.")
+    case .planSceneMembership: Body(contentType: "application/json", schema: Schema.ref("SceneMembershipRequest"), description: "The devices to add and to remove. Unknown fields are refused, and so is an empty change. A device named twice for the same group, or in both lists, is refused in the plan. The body is at most 8 KiB.")
     case .runScene: Body(contentType: "application/json", schema: Schema.ref("SceneCommand"), description: "The command: `action` is `on` or `off`. Unknown fields, including a level, are refused. The body is at most 8 KiB.")
     case .putRoute: Body(contentType: "application/json", schema: Schema.ref("RouteRequest"), description: "The route's ticket. Unknown fields are refused. The body is at most 8 KiB.")
     case .browserCommand: Body(contentType: "application/x-www-form-urlencoded", schema: Schema.string(), description: "The page's form: `action`, optional `levelPercent`, and the page's `formKey`.")
@@ -215,7 +220,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     switch self {
     case .listDevices, .health, .streamEvents, .openAPI, .listNotificationRules, .listRoutes, .listSchedules, .listTimers, .listScenes: .read
     case .executeCommand, .refreshScenes, .runScene: .control
-    case .listClients, .createClient, .revokeClient, .createPairing, .putNotificationRule, .deleteNotificationRule, .putRoute, .deleteRoute, .putSchedule, .deleteSchedule, .putTimer, .deleteTimer, .getBackup: .admin
+    case .listClients, .createClient, .revokeClient, .createPairing, .putNotificationRule, .deleteNotificationRule, .putRoute, .deleteRoute, .putSchedule, .deleteSchedule, .putTimer, .deleteTimer, .getBackup, .planSceneMembership: .admin
     case .browserIndex, .browserControls, .browserCard, .browserCommand: .admin
     }
   }
@@ -245,6 +250,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .putRoute: codes += [.invalidRouteRegistration, .routeRegistrationLimitReached, .routeRegistrationsNotSaved, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected]
     case .deleteRoute: codes += [.unknownRouteRegistration, .routeRegistrationsNotSaved, .apiMarkerMissing]
     case .runScene: codes += [.invalidScene, .invalidCommand, .invalidIdempotencyKey, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected, .unknownScene, .sceneEmpty, .idempotencyKeyReused, .busy, .modemUnavailable, .modemRejected, .databasesUnavailable, .canceled, .outcomeUnknown]
+    case .planSceneMembership: codes += [.invalidScene, .invalidMembership, .invalidAddress, .apiMarkerMissing, .unsupportedMediaType, .bodyTooLarge, .requestRejected, .unknownScene, .databasesUnavailable, .canceled]
     case .refreshScenes: codes += [.apiMarkerMissing, .busy, .modemUnavailable, .modemRejected, .databasesUnavailable, .canceled, .deviceNotAnswering]
     case .getBackup: codes += [.notificationRulesNotSaved, .routeRegistrationsNotSaved, .schedulesNotSaved]
     case .browserCard:
@@ -282,6 +288,7 @@ enum APIOperation: String, CaseIterable, Sendable {
     case .listScenes: [Reply(status: 200, description: "The scenes.", contentType: "application/json", schema: Schema.ref("SceneList"), headers: [:])]
     case .refreshScenes: [Reply(status: 200, description: "The scenes, read from the hardware.", contentType: "application/json", schema: Schema.ref("SceneList"), headers: [:])]
     case .runScene: [Reply(status: 200, description: "The scene's receipt.", contentType: "application/json", schema: Schema.ref("SceneReceipt"), headers: ["Idempotent-Replay": ["$ref": "#/components/headers/IdempotentReplay"]])]
+    case .planSceneMembership: [Reply(status: 200, description: "The plan. Nothing was written or sent.", contentType: "application/json", schema: Schema.ref("SceneMembershipPlan"), headers: [:])]
     case .getBackup: [Reply(status: 200, description: "The backup, as `insteon backup` writes it.", contentType: "application/json", schema: Schema.ref("NetworkBackup"), headers: [:])]
     case .deleteNotificationRule: [Reply(status: 204, description: "The rule is removed.", contentType: nil, schema: nil, headers: [:])]
     case .browserIndex: [Reply(status: 200, description: "The page.", contentType: "text/html", schema: nil, headers: [:])]

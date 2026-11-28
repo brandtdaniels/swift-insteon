@@ -183,6 +183,7 @@ struct HTTPFailure: Sendable {
     case HTTPInputError.invalidFormKey: self.init(.formKeyInvalid)
     case HTTPInputError.invalidAddress: self.init(.invalidAddress)
     case SceneInputError.invalidScene: self.init(.invalidScene)
+    case SceneInputError.invalidMembership: self.init(.invalidMembership)
     case IdempotencyError.invalidKey: self.init(.invalidIdempotencyKey)
     case IdempotencyError.reused: self.init(.idempotencyKeyReused)
     case is HTTPInputError: self.init(.invalidCommand)

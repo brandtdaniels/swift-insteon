@@ -365,7 +365,7 @@ extension DeviceLinkingCoordinator {
 
       if record.isModems {
 
-        let data: [UInt8] = modemData(reading.modemLinkData, isController: record.isController, identity: reading.identification.identity)
+        let data: [UInt8] = modemData(reading.modemLinkData, isController: record.isController, identity: reading.identification.identity.map(ReportedIdentity.init))
         let written = AllLinkRecord(
           flags: .linked(isController: record.isController),
           group: record.group,
@@ -451,7 +451,7 @@ extension DeviceLinkingCoordinator {
   /// The data bytes of a record the modem keeps for the device, from the catalog's profile of
   /// the modem: a fixed value, or a byte of the identity the device reported. A byte the
   /// catalog doesn't give, or one of an identity the device didn't report, is `0x00`.
-  static func modemData(_ linkData: ModemLinkData?, isController: Bool, identity: SetButtonPressed?) -> [UInt8] {
+  static func modemData(_ linkData: ModemLinkData?, isController: Bool, identity: ReportedIdentity?) -> [UInt8] {
 
     var data: [UInt8] = [0x00, 0x00, 0x00]
     let bytes: [ModemLinkDataByte] = (isController ? linkData?.controller : linkData?.responder) ?? []

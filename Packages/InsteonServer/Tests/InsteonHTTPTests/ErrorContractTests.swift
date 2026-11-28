@@ -129,6 +129,10 @@ struct ErrorContractTests {
         (path, .post, commandHeaders, #"{"action":"remove"}"#, 400, "invalidCommand"),
         (path, .post, commandHeaders, #"{"action":"on","levle":50}"#, 400, "invalidCommand"),
         ("/api/v1/devices/not-an-address/commands", .post, commandHeaders, #"{"action":"on"}"#, 400, "invalidAddress"),
+        ("/api/v1/scenes/4/plans", .post, commandHeaders, "{}", 400, "invalidMembership"),
+        ("/api/v1/scenes/4/plans", .post, commandHeaders, #"{"remove":["nope"]}"#, 400, "invalidAddress"),
+        ("/api/v1/scenes/0/plans", .post, commandHeaders, #"{"remove":["1A.2B.3C"]}"#, 400, "invalidScene"),
+        ("/api/v1/scenes/7/plans", .post, commandHeaders, #"{"remove":["1A.2B.3C"]}"#, 404, "unknownScene"),
         ("/api/v1/nothing-here", .get, [.authorization: authorization], nil, 404, "routeNotFound")
       ]
       for (uri, method, headers, body, status, code) in cases {
