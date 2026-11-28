@@ -499,7 +499,7 @@ struct SceneMembershipApplyTests {
     #expect(result.isModemChecked)
   }
 
-  @Test func stopsBetweenStepsWhenCanceledAndReadsNothingMore() async throws {
+  @Test func stopsBetweenStepsWhenCanceledAndStillComparesWhatWasWritten() async throws {
     let memory = await modem()
     let network = network(memory)
     let plan = try await plan(add(lamp), on: network)
@@ -518,8 +518,10 @@ struct SceneMembershipApplyTests {
     let result = try #require(error?.result)
     #expect(error?.cause is CancellationError)
     #expect(result.steps.map(\.outcome) == [.written, .notReached, .notReached])
-    #expect(!result.isModemChecked)
-    #expect(result.deviceChecks.isEmpty)
+    // A step was written, so both databases are read again to say what it left, even though the request was canceled.
+    #expect(result.isModemChecked)
+    #expect(result.deviceChecks == [lamp: .checked])
+    #expect(result.mismatches.isEmpty)
     #expect(await memory.writes.count == 1)
   }
 

@@ -365,10 +365,10 @@ extension DeviceLinkingCoordinator {
 
     var verification: Verification = Verification()
 
-    // Steps skipped for a cancellation read nothing more, so the databases aren't read again. Once every step was
-    // tried the reading runs to its end even if the request is canceled meanwhile, since the writes were made and
-    // a result without the comparison would say nothing about them.
-    if !(interruption is CancellationError) {
+    // When any step was tried the databases are read again, and the reading runs to its end even if the request is
+    // canceled meanwhile: the writes were made, and a result without the comparison would say nothing about them. A
+    // plan no step of which was tried wrote nothing, so there is nothing to compare.
+    if results.contains(where: { (result: SceneMembershipResult.StepResult) -> Bool in result.outcome != .notReached }) {
 
       let coordinator: DeviceLinkingCoordinator = self
       let steps: [SceneMembershipResult.StepResult] = results
